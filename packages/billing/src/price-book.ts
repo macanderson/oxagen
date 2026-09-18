@@ -402,9 +402,10 @@ interface PriceBookSyncResult {
    */
   deferred: number;
   /**
-   * Open rows closed because this sync re-priced the same model and class
-   * under a different provider name. Left open they would be a second row
-   * the reader could pick, so one of two prices would apply and neither
+   * Open rows closed because another row this sync wrote now prices what
+   * they priced: the same model and class under a different provider name,
+   * or the same names in a barer spelling. Left open they would be a second
+   * row the reader could pick, so one of two prices would apply and neither
    * would be predictable.
    */
   superseded: number;
@@ -564,6 +565,36 @@ export async function syncPriceBook(args: {
       bookCreatedAt === null ||
       now.getTime() - bookCreatedAt < COLD_START_WINDOW_MS;
     const coldStart = withinColdWindow;
+    // Which sources wrote at initialization, read off the book itself. Every
+    // row the first sync inserted carries that transaction's `now()` as its
+    // `created_at`, so the catalogs stamped on rows created at that instant
+    // are the sources that answered then; every other source was incomplete.
+    // Deriving it this way needs no new column and no migration: the
+    // `catalog` stamp the retirement pass already relies on carries it.
+    //
+    // The window alone said when initialization might still be recovering,
+    // never from what. So a model a catalog or the in-code card ADDED days
+    // after a complete first sync was floored like a recovery, and calls made
+    // before that model existed acquired its rate on the reprice pass or a
+    // later rollup retry, changing costs that had already settled. Only a key
+    // whose source wrote nothing at initialization can be a recovery.
+    const initialCatalogs = new Set<string>();
+    if (bookCreatedAt !== null)
+      for (const row of existing)
+        if (
+          row.createdAt.getTime() === bookCreatedAt &&
+          row.catalog !== null &&
+          row.catalog !== undefined
+        )
+          initialCatalogs.add(row.catalog);
+    // A seed with no catalog recorded cannot attest where it came from, and a
+    // book whose first rows predate the `catalog` column records nothing at
+    // all. Both fall back to flooring every unseen key while cold, which is
+    // what this did before the stamp existed: the cost of that fallback is a
+    // backdated rate, and the cost of the other choice is a model that stays
+    // unpriced for ever. Every seed a real sync writes carries its catalog.
+    const recoveredFromIncompleteSource = (seed: PriceEntrySeed): boolean =>
+      seed.catalog === undefined || !initialCatalogs.has(seed.catalog);
     const effectiveFrom = args.effectiveFrom;
 
     // The boundary is checked HERE, under the lock, against the write
@@ -615,6 +646,14 @@ export async function syncPriceBook(args: {
           if (seen.has(`${s.model}|${s.tokenClass}|${s.region ?? ""}`))
             return s;
           if (s.source === "override" && !emptyBook) return s;
+          // The floor is for a source that was down when the book was
+          // written, not for the calendar. A source that answered at
+          // initialization has published everything it had since then, so a
+          // key it names for the first time today is a model that did not
+          // exist before today, and it starts at the requested boundary like
+          // any other new rate. Flooring it would hand the new rate to every
+          // frame recorded since the first sync.
+          if (!emptyBook && !recoveredFromIncompleteSource(s)) return s;
           return { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM };
         })
       : requested;
@@ -858,6 +897,111 @@ export async function syncPriceBook(args: {
         .where(eq(schema.priceEntries.id, row.id));
       closedIds.add(row.id);
       retired += 1;
+    }
+
+    // Close what this run's seeds have displaced BY NAME rather than by key.
+    //
+    // The two passes above both ask about a row's key. Supersession asks
+    // whether a seed prices the same (model, class, region) under another
+    // provider; retirement asks whether the catalog that published the row
+    // answered and stopped naming it. Neither sees the case where the name
+    // itself moved between shapes: an operator adds a bare-family override
+    // `foo` while the catalog that published `anthropic/foo` is down, so the
+    // merge omits that catalog and its row survives as a preserved absence.
+    // `resolvePriceEntry` then resolves the gateway-form id `anthropic/foo`
+    // on the direct pass, where only the stale row matches, and never reaches
+    // the family pass where the override would win. The override is ignored
+    // for as long as the catalog stays down.
+    //
+    // So a row is closed when a seed written this run answers to the names
+    // the row holds. That is not the retirement bug in another shape: a row
+    // is not closed for being absent, it is closed because another row now
+    // prices exactly what it priced, which is the same reason supersession
+    // closes one. Absence alone still preserves the row.
+    //
+    // Only the gateway form is displaced. A bare row beside a gateway-form
+    // seed still answers ids the seed cannot match, so it stays open.
+    const sourceRank = (source: string | undefined): number =>
+      source === "override" ? 1 : 0;
+    const nameKey = (
+      tokenClass: string,
+      region: string | null,
+      name: string,
+    ) => `${tokenClass}|${region ?? ""}|${name}`;
+    const seedByName = new Map<string, PriceEntrySeed>();
+    for (const seed of seeds)
+      for (const name of [seed.model, ...seed.modelAliases]) {
+        const slot = nameKey(seed.tokenClass, seed.region, name);
+        const held = seedByName.get(slot);
+        if (
+          held === undefined ||
+          sourceRank(seed.source) > sourceRank(held.source)
+        )
+          seedByName.set(slot, seed);
+      }
+    // The seed that now answers to a name this row holds, or null. The test
+    // is the family behind a `creator/` prefix, spelled EXACTLY by one of the
+    // seed's names. That is the shape `resolvePriceEntry` falls back to and
+    // nothing looser. The resolver's prefix rule is deliberately loose, and
+    // loose is wrong here: `gpt-4` prefixes `gpt-4o`, and closing the
+    // `openai/gpt-4o` row because some seed prices `gpt-4` would throw away
+    // the more specific price for a model that merely shares a stem.
+    //
+    // A seed that ranks BELOW the row never displaces it, so an operator's
+    // override is never closed by a catalog. Above that, a seed outranks
+    // every source that did not answer: the merge holds every catalog below a
+    // failed one, so whatever wrote this run sits higher in precedence than
+    // whatever did not.
+    const displacedBy = (row: Row): PriceEntrySeed | null => {
+      for (const name of [row.model, ...row.modelAliases]) {
+        const slash = name.indexOf("/");
+        if (slash < 0) continue;
+        const seed = seedByName.get(
+          nameKey(row.tokenClass, row.region, name.slice(slash + 1)),
+        );
+        if (seed === undefined) continue;
+        if (sourceRank(seed.source) < sourceRank(row.source)) continue;
+        return seed;
+      }
+      return null;
+    };
+    for (const row of existing) {
+      if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
+      // A key this run seeded is the seed loop's business. Both spellings
+      // can be wanted at once, when one catalog names a model bare and
+      // another names it gateway-form and the merge emitted both, and
+      // closing a row the run just wrote would leave that spelling
+      // unpriced.
+      if (seeded.has(key(row))) continue;
+      const seed = displacedBy(row);
+      if (seed === null) continue;
+      if (row.effectiveFrom.getTime() === seed.effectiveFrom.getTime()) {
+        // The row starts at this run's own instant, so it cannot be closed
+        // there (`effective_to > effective_from`). While that instant is
+        // still ahead it has priced nothing and is deleted, as the
+        // retirement pass deletes a scheduled row a complete snapshot omits.
+        // At an instant already in force it is left alone. Only the floor
+        // reaches that case, the boundary check having refused every other
+        // instant, and deleting a floor row would unprice every frame since
+        // the first sync, which is worse than the stale row it replaces.
+        if (seed.effectiveFrom.getTime() <= now.getTime()) continue;
+        await tx
+          .delete(schema.priceEntries)
+          .where(eq(schema.priceEntries.id, row.id));
+        closedIds.add(row.id);
+        superseded += 1;
+        continue;
+      }
+      // A row that starts after this run is a later correction, not
+      // something this run may close.
+      if (row.effectiveFrom.getTime() > seed.effectiveFrom.getTime()) continue;
+      assertBoundaryAhead(seed.effectiveFrom);
+      await tx
+        .update(schema.priceEntries)
+        .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })
+        .where(eq(schema.priceEntries.id, row.id));
+      closedIds.add(row.id);
+      superseded += 1;
     }
 
     return {

@@ -1660,6 +1660,103 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(result.written).toBe(2);
   });
 
+  // The cold-start window said WHEN initialization might still be
+  // recovering, never from WHAT. A source that answered at the first sync and
+  // publishes a new model days later is publishing a model that did not exist
+  // before, not recovering one it always priced. Flooring it handed the new
+  // rate to every frame recorded since the first sync, on the reprice pass or
+  // on a later rollup retry, so costs that had settled changed.
+  it("starts a model added by a source that answered at initialization at the requested boundary", async () => {
+    const seed = (
+      model: string,
+      catalog: string,
+      at: Date,
+    ): PriceEntrySeed => ({
+      provider: "anthropic",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: at,
+      effectiveTo: null,
+      catalog,
+    });
+    // A complete first sync: both sources answered, and both stamp their rows.
+    await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        seed("card-model", "in_code_card", T1),
+        seed("catalog-model", "openrouter", T1),
+      ],
+      retireAbsent: true,
+      completedCatalogs: ["in_code_card", "openrouter"],
+    });
+    // Still well inside the window, and the card names a model it never had.
+    const result = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [
+        seed("card-model", "in_code_card", T2),
+        seed("catalog-model", "openrouter", T2),
+        seed("card-newcomer", "in_code_card", T2),
+      ],
+      retireAbsent: true,
+      completedCatalogs: ["in_code_card", "openrouter"],
+    });
+    // The window has not passed, so the run is still cold. The floor is what
+    // no longer applies, not the window.
+    expect(result.coldStart).toBe(true);
+    expect(
+      fake.rows.find((r) => r.model === "card-newcomer")!.effectiveFrom,
+    ).toEqual(T2);
+  });
+
+  // The floor still exists for what it was built for: a catalog that was down
+  // when the book was written, coming back with models it had priced all
+  // along. Calls made before that recovery must price at the rate it brings.
+  it("still backdates a model from a source that wrote nothing at initialization", async () => {
+    const seed = (
+      model: string,
+      catalog: string,
+      at: Date,
+    ): PriceEntrySeed => ({
+      provider: "anthropic",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: at,
+      effectiveTo: null,
+      catalog,
+    });
+    // A partial first sync: models.dev was down, so only the card wrote.
+    await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed("card-model", "in_code_card", T1)],
+      retireAbsent: false,
+      completedCatalogs: ["in_code_card"],
+    });
+    // It comes back naming a model of its own.
+    const result = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [
+        seed("card-model", "in_code_card", T2),
+        seed("recovered-model", "models_dev", T2),
+      ],
+      retireAbsent: true,
+      completedCatalogs: ["in_code_card", "models_dev"],
+    });
+    expect(result.coldStart).toBe(true);
+    expect(
+      fake.rows.find((r) => r.model === "recovered-model")!.effectiveFrom,
+    ).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+  });
+
   it("reports a row whose price and names both match as unchanged", async () => {
     fake.rows.push(
       priceRow({
@@ -2080,6 +2177,183 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     });
     expect(result).toMatchObject({ written: 1, superseded: 1, retired: 0 });
     expect(fake.rows.filter((r) => r.effectiveTo === null)).toHaveLength(1);
+  });
+});
+
+describe("syncPriceBook closes a row whose names another row now prices", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    fakeClock.now = null;
+    store.tx = makeFakePriceTx(fake);
+  });
+
+  // An established book: past the cold-start window, so nothing is floored
+  // and every write lands at the requested boundary.
+  const ESTABLISHED = new Date("2026-01-01T00:00:00.000Z");
+  const NOW = new Date("2026-09-18T15:10:00.000Z");
+  const AT = new Date("2026-09-18T16:00:00.000Z");
+
+  const seed = (over: Partial<PriceEntrySeed> = {}): PriceEntrySeed => ({
+    provider: "anthropic",
+    model: "foo",
+    modelAliases: [],
+    region: null,
+    tokenClass: "input_uncached",
+    unit: "token",
+    currency: "USD",
+    microsPerMillion: 1_000_000n,
+    effectiveFrom: AT,
+    effectiveTo: null,
+    source: "override",
+    catalog: "operator_override",
+    ...over,
+  });
+
+  const stale = () =>
+    priceRow({
+      provider: "openrouter",
+      model: "anthropic/foo",
+      catalog: "openrouter",
+      microsPerMillion: 5_000_000n,
+      effectiveFrom: FROM,
+      createdAt: ESTABLISHED,
+    });
+
+  // The operator adds a bare-family override while the catalog that
+  // published the gateway-form row is down. Supersession compares canonical
+  // keys and retirement protects the failed catalog's row, so both passes
+  // left it open. `resolvePriceEntry` resolves `anthropic/foo` on the direct
+  // pass, where only the stale row matches, and never reaches the family
+  // pass where the override would win: the override was ignored for as long
+  // as the catalog stayed down.
+  it("closes a gateway-form row a bare override now prices, while its catalog is down", async () => {
+    fake.rows.push(stale());
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      seeds: [seed()],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override", "in_code_card"],
+    });
+    expect(result.coldStart).toBe(false);
+    // Not a retirement: the failed catalog's rows are still protected from
+    // being closed for absence alone.
+    expect(result.retired).toBe(0);
+    expect(result.superseded).toBe(1);
+    expect(
+      fake.rows.find((r) => r.model === "anthropic/foo")!.effectiveTo,
+    ).toEqual(AT);
+    const book: PriceEntry[] = fake.rows.map((r) => ({
+      ...(r as unknown as PriceEntry),
+    }));
+    const hit = resolvePriceEntry(book, {
+      orgId: ORG,
+      modelId: "anthropic/foo",
+      tokenClass: "input_uncached",
+      at: AT,
+    });
+    expect(hit?.source).toBe("override");
+    expect(hit?.microsPerMillion).toBe(1_000_000n);
+  });
+
+  // The names a seed answers to include its aliases, because the resolver
+  // matches on them too.
+  it("closes a row displaced by a name the seed carries as an alias", async () => {
+    fake.rows.push(stale());
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      seeds: [seed({ model: "bar", modelAliases: ["foo"] })],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override"],
+    });
+    expect(result.superseded).toBe(1);
+    expect(
+      fake.rows.find((r) => r.model === "anthropic/foo")!.effectiveTo,
+    ).toEqual(AT);
+  });
+
+  // An override is the operator's own terms and outranks every catalog. A
+  // catalog seed that happens to name the same family does not end it.
+  it("never lets a catalog seed displace an operator's override (negative)", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "anthropic",
+        model: "anthropic/foo",
+        source: "override",
+        catalog: "operator_override",
+        microsPerMillion: 5_000_000n,
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      seeds: [
+        seed({ provider: "openrouter", source: "list", catalog: "openrouter" }),
+      ],
+      retireAbsent: false,
+      completedCatalogs: ["openrouter"],
+    });
+    expect(result.superseded).toBe(0);
+    expect(
+      fake.rows.find((r) => r.model === "anthropic/foo")!.effectiveTo,
+    ).toBeNull();
+  });
+
+  // Only the gateway form is displaced. A bare row answers ids the
+  // gateway-form seed cannot match, so closing it would leave them unpriced
+  // for as long as its catalog stayed down, which is the retirement bug this
+  // pass must not reintroduce.
+  it("keeps a bare row from a failed catalog when the seed names only the gateway form (negative)", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "openrouter",
+        model: "foo",
+        catalog: "openrouter",
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      seeds: [seed({ model: "anthropic/foo" })],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override", "in_code_card"],
+    });
+    expect(result.superseded).toBe(0);
+    expect(result.retired).toBe(0);
+    expect(fake.rows.find((r) => r.model === "foo")!.effectiveTo).toBeNull();
+  });
+
+  // The family has to be spelled exactly. The resolver's prefix rule is
+  // deliberately loose, and closing `openai/gpt-4o` because some seed prices
+  // `gpt-4` would throw away the more specific price for a different model.
+  it("leaves a gateway-form row alone when a seed only shares its stem (negative)", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "openai",
+        model: "openai/gpt-4o",
+        catalog: "openrouter",
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      seeds: [seed({ model: "gpt-4" })],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override"],
+    });
+    expect(result.superseded).toBe(0);
+    expect(
+      fake.rows.find((r) => r.model === "openai/gpt-4o")!.effectiveTo,
+    ).toBeNull();
   });
 });
 
