@@ -51,13 +51,89 @@ export interface GateDecision {
 export interface GateOptions extends CheckOptions {
   /** Skip the sync even when the policy enables it (`steering status`). */
   readOnly?: boolean;
+  /**
+   * Read the gates the production branch commits again, and fold them again.
+   *
+   * Those gates are read from a remote-tracking ref, and the check below is
+   * what moves that ref. So a production branch that had just committed
+   * `blockStaleRuns: true` alongside the records this checkout is missing was
+   * read at its old value: the same invocation went on to find the newly
+   * fetched records behind, kept the `false` it had already resolved, and
+   * only warned. Enforcement started one prompt late, on exactly the prompt
+   * the new records were published to govern.
+   *
+   * Called only when the check contacted the remote, so the common path,
+   * where the ref cannot have moved, pays nothing. The answer may only
+   * tighten the two gates; see {@link tightenedBy}.
+   */
+  reloadPolicy?: () => Promise<SteeringPolicy>;
+}
+
+/**
+ * `before`, with either gate the reload switched on switched on as well.
+ *
+ * A reload may tighten and nothing else. The scalars stay as they were,
+ * because the ref the check compared against and the paths it excluded were
+ * settled before it ran, and swapping them in afterwards would judge a
+ * verdict against a question it was never asked. Loosening is refused for the
+ * reason the whole fold is a ratchet: a gate one scope switched on is not a
+ * later read's to switch off.
+ */
+function tightenedBy(
+  before: SteeringPolicy,
+  after: SteeringPolicy,
+): SteeringPolicy {
+  const autoSync = before.autoSync || after.autoSync;
+  const blockStaleRuns = before.blockStaleRuns || after.blockStaleRuns;
+  if (autoSync === before.autoSync && blockStaleRuns === before.blockStaleRuns)
+    return before;
+  return {
+    ...before,
+    autoSync,
+    blockStaleRuns,
+    sources: {
+      autoSync: before.autoSync
+        ? before.sources.autoSync
+        : after.sources.autoSync,
+      blockStaleRuns: before.blockStaleRuns
+        ? before.sources.blockStaleRuns
+        : after.sources.blockStaleRuns,
+    },
+  };
 }
 
 /** Check, optionally sync, and decide. */
 export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
-  const { policy, readOnly = false } = opts;
+  const { readOnly = false, reloadPolicy } = opts;
+  let policy = opts.policy;
   let verdict = await checkSteeringFreshness(opts);
   let sync: SyncResult | null = null;
+
+  // The check has just fetched, so the ref the committed gates are read from
+  // may have moved since this invocation resolved its policy. Ask again,
+  // while the decision is still ahead of us and before the sync reads
+  // `autoSync`.
+  //
+  // Three conditions, so the prompt path pays for this only when it can
+  // change the answer. A fetch that failed moved nothing and a throttled one
+  // never contacted the remote. A checkout that is current is allowed
+  // whatever the gates say, which is also why an `allow` decision may carry
+  // gates one publication old: nothing reads them.
+  if (
+    isStale(verdict) &&
+    reloadPolicy &&
+    verdict.fetch.attempted &&
+    verdict.fetch.ok
+  ) {
+    try {
+      policy = tightenedBy(policy, await reloadPolicy());
+    } catch {
+      // A reload that throws has told us nothing, so the policy the gate
+      // already resolved stands. Letting the rejection escape would reach the
+      // CLI's catch-all, which exits 0, and a read that only ever tightens
+      // would have become a way to skip a gate that was already on.
+    }
+  }
 
   if (isStale(verdict) && autoSyncActive(policy) && !readOnly) {
     try {

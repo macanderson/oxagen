@@ -151,6 +151,38 @@ function remotes(table: Record<string, string>): void {
   });
 }
 
+/**
+ * `remotes`, plus the blobs `git show <ref>:<path>` can answer. A spec with no
+ * blob fails the way git does, which is how the committed-gates read learns
+ * the production branch has no settings file. The specs it was asked for are
+ * returned, because which ref is read is the property under test.
+ */
+function gitStub({
+  remotes: table,
+  blobs,
+}: {
+  remotes: Record<string, string>;
+  blobs: Record<string, string>;
+}): { specs: string[] } {
+  const specs: string[] = [];
+  execGit.mockImplementation(async (args: readonly string[]) => {
+    if (args.length === 1 && args[0] === "remote")
+      return Object.keys(table).join("\n");
+    if (args[0] === "remote" && args[1] === "get-url")
+      return table[args[args.length - 1] ?? ""] ?? "";
+    if (args[0] === "show") {
+      const spec = args[1] ?? "";
+      specs.push(spec);
+      const blob = blobs[spec];
+      if (blob === undefined)
+        throw new Error(`fatal: path does not exist: ${spec}`);
+      return blob;
+    }
+    return "";
+  });
+  return { specs };
+}
+
 beforeEach(() => {
   process.exitCode = undefined;
   apiPostOrThrow.mockReset();
@@ -654,6 +686,102 @@ describe("resolveContext", () => {
     const ctx = await resolveContext(tmp);
     expect(ctx.warnings[0]).toContain("not valid JSON");
   });
+
+  // The committed read is what audits the working copy, so letting the
+  // working copy say which ref to read it from lets the file choose its own
+  // auditor.
+  it("reads the committed gates from the remote's own default branch when the platform is silent", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.json"),
+      JSON.stringify({
+        steering: { blockStaleRuns: false, remote: "fork", branch: "stale" },
+      }),
+      "utf8",
+    );
+    const { specs } = gitStub({
+      remotes: { origin: "git@github.com:acme/app.git" },
+      blobs: {
+        "refs/remotes/origin/HEAD:.oxagen/settings.json": JSON.stringify({
+          steering: { blockStaleRuns: true },
+        }),
+        // The ref the working copy asked for holds no gate. Before the fix
+        // this is the one that was read, so nothing came back and the
+        // working copy's `false` stood.
+        "refs/remotes/fork/stale:.oxagen/settings.json": JSON.stringify({
+          steering: {},
+        }),
+      },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(specs).toEqual(["refs/remotes/origin/HEAD:.oxagen/settings.json"]);
+    expect(ctx.policy.blockStaleRuns).toBe(true);
+    expect(ctx.policy.sources.blockStaleRuns).toBe("project");
+  });
+
+  it("reads them from the bound remote and the approved branch when the platform answered", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.local.json"),
+      JSON.stringify({ steering: { remote: "fork", branch: "stale" } }),
+      "utf8",
+    );
+    const { specs } = gitStub({
+      remotes: {
+        fork: "git@github.com:someone/app.git",
+        upstream: "git@github.com:acme/app.git",
+      },
+      blobs: {},
+    });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/app",
+      defaultBranch: "release",
+      policy: {},
+    });
+    await resolveContext(tmp);
+    expect(specs).toEqual([
+      "refs/remotes/upstream/release:.oxagen/settings.json",
+    ]);
+  });
+
+  // The gate's own fetch moves the ref these gates are read from, so the
+  // answer from before the fetch is one publication out of date.
+  it("picks up a gate that the ref gained since the first read", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    const spec = "refs/remotes/origin/HEAD:.oxagen/settings.json";
+    const blobs: Record<string, string> = {
+      [spec]: JSON.stringify({ steering: { blockStaleRuns: false } }),
+    };
+    gitStub({ remotes: { origin: "git@github.com:acme/app.git" }, blobs });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.policy.blockStaleRuns).toBe(false);
+
+    blobs[spec] = JSON.stringify({ steering: { blockStaleRuns: true } });
+    const reloaded = await ctx.reloadPolicy();
+    expect(reloaded.blockStaleRuns).toBe(true);
+    expect(ctx.policy.blockStaleRuns).toBe(false);
+  });
+
+  it("reports a ref that stopped parsing between the two reads", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    const spec = "refs/remotes/origin/HEAD:.oxagen/settings.json";
+    const blobs: Record<string, string> = {
+      [spec]: JSON.stringify({ steering: { blockStaleRuns: true } }),
+    };
+    gitStub({ remotes: { origin: "git@github.com:acme/app.git" }, blobs });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.warnings.join(" ")).not.toContain("not valid JSON");
+
+    blobs[spec] = "{ nope";
+    await ctx.reloadPolicy();
+    expect(ctx.warnings.join(" ")).toContain("not valid JSON");
+  });
 });
 
 describe("steering status", () => {
@@ -786,6 +914,16 @@ describe("steering gate", () => {
     expect(w.err()).toContain("not valid JSON");
     expect(w.out()).not.toContain("not valid JSON");
     expect(process.exitCode).toBe(0);
+  });
+
+  // The gate's fetch is what moves the ref the production branch's gates are
+  // read from, so the gate has to be able to ask for them again afterwards.
+  it("hands the gate a way to read the committed gates again", async () => {
+    evaluateGate.mockResolvedValue(decision("allow"));
+    await steeringGate({}, splitWriter().writer, process.cwd());
+    expect(evaluateGate).toHaveBeenCalledWith(
+      expect.objectContaining({ reloadPolicy: expect.any(Function) }),
+    );
   });
 
   it("warns on stderr and still exits 0", async () => {

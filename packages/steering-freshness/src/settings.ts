@@ -157,9 +157,17 @@ export async function loadSteeringSettings({
 export interface CommittedGatesOptions {
   /** The repository root. */
   cwd: string;
-  /** The resolved policy's remote and branch: the production branch. */
+  /**
+   * The remote carrying the production branch.
+   *
+   * It has to come from a scope the working copy cannot write. This read is
+   * what audits `.oxagen/settings.json`, so letting that same file name the
+   * ref lets it choose its own auditor: point `remote` at another cached
+   * remote-tracking ref with no gate in it, and the read comes back empty
+   * while the working copy's `blockStaleRuns: false` stands.
+   */
   remote: string;
-  /** Null when no scope named one; the remote's own default is read then. */
+  /** Null when no such scope named one; the remote's own default is read then. */
   branch: string | null;
   run?: GitRunner;
   timeoutMs?: number;

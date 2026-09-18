@@ -149,6 +149,104 @@ describe("evaluateGate", () => {
   });
 });
 
+/**
+ * The committed gates are read from a remote-tracking ref, and the check
+ * inside the gate is what moves that ref. Production publishing new records
+ * and `blockStaleRuns: true` in one merge was therefore read at its old value
+ * on the very prompt the new records arrived: the gate saw them as behind and
+ * only warned, and enforcement started one prompt later.
+ */
+describe("evaluateGate with a reloaded policy", () => {
+  const blocking = resolveSteeringPolicy([
+    { scope: "project", policy: { blockStaleRuns: true } },
+  ]);
+
+  it("enforces a gate the fetch it just made published", async () => {
+    const d = await gate(true, {}, { reloadPolicy: async () => blocking });
+    expect(d.verdict.fetch).toEqual({ attempted: true, ok: true, reason: null });
+    expect(d.policy.blockStaleRuns).toBe(true);
+    expect(d.policy.sources.blockStaleRuns).toBe("project");
+    expect(d.action).toBe("block");
+    expect(d.exitCode).toBe(2);
+  });
+
+  // The fold is a ratchet in every other direction; a reload is no exception.
+  it("does not let the reload switch a gate back off", async () => {
+    const d = await gate(
+      true,
+      { blockStaleRuns: true },
+      { reloadPolicy: async () => resolveSteeringPolicy([]) },
+    );
+    expect(d.policy.blockStaleRuns).toBe(true);
+    expect(d.action).toBe("block");
+  });
+
+  // Auto-sync is read after the reload, so a newly published `autoSync` acts
+  // on the same prompt rather than on the next one.
+  it("runs a sync the reload turned on", async () => {
+    const d = await gate(
+      true,
+      {},
+      {
+        reloadPolicy: async () =>
+          resolveSteeringPolicy([
+            { scope: "project", policy: { autoSync: true } },
+          ]),
+      },
+    );
+    expect(d.sync?.applied).toBe(true);
+    expect(d.verdict.status).toBe("current");
+    expect(d.action).toBe("allow");
+  });
+
+  // Every prompt pays for this, so it only runs when the ref can have moved.
+  it("does not reload when the check was not allowed to fetch", async () => {
+    const reloadPolicy = vi.fn(async () => blocking);
+    const d = await gate(true, {}, { allowNetwork: false, reloadPolicy });
+    expect(d.verdict.fetch.attempted).toBe(false);
+    expect(reloadPolicy).not.toHaveBeenCalled();
+    expect(d.action).toBe("warn");
+  });
+
+  // A current checkout is allowed whatever the gates say, so reading them
+  // again would be a `git show` in front of every prompt for nothing.
+  it("does not reload on a checkout that is already current", async () => {
+    const reloadPolicy = vi.fn(async () => blocking);
+    const d = await gate(false, {}, { reloadPolicy });
+    expect(reloadPolicy).not.toHaveBeenCalled();
+    expect(d.action).toBe("allow");
+  });
+
+  it("does not reload when the fetch failed", async () => {
+    const { run } = stubRepo({ behind: true });
+    const unreachable: GitRunner = async (args, opts) => {
+      if (args[0] === "fetch") throw new Error("could not resolve host");
+      return run(args, opts);
+    };
+    const reloadPolicy = vi.fn(async () => blocking);
+    const d = await gate(true, {}, { run: unreachable, reloadPolicy });
+    expect(d.verdict.fetch.ok).toBe(false);
+    expect(reloadPolicy).not.toHaveBeenCalled();
+  });
+
+  // A read that can only ever tighten must not become a way past a gate that
+  // was already on: the CLI's catch-all exits 0, so a rejection here would
+  // have allowed the prompt.
+  it("keeps the gate it already had when the reload throws", async () => {
+    const d = await gate(
+      true,
+      { blockStaleRuns: true },
+      {
+        reloadPolicy: async () => {
+          throw new Error("git show failed");
+        },
+      },
+    );
+    expect(d.action).toBe("block");
+    expect(d.exitCode).toBe(2);
+  });
+});
+
 describe("evaluateGate with auto-sync", () => {
   // The two switches are one behaviour: auto-sync exists so the blocking one
   // rarely fires, which only works if the sync runs before the decision.

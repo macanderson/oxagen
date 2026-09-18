@@ -83,7 +83,10 @@ would make the setting decorative.
 The project file is read from the working copy and from the production
 branch as last fetched (`loadCommittedProjectGates`). An uncommitted edit to
 `.oxagen/settings.json` therefore cannot switch off a gate the team
-committed.
+committed. Which ref that second read uses is chosen by the workspace, or by
+the remote's own default branch, never by the file being audited. The gate
+reads it once more after its own fetch, since the fetch is what publishes a
+newly committed gate to that ref.
 
 `OXAGEN_STEERING_FRESHNESS=off` suspends both for one shell. A gate with no
 way out is a gate that gets uninstalled the first time a remote is

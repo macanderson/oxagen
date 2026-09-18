@@ -57,6 +57,7 @@ import {
   type FreshnessVerdict,
   type InstallableHarness,
   type PlatformSignal,
+  type PolicyLayer,
   type SteeringPolicy,
   type SteeringPolicyFile,
 } from "@oxagen/steering-freshness";
@@ -477,6 +478,12 @@ export interface ResolvedContext {
   policy: SteeringPolicy;
   platform: PlatformSignal | null;
   warnings: string[];
+  /**
+   * Read the production branch's gates again and fold them again, for a
+   * caller that has since moved the remote-tracking ref they are read from.
+   * `evaluateGate` calls this after its fetch; see its `reloadPolicy`.
+   */
+  reloadPolicy: () => Promise<SteeringPolicy>;
 }
 
 /**
@@ -582,38 +589,77 @@ export async function resolveContext(
   });
   // The working copy of `.oxagen/settings.json` is whatever was last typed
   // into it, so an uncommitted edit could switch off a gate the team had
-  // committed. The production branch's copy is folded in as well. The remote
-  // and branch come from the first resolution, which is why there are two:
-  // the committed layer carries only the two gates, so it cannot move either.
+  // committed. The production branch's copy is folded in as well. The
+  // committed layer carries only the two gates, so it can move neither the
+  // remote nor the branch.
   const emergency = readEmergencyOverride(process.env);
   const located = resolveSteeringPolicy(layers, emergency);
   const { execGit } = await import("@oxagen/steering-freshness");
-  const committed = await loadCommittedProjectGates({
-    cwd: projectRoot,
-    remote: located.remote,
-    branch: located.branch,
-    run: execGit,
-  });
-  if (committed.warning) warnings.push(committed.warning);
-  const policy =
-    committed.layer === null
+  // WHERE that committed copy is read from is not the working copy's to say.
+  //
+  // Locating it through the fully resolved `remote` and `branch` let the file
+  // under audit choose its own auditor. With no platform answer — the request
+  // failed, or `gate --no-network` was used — an uncommitted
+  // `.oxagen/settings.json` naming another cached remote-tracking ref pointed
+  // this read at a ref that carries no `blockStaleRuns`. Nothing came back, no
+  // committed layer was folded, and the working copy's `false` stood: the
+  // substitution the committed read exists to prevent, performed through the
+  // read itself.
+  //
+  // So the ref is chosen by the scopes the working copy cannot write. The
+  // workspace layer when the platform answered, which carries the remote bound
+  // to this checkout and the branch the workspace approved; otherwise the
+  // defaults, whose `refs/remotes/origin/HEAD` is git's own record of where
+  // this clone came from. A repository whose production branch is neither of
+  // those has no reviewed gates to read until the platform answers, which is
+  // the honest outcome rather than a value a feature branch supplied.
+  const authority = resolveSteeringPolicy(
+    layers.filter((layer) => layer.scope === "workspace"),
+    emergency,
+  );
+  const readCommitted = () =>
+    loadCommittedProjectGates({
+      cwd: projectRoot,
+      remote: authority.remote,
+      branch: authority.branch,
+      run: execGit,
+    });
+  const fold = (layer: PolicyLayer | null): SteeringPolicy =>
+    layer === null
       ? located
-      : resolveSteeringPolicy([...layers, committed.layer], emergency);
+      : resolveSteeringPolicy([...layers, layer], emergency);
+  const committed = await readCommitted();
+  if (committed.warning) warnings.push(committed.warning);
+  const policy = fold(committed.layer);
+  const messages = [
+    ...warnings.map((w) => `${w.path} ${w.message}`),
+    ...mismatch,
+    // A personal exclusion that was refused did nothing; say so, rather than
+    // letting the developer discover it by being blocked over a record they
+    // believe they excluded.
+    ...policy.refusedExcludes.map(
+      (path) =>
+        `\`${path}\` is excluded in a settings file and was ignored: only the workspace can remove records from the freshness check`,
+    ),
+  ];
   return {
     projectRoot,
     policy,
     platform: await toSignal(platformFreshness, projectRoot),
-    warnings: [
-      ...warnings.map((w) => `${w.path} ${w.message}`),
-      ...mismatch,
-      // A personal exclusion that was refused did nothing; say so, rather than
-      // letting the developer discover it by being blocked over a record they
-      // believe they excluded.
-      ...policy.refusedExcludes.map(
-        (path) =>
-          `\`${path}\` is excluded in a settings file and was ignored: only the workspace can remove records from the freshness check`,
-      ),
-    ],
+    warnings: messages,
+    reloadPolicy: async () => {
+      const again = await readCommitted();
+      const note =
+        again.warning === null
+          ? null
+          : `${again.warning.path} ${again.warning.message}`;
+      // `steeringGate` writes `warnings` after the decision is rendered, and
+      // this is the array it writes, so a layer that stopped parsing between
+      // the two reads is still reported. The first read's warning is already
+      // in there, so an unchanged file is not reported twice.
+      if (note !== null && !messages.includes(note)) messages.push(note);
+      return fold(again.layer);
+    },
   };
 }
 
@@ -784,6 +830,9 @@ export async function steeringGate(
       policy: ctx.policy,
       platform: ctx.platform,
       allowNetwork,
+      // The gate's own fetch is what moves the ref the production branch's
+      // gates are read from, so it asks for them again once it has fetched.
+      reloadPolicy: ctx.reloadPolicy,
     });
     const rendered = renderGate(decision, opts.harness ?? "text");
     if (rendered.stdout) writer.write(rendered.stdout.trimEnd());
