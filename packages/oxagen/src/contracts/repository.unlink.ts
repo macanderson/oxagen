@@ -32,7 +32,7 @@ export const repositoryUnlink = registerCapability({
     "Unlink a linked repository from the workspace. The main repository cannot be unlinked; binding history is kept.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

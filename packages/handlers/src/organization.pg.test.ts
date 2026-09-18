@@ -30,8 +30,32 @@ import { iamRoleDeleteHandler } from "./iam.role.delete";
 import { iamRoleGrantsSetHandler } from "./iam.role.grants.set";
 import { iamRoleListHandler } from "./iam.role.list";
 import { workspaceArchiveHandler } from "./workspace.archive";
-import { workspaceCreateHandler } from "./workspace.create";
+import { createWorkspaceCreateHandler } from "./workspace.create";
 import { workspaceListHandler } from "./workspace.list";
+
+// `create_workspace` reaches GitHub twice before its transaction — the org's
+// installations and the repository through one of them (ADR-091). This suite
+// proves the Postgres side, so GitHub is answered by a fixture: one
+// installation on `acme`, and a repository it can see.
+const workspaceCreateHandler = createWorkspaceCreateHandler({
+  candidates: async () => [
+    {
+      installationId: "555",
+      accountLogin: "acme",
+      accountType: "Organization",
+      avatarUrl: null,
+      repositorySelection: "all",
+    },
+  ],
+  repository: async (_installationId, owner, name) => ({
+    id: `pg-${owner}-${name}-${Date.now()}`,
+    owner,
+    name,
+    fullName: `${owner}/${name}`,
+    htmlUrl: `https://github.com/${owner}/${name}`,
+    defaultBranch: "main",
+  }),
+});
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -197,6 +221,16 @@ describe.skipIf(!enabled)(
             .delete(schema.workspaceSlugHistory)
             .where(inArray(schema.workspaceSlugHistory.workspaceId, wsIds));
         }
+        // The main repository `create_workspace` wrote with the workspace.
+        await tx
+          .delete(schema.repositoryBindingHeads)
+          .where(eq(schema.repositoryBindingHeads.orgId, orgId));
+        await tx
+          .delete(schema.repositoryBindings)
+          .where(eq(schema.repositoryBindings.orgId, orgId));
+        await tx
+          .delete(schema.sourceConnections)
+          .where(eq(schema.sourceConnections.orgId, orgId));
         await tx
           .delete(schema.workspaces)
           .where(eq(schema.workspaces.orgId, orgId));
@@ -383,7 +417,11 @@ describe.skipIf(!enabled)(
       };
       const created = await scoped(() =>
         workspaceCreateHandler(
-          workspaceCreate.input.parse({ name: "Data platform", slug: "data" }),
+          workspaceCreate.input.parse({
+            name: "Data platform",
+            slug: "data",
+            mainRepo: { owner: "acme", name: "data-platform" },
+          }),
           keyCall,
         ),
       );
@@ -398,11 +436,35 @@ describe.skipIf(!enabled)(
           .where(eq(schema.workspaces.publicId, created.publicId)),
       );
       expect(createdRow?.createdById).toBe(userId);
+      // §17 M0: the workspace arrived with its main repository, in the same
+      // transaction — one head, role 'main', on a connected GitHub connection.
+      expect(created.mainRepo.fullName).toBe("acme/data-platform");
+      const heads = await withSystemDb((tx) =>
+        tx
+          .select({
+            role: schema.repositoryBindingHeads.role,
+            status: schema.sourceConnections.status,
+          })
+          .from(schema.repositoryBindingHeads)
+          .innerJoin(
+            schema.sourceConnections,
+            eq(
+              schema.sourceConnections.id,
+              schema.repositoryBindingHeads.connectionId,
+            ),
+          )
+          .where(eq(schema.repositoryBindingHeads.workspaceId, createdRow!.id)),
+      );
+      expect(heads).toEqual([{ role: "main", status: "connected" }]);
       await expect(
         refusal(
           scoped(() =>
             workspaceCreateHandler(
-              workspaceCreate.input.parse({ name: "Again", slug: "data" }),
+              workspaceCreate.input.parse({
+                name: "Again",
+                slug: "data",
+                mainRepo: { owner: "acme", name: "data-platform" },
+              }),
               admin,
             ),
           ),
@@ -485,7 +547,11 @@ describe.skipIf(!enabled)(
         refusal(
           scoped(() =>
             workspaceCreateHandler(
-              workspaceCreate.input.parse({ name: "Data again", slug: "data" }),
+              workspaceCreate.input.parse({
+                name: "Data again",
+                slug: "data",
+                mainRepo: { owner: "acme", name: "data-platform" },
+              }),
               admin,
             ),
           ),

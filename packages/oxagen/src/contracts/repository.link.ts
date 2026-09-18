@@ -41,7 +41,7 @@ export const repositoryLink = registerCapability({
     "Link a GitHub repository the workspace's GitHub App installation reaches as a linked (not main) repository of the workspace.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,
