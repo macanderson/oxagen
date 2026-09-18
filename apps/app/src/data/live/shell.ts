@@ -13,8 +13,22 @@ import { ShellContext, ViewerPreferences } from "@/data/contracts/shell";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { isTimeZone } from "@/shared/time-zone";
 import { toOrgChoices, toWorkspaceChoices } from "./mappers/pretenant";
+
+/**
+ * True when `Intl` can format in `name` on this runtime. The column is free
+ * text and the contract admits any zone-shaped string, so a stored value can
+ * still be one this runtime's ICU data has never heard of, and
+ * `Intl.DateTimeFormat` throws a RangeError on it inside every date.
+ */
+function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const shell: DataSource["shell"] = {
   async context(ctx) {

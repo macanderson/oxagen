@@ -100,12 +100,19 @@ describe("ShellChrome", () => {
       steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
       tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
     };
-    const element: ReactElement<{ data: ShellData }> = await ShellChrome({
+    // The chrome is wrapped in the viewer's zone, so its own dates agree with
+    // the page's; the client shell is the provider's one child.
+    const element: ReactElement<{
+      timeZone: string;
+      children: ReactElement<{ data: ShellData }>;
+    }> = await ShellChrome({
       ctx,
       source,
     });
     expect(isValidElement(element)).toBe(true);
-    expect(element.props.data).toEqual(shellData());
+    expect(element.props.timeZone).toBe(shellData().viewer.timeZone);
+    expect(isValidElement(element.props.children)).toBe(true);
+    expect(element.props.children.props.data).toEqual(shellData());
     expect(shellSource).toHaveBeenCalledWith(ctx, source);
   });
 });

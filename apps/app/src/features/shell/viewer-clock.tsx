@@ -26,7 +26,7 @@ export async function ViewerClock({
   children,
 }: {
   ctx: OrgCtx;
-  source: DataSource;
+  source: Pick<DataSource, "shell">;
   children: ReactNode;
 }) {
   const preferences = await source.shell.preferences(ctx);

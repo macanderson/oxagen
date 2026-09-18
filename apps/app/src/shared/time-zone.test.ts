@@ -1,31 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { isTimeZone, timeZoneChoices } from "./time-zone";
-
-describe("isTimeZone", () => {
-  it("accepts an IANA zone and UTC", () => {
-    expect(isTimeZone("America/Los_Angeles")).toBe(true);
-    expect(isTimeZone("UTC")).toBe(true);
-  });
-
-  it("refuses a name Intl cannot format in (negative)", () => {
-    expect(isTimeZone("Mars/Olympus_Mons")).toBe(false);
-    expect(isTimeZone("")).toBe(false);
-  });
-});
+import { timeZoneChoices } from "./time-zone";
 
 describe("timeZoneChoices", () => {
-  it("lists the runtime's zones, with the stored one among them", () => {
+  it("lists the runtime's zones, with the stored one among them once", () => {
     const choices = timeZoneChoices("America/Los_Angeles");
-    expect(choices).toContain("America/Los_Angeles");
     expect(choices).toContain("Europe/London");
-    expect(choices.indexOf("America/Los_Angeles")).toBe(
-      choices.lastIndexOf("America/Los_Angeles"),
-    );
+    expect(choices.filter((z) => z === "America/Los_Angeles")).toHaveLength(1);
   });
 
   it("keeps a stored zone the list does not carry, first, so the select shows what is stored", () => {
-    const choices = timeZoneChoices("US/Pacific");
-    expect(choices[0]).toBe("US/Pacific");
-    expect(choices.filter((z) => z === "US/Pacific")).toHaveLength(1);
+    expect(timeZoneChoices("US/Pacific", ["Europe/London"])).toEqual([
+      "US/Pacific",
+      "Europe/London",
+    ]);
+  });
+
+  it("answers the list unchanged when it carries the stored zone", () => {
+    expect(timeZoneChoices("Europe/London", ["Europe/London"])).toEqual([
+      "Europe/London",
+    ]);
   });
 });

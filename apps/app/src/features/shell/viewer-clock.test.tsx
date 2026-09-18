@@ -4,6 +4,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { useFormatter } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -28,32 +29,44 @@ const NOON_UTC = new Date("2026-01-15T12:00:00Z");
 function Clock() {
   const format = useFormatter();
   return (
-    <time data-testid="clock">
+    <time data-testid="clock" dateTime={NOON_UTC.toISOString()}>
       {format.dateTime(NOON_UTC, { hour: "2-digit", hour12: false })}
     </time>
   );
 }
 
-async function renderUnder(preferences: unknown) {
-  const source = {
-    shell: { preferences: vi.fn().mockResolvedValue(preferences) },
-  } as unknown as Parameters<typeof ViewerClock>[0]["source"];
-  const tree = await ViewerClock({ ctx, source, children: <Clock /> });
-  render(<IntlProvider>{tree}</IntlProvider>);
-  expect(source.shell.preferences).toHaveBeenCalledWith(ctx);
-  return screen.getByTestId("clock").textContent;
+const preferences = vi.fn();
+
+async function renderUnder(read: unknown) {
+  preferences.mockReset();
+  preferences.mockResolvedValue(read);
+  const tree = await ViewerClock({
+    ctx,
+    source: { shell: { context: vi.fn(), preferences } },
+    children: <Clock />,
+  });
+  const { container } = render(<IntlProvider>{tree}</IntlProvider>);
+  expect(preferences).toHaveBeenCalledWith(ctx);
+  return { text: screen.getByTestId("clock").textContent, container };
 }
 
 afterEach(cleanup);
 
 describe("ViewerClock", () => {
   it("formats a date under it in the zone the preference read answered", async () => {
-    expect(await renderUnder(readOk({ timeZone: "Asia/Tokyo" }))).toBe("21");
+    const { text } = await renderUnder(readOk({ timeZone: "Asia/Tokyo" }));
+    expect(text).toBe("21");
   });
 
   it("formats in Pacific time when the preference read failed, rather than blanking the page (negative)", async () => {
-    expect(await renderUnder(readError("control_plane_unavailable", 503))).toBe(
-      "04",
+    const { text } = await renderUnder(
+      readError("control_plane_unavailable", 503),
     );
+    expect(text).toBe("04");
+  });
+
+  it("has no axe violations", async () => {
+    const { container } = await renderUnder(readOk({ timeZone: "Asia/Tokyo" }));
+    await expectNoAxe(container);
   });
 });

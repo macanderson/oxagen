@@ -27,6 +27,20 @@ const updateProfile = vi.fn();
 const updateTimeZone = vi.fn();
 vi.mock("./account-actions", () => ({ updateProfile, updateTimeZone }));
 
+// The runtime lists ~420 zones, and axe walking every <option> took 52s on
+// the CI runner. Three stand in; the stored-zone rule is the real one.
+vi.mock("@/shared/time-zone", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/shared/time-zone")>();
+  return {
+    timeZoneChoices: (current: string) =>
+      real.timeZoneChoices(current, [
+        "America/Los_Angeles",
+        "Asia/Tokyo",
+        "Europe/London",
+      ]),
+  };
+});
+
 // The dialog re-renders the server tree after a save, through useNavigate ---
 // the app's one useRouter importer (INV-13).
 const refresh = vi.fn();
@@ -343,7 +357,7 @@ describe("AccountDialog", () => {
   // Every date in the app reads in this zone (features/shell/viewer-clock.tsx),
   // so the dialog is where a person sets it. It is written through
   // set_preferences, a second capability behind the same Save.
-  it("shows the stored zone and offers the runtime's zones", async () => {
+  it("shows the stored zone and offers the zones to choose from", async () => {
     await openDialog({
       name: "Marcus Bell",
       email: "marcus.bell@acme.example",
