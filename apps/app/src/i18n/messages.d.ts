@@ -2403,6 +2403,7 @@ type Messages = {
       install: {
         heading: string;
         body: string;
+        unreachable: string;
         action: string;
         connect: string;
       };

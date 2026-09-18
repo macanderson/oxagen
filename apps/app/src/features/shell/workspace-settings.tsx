@@ -248,20 +248,29 @@ function MainRepositoryPanel({
           repositories = UNANSWERED;
         }
         if (cancelled()) return;
-        setListing(
-          repositories.ok
-            ? { kind: "ready", value: repositories.value }
-            : { kind: "failed", failure: repositories },
-        );
-        return;
+        if (repositories.ok) {
+          setListing({ kind: "ready", value: repositories.value });
+          return;
+        }
+        setListing({ kind: "failed", failure: repositories });
+        // A listing that refused with an installation on file is the one state
+        // `get_main_repository` cannot see: it makes no GitHub call, so it
+        // reports `connected` from the stored installation id whether or not
+        // that installation still exists. An installation uninstalled or
+        // suspended on GitHub fails here, at the token, and nowhere earlier.
+        // So this falls through to the candidates read rather than returning:
+        // the fastest way out is attaching an installation this account still
+        // reaches, which overwrites the id on file, and only GitHub can say
+        // which those are.
       }
 
-      // No installation attached. The panel asks rather than assuming there is
-      // nothing to pick from, because that assumption is what made this
-      // surface dead-end: the Connect action opens GitHub's identity URL,
-      // which always returns a code and never an `installation_id`, so a
-      // person whose account already carries the App returns authorized with
-      // nothing attached. What they reach is a question only GitHub answers.
+      // No installation attached, or the one attached could not be used. The
+      // panel asks rather than assuming there is nothing to pick from, because
+      // that assumption is what made this surface dead-end: the Connect action
+      // opens GitHub's identity URL, which always returns a code and never an
+      // `installation_id`, so a person whose account already carries the App
+      // returns authorized with nothing attached. What they reach is a
+      // question only GitHub answers.
       setCandidates({ kind: "loading" });
       let reachable;
       try {
@@ -346,13 +355,39 @@ function MainRepositoryPanel({
             )}
           </>
         ) : settings.value.github.connected ? (
-          <RepositoryPicker
-            org={org}
-            ws={ws}
-            listing={listing}
-            manageUrl={settings.value.github.manageUrl}
-            onBound={bound}
-          />
+          <>
+            <RepositoryPicker
+              org={org}
+              ws={ws}
+              listing={listing}
+              manageUrl={settings.value.github.manageUrl}
+              onBound={bound}
+            />
+            {/*
+              The listing refused with an installation on file, which is what a
+              revoked, uninstalled or suspended installation looks like from
+              here — `get_main_repository` makes no GitHub call, so it goes on
+              reporting `connected` from the stored id. Without this the panel
+              was the error and nothing else: no way to replace the stale
+              installation and no way to reinstall the App, on the one surface
+              that owns both. Same doors an unconnected workspace gets, because
+              they are the same next click, and drawn beside the refusal rather
+              than instead of it so the reason stays on screen.
+            */}
+            {listing !== null && listing.kind === "failed" ? (
+              <div className="mt-4">
+                <ConnectPanel
+                  org={org}
+                  ws={ws}
+                  connectUrl={settings.value.github.connectUrl}
+                  installUrl={settings.value.github.installUrl}
+                  candidates={candidates}
+                  onAttached={bound}
+                  body={t("install.unreachable")}
+                />
+              </div>
+            ) : null}
+          </>
         ) : (
           <ConnectPanel
             org={org}
@@ -429,6 +464,13 @@ function Acknowledgement({
  * Between the doors sits the third case: the account already carries the App on
  * more than one org, and nothing but the person can say which one this
  * workspace acts through.
+ *
+ * `body` is the sentence above the doors, and it is a prop because this panel
+ * answers two different questions with the same three controls. Its default
+ * says no installation is attached. The repository picker draws it with a
+ * different sentence when the listing refused: an installation IS on file
+ * there, it simply could not be used, and telling that person nothing is
+ * attached would be a sentence the panel knows to be false.
  */
 function ConnectPanel({
   org,
@@ -437,6 +479,7 @@ function ConnectPanel({
   installUrl,
   candidates,
   onAttached,
+  body,
 }: {
   org: string;
   ws: string;
@@ -444,6 +487,8 @@ function ConnectPanel({
   installUrl: string | null;
   candidates: Load<GitHubInstallations> | null;
   onAttached: () => void;
+  /** The sentence above the doors; the "nothing is attached yet" one by default. */
+  body?: string;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   const connectHref = parseGitHubUrl(connectUrl);
@@ -451,7 +496,7 @@ function ConnectPanel({
   return (
     <div data-testid="workspace-repository-install" className={`${panel} p-4`}>
       <h4 className={sectionTitle}>{t("install.heading")}</h4>
-      <p className={`mt-1.5 ${prose}`}>{t("install.body")}</p>
+      <p className={`mt-1.5 ${prose}`}>{body ?? t("install.body")}</p>
       <InstallationPicker
         org={org}
         ws={ws}
@@ -877,10 +922,20 @@ function RepositoryPicker({
     );
   }
   if (listing.kind === "failed") {
+    // The refusal, and the one control the ready path offers that still means
+    // something here. A listing can refuse because the installation is gone —
+    // the doors drawn beside this panel are the answer to that — or because it
+    // is suspended or reaches nothing this token may read, and that is settled
+    // on the App's own page, which is where this link goes. Returning the
+    // alert alone is what stranded the workspace (#3233): the state was
+    // reachable and had no affordance to leave it.
     return (
-      <FormAlert testId="workspace-repositories-failure">
-        {failureText(listing.failure)}
-      </FormAlert>
+      <div data-testid="workspace-repositories-refused">
+        <FormAlert testId="workspace-repositories-failure">
+          {failureText(listing.failure)}
+        </FormAlert>
+        <ManageLink manageUrl={manageUrl} />
+      </div>
     );
   }
 

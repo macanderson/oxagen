@@ -12,6 +12,7 @@
       "install": {
         "heading": "Oxagen reaches a repository through its GitHub App",
         "body": "No installation is attached to this workspace yet, so there is nothing to pick from. Install the App on the account that owns the repository, or connect an installation that account already has; GitHub sends you back here either way.",
+        "unreachable": "An installation is attached to this workspace, but GitHub would not let Oxagen use it \u2014 which is what an installation that has been uninstalled, suspended, or had its access withdrawn looks like from here. Install the App again, or attach an installation this account still reaches; either one replaces the installation on file.",
         "action": "Install the GitHub App",
         "connect": "Connect an existing installation"
       },

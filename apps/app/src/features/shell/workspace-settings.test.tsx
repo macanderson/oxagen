@@ -141,12 +141,22 @@ const NOT_AUTHORIZED = {
   code: "github_not_authorized",
 } as const;
 
+/**
+ * An installation is attached and nothing is bound: the picker's state.
+ *
+ * All three URLs, because that is the only shape the contract mints — the
+ * handler builds them from one env read and answers null for all three or a
+ * string for all three (`envGithubUrls`, packages/handlers). A fixture with a
+ * manage URL and no doors is a deployment that cannot exist, and it hid the
+ * state this file now covers: the doors that recover a stale installation
+ * cannot be drawn by a record that carries neither.
+ */
 const connected: WorkspaceRepository = {
   repository: null,
   github: {
     connected: true,
-    connectUrl: null,
-    installUrl: null,
+    connectUrl: CONNECT_URL,
+    installUrl: INSTALL_URL,
     manageUrl: MANAGE_URL,
   },
 };
@@ -913,6 +923,154 @@ describe("picking the main repository", () => {
     const { dialog } = await openSettings();
     await screen.findByTestId("workspace-repository-picker");
     await expectNoAxe(dialog);
+  });
+});
+
+/**
+ * An installation is on file and GitHub will not serve it (#3233).
+ *
+ * `get_main_repository` makes no GitHub API call, deliberately — it is a
+ * settings read that has to render while GitHub is down — so it reports
+ * `github.connected` from the stored installation id whether or not that
+ * installation still exists. Uninstalling the App, suspending it, or revoking
+ * its access leaves the id behind, and the first thing that notices is
+ * `list_installation_repositories`, at the token it mints.
+ *
+ * The panel used to draw that refusal and nothing else: no picker, no doors,
+ * no manage link, on the one surface that owns replacing an installation and
+ * reinstalling the App. The workspace could not leave the state from here.
+ * These assert the way out is on screen with the reason, and that none of it
+ * leaks into a healthy listing.
+ */
+describe("an installation the listing could not use", () => {
+  beforeEach(() => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: connected });
+    // What a revoked installation does: the handler's token mint throws, and
+    // the action answers `unavailable: action_failed`.
+    listInstallationRepositories.mockRejectedValue(
+      new Error("Bad credentials"),
+    );
+    listGithubInstallations.mockResolvedValue({ ok: true, value: reachable });
+  });
+
+  it("keeps the refusal AND draws both doors out of it", async () => {
+    await openSettings();
+    expect(
+      await screen.findByTestId("workspace-repositories-failure"),
+    ).toHaveTextContent("action_failed");
+
+    const doors = await screen.findByTestId("workspace-repository-install");
+    // Not "nothing is attached yet": one IS, and it could not be used.
+    expect(doors).toHaveTextContent("would not let Oxagen use it");
+    expect(screen.getByTestId("workspace-github-install")).toHaveAttribute(
+      "href",
+      INSTALL_URL,
+    );
+    expect(screen.getByTestId("workspace-github-connect")).toHaveAttribute(
+      "href",
+      CONNECT_URL,
+    );
+  });
+
+  // The fastest repair, and the only one that never leaves the app: the
+  // callback and `attach_github_installation` both OVERWRITE
+  // `deliveryConfig.installationId` on the connection already there, so
+  // choosing a live installation replaces the stale id outright.
+  it("offers the installations this account still reaches, and attaches one", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-installation-picker");
+    expect(listGithubInstallations).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+    );
+
+    await user.click(screen.getByRole("radio", { name: /mac/ }));
+    // The repair worked: the next read lists repositories again.
+    listInstallationRepositories.mockResolvedValue({
+      ok: true,
+      value: listing,
+    });
+    await user.click(
+      screen.getByRole("button", { name: "Use this installation" }),
+    );
+
+    expect(attachGithubInstallation).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "222",
+    );
+    expect(
+      await screen.findByTestId("workspace-repository-picker"),
+    ).toBeTruthy();
+    expect(screen.getByText("acme/platform")).toBeTruthy();
+    expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
+  });
+
+  // The other cause: the installation is live but reaches nothing this token
+  // may read, or is suspended. That is settled on the App's own page, and the
+  // ready picker offers exactly this link — skipping it here took a control
+  // away from the person who needs it most.
+  it("still offers the App's settings beside the refusal", async () => {
+    await openSettings();
+    const refused = await screen.findByTestId("workspace-repositories-refused");
+    expect(
+      within(refused).getByTestId("workspace-github-manage"),
+    ).toHaveAttribute("href", MANAGE_URL);
+  });
+
+  it("says the App is unconfigured rather than drawing dead doors (negative)", async () => {
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        repository: null,
+        github: {
+          connected: true,
+          connectUrl: null,
+          installUrl: null,
+          manageUrl: null,
+        },
+      },
+    });
+    await openSettings();
+    await screen.findByTestId("workspace-repositories-failure");
+    expect(
+      await screen.findByTestId("workspace-github-unconfigured"),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("workspace-github-install")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-connect")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-manage")).toBeNull();
+  });
+
+  it("has no axe violations with the way out showing", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-repository-install");
+    await expectNoAxe(dialog);
+  });
+});
+
+// The healthy listing, asserted from the other side: none of the recovery
+// above may appear where nothing is wrong, and the extra GitHub call that
+// finds the replacement installation must not fire on the ordinary path.
+describe("a listing that worked", () => {
+  beforeEach(() => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: connected });
+  });
+
+  it("draws no recovery doors and no refusal (negative)", async () => {
+    await openSettings();
+    await screen.findByTestId("workspace-repository-picker");
+    expect(screen.queryByTestId("workspace-repositories-refused")).toBeNull();
+    expect(screen.queryByTestId("workspace-repository-install")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-install")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-connect")).toBeNull();
+    // The manage link is the picker's own, not the refusal's.
+    expect(screen.getByTestId("workspace-github-manage")).toBeTruthy();
+  });
+
+  it("asks GitHub for no installations it does not need (negative)", async () => {
+    await openSettings();
+    await screen.findByTestId("workspace-repository-picker");
+    expect(listGithubInstallations).not.toHaveBeenCalled();
   });
 });
 
