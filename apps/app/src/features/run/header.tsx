@@ -107,9 +107,7 @@ export function RunHeader({
           <AgentCard
             agentKey={run.agentKey}
             notRecorded={t("notRecorded")}
-            sub={
-              run.operatorId === null ? t("notRecorded") : `${run.operatorId}`
-            }
+            sub={run.operatorId === null ? t("notRecorded") : run.operatorId}
           />
           <RunControls
             org={org}
