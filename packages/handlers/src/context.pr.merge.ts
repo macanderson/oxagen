@@ -128,12 +128,13 @@ export function createMergeContextPrHandler(
     }
 
     let commitSha: string;
-    // The publication instant is GitHub's merge instant, not this call's
-    // clock. `latestPublication` picks the newest `published_at` as the
-    // commit a checkout must reach, and the retry below can run after a
-    // later PR has published: stamped with `now()`, the earlier merge would
-    // sort newest, and a checkout at that earlier commit would read as
-    // current while it lacked the later record.
+    // The publication is stamped with the instant the commit landed on the
+    // production branch, not this call's clock. They differ on a retry, and
+    // the difference matters: `latestPublication` picks the newest
+    // `published_at` as the commit a checkout must reach, and the retry
+    // below can run after a later PR has published. Stamped with `now()`,
+    // the earlier merge sorted newest, and a checkout at that earlier
+    // commit read as current while it lacked the later record.
     let mergedAt: Date;
     if (pr.merged) {
       // GitHub merged it on an earlier call whose publication did not land.

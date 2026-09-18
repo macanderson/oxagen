@@ -168,8 +168,16 @@ describe("syncSteering refusals", () => {
     ]);
     expect(result.removed).toEqual([".oxagen/rules/ctx.mine.toml"]);
     const calls = run.mock.calls.map((c) => c[0]);
-    expect(calls.some((a) => a[0] === "rm" && a.includes(".oxagen/rules/ctx.mine.toml"))).toBe(true);
-    expect(calls.some((a) => a[0] === "clean" && a.includes(".oxagen/rules/ctx.mine.toml"))).toBe(true);
+    expect(
+      calls.some(
+        (a) => a[0] === "rm" && a.includes(".oxagen/rules/ctx.mine.toml"),
+      ),
+    ).toBe(true);
+    expect(
+      calls.some(
+        (a) => a[0] === "clean" && a.includes(".oxagen/rules/ctx.mine.toml"),
+      ),
+    ).toBe(true);
   });
 });
 

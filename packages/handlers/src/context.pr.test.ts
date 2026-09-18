@@ -43,6 +43,7 @@ import {
   MemoryStore,
   REPO,
   REVIEWER,
+  SCOPE,
   ctx,
   harness,
   type Harness,
@@ -909,6 +910,81 @@ describe("merge_context_pr", () => {
     expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime() + 1000);
   });
 
+  // `latestPublication` orders by `publishedAt` to name the commit a checkout
+  // must reach. A retried publication stamped with the retry's time, after a
+  // later merge had already published, named the earlier commit as newest.
+  it("stamps a resumed publication with GitHub's merge time, not the retry's", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let fail = true;
+    store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const mergedAt = h.github.pulls[0]!.mergedAt;
+    expect(mergedAt).not.toBeNull();
+    // Time passes: other calls, other merges.
+    h.now();
+    h.now();
+    h.now();
+
+    await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(h.store.records[0]!.publishedAt?.getTime()).toBe(
+      mergedAt!.getTime(),
+    );
+  });
+
+  // The case the stamp exists for. PR A merges on GitHub and its publication
+  // fails. PR B merges and publishes. A's publication is retried. The newest
+  // publication is still B's commit: a checkout at A's commit lacks B's
+  // record, and `get_steering_freshness` must name B's commit as the one a
+  // checkout has to reach, whatever order the rows were written in.
+  it("a retried earlier merge does not become the newest publication over a later one", async () => {
+    const h = harness();
+    const a = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let failOnce = true;
+    store.publishMerge = async (input) => {
+      if (failOnce) {
+        failOnce = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: a }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const commitA = h.github.pulls[0]!.mergeCommitSha;
+    expect(commitA).not.toBeNull();
+
+    const b = await opened(h, {
+      record: {
+        ...proposalInput().record,
+        lineageId: "ctx.release.cache-readme",
+        statement: "Do not re-read README.md more than once in a run.",
+      },
+    });
+    await merge({ proposalId: b }, ctx({ userId: REVIEWER }));
+    const commitB = h.github.pulls[1]!.mergeCommitSha;
+    expect(commitB).not.toBeNull();
+    expect(commitB).not.toBe(commitA);
+
+    // A's retry lands after B published, stamped with A's merge time.
+    await merge({ proposalId: a }, ctx({ userId: REVIEWER }));
+    expect(h.store.records).toHaveLength(2);
+    const latest = await h.store.latestPublication(SCOPE);
+    expect(latest?.commitSha).toBe(commitB);
   // GitHub reports `merged_at` to the second, so two PRs can merge inside
   // one. Ordering on that alone picked either record, and picking the
   // earlier merge let a checkout at that commit read as current while it

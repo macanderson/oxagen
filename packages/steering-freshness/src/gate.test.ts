@@ -7,7 +7,8 @@ import type { GitRunner } from "./git";
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
 const BASE = "3333333333333333333333333333333333333333";
-const EXCL = ":(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
+const EXCL =
+  ":(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
 
 /**
  * A runner whose remote-side diff can be emptied, which is how a sync is
@@ -105,6 +106,11 @@ describe("evaluateGate", () => {
 
   it("warns on a stale checkout when blocking is off", async () => {
     const d = await gate(true);
+    // Named first so a stub the check has outgrown fails on the verdict it
+    // produced (`unknown`, with the git command it could not answer in
+    // `notes`) rather than on the action that followed from it.
+    expect(d.verdict.notes).toEqual([]);
+    expect(d.verdict.status).toBe("behind");
     expect(d.action).toBe("warn");
     // A warning still lets the prompt through.
     expect(d.exitCode).toBe(0);

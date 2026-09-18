@@ -710,6 +710,8 @@ export function harness(files: Record<string, string> = {}): Harness {
   const events: SecurityEventInput[] = [];
   let tick = Date.parse("2026-09-15T09:16:40.000Z");
   const github = new FakeGitHub(files);
+  // One clock for GitHub and the platform, so a test can tell a merge's
+  // time apart from the time of the call that published it.
   github.clock = () => new Date((tick += 1000));
   return {
     store: new MemoryStore(),
