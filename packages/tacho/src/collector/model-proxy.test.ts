@@ -186,12 +186,14 @@ function controlPlane() {
   const queue: DeliveredCommand[] = [];
   const fetch: FetchLike = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}") as Record<string, unknown>;
-    const control: ControlEnvelope = {
+    // Built only for the routes that carry an envelope. The bundle route
+    // does not, and splicing here would let a bundle poll swallow commands.
+    const control = (): ControlEnvelope => ({
       host_status: "active",
       deny_generation: { org: 1, workspace: 1 },
       bundle_etag: "etag-3",
       commands: queue.splice(0),
-    };
+    });
     if (url.endsWith("/events")) {
       const events = body["events"] as TachoEvent[];
       ingested.push(...events);
@@ -203,7 +205,7 @@ function controlPlane() {
             accepted: events.length,
             event_ids: events.map((e) => e.event_id_idem),
             chain_breaks: [],
-            control,
+            control: control(),
           }),
       };
     }
@@ -220,7 +222,7 @@ function controlPlane() {
       text: async () =>
         JSON.stringify({
           acknowledged: (body["acknowledgements"] as unknown[]).length,
-          control,
+          control: control(),
         }),
     };
   };

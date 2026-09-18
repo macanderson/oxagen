@@ -330,14 +330,28 @@ export async function startDaemon(
    * Whether the cached mandate has outlived its own signed window since the
    * control plane last confirmed it. The same rule `isStale` applies to tool
    * decisions: a grant is authority for as long as the mandate is current,
-   * and no longer.
+   * and no longer. A window that cannot be read grants nothing.
    */
   function mandateLapsed(): boolean {
     const issued = Date.parse(host.bundle.issued_at);
     const expires = Date.parse(host.bundle.expires_at);
-    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return false;
-    if (expires <= issued) return false;
+    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return true;
+    if (expires <= issued) return true;
     return now() - mandateConfirmedAt > expires - issued;
+  }
+  /**
+   * Drop every held body once the mandate that allowed keeping it has
+   * lapsed. `retentionInForce` already stops new writes and `take` refuses
+   * one batch at a time, but a backlog longer than a batch would otherwise
+   * wait on disk for the next confirmation and then ship under a mandate
+   * nobody confirmed while it was written. Prompt text the host is no longer
+   * authorised to keep is not kept.
+   */
+  function dropLapsedBodies(): void {
+    if (!bundleVerified || !mandateLapsed()) return;
+    const held = bodyStore.dropDisallowed(NO_RETENTION);
+    if (held > 0)
+      log(`dropped ${held} held body file(s): the cached mandate has lapsed`);
   }
   if (!bundleVerified) {
     const held = bodyStore.dropDisallowed(NO_RETENTION);
@@ -1389,12 +1403,16 @@ export async function startDaemon(
     // Outside the serial block above on purpose: this is where the git
     // process spawns happen, and a hook must never queue behind them.
     await drainGitReads();
-    await shipper.drain();
+    // Refresh before draining, so a batch carrying bodies leaves under the
+    // mandate the control plane holds now rather than the one cached before
+    // an outage. Then purge whatever a lapsed mandate no longer covers.
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();
       await refreshBundle();
       await refreshUpstreams();
     }
+    dropLapsedBodies();
+    await shipper.drain();
     await sendAcks();
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();

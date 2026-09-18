@@ -997,6 +997,63 @@ describe("tachod", () => {
     expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
   });
 
+  it("purges held bodies when a signed mandate lapses during an outage, and ships none", async () => {
+    // The regression this guards: a correctly signed bundle kept granting
+    // `content_exact` after its window closed, and the tick drained before
+    // it refreshed, so bodies held through an outage left the machine
+    // before the current mandate was fetched.
+    //
+    // The fixture's signed window runs 2026-09-10 to 2027-09-10. The clock
+    // starts on real time because the tick's hourly body compaction reads
+    // file mtimes, and a fake clock months ahead would sweep the body first.
+    const plane = fakeControlPlane("etag-3");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+    plane.setDown(true);
+    let clock = Date.now();
+    const { handle, log } = await boot(plane, paths, { now: () => clock });
+    const prompt = (sessionId: string) =>
+      runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: sessionId,
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+
+    expect(
+      (await prompt("11111111-1111-4111-8111-11111111cccc")).exitCode,
+    ).toBe(0);
+    await handle.tick();
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(1);
+
+    clock = Date.parse("2027-10-01T00:00:00.000Z");
+    await handle.tick();
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+    expect(log.some((l) => l.includes("the cached mandate has lapsed"))).toBe(
+      true,
+    );
+
+    // Nothing new is written while it stays lapsed.
+    await prompt("11111111-1111-4111-8111-11111111dddd");
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+
+    plane.setDown(false);
+    await handle.stop();
+    expect(plane.ingestedBodies).toEqual([]);
+  });
+
   it("backs off the command poll instead of retrying it every tick", async () => {
     // The regression this guards: `sendAcks` had no gate of its own. Its only
     // skip condition is "a recent ingest already carried a control envelope",
