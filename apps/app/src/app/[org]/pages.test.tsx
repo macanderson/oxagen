@@ -14,7 +14,9 @@
 // (#2958); Billing hands
 // its viewer, the data source, the checkout outcome and the invoices cursor to
 // the Billing feature (WL-38); People renders its sections from org.members and
-// API keys its table from org.apiKeys. Run gains its body in WL-35.
+// API keys its table from org.apiKeys; Run hands its viewer, the data source, the
+// run id and the tab, zoom and frames cursor the URL carries to the Run feature
+// (WL-35).
 import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
@@ -29,6 +31,7 @@ const {
   Audit,
   Billing,
   Fleet,
+  Run,
   Agents,
   Agent,
   AgentSource,
@@ -67,6 +70,9 @@ const {
     FleetSpendTiles: vi.fn((_props: Record<string, unknown>) => (
       <p data-testid="fleet-spend" />
     )),
+    Run: vi.fn((_props: Record<string, unknown>) => (
+      <p data-testid="run-body" />
+    )),
     Roles: vi.fn((_props: Record<string, unknown>) => null),
     Workspaces: vi.fn((_props: Record<string, unknown>) => null),
     // The gate's own states are its component test; here it only has to render.
@@ -99,6 +105,7 @@ vi.mock("@/server/viewer", () => ({
 vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
+vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
 vi.mock("@/features/steering", () => ({ Steering }));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
@@ -166,9 +173,7 @@ const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
 const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
 const SPEND: Load = () => import("./[ws]/spend/page");
 
-const REV1: [string, string[], Load][] = [
-  ["run", WS, () => import("./[ws]/runs/[run]/page")],
-];
+const RUN: Load = () => import("./[ws]/runs/[run]/page");
 const API_KEYS: Load = () => import("./api-keys/page");
 
 const BILLING: Load = () => import("./billing/page");
@@ -429,18 +434,44 @@ describe("the Agents pages", () => {
   });
 });
 
-describe("rev1 pages before their page item", () => {
-  it.each(REV1)(
-    "pages.%s resolves its viewer, names the page once and renders no body, never a NotRecorded row (negative)",
-    async (key, segments, load) => {
-      await expectPageTitle(await load(), routeProps(SEGMENTS), title(key));
-      expect(requireViewer).toHaveBeenCalledWith(...segments);
-      expect(screen.queryByTestId("not-recorded")).toBeNull();
-      expect(
-        screen.getByRole("main").querySelectorAll("p, table, form, ul"),
-      ).toHaveLength(0);
-    },
-  );
+describe("the Run page", () => {
+  const ctx = { wsSlug: "core-platform" };
+  beforeEach(() => {
+    requireViewer.mockResolvedValue(ctx);
+  });
+
+  it("hands the run, the tab, the zoom and the frames cursor the URL names to Run", async () => {
+    await expectPageTitle(
+      await RUN(),
+      routeProps(SEGMENTS, {
+        tab: "frames",
+        zoom: "turns",
+        frames: "ZjoyMA",
+      }),
+      title("run"),
+    );
+    expect(requireViewer).toHaveBeenCalledWith(...WS);
+    expect(Run.mock.calls.at(-1)?.[0]).toEqual({
+      ctx,
+      source,
+      runId: "arun_1",
+      tab: "frames",
+      zoom: "turns",
+      frames: "ZjoyMA",
+      body: null,
+    });
+    expect(screen.queryByTestId("not-recorded")).toBeNull();
+  });
+
+  it("hands nulls, not empty strings, when the URL carries no query (negative)", async () => {
+    await expectPageTitle(await RUN(), routeProps(SEGMENTS), title("run"));
+    expect(Run.mock.calls.at(-1)?.[0]).toMatchObject({
+      tab: null,
+      zoom: null,
+      frames: null,
+      body: null,
+    });
+  });
 });
 
 describe("Organization › People", () => {
@@ -611,7 +642,7 @@ describe("a person requireViewer refuses", () => {
     ["agent", AGENT] as const,
     ["agentSource", AGENT_SOURCE] as const,
     ["spend", SPEND] as const,
-    ...REV1.map(([key, , load]) => [key, load] as const),
+    ["run", RUN] as const,
     ["people", () => import("./page")] as const,
     ["roles", () => import("./roles/page")] as const,
     ["apiKeys", API_KEYS] as const,

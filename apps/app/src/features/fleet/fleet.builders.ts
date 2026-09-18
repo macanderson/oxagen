@@ -23,6 +23,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     agentKey: "acme.core.release-bot",
     operatorId: "usr_marcusbell",
     status: "live",
+    turns: 34,
+    steps: 271,
     frames: 1204,
     cost: {
       micros: "4131265",
@@ -30,7 +32,15 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       basis: "gateway_observed",
     },
     taskRef: "ENG-4121 cut the 3.2 release",
+    name: "Cut the 3.2 release branch",
+    summary: {
+      text: "Cut release/3.2 from main, bumped eleven package versions, and opened the release pull request. Two test jobs were re-run after a flake in the e2e suite.",
+      generatedAt: at(-120),
+      model: "z-ai/glm-flash-latest",
+    },
+    replayGrade: "fork",
     startedAt: at(-3600),
+    sealedAt: null,
     ...overrides,
   };
 }
@@ -85,6 +95,10 @@ export function fleetSource(reads: FleetReads) {
         calls.runs.push(args);
         return Promise.resolve(reads.runs);
       },
+      get: refuse,
+      frameBody: refuse,
+      cost: refuse,
+      transcript: refuse,
     },
     approvals: {
       pending: (...args) => {

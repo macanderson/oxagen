@@ -59,7 +59,13 @@ async function renderRoles(
       contractRate: vi.fn(),
       invoices: vi.fn(),
     },
-    runs: { list: vi.fn() },
+    runs: {
+      list: vi.fn(),
+      get: vi.fn(),
+      frameBody: vi.fn(),
+      cost: vi.fn(),
+      transcript: vi.fn(),
+    },
     approvals: { pending: vi.fn() },
     agents: {
       list: vi.fn(),

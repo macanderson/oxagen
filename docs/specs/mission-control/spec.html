@@ -120,7 +120,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Specification</p>
   <h1>Oxagen Mission Control: Product and Technical Specification</h1>
-  <dl class="facts"><dt>Status</dt><dd>Draft for review</dd><dt>Date</dt><dd>2026-09-11</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Supersedes</dt><dd>The <code>oxagen-platform</code> and <code>oxagen</code> codebases as products. Carries forward the designs named in §16.</dd><dt>Builds on</dt><dd>Context Graph Protocol <code>contextgraph/1.0</code> and the <code>contextgraph/lifecycle/1.0-draft</code> profile (repo at <code>origin/main</code>, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under <code>docs/specs/tacho/</code>, renamed here).</dd><dt>Amended</dt><dd>2026-09-13, by Oxagen ADR-055 (<code>docs/adr/ADR-055-gau-buckets-and-contracted-rates.md</code>) and <code>apps/app/ARCHITECTURE.md</code> §3.9: the billing model. Blocks marked <strong>Amendment 2026-09-13 (ADR-055)</strong> supersede the text they follow in §0 row 13, §12.1, A.8, A.10 and Appendix E.</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Draft for review</dd><dt>Date</dt><dd>2026-09-11</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Supersedes</dt><dd>The <code>oxagen-platform</code> and <code>oxagen</code> codebases as products. Carries forward the designs named in §16.</dd><dt>Builds on</dt><dd>Context Graph Protocol <code>contextgraph/1.0</code> and the <code>contextgraph/lifecycle/1.0-draft</code> profile (repo at <code>origin/main</code>, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under <code>docs/specs/tacho/</code>, renamed here).</dd><dt>Amended</dt><dd>2026-09-13, by Oxagen ADR-055 (<code>docs/adr/ADR-055-gau-buckets-and-contracted-rates.md</code>) and <code>apps/app/ARCHITECTURE.md</code> §3.9: the billing model. Blocks marked <strong>Amendment 2026-09-13 (ADR-055)</strong> supersede the text they follow in §0 row 13, §12.1, A.8, A.11 and Appendix E. (A.11 was A.10 before ADR-090 inserted the <code>skills</code> schema.)</dd></dl>
 </header>
 <div class="grid">
 <nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-the-call-sheet">0. The call sheet</a></li><li><a href="#1-why-this-product-in-one-page">1. Why this product, in one page</a></li><li><a href="#2-scope">2. Scope</a></li><li><a href="#3-vocabulary">3. Vocabulary</a></li><li><a href="#4-architecture">4. Architecture</a></li><li><a href="#5-tenancy-and-isolation">5. Tenancy and isolation</a></li><li><a href="#6-identity-access-and-the-toolbelt">6. Identity, access, and the toolbelt</a></li><li><a href="#7-the-gateway-and-intervention">7. The gateway and intervention</a></li><li><a href="#8-runs-and-frames">8. Runs and frames</a></li><li><a href="#9-context-records-how-agents-learn">9. Context records: how agents learn</a></li><li><a href="#10-the-repository-steering-and-context-prs">10. The repository, steering, and Context PRs</a></li><li><a href="#11-the-knowledge-graph-and-dynamic-ontologies">11. The knowledge graph and dynamic ontologies</a></li><li><a href="#12-cost-accounted-to-the-token-attributed-to-the-operator-reconciled-to-the-cent">12. Cost: accounted to the token, attributed to the operator, reconciled to the cent</a></li><li><a href="#13-audit-retention-and-the-fidelity-call">13. Audit, retention, and the fidelity call</a></li><li><a href="#14-mission-control">14. Mission Control</a></li><li><a href="#15-non-functional-requirements">15. Non-functional requirements</a></li><li><a href="#16-carry-over-leave-behind">16. Carry over, leave behind</a></li><li><a href="#17-delivery-plan">17. Delivery plan</a></li><li><a href="#18-risks-and-open-decisions">18. Risks and open decisions</a></li><li><a href="#19-demo-wow-scenarios">19. Demo Wow! Scenarios</a></li><li><a href="#appendix-a-postgres-tables-target">Appendix A. Postgres tables (target)</a></li><li><a href="#appendix-b-neo4j-model-per-organization-database">Appendix B. Neo4j model (per organization database)</a></li><li><a href="#appendix-c-frame-envelope-gateway-kind-example">Appendix C. Frame envelope (gateway kind example)</a></li><li><a href="#appendix-d-tool-grant-example">Appendix D. Tool grant example</a></li><li><a href="#appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</a></li><li><a href="#appendix-f-the-pages-that-survive">Appendix F. The pages that survive</a></li></ol></nav>
@@ -208,7 +208,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 </tr>
 <tr>
 <td>15</td>
-<td>Mission Control is ten pages: seven in a workspace and three for the organization, down from 70. Everything else is deleted. Appendix F says where each old route went.</td>
+<td>Mission Control is eleven pages: eight in a workspace and three for the organization, down from 70 (Skills joined with ADR-090). Everything else is deleted. Appendix F says where each old route went.</td>
 <td>§14, App. F</td>
 </tr>
 <tr>
@@ -230,7 +230,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <li>teaches every future run from one knowledge graph, a linked map of the customer's data, built from the customer's data sources.</li>
 </ol>
 <p>Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.</p>
-<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
+<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is <strong>skill resolution</strong>: which skills a workspace's <code>.oxagen/skills.toml</code> lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is procedure written down — a file, in a repository, with a version and a digest. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call (ADR-090). The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
 <hr />
 <h2 id="2-scope">2. Scope</h2>
 <h3 id="2-1-in-scope-for-v1">2.1 In scope for v1</h3>
@@ -1144,7 +1144,7 @@ sandbox = &quot;read-only&quot;
 </tr>
 <tr>
 <td><code>applied</code></td>
-<td>The effect is visible in the record: the <code>model.request</code> carrying the steer was made, or the pause took hold. This is the only success status.</td>
+<td>The effect is visible in the record: the <code>model.request</code> carrying the steer was made, the pause took hold, or — for an <code>answer</code> (ADR-090) — the <code>control.answer</code> frame was written and the run left the interjected state and reached its first <code>model.request</code>. This is the only success status.</td>
 <td><strong>yes</strong></td>
 </tr>
 <tr>
@@ -1219,6 +1219,13 @@ sandbox = &quot;read-only&quot;
 <td>soft cancel guaranteed. Process kill best effort and recorded</td>
 </tr>
 <tr>
+<td><code>answer</code> (ADR-090)</td>
+<td>consumes it: the run is held <strong>before</strong> the first model call, so the proxy is what releases it</td>
+<td>not involved</td>
+<td>not involved</td>
+<td>guarantee: the run resumes only after the answer is recorded. No answer by the 30-minute timeout is not a <code>failed</code> command — no command was ever written, and the run falls back to <code>deny</code>, so &quot;nobody answered&quot; stays distinguishable from &quot;somebody denied it&quot;</td>
+</tr>
+<tr>
 <td><code>revoke</code> (agent or host)</td>
 <td>credential dead. All run tokens dead</td>
 <td>same</td>
@@ -1289,6 +1296,46 @@ sandbox = &quot;read-only&quot;
 <td><code>record.appended</code></td>
 <td>exchange provider</td>
 <td>record id, lineage id, record hash, kind</td>
+</tr>
+<tr>
+<td><code>skills.searched</code></td>
+<td>gateway</td>
+<td>query digest, resolved config version, returned ids, withheld count by reason class (never the withheld names), load cost, replay grade</td>
+</tr>
+<tr>
+<td><code>skills.resolved</code></td>
+<td>gateway</td>
+<td>the config version a run pinned at start, sources on, belt mode, cut-off, load budget</td>
+</tr>
+<tr>
+<td><code>skills.loaded</code></td>
+<td>gateway</td>
+<td><code>id@version</code>, digest, token cost, the decision that admitted it</td>
+</tr>
+<tr>
+<td><code>repo.unknown</code></td>
+<td>gateway</td>
+<td>the workspace has no bound repository to resolve a config against; carries the policy in force (<code>ask</code>) and what it falls back to at timeout (<code>deny</code>)</td>
+</tr>
+<tr>
+<td><code>repo.bound</code></td>
+<td>control plane</td>
+<td>the binding that answered a <code>repo.unknown</code>, and the commit its config was read at</td>
+</tr>
+<tr>
+<td><code>workspace.created</code></td>
+<td>control plane</td>
+<td>a workspace created while a run was in flight; records that it came up with <code>skills.enabled</code> false, per ADR-090</td>
+</tr>
+<tr>
+<td><code>control.interject</code></td>
+<td>control channel</td>
+<td>the question put to a person, why the loop stopped (e.g. <code>unbound_repo</code>), the timeout and what it falls back to (<code>deny</code>)</td>
+</tr>
+<tr>
+<td><code>control.answer</code></td>
+<td>control channel</td>
+<td>the answer, who gave it, and the frame it unblocked</td>
 </tr>
 <tr>
 <td><code>control.command</code></td>
@@ -2132,7 +2179,7 @@ sandbox = &quot;read-only&quot;
 <p>GDPR (the EU privacy law) erasure works by <strong>crypto-shredding</strong>, which destroys the encryption key so the data can never be read again. Bodies attributable to a natural person are encrypted under a per-subject data key. Erasure destroys the key and writes a tombstone frame in the ledger with the digests that remain. The chain stays intact and verifiable. The content is unrecoverable. Redaction detectors run before write, so most personal data never enters a body in the first place. The erasure SOP carries over.</p>
 <hr />
 <h2 id="14-mission-control">14. Mission Control</h2>
-<p>Mission Control has ten pages: seven at workspace scope and three at organization scope. No other pages ship in v1. Appendix F maps every current route onto these ten. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.</p>
+<p>Mission Control has eleven pages: eight at workspace scope and three at organization scope, Skills having joined them with ADR-090. <code>apps/app/ARCHITECTURE.md</code> sets the shipping page set and wins where it and this section differ — it records that this count and Appendix F have drifted in other directions too (Ontology cut, Audit rescoped), and reconciling those is not ADR-090's job. Appendix F maps current routes onto the ten that predate ADR-090 and does <strong>not</strong> cover Skills; it is therefore no longer a complete route map, and a cutover must take the page set from <code>apps/app/ARCHITECTURE.md</code> rather than from Appendix F. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.</p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -2171,6 +2218,11 @@ sandbox = &quot;read-only&quot;
 <td><strong>Ontology</strong></td>
 <td>The workspace's model of its own business, and the page the product is known for. Tabs in order: <strong>Model</strong> (the live map: every class with its entity count, freshness, sources, and relations drawn, plus the consequence on hover: most cited by agents, rules that reference it, proven runs per class, drift found), <strong>Graph</strong> (explore instances, typed expansion, ask in plain English and see the Cypher graph query and the citations behind the answer), <strong>Sources</strong> (connectors, sync health, entity provenance), <strong>Repositories</strong> (main repo and linked repos, production branch, last indexed commit, event health, issue import, code graph, data-layer drift), <strong>Versions</strong> (the git history of <code>.oxagen/ontology/</code>, open proposals as pull requests with diffs, an <code>as_of</code> picker). The page also lists embedding indexes with their recall and citation rate</td>
 <td>ask the graph, open an ontology proposal, link repo, set production branch, sync now, add source, resolve entity, upgrade an embedding index</td>
+</tr>
+<tr>
+<td><strong>Skills</strong></td>
+<td>Which skills the workspace's <code>.oxagen/skills.toml</code> lets an agent find, which it may load, what that cost, and what was held back and why. Tabs: <strong>Catalog</strong>, <strong>Search</strong> (the <code>search_skills</code> console), <strong>In the loop</strong> (the interjection seat), <strong>Reflection</strong> (research-only, quarantined) and <strong>Versions</strong> (the config's git history, each version a pull request). Oxagen resolves; the harness runs. (ADR-090)</td>
+<td>turn on, edit the config, approve a digest, add a skill — each a pull request</td>
 </tr>
 <tr>
 <td><strong>Steering</strong></td>
@@ -2495,7 +2547,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="19-demo-wow-scenarios">19. Demo Wow! Scenarios</h2>
-<p>Status: <code>complete</code> (2026-09-12, coverage audit, prompt W12).</p>
+<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 was adopted on 2026-09-18 by ADR-090, which puts skills resolution in scope; its page coverage is listed below with the rest.</p>
 <p>Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in <code>2026-09-11-oxagen-demo-mockup-prompts.md</code>, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.</p>
 <div class="tw"><table>
 <thead>
@@ -2592,6 +2644,13 @@ sandbox = &quot;read-only&quot;
 <td><a href="https://claude.ai/code/artifact/45c5e3f9-82f0-404e-ad69-b3279d84c649">W12 audit</a>, <a href="https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e">The Ten Pages</a></td>
 <td>mocked</td>
 </tr>
+<tr>
+<td>W13</td>
+<td>In the loop: the skills scenario — skills off by default, resolution as config not model, and a run interjected before the first model call</td>
+<td>Skills (Catalog, Search, In the loop, Reflection, Versions), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
+<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a></td>
+<td>mocked; <strong>adopted</strong> — ADR-090 puts skills resolution in scope and the #3098 lane builds it</td>
+</tr>
 </tbody>
 </table></div>
 <p><strong>Page coverage.</strong> Every row must carry at least one link before the section is complete.</p>
@@ -2654,6 +2713,12 @@ sandbox = &quot;read-only&quot;
 <td><a href="https://claude.ai/code/artifact/8692f683-0eab-4a1f-ad66-20f4a1a2db5b">W7 mockup</a>, <a href="https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b">W11 mockup</a>, <a href="https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e">W12 mockup</a></td>
 </tr>
 <tr>
+<td>Skills (Catalog, Search, In the loop, Reflection, Versions)</td>
+<td><code>/{org}/{ws}/skills[/{tab}]</code></td>
+<td>loaded, empty, loading, error, denied, off (the gate), phone</td>
+<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a></td>
+</tr>
+<tr>
 <td>Steering (records, proposals, Context PR, retirement)</td>
 <td><code>/{org}/{ws}/steering</code></td>
 <td>loaded, empty, error, denied, phone</td>
@@ -2699,7 +2764,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="appendix-a-postgres-tables-target">Appendix A. Postgres tables (target)</h2>
-<p>Thirty-five tables in nine schemas in the wedge, thirty-seven for the full product (<code>cost.fx_rates</code> and <code>control.event_subscriptions</code> arrive in Series A), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.</p>
+<p>Thirty-eight tables in ten schemas in the wedge, forty for the full product (<code>cost.fx_rates</code> and <code>control.event_subscriptions</code> arrive in Series A; the <code>skills</code> schema arrives with ADR-090), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.</p>
 <h3 id="a-0-conventions-that-apply-to-every-table">A.0 Conventions that apply to every table</h3>
 <div class="tw"><table>
 <thead>
@@ -2730,13 +2795,13 @@ sandbox = &quot;read-only&quot;
 <td></td>
 </tr>
 <tr>
-<td><code>created_by</code>, <code>updated_by</code></td>
+<td><code>created_by_id</code>, <code>updated_by_id</code></td>
 <td>uuid → <code>auth.users</code></td>
 <td>tables a person edits</td>
 <td></td>
 </tr>
 <tr>
-<td><code>deleted_at</code>, <code>deleted_by</code></td>
+<td><code>deleted_at</code>, <code>deleted_by_id</code></td>
 <td>timestamptz, uuid</td>
 <td>tables a person edits</td>
 <td>rows are never hard-deleted</td>
@@ -2755,6 +2820,9 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
+<blockquote>
+<p><strong>Amendment 2026-09-15 (ADR-077).</strong> Attribution columns end in <code>_id</code> like every other reference column: <code>created_by_id</code>, <code>updated_by_id</code>, <code>deleted_by_id</code>, and the per-table <code>&lt;verb&gt;_by</code> columns below (<code>invited_by</code>, <code>granted_by</code>, <code>issued_by</code>, <code>approved_by</code>, <code>revoked_by</code>, <code>placed_by</code>, <code>released_by</code>) are <code>&lt;verb&gt;_by_id</code> when they hold a user or principal id. <code>control.approvals.resolved_by</code> keeps its name: it is text that may hold <code>policy:&lt;rule id&gt;</code>, not a reference. <code>createdBy</code> without a suffix is reserved for a resolved display name in a contract output (<code>iam.role.list</code>), never a column.</p>
+</blockquote>
 <p>Money is <code>bigint</code> micro-USD unless a <code>currency</code> column says otherwise. Secrets are <code>bytea</code> ciphertext with <code>key_id</code> and <code>digest</code> beside them (the envelope pattern). Every <code>jsonb</code> column is validated against a schema in code before it is written. Enumerations are <code>text</code> with a check constraint; their values are listed in the Notes column.</p>
 <h3 id="a-1-auth-4-tables-platform-scope-better-auth-s-own-tables-unchanged">A.1 <code>auth</code> (4 tables, platform scope, Better Auth's own tables, unchanged)</h3>
 <p><strong><code>auth.users</code></strong></p>
@@ -4036,7 +4104,7 @@ sandbox = &quot;read-only&quot;
 <tr>
 <td><code>command</code></td>
 <td>text</td>
-<td><code>pause</code>, <code>resume</code>, <code>steer</code>, <code>message</code>, <code>cancel</code>, <code>revoke</code>, <code>kill_switch_on</code>, <code>kill_switch_off</code>, <code>refresh_bundle</code></td>
+<td><code>pause</code>, <code>resume</code>, <code>steer</code>, <code>message</code>, <code>cancel</code>, <code>revoke</code>, <code>kill_switch_on</code>, <code>kill_switch_off</code>, <code>refresh_bundle</code>, <code>answer</code> (ADR-090: the reply to a <code>control.interject</code>; its payload carries the answer text, the frame it unblocks, and the responder — a timeout writes none and the run falls back to <code>deny</code>)</td>
 </tr>
 <tr>
 <td><code>payload</code></td>
@@ -4968,7 +5036,194 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
-<h3 id="a-10-where-today-s-tables-went">A.10 Where today's tables went</h3>
+<h3 id="a-10-skills-3-tables-adr-090">A.10 <code>skills</code> (3 tables, ADR-090)</h3>
+<p>Skill <strong>resolution</strong> is the governed act; the config itself is a file in the customer's repository, not a row, and its
+version history is git history. These tables record what Oxagen decided against a given version of that file.</p>
+<p><strong><code>skills.config_versions</code></strong> (class <code>workspace</code>; append-only; one row per merged change to <code>.oxagen/skills.toml</code>)</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version_label</code></td>
+<td>text</td>
+<td>the label the product shows (<code>skl_v7</code>); unique per workspace</td>
+</tr>
+<tr>
+<td><code>repository_id</code></td>
+<td>uuid → <code>wrk.repositories</code></td>
+<td>the bound repository the file was read through (#3241)</td>
+</tr>
+<tr>
+<td><code>commit_sha</code></td>
+<td>text</td>
+<td>the production-branch commit this version was read at; the provenance, in place of a column</td>
+</tr>
+<tr>
+<td><code>pull_request_number</code></td>
+<td>int</td>
+<td>the change that published it; nullable only for the initial import</td>
+</tr>
+<tr>
+<td><code>enabled</code></td>
+<td>boolean</td>
+<td><code>.oxagen/skills.toml</code> absent or <code>enabled = false</code> means off; a workspace is created false</td>
+</tr>
+<tr>
+<td><code>config_digest</code></td>
+<td>text</td>
+<td>digest of the file as read back at the merged commit</td>
+</tr>
+<tr>
+<td><code>sources</code>, <code>search</code>, <code>unbound_repo</code>, <code>reflection</code></td>
+<td>jsonb</td>
+<td>the parsed sections, stored as read</td>
+</tr>
+<tr>
+<td><code>published_at</code></td>
+<td>timestamptz</td>
+<td>the merge, not the authoring</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>skills.resolutions</code></strong> (class <code>workspace</code>; append-only; one row per resolution a run performed)</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config_version_id</code></td>
+<td>uuid → <code>skills.config_versions</code></td>
+<td>pinned at run start; a replay resolves this version, never today's</td>
+</tr>
+<tr>
+<td><code>run_id</code>, <code>attempt_id</code></td>
+<td>text</td>
+<td>graph ids</td>
+</tr>
+<tr>
+<td><code>skill_id</code>, <code>skill_version</code></td>
+<td>text</td>
+<td>the <code>id@version</code> that was considered</td>
+</tr>
+<tr>
+<td><code>skill_digest</code></td>
+<td>text</td>
+<td>the digest at resolution time</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>text</td>
+<td>which configured source held it</td>
+</tr>
+<tr>
+<td><code>decision</code></td>
+<td>text</td>
+<td><code>allowed</code>, <code>needs_approval</code>, <code>denied</code></td>
+</tr>
+<tr>
+<td><code>withheld_reason</code></td>
+<td>text</td>
+<td>nullable; <code>out_of_scope</code>, <code>unapproved_digest</code>. Withholding happens <strong>before ranking</strong></td>
+</tr>
+<tr>
+<td><code>loaded</code></td>
+<td>boolean</td>
+<td>whether the agent actually loaded it, as against being allowed to</td>
+</tr>
+<tr>
+<td><code>token_cost</code></td>
+<td>int</td>
+<td>the load cost charged to the search budget</td>
+</tr>
+<tr>
+<td><code>resolved_at</code></td>
+<td>timestamptz</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>skills.reflections</code></strong> (class <code>workspace</code>; <strong>quarantined</strong>; retention-bounded; read only under an org <code>research.read</code> grant)</p>
+<p>The quarantine is not §5.2, which supplies tenant isolation only and would let any ordinary workspace read reach
+these rows. It is four mechanisms the #3098 lane must build, named here because a fence nobody implements is not a
+fence: (1) a dedicated read capability — an ordinary workspace read must not return these rows; (2) an
+<strong>org-scoped <code>research.read</code> IAM permission</strong>, which does <strong>not</strong> exist in the catalogue today and is created by
+that lane; (3) an RLS predicate on this table, which needs a signal Postgres can actually see: §5.2 exposes only
+<code>app.current_org_id</code> and <code>app.current_workspace_id</code>, and an IAM permission is application state the database
+cannot read. So <code>withTenantDb</code> sets a <strong>third transaction-local setting</strong> — <code>app.research_read</code>, written only
+after the IAM check has passed and never from request input — and the predicate on this table requires it true <strong>in addition to</strong>
+the ordinary <code>org_id</code> and <code>workspace_id</code> checks, never in place of them — a research flag that replaced tenant
+isolation would let a researcher in one organization read another's reflections. Without that bridge the fence either denies
+every read or silently falls back to tenant scope and exposes the rows; and (4) a job that <strong>deletes</strong> rows past <code>retain_until</code>, since
+an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
+does not price the work, and is not evidence about a person.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_id</code>, <code>attempt_id</code></td>
+<td>text</td>
+<td>the sealed run it is about; captured <strong>after</strong> the seal and outside the sealed chain</td>
+</tr>
+<tr>
+<td><code>captured_after_seal</code></td>
+<td>boolean</td>
+<td>always true; a reflection is a <strong>post-seal record, not a frame</strong> (§8.2 requires a dense <code>seq</code> and hash chain, §8.3 seals a Merkle root over every frame, so a frame appended after the seal would invalidate the attestation). The player draws it dashed because it is not a chain member, and a fork never replays it</td>
+</tr>
+<tr>
+<td><code>rubric</code></td>
+<td>jsonb</td>
+<td>axes, the agent's self-grade, and the record's value for each</td>
+</tr>
+<tr>
+<td><code>contradictions</code></td>
+<td>jsonb</td>
+<td>each citing the frame that disagrees with the self-grade</td>
+</tr>
+<tr>
+<td><code>use</code></td>
+<td>text</td>
+<td><code>research</code> is the only accepted value; any other value is refused at write</td>
+</tr>
+<tr>
+<td><code>consent_scope</code></td>
+<td>text</td>
+<td><code>organization</code></td>
+</tr>
+<tr>
+<td><code>billed_as</code></td>
+<td>text</td>
+<td><code>overhead</code>; never productive spend</td>
+</tr>
+<tr>
+<td><code>retain_until</code></td>
+<td>timestamptz</td>
+<td>set at capture; the row is deleted, not archived</td>
+</tr>
+<tr>
+<td><code>captured_at</code></td>
+<td>timestamptz</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="a-11-where-today-s-tables-went">A.11 Where today's tables went</h3>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -5015,7 +5270,7 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
-<p>The nine schemas are <code>auth</code>, <code>org</code>, <code>wrk</code>, <code>iam</code>, <code>tools</code>, <code>control</code>, <code>cost</code>, <code>billing</code>, <code>audit</code>. Thirty-five tables in the wedge, thirty-seven in full. Every tenant table uses one of the two policy classes in §5.2.</p>
+<p>The ten schemas are <code>auth</code>, <code>org</code>, <code>wrk</code>, <code>iam</code>, <code>tools</code>, <code>control</code>, <code>cost</code>, <code>billing</code>, <code>audit</code>, <code>skills</code>. Thirty-eight tables in the wedge, forty in full. Every tenant table uses one of the two policy classes in §5.2.</p>
 <h2 id="appendix-b-neo4j-model-per-organization-database">Appendix B. Neo4j model (per organization database)</h2>
 <p>Every organization has its own database (§5.3). Every node and relationship carries <code>ws</code> (the workspace public id), and every node carries <code>id</code> (its public id), <code>created_at</code>, <code>valid_from</code>, <code>valid_to</code>, <code>recorded_at</code>, and <code>is_system</code>. The tables below list what is specific to each label and relationship type.</p>
 <h3 id="b-1-node-labels">B.1 Node labels</h3>
@@ -5666,7 +5921,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <p>How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.</p>
 <h2 id="appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</h2>
-<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>96 agent tools</strong> (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
+<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>109 agent tools</strong> (91 of them in the wedge; twelve are the Skills tools — <code>list_skills</code> from 2026-09-15 and the eleven ADR-090 adds, <code>search_skills</code> and <code>preview_skill_search</code> plus nine controls), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
 <p><strong>Organization and workspace (11)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -5801,7 +6056,7 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
-<p><strong>Wrapping and control (14)</strong></p>
+<p><strong>Wrapping and control (26)</strong></p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -5844,7 +6099,7 @@ sandbox = &quot;read-only&quot;
 <tr>
 <td><code>dispatch_command</code></td>
 <td>dispatch_tacho_command</td>
-<td>pause, resume, steer, cancel, revoke</td>
+<td>pause, resume, steer, cancel, revoke, answer (the reply to a <code>control.interject</code>, ADR-090)</td>
 </tr>
 <tr>
 <td><code>list_runs</code></td>
@@ -5852,37 +6107,74 @@ sandbox = &quot;read-only&quot;
 <td>by operator, agent, task, tier, verdict</td>
 </tr>
 <tr>
-<td><code>get_run</code></td>
-<td>get_tacho_session, get_execution_trace, get_message_execution</td>
-<td>run with turns, steps, frames, receipts, cost</td>
+<td><code>list_skills</code></td>
+<td>(new; <code>tacho.sessions.skills_available</code> had no reader)</td>
+<td>read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098)</td>
 </tr>
 <tr>
-<td><code>export_run</code></td>
-<td>export_data (run part)</td>
-<td>signed bundle with verifier</td>
+<td><code>search_skills</code></td>
+<td>(new; ADR-090)</td>
+<td><strong>metered</strong> (no <code>noBillingGate</code>) and authorized by the belt rather than a human role — it is an agent-facing resolution the run pays for. The one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds <strong>before ranking</strong>, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move</td>
 </tr>
 <tr>
-<td><code>list_approvals</code></td>
-<td>(new; approvals had no list)</td>
-<td>queue with the four-hop chain</td>
+<td><code>get_skill_config</code></td>
+<td>(new; ADR-090)</td>
+<td>read: <code>.oxagen/skills.toml</code> as resolved at a config version — sources, belt mode, cut-off, load budget, <code>unbound_repo</code> policy — with its version history and the pull request that published each</td>
 </tr>
 <tr>
-<td><code>resolve_approval</code></td>
-<td>resolve_approval, resolve_mcp_consent</td>
-<td>approve or deny, mints the token</td>
+<td><code>list_skill_resolutions</code></td>
+<td>(new; ADR-090)</td>
+<td>read: the Catalog tab. Each skill considered at a config version with <code>id@version</code>, digest, source, load cost, decision, and for a held skill its reason class. Withheld names are visible to a person here and never to the agent</td>
 </tr>
 <tr>
-<td><code>send_message</code></td>
-<td>(new)</td>
-<td>message to <code>@&lt;agent-slug&gt;</code>, <code>@agents</code>, or a run id, with a delivery mode; reaches <code>applied</code> at the model request that carried it (§7.3, §7.6)</td>
+<td><code>list_skill_interjections</code></td>
+<td>(new; ADR-090)</td>
+<td>read: the In the loop tab — interjections over a window, the median answer time, what an unanswered one falls back to, and the one currently open</td>
 </tr>
 <tr>
-<td><code>list_messages</code></td>
-<td>(new)</td>
-<td>sent and received, with delivery outcome</td>
+<td><code>read_skill_reflection</code></td>
+<td>(new; ADR-090)</td>
+<td>read: a quarantined reflection. Requires the org-scoped <code>research.read</code> grant, is refused without it, and is the only path to these rows — an ordinary workspace read returns none</td>
+</tr>
+<tr>
+<td><code>set_skills_enabled</code></td>
+<td>(new; ADR-090)</td>
+<td>write: turn resolution on or off for a workspace by opening a pull request against <code>.oxagen/skills.toml</code>. Adds <code>search_skills</code> to every belt and nothing else: no tool granted, no tier change, no budget move</td>
+</tr>
+<tr>
+<td><code>update_skill_config</code></td>
+<td>(new; ADR-090)</td>
+<td>write: change sources, cut-off or budget, as a pull request. The switch is the outcome; the pull request is the control, and its author is on the receipt</td>
+</tr>
+<tr>
+<td><code>approve_skill_digest</code></td>
+<td>(new; ADR-090)</td>
+<td>write: approve a changed digest so the skill stops being withheld as <code>unapproved_digest</code>. Recomputed at merge against the file read back at the head</td>
+</tr>
+<tr>
+<td><code>propose_skill</code></td>
+<td>(new; ADR-090)</td>
+<td>write: add a skill as a pull request — registry pin by digest, a drafted <code>SKILL.md</code>, or an uploaded bundle. Gated on frontmatter, semver, digest, grants, secret scan and the search budget</td>
+</tr>
+<tr>
+<td><code>set_reflection_capture</code></td>
+<td>(new; ADR-090)</td>
+<td>write: turn reflection capture on or off. Capture is research-only and never becomes evidence, so this grants no read — <code>read_skill_reflection</code> still needs <code>research.read</code></td>
+</tr>
+<tr>
+<td><code>preview_skill_search</code></td>
+<td>(new; ADR-090)</td>
+<td>read: the Search tab's console. Runs the <strong>same</strong> resolution as <code>search_skills</code> against the same pinned config version, and returns a different projection: a person sees each withheld skill by name with its reason, where the agent is told only the count and the reason class. Human-authorized (org Owner/Admin/Member or workspace Owner/Member) and <code>noBillingGate: true</code>, because inspecting your own configuration is not an agent's governed action. It resolves and returns; it never loads a skill into a run</td>
 </tr>
 </tbody>
 </table></div>
+<p>| <code>get_run</code> | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
+| <code>export_run</code> | export_data (run part) | signed bundle with verifier |
+| <code>list_approvals</code> | (new; approvals had no list) | queue with the four-hop chain |
+| <code>resolve_approval</code> | resolve_approval, resolve_mcp_consent | approve or deny, mints the token |
+| <code>send_message</code> | (new) | message to <code>@&lt;agent-slug&gt;</code>, <code>@agents</code>, or a run id, with a delivery mode; reaches <code>applied</code> at the model request that carried it (§7.3, §7.6) |
+| <code>list_messages</code> | (new) | sent and received, with delivery outcome |</p>
+<p><strong>Roles and billing for the eleven Skills tools (ADR-090).</strong> <code>checkIAM</code> allows every capability for a non-enterprise org (§5), so each asserts its own role in its handler rather than relying on the kernel. The five writes are org Owner or Admin; <code>read_skill_reflection</code> additionally requires the org-scoped <code>research.read</code> grant; the five console reads (<code>get_skill_config</code>, <code>list_skill_resolutions</code>, <code>list_skill_interjections</code>, <code>preview_skill_search</code>, <code>list_skills</code>) are org Owner, Admin or Member, or workspace Owner or Member. All ten of those declare <code>noBillingGate: true</code>, because an organization out of governed action units must still be able to read its configuration and <strong>turn skills off</strong> — a control you cannot switch off when the bill lapses is not a control. <code>search_skills</code> is the one exception: it is the agent's tool, authorized by the belt rather than a human role, and <strong>metered</strong>, because it is resolution a run consumes.</p>
 <p><strong>Toolbelt (17)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -6306,9 +6598,9 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <p><strong>De-registered, by family</strong> (everything not named above, all of it kept in the tree per the preamble and <code>DEREGISTERED.md</code>): <code>environment.*</code> and <code>bind/unbind_agent_environment</code> (no runtime); <code>plugin.*</code>, <code>browse_plugin_catalog</code>, <code>add/remove_plugin_registry</code>, <code>install_plugins_bulk</code>, <code>sync_plugin_catalog</code>, <code>get_catalog_plugin</code>, <code>get_plugin_schema</code>, <code>validate_plugin_schema</code>, <code>list_plugin_registries</code>, <code>list_plugin_versions</code>, <code>set_plugin_enabled</code> (no marketplace in v1; sources and tool servers replace it); <code>prompt.settings.*</code> (steering replaces prompt settings); <code>import_env_secrets</code>, <code>export_secrets</code>, <code>reveal_secret</code> (secrets are connections and are never revealed); <code>parse_memory_import</code>, <code>commit_memory_import</code> (records are appended, not imported); <code>get_pr</code>, <code>get_pr_diff</code>, <code>list_branches</code>, <code>get_ci_status</code>, <code>read_file</code> (the graph and the GitHub events hold these; agents read code through their own harness); <code>upload_asset</code> (no content); <code>get_org_settings</code>, <code>get_workspace_settings</code>, <code>get_environment</code>, <code>get_connection</code>, <code>get_connection_mappings</code>, <code>get_memory_policy</code>, <code>get_prompt_settings</code>, <code>get_routing_policy</code> (reads folded into the objects above); everything in the test fixtures.</p>
 <p>Two notes on that list. <code>read_file</code> has no registered contract on <code>main</code> — the only match is a test fixture in <code>packages/oxagen/src/contracts/tool.declaration.publish.test.ts</code> — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (<code>set_plugin_secret</code>, <code>revoke_plugin_credential</code>, <code>reauth_plugin_credential</code>) are absorbed into <code>set_connection</code> and <code>delete_connection</code> rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.</p>
-<p>Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = <strong>96</strong> for the full product. The wedge ships 78: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.</p>
+<p>Count: <strong>109</strong> rows for the full product, counted from the table above, of which twelve are the Skills tools: <code>list_skills</code> (2026-09-15) and the eleven ADR-090 adds — <code>search_skills</code>, <code>preview_skill_search</code> and the nine controls. The wedge ships <strong>91</strong>: the 109 minus the eighteen marked new in the toolbelt, compliance, wrapping and knowledge families that land from M2 onward and in Series A. The per-family headings were recomputed from the rows rather than adjusted, after the Skills additions left Wrapping and control reading 15 against 26 actual rows.</p>
 <h2 id="appendix-f-the-pages-that-survive">Appendix F. The pages that survive</h2>
-<p>&quot;Survive&quot; here means <em>stays routed</em>. The ten pages below are what a user can reach in rev1. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its <code>page.tsx</code>, its components and its <code>actions.ts</code> stay in the tree. <code>DEREGISTERED.md</code> §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.</p>
+<p>&quot;Survive&quot; here means <em>stays routed</em>. The ten pages below predate ADR-090, which added Skills at <code>/{org}/{ws}/skills</code>; that page is reachable in rev1 and is <strong>not</strong> in this table. <code>apps/app/ARCHITECTURE.md</code> carries the current set. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its <code>page.tsx</code>, its components and its <code>actions.ts</code> stay in the tree. <code>DEREGISTERED.md</code> §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.</p>
 <p>The current web app has 70 page files. Ten remain: seven at workspace scope, three at organization scope. Sign-in flows (login, signup, password reset, two-factor, verify, accept an invite, create the first organization) are not screens and are not counted; there are seven of them and they stay as they are. Onboarding is not a page: it is the in-app agent's first run inside the workspace.</p>
 <div class="tw"><table>
 <thead>
@@ -6395,7 +6687,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <p>Account pages (<code>account</code>, <code>account/profile</code>, <code>account/preferences</code>, <code>account/privacy</code>, <code>account/security</code>) collapse into one <strong>Account</strong> dialog reachable from the user menu; it is a dialog, not a page. <code>cli/authorize</code> and <code>github/setup</code> are callback endpoints, not pages, and stay. Every other route in today's list redirects to the page that absorbed it. After one release the <strong>redirect</strong> is removed, not the page file — an unrouted page costs a compile and a test run, and keeping it is what lets a later release put a capability back without rebuilding its screen. Deleting any of these page files takes an ADR that names them (§2.2, <code>DEREGISTERED.md</code> §12).</p>
 
-<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-16</span></footer>
+<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-18</span></footer>
 </main>
 </div>
 </div>

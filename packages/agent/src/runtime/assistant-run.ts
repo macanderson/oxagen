@@ -39,6 +39,7 @@ import {
   type ResolvedEngineIdentity,
   type RunStore,
 } from "@oxagen/run-ledger";
+import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
 import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -409,7 +410,17 @@ export async function openAssistantRun(
   args: OpenAssistantRunArgs,
 ): Promise<AssistantRunRecorder> {
   const scope = { orgId: args.orgId, workspaceId: args.workspaceId };
-  const store = args.store ?? createPostgresRunStore();
+  // The archive is not optional here: this recorder SEALS its attempt, and a
+  // sealing store with no archive refuses in `sealAttemptInTx` — after the
+  // model has answered and the tokens have been charged. Built without one,
+  // every assistant turn produced a reply, billed it, then threw
+  // `run_store_state_invalid`, which the app's kernel seam reports to the
+  // person as the generic "could not be reached". `deferredEvidenceArchive`
+  // rather than `evidenceStore()` because this module is constructed on a
+  // path that does not always seal, and the deferred seam opens the storage
+  // driver only when a segment is actually written.
+  const store =
+    args.store ?? createPostgresRunStore({ archive: deferredEvidenceArchive });
   const now = args.now ?? (() => new Date());
   const inScope = <T>(fn: () => Promise<T>): Promise<T> =>
     runInTenantScope(scope, fn);

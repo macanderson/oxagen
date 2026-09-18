@@ -10,6 +10,7 @@ import "server-only";
 import type { ReactNode } from "react";
 import type { SpendReport } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { BudgetDialog } from "./budget-dialog";
 import { DrillSection } from "./drill";
@@ -41,6 +42,10 @@ export async function Spend({ ctx, source, searchParams, today }: SpendProps) {
   const at: SpendAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   return (
     <div className="flex flex-col gap-4">
+      {/* The record this page is actually showing, which is not what the query
+          string says on its own: a `finding` outside the Findings tab, or a
+          `drill` on a tab that fell back, is not selected here. */}
+      <PageRecord route="spend" id={view.finding ?? view.drill} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SpendTabs at={at} current={view.tab} />
         <div className="flex flex-wrap gap-2">

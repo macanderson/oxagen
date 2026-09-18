@@ -157,6 +157,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "dispatch_command": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command (features/run/actions.ts, features/run/run-controls.tsx)",
+      "proof": "apps/app/src/features/run/controls.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
+    },
     "export_audit_events": {
       "route": "/[org]/audit/export",
       "page": "apps/app/src/app/[org]/audit/export/route.ts",
@@ -164,6 +172,14 @@
       "proof": "apps/app/src/features/audit/export.test.ts",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "export_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Export on a sealed run queues export_run for an org Owner or Admin (features/run/actions.ts, features/run/record-actions.tsx)",
+      "proof": "apps/app/src/features/run/controls.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
     },
     "export_statement": {
       "route": "/[org]/[ws]/spend",
@@ -245,6 +261,38 @@
       "proof": "apps/app/src/features/onboarding/register.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the Run page's header and its Frames tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
+    },
+    "get_run_cost": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the Cost tab reads get_run_cost when open (data/live/runs.ts, features/run/cost.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
+    },
+    "get_run_frame_body": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the Frames tab's Open body link reads get_run_frame_body for ?body=<seq> (data/live/runs.ts, features/run/frames.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
+    },
+    "get_run_transcript": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at the zoom the URL names (data/live/runs.ts, features/run/transcript.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
@@ -633,6 +681,14 @@
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "summarize_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Summarize on a sealed run queues summarize_run (features/run/actions.ts, features/run/record-actions.tsx)",
+      "proof": "apps/app/src/features/run/controls.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-c2f283fb-3282-review"
     },
     "suspend_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
