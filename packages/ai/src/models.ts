@@ -185,11 +185,77 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
   ] as const);
   const tier = selector.tier ?? DEFAULT_TIER;
   const modelId =
-    selector.model ??
-    tierModelFor(tier, tierFromEnv(env, tier), selector.credential);
+    selector.model === undefined
+      ? tierModelFor(tier, tierFromEnv(env, tier), selector.credential)
+      : explicitModelFor(selector.model, tier, env, selector.credential);
   return applyDevtools(
     languageProvider(selector.credential).languageModel(modelId),
   );
+}
+
+const TIERS: readonly OxagenTier[] = ["fast", "balanced", "precise"];
+
+/** The three keys whose vendor is fixed: the platform's ids mean nothing there. */
+function isDirectVendorKey(credential?: ModelCredential): boolean {
+  return (
+    credential !== undefined &&
+    credential.provider !== "openrouter" &&
+    credential.provider !== "gateway"
+  );
+}
+
+/**
+ * What an explicit model id means on the key that is about to serve it.
+ *
+ * On the platform key and on the routed keys it means itself: the catalog is
+ * shared, so a caller that named `openai/gpt-5.2` gets `openai/gpt-5.2`.
+ *
+ * On a direct-vendor key the explicit id is very often NOT the caller's
+ * decision. `prepareAssistantTurn` passes the workspace's or the person's
+ * stored `defaultTextModel` here, a gateway id chosen before the key existed,
+ * and `api.openai.com` answers 404 to `anthropic/claude-opus-4.8`. Sending it
+ * untranslated fails every turn in that workspace on a key whose balanced
+ * mapping was configured exactly as the form asked. So on these keys the id
+ * is read, in order, as:
+ *
+ *   1. one of the customer's own models — a `modelMap` value — passed through;
+ *   2. a platform tier id (`OXAGEN_LLM_*`) — the tier it names, on the key;
+ *   3. a gateway id for the SAME vendor (`openai/gpt-5.2` on an `openai`
+ *      key) — the vendor's spelling, which is the gateway id without its
+ *      creator prefix. The gateway mirrors both vendors' names; a mismatch
+ *      fails loudly at call time on a choice the caller made explicitly,
+ *      the same rule this file applies to the `OXAGEN_LLM_*` env;
+ *   4. anything else — a catalog model this key cannot reach — runs on the
+ *      selected tier's mapping, for the reason `tierModelFor` gives: a
+ *      substitution the turn log names beats a 404 the customer cannot fix
+ *      without finding a stored preference they may not know exists.
+ *
+ * `openai_compatible` skips step 3: its namespace is the customer's server's,
+ * and a gateway prefix says nothing about what that server calls a model.
+ */
+export function explicitModelFor(
+  model: string,
+  tier: OxagenTier,
+  env: TierEnv,
+  credential?: ModelCredential,
+): string {
+  if (!credential || !isDirectVendorKey(credential)) return model;
+  const map = credential.modelMap ?? {};
+  if (Object.values(map).includes(model)) return model;
+  for (const t of TIERS) {
+    if (tierFromEnv(env, t) === model) {
+      return tierModelFor(t, model, credential);
+    }
+  }
+  const vendorPrefix = `${credential.provider}/`;
+  if (
+    (credential.provider === "openai" || credential.provider === "anthropic") &&
+    model.startsWith(vendorPrefix) &&
+    model.length > vendorPrefix.length
+  ) {
+    return model.slice(vendorPrefix.length);
+  }
+  return tierModelFor(tier, tierFromEnv(env, tier), credential);
 }
 
 /**
@@ -218,9 +284,10 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
  * the way `modelForRole` intends. That is a quality reduction on the
  * customer's own choice of model. A 404 mid-turn is an outage.
  *
- * `selector.model` — an explicit id — is never rewritten. A caller that names
- * a model has already decided, and remapping it would make an explicit choice
- * mean something else.
+ * `selector.model` — an explicit id — takes a different path, `explicitModelFor`:
+ * it is passed through on the routed keys and the platform key, and read as
+ * one of the customer's models, a tier, or a same-vendor gateway id on a
+ * direct one.
  */
 export function tierModelFor(
   tier: OxagenTier,
