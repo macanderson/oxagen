@@ -4,8 +4,12 @@
  * exercises it through that handler, and this suite pins it directly — in
  * particular the `requireTls` option, which only the new caller uses.
  */
-import { describe, expect, it } from "vitest";
-import { assertPublicHttpUrl, UnsafeOutboundUrlError } from "./public-url";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  assertPublicHttpUrl,
+  fetchWithoutRedirects,
+  UnsafeOutboundUrlError,
+} from "./public-url";
 
 const OPTS = { refusing: "Refusing to test" };
 const TLS = { ...OPTS, requireTls: true };
@@ -57,6 +61,8 @@ describe("assertPublicHttpUrl", () => {
     ["IPv4-mapped, hex-spelled", "https://[::ffff:7f00:1]/"],
     ["IPv4-compatible loopback", "https://[::127.0.0.1]/"],
     ["NAT64 metadata", "https://[64:ff9b::169.254.169.254]/"],
+    ["NAT64 local-use prefix (RFC 8215)", "https://[64:ff9b:1::a9fe:a9fe]/"],
+    ["NAT64 local-use prefix, any suffix", "https://[64:ff9b:1:1:2:3:4:5]/"],
     ["fully expanded mapped", "https://[0:0:0:0:0:ffff:7f00:1]/"],
   ])("refuses %s — the parser-normalised bypass", (_name, raw) => {
     expect(() => assertPublicHttpUrl(raw, TLS)).toThrow(UnsafeOutboundUrlError);
@@ -168,5 +174,58 @@ describe("assertPublicHttpUrl", () => {
       expect(err).toBeInstanceOf(UnsafeOutboundUrlError);
       expect((err as UnsafeOutboundUrlError).code).toBe("unsafe_outbound_url");
     }
+  });
+});
+
+describe("fetchWithoutRedirects", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends every request with redirect: manual", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response("{}", { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await fetchWithoutRedirects(OPTS)(
+      "https://api.example.com/v1/models",
+      { method: "GET" },
+    );
+    expect(response.status).toBe(200);
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.redirect).toBe("manual");
+    expect(init?.method).toBe("GET");
+  });
+
+  it("refuses a redirect and names where it pointed — the target is a URL nobody checked", async () => {
+    // A public endpoint answering 302 to a private host would walk the key
+    // past assertPublicHttpUrl, which only saw the URL the admin typed.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(null, {
+            status: 302,
+            headers: { location: "http://10.0.0.5/v1/models" },
+          }),
+      ),
+    );
+    await expect(
+      fetchWithoutRedirects({ refusing: "Refusing to test" })(
+        "https://api.example.com/v1/models",
+      ),
+    ).rejects.toThrow(
+      /^Refusing to test: the endpoint answered 302 redirecting to "http:\/\/10\.0\.0\.5\/v1\/models"; redirects are not followed/,
+    );
+  });
+
+  it("refuses a redirect with no Location header the same way", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 308 })),
+    );
+    await expect(
+      fetchWithoutRedirects(OPTS)("https://api.example.com/v1/models"),
+    ).rejects.toBeInstanceOf(UnsafeOutboundUrlError);
   });
 });

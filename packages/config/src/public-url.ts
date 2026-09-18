@@ -113,6 +113,37 @@ export function assertPublicHttpUrl(
 }
 
 /**
+ * A `fetch` that does not follow redirects, for every request this process
+ * makes to a customer-supplied endpoint with a secret in the header.
+ *
+ * `assertPublicHttpUrl` checks the URL an admin typed. `fetch` follows a
+ * redirect by default, and the redirect target is a URL nobody checked: a
+ * public endpoint answering `/models` with `302 Location: http://10.0.0.5/`
+ * would walk the request, key and all, straight past the guard. So the
+ * request is sent with `redirect: "manual"` and a 3xx answer is refused as
+ * the guard would refuse the URL itself, naming the `Location` so the
+ * operator can give the final URL instead. The runtime model client and the
+ * credential probe both use this, because a policy enforced in one of them
+ * is a policy the other one bypasses.
+ */
+export function fetchWithoutRedirects(
+  options: Pick<AssertPublicHttpUrlOptions, "refusing">,
+): typeof fetch {
+  return async (input, init) => {
+    const response = await fetch(input, { ...init, redirect: "manual" });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      throw new UnsafeOutboundUrlError(
+        `${options.refusing}: the endpoint answered ${response.status}${
+          location ? ` redirecting to "${location}"` : ""
+        }; redirects are not followed, give the final URL instead`,
+      );
+    }
+    return response;
+  };
+}
+
+/**
  * Canonicalize a hostname that is an IPv4 literal in any of the four inet_aton
  * forms (a, a.b, a.b.c, a.b.c.d) with decimal / octal (0…) / hex (0x…) parts,
  * to dotted-quad. Returns null when the host is not an IPv4 literal at all
@@ -276,6 +307,11 @@ function isPrivateIPv6(ip: string): boolean {
   const compatible = zeroTo(6);
   const nat64 =
     g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0);
+  // RFC 8215's local-use translation prefix, `64:ff9b:1::/48`. Unlike the
+  // well-known /96 above, its embedded IPv4 sits at a deployment-chosen
+  // offset, so it cannot be decoded here; and the RFC says the prefix must
+  // not be routed globally, so nothing public lives under it. Refused whole.
+  if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) return true;
   if (mapped || compatible || nat64) {
     return isPrivateIPv4(embeddedIPv4(g));
   }
