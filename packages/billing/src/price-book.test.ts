@@ -1597,6 +1597,66 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(result.unchanged).toBe(1);
   });
 
+  // The overrides are read completely on every run. One for a key the book
+  // has never priced is not a catalog recovering; it is terms the operator
+  // introduced after an earlier snapshot, and flooring it changed what the
+  // frames since that snapshot cost on a rollup retry. Only the first sync
+  // of an empty book floors an override.
+  it("starts an override introduced while the book is cold at the requested boundary, not the floor", async () => {
+    const seed = (
+      model: string,
+      over: Partial<PriceEntrySeed> = {},
+    ): PriceEntrySeed => ({
+      provider: "moonshot",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+      effectiveTo: null,
+      ...over,
+    });
+    const override = {
+      source: "override",
+      catalog: "operator_override",
+    } as const;
+    // First sync of an empty book: an override present from the start is
+    // floored, like everything else in the first snapshot.
+    const first = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed("card-model"), seed("day-one-override", override)],
+    });
+    expect(first.coldStart).toBe(true);
+    expect(
+      fake.rows.find((r) => r.model === "day-one-override")!.effectiveFrom,
+    ).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+
+    // Next tick, still cold: the operator adds an override for a model the
+    // book never priced, and a catalog comes back with a model of its own.
+    const result = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [
+        seed("card-model"),
+        seed("day-one-override", override),
+        seed("new-override", override),
+        seed("catalog-model"),
+      ],
+    });
+    expect(result.coldStart).toBe(true);
+    const byModel = (m: string) => fake.rows.find((r) => r.model === m)!;
+    expect(byModel("new-override").effectiveFrom).toEqual(T2);
+    expect(byModel("new-override").source).toBe("override");
+    // The catalog's model is still backdated: that is what cold start is for.
+    expect(byModel("catalog-model").effectiveFrom).toEqual(
+      COLD_BOOK_EFFECTIVE_FROM,
+    );
+    expect(result.unchanged).toBe(2);
+    expect(result.written).toBe(2);
+  });
+
   it("reports a row whose price and names both match as unchanged", async () => {
     fake.rows.push(
       priceRow({
