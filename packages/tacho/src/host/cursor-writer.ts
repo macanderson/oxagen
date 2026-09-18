@@ -134,7 +134,11 @@ export function mergeCursorHooks(
 
 /**
  * Remove Tacho's entries (one enrollment, or any) and drop emptied events.
- * `version` stays: the file is Cursor's, and a user's remaining hooks need it.
+ * `version` stays while anything else in the document does, because the file
+ * is Cursor's and a user's remaining hooks need it. Where the strip empties
+ * the document, `version` goes too: `mergeCursorHooks` is what wrote it on a
+ * machine that had no `hooks.json`, and `HarnessFiles.settle` removes a file
+ * Tacho created only when what is left says nothing.
  */
 export function stripCursorHooks(
   existing: unknown,
@@ -154,6 +158,9 @@ export function stripCursorHooks(
     if (Object.keys(hooks).length > 0) settings.hooks = hooks;
     else delete settings.hooks;
   }
+  const remaining = Object.keys(settings);
+  if (remaining.length === 1 && remaining[0] === "version")
+    delete settings.version;
   return { settings, changed: JSON.stringify(settings) !== before };
 }
 

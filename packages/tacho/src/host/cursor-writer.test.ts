@@ -91,8 +91,10 @@ describe("cursor writer", () => {
 
   it("strips one enrollment, or any, and gives back the user's file", () => {
     const ours = mergeCursorHooks(FOREIGN, CONFIG).settings;
-    const both = mergeCursorHooks(ours, { ...CONFIG, enrollmentId: OTHER })
-      .settings;
+    const both = mergeCursorHooks(ours, {
+      ...CONFIG,
+      enrollmentId: OTHER,
+    }).settings;
     const one = stripCursorHooks(both, TEST_ENROLLMENT);
     expect(one.changed).toBe(true);
     expect(cursorHookPresence(one.settings, OTHER).complete).toBe(true);
@@ -101,10 +103,25 @@ describe("cursor writer", () => {
     );
     const all = stripCursorHooks(both);
     expect(all.settings).toEqual(FOREIGN);
-    // A file that was only ours keeps its version and loses its hooks.
+    // A file that held nothing but ours empties, `version` included: the
+    // merge is what wrote that `version` on a machine with no `hooks.json`,
+    // and `HarnessFiles.settle` removes a file Tacho created only when what
+    // is left says nothing. A leftover `{"version":1}` reads as a user edit
+    // and the file survives an unenroll --purge.
     expect(
       stripCursorHooks(mergeCursorHooks(undefined, CONFIG).settings).settings,
-    ).toEqual({ version: 1 });
+    ).toEqual({});
+    // The user's own `version` stays while any of their hooks do.
+    const withUserHook = stripCursorHooks(
+      mergeCursorHooks(
+        { version: 1, hooks: { stop: [{ command: "mine" }] } },
+        CONFIG,
+      ).settings,
+    ).settings;
+    expect(withUserHook).toEqual({
+      version: 1,
+      hooks: { stop: [{ command: "mine" }] },
+    });
   });
 
   it("leaves a document it cannot read exactly as it is", () => {
