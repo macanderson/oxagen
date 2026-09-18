@@ -56,6 +56,10 @@ function stubRepo({ behind }: { behind: boolean }) {
         .join("");
     }
     if (args[0] === "fetch") return "";
+    // Nothing untracked under the governed tree, and no index entry left out
+    // of the working tree. The skip-worktree probe fails loudly now, so the
+    // stub has to answer it rather than fall through to the throw below.
+    if (args[0] === "ls-files") return "";
     if (args[0] === "restore") {
       // The sync landed, so the checkout is no longer behind.
       state.behind = false;

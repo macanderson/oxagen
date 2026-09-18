@@ -128,6 +128,13 @@ export function createMergeContextPrHandler(
     }
 
     let commitSha: string;
+    // The publication instant is GitHub's merge instant, not this call's
+    // clock. `latestPublication` picks the newest `published_at` as the
+    // commit a checkout must reach, and the retry below can run after a
+    // later PR has published: stamped with `now()`, the earlier merge would
+    // sort newest, and a checkout at that earlier commit would read as
+    // current while it lacked the later record.
+    let mergedAt: Date;
     if (pr.merged) {
       // GitHub merged it on an earlier call whose publication did not land.
       if (!pr.mergeCommitSha) {
@@ -138,6 +145,7 @@ export function createMergeContextPrHandler(
         });
       }
       commitSha = pr.mergeCommitSha;
+      mergedAt = pr.mergedAt ?? deps.now();
     } else {
       commitSha = (
         await deps.github.mergePullRequest(repo, {
@@ -146,9 +154,9 @@ export function createMergeContextPrHandler(
           sha: row.headSha,
         })
       ).sha;
+      mergedAt = deps.now();
     }
     await deps.github.deleteBranch(repo, row.branch);
-    const mergedAt = deps.now();
     const result = await deps.store.publishMerge({
       scope,
       proposal: row,

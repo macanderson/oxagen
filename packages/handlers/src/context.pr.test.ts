@@ -900,6 +900,12 @@ describe("merge_context_pr", () => {
     expect(h.store.versions[0]!.body).toBe(
       await h.github.readFile(REPO, PATH, "head1"),
     );
+    // The publication carries GitHub's merge instant, not the retry's clock:
+    // every later `now()` (the failed publication, the retry itself) is
+    // after it.
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime() + 1000);
   });
 
   it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {

@@ -468,6 +468,7 @@ export class FakeGitHub implements SteeringGitHub {
     state: "open" | "closed";
     merged: boolean;
     mergeCommitSha: string | null;
+    mergedAt: Date | null;
     /** The head sha at close or merge; the branch may be gone after. */
     headSha: string;
   }[] = [];
@@ -484,6 +485,8 @@ export class FakeGitHub implements SteeringGitHub {
   /** Set to make the merge refused by GitHub (a required review). */
   mergeRefusedWith: string | null = null;
   repository: SteeringRepository | null = REPO;
+  /** What GitHub stamps `merged_at` with; the harness shares its clock. */
+  clock: () => Date = () => new Date();
   private prNumber = 518;
   private commitNo = 0;
 
@@ -585,6 +588,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "open",
       merged: false,
       mergeCommitSha: null,
+      mergedAt: null,
       headSha: this.shaOf(args.head),
     });
     return { number: this.prNumber, htmlUrl: pullUrl(this.prNumber) };
@@ -621,6 +625,7 @@ export class FakeGitHub implements SteeringGitHub {
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
+      mergedAt: pr.mergedAt,
     };
   }
   async reportCheckRun(
@@ -667,6 +672,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "closed",
       merged: true,
       mergeCommitSha: mergeSha,
+      mergedAt: this.clock(),
       headSha: head,
     });
     return { sha: mergeSha };
@@ -697,9 +703,11 @@ export function harness(files: Record<string, string> = {}): Harness {
   roleOf.set(REVIEWER, { org: "Admin", workspace: null });
   const events: SecurityEventInput[] = [];
   let tick = Date.parse("2026-09-15T09:16:40.000Z");
+  const github = new FakeGitHub(files);
+  github.clock = () => new Date((tick += 1000));
   return {
     store: new MemoryStore(),
-    github: new FakeGitHub(files),
+    github,
     roles: {
       orgRole: async (_org, userId) => roleOf.get(userId)?.org ?? null,
       workspaceRole: async (_org, _ws, userId) =>

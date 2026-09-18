@@ -136,6 +136,41 @@ describe("syncSteering refusals", () => {
     });
     expect(result.applied).toBe(true);
   });
+
+  // A forced sync that restored only `missing` left a local-only rule on
+  // disk and reported success, so the agent kept reading a record production
+  // never held.
+  it("reconciles local-only and dirty files to production under --force", async () => {
+    const run = vi.fn<GitRunner>(async (args) => {
+      if (args[0] === "rev-parse") return REMOTE_SHA;
+      // Production holds the edited rule, not the branch's own one.
+      if (args[0] === "ls-tree") {
+        return args.includes(".oxagen/rules/ctx.edited.toml")
+          ? `100644 blob abc\t.oxagen/rules/ctx.edited.toml\0`
+          : "";
+      }
+      return "";
+    });
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({
+        status: "diverged",
+        local: [{ status: "added", path: ".oxagen/rules/ctx.mine.toml" }],
+        dirty: [".oxagen/rules/ctx.edited.toml", ".oxagen/rules/ctx.mine.toml"],
+      }),
+      run,
+      force: true,
+    });
+    expect(result.applied).toBe(true);
+    expect(result.updated).toEqual([
+      ".oxagen/rules/ctx.a.toml",
+      ".oxagen/rules/ctx.edited.toml",
+    ]);
+    expect(result.removed).toEqual([".oxagen/rules/ctx.mine.toml"]);
+    const calls = run.mock.calls.map((c) => c[0]);
+    expect(calls.some((a) => a[0] === "rm" && a.includes(".oxagen/rules/ctx.mine.toml"))).toBe(true);
+    expect(calls.some((a) => a[0] === "clean" && a.includes(".oxagen/rules/ctx.mine.toml"))).toBe(true);
+  });
 });
 
 describe("syncSteering applying", () => {

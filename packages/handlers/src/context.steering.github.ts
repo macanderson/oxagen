@@ -92,7 +92,10 @@ export interface SteeringGitHub {
     repo: SteeringRepository,
     args: { head: string; base: string },
   ): Promise<{ number: number; htmlUrl: string; body: string } | null>;
-  /** The branch the PR merges into, its head commit and, once GitHub merged it, the merge commit. */
+  /**
+   * The branch the PR merges into, its head commit and, once GitHub merged
+   * it, the merge commit and the instant GitHub merged it.
+   */
   getPullRequest(
     repo: SteeringRepository,
     number: number,
@@ -101,6 +104,7 @@ export interface SteeringGitHub {
     headSha: string | null;
     merged: boolean;
     mergeCommitSha: string | null;
+    mergedAt: Date | null;
   }>;
   /**
    * Every path the commit `head` changes against `base`, as its pull request
@@ -556,6 +560,7 @@ export function createSteeringGitHub(
           headSha: pr.headSha,
           merged: pr.merged,
           mergeCommitSha: pr.mergeCommitSha,
+          mergedAt: pr.mergedAt ? new Date(pr.mergedAt) : null,
         };
       } catch (err) {
         throw githubRefused(err);
