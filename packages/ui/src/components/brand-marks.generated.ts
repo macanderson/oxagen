@@ -12,13 +12,13 @@
  * in BOTH themes, which is what the kit's own light and dark files do — the
  * "gold becomes its deep shade on paper" rule governs WORDS, not the mark.
  *
- * The icons are one path and one colour by design. A two-colour mark has to be
- * redrawn for every ground it lands on; a one-colour mark is placed and
- * forgotten, and an operating system can tint it however it likes.
+ * An icon is a list of parts. Stella's is the gold asterisk alone. Oxagen's is
+ * the hive: cell outlines in currentColor (`ink`) and two cells in the gold
+ * (`accent`), one at half strength. A mono tone paints every part one colour.
  */
 
 /** The kit's gold, pinned. Identity only — never a surface, never a state. */
-export const BRAND_GOLD = "#D6962C";
+export const BRAND_GOLD = "#D4AF37";
 
 export interface WordmarkGeometry {
   /** The kit's own viewBox — never re-fit it. */
@@ -33,12 +33,20 @@ export interface WordmarkGeometry {
   readonly accent: string;
 }
 
+export interface IconPart {
+  readonly d: string;
+  /** `ink` takes currentColor; `accent` takes the gold. */
+  readonly role: "ink" | "accent";
+  /** Set on an outlined part: it is stroked, not filled. */
+  readonly strokeWidth?: number;
+  readonly opacity?: number;
+}
+
 export interface IconGeometry {
   readonly viewBox: string;
-  /** Places the glyph in the 96-unit box the kit fitted it to. */
+  /** Places the mark in the 96-unit box the kit fitted it to. */
   readonly transform: string;
-  /** The whole mark, one path, one colour. */
-  readonly path: string;
+  readonly parts: readonly IconPart[];
 }
 
 export interface BrandGeometry {
@@ -56,8 +64,38 @@ export const OXAGEN: BrandGeometry = {
   },
   "icon": {
     "viewBox": "0 0 96 96",
-    "transform": "translate(10.387,69.371) scale(0.46378)",
-    "path": "M44.5001 1.8432Q27.1214 1.8432 16.8521 -7.70194Q6.58286 -17.2471 6.58286 -35.0208V-57.1392Q6.58286 -74.9129 16.8521 -84.4581Q27.1214 -94.0032 44.5001 -94.0032Q61.8789 -94.0032 72.1481 -84.4581Q82.4174 -74.9129 82.4174 -57.1392V-35.0208Q82.4174 -17.2471 72.1481 -7.70194Q61.8789 1.8432 44.5001 1.8432ZM44.5001 -13.6923Q54.2427 -13.6923 59.6407 -19.3536Q65.0386 -25.0149 65.0386 -34.4942V-57.6658Q65.0386 -67.1451 59.6407 -72.8064Q54.2427 -78.4677 44.5001 -78.4677Q34.8891 -78.4677 29.4254 -72.8064Q23.9616 -67.1451 23.9616 -57.6658V-34.4942Q23.9616 -25.0149 29.4254 -19.3536Q34.8891 -13.6923 44.5001 -13.6923Z M84.5239 0 108.222 -32.9143 84.7872 -65.3019H104.009L118.886 -43.5785H121.256L136.133 -65.3019H155.355L131.92 -32.9143L155.619 0H136.133L121.256 -21.9867H118.886L104.009 0Z"
+    "transform": "translate(27.843,26.960) scale(2.05470)",
+    "parts": [
+      {
+        "d": "M0.000 -6.080L5.800 -3.040L5.800 3.040L0.000 6.080L-5.800 3.040L-5.800 -3.040Z",
+        "role": "ink",
+        "strokeWidth": 1
+      },
+      {
+        "d": "M13.080 -6.080L18.880 -3.040L18.880 3.040L13.080 6.080L7.280 3.040L7.280 -3.040Z",
+        "role": "ink",
+        "strokeWidth": 1
+      },
+      {
+        "d": "M6.540 4.160L12.340 7.200L12.340 13.280L6.540 16.320L0.740 13.280L0.740 7.200Z",
+        "role": "ink",
+        "strokeWidth": 1
+      },
+      {
+        "d": "M19.620 3.660L25.897 6.950L25.897 13.530L19.620 16.820L13.343 13.530L13.343 6.950Z",
+        "role": "accent"
+      },
+      {
+        "d": "M0.000 13.900L6.277 17.190L6.277 23.770L0.000 27.060L-6.277 23.770L-6.277 17.190Z",
+        "role": "accent",
+        "opacity": 0.55
+      },
+      {
+        "d": "M13.080 14.400L18.880 17.440L18.880 23.520L13.080 26.560L7.280 23.520L7.280 17.440Z",
+        "role": "ink",
+        "strokeWidth": 1
+      }
+    ]
   }
 };
 
@@ -72,6 +110,11 @@ export const STELLA: BrandGeometry = {
   "icon": {
     "viewBox": "0 0 96 96",
     "transform": "translate(13.423,109.664) scale(0.98160)",
-    "path": "M5.88507 -58.2714V-67.369H16.3847L25.7719 -65.7956L26.4302 -67.4381L18.669 -72.8821L11.2665 -80.3931L17.6519 -86.7785L25.163 -79.3761L30.607 -71.6149L32.2494 -72.2732L30.6761 -81.6604V-92.16H39.7737V-81.6604L38.2004 -72.2732L39.8428 -71.6149L45.2868 -79.3761L52.7978 -86.7785L59.1832 -80.3931L51.7808 -72.8821L44.0196 -67.4381L44.6779 -65.7956L54.0651 -67.369H64.5647V-58.2714H54.0651L44.6779 -59.8447L44.0196 -58.2023L51.7808 -52.7583L59.1832 -45.2472L52.7978 -38.8618L45.2868 -46.2642L39.8428 -54.0254L38.2004 -53.3672L39.7737 -43.98V-33.4804H30.6761V-43.98L32.2494 -53.3672L30.607 -54.0254L25.163 -46.2642L17.6519 -38.8618L11.2665 -45.2472L18.669 -52.7583L26.4302 -58.2023L25.7719 -59.8447L16.3847 -58.2714Z"
+    "parts": [
+      {
+        "d": "M5.88507 -58.2714V-67.369H16.3847L25.7719 -65.7956L26.4302 -67.4381L18.669 -72.8821L11.2665 -80.3931L17.6519 -86.7785L25.163 -79.3761L30.607 -71.6149L32.2494 -72.2732L30.6761 -81.6604V-92.16H39.7737V-81.6604L38.2004 -72.2732L39.8428 -71.6149L45.2868 -79.3761L52.7978 -86.7785L59.1832 -80.3931L51.7808 -72.8821L44.0196 -67.4381L44.6779 -65.7956L54.0651 -67.369H64.5647V-58.2714H54.0651L44.6779 -59.8447L44.0196 -58.2023L51.7808 -52.7583L59.1832 -45.2472L52.7978 -38.8618L45.2868 -46.2642L39.8428 -54.0254L38.2004 -53.3672L39.7737 -43.98V-33.4804H30.6761V-43.98L32.2494 -53.3672L30.607 -54.0254L25.163 -46.2642L17.6519 -38.8618L11.2665 -45.2472L18.669 -52.7583L26.4302 -58.2023L25.7719 -59.8447L16.3847 -58.2714Z",
+        "role": "accent"
+      }
+    ]
   }
 };
