@@ -46,6 +46,7 @@ import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
   ShellContext,
+  ViewerPreferences,
   WorkspaceChoice,
 } from "./contracts/shell";
 import type { SkillInventory } from "./contracts/skills";
@@ -89,8 +90,16 @@ export interface DataSource {
       orgSlug: string,
     ): Promise<Read<WorkspaceChoice[]>>;
   };
-  /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
-  shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
+  shell: {
+    /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
+    context(ctx: OrgCtx): Promise<Read<ShellContext>>;
+    /**
+     * get_user_preferences, user-global: the zone every date under the
+     * organization layout renders in; callers: features/shell/source.ts and
+     * features/shell/viewer-clock.tsx.
+     */
+    preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+  };
   /**
    * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.

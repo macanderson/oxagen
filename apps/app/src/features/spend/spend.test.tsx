@@ -95,7 +95,7 @@ const findings = vi.fn<DataSource["spend"]["findings"]>();
 const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const source: DataSource = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context: vi.fn() },
+  shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),

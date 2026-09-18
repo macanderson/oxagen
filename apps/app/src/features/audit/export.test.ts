@@ -34,7 +34,7 @@ const exportEvents = vi.fn();
 const resolveViewer = vi.fn();
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse },
+  shell: { context: refuse, preferences: refuse },
   runs: {
     list: refuse,
     get: refuse,

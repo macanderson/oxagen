@@ -73,7 +73,7 @@ const members = vi.fn<DataSource["org"]["members"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse },
+  shell: { context: refuse, preferences: refuse },
   runs: {
     list: refuse,
     get: refuse,
