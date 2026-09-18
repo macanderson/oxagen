@@ -201,25 +201,32 @@ vi.mock("@oxagen/handlers/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// Mock the workspace.create contract — minimal input schema validation.
-vi.mock("@oxagen/oxagen/contracts/workspace.create", () => ({
-  workspaceCreate: {
-    input: {
-      safeParse: (raw: unknown) => {
-        const r = raw as { name?: unknown; slug?: unknown };
-        const name = typeof r?.name === "string" ? r.name.trim() : "";
-        const slug = typeof r?.slug === "string" ? r.slug.trim() : "";
-        if (!name || !slug || /\s/.test(slug)) {
-          return {
-            success: false,
-            error: { issues: [{ message: "Invalid" }] },
-          };
-        }
-        return { success: true, data: { name, slug } };
+// Mock the workspace.create contract — minimal input schema validation. The
+// action parses `workspaceCreate.input.omit({ mainRepo: true })`, because the
+// real contract requires a main repository this deprecated form never
+// collects (ADR-099); the mock carries the same `omit` so the module loads.
+vi.mock("@oxagen/oxagen/contracts/workspace.create", () => {
+  const safeParse = (raw: unknown) => {
+    const r = raw as { name?: unknown; slug?: unknown };
+    const name = typeof r?.name === "string" ? r.name.trim() : "";
+    const slug = typeof r?.slug === "string" ? r.slug.trim() : "";
+    if (!name || !slug || /\s/.test(slug)) {
+      return {
+        success: false,
+        error: { issues: [{ message: "Invalid" }] },
+      };
+    }
+    return { success: true, data: { name, slug } };
+  };
+  return {
+    workspaceCreate: {
+      input: {
+        safeParse,
+        omit: () => ({ safeParse }),
       },
     },
-  },
-}));
+  };
+});
 
 import { createWorkspaceAction } from "./actions";
 
@@ -235,6 +242,23 @@ function form(fields: Record<string, string>): FormData {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("the shape the action validates against the real contract", () => {
+  // The mock above stands in for the contract during the action tests. This
+  // block reads the real one, so a contract change that makes the action's
+  // `{ name, slug }` parse fail unconditionally (as requiring `mainRepo` did
+  // before the action omitted it) fails here instead of in production.
+  it("accepts a name and slug once mainRepo is omitted, and refuses them on the full contract", async () => {
+    const { workspaceCreate: real } = await vi.importActual<
+      typeof import("@oxagen/oxagen/contracts/workspace.create")
+    >("@oxagen/oxagen/contracts/workspace.create");
+    const draft = { name: "Platform", slug: "platform" };
+    expect(real.input.omit({ mainRepo: true }).safeParse(draft).success).toBe(
+      true,
+    );
+    expect(real.input.safeParse(draft).success).toBe(false);
+  });
+});
 
 describe("createWorkspaceAction", () => {
   beforeEach(() => {

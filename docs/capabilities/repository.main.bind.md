@@ -42,6 +42,13 @@ The GitHub App installation reaches the workspace through the connect flow the A
 | `conflict` | `github_not_connected` | the workspace has no GitHub connection carrying an installation |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
 | `conflict` | `main_repo_bound` | the workspace already binds a different repository |
+| `conflict` | `main_repo_claimed` | another workspace already steers by that repository (ADR-099); names neither the organization nor the workspace holding it |
+| `conflict` | `repository_linked_elsewhere` | another workspace has linked that repository; a repository that receives one workspace's Context PRs cannot hold another's `.oxagen/` governance tree |
+| `conflict` | `main_repo_plane_unsupported` | a dedicated Postgres plane is in use, so the cross-workspace claim cannot be checked (ADR-042) |
+
+`main_repo_claimed` and `repository_linked_elsewhere` are checked twice: once by a cross-tenant read before the transaction, for the sentence, and once by the store. The unique index `repository_binding_heads_main_repository_uq` holds main against main, and the trigger `repository_binding_heads_exclusive_main` serialises every head write for one repository on a repository-keyed advisory lock and refuses a main head where another workspace holds any head for it. A bind that loses that race is refused with the same reason.
+
+`main_repo_bound` is about MAIN heads only. A repository this workspace already holds as a LINKED head is promoted in place instead: `role` moves to `main`, carrying any binding version the same call supersedes, and `boundAt` is the promotion rather than the original link. That is the way out of a workspace left with linked heads and no main one, which the exclusivity migration's demotion creates directly. It is also the only correct write there: one head per (connection, repository) is `repository_binding_heads_repository_uq` and a second version 1 for that pair is `repository_bindings_repository_version_uq`, so a writer that ignored the linked head would lose to a constraint naming no cross-workspace claim and surface as a 500. A repository with binding versions retained from an unlinked head reuses the latest version for the same reason.
 
 Binding the same repository again is idempotent **only while nothing the binding recorded has moved**: nothing is written and the existing binding is answered, with `provisionalClosed: false`.
 
