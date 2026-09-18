@@ -19,14 +19,14 @@
 // A conversation belongs to the workspace it was opened in: the turn handler
 // matches it on `(id, orgId, workspaceId)` and raises ConversationNotFoundError
 // otherwise. The chrome lives in the organization layout and survives a
-// workspace switch, so the flyout keeps one thread per workspace — transcript,
-// conversation id, draft and in-flight flag — and shows the thread of the
+// workspace switch, so the flyout keeps one thread per workspace (transcript,
+// conversation id, draft, and in-flight flag) and shows the thread of the
 // workspace the person is standing in. Standing on an organization page is not
 // a switch: it has no workspace of its own, so the last thread stays on screen
 // and only the composer is withheld.
 //
 // A turn the person walks away from is owned to completion, not cancelled
-// (ADR-092). Its reply, run, conversation id and any parked writes are written
+// (ADR-092). Its reply, run, conversation id, and any parked writes are written
 // to the thread of the workspace it was asked in, so they are waiting there on
 // the way back, and the workspace the person moved to is never handed a reply
 // that is not its own. This used to be the other way round: leaving cleared
@@ -38,9 +38,10 @@
 // thread.
 //
 // Stopping a turn on purpose is a different thing from walking away from it,
-// and it is not here. It belongs to run controls (#2953), which cancel any run
-// — an assistant turn is recorded as one — through a single mechanism rather
-// than one per surface.
+// and it is not here. It belongs to run controls (#2953), whose job is to
+// cancel any run through one mechanism rather than one per surface. An
+// assistant turn is recorded as a run, so that mechanism will cover it. It
+// does not exist yet: today nothing stops a turn once it is asked.
 //
 // Each answer names the run it was recorded as, and links it. `list_runs`
 // excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
@@ -288,7 +289,7 @@ export function AssistantFlyout() {
   // One thread per workspace, keyed "org/ws" (ADR-092). A turn is written to
   // the thread of the workspace it was asked in, whatever the person is looking
   // at when it resolves, so a reply cannot land in the wrong conversation at
-  // any timing — the routing is structural, not a race the code has to win.
+  // any timing. The routing is structural, not a race the code has to win.
   const [threads, setThreads] = useState<ReadonlyMap<string, Thread>>(
     () => new Map(),
   );
@@ -297,7 +298,7 @@ export function AssistantFlyout() {
   // page, which owns no conversation.
   const scope = org === null || ws === null ? null : `${org}/${ws}`;
   // The workspace whose thread is on screen. An organization page is not a
-  // switch — it has no conversation of its own — so it keeps showing the last
+  // switch (it has no conversation of its own), so it keeps showing the last
   // workspace's thread and only withholds the composer. Adjusted during render
   // rather than in an effect so the previous thread never paints under the new
   // workspace.
@@ -403,12 +404,12 @@ export function AssistantFlyout() {
     nextIdRef.current += 1;
     const id = `t${nextIdRef.current.toString()}`;
     /**
-     * The thread this turn belongs to, fixed now. Everything it produces — the
-     * reply, the run, the conversation id, a refusal, the end of `pending` — is
-     * written back to this thread, not to whichever one is on screen when the
-     * action resolves (ADR-092). A person who asks and then moves on finds the
-     * answer when they come back, and the workspace they moved to is never
-     * handed a reply that is not its own.
+     * The thread this turn belongs to, fixed now. Everything it produces goes
+     * back to this thread: the reply, the run, the conversation id, a refusal,
+     * and the end of `pending`. None of it goes to whichever thread is on screen
+     * when the action resolves (ADR-092). A person who asks and then moves on
+     * finds the answer when they come back, and the workspace they moved to is
+     * never handed a reply that is not its own.
      *
      * One thread holds at most one turn in flight, so nothing races this one
      * for `conversationId`. Two layers hold it, and each is enough on its own:

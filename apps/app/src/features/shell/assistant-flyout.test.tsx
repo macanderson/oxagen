@@ -536,7 +536,7 @@ describe("AssistantFlyout", () => {
   // ADR-092: a turn the person walks away from is owned to completion. It used
   // to be discarded, which threw away an answer the person had asked for and
   // the budget already spent on it. Its reply goes to the thread of the
-  // workspace it was asked in — never to the one the person moved to.
+  // workspace it was asked in, never to the one the person moved to.
   it("keeps a reply that lands after the person left, in the workspace it was asked in", async () => {
     const settle = heldTurn();
     const { user, renavigate } = await openFlyout();
@@ -565,7 +565,7 @@ describe("AssistantFlyout", () => {
 
   // Away and back before the turn resolves. The old guard counted visits so a
   // reply from the first could not land in the transcript the second had just
-  // cleared; nothing is cleared now, so the reply belongs where it lands, and
+  // cleared. Nothing is cleared now, so the reply belongs where it lands, and
   // the conversation it opened is the one the next question continues.
   it("keeps the turn from an earlier visit, and its conversation, when the person goes away and comes back", async () => {
     const settle = heldTurn();

@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-18
 - **Owners:** app, agent
-- **Related:** ADR-043 (Oxagen governs agents; it does not run them), ADR-053
+- **Related:** ADR-043 (Oxagen governs agents, and does not run them), ADR-053
   (the in-app agent's turn and its governed tool calls), #2953 (run controls:
   cancel on every run), #3230 (the finding this settles), #3216 (the flyout
   this changes)
@@ -45,9 +45,10 @@ refusal, any parked writes, and the end of `pending`. That holds whatever the
 person is looking at when the action resolves.
 
 **Stopping a turn on purpose is a separate thing, and it belongs to run
-controls (#2953).** An assistant turn is recorded as a run (`arun_…`). An
-explicit Stop goes through the same cancel as every other run, not through a
-mechanism specific to the flyout.
+controls (#2953).** An assistant turn is recorded as a run (`arun_…`), so an
+explicit Stop should go through the cancel #2953 builds for every run, not
+through a mechanism specific to the flyout. #2953 is open and that cancel
+does not exist yet: today, nothing stops a turn once it is asked.
 
 ## Why not cancel on navigation
 
@@ -65,9 +66,9 @@ some of those are governed writes. Stopping it partway can leave an action half
 done. Running to completion cannot, and the one hazard completion carries, a
 parked write going unseen, is the one this decision fixes directly.
 
-**Run cancellation already has an owner.** #2953 is cancel on every run. An
-assistant-only cancel would be a second, narrower mechanism that #2953 then has
-to absorb or reconcile. Cancelling across nodes also needs a durable record
+**Run cancellation already has an owner.** #2953 is the lane for cancel on
+every run. An assistant-only cancel would be a second, narrower mechanism that
+#2953 would then have to absorb or reconcile. Cancelling across nodes also needs a durable record
 that the process running the turn can observe, because the request that asks
 for the cancel may land on a different node than the turn. That is #2953's
 problem to solve once, for every kind of run.
@@ -100,8 +101,10 @@ are gone.
   on top of this decision, not a change to it.
 - **The spend on an abandoned turn is now a stated cost rather than a hidden
   one.** A turn nobody returns to still runs to completion. That is the price of
-  never half-finishing a governed action. #2953's cancel is how a person who
-  wants to stop paying for a turn stops it.
+  never half-finishing a governed action. Until #2953 ships its cancel, a
+  person has no way to stop paying for a turn they have asked. This decision
+  does not change that. It was true before this decision too, because the old
+  behaviour hid the reply but never stopped the turn.
 
 ## Verification
 
