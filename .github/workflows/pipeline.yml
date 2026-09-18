@@ -577,6 +577,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # The graph half of M0's "a cross-tenant probe finds nothing in either
+      # store" (spec §17): @oxagen/ontology's integration suite seeds three
+      # tenants into the pooled database and reads across them.
+      neo4j:
+        image: neo4j:5.24-community
+        env:
+          NEO4J_AUTH: neo4j/oxagen-dev
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:7474 >/dev/null 2>&1 || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       TENANT_RLS_ENFORCEMENT_ENABLED: "true"
     steps:
@@ -596,6 +611,12 @@ jobs:
 
       - name: RLS isolation proof and manifest coverage
         run: pnpm --filter @oxagen/database test:integration
+
+      - name: Migrate Neo4j
+        run: DB_MIGRATE_STORES=neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
+
+      - name: Graph cross-tenant isolation proof
+        run: pnpm --filter @oxagen/ontology test:integration
 
   # Every Postgres container above runs as a real superuser. RDS never gives you
   # one — the master user gets rds_superuser, which is not the same bit — so the

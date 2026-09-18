@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   bootstrapWorkspace: vi.fn(),
   grantSignupCredits: vi.fn(),
   openOnboardingGate: vi.fn(),
+  provisionOrgGraph: vi.fn(),
+  recordOrgGraphDatabase: vi.fn(),
 }));
 
 const ORG_ROW = {
@@ -99,6 +101,16 @@ vi.mock("./lib/onboarding", () => ({
   openOnboardingGate: mocks.openOnboardingGate,
 }));
 
+// The graph provisioner is tested in @oxagen/ontology (provision.test.ts) and
+// the routing row writer in @oxagen/database (data-plane-resolver.test.ts);
+// here we verify org creation calls them on the org transaction.
+vi.mock("@oxagen/ontology/provision", () => ({
+  provisionOrgGraph: mocks.provisionOrgGraph,
+}));
+vi.mock("@oxagen/database/data-plane", () => ({
+  recordOrgGraphDatabase: mocks.recordOrgGraphDatabase,
+}));
+
 import { organizationCreateHandler } from "./org.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
@@ -127,8 +139,46 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.bootstrapOrgIAM.mockResolvedValue(undefined);
     mocks.bootstrapWorkspace.mockResolvedValue(WORKSPACE_ROW);
     mocks.grantSignupCredits.mockResolvedValue(true);
+    mocks.provisionOrgGraph.mockReset();
+    mocks.provisionOrgGraph.mockResolvedValue({ mode: "pooled" });
+    mocks.recordOrgGraphDatabase.mockReset();
+    mocks.recordOrgGraphDatabase.mockResolvedValue(undefined);
     mocks.withSystemDbFn.mockReset();
     passthrough();
+  });
+
+  // ── graph placement (spec §5.3, ADR-098) ───────────────────────────────────
+
+  it("places a free org in the pooled graph and records no binding", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+    expect(mocks.provisionOrgGraph).toHaveBeenCalledWith({
+      orgId: ORG_ROW.id,
+      namespace: expect.stringMatching(/^[a-z0-9]{2,6}$/),
+      planType: "free",
+    });
+    expect(mocks.recordOrgGraphDatabase).not.toHaveBeenCalled();
+  });
+
+  it("records the routing row on the org transaction when a database is provisioned", async () => {
+    mocks.provisionOrgGraph.mockResolvedValue({
+      mode: "database",
+      database: "org-acme",
+    });
+    await organizationCreateHandler(INPUT, CTX);
+    expect(mocks.recordOrgGraphDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ insert: expect.any(Function) }),
+      { orgId: ORG_ROW.id, database: "org-acme", actorUserId: CTX.userId },
+    );
+  });
+
+  it("rolls the org back when provisioning fails, rethrowing the typed error", async () => {
+    const failure = Object.assign(new Error("CREATE DATABASE failed"), {
+      code: "org_graph_provision_failed",
+    });
+    mocks.provisionOrgGraph.mockRejectedValue(failure);
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toBe(failure);
+    expect(mocks.bootstrapOrgIAM).not.toHaveBeenCalled();
+    expect(mocks.grantSignupCredits).not.toHaveBeenCalled();
   });
 
   // ── auth guard ───────────────────────────────────────────────────────────

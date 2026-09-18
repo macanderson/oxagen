@@ -86,12 +86,24 @@ const runFn = vi.fn(async (query: string) => {
   return { records: [] };
 });
 const closeFn = vi.fn(async () => undefined);
+const sessionArgs = vi.fn();
 vi.mock("./client", () => ({
-  session: () => ({ run: runFn, close: closeFn }),
+  session: (database?: string | null) => {
+    sessionArgs(database);
+    return { run: runFn, close: closeFn };
+  },
   closeDriver: vi.fn(async () => undefined),
 }));
+const listOrgDbs = vi.fn(async (): Promise<string[]> => []);
+vi.mock("./org-graph", () => ({
+  listOrgGraphDatabases: () => listOrgDbs(),
+}));
 
-import { migrate } from "./migrate";
+import {
+  migrate,
+  migrateEveryGraphDatabase,
+  migrateOrgGraphDatabases,
+} from "./migrate";
 
 function schemaCalls(): string[] {
   return (runFn.mock.calls as Array<unknown[]>).flatMap((c) =>
@@ -272,5 +284,84 @@ describe("splitStatements (via migrate behaviour)", () => {
     for (const stmt of schemaCalls()) {
       expect(stmt.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("migrate() per organisation database (ADR-098)", () => {
+  beforeEach(() => {
+    runFn.mockClear();
+    sessionArgs.mockClear();
+    listOrgDbs.mockReset();
+  });
+
+  it("opens the pooled database when no name is given", async () => {
+    await migrate();
+    expect(sessionArgs).toHaveBeenCalledWith(undefined);
+  });
+
+  it("opens the named database when one is given", async () => {
+    await migrate("org-acme");
+    expect(sessionArgs).toHaveBeenCalledWith("org-acme");
+  });
+
+  it("migrates every organisation database the engine reports", async () => {
+    listOrgDbs.mockResolvedValue(["org-ab", "org-cd"]);
+    await expect(migrateOrgGraphDatabases()).resolves.toEqual([
+      "org-ab",
+      "org-cd",
+    ]);
+    expect(sessionArgs.mock.calls.map((c) => c[0])).toEqual([
+      "org-ab",
+      "org-cd",
+    ]);
+  });
+
+  it("is a no-op on Community Edition, which reports none", async () => {
+    listOrgDbs.mockResolvedValue([]);
+    await expect(migrateOrgGraphDatabases()).resolves.toEqual([]);
+    expect(sessionArgs).not.toHaveBeenCalled();
+  });
+
+  // The deploy-time entry. `tools/scripts/db-migrate.ts` imports this module
+  // rather than running it, so the per-organisation pass must live in an
+  // exported function that the aggregate migrator calls — a pass that ran only
+  // under the direct-run guard never ran on a deploy.
+  it("migrateEveryGraphDatabase migrates the pooled database first, then every organisation database", async () => {
+    listOrgDbs.mockResolvedValue(["org-ab", "org-cd"]);
+    await expect(migrateEveryGraphDatabase()).resolves.toEqual({
+      orgDatabases: ["org-ab", "org-cd"],
+    });
+    expect(sessionArgs.mock.calls.map((c) => c[0])).toEqual([
+      undefined,
+      "org-ab",
+      "org-cd",
+    ]);
+  });
+
+  it("migrateEveryGraphDatabase still migrates the pooled database when no organisation database exists", async () => {
+    listOrgDbs.mockResolvedValue([]);
+    await expect(migrateEveryGraphDatabase()).resolves.toEqual({
+      orgDatabases: [],
+    });
+    expect(sessionArgs.mock.calls.map((c) => c[0])).toEqual([undefined]);
+  });
+
+  it("the aggregate migrator calls the deploy-time entry, not the pooled-only migrate()", async () => {
+    // Read as text rather than imported: the script runs `main()` on import
+    // and exits the process. The assertion is on the import binding, which is
+    // the seam the P1 finding named.
+    const { readFileSync: realRead } =
+      await vi.importActual<typeof import("node:fs")>("node:fs");
+    const { resolve: realResolve } =
+      await vi.importActual<typeof import("node:path")>("node:path");
+    const script = realRead(
+      realResolve(__dirname, "../../../tools/scripts/db-migrate.ts"),
+      "utf8",
+    );
+    expect(script).toMatch(
+      /import \{ migrateEveryGraphDatabase \} from "@oxagen\/ontology\/migrate"/,
+    );
+    expect(script).toMatch(/await migrateEveryGraphDatabase\(\)/);
+    expect(script).not.toMatch(/migrate as migrateNeo4j/);
   });
 });
