@@ -38,11 +38,30 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("alreadyArchived");
           case "workspace_has_agents":
             return t("workspaceHasAgents");
+          // The four ways `create_workspace` can refuse the main repository
+          // (MC spec §10.1): the org never connected GitHub, the App is not on
+          // that owner, the installation cannot see the repository, or another
+          // workspace already steers by it.
+          case "github_not_authorized":
+            return t("githubNotAuthorized");
+          case "installation_unreachable":
+            return t("installationUnreachable");
+          case "repository_not_installed":
+            return t("repositoryNotInstalled");
+          case "main_repo_claimed":
+            return t("mainRepoClaimed");
           default:
             return t("refused", { code: failure.code });
         }
       case "invalid":
-        return t("invalid");
+        // A main repository the action could not split into `owner/name`, or
+        // one whose owner or name the contract's GitHub-shaped schema refused,
+        // is named as such: "refused as invalid" would leave the one field a
+        // person has to fix unnamed.
+        return failure.code === "repository_unparsable" ||
+          failure.field?.startsWith("mainRepo") === true
+          ? t("repositoryUnparsable")
+          : t("invalid");
       case "pending_approval":
         return t("pendingApproval", {
           accessRequestId: failure.accessRequestId,

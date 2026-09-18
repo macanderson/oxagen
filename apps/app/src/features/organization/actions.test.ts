@@ -207,27 +207,93 @@ describe("deleteRole", () => {
 });
 
 describe("createWorkspace", () => {
-  it("creates the workspace and reports its slug", async () => {
-    invoke.mockResolvedValue({
-      publicId: "wrk_1",
-      name: "Research",
-      slug: "research",
-      orgSlug: "acme",
-      createdAt: "2026-09-15T00:00:00.000Z",
-    });
+  const CREATED = {
+    publicId: "wrk_1",
+    name: "Research",
+    slug: "research",
+    orgSlug: "acme",
+    createdAt: "2026-09-15T00:00:00.000Z",
+    mainRepo: {
+      bindingId: "rpb_0a1b2c",
+      connectionId: "con_01hq",
+      fullName: "acme/research",
+      defaultRef: "main",
+    },
+  };
+
+  it("creates the workspace with its main repository and reports its slug", async () => {
+    invoke.mockResolvedValue(CREATED);
     expect(
-      await createWorkspace("acme", { name: " Research ", slug: "research" }),
+      await createWorkspace("acme", {
+        name: " Research ",
+        slug: "research",
+        mainRepo: "acme/research",
+      }),
     ).toEqual({ ok: true, value: { slug: "research" } });
     expect(invoke).toHaveBeenCalledWith(
       "create_workspace",
-      { name: "Research", slug: "research" },
+      {
+        name: "Research",
+        slug: "research",
+        mainRepo: { provider: "github", owner: "acme", name: "research" },
+      },
       expect.objectContaining(TENANT),
     );
   });
 
+  // What a person pastes from GitHub: the clone URL's tail, with space around
+  // it. Only the two segments reach the contract.
+  it("drops surrounding space and a trailing .git from the repository", async () => {
+    invoke.mockResolvedValue(CREATED);
+    await createWorkspace("acme", {
+      name: "Research",
+      slug: "research",
+      mainRepo: "  acme/research.git ",
+    });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      mainRepo: { owner: "acme", name: "research" },
+    });
+  });
+
+  it.each(["", "research", "acme/research/extra", "/research", "acme/"])(
+    "refuses %j as the main repository before the kernel runs (negative)",
+    async (mainRepo) => {
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          mainRepo,
+        }),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "repository_unparsable",
+        field: "mainRepo",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    },
+  );
+
+  // The segments' spelling is the contract's to judge: `bind_main_repository`'s
+  // GitHub-shaped owner and name schemas, carried by import.
+  it("refuses an owner GitHub would not accept before the kernel runs, naming the field (negative)", async () => {
+    expect(
+      await createWorkspace("acme", {
+        name: "Research",
+        slug: "research",
+        mainRepo: "-acme-/research",
+      }),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "mainRepo.owner" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   it("refuses a slug the contract's shape rejects before the kernel runs (negative)", async () => {
     expect(
-      await createWorkspace("acme", { name: "Research", slug: "Research Lab" }),
+      await createWorkspace("acme", {
+        name: "Research",
+        slug: "Research Lab",
+        mainRepo: "acme/research",
+      }),
     ).toMatchObject({ ok: false, reason: "invalid", field: "slug" });
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -235,9 +301,34 @@ describe("createWorkspace", () => {
   it("carries a slug already taken to the caller as a conflict (negative)", async () => {
     invoke.mockRejectedValue(refusal("conflict", "slug_taken"));
     expect(
-      await createWorkspace("acme", { name: "Research", slug: "research" }),
+      await createWorkspace("acme", {
+        name: "Research",
+        slug: "research",
+        mainRepo: "acme/research",
+      }),
     ).toEqual({ ok: false, reason: "conflict", code: "slug_taken" });
   });
+
+  // The four repository refusals `create_workspace` documents, each carried
+  // with its reason intact so the dialog can print its own sentence.
+  it.each([
+    ["conflict", "github_not_authorized"],
+    ["not_found", "installation_unreachable"],
+    ["not_found", "repository_not_installed"],
+    ["conflict", "main_repo_claimed"],
+  ] as const)(
+    "carries a %s: %s from the handler to the caller (negative)",
+    async (code, reason) => {
+      invoke.mockRejectedValue(refusal(code, reason));
+      expect(
+        await createWorkspace("acme", {
+          name: "Research",
+          slug: "research",
+          mainRepo: "acme/research",
+        }),
+      ).toEqual({ ok: false, reason: code, code: reason });
+    },
+  );
 });
 
 describe("renameWorkspace", () => {

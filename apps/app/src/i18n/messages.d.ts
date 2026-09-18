@@ -1274,6 +1274,8 @@ type Messages = {
         scope: string;
         slug: string;
         slugHint: string;
+        mainRepo: string;
+        mainRepoHint: string;
         permissions: string;
         roleNameHint: string;
       };
@@ -1350,6 +1352,11 @@ type Messages = {
         targetNotMember: string;
         roleNotGrantable: string;
         insufficientRole: string;
+        githubNotAuthorized: string;
+        installationUnreachable: string;
+        repositoryNotInstalled: string;
+        mainRepoClaimed: string;
+        repositoryUnparsable: string;
       };
     };
     invitations: {
