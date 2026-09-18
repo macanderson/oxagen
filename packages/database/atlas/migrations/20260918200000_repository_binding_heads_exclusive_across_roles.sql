@@ -99,11 +99,36 @@
 -- case §10.1 allows and passes. A main head beside a linked head in the SAME
 -- workspace is `link_repository`'s own `conflict: main_repo` and is not this
 -- trigger's business. When both a main and a linked head exist elsewhere,
--- which the trigger makes impossible from here on but the 20260918040000
--- demotion may have left behind, the main one wins the message.
+-- the main one wins the message; section 2 below removes the pairs that
+-- already exist, so from the trigger on the case is only ever a race.
 --
 -- The index stays. It is cheap, it holds the main-against-main case without
 -- the trigger's read, and it is what the schema in ingestion.ts declares.
+--
+-- ## 3. The pairs the trigger forbids may already be in the table
+--
+-- A forward-only trigger inspects the row being written and nothing else.
+-- 20260918040000 kept the OLDEST main claim on a repository and demoted every
+-- later one to 'linked', so an upgraded database can hold exactly the state
+-- this migration forbids: the repository main in workspace A and linked in
+-- workspace B. The trigger never sees those rows, the handlers' pre-checks
+-- never see them either (both read the row being written), and B keeps
+-- opening Context PRs on A's governance repository — the door ADR-099 §4
+-- closes — for as long as the row stands. `link_repository` between #3269
+-- and this migration could leave the same pair behind a lost race, since its
+-- pre-check was not serialised against a concurrent main claim.
+--
+-- The repair runs BEFORE the trigger is installed and is the same move
+-- `unlink_repository` makes: the linked head is deleted, its binding versions
+-- stay as evidence for every run that cited them, and no connection is
+-- touched. The main head is kept, because it is the claim steering resolved
+-- against up to now; removing it instead would silently move A's governance.
+-- B is left as the demotion already left it in effect — a workspace that
+-- cannot be steered by that repository — and now the store says so too. If B
+-- has no other main head it binds its way out through `bind_main_repository`,
+-- which promotes a linked head or reuses a retained version
+-- (packages/handlers/src/repository.pg.test.ts). Each removal is a NOTICE
+-- naming the workspace, so the deploy log says exactly what changed.
 
 -- ── 1. DELETE on the heads table ─────────────────────────────────────────────
 -- Guarded the way 20260813100000 guards its grants: a fresh cluster may lack
@@ -116,7 +141,40 @@ BEGIN
 END
 $$;
 
--- ── 2. The trigger ───────────────────────────────────────────────────────────
+-- ── 2. Reconcile linked heads whose repository is main elsewhere ─────────────
+-- Runs before the trigger exists, so the trigger only ever guards rows that
+-- already satisfy it. DELETE does not fire the trigger anyway; the order is
+-- so the file reads as its invariant does: repair, then guard.
+DO $$
+DECLARE
+  removed record;
+  n integer := 0;
+BEGIN
+  FOR removed IN
+    DELETE FROM "ingestion"."repository_binding_heads" AS h
+     WHERE h."role" = 'linked'
+       AND EXISTS (
+         SELECT 1
+           FROM "ingestion"."repository_binding_heads" AS m
+          WHERE m."role" = 'main'
+            AND m."provider" = h."provider"
+            AND m."provider_repository_id" = h."provider_repository_id"
+            AND m."workspace_id" <> h."workspace_id"
+       )
+    RETURNING h."org_id", h."workspace_id", h."provider", h."provider_repository_id"
+  LOOP
+    n := n + 1;
+    RAISE NOTICE
+      'repository_binding_heads: removed linked head for org % workspace % on %:% (repository is the main repository of another workspace; its binding versions are retained)',
+      removed."org_id", removed."workspace_id", removed."provider", removed."provider_repository_id";
+  END LOOP;
+  IF n > 0 THEN
+    RAISE NOTICE 'repository_binding_heads: % linked head(s) removed before installing the exclusive-main trigger', n;
+  END IF;
+END
+$$;
+
+-- ── 3. The trigger ───────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION "ingestion"."repository_binding_heads_guard_exclusive_main"()
 RETURNS trigger
 LANGUAGE plpgsql
