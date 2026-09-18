@@ -7,7 +7,7 @@
  *
  *   node e2e-smoke.mjs                                  read-only checks
  *   node e2e-smoke.mjs --login                          + browser sign-in
- *   node e2e-smoke.mjs --enroll --org acme --workspace core [--harness claude-code,codex]
+ *   node e2e-smoke.mjs --enroll --org acme --workspace core [--harness claude-code,codex,cursor]
  *                                                       + register, record a first run
  *   node e2e-smoke.mjs --cleanup                        + unenroll --purge at the end
  *
@@ -266,6 +266,9 @@ if (status?.enrolled) {
     status.codexHooks
       ? `codex hooks ${status.codexHooks.complete ? "complete" : `${status.codexHooks.missing?.length} missing`}`
       : null,
+    status.cursorHooks
+      ? `cursor hooks ${status.cursorHooks.complete ? "complete" : `${status.cursorHooks.missing?.length} missing`}`
+      : null,
     status.stellaHooks
       ? `stella hooks ${status.stellaHooks.complete ? "complete" : `${status.stellaHooks.missing?.length} missing`}`
       : null,
@@ -275,6 +278,7 @@ if (status?.enrolled) {
     Boolean(status.service?.running) &&
       (status.hooks?.complete ?? true) &&
       (status.codexHooks?.complete ?? true) &&
+      (status.cursorHooks?.complete ?? true) &&
       (status.stellaHooks?.complete ?? true),
     `${status.host?.agent_key} → ${status.host?.org_slug}/${status.host?.workspace_slug}; service ${status.service?.kind} ${status.service?.running ? "running" : "NOT running"}; ${hooks.join("; ")}`,
   );

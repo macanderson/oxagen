@@ -53,6 +53,7 @@ export interface TachoStatus {
   enrolled: boolean;
   hooks?: TachoHookPresence;
   codexHooks?: TachoHookPresence;
+  cursorHooks?: TachoHookPresence;
   stellaHooks?: TachoHookPresence;
   /** Present once the host connects Claude Desktop. */
   claudeDesktop?: TachoMcpPresence;
@@ -167,6 +168,8 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   if (hooks !== undefined) status.hooks = hooks;
   const codexHooks = presence(parsed["codexHooks"]);
   if (codexHooks !== undefined) status.codexHooks = codexHooks;
+  const cursorHooks = presence(parsed["cursorHooks"]);
+  if (cursorHooks !== undefined) status.cursorHooks = cursorHooks;
   const stellaHooks = presence(parsed["stellaHooks"]);
   if (stellaHooks !== undefined) status.stellaHooks = stellaHooks;
   const claudeDesktop = mcpPresence(parsed["claudeDesktop"]);
