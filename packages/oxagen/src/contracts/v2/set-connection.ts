@@ -8,6 +8,8 @@ import { defineTool } from "./_define";
  */
 import {
   modelCredentialApiKeySchema,
+  modelCredentialBaseUrlSchema,
+  modelCredentialModelMapSchema,
   modelCredentialVerificationSchema,
 } from "../org.model_credential.shared";
 import { pluginCredentialSetSecret } from "../plugin.credential.set_secret";
@@ -52,8 +54,9 @@ export const setConnectionInputObject = z.object({
   /**
    * Appendix A `tools.connections.provider` is free text because a connection
    * can point at any vendor. The closed `modelCredentialProviderSchema`
-   * (`openrouter`, `gateway`) still governs which values are legal when
-   * `kind` is `model_provider` — enforced in the handler rather than as a
+   * (`openrouter`, `gateway`, `openai`, `anthropic`, `openai_compatible`)
+   * still governs which values are legal when `kind` is `model_provider` —
+   * enforced in the handler rather than as a
    * refinement here, so `.shape` stays reachable for the MCP parameter
    * builder (the same reason `verify_model_credential` exported its base
    * object separately).
@@ -69,6 +72,28 @@ export const setConnectionInputObject = z.object({
    * `z.string()`, so this is a tightening — the stricter of two sources wins.
    */
   secret: modelCredentialApiKeySchema.optional(),
+
+  /**
+   * Carried from `set_model_credential` and `verify_model_credential`: the
+   * customer's own endpoint for a `model_provider` connection whose provider
+   * is `openai_compatible`. Not a secret, so it is stored in the clear and
+   * returned by every read — an endpoint an operator cannot see is one they
+   * cannot correct. The imported schema keeps the https-only rule and the
+   * 2048 bound; the loopback and RFC1918 range check still runs in the
+   * handler, for the reason the source gives (`http://2130706433/` is
+   * loopback too, and no regex knows it).
+   */
+  baseUrl: modelCredentialBaseUrlSchema.nullish(),
+
+  /**
+   * Carried from `set_model_credential`: which concrete model each
+   * white-labeled tier means on THIS credential. A routed provider
+   * (`openrouter`, `gateway`) understands the platform's tier ids and needs no
+   * map; a direct vendor does not, and the source's rule that a direct-vendor
+   * key must map `balanced` is enforced in the handler where `provider` is
+   * read against `kind` (`.shape` must stay reachable, see `provider`).
+   */
+  modelMap: modelCredentialModelMapSchema.optional(),
 
   // Carried from `set_plugin_secret` for `kind: "oauth"`. The refresh token
   // is stored and never read back — `list_connections` cannot return it and
@@ -231,6 +256,11 @@ export const setConnection = defineTool({
       field: "orgListingId",
       from: "reauth_plugin_credential",
       why: "same collapse; re-auth is now `set_connection` on an existing connectionId with no new secret, which returns a fresh authorizeUrl when the kind is oauth",
+    },
+    {
+      field: "toolProbeModel",
+      from: "verify_model_credential",
+      why: "verify asked the tool-calling question of a model named separately from the one about to be stored, because it ran as its own call before save. Here the test is unconditional and runs on the candidate itself, so the probe model IS `modelMap.balanced` — the assistant's worker tier, the model the source told operators to name here anyway. A separate field would let the tested model differ from the stored one, which is the gap the test exists to close",
     },
     {
       field: "authKind",
