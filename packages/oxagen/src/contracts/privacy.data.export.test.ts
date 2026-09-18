@@ -68,30 +68,34 @@ describe("privacy.data.export capability", () => {
     ).toThrow();
   });
 
-  it("has defaultEffect of 'deny'", () => {
-    expect(privacyDataExport.defaultEffect).toBe("deny");
+  // A person is never the wrong person to export their own data, and on an
+  // enterprise org the resolver is the only thing between a member and their
+  // own record. An invited member holds no org role at all -- iam-provision
+  // seeds Owner, Admin, Compliance and Billing, and nothing else -- so a role
+  // map cannot admit them; rule 8 has to.
+  it("defaults to allow, so a member holding no org role is not refused", () => {
+    expect(privacyDataExport.defaultEffect).toBe("allow");
   });
 
-  // GDPR Article 20 is a right the person holds, not a privilege an
-  // administrator grants. With `deny` as the default effect, a role this map
-  // omits cannot invoke the capability at all on an enterprise org -- so an
-  // ordinary member could not export their own data, which is the only scope
-  // that is theirs to export.
-  it("admits every org role, because scope 'user' is the caller's own data", () => {
-    for (const role of [
-      "Owner",
-      "Admin",
-      "Member",
-      "Compliance",
-      "Billing",
-      "Viewer",
-    ]) {
-      expect(
-        privacyDataExport.defaultRoles.org[
-          role as keyof typeof privacyDataExport.defaultRoles.org
-        ],
-      ).toBe("allow");
-    }
+  // The map is read BY NAME by iam-provision, which iterates the real role
+  // list, so a name that is not a real role seeds no grant. It is also what
+  // list_capabilities shows an operator, and a map naming roles that do not
+  // exist is a lie on an admin screen whatever the resolver does with it.
+  it("names exactly the four system org roles", () => {
+    expect(privacyDataExport.defaultRoles.org).toEqual({
+      Owner: "allow",
+      Admin: "allow",
+      Compliance: "allow",
+      Billing: "allow",
+    });
+  });
+
+  // Assembling the ZIP spends no AI credits, and the billing gate runs before
+  // the handler. Without this, an organisation that has exhausted its credits
+  // could not export its data -- the thing a customer needs most when their
+  // account is in trouble would be the first to stop working.
+  it("is exempt from the billing gate", () => {
+    expect(privacyDataExport.noBillingGate).toBe(true);
   });
 
   // The org-scope restriction cannot live here: it turns on an input field,
