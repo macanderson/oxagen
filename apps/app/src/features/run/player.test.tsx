@@ -2,7 +2,15 @@
 // The run replay transport (spec §8.4): the playhead, its idle compression,
 // the scrub and step controls, live-head following, and pagination through
 // `readTranscriptPage`. Mirrors the harness conventions of controls.test.tsx.
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -192,7 +200,13 @@ describe("the playhead", () => {
     expect(screen.queryByTestId("player-cost")).toBeNull();
     const user = userEvent.setup();
     await user.click(screen.getByTestId("player-forward"));
-    expect(screen.queryByTestId("player-cost")).toBeInTheDocument();
+    const line = screen.getByTestId("player-cost");
+    // The figure itself, not just the words around it. `t.rich` silently drops
+    // a value passed as a function when the message carries a plain `{cost}`
+    // placeholder, so a readout that says "spent so far" and no money at all
+    // passes every assertion about its prose.
+    expect(within(line).getByTestId("money")).toHaveTextContent(/\d/);
+    expect(line).toHaveTextContent("spent so far");
     expect(screen.getByTestId("player-position")).not.toHaveTextContent(
       "nothing priced up to here",
     );

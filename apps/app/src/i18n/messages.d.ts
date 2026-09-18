@@ -1920,7 +1920,6 @@ type Messages = {
         harness: string;
         observe: string;
       };
-      recordedGrade: string;
       gapsTitle: string;
       prefix: string;
       noGaps: string;

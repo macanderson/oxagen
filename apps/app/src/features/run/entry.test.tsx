@@ -217,4 +217,28 @@ describe("Entry", () => {
     );
     await expectNoAxe(container);
   });
+
+  it("prints the running total as a figure, not only as the words beside it", () => {
+    const { container } = renderEntry(
+      transcriptEntry({
+        cost: {
+          micros: "18240",
+          currency: "USD",
+          basis: "gateway_observed",
+        },
+        cumulativeCost: {
+          micros: "4131265",
+          currency: "USD",
+          basis: "gateway_observed",
+        },
+      }),
+    );
+    const line = screen.getByTestId("entry-cumulative");
+    // `t.rich` silently drops a value passed as a function when the message
+    // carries a plain `{cost}` placeholder, and the line still reads "so far"
+    // without the money. Assert the figure itself.
+    expect(within(line).getByTestId("money")).toHaveTextContent(/\d/);
+    expect(line).toHaveTextContent("so far");
+    expect(container).toBeTruthy();
+  });
 });

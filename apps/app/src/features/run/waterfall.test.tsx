@@ -134,8 +134,13 @@ describe("Waterfall", () => {
     expect(bars).toHaveLength(2);
     for (const bar of bars) {
       expect(within(bar).getByText(/running total/)).toBeInTheDocument();
+      // Every money figure, not just the words beside it: `t.rich` drops a
+      // value passed as a function when the message carries a plain `{cost}`
+      // placeholder, and the row still reads "running total" without it.
+      expect(within(bar).getAllByTestId("money").length).toBeGreaterThan(1);
     }
     const totalLine = screen.getByText(/over the run/);
+    expect(within(totalLine).getByTestId("money")).toHaveTextContent(/\d/);
     const list = screen.getByTestId("waterfall");
     expect(
       totalLine.compareDocumentPosition(list) &

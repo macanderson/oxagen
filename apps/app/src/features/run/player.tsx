@@ -362,11 +362,14 @@ export function RunPlayer({
   }, [playing, index, entries, speed, cursor]);
 
   // Read ahead of the playhead, so playback does not stall at a page boundary.
+  // Only while playing: reading a second page the moment a short transcript
+  // renders would double the cost of opening the tab for a person who has not
+  // asked for anything yet, and "Read more" is what asking looks like.
   useEffect(() => {
-    if (cursor === null || loading !== "idle") return;
+    if (!playing || cursor === null || loading !== "idle") return;
     if (index < entries.length - PREFETCH_WITHIN) return;
     void loadMore();
-  }, [index, entries.length, cursor, loading, loadMore]);
+  }, [playing, index, entries.length, cursor, loading, loadMore]);
 
   // Keep the entry under the playhead on screen. A person who asked for less
   // motion gets none.

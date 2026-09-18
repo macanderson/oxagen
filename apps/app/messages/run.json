@@ -52,7 +52,7 @@
       "response": "Returned",
       "decision": "Decision: {decision}, at frame {seq}",
       "elapsed": "{elapsed} into the run",
-      "cumulative": "{cost} so far",
+      "cumulative": "<cost></cost> so far",
       "chipsLabel": "Filter the transcript",
       "chip": {
         "prompt": "Prompt",
@@ -263,7 +263,7 @@
       "ofEntries": "entry {index} of {total}",
       "into": "{elapsed} into the run",
       "noCostYet": "nothing priced up to here",
-      "spentSoFar": "{cost} spent so far",
+      "spentSoFar": "<cost></cost> spent so far",
       "idle": "The run waited {real} here. Playback holds it for {played}.",
       "following": {
         "off": "This run is live. Your browser cannot follow its head, so re-read the page for later entries.",
@@ -292,7 +292,6 @@
         "harness": "observed at the harness",
         "observe": "observed from the side"
       },
-      "recordedGrade": "Replay grade",
       "gapsTitle": "Gaps",
       "prefix": "This walk stopped before the end of the recording, so these are the gaps of the part it read, not of the whole run.",
       "noGaps": "The walk found no missing sequence and no missing body, and the seal recorded no gap.",
@@ -345,9 +344,9 @@
     },
     "waterfall": {
       "title": "Run waterfall",
-      "total": "{cost} over the run",
+      "total": "<cost></cost> over the run",
       "basisNotRecorded": "basis not recorded",
-      "running": "{cost} running total",
+      "running": "<cost></cost> running total",
       "steps": "{count} steps",
       "step": "{label}",
       "noCost": "this turn's cost was not recorded",
