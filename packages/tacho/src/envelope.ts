@@ -47,6 +47,7 @@ export const TACHO_RUNTIMES = [
   "stella",
   "proxy",
   "codex",
+  "cursor",
 ] as const;
 export type TachoRuntime = (typeof TACHO_RUNTIMES)[number];
 export const TACHO_FIDELITIES = ["sdk", "ambient", "proxy"] as const;
