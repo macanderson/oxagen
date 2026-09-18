@@ -97,19 +97,18 @@ describe("readModelCallFrames", () => {
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
-    // A call seen twice (OTel and transcript, or OTel and collector) is
-    // priced once: the host correlates the sightings per call as it seals
-    // them and stamps every one after the first, and the rollup skips a
-    // stamped row.
+    // A call seen twice (OTel and transcript) is priced once: the host
+    // stamps the later sighting and the rollup skips stamped rows.
     expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
-    // Retargeted from the per-turn source pick this read used to carry. The
-    // property that rule existed for — an OTel stream that stops mid-session
-    // must not take the collector's later calls with it — is now held by the
-    // stamp being written per call: a call only the collector saw is a first
-    // sighting, carries no stamp, and counts. So the read must admit a row on
-    // the absence of its OWN stamp and nothing else. Any per-turn or
-    // per-source authority pick here would drop those collector-only calls
-    // again and bill the run short.
+    // Retargeted from the per-turn source pick this read used to carry, which
+    // admitted one source per (session, turn). The property that rule existed
+    // for — an OTel stream that stops mid-session must not take the
+    // collector's later calls with it — is now held by the stamp being
+    // written per call, on the vendor request id: a call only the collector
+    // saw is a first sighting, carries no stamp, and counts. So the read must
+    // admit a row on the absence of its OWN stamp and nothing else. Any
+    // per-turn or per-source authority pick here would drop those
+    // collector-only calls again and bill the run short.
     expect(query).not.toContain("argMin(source");
     expect(query).not.toContain("turn_seq");
     expect(query).not.toContain("toStartOfMinute(ts)");
@@ -314,17 +313,17 @@ describe("readObservedModels", () => {
     expect(query).toContain("UNION ALL");
     expect(query).toContain("kind = 'llm_call'");
     expect(query).toContain("source IN {sources:Array(String)}");
-    // A session that reports one call through the OTel log AND a collector or
-    // hook event holds two rows for it under different `seq`s, which FINAL
-    // does not collapse, so a plain count over the admitted sources would
-    // bill the call twice and rank the model above ones that need pricing
-    // more. The host stamps every sighting after the first, and this read
-    // drops a stamped row — the same rule `readModelCallFrames` uses, so the
-    // two never disagree about what one call is.
+    // Each call is priced once: a session that reports a call through the
+    // OTel log AND a collector or hook event holds two rows for it under
+    // different `seq`s, which FINAL does not collapse, so a plain count over
+    // the admitted sources would bill the call twice and rank the model
+    // above ones that need pricing more. The host stamps the later sighting
+    // and this read skips stamped rows, the same rule the per-run read uses.
     expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
-    // Retargeted from the per-turn source pick, for the reason above: the
-    // stamp is per call, so a call only the collector saw after the OTel
-    // stream dropped counts here too, and an authority pick would discard it.
+    // Retargeted from the per-turn source pick, for the reason the per-run
+    // read states: the stamp is per call, so a call only the collector saw
+    // after the OTel stream dropped counts here too, and an authority pick
+    // would discard it and under-rank its model.
     expect(query).not.toContain("argMin(source");
     expect(query).not.toContain("turn_seq");
     expect(query).toContain("GROUP BY model");
@@ -379,13 +378,11 @@ describe("readObservedModels", () => {
     await readObservedModels({ orgId: ORG, since: SINCE, until: UNTIL });
     const bounded = lastQuery();
     expect(bounded.query).toContain("created_at <= {until:DateTime64(3)}");
+    // Once, in the tacho branch: `ts` is that store's timestamp column and
+    // the gateway branch is bounded on `created_at` instead.
     expect(
       bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
-    ).toHaveLength(
-      // The tacho branch, once: the per-call duplicate stamp replaced the
-      // source pick that used to repeat this filter in a subquery.
-      1,
-    );
+    ).toHaveLength(1);
     expect(bounded.query_params).toMatchObject({
       until: "2026-09-10 00:00:00.000",
     });
@@ -401,8 +398,8 @@ describe("readObservedModels", () => {
     answer([]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
     const { query, query_params } = lastQuery();
-    // Once per store, and no longer a third time in a source-pick subquery:
-    // a fence on only one store would leak the other.
+    // Once per store: a fence on only one of them would leak the other's
+    // rows into a workspace-scoped list.
     expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
     expect(query_params).toMatchObject({ workspaceId: WS });
   });

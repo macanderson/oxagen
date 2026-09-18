@@ -11,18 +11,18 @@
  *
  * The tacho table receives the same model call from more than one source
  * (hook, collector, OTel log, transcript); the token-bearing sources are
- * `LLM_CALL_TOKEN_SOURCES`, the same rule the ingest handler folds session
- * totals by, and FINAL collapses a redelivered (session, seq). FINAL does NOT
- * collapse two sources' records of one call: each carries its own `seq`. The
- * host correlates them instead, per call, as it seals them — on the vendor
- * `request_id`, then the message id, then the token tuple — and stamps every
- * sighting after the first with `oxagen.llm_call_duplicate_of`, so the reads
- * below drop a stamped row and price each call once ({@link
- * TACHO_TOKEN_SOURCES}). Those sources carry cache writes as one
- * `cache_creation_tokens` figure (the 5m/1h split and thinking tokens are
- * transcript columns, docs/specs/tacho/data-model.md §2.7), so a wrapped
- * run's cache writes are priced as 5m writes, the same rule the ledger
- * branch applies to `cache_write_tokens`.
+ * `otel_log`, `collector` and `hook`, the same rule the ingest handler folds
+ * session totals by, and FINAL collapses a redelivered (session, seq). FINAL
+ * does NOT collapse two sources' records of one call, so the host stamps the
+ * later sighting of a call it already sealed from another source with
+ * `oxagen.llm_call_duplicate_of`, and every reader below drops a stamped row
+ * ({@link NOT_A_DUPLICATE}). That is the same rule `countsLlmCallUsage` in
+ * @oxagen/tacho folds session totals by, so the rollup and the fold cannot
+ * price a call a different number of times. Those
+ * sources carry cache writes as one `cache_creation_tokens` figure (the
+ * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
+ * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
+ * writes, the same rule the ledger branch applies to `cache_write_tokens`.
  *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
@@ -73,6 +73,13 @@ const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
  * with `oxagen.llm_call_duplicate_of`.
  */
 const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
+
+/**
+ * The predicate that keeps one row per model call: the host has already
+ * decided which sighting is the duplicate, so a reader only has to drop the
+ * stamped one. Spelled once so the two reads below cannot filter differently.
+ */
+const NOT_A_DUPLICATE = "attrs[{duplicateAttr:String}] = ''";
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -149,7 +156,7 @@ export async function readModelCallFrames(args: {
         AND root_session_uuid = {rootSessionUuid:UUID}
         AND kind = 'llm_call'
         AND source IN {sources:Array(String)}
-        AND attrs[{duplicateAttr:String}] = ''
+        AND ${NOT_A_DUPLICATE}
         AND model != ''
       ORDER BY ts, seq
     `,
@@ -364,11 +371,7 @@ const OBSERVED_MODEL_LIMIT = 500;
  * stores add up the same way. `token_usage.input_tokens` is the inclusive
  * input total (fresh + cache reads + cache writes, see schema.sql), so its
  * classes are split the way {@link readModelCallFrames} splits them; the
- * tacho sources carry each class separately and are simply added. The
- * tacho branch drops a duplicate-stamped row by the same rule
- * {@link readModelCallFrames} uses, so a call two sources reported is one
- * call here too — otherwise it would rank its model above ones that need
- * pricing more.
+ * tacho sources carry each class separately and are simply added.
  *
  * Throws on a degraded store: a short list read off half the frames would
  * say a model is priced when nobody has priced it.
@@ -387,6 +390,14 @@ export async function readObservedModels(args: {
       : "AND workspace_id = {workspaceId:UUID}";
   const until =
     args.until === undefined ? "" : "AND {col} <= {until:DateTime64(3)}";
+  const tachoWhere = `org_id = {orgId:UUID}
+          AND ts >= {since:DateTime64(3)}
+          ${until.replace("{col}", "ts")}
+          AND kind = 'llm_call'
+          AND source IN {sources:Array(String)}
+          AND ${NOT_A_DUPLICATE}
+          AND model != ''
+          ${workspace}`;
   const result = await breaker().exec(() =>
     ch.query({
       query: `
@@ -429,14 +440,7 @@ export async function readObservedModels(args: {
           min(toDateTime64(ts, 3, 'UTC'))     AS first_seen,
           max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
         FROM tacho_events FINAL
-        WHERE org_id = {orgId:UUID}
-          AND ts >= {since:DateTime64(3)}
-          ${until.replace("{col}", "ts")}
-          AND kind = 'llm_call'
-          AND source IN {sources:Array(String)}
-          AND attrs[{duplicateAttr:String}] = ''
-          AND model != ''
-          ${workspace}
+        WHERE ${tachoWhere}
         GROUP BY toString(model), toString(provider)
       )
       GROUP BY model
