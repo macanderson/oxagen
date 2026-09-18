@@ -28,6 +28,10 @@ vi.mock("./logger", () => ({
 }));
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
+import {
+  clearSteeringCacheForTests,
+  type SteeringRow,
+} from "./lib/tacho-steering";
 import { tachoBundleGetHandler } from "./tacho.bundle.get";
 import { ackPatch, tachoCommandFetchHandler } from "./tacho.command.fetch";
 import { tachoEnrollmentRevokeHandler } from "./tacho.enrollment.revoke";
@@ -155,8 +159,12 @@ interface Fake {
   commands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
   inserts: Array<{ table: string; values: Record<string, unknown> }>;
-  /** Active context records the workspace has published. */
-  records?: Array<Record<string, unknown>>;
+  /**
+   * Active context records the workspace has published, each joined to its
+   * pinned version, as the steering read selects them. The fake counts the
+   * promotions ledger as one row per record: a merge appends one.
+   */
+  records?: SteeringRow[];
 }
 
 function tableName(table: unknown): string {
@@ -240,13 +248,30 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
             findMany: async () => [{ workspaceId: null, generation: 1 }],
           },
           retentionPolicyVersions: { findFirst: async () => undefined },
-          contextRecords: { findMany: async () => db.records ?? [] },
           tachoControlCommands: {
             findMany: async () =>
               db.commands.filter((c) => c["outcome"] === "queued"),
           },
         },
-        select: () => ({ from: () => ({ where: async () => [{ value: 2 }] }) }),
+        // The steering read: the ledger count over `context_promotions`
+        // (the bundle cache key) and the records joined to their pinned
+        // versions. Any other table answers what it did before.
+        select: () => ({
+          from: (table: unknown) => ({
+            where: async () =>
+              tableName(table) === "context_promotions"
+                ? [
+                    {
+                      ledger: (db.records ?? []).length,
+                      steering: (db.records ?? []).filter((r) =>
+                        ["must", "should"].includes(r.versionForce ?? ""),
+                      ).length,
+                    },
+                  ]
+                : [{ value: 2 }],
+            leftJoin: () => ({ where: async () => db.records ?? [] }),
+          }),
+        }),
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => {
             db.inserts.push({ table: tableName(table), values });
@@ -278,6 +303,7 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearSteeringCacheForTests();
   mocks.resolveActorOrgRole.mockResolvedValue("Admin");
   vi.stubEnv("TACHO_BUNDLE_SIGNING_PRIVATE_KEY", PEM.replace(/\n/g, "\\n"));
 });
@@ -351,20 +377,31 @@ describe("get_tacho_bundle", () => {
     );
     expect(before.bundle?.context.system).toBeNull();
 
+    // Each row carries its pinned version's classification and the record
+    // row's copy. The copy on the first is stale on purpose: it is what a
+    // newer merge left on the row, and the bundle must not say it (#3312).
     db.records = [
       {
         slug: "no-force-push",
-        kind: "constraint",
-        force: "must",
-        constraintEffect: "forbid",
-        statement: "Never force-push to the production branch.",
+        versionKind: "constraint",
+        versionForce: "must",
+        versionConstraintEffect: "forbid",
+        versionStatement: "Never force-push to the production branch.",
+        recordKind: "rule",
+        recordForce: "should",
+        recordConstraintEffect: null,
+        recordStatement: "Ask before force-pushing.",
       },
       {
         slug: "prefer-small-prs",
-        kind: "preference",
-        force: "may",
-        constraintEffect: null,
-        statement: "Small pull requests are easier to review.",
+        versionKind: "preference",
+        versionForce: "may",
+        versionConstraintEffect: null,
+        versionStatement: "Small pull requests are easier to review.",
+        recordKind: "preference",
+        recordForce: "may",
+        recordConstraintEffect: null,
+        recordStatement: "Small pull requests are easier to review.",
       },
     ];
     const after = await tachoBundleGetHandler(
@@ -377,6 +414,7 @@ describe("get_tacho_bundle", () => {
       "- Never force-push to the production branch. (constraint, forbid; no-force-push)",
     );
     expect(after.bundle?.context.system).not.toContain("Small pull requests");
+    expect(after.bundle?.context.system).not.toContain("Ask before");
   });
 });
 
