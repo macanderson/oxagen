@@ -281,26 +281,26 @@
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Chain and seal tab reads get_run_chain when open: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/run.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "proof": "apps/app/src/features/run/chain.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-contracts"
+      "verifiedBy": "session-replay-ui"
     },
     "fork_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed run graded fork calls fork_run (features/run/actions.ts, features/run/record-actions.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-contracts"
+      "verifiedBy": "session-replay-ui"
     },
     "bisect_runs": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — Bisect on a sealed run compares it with another and opens the first divergent frame (features/run/actions.ts, features/run/record-actions.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-contracts"
+      "verifiedBy": "session-replay-ui"
     },
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -313,10 +313,10 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Cost tab reads get_run_cost when open (data/live/runs.ts, features/run/cost.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
+      "proof": "apps/app/src/features/run/waterfall.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -329,10 +329,10 @@
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at the zoom the URL names (data/live/runs.ts, features/run/transcript.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=transcript — the Transcript tab reads get_run_transcript at the zoom and chips the URL names, the player pages it with the cursor, and the Cost tab reads the run's per-turn ledger for the waterfall (data/live/runs.ts, features/run/transcript.tsx, features/run/player.tsx, features/run/waterfall.tsx)",
+      "proof": "apps/app/src/features/run/player.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
@@ -393,10 +393,10 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_approvals (data/live/approvals.ts, data/live/mappers/approvals.ts, data/live/mappers/mappers.type-test.ts)",
-      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws] — the Fleet approvals panel invokes list_approvals, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",

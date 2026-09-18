@@ -14,6 +14,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   NOW,
+  runChain,
   runCost,
   runDetail,
   runFrame,
@@ -725,5 +726,173 @@ describe("failures", () => {
   it("names the permission a denied viewer lacks (negative)", async () => {
     await renderRun({ detail: DENIED });
     expect(screen.getByText(/Your roles do not include run.read/)).toBeTruthy();
+  });
+});
+
+describe("chips", () => {
+  it("reads the transcript through the chips the URL pressed, in the contract's own order", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "transcript", kinds: "errors,tools" },
+    );
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      { zoom: "steps", kinds: ["tools", "errors"], after: null },
+    ]);
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByTestId("chip-prompt")).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("drops a word the contract does not publish rather than refusing the page (negative)", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "transcript", kinds: "thinking,proof,tools" },
+    );
+    expect(calls.transcript[0]?.[2]).toEqual({
+      zoom: "steps",
+      kinds: ["tools"],
+      after: null,
+    });
+    expect(screen.queryByTestId("chip-thinking")).toBeNull();
+    expect(screen.queryByTestId("chip-proof")).toBeNull();
+  });
+
+  it("carries the zoom and the chips on every chip's own link, so one filter has one URL", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ zoom: "turns" })),
+      },
+      { tab: "transcript", zoom: "turns", kinds: "tools" },
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+    );
+    // Pressing a chip that is on takes it off again.
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    );
+  });
+
+  it("says no entry answers the filter rather than drawing an empty run (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ entries: [], kinds: ["policy"] })),
+      },
+      { tab: "transcript", kinds: "policy" },
+    );
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Clear the filter",
+    );
+    expect(screen.queryByTestId("run-transport")).toBeNull();
+  });
+});
+
+describe("chain and seal", () => {
+  it("reads get_run_chain only when its tab is open, and states the recorded grade", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        chain: ok(runChain({ recordedGrade: "view" })),
+      },
+      { tab: "chain" },
+    );
+    expect(calls.chain).toHaveLength(1);
+    expect(calls.transcript).toHaveLength(0);
+    expect(calls.cost).toHaveLength(0);
+    expect(screen.getByTestId("chain-ladder")).toBeTruthy();
+  });
+
+  it("names its own failure when the chain read is refused (negative)", async () => {
+    await renderRun({ detail: ok(runDetail()), chain: DOWN }, { tab: "chain" });
+    expect(
+      screen.getByText(/frame_store_unreachable/),
+    ).toBeTruthy();
+  });
+});
+
+describe("approvals on the run", () => {
+  it("reads list_approvals narrowed to this run, and only when its tab is open", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), approvals: ok([]) },
+      { tab: "approvals" },
+    );
+    expect(calls.approvals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
+    expect(calls.transcript).toHaveLength(0);
+  });
+
+  it("says nothing is parked rather than drawing an empty strip (negative)", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), approvals: ok([]) },
+      { tab: "approvals" },
+    );
+    expect(screen.queryByTestId("approval")).toBeNull();
+  });
+
+  it("draws one card per approval recorded on the run", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok([
+          {
+            id: "apr_1",
+            runId: "tse_7k2m9q",
+            tool: "create_release",
+            agentKey: "acme.core.release-bot",
+            requester: "usr_marcusbell",
+            mandateId: null,
+            createdAt: new Date(NOW - 60_000).toISOString(),
+            expiresAt: new Date(NOW + 3_600_000).toISOString(),
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    const [card] = screen.getAllByTestId("approval");
+    expect(card).toHaveTextContent("create_release");
+  });
+});
+
+describe("cost", () => {
+  it("reads the rollup and the run's own per-turn ledger, and lays the turns out as bars", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        cost: ok(runCost()),
+        transcript: (zoom) =>
+          ok(
+            runTranscript({
+              zoom,
+              entries:
+                zoom === "turns"
+                  ? [
+                      transcriptEntry({
+                        seq: "1",
+                        endSeq: "20",
+                        kind: "turn",
+                        label: "turn 1",
+                      }),
+                    ]
+                  : [transcriptEntry({ seq: "11", endSeq: "14" })],
+            }),
+          ),
+      },
+      { tab: "cost" },
+    );
+    expect(calls.cost).toHaveLength(1);
+    expect(calls.transcript.map((call) => call[2])).toEqual([
+      { zoom: "turns", kinds: [], after: null },
+      { zoom: "steps", kinds: [], after: null },
+    ]);
+    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
   });
 });
