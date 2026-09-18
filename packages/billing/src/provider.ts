@@ -207,6 +207,38 @@ export class ProrationLinesTruncatedError extends Error {
   }
 }
 
+/**
+ * Raised when a previewed invoice does not carry the subscription it was
+ * computed against, so the interval that decides whether this change resets
+ * the billing-cycle anchor cannot be derived from the priced state.
+ *
+ * WHY THIS IS A REFUSAL AND NOT A FALLBACK.
+ *
+ * There is an obvious fallback: the adapter retrieved the subscription a
+ * moment earlier to find the item to reprice, so it could label the preview
+ * with that. It did, and that was the defect. A retrieval and a preview are
+ * two provider requests with a window between them, and a plan update landing
+ * in that window makes the label describe a subscription the invoice was not
+ * priced against. Labelling is not deriving: passing the earlier snapshot
+ * enforces that SOMETHING was supplied, never that it is the thing that was
+ * priced (#3157, PR #3171 review, r4042380655).
+ *
+ * So there is no fallback to take. Either the preview says which subscription
+ * it priced, or nobody knows and this refuses. The quote path already refuses
+ * when a preview cannot be taken, for the same reason: quoting nothing is
+ * recoverable, and quoting $0 for a charge that will not be $0 is the failure
+ * this whole change exists to remove.
+ */
+export class PreviewedSubscriptionUnavailableError extends Error {
+  readonly code = "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" as const;
+  constructor(readonly subscriptionId: string) {
+    super(
+      `The previewed invoice for ${subscriptionId} did not carry the subscription it was computed against, so the interval this change moves from cannot be established from the state that was priced.`,
+    );
+    this.name = "PreviewedSubscriptionUnavailableError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer
@@ -246,23 +278,38 @@ export interface BillingProrationPreview {
   amountDueCents: number;
   /**
    * The recurring interval of the subscription THIS preview was computed
-   * against, read from the same retrieval that produced it.
+   * against, taken from the SAME PROVIDER REQUEST that priced it.
    *
    * It is here because the caller needs it and must not fetch it separately.
    * Whether a change resets the billing-cycle anchor is decided by comparing
    * the interval the subscription is on against the one being asked for, and a
    * caller that takes the first from its own `getSubscription` is comparing
-   * against a subscription that is not the one this preview priced. Another
-   * plan update landing between the two reads makes them describe different
+   * against a subscription that is not the one this preview priced. A plan
+   * update landing between the two reads makes them describe different
    * subscriptions: the caller sees monthly, the preview is computed on annual,
    * a move to monthly scores as same-interval, its negative proration reads as
    * a downgrade, `none` is selected and the quote is $0 — while the provider
    * resets the anchor and invoices the whole new month anyway.
    *
-   * One read, one answer. The adapter already retrieves the subscription to
-   * find the item to price, so carrying the interval back costs nothing, and
-   * there is no second value left to keep in step (#3157, PR #3171 review,
-   * r4042249142).
+   * WHAT "THE SAME REQUEST" HAD TO MEAN, ON THE SECOND ATTEMPT.
+   *
+   * The first fix moved the field here and filled it from the subscription the
+   * adapter had retrieved in order to find the item to reprice. That closed
+   * the gap between the DOMAIN's read and the preview, and left an identical
+   * gap one layer down: `subscriptions.retrieve` and `invoices.createPreview`
+   * are also two requests, so the retrieved object was a LABEL on the preview,
+   * not a derivation from it. A dashboard update landing between them
+   * reproduced the whole defect inside the adapter, and a required parameter
+   * enforced only that something was passed (#3157, PR #3171 review,
+   * r4042380655).
+   *
+   * It is now read off the preview response itself: the preview is requested
+   * with the subscription expanded, so one HTTP request returns both the
+   * invoice and the subscription that invoice was priced against. There is no
+   * window, because there is no second request — and nothing to compare,
+   * because there is only one observation. A preview that does not carry it
+   * raises {@link PreviewedSubscriptionUnavailableError} rather than falling
+   * back to a snapshot from another moment.
    */
   billingInterval: BillingInterval;
   /** Per-line breakdown of the proration adjustments. */

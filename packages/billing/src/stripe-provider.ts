@@ -47,6 +47,7 @@ import type {
 } from "./provider";
 import {
   AmbiguousProrationAnchorError,
+  PreviewedSubscriptionUnavailableError,
   ProrationAttributionError,
   ProrationLinesTruncatedError,
 } from "./provider";
@@ -139,6 +140,35 @@ async function allPreviewLines(
   return all;
 }
 
+/**
+ * The subscription a previewed invoice was computed against, taken from the
+ * preview itself.
+ *
+ * This exists so that nothing can supply the answer from somewhere else. The
+ * caller cannot hand in a subscription it retrieved a moment ago, because it
+ * is not asked for one; the only thing that can answer is the response that
+ * carries the priced invoice. That is the whole difference between this and
+ * what it replaces — a required parameter proved a value had been supplied,
+ * never that the value described the state that was priced (r4042380655).
+ *
+ * `previewWithOwnedAnchor` requests `expand: ["subscription"]`, so an
+ * unexpanded id or a null here means the preview did not report what it
+ * priced. There is deliberately no fallback to the adapter's earlier
+ * retrieval: that snapshot is from a different moment, and preferring it would
+ * restore the defect in the one case this guard exists to catch. Refuse
+ * instead — see {@link PreviewedSubscriptionUnavailableError}.
+ */
+function previewedSubscriptionOf(
+  preview: Stripe.Invoice,
+  subscriptionId: string,
+): Stripe.Subscription {
+  const sub = preview.subscription;
+  if (!sub || typeof sub === "string") {
+    throw new PreviewedSubscriptionUnavailableError(subscriptionId);
+  }
+  return sub;
+}
+
 function summarizeProration(
   preview: Stripe.Invoice,
   /** Every line of `preview`, already paged — see {@link allPreviewLines}. */
@@ -152,15 +182,11 @@ function summarizeProration(
    */
   pendingAtAnchor: number,
   /**
-   * The subscription this preview was computed against — the very object the
-   * item being repriced was taken from, not a second retrieval of it.
-   *
-   * Passed as a REQUIRED parameter rather than spread onto the result by each
-   * caller, so a future preview path cannot ship without saying which
-   * subscription it priced. See {@link BillingProrationPreview.billingInterval}
-   * for what goes wrong when the caller sources that separately.
+   * The subscription id being priced. Used only to name it in a refusal — the
+   * subscription STATE is never passed in, because a state passed in is a
+   * state observed at another moment.
    */
-  previewedSubscription: Stripe.Subscription,
+  subscriptionId: string,
 ): BillingProrationPreview {
   // Somebody else's change already occupies this second, so the lines carrying
   // our anchor are not all ours and nothing in the payload says which are.
@@ -210,10 +236,11 @@ function summarizeProration(
     // to `amount_due`, so this is the figure the confirmation screen means by
     // "charged now" (#3157, PR #3171 review).
     amountDueCents: preview.amount_due,
-    // The interval of the subscription that was priced, derived by the one
-    // helper `getSubscription` derives it with — a second derivation would be
-    // a second thing to keep in step, which is the defect this field closes.
-    billingInterval: pickInterval(previewedSubscription),
+    // The interval of the subscription that was priced, off the preview's own
+    // response — see `previewedSubscriptionOf`.
+    billingInterval: pickInterval(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
     lines: prorationLines,
   };
 }
@@ -675,9 +702,25 @@ async function previewWithOwnedAnchor(
     subscriptionId,
     prorationDate,
   );
+  // `expand` is what makes this ONE observation rather than two.
+  //
+  // The interval that decides whether this change resets the billing-cycle
+  // anchor has to come from the subscription the invoice was PRICED against.
+  // The adapter retrieves the subscription just before this, to find the item
+  // to reprice, and using that retrieval for the interval as well was the
+  // defect: two requests, a window between them, and a plan update landing in
+  // it makes the earlier snapshot a label rather than a derivation
+  // (r4042380655).
+  //
+  // Expanding it here returns the subscription on the SAME request that
+  // computes the invoice, so there is no window to straddle and no second
+  // value to keep in step. `subscription_details` overrides what the preview
+  // SIMULATES; the expanded `subscription` is the stored resource as this
+  // request saw it, which is exactly the state that was priced.
   const preview = await stripe.invoices.createPreview({
     subscription: subscriptionId,
     subscription_details: subscriptionDetails,
+    expand: ["subscription"],
   });
   const lines = await allPreviewLines(stripe, preview, {
     subscription: subscriptionId,
@@ -875,6 +918,16 @@ export class StripeProvider implements BillingProvider {
     input: BillingSeatPreviewInput,
   ): Promise<BillingProrationPreview> {
     const stripe = this.client();
+    // Retrieved for ONE thing: which subscription item to reprice. The state
+    // it reports decides nothing, and in particular does not supply the
+    // interval — that comes off the preview response, because this retrieval
+    // and the preview are separate requests (r4042380655).
+    //
+    // This use does not straddle that window in the same way. A stale item id
+    // cannot make a same-interval change look like an interval change, or the
+    // reverse: if the item has been removed or replaced, `createPreview` fails
+    // with a provider error and nothing is priced, rather than pricing the
+    // wrong thing quietly.
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -894,7 +947,7 @@ export class StripeProvider implements BillingProvider {
       lines,
       prorationDate,
       pendingAtAnchor,
-      sub,
+      subscriptionId,
     );
   }
 
@@ -903,6 +956,16 @@ export class StripeProvider implements BillingProvider {
     input: BillingPlanPreviewInput,
   ): Promise<BillingProrationPreview> {
     const stripe = this.client();
+    // Retrieved for ONE thing: which subscription item to reprice. The state
+    // it reports decides nothing, and in particular does not supply the
+    // interval — that comes off the preview response, because this retrieval
+    // and the preview are separate requests (r4042380655).
+    //
+    // This use does not straddle that window in the same way. A stale item id
+    // cannot make a same-interval change look like an interval change, or the
+    // reverse: if the item has been removed or replaced, `createPreview` fails
+    // with a provider error and nothing is priced, rather than pricing the
+    // wrong thing quietly.
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
@@ -922,7 +985,7 @@ export class StripeProvider implements BillingProvider {
       lines,
       prorationDate,
       pendingAtAnchor,
-      sub,
+      subscriptionId,
     );
   }
 

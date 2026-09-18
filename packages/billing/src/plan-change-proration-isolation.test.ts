@@ -190,6 +190,36 @@ function stubContaminatedPreview(): void {
     async (args: { subscription_details?: { proration_date?: number } }) => {
       const anchor = args.subscription_details?.proration_date ?? 0;
       return {
+        // The adapter derives the billing interval from the preview's own
+        // response rather than from the retrieval beside it (r4042380655), so
+        // a change-preview has to say what it priced. This file is about
+        // proration ATTRIBUTION, not intervals, so it agrees with
+        // `subscriptions.retrieve`; the case where the two disagree is
+        // `plan-change-provider-interval.test.ts`.
+        subscription: {
+          id: "sub_active_001",
+          customer: "cus_001",
+          metadata: { org_id: "org-abc" },
+          status: "active",
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 1,
+                price: {
+                  id: "price_build_m",
+                  recurring: { interval: "month" },
+                  product: "prod_build",
+                },
+              },
+            ],
+          },
+          current_period_start: 1_756_684_800,
+          current_period_end: 1_759_276_800,
+          cancel_at_period_end: false,
+          canceled_at: null,
+          trial_end: null,
+        },
         currency: "usd",
         total: THIS_CHANGE_NET_CENTS + PENDING_SEAT_CREDIT_CENTS,
         lines: {

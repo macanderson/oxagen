@@ -92,6 +92,40 @@ function stubSubscription(): void {
  * decides whether a proration from somebody else's change is already sitting on
  * the invoice at this very second.
  */
+/**
+ * The subscription a preview reports having been computed against.
+ *
+ * The adapter derives the billing interval from the preview's own response
+ * rather than from the retrieval beside it (r4042380655), so every stubbed
+ * change-preview has to say what it priced. These tests are about proration
+ * ANCHORS, not intervals, so it simply agrees with `subscriptions.retrieve`.
+ * The case where the two disagree is `plan-change-provider-interval.test.ts`.
+ */
+const PREVIEWED_SUBSCRIPTION = {
+  id: "sub_001",
+  customer: "cus_001",
+  metadata: {},
+  status: "active",
+  items: {
+    data: [
+      {
+        id: "si_001",
+        quantity: 3,
+        price: {
+          id: "price_build_m",
+          recurring: { interval: "month" },
+          product: "prod_build",
+        },
+      },
+    ],
+  },
+  current_period_start: 1_756_684_800,
+  current_period_end: 1_759_276_800,
+  cancel_at_period_end: false,
+  canceled_at: null,
+  trial_end: null,
+};
+
 function stubPreviews(opts: {
   pendingAtNow: boolean;
   pendingAtOtherAnchor?: boolean;
@@ -128,6 +162,7 @@ function stubPreviews(opts: {
       }
       // The change preview: the pending lines plus the two this change makes.
       return {
+        subscription: PREVIEWED_SUBSCRIPTION,
         currency: "usd",
         total: 12_000,
         amount_due: 12_000,
@@ -197,6 +232,7 @@ function stubInterleaved(opts: {
         };
       }
       return {
+        subscription: PREVIEWED_SUBSCRIPTION,
         currency: "usd",
         total: 12_000,
         amount_due: 12_000,

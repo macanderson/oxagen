@@ -127,12 +127,24 @@ export interface PlanChangeDirection {
  *
  * So the caller passes the interval it is ASKING FOR — a request parameter,
  * which cannot go stale because it is not a reading of anything — and the
- * interval being moved FROM comes back on the preview, off the same retrieval
- * that produced it. One read, one comparison, nothing to keep in step. The
- * alternative on offer was to verify the subscription had not changed between
- * the two reads, which is two values plus a check that can itself go stale
- * between passing and being acted on; SCR-002 takes the option that cannot be
- * questioned later, and not fetching a second copy is that option.
+ * interval being moved FROM comes back on the preview, off the same PROVIDER
+ * REQUEST that priced it. One observation, one comparison, nothing to keep in
+ * step. The alternative on offer was to verify the subscription had not
+ * changed between the two reads, which is two values plus a check that can
+ * itself go stale between passing and being acted on; SCR-002 takes the option
+ * that cannot be questioned later, and not fetching a second copy is that
+ * option.
+ *
+ * That took two rounds to get right, and the first round is worth recording
+ * because it looked finished. Moving the field onto the preview closed the gap
+ * between THIS function's caller and the preview, and the adapter then filled
+ * it from the subscription it had retrieved to find the item to reprice — a
+ * second request, one layer down, with the same window and the same defect
+ * inside it. A required parameter made the adapter state which subscription it
+ * meant; it could not make that the subscription the invoice was priced
+ * against. The preview now reports its own subscription, expanded onto the
+ * response that computes it (#3157, PR #3171 review, r4042249142 then
+ * r4042380655).
  */
 async function planChangeDirection(
   stripeSubscriptionId: string,
@@ -165,9 +177,10 @@ async function planChangeDirection(
     // collects `amount_due`. The total overstated the charge by the whole
     // balance (#3157, PR #3171 review).
     //
-    // The interval moved FROM is the preview's own: the subscription it was
-    // computed against, not a second retrieval that may describe a different
-    // one. See the header and BillingProrationPreview.billingInterval.
+    // The interval moved FROM is the preview's own: the subscription the
+    // priced invoice reports, on the response that priced it, not a retrieval
+    // taken beside it. See the header and
+    // BillingProrationPreview.billingInterval.
     const intervalChanges = preview.billingInterval !== targetInterval;
     if (intervalChanges) {
       return {
@@ -1467,7 +1480,7 @@ export async function previewPlanChange(
   //
   // So nothing is read here. The interval moved TO is `interval`, a request
   // parameter with no staleness to have, and the interval moved FROM comes
-  // back on the preview off the same retrieval that priced it.
+  // back on the preview, off the same provider request that priced it.
   //
   // Losing the separate read does not lose the refusal it used to provide: a
   // provider that cannot be reached cannot produce a preview either, and the

@@ -371,11 +371,21 @@ describe("StripeProvider", () => {
      * no customer balance; pass it to model an account credit.
      */
     amountDue = total,
+    /**
+     * The subscription the preview reports having been computed against.
+     *
+     * The adapter takes the billing interval from HERE rather than from the
+     * `subscriptions.retrieve` beside it, because those are two provider
+     * requests and a plan update can land between them (r4042380655). Pass
+     * `null` to model a preview that does not report what it priced.
+     */
+    previewedSubscription: unknown = makeStripeSub(),
   ) {
     stripeMethods.invoices.createPreview.mockImplementation(
       async (args: { subscription_details?: { proration_date?: number } }) => {
         const anchoredAt = args.subscription_details?.proration_date ?? 0;
         return {
+          subscription: previewedSubscription ?? "sub_test_001",
           currency: "usd",
           total,
           amount_due: amountDue,
@@ -539,6 +549,95 @@ describe("StripeProvider", () => {
       });
       expect(preview.amountDueCents).toBe(20_000);
       expect(preview.totalCents).toBe(20_000);
+    });
+
+    // ── The interval comes off the preview, not the retrieval beside it ───
+    //
+    // `subscriptions.retrieve` and `invoices.createPreview` are two provider
+    // requests. The adapter used to retrieve the subscription (to find the
+    // item to reprice) and label the preview with it, which is not the same as
+    // deriving the interval from the state that was priced: a plan update
+    // landing between the two makes the label describe a different
+    // subscription (r4042380655).
+
+    it("takes the billing interval from the subscription the preview reports, not the one retrieved beside it", async () => {
+      // The two disagree, which is the only configuration that can tell a
+      // derivation from a label. Retrieval says monthly; the preview says it
+      // priced an annual subscription.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused time", amount: -80_000 }],
+        20_000,
+        20_000,
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  recurring: { interval: "year" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+
+      expect(preview.billingInterval).toBe("year");
+    });
+
+    it("requests the subscription on the preview call, which is what makes it one observation", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing([
+        { proration: true, description: "Unused time", amount: -100 },
+      ]);
+
+      await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+
+      expect(stripeMethods.invoices.createPreview).toHaveBeenCalledWith(
+        expect.objectContaining({ expand: ["subscription"] }),
+      );
+    });
+
+    it("refuses when the preview does not report the subscription it priced", async () => {
+      // The adapter is holding a perfectly good subscription from its own
+      // retrieval. Using it is the fallback that was the defect, so there is
+      // no fallback — an unreported priced state is a refusal.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused time", amount: -100 }],
+        0,
+        0,
+        null,
+      );
+
+      await expect(
+        provider.previewPlanChange("sub_test_001", {
+          newPriceId: "price_scale_monthly",
+        }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" });
+    });
+
+    it("refuses on the seat path too, which shares the helper", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused seats", amount: -100 }],
+        0,
+        0,
+        null,
+      );
+
+      await expect(
+        provider.previewSeatChange("sub_test_001", { seats: 5 }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" });
     });
   });
 

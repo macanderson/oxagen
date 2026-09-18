@@ -143,30 +143,10 @@ function stubProviderOnAnnual(): void {
       | undefined;
     const swappedTo = lastUpdate?.[1]?.items?.[0]?.price;
     const onMonthly = swappedTo === "price_build_m";
-    return {
-      id: "sub_active_001",
-      customer: "cus_001",
-      metadata: { org_id: "org-abc" },
-      status: "active",
-      items: {
-        data: [
-          {
-            id: "si_001",
-            quantity: 1,
-            price: {
-              id: swappedTo ?? "price_build_y",
-              recurring: { interval: onMonthly ? "month" : "year" },
-              product: "prod_build",
-            },
-          },
-        ],
-      },
-      current_period_start: 1_756_684_800,
-      current_period_end: 1_788_220_800,
-      cancel_at_period_end: false,
-      canceled_at: null,
-      trial_end: null,
-    };
+    return subscriptionPayload(
+      onMonthly ? "month" : "year",
+      swappedTo ?? "price_build_y",
+    );
   });
 }
 
@@ -178,11 +158,73 @@ function stubProviderOnAnnual(): void {
  * which is how Stripe reports an account credit. They are deliberately
  * different numbers — that is the second half of this file.
  */
-function stubAnchorResetPreview(): void {
+/**
+ * A Stripe-shaped subscription payload.
+ *
+ * Shared so that the two places a subscription can come back from —
+ * `subscriptions.retrieve` and the `subscription` expanded onto a preview —
+ * are built the same way and can be set INDEPENDENTLY. That independence is
+ * the whole point: it is what lets a test say "the subscription changed
+ * between the retrieval and the preview".
+ */
+function subscriptionPayload(interval: "month" | "year", priceId: string) {
+  return {
+    id: "sub_active_001",
+    customer: "cus_001",
+    metadata: { org_id: "org-abc" },
+    status: "active",
+    items: {
+      data: [
+        {
+          id: "si_001",
+          quantity: 1,
+          price: {
+            id: priceId,
+            recurring: { interval },
+            product: "prod_build",
+          },
+        },
+      ],
+    },
+    current_period_start: 1_756_684_800,
+    current_period_end: 1_788_220_800,
+    cancel_at_period_end: false,
+    canceled_at: null,
+    trial_end: null,
+  };
+}
+
+/**
+ * @param priced the subscription the PREVIEW reports having been computed
+ *   against, expanded onto its own response. Annual by default, matching the
+ *   provider state the describes above put it in.
+ * @param carrySubscription false models a preview that does not report what it
+ *   priced at all — the case the adapter now refuses rather than falling back
+ *   to the retrieval beside it.
+ */
+function stubAnchorResetPreview(
+  priced: { interval: "month" | "year"; priceId: string } = {
+    interval: "year",
+    priceId: "price_build_y",
+  },
+  carrySubscription = true,
+): void {
   stripeMethods.invoices.createPreview.mockImplementation(
-    async (args: { subscription_details?: { proration_date?: number } }) => {
+    async (args: {
+      subscription_details?: { proration_date?: number };
+      expand?: string[];
+    }) => {
       const anchor = args.subscription_details?.proration_date ?? 0;
+      // Honour `expand` the way Stripe does: the subscription comes back as an
+      // object only when it was asked for, and as its id otherwise. A stub
+      // that returned the object unconditionally would let the adapter pass
+      // without ever sending the expand that makes this one observation.
+      const subscription =
+        carrySubscription && args.expand?.includes("subscription")
+          ? subscriptionPayload(priced.interval, priced.priceId)
+          : "sub_active_001";
       return {
+        subscription,
         currency: "usd",
         total: NEW_MONTH_TOTAL_CENTS,
         amount_due: COLLECTIBLE_CENTS,
@@ -627,5 +669,149 @@ describe("a plan update landing between two reads of one subscription (#3157, PR
       );
     expect(expandedReads.length).toBeGreaterThan(0);
     expect(prorationBehaviorSent()).toBe("always_invoice");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The SECOND round of the same finding, one layer down (#3157, PR #3171
+// review, r4042380655).
+//
+// The describe above closed the window between the DOMAIN's `getSubscription`
+// and the preview. The adapter then filled the preview's interval from the
+// subscription IT had retrieved to find the item to reprice — and
+// `subscriptions.retrieve` and `invoices.createPreview` are also two provider
+// requests, with the same window between them and the same cost inside it.
+//
+// The required `previewedSubscription` parameter did not help. It enforced
+// that a subscription was supplied; it could not enforce that the subscription
+// supplied was the one the invoice was priced against. Labelling is not
+// deriving.
+//
+// Here the two adapter requests disagree: `subscriptions.retrieve` answers
+// MONTHLY, and the preview reports having been computed against an ANNUAL
+// subscription. A move to monthly is therefore an interval change, and reading
+// it off the retrieval would call it same-interval, take the sign of the
+// annual credit, ship `none` and quote $0 — while Stripe resets the anchor and
+// invoices the month.
+//
+// THE FIXTURE CAN REPRESENT IT, and that is again load-bearing. The
+// subscription the preview reports is a separate knob from the one
+// `subscriptions.retrieve` answers with — two independent stubs — so "the
+// subscription changed between the retrieval and the preview" is a state this
+// mock is genuinely in. The preview stub also honours `expand` the way Stripe
+// does, returning the subscription as an object only when it was asked for, so
+// an adapter that stopped sending the expand could not pass.
+// ---------------------------------------------------------------------------
+
+/** The subscription as `subscriptions.retrieve` answers: monthly, and NOT the target price. */
+function stubAdapterRetrievalOnMonthly(): void {
+  stripeMethods.subscriptions.retrieve.mockImplementation(async () =>
+    subscriptionPayload("month", "price_scale_m"),
+  );
+}
+
+describe("a plan update landing between the adapter's retrieval and its preview (r4042380655)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setBillingProvider(new StripeProvider());
+    // The retrieval sees monthly. The update to annual lands. The preview is
+    // computed against — and reports — the annual subscription.
+    stubAdapterRetrievalOnMonthly();
+    stubAnchorResetPreview({ interval: "year", priceId: "price_build_y" });
+    stubStaleMonthlyRow();
+    stubPlanLookups();
+    stripeMethods.customers.retrieve.mockResolvedValue({
+      id: "cus_001",
+      deleted: false,
+      invoice_settings: { default_payment_method: null },
+    });
+    stripeMethods.subscriptions.update.mockResolvedValue(undefined);
+  });
+
+  it("the fixture really does put the retrieval and the preview in disagreement", async () => {
+    // Guard the test itself, as the round before did. Every assertion below is
+    // about a disagreement between these two requests; a fixture that stopped
+    // producing one would make them all pass for the wrong reason.
+    const retrieved = (await stripeMethods.subscriptions.retrieve(
+      "sub_active_001",
+    )) as {
+      items: { data: Array<{ price: { recurring: { interval: string } } }> };
+    };
+    const previewed = (await stripeMethods.invoices.createPreview({
+      subscription: "sub_active_001",
+      subscription_details: { proration_date: 1 },
+      expand: ["subscription"],
+    })) as {
+      subscription: {
+        items: { data: Array<{ price: { recurring: { interval: string } } }> };
+      };
+    };
+
+    expect(retrieved.items.data[0]?.price.recurring.interval).toBe("month");
+    expect(previewed.subscription.items.data[0]?.price.recurring.interval).toBe(
+      "year",
+    );
+  });
+
+  it("quotes the anchor-reset invoice, taking the interval from the subscription the preview priced", async () => {
+    const quote = await previewPlanChange("org-abc", "build-v2", "month");
+
+    expect(quote.isCharge).toBe(true);
+    expect(quote.amountCents).toBe(COLLECTIBLE_CENTS);
+    // What labelling the preview with the earlier retrieval produced.
+    expect(quote.amountCents).not.toBe(0);
+    expect(quote.amountCents).not.toBe(UNUSED_ANNUAL_CREDIT_CENTS);
+  });
+
+  it("bills the swap under always_invoice, not the 'none' the retrieval would have selected", async () => {
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(stripeMethods.subscriptions.update).toHaveBeenCalledTimes(1);
+    expect(prorationBehaviorSent()).toBe("always_invoice");
+    expect(prorationBehaviorSent()).not.toBe("none");
+  });
+
+  it("asks the preview request itself for the subscription it priced", async () => {
+    // The mechanism. Without the expand there is no single observation to
+    // derive from, only the retrieval sitting beside it — so this pins the
+    // request shape, not just the number that fell out of it.
+    await previewPlanChange("org-abc", "build-v2", "month");
+
+    expect(stripeMethods.invoices.createPreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription: "sub_active_001",
+        expand: ["subscription"],
+      }),
+    );
+  });
+
+  it("refuses rather than falling back when the preview does not say what it priced", async () => {
+    // The fallback is always available and is always wrong: the adapter is
+    // holding a subscription it retrieved a moment earlier. Preferring it
+    // would restore the defect in exactly the case this guard exists for, so
+    // there is no fallback to take.
+    stubAnchorResetPreview(
+      { interval: "year", priceId: "price_build_y" },
+      false,
+    );
+
+    await expect(
+      previewPlanChange("org-abc", "build-v2", "month"),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_PREVIEW_UNAVAILABLE" });
+  });
+
+  it("does not swap a subscription whose priced state the preview would not name", async () => {
+    // The swap path settles an unavailable preview as `always_invoice` by
+    // design, so the refusal must not be read as "the swap is blocked" — what
+    // matters is that it never ships `none` off a state nobody confirmed.
+    stubAnchorResetPreview(
+      { interval: "year", priceId: "price_build_y" },
+      false,
+    );
+
+    await changeOrgPlan("org-abc", "build-v2", "month");
+
+    expect(prorationBehaviorSent()).toBe("always_invoice");
+    expect(prorationBehaviorSent()).not.toBe("none");
   });
 });

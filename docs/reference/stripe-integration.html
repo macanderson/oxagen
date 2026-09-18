@@ -335,17 +335,39 @@ matches the provider within one round-trip.</p>
       <code>resolveActiveProviderState</code> now raises <code>SubscriptionStateUnavailableError</code> and the
       caller retries. It is raised before any provider mutation and before the durable upgrade intent is written, so
       a refusal leaves nothing half-done.</li>
-  <li><strong>The interval is read from the provider for the same reason, and by the same call.</strong>
+  <li><strong>The interval comes off the previewed invoice, not from any separate read.</strong>
       <code>subscriptions.billing_interval</code> is written by that same post-mutation sync and is stale in the
       same failure — and what it decides is worse to get wrong, because it is what says whether this change resets
       the billing-cycle anchor. After a monthly→annual swap whose sync was lost, the column still reads
       <code>month</code>, so a move back to monthly looks same-interval: its negative proration reads as a
       downgrade, <code>none</code> is selected, and the quote is $0 while the provider resets the anchor and
-      invoices the new month regardless. <code>resolveActiveProviderState</code> returns the price and the interval
-      from the one subscription read, and both the swap path and the quote path take the interval from it, so the
-      confirmation screen and the charge are decided by the same subscription. The local column is not a fallback
-      for this either — the same refusal applies — and the swap logs both the provider's interval and the recorded
-      one, so a row drifting from the provider is visible before its consequences are.</li>
+      invoices the new month regardless.
+      <p>Reading it from the provider instead is necessary and <em>not sufficient</em>, which took two rounds of
+      review to establish and is the reason this paragraph is worth the length. A provider read taken
+      <em>beside</em> the preview is a second observation of the same subscription, and two observations with a
+      window between them can describe two different subscriptions. A plan update landing in that window — a
+      dashboard edit, a concurrent request — reproduces the whole defect: the read says monthly, the invoice was
+      priced on annual, the move to monthly scores as same-interval, and the customer is quoted $0 for a month
+      they are about to be charged.</p>
+      <p>So the interval is <strong>derived from the priced invoice itself</strong>.
+      <code>StripeProvider.previewPlanChange</code> requests the preview with the subscription expanded
+      (<code>expand: ["subscription"]</code>), so one HTTP request returns both the invoice and the subscription
+      that invoice was computed against, and <code>BillingProrationPreview.billingInterval</code> carries it back.
+      There is nothing to keep in step, because there is only one observation. A preview that does not report what
+      it priced raises <code>PreviewedSubscriptionUnavailableError</code>; it deliberately does <em>not</em> fall
+      back to the subscription the adapter retrieved moments earlier to find the item to reprice, because that
+      snapshot is from another moment and preferring it would restore the defect in exactly the case the check
+      exists for.</p>
+      <p>What each remaining read is for, stated so the next reader does not have to infer it:
+      <code>resolveActiveProviderState</code> returns <strong>only the active price id</strong> — it deliberately
+      no longer returns an interval, so no caller can obtain a second one to compare against the preview — and it
+      is consumed by <code>changeOrgPlan</code>'s already-applied guard <em>before</em> any preview is taken. The
+      quote path takes no subscription read of its own at all. The adapter's own
+      <code>subscriptions.retrieve</code> names which subscription item to reprice and nothing else; a stale item
+      id cannot turn a same-interval change into an interval change, and an item that has gone away fails the
+      preview outright rather than pricing the wrong thing quietly. The local column is never a fallback for any
+      of this, and the swap logs the previewed interval beside the recorded one, so a row drifting from the
+      provider is visible before its consequences are.</p></li>
   <li>The entitlement tier ordering (<code>TIER_ORDER</code> / <code>meetsMinimumTier</code>) answers a different
       question — <em>does this plan include that feature</em> — and is never read as a price direction. The two
       disagree in the live catalogue: Enterprise outranks Scale on features and costs half as much, so deciding
