@@ -84,6 +84,9 @@ function draftFrom(value: string | null, fallbackLetters: string): Draft {
     };
   if (stored.kind === "image")
     return { ...base, kind: "photo", url: stored.url };
+  // A legacy emoji avatar lands here with the rest. The editor offers no emoji
+  // kind by design, so there is nothing to open on; the draft is a monogram and
+  // the stored emoji stays until the person presses Save on a replacement.
   return base;
 }
 

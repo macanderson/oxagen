@@ -92,8 +92,6 @@ describe("the spec", () => {
       'avatar:v1:{"kind":"initials","text":"  ","font":"sans","tone":"soft"}',
       'avatar:v1:{"kind":"initials","text":"MB","font":"comic","tone":"soft"}',
       'avatar:v1:{"kind":"photo","src":"data:image/png;base64,AAAA"}',
-      // The emoji body the app stored before the W11 editor: no longer drawn.
-      'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}',
       'avatar:v1:["rocket"]',
       "avatar:v1:null",
       `https://e.example/${"a".repeat(AVATAR_MAX_LEN)}`,
@@ -102,6 +100,33 @@ describe("the spec", () => {
       expect(() => drawn(value)).not.toThrow();
       expect(screen.getByTestId("k").dataset.avatar).toBe("initials");
     }
+  });
+});
+
+describe("the emoji body stored before the W11 editor", () => {
+  const LEGACY = 'avatar:v1:{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}';
+
+  // `avatarUrlSchema` accepted this body and still does, so profiles,
+  // workspaces and agents hold it. A parser that reads only the new shapes
+  // turns every one of them into the initials fallback, silently, without
+  // anyone editing anything.
+  it("still reads, so an avatar set years ago is still the avatar", () => {
+    expect(parseAvatarValue(LEGACY)).toEqual({ kind: "emoji", emoji: "\u{1F98A}" });
+  });
+
+  it("draws the emoji on a house tone, not the free colour it stored", () => {
+    const tile = drawn(LEGACY);
+    expect(tile.dataset.avatar).toBe("emoji");
+    expect(tile.dataset.tone).toBe("soft");
+    expect(tile.textContent).toBe("\u{1F98A}");
+    // The body's own `bg` was a free hex colour, which the house scale replaced.
+    expect(tile.getAttribute("style") ?? "").not.toContain("#f59e0b");
+  });
+
+  it("is never written back: an empty emoji is not an avatar", () => {
+    expect(
+      parseAvatarValue('avatar:v1:{"emoji":"","bg":"#000","mode":"full"}'),
+    ).toEqual({ kind: "none" });
   });
 });
 

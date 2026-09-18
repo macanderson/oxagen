@@ -72,6 +72,36 @@ describe("privacy.data.export capability", () => {
     expect(privacyDataExport.defaultEffect).toBe("deny");
   });
 
+  // GDPR Article 20 is a right the person holds, not a privilege an
+  // administrator grants. With `deny` as the default effect, a role this map
+  // omits cannot invoke the capability at all on an enterprise org -- so an
+  // ordinary member could not export their own data, which is the only scope
+  // that is theirs to export.
+  it("admits every org role, because scope 'user' is the caller's own data", () => {
+    for (const role of [
+      "Owner",
+      "Admin",
+      "Member",
+      "Compliance",
+      "Billing",
+      "Viewer",
+    ]) {
+      expect(
+        privacyDataExport.defaultRoles.org[
+          role as keyof typeof privacyDataExport.defaultRoles.org
+        ],
+      ).toBe("allow");
+    }
+  });
+
+  // The org-scope restriction cannot live here: it turns on an input field,
+  // which defaultRoles cannot read. privacy.data.export.ts's handler re-reads
+  // the caller's membership on the TARGET org, which is also the only check
+  // that holds when a body-supplied orgId differs from the context org.
+  it("grants no workspace role, so the gate is the org one", () => {
+    expect(privacyDataExport.defaultRoles.workspace).toEqual({});
+  });
+
   it("is available on api, mcp, and agent surfaces", () => {
     expect(privacyDataExport.surfaces).toContain("api");
     expect(privacyDataExport.surfaces).toContain("mcp");

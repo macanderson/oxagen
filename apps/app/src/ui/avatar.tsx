@@ -180,6 +180,24 @@ export function Avatar({
     );
   }
 
+  // The emoji body stored before the W11 editor. Read-only: the editor cannot
+  // produce one, but a person who set an emoji years ago still sees it rather
+  // than their initials. Drawn on `soft` because the body's own `bg` was a free
+  // hex colour, which the house scale replaced.
+  if (spec.kind === "emoji")
+    return (
+      <span
+        aria-hidden="true"
+        data-testid={testId}
+        data-avatar="emoji"
+        data-tone="soft"
+        style={{ ...side, fontSize: Math.round(size * 0.58) }}
+        className={`${box} ${TONE_CLASS.soft}`}
+      >
+        {spec.emoji}
+      </span>
+    );
+
   const text = spec.kind === "initials" ? spec.text : initials;
   const tone: AvatarTone = spec.kind === "initials" ? spec.tone : "soft";
   const font: AvatarFont = spec.kind === "initials" ? spec.font : "sans";

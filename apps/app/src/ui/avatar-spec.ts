@@ -67,9 +67,30 @@ export type DesignedAvatar =
   | { kind: "icon"; icon: AvatarIcon; tone: AvatarTone }
   | { kind: "initials"; text: string; font: AvatarFont; tone: AvatarTone };
 
+/**
+ * The emoji body the app stored under `avatar:v1:` before the W11 editor:
+ * `{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}`. Still readable, never writable --
+ * the editor offers icons, monograms and photos and nothing else, so no new
+ * value takes this shape.
+ *
+ * It is read because the rows are real: `avatarUrlSchema` accepted this body,
+ * it is still accepted, and profiles, workspaces and agents hold it. Dropping
+ * it from the parser turned every one of those into the initials fallback
+ * without anyone editing anything.
+ *
+ * The stored `bg` is not read. It was a free hex colour, which the house scale
+ * replaced; the glyph is the part that identifies the person, so it is drawn on
+ * the `soft` tone like any other avatar the theme owns.
+ */
+interface LegacyEmojiAvatar {
+  kind: "emoji";
+  emoji: string;
+}
+
 export type AvatarValue =
   | { kind: "image"; url: string }
   | DesignedAvatar
+  | LegacyEmojiAvatar
   | { kind: "none" };
 
 const ICONS: readonly string[] = AVATAR_ICONS;
@@ -95,7 +116,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function designedFrom(json: string): DesignedAvatar | null {
+function designedFrom(json: string): DesignedAvatar | LegacyEmojiAvatar | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -103,7 +124,10 @@ function designedFrom(json: string): DesignedAvatar | null {
     return null;
   }
   if (!isRecord(parsed)) return null;
-  const { kind, icon, text, font, tone } = parsed;
+  const { kind, icon, text, font, tone, emoji } = parsed;
+  // The legacy body names no kind and no tone; it is recognised by its emoji.
+  if (kind === undefined && typeof emoji === "string" && emoji !== "")
+    return { kind: "emoji", emoji };
   if (!isAvatarTone(tone)) return null;
   if (kind === "icon" && isAvatarIcon(icon)) return { kind, icon, tone };
   if (kind === "initials" && typeof text === "string" && isAvatarFont(font)) {
