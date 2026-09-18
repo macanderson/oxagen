@@ -53,6 +53,13 @@ export interface PriceBookSyncReport {
    * under a different provider name (see {@link syncPriceBook}).
    */
   superseded: number;
+  /**
+   * Open rows closed because a complete refresh no longer emitted them — a
+   * model a catalog withdrew, or a class it stopped publishing. Zero whenever
+   * a catalog failed or the run was offline: an absence the sync cannot tell
+   * from an outage retires nothing (see {@link syncPriceBook}).
+   */
+  retired: number;
   /** Distinct models the book now prices. */
   models: number;
   /** How many models each source ended up being the authority for. */
@@ -85,11 +92,13 @@ export interface SyncPriceBookFromSourcesArgs {
   write?: (args: {
     effectiveFrom: Date;
     seeds: readonly PriceEntrySeed[];
+    retireAbsent: boolean;
   }) => Promise<{
     written: number;
     unchanged: number;
     renamed?: number;
     superseded?: number;
+    retired?: number;
   }>;
 }
 
@@ -133,12 +142,23 @@ export async function syncPriceBookFromSources(
     .filter((c): c is PriceSourceResult & { error: string } => c.error !== null)
     .map((c) => ({ source: c.source, error: c.error }));
 
+  // The seeds are the whole book only when every source answered. A catalog
+  // that failed contributed nothing, so a row it priced last time is absent
+  // from the seeds because of the outage, not because the price ended; an
+  // offline run never asked. Retiring on those runs would close every row the
+  // failed catalog owned and leave its models unpriced until it came back.
+  // On a complete snapshot, though, a row nothing emits IS a price that
+  // ended, and keeping it open prices a withdrawn model at a rate nobody
+  // publishes any more.
+  const retireAbsent = args.offline !== true && failures.length === 0;
+
   if (args.dryRun === true)
     return {
       written: 0,
       unchanged: 0,
       renamed: 0,
       superseded: 0,
+      retired: 0,
       models: merged.prices.length,
       counts: merged.counts,
       failures,
@@ -147,15 +167,28 @@ export async function syncPriceBookFromSources(
 
   const write =
     args.write ??
-    ((a: { effectiveFrom: Date; seeds: readonly PriceEntrySeed[] }) =>
-      syncPriceBook({ effectiveFrom: a.effectiveFrom, seeds: a.seeds }));
-  const result = await write({ effectiveFrom: args.effectiveFrom, seeds });
+    ((a: {
+      effectiveFrom: Date;
+      seeds: readonly PriceEntrySeed[];
+      retireAbsent: boolean;
+    }) =>
+      syncPriceBook({
+        effectiveFrom: a.effectiveFrom,
+        seeds: a.seeds,
+        retireAbsent: a.retireAbsent,
+      }));
+  const result = await write({
+    effectiveFrom: args.effectiveFrom,
+    seeds,
+    retireAbsent,
+  });
 
   return {
     written: result.written,
     unchanged: result.unchanged,
     renamed: result.renamed ?? 0,
     superseded: result.superseded ?? 0,
+    retired: result.retired ?? 0,
     models: merged.prices.length,
     counts: merged.counts,
     failures,

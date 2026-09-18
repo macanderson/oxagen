@@ -194,11 +194,23 @@ export function PriceDialog({
       setAlert(t("dialog.errors.ratesEmpty"));
       return;
     }
+    // One instant for the whole card. With the date left blank each server
+    // action would otherwise pick its own `new Date()`, so a four-class card
+    // would start at four different instants and a frame in between would be
+    // priced at negotiated input and list output — the very blend the
+    // one-class-per-call design exists to keep out of the book. The instant is
+    // taken once, here, and every class carries it; a day the person typed
+    // is already one instant (its UTC midnight).
+    const effectiveFrom =
+      shared.effectiveFrom.trim().length === 0
+        ? new Date().toISOString()
+        : shared.effectiveFrom;
     // Every class is read into the contract's own input before any of them is
     // sent, so a typo in the fourth rate does not leave the first three
     // written (INV-28: the form refuses before the capability runs).
     const payloads = filled.map((tokenClass) => ({
       ...shared,
+      effectiveFrom,
       tokenClass,
       usdPerMillion: rates[tokenClass] ?? "",
     }));

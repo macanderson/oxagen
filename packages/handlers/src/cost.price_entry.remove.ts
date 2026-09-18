@@ -21,7 +21,7 @@ import {
 } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import {
   closeNegotiatedPriceEntry,
-  type PriceEntry,
+  type NegotiatedPriceClose,
   type PriceTokenClass,
 } from "@oxagen/billing";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -37,7 +37,8 @@ export type PriceEntryRemoveDeps = {
     tokenClass: PriceTokenClass;
     region?: string | null;
     at: Date;
-  }) => Promise<PriceEntry | null>;
+    now?: Date;
+  }) => Promise<NegotiatedPriceClose>;
   now: () => Date;
 };
 
@@ -51,14 +52,20 @@ export function createPriceEntryRemoveHandler(
       { org: ["Owner", "Admin", "Billing"] },
     );
 
-    const at = input.at === undefined ? deps.now() : new Date(input.at);
-    const closed = await deps.closeNegotiatedPriceEntry({
+    const now = deps.now();
+    const at = input.at === undefined ? now : new Date(input.at);
+    // The row in effect at `at` is closed there; a correction scheduled to
+    // start after `at` is cancelled, because it would re-establish the rate
+    // the caller just ended. `now` is what decides whether a scheduled row has
+    // begun — one that has is refused rather than repriced.
+    const { closed, cancelled } = await deps.closeNegotiatedPriceEntry({
       orgId: ctx.orgId,
       provider: input.provider,
       model: input.model,
       tokenClass: input.tokenClass,
       region: input.region ?? null,
       at,
+      now,
     });
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
@@ -88,6 +95,10 @@ export function createPriceEntryRemoveHandler(
         at: at.toISOString(),
         closedEntryId: closed?.id ?? null,
         closedMicrosPerMillion: closed?.microsPerMillion.toString() ?? null,
+        // Scheduled corrections this end cancelled: never priced anything, so
+        // removed; named here because the audit trail is the only place they
+        // now exist.
+        cancelledEntryIds: cancelled.map((entry) => entry.id),
         surface: ctx.surface,
       },
       "cost.price_entry.remove: negotiated price ended",

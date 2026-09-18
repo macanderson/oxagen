@@ -24,7 +24,7 @@
 import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
-import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   IMAGE_RATE_CARD,
   PROVIDER_RATE_CARD,
@@ -324,6 +324,12 @@ interface PriceBookSyncResult {
    * would be predictable.
    */
   superseded: number;
+  /**
+   * Open rows closed because the sources no longer emit them: a model a
+   * catalog withdrew, or a token class it stopped publishing. Only counted
+   * when the caller vouched for the seeds as complete (`retireAbsent`).
+   */
+  retired: number;
 }
 
 /**
@@ -333,10 +339,20 @@ interface PriceBookSyncResult {
  * `effectiveFrom` adds the new rows and closes the previous ones at that
  * instant, so a run priced before the change keeps the entry it used.
  * Negotiated rows are never touched.
+ *
+ * `retireAbsent` says the seeds are the whole book: every open list row they
+ * do not name is closed at `effectiveFrom`. Without it an omitted row stays
+ * open, which is right when a catalog was down (its models are absent because
+ * the read failed, not because the prices ended) and wrong when every source
+ * answered: a model a vendor retired would keep its last price forever, and a
+ * class a catalog stopped publishing would keep being priced instead of
+ * becoming `estimated`. The caller knows which of the two happened; this
+ * function does not, so it is told.
  */
 export async function syncPriceBook(args: {
   effectiveFrom: Date;
   seeds?: readonly PriceEntrySeed[];
+  retireAbsent?: boolean;
 }): Promise<PriceBookSyncResult> {
   const seeds = args.seeds ?? priceEntriesFromRateCards(args.effectiveFrom);
   return withSystemDb(async (tx) => {
@@ -375,7 +391,10 @@ export async function syncPriceBook(args: {
         current.microsPerMillion === seed.microsPerMillion &&
         current.currency === seed.currency &&
         current.unit === seed.unit;
-      if (pricedTheSame && sameAliases(current.modelAliases, seed.modelAliases)) {
+      if (
+        pricedTheSame &&
+        sameAliases(current.modelAliases, seed.modelAliases)
+      ) {
         unchanged += 1;
         continue;
       }
@@ -471,6 +490,7 @@ export async function syncPriceBook(args: {
     }) => `${e.model}|${e.tokenClass}|${e.region ?? ""}`;
     const writtenKeys = new Map<string, PriceEntrySeed>();
     for (const seed of seeds) writtenKeys.set(supersededKey(seed), seed);
+    const closedIds = new Set<string>();
     let superseded = 0;
     for (const row of existing) {
       if (row.effectiveTo !== null) continue;
@@ -482,10 +502,38 @@ export async function syncPriceBook(args: {
         .update(schema.priceEntries)
         .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })
         .where(eq(schema.priceEntries.id, row.id));
+      closedIds.add(row.id);
       superseded += 1;
     }
 
-    return { written, unchanged, renamed, superseded };
+    // Retire what the sources no longer emit. A row absent from a complete
+    // snapshot is a price that ended: the vendor retired the model, or the
+    // catalog stopped publishing that class. Left open it would go on pricing
+    // frames at a rate nobody publishes any more, and a class that should
+    // now read `estimated` would carry a figure instead. Only on a complete
+    // snapshot — a row absent because its catalog was down is preserved, and
+    // the caller is the one that knows which happened.
+    let retired = 0;
+    if (args.retireAbsent === true) {
+      const seeded = new Set(seeds.map(key));
+      for (const row of existing) {
+        if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
+        if (seeded.has(key(row))) continue;
+        // A row that starts at or after this sync cannot close at this
+        // instant (`effective_to > effective_from`); it is a later correction
+        // this run must not touch.
+        if (row.effectiveFrom.getTime() >= args.effectiveFrom.getTime())
+          continue;
+        await tx
+          .update(schema.priceEntries)
+          .set({ effectiveTo: args.effectiveFrom, updatedAt: new Date() })
+          .where(eq(schema.priceEntries.id, row.id));
+        closedIds.add(row.id);
+        retired += 1;
+      }
+    }
+
+    return { written, unchanged, renamed, superseded, retired };
   });
 }
 
@@ -556,11 +604,15 @@ export interface NegotiatedPriceWrite {
  * The organization's rows for one key, newest first. Runs in the tenant's
  * scope with the org written into the predicate as well as the policy, since a
  * stack with RLS enforcement off runs the query under `app.rls_bypass`.
+ *
+ * `anyProvider` widens the read to every provider string for the (model,
+ * class, region): the resolver never reads `provider`, so a second provider's
+ * row for the same model is a second candidate, not a different price.
  */
 async function readKeyRows(
   tx: Tx,
   key: NegotiatedPriceKey,
-  options: { includeList: boolean },
+  options: { includeList: boolean; anyProvider?: boolean },
 ): Promise<Row[]> {
   const region = key.region ?? null;
   const rows = await tx
@@ -574,7 +626,9 @@ async function readKeyRows(
               eq(schema.priceEntries.orgId, key.orgId),
             )
           : eq(schema.priceEntries.orgId, key.orgId),
-        eq(schema.priceEntries.provider, key.provider),
+        ...(options.anyProvider === true
+          ? []
+          : [eq(schema.priceEntries.provider, key.provider)]),
         eq(schema.priceEntries.model, key.model),
         eq(schema.priceEntries.tokenClass, key.tokenClass),
         region === null
@@ -584,6 +638,37 @@ async function readKeyRows(
     );
   return [...rows].sort(
     (a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime(),
+  );
+}
+
+/**
+ * Serialise every negotiated write and removal for one organization's (model,
+ * class, region) — the set of rows the resolver can pick between for a frame.
+ *
+ * Without this two writes for one key read the same open row before either
+ * commits, each closes it and inserts its own open row, and the key ends with
+ * two open windows — after which a removal closes only the newest and the
+ * older negotiated rate quietly stays in force instead of falling back to
+ * list pricing. A removal that overlaps a write is the same race with a
+ * different loser: both read the old state, the setter inserts a new open row
+ * despite the removal, or the remover closes the old row and reports success
+ * while the new rate stands. The read-then-write is not atomic on its own and
+ * no constraint forbids a second open window, so the lock is what serialises
+ * them. Transaction-scoped: released by the commit or the rollback, never
+ * left held.
+ *
+ * Keyed WITHOUT the provider string: `resolvePriceEntry` never reads it, so
+ * two providers' rows for one model are two candidates for the same frame and
+ * must not be written concurrently either. Keyed WITH the org, so two
+ * organisations correcting the same model never wait on each other.
+ */
+async function lockNegotiatedKey(
+  tx: Tx,
+  key: NegotiatedPriceKey,
+): Promise<void> {
+  const region = key.region ?? null;
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${key.orgId}:${key.model}|${key.tokenClass}|${region ?? ""}`}::text, 0))`,
   );
 }
 
@@ -627,21 +712,33 @@ export async function setNegotiatedPriceEntry(
   const key = entryKey({ ...args, region });
 
   return withTenantDb(async (tx) => {
-    // Two writes for one key must not interleave. Without this, both read the
-    // same open row before either commits, each closes it and inserts its own
-    // open row, and the key ends with two open windows — after which a removal
-    // closes only the newest and the older negotiated rate quietly stays in
-    // force instead of falling back to list pricing. The read-then-write below
-    // is not atomic on its own and no constraint forbids a second open window,
-    // so the lock is what serialises them. Transaction-scoped: it is released
-    // by the commit or the rollback, never left held.
-    //
-    // Keyed on the org as well as the price key, so two organisations
-    // correcting the same model never wait on each other.
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry:${args.orgId}:${key}`}::text, 0))`,
+    await lockNegotiatedKey(tx, args);
+    const everyProvider = await readKeyRows(tx, args, {
+      includeList: false,
+      anyProvider: true,
+    });
+
+    // One provider per negotiated model and class. The row key carries the
+    // provider string, so nothing in the table stops an organization holding
+    // `anthropic / claude-sonnet-5 / output` AND `openrouter / claude-sonnet-5
+    // / output` open at once — but `resolvePriceEntry` never receives or
+    // filters on a frame's provider (a frame may not even carry one), so both
+    // rows would match every call and the newer would win globally, applying
+    // one provider's commercial terms to traffic billed by the other. Rather
+    // than silently pick, the second provider is refused until the first is
+    // ended: a rate that will not apply as stated is worse than one refused.
+    const otherProvider = everyProvider.find(
+      (r) =>
+        r.provider !== args.provider &&
+        (r.effectiveTo === null || r.effectiveTo.getTime() > from.getTime()),
     );
-    const rows = await readKeyRows(tx, args, { includeList: false });
+    if (otherProvider)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_provider_conflict",
+        message: `${args.model} ${args.tokenClass} is already negotiated under provider ${otherProvider.provider} (effective from ${otherProvider.effectiveFrom.toISOString()}); the resolver does not distinguish providers for one model, so end that rate before setting one under ${args.provider}`,
+      });
+    const rows = everyProvider.filter((r) => r.provider === args.provider);
 
     // A correction is always a later row. A row already effective from an
     // instant after this one — open or since superseded — means this write
@@ -737,14 +834,39 @@ export async function setNegotiatedPriceEntry(
   });
 }
 
+/** What ending a negotiated rate at an instant did. */
+export interface NegotiatedPriceClose {
+  /**
+   * The row that was in effect at `at`, now ending there; null when the
+   * organization had no rate in effect at that instant.
+   */
+  closed: PriceEntry | null;
+  /**
+   * Corrections scheduled to start after `at` that this call cancelled. They
+   * had not begun, so no run was ever priced against them, and they are
+   * removed rather than closed: a row cannot end before it starts.
+   */
+  cancelled: PriceEntry[];
+}
+
 /**
- * End an organization's negotiated row for one key at `at`, so every frame
+ * End an organization's negotiated rate for one key at `at`, so every frame
  * from that instant on resolves to the list price again.
  *
- * It closes the row — `effective_to = at` — and never deletes it: a cost
- * record priced before `at` still names the entry, and the rollup can still
- * read it. Re-closing a key the organization has already ended is a no-op that
- * answers null, so a retry is safe.
+ * The rate is the whole effective-dated chain for the key, not one row. The
+ * row in effect at `at` is closed there — `effective_to = at` — and never
+ * deleted: a cost record priced before `at` still names the entry, and the
+ * rollup can still read it. A row already closed at a later instant is
+ * shortened to `at` for the same reason. A correction scheduled to start
+ * AFTER `at` would re-establish the rate the caller just ended, so it is
+ * cancelled: removed if it has not yet begun (nothing was priced against it,
+ * so nothing is lost), refused if it has — ending a rate at an instant before
+ * a window that has already shipped would reprice settled runs, which is the
+ * same refusal a backdated write meets. Re-ending a key the organization has
+ * already ended is a no-op that answers a null close, so a retry is safe.
+ *
+ * Takes the same per-key lock the write takes: a removal that overlaps a
+ * write is otherwise a race one of them loses silently.
  *
  * A list row is not an organization's to change. The read admits the list rows
  * (the same set the RLS policy shows a tenant session) precisely so this case
@@ -760,11 +882,15 @@ export async function closeNegotiatedPriceEntry(args: {
   region?: string | null;
   /** The instant the negotiated rate stops applying. */
   at: Date;
-}): Promise<PriceEntry | null> {
+  /** The write instant, which decides whether a scheduled row has begun. */
+  now?: Date;
+}): Promise<NegotiatedPriceClose> {
   const region = args.region ?? null;
   const key = entryKey({ ...args, region });
+  const now = args.now ?? new Date();
 
   return withTenantDb(async (tx) => {
+    await lockNegotiatedKey(tx, args);
     const rows = await readKeyRows(tx, args, { includeList: true });
     const own = rows.filter(
       (r) => r.orgId === args.orgId && r.source !== "list",
@@ -782,19 +908,58 @@ export async function closeNegotiatedPriceEntry(args: {
             : ``),
       });
 
-    const open = own.find((r) => r.effectiveTo === null);
-    if (!open) return null;
-    if (open.effectiveFrom.getTime() >= args.at.getTime())
+    const at = args.at.getTime();
+    // The row in effect at `at`, not the open one: after a future-dated
+    // correction the current row is already closed at that future instant and
+    // the scheduled row is the only open one, so "the open row" is the wrong
+    // row and ending the visible rate becomes impossible.
+    const active =
+      own.find(
+        (r) =>
+          r.effectiveFrom.getTime() <= at &&
+          (r.effectiveTo === null || r.effectiveTo.getTime() > at),
+      ) ?? null;
+    if (active && active.effectiveFrom.getTime() >= at)
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_ends_before_it_starts",
-        message: `the negotiated price for ${key} is effective from ${open.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
+        message: `the negotiated price for ${key} is effective from ${active.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
       });
 
-    await tx
-      .update(schema.priceEntries)
-      .set({ effectiveTo: args.at, updatedAt: new Date() })
-      .where(eq(schema.priceEntries.id, open.id));
-    return rowToEntry({ ...open, effectiveTo: args.at });
+    const scheduled = own.filter((r) => r.effectiveFrom.getTime() > at);
+    const begun = scheduled.find(
+      (r) => r.effectiveFrom.getTime() <= now.getTime(),
+    );
+    if (begun)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_ends_before_it_starts",
+        message: `the negotiated price for ${key} effective from ${begun.effectiveFrom.toISOString()} is already in force; it cannot end at ${args.at.toISOString()}, before it starts — end it at or after that instant`,
+      });
+
+    if (active === null && scheduled.length === 0)
+      return { closed: null, cancelled: [] };
+
+    if (active) {
+      await tx
+        .update(schema.priceEntries)
+        .set({ effectiveTo: args.at, updatedAt: new Date() })
+        .where(eq(schema.priceEntries.id, active.id));
+    }
+    if (scheduled.length > 0) {
+      await tx.delete(schema.priceEntries).where(
+        inArray(
+          schema.priceEntries.id,
+          scheduled.map((r) => r.id),
+        ),
+      );
+    }
+    return {
+      closed:
+        active === null
+          ? null
+          : rowToEntry({ ...active, effectiveTo: args.at }),
+      cancelled: scheduled.map(rowToEntry),
+    };
   });
 }

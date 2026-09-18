@@ -79,7 +79,7 @@ export interface FakePriceStore {
   rows: PriceRow[];
   /** Every statement the executor ran, in order. */
   log: {
-    op: "select" | "update" | "insert" | "upsert" | "lock";
+    op: "select" | "update" | "insert" | "upsert" | "lock" | "delete";
     sql?: string;
   }[];
 }
@@ -111,6 +111,8 @@ function matches(row: PriceRow, cond: PriceCond): boolean {
       return valueOf(row, cond.col) === null;
     case "eq":
       return sameValue(valueOf(row, cond.col), cond.val);
+    case "inArray":
+      return cond.vals.some((v) => sameValue(valueOf(row, cond.col), v));
   }
 }
 
@@ -390,6 +392,20 @@ export function fakePriceExecutor(store: FakePriceStore) {
             return hit.map((r) => ({ ...r }));
           }),
       }),
+    }),
+
+    // The one DELETE the store issues: a scheduled negotiated row that has not
+    // begun, cancelled by an end of the rate at an earlier instant. Nothing
+    // else may delete a price row, so the fake models exactly that and no more.
+    delete: (table: unknown) => ({
+      where: (cond: PriceCond) =>
+        thenable(() => {
+          assertTable(table);
+          store.log.push({ op: "delete" });
+          const hit = store.rows.filter((r) => matches(r, cond));
+          store.rows = store.rows.filter((r) => !matches(r, cond));
+          return hit.map((r) => ({ ...r }));
+        }),
     }),
 
     execute: (stmt: unknown) => {

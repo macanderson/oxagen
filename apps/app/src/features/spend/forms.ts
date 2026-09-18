@@ -109,7 +109,11 @@ export type PriceEntryFormValues = {
   region?: string;
   /** Comma- or newline-separated; empty leaves the stored alias list alone. */
   modelAliases: string;
-  /** A UTC day (YYYY-MM-DD); empty is the write instant. */
+  /**
+   * A UTC day (YYYY-MM-DD, read as its midnight) or an RFC 3339 instant;
+   * empty is the write instant. The dialog sends an instant it took once for
+   * the whole card, so every class of one submission starts together.
+   */
   effectiveFrom: string;
   tokenClass: string;
   /** USD per one million units, as a person reads it off a contract. */
@@ -149,6 +153,13 @@ export type PriceFieldErrors = Partial<
 
 /** A UTC calendar day, as `<input type="date">` writes it. */
 const UTC_DAY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+/**
+ * An RFC 3339 instant in UTC, as `Date#toISOString` writes it — the shape the
+ * contract's `z.string().datetime()` takes. A day is widened to this; an
+ * instant passes through unchanged.
+ */
+const UTC_INSTANT =
+  /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
 /**
  * USD per one million units as typed: digits, at most six decimal places (the
@@ -212,9 +223,21 @@ export const PriceEntryForm = z
       aliases.some((alias) => alias.length > MODEL_MAX)
     )
       return issue(ctx, "modelAliases", "aliasesInvalid");
-    const day = form.effectiveFrom.trim();
-    if (day.length > 0 && !UTC_DAY.test(day))
+    const when = form.effectiveFrom.trim();
+    const isDay = UTC_DAY.test(when);
+    if (when.length > 0 && !isDay && !UTC_INSTANT.test(when))
       return issue(ctx, "effectiveFrom", "effectiveFromInvalid");
+    // A calendar check the shape alone cannot make: `Date` rolls a 30 February
+    // over into March rather than refusing it, so the day that comes back is
+    // compared with the day typed.
+    if (when.length > 0) {
+      const parsed = new Date(when);
+      if (
+        Number.isNaN(parsed.getTime()) ||
+        parsed.toISOString().slice(0, 10) !== when.slice(0, 10)
+      )
+        return issue(ctx, "effectiveFrom", "effectiveFromInvalid");
+    }
     const tokenClass = PriceTokenClass.safeParse(form.tokenClass);
     if (!tokenClass.success)
       return issue(ctx, "tokenClass", "tokenClassInvalid");
@@ -228,9 +251,12 @@ export const PriceEntryForm = z
       region: region.length === 0 ? null : region,
       ...(aliases.length === 0 ? {} : { modelAliases: aliases }),
       usdPerMillion: Number(rate),
-      // A day the person named is read as its UTC midnight; the contract takes
-      // the write instant when nothing is named.
-      ...(day.length === 0 ? {} : { effectiveFrom: `${day}T00:00:00.000Z` }),
+      // A day the person named is read as its UTC midnight; an instant the
+      // dialog took for the whole card passes through; the contract takes the
+      // write instant when nothing is named.
+      ...(when.length === 0
+        ? {}
+        : { effectiveFrom: isDay ? `${when}T00:00:00.000Z` : when }),
     };
   });
 

@@ -157,6 +157,37 @@ describe("setPriceEntryAction", () => {
     );
   });
 
+  // The dialog takes ONE instant for a whole card and sends it with every
+  // class, so the form must pass an instant through unchanged rather than
+  // refuse it as "not a day" or widen it to a midnight it never named.
+  it("passes an instant the dialog took for the whole card through unchanged", async () => {
+    invoke.mockResolvedValue({ entry, closed: null });
+    await setPriceEntryAction(at, {
+      ...form,
+      effectiveFrom: "2026-09-17T14:03:27.512Z",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      costPriceEntrySet.name,
+      expect.objectContaining({ effectiveFrom: "2026-09-17T14:03:27.512Z" }),
+      expect.anything(),
+    );
+  });
+
+  it("refuses an instant that is not UTC, or that names no real time (negative)", async () => {
+    for (const effectiveFrom of [
+      "2026-09-17T14:03:27.512+02:00",
+      "2026-02-30T00:00:00.000Z",
+    ]) {
+      const result = await setPriceEntryAction(at, { ...form, effectiveFrom });
+      expect(result).toMatchObject({
+        ok: false,
+        reason: "invalid",
+        field: "effectiveFrom",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
   // The dialog stopped collecting a region: nothing on the pricing path reads
   // `PriceEntry.region`, so a regional row would be a candidate everywhere and
   // `set_price_entry` refuses one. The form shape keeps the optional field for

@@ -55,8 +55,14 @@ const closedEntry: PriceEntry = {
   source: "negotiated",
 };
 
-function harness(result: PriceEntry | null = closedEntry) {
-  const closeNegotiatedPriceEntry = vi.fn(async () => result);
+function harness(
+  result: PriceEntry | null = closedEntry,
+  cancelled: PriceEntry[] = [],
+) {
+  const closeNegotiatedPriceEntry = vi.fn(async () => ({
+    closed: result,
+    cancelled,
+  }));
   return {
     handler: createPriceEntryRemoveHandler({
       closeNegotiatedPriceEntry,
@@ -116,6 +122,7 @@ describe("remove_price_entry", () => {
       tokenClass: "output",
       region: null,
       at: NOW,
+      now: NOW,
     });
     expect(out.at).toBe(NOW.toISOString());
     expect(out.closed).toMatchObject({
@@ -145,8 +152,26 @@ describe("remove_price_entry", () => {
       expect.objectContaining({
         region: "eu-west-1",
         at: new Date("2026-10-01T00:00:00.000Z"),
+        // The write instant travels separately: it decides whether a
+        // correction scheduled after `at` has already begun.
+        now: NOW,
       }),
     );
+  });
+
+  it("answers the row closed at `at` when the end also cancelled a scheduled correction", async () => {
+    const scheduled: PriceEntry = {
+      ...closedEntry,
+      id: "0192d4a8-7c1e-7a00-8000-0000000000e2",
+      effectiveFrom: new Date("2026-11-01T00:00:00.000Z"),
+      effectiveTo: null,
+    };
+    const h = harness(closedEntry, [scheduled]);
+    const out = await h.handler(input(), ctx());
+    // The contract's `closed` is the row that was in effect; the cancelled
+    // correction never priced anything and is carried in the log only.
+    expect(out.closed?.id).toBe(closedEntry.id);
+    expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
   });
 
   it("answers null when the organization has already ended that rate, so a retry is safe", async () => {

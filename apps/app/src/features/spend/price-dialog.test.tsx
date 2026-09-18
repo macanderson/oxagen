@@ -148,6 +148,40 @@ describe("Set a negotiated rate", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  // With the date left blank each server action would pick its own
+  // `new Date()`, so a card's classes would start at several instants and a
+  // frame in between would be priced at negotiated input and list output —
+  // the exact half-card state the sequence exists to keep out of the book.
+  it("sends every class of a card under ONE instant when no date is typed", async () => {
+    setPriceEntryAction.mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    await fill({
+      Vendor: "anthropic",
+      Model: "claude-sonnet-5",
+      Input: "3",
+      "Cached input read": "0.3",
+      Output: "15",
+    });
+    const before = Date.now();
+    await submit();
+    await waitFor(() => {
+      expect(setPriceEntryAction).toHaveBeenCalledTimes(3);
+    });
+
+    const instants = setPriceEntryAction.mock.calls.map(
+      ([, values]) => values["effectiveFrom"],
+    );
+    expect(new Set(instants).size).toBe(1);
+    const [instant] = instants;
+    expect(typeof instant).toBe("string");
+    // An instant, not a UTC day: a day would backdate the rate to midnight and
+    // reprice every frame the organization ran earlier today.
+    expect(instant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(new Date(instant as string).getTime()).toBeGreaterThanOrEqual(
+      before - 1_000,
+    );
+  });
+
   it("names the classes written and the classes not written when a call is refused halfway (negative)", async () => {
     setPriceEntryAction
       .mockResolvedValueOnce({ ok: true, value: null })

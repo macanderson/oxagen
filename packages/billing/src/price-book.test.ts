@@ -34,6 +34,7 @@ import {
   usdPerMillionToMicros,
   usdPerUnitToMicrosPerMillion,
   type PriceEntry,
+  type PriceEntrySeed,
 } from "./price-book";
 import {
   makeFakePriceStore,
@@ -456,8 +457,12 @@ describe("the negotiated write path", () => {
       effectiveFrom: T1,
     });
 
-    const closed = await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+    const { closed, cancelled } = await closeNegotiatedPriceEntry({
+      ...SET,
+      at: T2,
+    });
     expect(closed?.effectiveTo).toEqual(T2);
+    expect(cancelled).toEqual([]);
     // Closed, not deleted: the row and its price are still there.
     expect(fake.rows).toHaveLength(2);
     expect(
@@ -467,7 +472,104 @@ describe("the negotiated write path", () => {
     expect(priceAt(T2)?.source).toBe("list");
 
     // Re-ending what is already ended is a no-op, so a retry is safe.
-    expect(await closeNegotiatedPriceEntry({ ...SET, at: T2 })).toBeNull();
+    expect(await closeNegotiatedPriceEntry({ ...SET, at: T2 })).toEqual({
+      closed: null,
+      cancelled: [],
+    });
+  });
+
+  // A removal that overlaps a write is the same race as two writes: both read
+  // the old state, then the setter inserts a new open row despite the
+  // removal, or the remover closes only the old row and reports success while
+  // the new negotiated rate stands. Same lock, same key, so they serialise.
+  it("takes the write's per-key lock before it reads, so a removal cannot interleave with a write", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const setLock = fake.log.find((l) => l.op === "lock")?.sql;
+    fake.log.length = 0;
+
+    await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+    const ops = fake.log.map((l) => l.op);
+    expect(ops[0]).toBe("lock");
+    expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
+    // The SAME lock the write takes, not a second one the write never waits on.
+    expect(fake.log[0]?.sql).toBe(setLock);
+  });
+
+  // After a future-dated correction the current row is already closed at that
+  // future instant and the scheduled row is the only open one. Picking "the
+  // open row" then selected the future row, refused it as ending before it
+  // starts, and left the visible current rate impossible to end.
+  it("ends the rate in effect at `at`, and cancels a correction scheduled after it that has not begun", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const scheduled = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+    const endAt = new Date("2026-09-20T00:00:00.000Z");
+    const now = new Date("2026-09-21T00:00:00.000Z");
+
+    const result = await closeNegotiatedPriceEntry({ ...SET, at: endAt, now });
+
+    // The row that was in effect at `at` is the one that ends there.
+    expect(result.closed?.id).toBe(first.entry.id);
+    expect(result.closed?.effectiveTo).toEqual(endAt);
+    // The scheduled correction would have re-established the rate at T2, so
+    // it does not survive the end. It never priced anything, so it is removed.
+    expect(result.cancelled.map((e) => e.id)).toEqual([scheduled.entry.id]);
+    expect(fake.rows.find((r) => r.id === scheduled.entry.id)).toBeUndefined();
+    expect(fake.log.some((l) => l.op === "delete")).toBe(true);
+
+    expect(priceAt(new Date("2026-09-15T00:00:00.000Z"))?.id).toBe(
+      first.entry.id,
+    );
+    expect(priceAt(endAt)?.source).toBe("list");
+    expect(priceAt(T2)?.source).toBe("list");
+  });
+
+  it("refuses to end a rate before a scheduled correction that has already begun (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+    // The correction at T2 is already in force by the write instant: ending
+    // the rate at an earlier instant would reprice runs settled under it.
+    const now = new Date("2026-10-15T00:00:00.000Z");
+    await expect(
+      closeNegotiatedPriceEntry({
+        ...SET,
+        at: new Date("2026-09-20T00:00:00.000Z"),
+        now,
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_ends_before_it_starts",
+    });
+    // Nothing moved: the first row still ends where the correction starts,
+    // and the correction is still open.
+    expect(fake.rows).toHaveLength(2);
+    expect(fake.rows.map((r) => r.effectiveTo)).toEqual([T2, null]);
+
+    // Ending it at or after the correction's start is the answer the refusal
+    // points at, and it works.
+    const ended = await closeNegotiatedPriceEntry({ ...SET, at: now, now });
+    expect(ended.closed?.effectiveFrom).toEqual(T2);
+    expect(ended.cancelled).toEqual([]);
   });
 
   it("refuses to touch the list row", async () => {
@@ -478,6 +580,74 @@ describe("the negotiated write path", () => {
     );
     expect(fake.rows[0]!.effectiveTo).toBeNull();
     expect(fake.rows[0]!.source).toBe("list");
+  });
+
+  // The row key carries the provider string, but `resolvePriceEntry` never
+  // receives or filters on a frame's provider: two providers' rows for one
+  // model and class would both match every call and the newer would win
+  // globally, applying one provider's commercial terms to traffic billed by
+  // the other. So the second provider is refused until the first is ended.
+  it("refuses a second provider for a model and class the organization has already negotiated (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openrouter",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "anthropic",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_provider_conflict",
+    });
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.provider).toBe("openrouter");
+
+    // The lock is keyed without the provider, so the two writes above would
+    // have waited on each other rather than both reading an empty key.
+    const locks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
+    expect(new Set(locks).size).toBe(1);
+
+    // Once the first provider's rate is ended, the other can be set: the
+    // ended window and the new one never overlap.
+    await closeNegotiatedPriceEntry({ ...SET, provider: "openrouter", at: T2 });
+    const written = await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "anthropic",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+    expect(written.entry.provider).toBe("anthropic");
+    expect(priceAt(T2)?.id).toBe(written.entry.id);
+    expect(priceAt(new Date("2026-09-20T00:00:00.000Z"))?.provider).toBe(
+      "openrouter",
+    );
+  });
+
+  it("leaves a different token class under another provider alone", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openrouter",
+      tokenClass: "output",
+      microsPerMillion: 12_000_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "anthropic",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T1,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+    expect(fake.rows).toHaveLength(2);
   });
 
   it("refuses to end a rate at or before it starts", async () => {
@@ -646,6 +816,105 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
   });
 });
 
+describe("syncPriceBook retires what a complete refresh no longer emits", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    store.tx = makeFakePriceTx(fake);
+  });
+
+  const seed = (over: Partial<PriceEntrySeed> = {}): PriceEntrySeed => ({
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    modelAliases: [],
+    region: null,
+    tokenClass: "input_uncached",
+    unit: "token",
+    currency: "USD",
+    microsPerMillion: 3_000_000n,
+    effectiveFrom: T1,
+    effectiveTo: null,
+    ...over,
+  });
+
+  // A model a vendor retired, or a class a catalog stopped publishing, is
+  // absent from the seeds. Left open its last rate would price frames for
+  // ever, and a class that should now read `estimated` would carry a figure.
+  it("closes an open row the seeds no longer name, at the sync's instant", async () => {
+    fake.rows.push(priceRow({ tokenClass: "input_uncached" }));
+    fake.rows.push(
+      priceRow({ tokenClass: "cache_read", microsPerMillion: 300_000n }),
+    );
+    const retiredModel = priceRow({
+      model: "claude-sonnet-4",
+      microsPerMillion: 2_000_000n,
+    });
+    fake.rows.push(retiredModel);
+
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      // The catalog still prices input, stopped publishing cache_read, and
+      // withdrew claude-sonnet-4 altogether.
+      seeds: [seed()],
+      retireAbsent: true,
+    });
+
+    expect(result).toMatchObject({ unchanged: 1, retired: 2, written: 0 });
+    const byKey = (model: string, tokenClass: string) =>
+      fake.rows.find((r) => r.model === model && r.tokenClass === tokenClass)!;
+    expect(byKey("claude-sonnet-5", "input_uncached").effectiveTo).toBeNull();
+    // Closed, never deleted: a run priced before T1 still names the entry.
+    expect(byKey("claude-sonnet-5", "cache_read").effectiveTo).toEqual(T1);
+    expect(byKey("claude-sonnet-4", "input_uncached").effectiveTo).toEqual(T1);
+    expect(fake.rows).toHaveLength(3);
+  });
+
+  // A row absent because its catalog was down is not a price that ended. The
+  // caller knows which happened and says so; without the flag nothing closes.
+  it("retires nothing unless the caller vouched for the seeds as complete", async () => {
+    fake.rows.push(priceRow({ model: "claude-sonnet-4" }));
+    const result = await syncPriceBook({ effectiveFrom: T1, seeds: [seed()] });
+    expect(result.retired).toBe(0);
+    expect(
+      fake.rows.find((r) => r.model === "claude-sonnet-4")!.effectiveTo,
+    ).toBeNull();
+  });
+
+  it("never touches a negotiated row, and never closes a row that starts at or after the sync", async () => {
+    fake.rows.push(
+      priceRow({
+        orgId: ORG,
+        source: "negotiated",
+        model: "claude-sonnet-4",
+        microsPerMillion: 1_000_000n,
+      }),
+    );
+    // A list row already scheduled to start after this sync: a later
+    // correction this run must not close, since it cannot end before it starts.
+    fake.rows.push(priceRow({ model: "gpt-9", effectiveFrom: T2 }));
+
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed()],
+      retireAbsent: true,
+    });
+    expect(result.retired).toBe(0);
+    expect(fake.rows.filter((r) => r.effectiveTo === null)).toHaveLength(3);
+  });
+
+  it("does not count a row it already superseded under a new provider as retired too", async () => {
+    fake.rows.push(priceRow({ provider: "openrouter", effectiveFrom: FROM }));
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed({ provider: "anthropic" })],
+      retireAbsent: true,
+    });
+    expect(result).toMatchObject({ written: 1, superseded: 1, retired: 0 });
+    expect(fake.rows.filter((r) => r.effectiveTo === null)).toHaveLength(1);
+  });
+});
+
 describe("the negotiated write path refuses in a shape every surface can classify", () => {
   let fake: FakePriceStore;
 
@@ -669,20 +938,46 @@ describe("the negotiated write path refuses in a shape every surface can classif
     });
   });
 
-  it("refuses to end a rate at or before it starts, as a conflict", async () => {
+  it("refuses to end a rate before a window that has already begun, as a conflict", async () => {
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: usdPerMillionToMicros(2.4),
       effectiveFrom: T2,
     });
 
+    // The write instant is after T2, so the row is in force and ending the
+    // rate at T1 would reprice a window that has shipped.
     await expect(
-      closeNegotiatedPriceEntry({ ...SET, at: T1 }),
+      closeNegotiatedPriceEntry({
+        ...SET,
+        at: T1,
+        now: new Date("2026-10-15T00:00:00.000Z"),
+      }),
     ).rejects.toMatchObject({
       name: "HandlerError",
       code: "conflict",
       reason: "price_entry_ends_before_it_starts",
     });
+    expect(fake.rows).toHaveLength(1);
+  });
+
+  // The same call before T2 arrives is not a refusal: the row has not begun,
+  // nothing was priced against it, and ending the rate at T1 means it never
+  // applies — so it is cancelled rather than left to start anyway.
+  it("cancels a scheduled rate that has not begun when the rate is ended before it starts", async () => {
+    const scheduled = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: usdPerMillionToMicros(2.4),
+      effectiveFrom: T2,
+    });
+    const result = await closeNegotiatedPriceEntry({
+      ...SET,
+      at: T1,
+      now: new Date("2026-09-20T00:00:00.000Z"),
+    });
+    expect(result.closed).toBeNull();
+    expect(result.cancelled.map((e) => e.id)).toEqual([scheduled.entry.id]);
+    expect(fake.rows).toHaveLength(0);
   });
 
   it("refuses to reopen a window the organization already ended, as a conflict", async () => {

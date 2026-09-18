@@ -8,12 +8,18 @@
 
 export type PriceCond =
   | { op: "eq"; col: unknown; val: unknown }
+  | { op: "inArray"; col: unknown; vals: unknown[] }
   | { op: "isNull"; col: unknown }
   | { op: "and"; conds: PriceCond[] }
   | { op: "or"; conds: PriceCond[] };
 
 export const priceConditionMocks = {
   eq: (col: unknown, val: unknown): PriceCond => ({ op: "eq", col, val }),
+  inArray: (col: unknown, vals: readonly unknown[]): PriceCond => ({
+    op: "inArray",
+    col,
+    vals: [...vals],
+  }),
   isNull: (col: unknown): PriceCond => ({ op: "isNull", col }),
   // drizzle's `and`/`or` skip an undefined condition; so do these.
   and: (...conds: (PriceCond | undefined)[]): PriceCond => ({

@@ -30,8 +30,17 @@ const CARD_MODELS = mergePublishedPrices([inCodeCardPrices()]).prices.length;
 const NO_OVERRIDES = { filePath: "", inline: "" };
 
 /** Records every write the sync makes and answers with a fixed tally. */
-function recorder(result = { written: 0, unchanged: 0 }) {
-  const calls: { effectiveFrom: Date; seeds: readonly PriceEntrySeed[] }[] = [];
+function recorder(
+  result: { written: number; unchanged: number; retired?: number } = {
+    written: 0,
+    unchanged: 0,
+  },
+) {
+  const calls: {
+    effectiveFrom: Date;
+    seeds: readonly PriceEntrySeed[];
+    retireAbsent: boolean;
+  }[] = [];
   return {
     calls,
     get seeds(): readonly PriceEntrySeed[] {
@@ -40,6 +49,7 @@ function recorder(result = { written: 0, unchanged: 0 }) {
     write: (args: {
       effectiveFrom: Date;
       seeds: readonly PriceEntrySeed[];
+      retireAbsent: boolean;
     }) => {
       calls.push(args);
       return Promise.resolve(result);
@@ -101,6 +111,52 @@ describe("syncPriceBookFromSources", () => {
       "openrouter",
     ]);
     expect(report.failures.every((f) => f.error.includes("503"))).toBe(true);
+    // A model absent because its catalog was down is not a price that ended:
+    // the write is told the seeds are NOT the whole book, so nothing retires.
+    expect(write.calls[0]!.retireAbsent).toBe(false);
+    expect(report.retired).toBe(0);
+  });
+
+  it("vouches for the seeds as complete only when every catalog answered", async () => {
+    const { fetchImpl } = fakeFetch({
+      [OPENROUTER_MODELS_URL]: {
+        data: [
+          {
+            id: "moonshot/kimi-k3",
+            pricing: { prompt: "0.000002", completion: "0.00001" },
+          },
+        ],
+      },
+      [MODELS_DEV_URL]: {
+        moonshot: {
+          id: "moonshot",
+          models: {
+            "kimi-k3": { id: "kimi-k3", cost: { input: 2, output: 10 } },
+          },
+        },
+      },
+    });
+    const write = recorder({ written: 0, unchanged: 0, retired: 4 });
+    const report = await syncPriceBookFromSources({
+      effectiveFrom: FROM,
+      overrides: NO_OVERRIDES,
+      fetchImpl,
+      write: write.write,
+    });
+    expect(report.failures).toEqual([]);
+    // Every source answered, so a row nothing emits is a price that ended.
+    expect(write.calls[0]!.retireAbsent).toBe(true);
+    expect(report.retired).toBe(4);
+
+    // Offline never asked the catalogs, so it can vouch for nothing.
+    const offline = recorder();
+    await syncPriceBookFromSources({
+      effectiveFrom: FROM,
+      overrides: NO_OVERRIDES,
+      offline: true,
+      write: offline.write,
+    });
+    expect(offline.calls[0]!.retireAbsent).toBe(false);
   });
 
   it("reads no catalog at all when told to stay offline, and still seeds", async () => {
