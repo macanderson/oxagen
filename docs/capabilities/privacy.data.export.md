@@ -45,10 +45,13 @@ Request a machine-readable ZIP archive of personal or organizational data under 
   defaults to `allow` rather than listing roles: an invited member holds no org
   role, and portability is a right the person holds, not a privilege an
   administrator grants. An explicit deny grant still refuses.
-- `scope: "org"` — Owner or Admin role on the org. Enforced in the handler, not
-  by the role map, because the rule turns on an input field. The handler reads
-  membership on the **target** org, so a body-supplied `orgId` is checked
-  against the caller's role there rather than in the context org.
+- `scope: "org"` — Owner or Admin role on the org, and `orgId` must be the org
+  the request was made in. `invoke()` resolves IAM against the request's org, so
+  an export naming a different one would be decided in one tenant and read from
+  another, with the target's own grants never consulted. To export another
+  organization, invoke in that organization's context. The Owner/Admin rule
+  itself is enforced in the handler, not by the role map, because it turns on an
+  input field.
 
 ## Billing
 
@@ -76,5 +79,6 @@ organization has exhausted its credits or reached its spend ceiling.
 | `unauthorized` | No authenticated session. |
 | `forbidden` | Requested by a machine principal (`reason: "export_requires_a_person"`). A normal API key carries no user, and an export is a person's right over their own data. A CLI session key speaks for its creator and is unaffected. |
 | `forbidden` | `scope: "org"` requested without Owner/Admin role (`reason: "org_export_requires_admin"`). |
+| `forbidden` | `scope: "org"` naming an org other than the request's own (`reason: "org_export_outside_governed_scope"`). |
 | `validation_error` | Input failed Zod parse. |
 | `not_found` | `exportId` not found when polling. |

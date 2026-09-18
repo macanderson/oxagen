@@ -78,11 +78,11 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects org-scope export when caller is not a member of the target org", async () => {
-    // membership lookup returns no row for the foreign org
+  it("rejects org-scope export when the caller is not a member of the org", async () => {
+    // membership lookup returns no row
     queueSelects([]);
     await expect(
-      privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX),
+      privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX),
     ).rejects.toThrow("An organization export requires the Owner or Admin role");
     expect(mocks.insertReturning).not.toHaveBeenCalled();
     expect(mocks.eventSend).not.toHaveBeenCalled();
@@ -91,17 +91,11 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   it("rejects org-scope export when caller is a non-privileged member", async () => {
     queueSelects([{ role: "member" }]);
     await expect(
-      privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX),
+      privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX),
     ).rejects.toThrow("An organization export requires the Owner or Admin role");
     expect(mocks.insertReturning).not.toHaveBeenCalled();
   });
 
-  // The contract admits every org role -- it must, or a member could not
-  // export their own data -- so this branch is the only thing refusing a
-  // member's org export, and a surface classifies a refusal by `code` alone.
-  // Uncoded, the app shows its generic failure instead of "an organization
-  // export needs an owner or admin" and records a runtime error rather than a
-  // policy denial, and the API answers 500 rather than 403.
   // Reachable since the contract started admitting every org role: a normal API
   // key resolves with `userId: null`, so a machine principal now reaches the
   // handler instead of being stopped at IAM. Uncoded, that read as a runtime
@@ -123,7 +117,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   it("refuses with a coded forbidden, so the surfaces read it as a denial", async () => {
     queueSelects([{ role: "member" }]);
     const err = await privacyDataExportHandler(
-      { scope: "org", orgId: "org_B" },
+      { scope: "org", orgId: "org_A" },
       CTX,
     ).catch((e: unknown) => e);
     expect(isHandlerError(err)).toBe(true);
@@ -133,23 +127,44 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     });
   });
 
-  it("allows org-scope export for an Owner of the target org", async () => {
+  it("allows org-scope export for an Owner of the org", async () => {
     queueSelects([{ role: "owner" }]);
     const result = await privacyDataExportHandler(
-      { scope: "org", orgId: "org_B" },
+      { scope: "org", orgId: "org_A" },
       CTX,
     );
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
   });
 
-  it("allows org-scope export for an Admin of the target org", async () => {
+  it("allows org-scope export for an Admin of the org", async () => {
     queueSelects([{ role: "admin" }]);
     const result = await privacyDataExportHandler(
-      { scope: "org", orgId: "org_B" },
+      { scope: "org", orgId: "org_A" },
       CTX,
     );
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
+  });
+
+  // `invoke()` resolves IAM against ctx.orgId, so an export whose target is a
+  // DIFFERENT org would have the decision made in one tenant and the data read
+  // from another -- the target's own grants, including an explicit deny, never
+  // consulted. A membership read cannot substitute: it cannot see a deny grant
+  // at all. So the two must name the same org.
+  it("refuses an export whose target is not the org the kernel governed", async () => {
+    const err = await privacyDataExportHandler(
+      { scope: "org", orgId: "org_B" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(isHandlerError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: "forbidden",
+      reason: "org_export_outside_governed_scope",
+    });
+    // Refused before the membership read, so an Owner of org_B cannot reach
+    // the export by invoking through another membership.
+    expect(mocks.insertReturning).not.toHaveBeenCalled();
+    expect(mocks.eventSend).not.toHaveBeenCalled();
   });
 
   it("throws when org scope is requested without an orgId", async () => {

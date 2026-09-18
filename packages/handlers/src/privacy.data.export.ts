@@ -38,11 +38,32 @@ export const privacyDataExportHandler: CapabilityHandler<
   }
   if (input.scope === "org") {
     if (!input.orgId) throw new Error("orgId is required for org-scope export");
-    // Org-scope export emits a ZIP of the entire org's data. The kernel IAM gate
-    // resolves roles against ctx.orgId, NOT the caller-supplied input.orgId, so a
-    // body-supplied orgId could otherwise trigger a cross-tenant export. Re-verify
-    // the caller's membership and role on the TARGET org here (defense-in-depth),
-    // mirroring privacy.data.erase. Contract allows Owner + Admin.
+    // The export target must be the org the kernel governed.
+    //
+    // `invoke()` resolves IAM against `ctx.orgId`, so a body-supplied `orgId`
+    // naming a DIFFERENT org would have the decision made in one tenant and the
+    // data read from another: the target org's grants -- including an explicit
+    // `export_data` deny -- are never evaluated, and a person holding a
+    // membership in both could export the denying org's ZIP by invoking through
+    // the other one. A membership-role read is not a substitute for that
+    // decision; it cannot see a deny grant at all
+    // (discussion_r4050819465).
+    //
+    // So the two must name the same org, and a caller who wants another org's
+    // export invokes in that org's context, where the kernel governs it. The
+    // app already passes `ctx.orgId` here, so nothing legitimate changes.
+    if (input.orgId !== ctx.orgId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_export_outside_governed_scope",
+        message:
+          "An organization export must be requested in that organization's own context, so its access rules govern the request",
+      });
+    }
+    // Belt and braces on the rule the contract cannot express: `defaultRoles`
+    // cannot read an input field, so Owner/Admin for org scope is enforced
+    // here. Kept as a read against the target org, mirroring
+    // privacy.data.erase.
     const membership = await withSystemDb((tx) =>
       tx
         .select({ role: schema.orgUsers.role })
