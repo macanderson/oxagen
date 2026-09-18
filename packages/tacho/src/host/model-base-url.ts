@@ -16,7 +16,7 @@
  *     be redefined under `model_providers`, and the key applies to both the
  *     API-key login and the ChatGPT login. Our URL ends in
  *     `/backend-api/codex`, which is the suffix Codex requires before it keeps
- *     using its backend-only routes; the proxy then picks the vendor host from
+ *     using its backend-only routes. The proxy then picks the vendor host from
  *     the credential the request carries.
  *
  * The contract is the MCP config writer's: idempotent, a colliding value is
@@ -202,13 +202,13 @@ function writeAtomicPreserving(path: string, data: string | Buffer): void {
     closeSync(fd);
   }
   try {
-    // `open` applies the umask; the file must end with the mode it had.
+    // `open` applies the umask. The file must end with the mode it had.
     chmodSync(tmp, mode);
     if (owner !== undefined) {
       try {
         chownSync(tmp, owner.uid, owner.gid);
       } catch {
-        // Only root may give a file away; the same owner needs no change.
+        // Only root may give a file away. The same owner needs no change.
       }
     }
     renameSync(tmp, path);

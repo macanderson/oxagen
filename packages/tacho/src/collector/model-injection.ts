@@ -13,7 +13,7 @@ type Json = Record<string, unknown>;
 
 /**
  * Append a system block to an Anthropic Messages request. `system` may be
- * absent, a string or a list of blocks; the result is always a list, with the
+ * absent, a string or a list of blocks. The result is always a list, with the
  * caller's own system text first so its prompt cache prefix is unchanged.
  */
 export function withAnthropicSystemBlock(body: Json, text: string): Json {
@@ -28,7 +28,7 @@ export function withAnthropicSystemBlock(body: Json, text: string): Json {
 
 /**
  * Add instructions to an OpenAI request. A Responses request carries them in
- * `instructions`; a Chat Completions request has no such member, so the text
+ * `instructions`. A Chat Completions request has no such member, so the text
  * goes in as a system message after the caller's own leading system messages.
  */
 export function withOpenAiInstructions(body: Json, text: string): Json {

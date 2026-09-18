@@ -7,7 +7,7 @@
  * it arrives. The caller's credential crosses untouched, in memory only: this
  * module never logs a header value, never writes a body, and seals nothing
  * onto a chain but digests, counts and timings. Prompt bodies never leave the
- * machine through Oxagen; they go to the vendor the harness chose, and only
+ * machine through Oxagen. They go to the vendor the harness chose, and only
  * the frame goes up.
  *
  * Standing in the path is what makes four things possible, and each is here:
@@ -45,10 +45,11 @@
  *
  * ## Which session a call belongs to
  *
- * In order: the `x-oxagen-session` header; the harness's own session header
- * (`X-Claude-Code-Session-Id`, Codex's `session-id`); the session id inside an
- * Anthropic `metadata.user_id`; and, failing all of those, the one live
- * session of that harness on this host when there is exactly one. A call that
+ * Four sources are tried in order. First the `x-oxagen-session` header. Then
+ * the harness's own session header (`X-Claude-Code-Session-Id`, or Codex's
+ * `session-id`). Then the session id inside an Anthropic `metadata.user_id`.
+ * Last, the one live session of that harness on this host, when there is
+ * exactly one. A call that
  * matches none is sealed on the daemon's own chain and says so, because a call
  * filed under the wrong session is worse than one filed under none.
  */
@@ -115,7 +116,7 @@ export interface ForwardRequest {
   path: string;
   /**
    * The request body as JSON, when it is a JSON object. To change the body,
-   * return a request whose `json` is a NEW object; the proxy re-serializes
+   * return a request whose `json` is a NEW object. The proxy re-serializes
    * only when the reference changed, so an untouched request is forwarded
    * byte for byte.
    */
@@ -126,7 +127,7 @@ export interface ForwardRequest {
 
 /**
  * The seam for per-turn volatile steering (story sheet item 6, injection
- * point 5). Phase 1's assembler plugs in here; nothing does today.
+ * point 5). Phase 1's assembler plugs in here. Nothing does today.
  */
 export type BeforeForward = (
   request: ForwardRequest,
@@ -249,7 +250,7 @@ function leadingModel(bytes: Buffer | undefined): string | undefined {
 
 /**
  * The session id inside an Anthropic `metadata.user_id`. Current Claude Code
- * sends a JSON string with a `session_id` member; older builds sent
+ * sends a JSON string with a `session_id` member. Older builds sent
  * `user_<hash>_account_<uuid>_session_<uuid>`.
  */
 export function sessionFromAnthropicMetadata(
@@ -265,7 +266,7 @@ export function sessionFromAnthropicMetadata(
       const id = inner["session_id"];
       if (typeof id === "string" && id.length > 0) return id;
     } catch {
-      // Not the JSON form; try the legacy one.
+      // Not the JSON form. Try the legacy one.
     }
   }
   return /_session_([0-9a-fA-F-]{8,64})$/.exec(userId)?.[1];

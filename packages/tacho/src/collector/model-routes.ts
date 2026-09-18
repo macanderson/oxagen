@@ -47,7 +47,7 @@ export interface ModelRoute {
   upstream: ModelUpstreamName;
   /**
    * The path and query to append to the upstream base. For Anthropic it keeps
-   * its `/v1`; for OpenAI the base already ends in the version segment.
+   * its `/v1`. For OpenAI the base already ends in the version segment.
    */
   path: string;
 }

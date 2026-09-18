@@ -78,7 +78,7 @@ export function createModelProxyListener(
       }
       const next = createServer((req, res) => options.proxy.handle(req, res));
       next.maxConnections = MAX_CONNECTIONS;
-      // A stream can be open for a long time; only a stalled header is cut.
+      // A stream can be open for a long time. Only a stalled header is cut.
       next.requestTimeout = 0;
       next.headersTimeout = 30_000;
       next.keepAliveTimeout = 60_000;

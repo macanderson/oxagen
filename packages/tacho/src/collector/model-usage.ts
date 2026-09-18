@@ -15,7 +15,7 @@
  *     `output_tokens` there is cumulative, so the last delta seen is the count
  *     even when the stream is cut short.
  *   - OpenAI Responses: `response.completed` (and the `incomplete` and
- *     `failed` endings) carry `response.usage`; not streamed, the document's
+ *     `failed` endings) carry `response.usage`. Not streamed, the document's
  *     `usage`.
  *   - OpenAI Chat Completions: the document's `usage`, or the one chunk that
  *     carries a non-null `usage`, which the vendor only sends when the caller
@@ -179,7 +179,7 @@ export function foldUsageDocument(
     return;
   }
   if (api === "openai.responses") {
-    // Streamed endings wrap the response; the unstreamed document is it.
+    // Streamed endings wrap the response. The unstreamed document is it.
     const response = obj(root["response"]) ?? root;
     const usage = obj(response["usage"]);
     if (usage === undefined) return;
@@ -209,7 +209,7 @@ const USAGE_MARKER = Buffer.from('"usage"');
 
 /**
  * Reads usage out of a response as its bytes go by. `write` is called with
- * each decoded chunk; `end` returns what was seen. Safe to abandon half way:
+ * each decoded chunk. `end` returns what was seen. Safe to abandon half way:
  * a stream that is cut short reports whatever the vendor had said by then.
  */
 export class UsageMeter {
