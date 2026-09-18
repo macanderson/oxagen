@@ -43,7 +43,7 @@ Each enforcement mechanism has exactly one implementation, in oxagen.
 2. **Per-repo PR checks ship as `workflow_call` reusable workflows in
    oxagen**, and each consumer repo carries a caller stub of roughly a dozen
    lines. This covers the DoD check and its close guard (#1321). All five
-   repos are public, so `uses: macanderson/oxagen/.github/workflows/…@main`
+   repos are public, so `uses: oxagenai/oxagen/.github/workflows/…@main`
    resolves without additional credentials.
 
 3. **The shared logic lives in plain, dependency-free ES modules under

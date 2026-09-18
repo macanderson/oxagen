@@ -1,5 +1,5 @@
 /**
- * The Stella hooks writer (verified 2026-09-15 against macanderson/stella:
+ * The Stella hooks writer (verified 2026-09-15 against oxagenai/stella:
  * `crates/stella-core/src/hooks.rs`, `crates/stella-cli/src/settings/
  * toml_config.rs`). Stella reads user-scope hooks from `$STELLA_HOME/
  * stella.toml` (`~/.stella` by default) or, when no TOML exists, from the

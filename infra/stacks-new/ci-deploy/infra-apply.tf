@@ -22,7 +22,7 @@
  *
  * An earlier version of this comment said required reviewers on the
  * `production` environment were "the real control on this role". They are not
- * configured: `gh api repos/macanderson/oxagen/environments/production` returns
+ * configured: `gh api repos/oxagenai/oxagen/environments/production` returns
  * one protection rule, a branch policy, and an empty reviewer list.
  * `db-migrate.yml` had already recorded that in its own header. Do not restore
  * the claim without re-reading the API.

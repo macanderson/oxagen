@@ -19,7 +19,7 @@
 # five drifting implementations of a rule whose sibling check (scr-corpus-check)
 # exists to police drift. Instead this is a `workflow_call` workflow living once
 # in oxagen; the other four repos carry a ~12-line caller. All five repos are
-# public, so `uses: macanderson/oxagen/.github/workflows/dod-check.yml@main`
+# public, so `uses: oxagenai/oxagen/.github/workflows/dod-check.yml@main`
 # resolves with no extra credentials. See ADR-039.
 #
 # ## Why the check runs on the PR, not on the close
@@ -84,8 +84,8 @@ jobs:
       - name: Fetch the SCR tooling
         uses: actions/checkout@v5
         with:
-          repository: macanderson/oxagen
-          ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+          repository: oxagenai/oxagen
+          ref: ${{ github.repository == 'oxagenai/oxagen' && github.sha || 'main' }}
           path: .scr-tools
           sparse-checkout: tools/scripts
           sparse-checkout-cone-mode: false

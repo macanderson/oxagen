@@ -122,7 +122,7 @@ mkdir -p /data/{postgres,neo4j/data,neo4j/logs,clickhouse,clickhouse-config}
 # pinned at its burst ceiling with zero credits.
 #
 # Mounted as a single file rather than over config.d/, so ClickHouse's own
-# docker_related_config.xml survives. See macanderson/oxagen#1305.
+# docker_related_config.xml survives. See oxagenai/oxagen#1305.
 cat >/data/clickhouse-config/zz-oxagen-limits.xml <<'CHXMLEOF'
 <clickhouse>
     <logger>

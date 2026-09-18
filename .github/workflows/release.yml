@@ -16,6 +16,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container:
+      # Still pulled from the macanderson namespace until ci-image.yml, which
+      # now pushes to ghcr.io/oxagenai/, has published the image there.
       image: ghcr.io/macanderson/oxagen-ci-base:latest
       credentials:
         username: ${{ github.actor }}

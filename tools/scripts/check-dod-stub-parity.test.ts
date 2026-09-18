@@ -9,9 +9,9 @@ const PIN_A = "587435a133e3c8ac8fb6473ca5212939f5f064aa";
 const PIN_B = "2dd72c9957f8520ee673862de894ed64f4b2380c";
 const PIN_C = "84fe021ba3cf455b1d5057b04ed1111152fdceda";
 const stub = (ref: string) =>
-  `jobs:\n  dod:\n    uses: macanderson/oxagen/.github/workflows/dod-check.yml@${ref} # oxagen main\n`;
+  `jobs:\n  dod:\n    uses: oxagenai/oxagen/.github/workflows/dod-check.yml@${ref} # oxagen main\n`;
 const guardStub = (ref: string) =>
-  `jobs:\n  guard:\n    uses: macanderson/oxagen/.github/workflows/dod-close-guard.yml@${ref} # last changed 2026-09-05\n`;
+  `jobs:\n  guard:\n    uses: oxagenai/oxagen/.github/workflows/dod-close-guard.yml@${ref} # last changed 2026-09-05\n`;
 
 /**
  * One repo's facts, healthy by default so a test states only what it breaks.
@@ -46,9 +46,7 @@ describe("pinnedRef", () => {
 
   it("returns null for a moving ref, which is the thing ADR-045 forbids", () => {
     expect(
-      pinnedRef(
-        "uses: macanderson/oxagen/.github/workflows/dod-check.yml@main",
-      ),
+      pinnedRef("uses: oxagenai/oxagen/.github/workflows/dod-check.yml@main"),
     ).toBeNull();
   });
 
@@ -78,7 +76,7 @@ describe("divergence", () => {
       world({
         "cgp-website": repo({
           checkSource:
-            "uses: macanderson/oxagen/.github/workflows/dod-check.yml@main",
+            "uses: oxagenai/oxagen/.github/workflows/dod-check.yml@main",
         }),
       }),
     );
@@ -106,7 +104,7 @@ describe("divergence", () => {
       world({
         arenabench: repo({
           closeGuardSource:
-            "uses: macanderson/oxagen/.github/workflows/dod-close-guard.yml@main",
+            "uses: oxagenai/oxagen/.github/workflows/dod-close-guard.yml@main",
         }),
       }),
     );

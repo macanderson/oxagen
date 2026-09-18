@@ -9,6 +9,9 @@ on:
 
 # Atlas is baked into the ghcr.io/macanderson/oxagen-ci-* images (pin lives in
 # pipeline.yml's ATLAS_VERSION, read by ci-image.yml at image build time).
+# The `image:` pulls below still name ghcr.io/macanderson/oxagen-ci-*: the
+# images live under the macanderson namespace until ci-image.yml, which now
+# pushes to ghcr.io/oxagenai/, has published them there.
 env:
   # Container jobs: see the identical block in pipeline.yml — git in the
   # bind-mounted workspace trips "dubious ownership" without this.

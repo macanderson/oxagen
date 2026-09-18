@@ -164,7 +164,7 @@ change, and a fork's pull request cannot mint an accepted token.
 
 | Repository | Publishes |
 | --- | --- |
-| `macanderson/stella` | `stella.oxagen.sh` (node) |
+| `oxagenai/stella` | `stella.oxagen.sh` (node) |
 | `macanderson/cgp-website` | `contextgraphprotocol.org` (S3 + CloudFront) |
 | `macanderson/context-graph-protocol` | that site's `/schema` and `/spec` prefixes |
 | `oxageninc/oxagen-platform` | `oxagen.sh` (S3 + CloudFront); `docs`, `app`, `api`, `mcp` (node) |

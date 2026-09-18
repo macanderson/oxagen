@@ -154,7 +154,7 @@ tools/eval-out/
 # (sessions, exports, private evidence) and stays ignored -- with one tracked
 # exception: `commands/`. A custom slash command only steers a teammate's
 # session if it travels with the repository, so commands are reviewed through
-# the same pull requests as the code. Mirrors the exception macanderson/stella
+# the same pull requests as the code. Mirrors the exception oxagenai/stella
 # makes for `.stella/rules/`.
 #
 # Note the shape: a bare `.stella/` excludes the DIRECTORY, and git cannot

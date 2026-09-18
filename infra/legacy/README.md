@@ -60,7 +60,7 @@ Both questions this section used to hold open are answered.
 
 **The new account has its own key.** `alias/oxagen-app/ingestion` in
 `916294258235`, created by `infra/stacks-new/oxagen/crypto.tf` and applied to
-production on 2026-09-09 by [run 34411814281](https://github.com/macanderson/oxagen/actions/runs/34411814281)
+production on 2026-09-09 by [run 34411814281](https://github.com/oxagenai/oxagen/actions/runs/34411814281)
 — key, alias, the node role's grant, and the parameter that names it.
 
 **There is no re-wrap path because there is nothing to re-wrap.** Every

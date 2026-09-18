@@ -207,7 +207,7 @@ jobs:
     #   - The environment has a deployment branch policy naming `main` alone,
     #     so the ref check below is a second line of defence rather than the
     #     only one. Verify with:
-    #       gh api repos/macanderson/oxagen/environments/production/deployment-branch-policies
+    #       gh api repos/oxagenai/oxagen/environments/production/deployment-branch-policies
     #
     #   - There is deliberately NO required reviewer and no wait timer. A push
     #     to `main` applies with no human in the loop, and that is a decision
@@ -230,7 +230,7 @@ jobs:
     # only one.
     #
     # Both halves are checked rather than assumed (#2679):
-    #   gh api repos/macanderson/oxagen/environments/production \
+    #   gh api repos/oxagenai/oxagen/environments/production \
     #     --jq "[.protection_rules[]?.type]"   -> ["branch_policy"]
     environment: production
     strategy:

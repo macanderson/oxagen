@@ -33,7 +33,7 @@ decommission phase.
 
 **Two migration bugs found and fixed while bootstrapping Aurora**, both as
 PRs in `oxagen-platform` rather than hand-patched silently:
-[#1333](https://github.com/macanderson/oxagen/pull/1333) makes two Atlas
+[#1333](https://github.com/oxagenai/oxagen/pull/1333) makes two Atlas
 migrations RDS/Aurora-compatible — one is flagged for a human security
 review before merge (it touches an RLS-bypass mechanism). See that PR's
 description for the full reasoning.

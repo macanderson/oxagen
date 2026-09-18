@@ -30,7 +30,7 @@ period, and the reason a customer-facing cutover must re-sync `billing.plans`
 
 ## Where each variable lives
 
-| Variable | Parameter Store (`/oxagen/production/…`, account `916294258235`, `us-east-1`) | GitHub Actions secret (`macanderson/oxagen`) | Local `.env.local` (root, `apps/app`, `apps/api`, `apps/mcp`) | Consumer |
+| Variable | Parameter Store (`/oxagen/production/…`, account `916294258235`, `us-east-1`) | GitHub Actions secret (`oxagenai/oxagen`) | Local `.env.local` (root, `apps/app`, `apps/api`, `apps/mcp`) | Consumer |
 | --- | --- | --- | --- | --- |
 | `STRIPE_SECRET_KEY` | `SecureString` | repo + `production` environment (read by `stripe-sync.yml`) | yes | `api`, `app` at runtime |
 | `STRIPE_PUBLISHABLE_KEY` | `SecureString` | repo + `production` (unused by workflows) | yes | provisioning only |
@@ -92,8 +92,8 @@ put STRIPE_WEBHOOK_SECRET "$WHSEC"
 
 # 3. GitHub Actions (values over stdin).
 for n in STRIPE_SECRET_KEY STRIPE_PUBLISHABLE_KEY NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY STRIPE_WEBHOOK_SECRET; do
-  printf %s "${!n}" | gh secret set "$n" --repo macanderson/oxagen
-  printf %s "${!n}" | gh secret set "$n" --repo macanderson/oxagen --env production
+  printf %s "${!n}" | gh secret set "$n" --repo oxagenai/oxagen
+  printf %s "${!n}" | gh secret set "$n" --repo oxagenai/oxagen --env production
 done   # (bind the four names to the right variables first)
 
 # 4. Restart the server-side consumers: api, then app, then mcp.

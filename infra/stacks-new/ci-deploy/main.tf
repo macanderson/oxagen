@@ -27,8 +27,8 @@ locals {
 
   deployers = {
     stella = {
-      repository  = "macanderson/stella"
-      owner_id    = 542881
+      repository  = "oxagenai/stella"
+      owner_id    = 267772457
       repo_id     = 1297837446
       description = "Publishes stella.oxagen.sh from website/."
     }
@@ -45,8 +45,8 @@ locals {
       description = "Publishes the CGP schema and specification artifacts."
     }
     oxagen-platform = {
-      repository  = "macanderson/oxagen"
-      owner_id    = 542881
+      repository  = "oxagenai/oxagen"
+      owner_id    = 267772457
       repo_id     = 1252628274
       description = "Publishes oxagen.sh and the docs/app/api/mcp services on the node."
     }

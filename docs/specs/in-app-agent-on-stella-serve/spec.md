@@ -5,7 +5,7 @@
 - **Author:** platform
 - **Related:** [ADR-053](../../adr/ADR-053-in-app-agent-on-stella-serve-and-funding-sources.md)
   (the decision), [ADR-043](../../adr/ADR-043-runtime-excision.md) (what was
-  cut, and the commit it is recoverable from), `macanderson/stella`
+  cut, and the commit it is recoverable from), `oxagenai/stella`
   `docs/spec/serve-surface.md` and `docs/wire/` (the engine side),
   `packages/agent/src/runtime/governed-turn.ts` (the loop this replaces),
   [the funding-source spec](../model-funding-source/spec.md) (what answers a

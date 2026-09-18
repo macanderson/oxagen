@@ -3,7 +3,7 @@ name: dod-close-guard-unchecked-by-stub-parity
 type: bug
 domain: ci
 severity: P1
-linear: n/a (GitHub macanderson/oxagen#1336)
+linear: n/a (GitHub oxagenai/oxagen#1336)
 date: 2026-09-11
 ---
 

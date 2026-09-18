@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Edit, Write, Grep, Glob, Agent, ToolSearch, TaskCreat
 
 Drive the target repositories to a fully green state and prove it.
 
-**Target:** `$ARGUMENTS`. If blank, target all of: `macanderson/stella`, `macanderson/oxagen-platform`, `macanderson/context-graph-protocol`, `macanderson/cgp-website`. A short name resolves to `macanderson/<name>`.
+**Target:** `$ARGUMENTS`. If blank, target all of: `oxagenai/stella`, `macanderson/oxagen-platform`, `macanderson/context-graph-protocol`, `macanderson/cgp-website`. A short name resolves to `macanderson/<name>`.
 
 **Definition of done:** for every target repo — main's latest CI run is green, zero PRs remain open, any deploy triggered by a merge completed healthy, and verification screenshots exist on the Desktop. Do not stop short of that.
 

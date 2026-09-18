@@ -173,7 +173,7 @@ mkdir -p /data/clickhouse /data/clickhouse-config
 # shipped level is <trace>. On the old data node that produced 68M rows of
 # metric logging over a database holding ten rows of real data, and merging the
 # backlog held the box at its CPU burst ceiling for 26 hours — see
-# macanderson/oxagen#1305. Mounted as a single file so ClickHouse's own
+# oxagenai/oxagen#1305. Mounted as a single file so ClickHouse's own
 # docker_related_config.xml survives.
 cat > /data/clickhouse-config/zz-oxagen-limits.xml <<'CHXMLEOF'
 <clickhouse>

@@ -19,7 +19,7 @@ Full reference: **https://docs.oxagen.sh/docs/cli**
 **From the monorepo** (recommended today):
 
 ```bash
-git clone https://github.com/macanderson/oxagen.git
+git clone https://github.com/oxagenai/oxagen.git
 cd oxagen
 pnpm install
 
@@ -201,7 +201,7 @@ bumps all packages to the same version and syncs it to Vercel.
 ## Support
 
 - Docs: https://docs.oxagen.sh
-- Issues: https://github.com/macanderson/oxagen/issues
+- Issues: https://github.com/oxagenai/oxagen/issues
 
 ## License
 

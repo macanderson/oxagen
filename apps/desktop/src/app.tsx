@@ -73,7 +73,7 @@ const INSTALL_HINT: Record<Harness, string> = {
   "claude-code": "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
   stella:
-    "curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh",
+    "curl -fsSL https://raw.githubusercontent.com/oxagenai/stella/main/install.sh | sh",
   // A connected app is downloaded, not installed from a terminal. Sending a
   // non-developer to a command line is the thing this release exists to stop.
   "claude-desktop": "https://claude.ai/download",

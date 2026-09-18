@@ -5,7 +5,7 @@ prompt = """
 Drive the target repositories to a fully green state and prove it.
 
 Target: $ARGUMENTS
-If the argument is blank, target all of: macanderson/stella,
+If the argument is blank, target all of: oxagenai/stella,
 macanderson/oxagen-platform, macanderson/context-graph-protocol,
 macanderson/cgp-website. A short name resolves to macanderson/<name>.
 

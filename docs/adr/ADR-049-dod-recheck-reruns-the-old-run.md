@@ -45,7 +45,7 @@ oxagen hearing its own edits does nothing for theirs.
 
 ### The one exception, named rather than discovered later
 
-`macanderson/stella` implements the recheck itself, in `scripts/dod-recheck.sh`,
+`oxagenai/stella` implements the recheck itself, in `scripts/dod-recheck.sh`,
 with its own tests and `make` target, documented in its AGENTS.md. That is not
 the duplication ADR-039 exists to prevent: the **verdict** still comes from one
 implementation here. Stella's file only subscribes to its own issue edits and

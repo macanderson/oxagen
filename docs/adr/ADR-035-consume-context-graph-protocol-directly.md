@@ -131,7 +131,7 @@ Stella's Rust engine still depends on pinned `ocp-types`/`ocp-host`. The
 run-evidence-ingress spec requires Stella to either consume the current CGP
 crates directly or prove a narrow adapter against the same golden fixtures
 before its evidence may label the context source `context-graph-protocol`. That
-migration lives in the [`stella`](https://github.com/macanderson/stella) repo
+migration lives in the [`stella`](https://github.com/oxagenai/stella) repo
 and is tracked there; **this ADR governs the oxagen-platform (TypeScript) side
 only.** Whether #1082 closes on the TS resolution alone or stays open to track
 the Stella crate swap is a call for the issue owner.

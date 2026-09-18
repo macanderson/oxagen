@@ -11,7 +11,7 @@ import {
   stampRecordObject,
 } from "./context.steering.file";
 
-// A record Stella stamped itself (macanderson/stella, .stella/rules/), copied
+// A record Stella stamped itself (oxagenai/stella, .stella/rules/), copied
 // verbatim: its record_id and record_hash are the values Stella's loader
 // accepts, so recomputing them here proves the two sides hash the same bytes.
 const STELLA_FILE = readFileSync(

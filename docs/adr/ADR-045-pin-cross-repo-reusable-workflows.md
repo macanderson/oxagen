@@ -18,7 +18,7 @@ Read on 2026-09-05, the four stubs did not agree:
 
 | repo | ref |
 | --- | --- |
-| macanderson/stella | a commit SHA |
+| oxagenai/stella | a commit SHA |
 | macanderson/arenabench | `@main` |
 | macanderson/cgp-website | `@main` |
 | macanderson/context-graph-protocol | `@main` |
@@ -59,7 +59,7 @@ sooner re-pins sooner, and that is a one-line PR.
 `dod-recheck.yml` both fetch `tools/scripts/scr-dod-check.mjs` from oxagen with:
 
 ```yaml
-ref: ${{ github.repository == 'macanderson/oxagen' && github.sha || 'main' }}
+ref: ${{ github.repository == 'oxagenai/oxagen' && github.sha || 'main' }}
 ```
 
 Inside a called workflow, `github.sha` is the *caller's* commit, which does not

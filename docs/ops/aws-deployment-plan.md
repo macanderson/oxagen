@@ -87,7 +87,7 @@ migration completes, and is a prerequisite for customer-hosted deployments.
 | Sandbox | Modal (prod) / Vercel Sandbox / Docker | `packages/sandbox` |
 | Secrets | Env vars, fanned out to Vercel projects | ADR-004 |
 | KMS | **Both aliases exist**, in `578673726240`/`us-east-2` — `alias/oxagen/ingestion-prod` and `alias/oxagen/auth-tokens-prod`, confirmed by `aws kms list-aliases --region us-east-2` on 2026-09-08. The earlier "no such aliases exist" reading (2026-08-26) was taken in a different region; this stack's backend and keys are `us-east-2` and nothing else in the estate is. The ingestion key is live and production wraps with it — see #2680 and `infra/legacy/README.md` | `infra/legacy/environments/production` |
-| CI | GitHub Actions, `ghcr.io/oxageninc/oxagen-ci-*` images | `.github/workflows/pipeline.yml` |
+| CI | GitHub Actions, `ghcr.io/oxagenai/oxagen-ci-*` images | `.github/workflows/pipeline.yml` |
 
 Only `infra/legacy/bootstrap` was ever actually applied — the state backend
 (`oxagen-tfstate-578673726240` + `oxagen-tflock`) exists and is shared with

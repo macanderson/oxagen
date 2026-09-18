@@ -21,7 +21,7 @@ locals {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/stella -> stella.oxagen.sh
+# oxagenai/stella -> stella.oxagen.sh
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "stella" {
@@ -155,7 +155,7 @@ resource "aws_iam_role_policy" "cgp_protocol" {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/oxagen -> oxagen.sh and the four services on the node
+# oxagenai/oxagen -> oxagen.sh and the four services on the node
 # --------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "oxagen_platform" {

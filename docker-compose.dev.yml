@@ -33,6 +33,9 @@ services:
   # surfaces at it with STELLA_SERVE_URL=http://127.0.0.1:4300 and
   # STELLA_SERVE_TOKEN=dev-token-change-me in .env.local.
   stella-serve:
+    # Still pulled from the macanderson namespace: 0.9.414 was published there.
+    # Stella's docker-serve-publish.yml now pushes to ghcr.io/oxagenai/stella-serve;
+    # flip this and package-for-node.sh together with the first tag published there.
     image: ghcr.io/macanderson/stella-serve:${STELLA_SERVE_IMAGE_TAG:-0.9.414}
     container_name: oxagen-v2-stella-serve
     restart: unless-stopped

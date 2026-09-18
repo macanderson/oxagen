@@ -67,6 +67,9 @@ env:
   # ATLAS_VERSION is no longer installed per-job — it is baked into the
   # ghcr.io/macanderson/oxagen-ci-* images. This pin stays here as the single
   # source ci-image.yml reads when building those images.
+  # The `image:` pulls below still name ghcr.io/macanderson/oxagen-ci-*: the
+  # images live under the macanderson namespace until ci-image.yml, which now
+  # pushes to ghcr.io/oxagenai/, has published them there.
   ATLAS_VERSION: "v1.2.2"
   # Jobs run inside the toolchain container, so service containers are
   # reached by their service name on the shared docker network, not localhost.

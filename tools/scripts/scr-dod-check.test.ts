@@ -40,8 +40,8 @@ describe("linkedIssues", () => {
   });
 
   it("finds cross-repo closing references with their owner and repo", () => {
-    expect(linkedIssues("Fixes macanderson/stella#5128")).toEqual([
-      { owner: "macanderson", repo: "stella", number: 5128 },
+    expect(linkedIssues("Fixes oxagenai/stella#5128")).toEqual([
+      { owner: "oxagenai", repo: "stella", number: 5128 },
     ]);
   });
 
@@ -121,8 +121,8 @@ describe("referencedIssues", () => {
   });
 
   it("finds a cross-repo Refs reference with its owner and repo", () => {
-    expect(referencedIssues("Refs macanderson/stella#4151")).toEqual([
-      { owner: "macanderson", repo: "stella", number: 4151 },
+    expect(referencedIssues("Refs oxagenai/stella#4151")).toEqual([
+      { owner: "oxagenai", repo: "stella", number: 4151 },
     ]);
   });
 
@@ -583,7 +583,7 @@ describe("closeExemptFromDod", () => {
 });
 
 describe("referencesIssue (#2638)", () => {
-  const HERE = { owner: "macanderson", repo: "oxagen", number: 42 };
+  const HERE = { owner: "oxagenai", repo: "oxagen", number: 42 };
 
   it("matches a same-repo close and a same-repo Refs", () => {
     expect(referencesIssue("Closes #42", HERE)).toBe(true);
@@ -601,12 +601,12 @@ describe("referencesIssue (#2638)", () => {
   });
 
   it("does not match the same number in another repository", () => {
-    expect(referencesIssue("Closes macanderson/stella#42", HERE)).toBe(false);
+    expect(referencesIssue("Closes oxagenai/stella#42", HERE)).toBe(false);
     expect(referencesIssue("Refs otherorg/oxagen#42", HERE)).toBe(false);
   });
 
   it("matches a fully-qualified reference to this repository", () => {
-    expect(referencesIssue("Closes macanderson/oxagen#42", HERE)).toBe(true);
+    expect(referencesIssue("Closes oxagenai/oxagen#42", HERE)).toBe(true);
   });
 
   it("ignores a negated close but still sees a Refs for the same issue", () => {
@@ -742,10 +742,10 @@ describe("matching GitHub's own reading of a close claim (oxagen#1354)", () => {
       // and this is the spelling GitHub's UI produces when someone pastes a
       // link.
       expect(
-        linkedIssues(
-          "Closes https://github.com/macanderson/oxagen/issues/7",
-        ).map((r) => ({ owner: r.owner, repo: r.repo, number: r.number })),
-      ).toEqual([{ owner: "macanderson", repo: "oxagen", number: 7 }]);
+        linkedIssues("Closes https://github.com/oxagenai/oxagen/issues/7").map(
+          (r) => ({ owner: r.owner, repo: r.repo, number: r.number }),
+        ),
+      ).toEqual([{ owner: "oxagenai", repo: "oxagen", number: 7 }]);
     });
 
     it("reads a URL carrying www", () => {

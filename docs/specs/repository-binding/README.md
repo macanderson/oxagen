@@ -279,7 +279,7 @@ agent are their own body of work.
 
 ## 6. What #3233 already builds, and what is left
 
-[#3233](https://github.com/macanderson/oxagen/pull/3233) ("a Workspace settings dialog that
+[#3233](https://github.com/oxagenai/oxagen/pull/3233) ("a Workspace settings dialog that
 binds a main repository") is in flight and lands the first half of §2.2's Repositories tab.
 This spec builds on it and must not duplicate it.
 
@@ -300,7 +300,7 @@ binding table directly. And its own post-mortem names the structural cause of fo
 eight P1s: `apps/api/src/routes/v1/github-oauth.ts` bypasses the kernel, so every gate the
 kernel would apply is hand-rolled there. No capability in §3 may take that route; each one
 goes through `invoke()`.
-[#3253](https://github.com/macanderson/oxagen/issues/3253) carries the open invariant that
+[#3253](https://github.com/oxagenai/oxagen/issues/3253) carries the open invariant that
 the bound repository and the credential acting on it are resolved by independent reads —
 `open_oxagen_pr` must not add a third such read.
 

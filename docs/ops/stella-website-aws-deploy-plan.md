@@ -2,18 +2,18 @@
 
 - **Status:** Proposed — no infrastructure applied, no app code changed.
 - **Date:** 2026-08-19
-- **Scope:** move `macanderson/stella`'s `website/` from Vercel to AWS, owned by
+- **Scope:** move `oxagenai/stella`'s `website/` from Vercel to AWS, owned by
   the same OpenTofu state and account that already backs `infra/`.
 - **Two repos are involved.** Infrastructure (`infra/`) and this plan live in
   `oxageninc/oxagen-platform`. The application changes (static export, search
   index, dropping the Vercel SDKs, the CI deploy job) live in
-  `macanderson/stella` under `website/` — a separate repository that this
+  `oxagenai/stella` under `website/` — a separate repository that this
   session can read but not push to. Every task below is tagged **[platform]**
   or **[stella]** so the split is unambiguous.
 
 ## 1. What is actually being deployed
 
-`macanderson/stella/website` — the Stella CLI documentation and marketing site.
+`oxagenai/stella/website` — the Stella CLI documentation and marketing site.
 
 | Fact | Value |
 | --- | --- |
@@ -173,7 +173,7 @@ values, or the funnel numbers reset to zero on cutover.
 2d. **Deploy IAM via GitHub OIDC, not an access key.** The existing KMS modules
     mint IAM users with long-lived secrets exported as Terraform outputs; do not
     extend that pattern to CI. Create an OIDC provider + a role trusted by
-    `repo:macanderson/stella:ref:refs/heads/main`, scoped to `s3:PutObject` on
+    `repo:oxagenai/stella:ref:refs/heads/main`, scoped to `s3:PutObject` on
     the one bucket and `cloudfront:CreateInvalidation` on the one distribution.
 2e. `tofu plan` reviewed by a second person before `tofu apply` — this stack
     shares state with production KMS keys.

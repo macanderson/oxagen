@@ -8,7 +8,7 @@
   verifier gate), ADR-030 (speculative tool execution), ADR-032 (unified chat
   session state), `docs/specs/agent-engine-v2/` (full design),
   `docs/specs/oxagen-rust-cli/` (superseded on the "build a Rust agent" point —
-  that agent now exists as [Stella](https://github.com/macanderson/stella))
+  that agent now exists as [Stella](https://github.com/oxagenai/stella))
 
 ## Context
 
@@ -34,7 +34,7 @@ uses the one without judging, revision, routing or a mutation gate:
    mutating-call barrier** — parallel `write_file` + `bash` can interleave.
 
 Meanwhile Stella — the Rust terminal agent that grew out of this org's own
-`oxagen-rust-cli` spec and now lives at `macanderson/stella` (MIT OR
+`oxagen-rust-cli` spec and now lives at `oxagenai/stella` (MIT OR
 Apache-2.0) — has the engine we want: a pure, ports-everywhere core
 (`stella-protocol` → `stella-core` → `stella-pipeline`) with a
 deterministic-first verification ladder (flip oracle), witness authoring with

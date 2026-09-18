@@ -15,7 +15,7 @@ control, and they are not the same maturity. §10 says Stella "implements this
 contract natively" through `tacho-core`: the executor's `tool.call.requested`
 bus event is the `PreToolUse` equivalent, `policy.evaluated` maps to
 `policy_decision`, and its `ApprovalRequest`/`ApprovalResponse` types carry
-elevation. That is a description of work on the `macanderson/stella` side that
+elevation. That is a description of work on the `oxagenai/stella` side that
 had not landed. `oxagen-trace-drain.md` §9 independently ranks a hook-based
 transport as "v0 … build this first, as a spike to validate §6–§8, then
 discard it. It does not ship as the product," and names `stella serve` (v2,
@@ -141,7 +141,7 @@ author calls itself.
 - `apps/docs/content/docs/cli/wrap-an-agent.mdx` is the operator-facing
   surface for both: the three-harness comparison and the full
   `tacho hook --agent` contract with worked examples.
-- When `tacho-core` ships on `macanderson/stella`, this ADR's Decision 1
+- When `tacho-core` ships on `oxagenai/stella`, this ADR's Decision 1
   and Decision 2 are superseded in place (not re-litigated): the settings
   writer retires, the harness label moves from a hook-answered
   `client_attested` session to a natively-emitted one, and the session-boundary

@@ -331,9 +331,9 @@ export function referencesIssue(prBody, { owner, repo, number }) {
  * a migration, and the migration was invisible until someone opened a PR
  * against an old issue and got a red check for a reason unrelated to their
  * change — a per-issue tax paid at the worst moment, by whoever happened to be
- * closing it. A census of macanderson/stella's open non-epic issues found 36
+ * closing it. A census of oxagenai/stella's open non-epic issues found 36
  * under `Done when`, 11 under `What "done" looks like`, and a further 60 under
- * `Done means` that had already been migrated by hand (macanderson/stella#5193).
+ * `Done means` that had already been migrated by hand (oxagenai/stella#5193).
  *
  * Bare `Done` is deliberately **excluded**. It is short enough to head a
  * section written for another purpose, and the cost of the two directions is

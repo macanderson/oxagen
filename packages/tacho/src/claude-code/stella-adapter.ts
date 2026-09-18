@@ -1,5 +1,5 @@
 /**
- * The Stella hook adapter (verified 2026-09-15 against macanderson/stella:
+ * The Stella hook adapter (verified 2026-09-15 against oxagenai/stella:
  * `crates/stella-core/src/hooks/payload.rs`, `hooks/decision.rs`, `bus.rs`).
  * Stella's hook surface differs from Claude Code's in both directions, and
  * this module is the one place that knows it, so the recorder, the policy

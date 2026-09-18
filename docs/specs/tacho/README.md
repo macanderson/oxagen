@@ -11,7 +11,7 @@ insurer API, and its three decision records `adr-0003..0005`).
 ## The Stella-side seam corpus (copied)
 
 The remaining files in this directory are copied verbatim from
-`macanderson/stella` at commit `0cb26c5e0835aa79e70674d723575871c5ca52fd`
+`oxagenai/stella` at commit `0cb26c5e0835aa79e70674d723575871c5ca52fd`
 (`docs/spec/*`) on 2026-09-07. Stella is the reference implementation of the
 Context Graph Protocol and of the trace vocabulary `spec.md` §6 ingests; these
 documents define the seam Stella already speaks. They are copied, not linked,

@@ -64,7 +64,7 @@ jobs:
     # It gates nothing. This comment used to say required reviewers stood in
     # front of a production apply. They do not: the `production` environment
     # carries one protection rule and it is a branch policy
-    # (`gh api repos/macanderson/oxagen/environments`), so a dispatch applies
+    # (`gh api repos/oxagenai/oxagen/environments`), so a dispatch applies
     # with no second person involved. Naming a reviewer that does not exist is
     # worse than naming none, because it is the reason someone stops looking.
     environment: ${{ github.event.inputs.target }}

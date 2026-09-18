@@ -126,7 +126,7 @@ icons` (needs `rsvg-convert`) and committed.
 
 `src/updater.ts` wraps `@tauri-apps/plugin-updater`: **Check for updates** in
 the masthead fetches
-`https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json`,
+`https://github.com/oxagenai/oxagen/releases/download/desktop-latest/latest.json`,
 and **Install** downloads the bundle for this platform, verifies it against
 the minisign public key in `tauri.conf.json` (`plugins.updater.pubkey`),
 installs it and relaunches; download milestones stream into the Activity

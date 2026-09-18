@@ -22,21 +22,21 @@ class Tacho < Formula
 
   on_macos do
     on_arm do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-aarch64-apple-darwin"
+      url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/tacho-aarch64-apple-darwin"
       sha256 "{{sha256:tacho-aarch64-apple-darwin}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-aarch64-apple-darwin"
+        url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/oxagen-aarch64-apple-darwin"
         sha256 "{{sha256:oxagen-aarch64-apple-darwin}}"
       end
     end
 
     on_intel do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-apple-darwin"
+      url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-apple-darwin"
       sha256 "{{sha256:tacho-x86_64-apple-darwin}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-apple-darwin"
+        url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-apple-darwin"
         sha256 "{{sha256:oxagen-x86_64-apple-darwin}}"
       end
     end
@@ -45,11 +45,11 @@ class Tacho < Formula
   on_linux do
     # The release matrix builds Linux on x86_64 only (ubuntu-22.04).
     on_intel do
-      url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-unknown-linux-gnu"
+      url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/tacho-x86_64-unknown-linux-gnu"
       sha256 "{{sha256:tacho-x86_64-unknown-linux-gnu}}"
 
       resource "oxagen" do
-        url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-unknown-linux-gnu"
+        url "https://github.com/oxagenai/oxagen/releases/download/desktop-v#{version}/oxagen-x86_64-unknown-linux-gnu"
         sha256 "{{sha256:oxagen-x86_64-unknown-linux-gnu}}"
       end
     end

@@ -5,10 +5,10 @@ description: "The oxagen CLI: govern, ground, explain, meter, and rate your agen
 
 `oxagen` is the terminal for fleet management on the Oxagen agent control plane. It answers the questions an operator asks about a fleet: what each agent did, what context it had, what it cost, and what its mandate lets it ask for next.
 
-Oxagen **governs, grounds, explains, meters, and rates** agents. It does not run them. The coding agent is the [`stella`](https://github.com/macanderson/stella) CLI, which reaches Oxagen over MCP and the platform API.
+Oxagen **governs, grounds, explains, meters, and rates** agents. It does not run them. The coding agent is the [`stella`](https://github.com/oxagenai/stella) CLI, which reaches Oxagen over MCP and the platform API.
 
 <Callout type="warn">
-**The coding agent moved.** Earlier versions of this CLI shipped an interactive REPL, one-shot turns, a local `fleet` command, sandboxes, skills, slash commands, `eval`, and local rules and settings. All of them are removed. Every removed entry point is still registered and prints a retirement notice that points at Stella, so a stale script fails loudly instead of doing nothing. See [ADR-043](https://github.com/macanderson/oxagen/blob/main/docs/adr/ADR-043-runtime-excision.md).
+**The coding agent moved.** Earlier versions of this CLI shipped an interactive REPL, one-shot turns, a local `fleet` command, sandboxes, skills, slash commands, `eval`, and local rules and settings. All of them are removed. Every removed entry point is still registered and prints a retirement notice that points at Stella, so a stale script fails loudly instead of doing nothing. See [ADR-043](https://github.com/oxagenai/oxagen/blob/main/docs/adr/ADR-043-runtime-excision.md).
 </Callout>
 
 ## Who this is for

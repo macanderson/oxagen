@@ -6,13 +6,13 @@
 - **Related:** issue #2630 (the epic asking this question), issue #2629
   (OpenRouter refusing a request on `max_tokens`, the one gap found so far),
   `packages/ai/src/models.ts`, `packages/ai/src/output-budget.ts`,
-  `macanderson/stella`'s `crates/stella-model/src/provider_parity.rs`
+  `oxagenai/stella`'s `crates/stella-model/src/provider_parity.rs`
 
 ## Context
 
 Model providers diverge in ways that are invisible until one bites: a
 token-budget refusal, a broken stream, a cache that reports hits differently.
-`macanderson/stella` keeps a matrix for this — one row per provider per
+`oxagenai/stella` keeps a matrix for this — one row per provider per
 axis, each naming a witness test — because a gap there was found four times by a
 benchmark run paying for it rather than by a test.
 

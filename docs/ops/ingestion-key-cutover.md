@@ -66,7 +66,7 @@ direct call the crypto adapter makes, which is why a second key-scoped
 statement lives in `crypto.tf` rather than being folded into the module.
 
 **Applied to production on 2026-09-09**, by
-[run 34411814281](https://github.com/macanderson/oxagen/actions/runs/34411814281)
+[run 34411814281](https://github.com/oxagenai/oxagen/actions/runs/34411814281)
 on `main`:
 
 ```
@@ -92,7 +92,7 @@ account's key.
 
 All five services were redeployed after the apply — `app`, `api`, `mcp`,
 `docs` and the marketing site, between 08:05 and 08:34 UTC on 2026-09-10, in
-[run 34449061380](https://github.com/macanderson/oxagen/actions/runs/34449061380).
+[run 34449061380](https://github.com/oxagenai/oxagen/actions/runs/34449061380).
 The key landed at 22:22 UTC the previous day, so the running containers should
 now hold the new ARN. **Should** is the gap the verification below closes.
 

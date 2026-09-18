@@ -82,7 +82,7 @@
  * that did not run must not read as a check that found nothing.
  */
 
-const REPO = process.env.GITHUB_REPOSITORY ?? "macanderson/oxagen";
+const REPO = process.env.GITHUB_REPOSITORY ?? "oxagenai/oxagen";
 const TOKEN = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 const WINDOW = Number(process.env.MAIN_VERIFIED_WINDOW ?? 10);
 /**

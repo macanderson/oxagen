@@ -3,7 +3,7 @@ name: closing-keyword-inside-narrative-prose
 type: observation
 domain: ci
 severity: P2
-linear: n/a (GitHub macanderson/oxagen#2559, #2865)
+linear: n/a (GitHub oxagenai/oxagen#2559, #2865)
 date: 2026-09-11
 ---
 

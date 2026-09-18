@@ -25,7 +25,7 @@ authoring, evals, playbooks/automations, browser automation, content
 generation (image / video / svg / mermaid / document), and a 47k-line CLI
 that duplicated a terminal coding agent in TypeScript.
 
-Stella (`macanderson/stella`) is the coding agent and the reference
+Stella (`oxagenai/stella`) is the coding agent and the reference
 implementation of CGP and of the trace vocabulary. Every one of the surfaces
 above either duplicates Stella or exists only to run an agent inside Oxagen.
 Carrying them has three compounding costs: the kernel's governance

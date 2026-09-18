@@ -31,7 +31,7 @@ locals {
 }
 
 # --------------------------------------------------------------------------
-# macanderson/stella -> stella.oxagen.sh
+# oxagenai/stella -> stella.oxagen.sh
 #
 # The site runs as a Node process on the shared node rather than on Lambda:
 # CloudFront in front of a Lambda Function URL returns 403 for every request in

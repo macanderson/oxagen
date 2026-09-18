@@ -3,7 +3,7 @@ name: a-comment-claiming-a-fix-is-a-silent-failure
 type: observation
 domain: ci
 severity: P1
-linear: n/a (GitHub macanderson/oxagen#2556, #2559)
+linear: n/a (GitHub oxagenai/oxagen#2556, #2559)
 date: 2026-09-11
 ---
 

@@ -41,7 +41,7 @@
 //
 // ## The declared exception
 //
-// `macanderson/stella` implements the recheck itself, in
+// `oxagenai/stella` implements the recheck itself, in
 // `scripts/dod-recheck.sh`, with its own tests and `make` target, and its
 // AGENTS.md documents it. That is not the drift ADR-039 exists to stop: the
 // VERDICT still comes from one implementation here — stella's file only
@@ -51,13 +51,16 @@
 // It is named here rather than left to be rediscovered, and naming it is what
 // makes a FIFTH shape fail instead of joining it.
 
-const OWNER = "macanderson";
-const CALLERS = [
-  "stella",
-  "arenabench",
-  "cgp-website",
-  "context-graph-protocol",
-];
+const OXAGEN = "oxagenai/oxagen";
+// Keyed by the short name the report uses; the value is where the repo lives.
+// stella moved into the oxagenai organisation with oxagen on 2026-09-17; the
+// other three callers stayed under macanderson.
+const CALLERS = {
+  stella: "oxagenai/stella",
+  arenabench: "macanderson/arenabench",
+  "cgp-website": "macanderson/cgp-website",
+  "context-graph-protocol": "macanderson/context-graph-protocol",
+};
 const CHECK = ".github/workflows/dod-check.yml";
 const RECHECK = ".github/workflows/dod-recheck.yml";
 const CLOSE_GUARD = ".github/workflows/dod-close-guard.yml";
@@ -190,18 +193,16 @@ async function api(path) {
 async function resolveCloseGuardBlob(guardSource) {
   const ref = pinnedRef(guardSource, "dod-close-guard.yml");
   if (!ref) return null;
-  const at = await api(
-    `/repos/${OWNER}/oxagen/contents/${CLOSE_GUARD}?ref=${ref}`,
-  );
+  const at = await api(`/repos/${OXAGEN}/contents/${CLOSE_GUARD}?ref=${ref}`);
   return at?.sha ?? null;
 }
 
 async function main() {
   const observed = {};
-  for (const repo of CALLERS) {
-    const check = await api(`/repos/${OWNER}/${repo}/contents/${CHECK}`);
-    const recheck = await api(`/repos/${OWNER}/${repo}/contents/${RECHECK}`);
-    const guard = await api(`/repos/${OWNER}/${repo}/contents/${CLOSE_GUARD}`);
+  for (const [repo, home] of Object.entries(CALLERS)) {
+    const check = await api(`/repos/${home}/contents/${CHECK}`);
+    const recheck = await api(`/repos/${home}/contents/${RECHECK}`);
+    const guard = await api(`/repos/${home}/contents/${CLOSE_GUARD}`);
     const guardSource = guard
       ? Buffer.from(guard.content, "base64").toString("utf8")
       : "";

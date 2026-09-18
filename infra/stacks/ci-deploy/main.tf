@@ -62,8 +62,8 @@ locals {
   #   gh api repos/<owner>/<name> --jq '"\(.owner.id) \(.id)"'
   deployers = {
     stella = {
-      repository  = "macanderson/stella"
-      owner_id    = 542881
+      repository  = "oxagenai/stella"
+      owner_id    = 267772457
       repo_id     = 1297837446
       description = "Publishes stella.oxagen.sh from website/."
     }
@@ -80,13 +80,15 @@ locals {
       description = "Publishes the CGP schema and specification artifacts."
     }
     # The key is the IAM role name (`gha-deploy-oxagen-platform`), which the
-    # workflow names by ARN, so it stays put even though the repository moved
-    # to `macanderson/oxagen`. The transfer kept `repo_id` and changed only the
-    # owner; a trust policy still naming `oxageninc` refuses every deploy with
+    # workflow names by ARN, so it stays put even though the repository has
+    # moved twice: out of the `oxageninc` organisation to `macanderson/oxagen`,
+    # and on 2026-09-17 into `oxagenai/oxagen`. Each transfer kept
+    # `repo_id` and changed only the owner, so `owner_id` moves with it; a
+    # trust policy still naming the previous owner refuses every deploy with
     # `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
     oxagen-platform = {
-      repository  = "macanderson/oxagen"
-      owner_id    = 542881
+      repository  = "oxagenai/oxagen"
+      owner_id    = 267772457
       repo_id     = 1252628274
       description = "Publishes oxagen.sh and the four services on the node."
     }
@@ -104,7 +106,7 @@ locals {
   # also sees the **immutable-id** form, in which the owner and repository each
   # carry their numeric database id:
   #
-  #   repo:macanderson@542881/stella@1297837446:environment:production
+  #   repo:oxagenai@267772457/stella@1297837446:environment:production
   #
   # That is not a guess. The first real deploy failed with
   # `Not authorized to perform sts:AssumeRoleWithWebIdentity`, and CloudTrail's
