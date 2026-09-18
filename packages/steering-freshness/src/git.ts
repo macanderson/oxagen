@@ -450,7 +450,14 @@ export async function dirtyPaths(
       "status",
       "--porcelain=v1",
       "-z",
-      "--untracked-files=normal",
+      "--untracked-files=all",
+      // Ignored files too. This is the "is it safe to overwrite `.oxagen/`?"
+      // question, and a file excluded through `.gitignore` or
+      // `.git/info/exclude` is still a file the sync's `restore --worktree`
+      // would replace. Without this a locally ignored copy at a path
+      // production just added read as no dirt at all, and auto-sync wrote
+      // over it with `force` false.
+      "--ignored=matching",
       "--",
       ...pathspecs,
     ],

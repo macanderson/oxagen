@@ -39,7 +39,7 @@ function table(
       "",
     [`diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen :(exclude).oxagen/settings.local.json`]:
       "",
-    "status --porcelain=v1 -z --untracked-files=normal -- .oxagen :(exclude).oxagen/settings.local.json":
+    "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
       "",
     [`rev-list --count ${BASE}..${REMOTE} -- .oxagen`]: "0",
     [`rev-parse ${HEAD}:.oxagen`]: "aaaa",
@@ -171,7 +171,7 @@ describe("checkSteeringFreshness", () => {
     const v = await check(
       remoteDiff(
         table({
-          "status --porcelain=v1 -z --untracked-files=normal -- .oxagen :(exclude).oxagen/settings.local.json":
+          "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
             " M .oxagen/rules/ctx.mine.toml\0",
         }),
         REMOTE_ADDED,
@@ -212,7 +212,7 @@ describe("checkSteeringFreshness", () => {
   it("stays current when .oxagen is merely dirty", async () => {
     const v = await check(
       table({
-        "status --porcelain=v1 -z --untracked-files=normal -- .oxagen :(exclude).oxagen/settings.local.json":
+        "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
           "?? .oxagen/rules/ctx.new.toml\0",
       }),
     );
@@ -475,7 +475,7 @@ describe("checkSteeringFreshness, a comparison that cannot run", () => {
   it("is unknown, not a throw, when status fails", async () => {
     const v = await check({
       ...table(),
-      "status --porcelain=v1 -z --untracked-files=normal -- .oxagen :(exclude).oxagen/settings.local.json":
+      "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
         new Error("fatal: not a git repository"),
     });
     expect(v.status).toBe("unknown");

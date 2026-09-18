@@ -419,3 +419,28 @@ describe("the fetch throttle", () => {
     expect(await g(fresh, "status", "--porcelain")).toBe("");
   });
 });
+
+// An ignored file at a path production just added is a file the sync would
+// overwrite. `git status` hides ignored files unless asked, so it read as no
+// dirt at all and auto-sync replaced it with `force` false.
+describe("an ignored local file where production added a record", () => {
+  it("counts as dirt, so the sync refuses", async () => {
+    await mergeContextPr("ctx.ignored.case", "Production's version");
+    const path = ".oxagen/rules/ctx.ignored.case.toml";
+    await write(work, path, "# the developer's own, ignored, copy\n");
+    await write(work, ".git/info/exclude", `${path}\n`);
+    const verdict = await checkSteeringFreshness({
+      cwd: work,
+      policy: policy(),
+    });
+    expect(verdict.dirty).toContain(path);
+    const result = await syncSteering({ cwd: work, verdict, force: false });
+    expect(result.applied).toBe(false);
+    // `dirty`, or `diverged` when the branch also has its own commits, as it
+    // does by this point in the file. Either way the file is not touched.
+    expect(["dirty", "diverged"]).toContain(result.refusal);
+    expect(await readFile(join(work, path), "utf8")).toContain(
+      "the developer's own",
+    );
+  });
+});

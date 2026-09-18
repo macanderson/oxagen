@@ -37,7 +37,7 @@ function stubRepo({ behind }: { behind: boolean }) {
         return state.behind ? "A\0.oxagen/rules/ctx.a.toml\0" : "";
       case `diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen ${EXCL}`:
         return "";
-      case `status --porcelain=v1 -z --untracked-files=normal -- .oxagen ${EXCL}`:
+      case `status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen ${EXCL}`:
         return "";
       case `rev-list --count ${BASE}..${REMOTE} -- .oxagen`:
         return state.behind ? "1" : "0";

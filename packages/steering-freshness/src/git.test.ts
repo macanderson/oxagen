@@ -82,6 +82,14 @@ describe("parsePorcelain", () => {
     expect(parsePorcelain(raw)).toEqual([".oxagen/rules/new.toml"]);
   });
 
+  // `!!` is an ignored file. It is dirt for the question this answers: a
+  // sync's `restore --worktree` would replace it all the same.
+  it("counts an ignored file as a dirty path", () => {
+    expect(parsePorcelain("!! .oxagen/rules/local.toml\0")).toEqual([
+      ".oxagen/rules/local.toml",
+    ]);
+  });
+
   it("is empty for a clean tree", () => {
     expect(parsePorcelain("")).toEqual([]);
   });
