@@ -14,8 +14,13 @@ inverts.
 This file is the register of what has to change at that boundary, and the plan
 for changing it. It exists so the boundary does not arrive before the list does.
 
-**Status:** opened 2026-09-18. The plan for working through it is #3268, one
-issue carrying every item, with the options and the recommendation for each.
+**Status:** opened 2026-09-18. The plan for working through it is #3268, which
+records the options and the recommendation for each item and is the parent of
+one issue per item. #3268 does not itself carry the work: these items are
+independently shippable and their definitions of done have nothing in common,
+so an issue that closed only when all of them were done could never close. The
+one exception is items 4 and 5, which are a single change and so share a single
+issue — the "Order to do them in" section below says why.
 
 ---
 
@@ -189,9 +194,12 @@ would read as a guarantee.
 **What changes:** restoring the ordering is the same work as item 4, and the
 comment says so. Code must not reach production ahead of the schema it reads.
 
-**Done looks like:** `deploy-node` and `deploy-web` cannot publish a commit
-whose migrations have not applied, and the guarantee is tested rather than
-assumed.
+**Done looks like:** `deploy-node` cannot publish a commit whose migrations
+have not applied, and the guarantee is tested rather than assumed. `deploy-web`
+is deliberately excluded: it builds and publishes `apps/web/dist`, the static
+marketing site, and reads no application schema, so ordering it behind a
+migration would take the website down for a database problem it has no part in.
+The ordering follows what reads the schema, not what deploys.
 
 ---
 
@@ -261,7 +269,10 @@ unreachable across two releases with no customer asking for it is a deletion,
 not a de-registration.
 
 **Done looks like:** each row in `DEREGISTERED.md` has been read once against a
-live roadmap and either kept with a reason or deleted.
+live roadmap and either kept with a reason or deleted — and a deletion still
+lands the ADR naming the feature being removed, which is what `check:deregistered`
+enforces today (AGENTS.md). The roadmap review decides *whether* a row is worth
+retaining; it is not itself the authorisation to delete it.
 
 ---
 
