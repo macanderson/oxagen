@@ -132,7 +132,8 @@ beforeEach(() => {
 
 describe("findProjectRoot", () => {
   it("walks up to the directory holding .oxagen", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    // Real path: the walk compares against git's answer, which is one.
+    const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
     await mkdir(join(tmp, "packages", "deep"), { recursive: true });
     expect(findProjectRoot(join(tmp, "packages", "deep"))).toBe(tmp);
@@ -140,7 +141,7 @@ describe("findProjectRoot", () => {
 
   // Outside any repository there is nothing better than where we started.
   it("falls back to the starting directory outside a repository", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
     expect(findProjectRoot(tmp)).toBe(tmp);
   });
 
@@ -148,6 +149,20 @@ describe("findProjectRoot", () => {
   // prompt's directory. Anchoring at that subdirectory made the sync's
   // root-relative `git restore` match nothing, throw, and let the gate allow
   // the prompt with `blockStaleRuns` on.
+  // A nested repository or a submodule is a different repository. Walking past
+  // its root found the OUTER checkout's `.oxagen/`, and the gate then governed
+  // the wrong one.
+  it("does not climb out of a nested repository to an outer .oxagen", async () => {
+    const outer = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
+    await mkdir(join(outer, ".oxagen"), { recursive: true });
+    const inner = join(outer, "vendor", "lib");
+    await mkdir(inner, { recursive: true });
+    await promisify(execFile)("git", ["init", "--quiet"], { cwd: inner });
+    const deep = join(inner, "src");
+    await mkdir(deep, { recursive: true });
+    expect(findProjectRoot(deep)).toBe(inner);
+  });
+
   it("falls back to the repository root, not the subdirectory, inside a repository", async () => {
     const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
     await promisify(execFile)("git", ["init", "--quiet"], { cwd: tmp });

@@ -36,7 +36,7 @@
  * stdout belongs to the harness.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, join, parse as parsePath } from "node:path";
 import {
   checkSteeringFreshness,
@@ -76,19 +76,31 @@ import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
  */
 export function findProjectRoot(start: string): string {
   const { root } = parsePath(start);
-  let dir = start;
+  // The search never crosses the repository root. Inside a nested repository
+  // or a submodule with no `.oxagen/`, an unbounded walk found the OUTER
+  // checkout's, and the gate then read that workspace, compared that
+  // repository, and could block or sync it while the agent was working in the
+  // inner one. The outer checkout is a different repository, full stop.
+  const gitRoot = gitRootOr(start);
+  // git answers with the real path; `start` may reach the same directory
+  // through a symlink (`/tmp` on macOS), and the two must compare equal.
+  const from = realpathOr(start);
+  // Outside a repository there is no root to stop at, and the old behaviour
+  // (walk to the filesystem root, fall back to where we started) stands.
+  const inRepo = gitRoot !== null;
+  let dir = from;
   for (;;) {
     if (existsSync(join(dir, PROJECT_DIR_NAME))) return dir;
-    if (dir === root) return gitRootOr(start);
+    if (inRepo && dir === gitRoot) return gitRoot;
+    if (dir === root) return inRepo ? gitRoot : from;
     const parent = dirname(dir);
-    if (parent === dir) return gitRootOr(start);
+    if (parent === dir) return inRepo ? gitRoot : from;
     dir = parent;
   }
 }
 
 /**
- * The repository root containing `start`, or `start` itself outside a
- * repository.
+ * The repository root containing `start`, or null outside a repository.
  *
  * With no `.oxagen/` anywhere above (a branch cut before the repository's
  * first records), falling back to the starting directory anchored the sync
@@ -97,7 +109,15 @@ export function findProjectRoot(start: string): string {
  * subdirectory matched none of them and threw, and the gate caught that and
  * allowed the prompt: `blockStaleRuns` bypassed, silently.
  */
-function gitRootOr(start: string): string {
+function realpathOr(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function gitRootOr(start: string): string | null {
   try {
     const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: start,
@@ -105,9 +125,9 @@ function gitRootOr(start: string): string {
       stdio: ["ignore", "pipe", "ignore"],
       timeout: 5_000,
     }).trim();
-    return out.length > 0 ? out : start;
+    return out.length > 0 ? out : null;
   } catch {
-    return start;
+    return null;
   }
 }
 

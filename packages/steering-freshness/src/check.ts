@@ -134,8 +134,17 @@ export interface CheckOptions {
   cwd: string;
   policy: SteeringPolicy;
   run?: GitRunner;
-  /** Per git invocation. The whole check runs several. */
+  /** Per LOCAL git invocation. The whole check runs several. */
   timeoutMs?: number;
+  /**
+   * One budget for every call that reaches the network in this check: the
+   * cached-HEAD refresh, the `remote show` fallback, and the fetch. They run
+   * one after another, and each was bounded on its own, so together a slow
+   * remote spent 20 seconds or more, past the hook's own timeout, and the
+   * harness killed the gate and allowed the prompt before the failed-fetch
+   * stamp was written. Each call now gets whatever is left of this.
+   */
+  networkBudgetMs?: number;
   /** Set false in a hook that must never touch the network. */
   allowNetwork?: boolean;
   now?: () => number;
@@ -145,6 +154,12 @@ export interface CheckOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+/**
+ * Half the installed hook's 20 seconds, so the local git work and the optional
+ * platform read still fit after the slowest remote gives up.
+ */
+export const DEFAULT_NETWORK_BUDGET_MS = 8_000;
 
 /**
  * The pathspec the whole feature operates over: the `.oxagen/` directory,
@@ -188,6 +203,7 @@ export async function checkSteeringFreshness(
     policy,
     run,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    networkBudgetMs = DEFAULT_NETWORK_BUDGET_MS,
     allowNetwork = true,
     now = Date.now,
     cacheIo,
@@ -195,6 +211,15 @@ export async function checkSteeringFreshness(
   } = opts;
 
   const ctx: GitContext = { cwd, timeoutMs, run: run ?? execGit };
+  // The deadline every network call in this check shares. `networkCtx()`
+  // hands out a context whose timeout is what is left of it, floored at one
+  // second so a call already past the deadline fails fast instead of hanging
+  // on a zero timeout.
+  const networkDeadline = now() + networkBudgetMs;
+  const networkCtx = (base: GitContext): GitContext => ({
+    ...base,
+    timeoutMs: Math.max(1_000, Math.min(base.timeoutMs, networkDeadline - now())),
+  });
 
   const base: Omit<FreshnessVerdict, "status"> = {
     remote: policy.remote,
@@ -279,7 +304,7 @@ export async function checkSteeringFreshness(
 
   const branch =
     policy.branch ??
-    (await defaultBranch(repoCtx, policy.remote, {
+    (await defaultBranch(networkCtx(repoCtx), policy.remote, {
       // Both of `defaultBranch`'s network calls — the cached-HEAD refresh and
       // the `git remote show` fallback — sit behind the same throttle. Gating
       // only the refresh left the fallback free to run on every prompt.
@@ -326,7 +351,11 @@ export async function checkSteeringFreshness(
 
   if (allowNetwork) {
     if (shouldFetch(stamp, target, policy.fetchIntervalSeconds, now())) {
-      const result = await fetchBranch(repoCtx, policy.remote, branch);
+      const result = await fetchBranch(
+        networkCtx(repoCtx),
+        policy.remote,
+        branch,
+      );
       base.fetch = {
         attempted: true,
         ok: result.ok,
@@ -538,6 +567,25 @@ async function differingFromRemote(
       { cwd: ctx.cwd, timeoutMs: ctx.timeoutMs },
     );
     for (const change of parseNameStatus(raw)) differing.add(change.path);
+  }
+
+  // `git diff <commit>` compares the commit with the index-aware working tree
+  // and never sees an untracked file. So a record production REMOVED, whose
+  // deletion this checkout staged while the file stayed (or came back) on
+  // disk, read as "same as production": the removal was filtered out, the
+  // verdict said `current`, and the agent went on reading the retired record.
+  // For a removal the honest question is whether the path still exists on
+  // disk, which `ls-files --others` answers for exactly these paths.
+  const removed = candidates
+    .filter((c) => c.status === "removed" && !differing.has(c.path))
+    .map((c) => c.path);
+  for (let i = 0; i < removed.length; i += 200) {
+    const batch = removed.slice(i, i + 200);
+    const raw = await ctx.run(
+      ["ls-files", "--others", "-z", "--", ...batch],
+      { cwd: ctx.cwd, timeoutMs: ctx.timeoutMs },
+    );
+    for (const path of raw.split("\0")) if (path.length > 0) differing.add(path);
   }
   return candidates.filter((c) => differing.has(c.path));
 }

@@ -340,9 +340,20 @@ export async function apiPostOrThrow<T>(
    */
   options: { timeoutMs?: number } = {},
 ): Promise<T> {
-  const resolved = resolveApiContext();
-  if (!resolved) throw new ApiError(NOT_LOGGED_IN);
-  const ctx = scope ? { ...resolved, org: scope.org, ws: scope.ws } : resolved;
+  // With an explicit scope only the token is needed. Requiring the global org
+  // and workspace as well made a linked checkout on a machine that had never
+  // run `oxagen workspace use` fail before the scope was even read, and the
+  // freshness caller swallows that failure: the linked workspace's gates were
+  // dropped without a word.
+  const token = getToken();
+  if (!token) throw new ApiError(NOT_LOGGED_IN);
+  const ctx: ApiContext = scope
+    ? { apiUrl: getApiUrl(), token, org: scope.org, ws: scope.ws }
+    : (() => {
+        const resolved = resolveApiContext();
+        if (!resolved) throw new ApiError(NOT_LOGGED_IN);
+        return resolved;
+      })();
   const category: DebugCategory = "api";
   const url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
   void debugLog(category, "api.post.request", {

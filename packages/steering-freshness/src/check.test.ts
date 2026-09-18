@@ -65,6 +65,8 @@ function runner(t: Record<string, string | Error>): GitRunner {
         .map((path) => `M\0${path}\0`)
         .join("");
     }
+    // Untracked files under the given paths. None, unless a test says so.
+    if (key.startsWith("ls-files --others -z --")) return "";
     throw new Error(`unexpected git ${key}`);
   };
 }
@@ -548,5 +550,78 @@ describe("isSafeRefName", () => {
     "tab\tname",
   ])("refuses %j", (name) => {
     expect(isSafeRefName(name)).toBe(false);
+  });
+});
+
+// Every network call used to carry its own full timeout, so a slow remote
+// spent them one after another and blew past the hook's own budget; the
+// harness killed the gate and allowed the prompt.
+describe("checkSteeringFreshness, the network budget", () => {
+  it("gives the fetch only what the branch refresh left", async () => {
+    let clock = 1_000_000;
+    const seen: { cmd: string; timeoutMs: number }[] = [];
+    const base = runner(table());
+    const run: GitRunner = async (args, opts) => {
+      const cmd = args.join(" ");
+      seen.push({ cmd, timeoutMs: opts.timeoutMs });
+      // The refresh takes 3 seconds of a 5-second budget.
+      if (cmd === "remote set-head origin --auto") clock += 3_000;
+      return base(args, opts);
+    };
+    await check(table(), {
+      run,
+      now: () => clock,
+      timeoutMs: 10_000,
+      networkBudgetMs: 5_000,
+    });
+    const refresh = seen.find((c) => c.cmd === "remote set-head origin --auto");
+    const fetch = seen.find((c) => c.cmd.startsWith("fetch "));
+    expect(refresh?.timeoutMs).toBe(5_000);
+    expect(fetch?.timeoutMs).toBe(2_000);
+  });
+
+  it("leaves local git calls on their own timeout", async () => {
+    const seen: { cmd: string; timeoutMs: number }[] = [];
+    const base = runner(table());
+    const run: GitRunner = async (args, opts) => {
+      seen.push({ cmd: args.join(" "), timeoutMs: opts.timeoutMs });
+      return base(args, opts);
+    };
+    await check(table(), { run, timeoutMs: 10_000, networkBudgetMs: 5_000 });
+    const local = seen.find((c) => c.cmd.startsWith("diff "));
+    expect(local?.timeoutMs).toBe(10_000);
+  });
+});
+
+// `git diff <commit>` never sees an untracked file, so a record production
+// removed, whose deletion this checkout staged while the file stayed on disk,
+// read as "same as production" and the verdict said `current` while the agent
+// went on reading it.
+describe("checkSteeringFreshness, a removed record still on disk", () => {
+  const REMOVED = `D\0.oxagen/rules/ctx.retired.toml\0`;
+
+  it("is still behind when the removed path exists untracked", async () => {
+    const v = await check({
+      ...remoteDiff(table(), REMOVED),
+      // The staged deletion makes the diff against production say "same".
+      [`diff --name-status --no-renames -z ${REMOTE} -- .oxagen/rules/ctx.retired.toml`]:
+        "",
+      // But the file is right there, untracked.
+      "ls-files --others -z -- .oxagen/rules/ctx.retired.toml":
+        ".oxagen/rules/ctx.retired.toml\0",
+    });
+    expect(v.status).toBe("behind");
+    expect(v.missing.map((c) => c.path)).toEqual([
+      ".oxagen/rules/ctx.retired.toml",
+    ]);
+  });
+
+  it("is current once the removed path is really gone", async () => {
+    const v = await check({
+      ...remoteDiff(table(), REMOVED),
+      [`diff --name-status --no-renames -z ${REMOTE} -- .oxagen/rules/ctx.retired.toml`]:
+        "",
+    });
+    expect(v.status).toBe("current");
   });
 });
