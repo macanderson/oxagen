@@ -29,6 +29,10 @@
 import { digestBytes, type Sha256Digest } from "../digest";
 import { type PolicyBundle, TACHO_MAX_BODY_BYTES } from "../wire";
 import { type Redaction, redactBytes } from "./redaction";
+import {
+  RETENTION_CLASS_BY_KIND,
+  type RetentionContentClass,
+} from "./retention";
 
 /**
  * The most redactions one event may record (`contentSchema` caps the list at
@@ -61,36 +65,24 @@ export interface FrameBody {
  * copies that list into `retention.classes`, and a class this host spells
  * differently is a body that never ships.
  */
-export type RetentionContentClass =
-  | "model_call"
-  | "tool_call"
-  | "approval_receipt";
+export type { RetentionContentClass } from "./retention";
 
 /**
  * The retention class of an event kind's body. Prompts, assistant messages
  * and subagent results are model traffic; tool requests and results are tool
  * traffic; a permission request is an approval receipt. Anything else has no
  * body to classify.
+ *
+ * This reads `RETENTION_CLASS_BY_KIND` rather than restating it. The host
+ * asks this function whether to write a body and the control plane asks
+ * `retainsBody` whether to accept one, so the two answers have to come from
+ * the same table. When they were separate tables one fell behind, and the
+ * host spent a turn writing bodies the control plane then refused.
  */
 export function contentClassOf(
   kind: string,
 ): RetentionContentClass | undefined {
-  switch (kind) {
-    case "turn_start":
-    case "turn_end":
-    case "oxagen:message":
-    case "subagent_stop":
-    case "llm_call":
-      return "model_call";
-    case "tool_requested":
-    case "tool_call":
-    case "token_denied":
-      return "tool_call";
-    case "approval_request":
-      return "approval_receipt";
-    default:
-      return undefined;
-  }
+  return RETENTION_CLASS_BY_KIND[kind];
 }
 
 /**

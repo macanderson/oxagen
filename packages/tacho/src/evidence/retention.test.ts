@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { contentClassOf } from "./frame-body";
 import {
   RETENTION_CLASS_BY_KIND,
   retainsBody,
@@ -29,12 +30,17 @@ describe("retainsBody", () => {
         exact(["model_call", "tool_call", "change_receipt"]),
       ),
     ).toBe(false);
-    expect(RETENTION_CLASS_BY_KIND["oxagen:worktree_reconciled"]).toBeUndefined();
+    expect(
+      RETENTION_CLASS_BY_KIND["oxagen:worktree_reconciled"],
+    ).toBeUndefined();
   });
 
   it("keeps nothing under digest_only, whatever the classes say", () => {
     expect(
-      retainsBody("turn_start", { mode: "digest_only", classes: ["model_call"] }),
+      retainsBody("turn_start", {
+        mode: "digest_only",
+        classes: ["model_call"],
+      }),
     ).toBe(false);
   });
 
@@ -89,6 +95,53 @@ describe("retainsBody", () => {
         vocabulary.has(contentClass),
         `${kind} maps to ${contentClass}, which no mandate can name`,
       ).toBe(true);
+    }
+  });
+});
+
+describe("one table, not two", () => {
+  it("retains a body for every kind the host classifies and ships", () => {
+    // The host asks `contentClassOf` whether to write a body and the control
+    // plane asks `retainsBody` whether to accept one. These were separate
+    // tables until one fell behind: the host wrote and shipped bodies for
+    // `tool_requested`, `token_denied` and `approval_request`, and the
+    // control plane refused all three as `retention_class_excluded`, so a
+    // workspace paying for that content lost it and recorded a gap instead.
+    const everything = {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call", "approval_receipt"],
+    } as const;
+    for (const kind of [
+      "turn_start",
+      "turn_end",
+      "llm_call",
+      "oxagen:message",
+      "subagent_stop",
+      "tool_requested",
+      "tool_call",
+      "token_denied",
+      "approval_request",
+    ]) {
+      expect(contentClassOf(kind), `${kind} is classified`).toBeDefined();
+      expect(retainsBody(kind, everything), `${kind} is retained`).toBe(true);
+    }
+  });
+
+  it("agrees with the host on the class, not just on retaining something", () => {
+    // A kind retained under the wrong class would still ship under a mandate
+    // that names every class, and fail under a narrower one.
+    for (const kind of Object.keys(RETENTION_CLASS_BY_KIND)) {
+      const cls = contentClassOf(kind);
+      expect(cls).toBeDefined();
+      expect(
+        retainsBody(kind, { mode: "content_exact", classes: [cls as string] }),
+      ).toBe(true);
+      const others = ["model_call", "tool_call", "approval_receipt"].filter(
+        (c) => c !== cls,
+      );
+      expect(
+        retainsBody(kind, { mode: "content_exact", classes: others }),
+      ).toBe(false);
     }
   });
 });

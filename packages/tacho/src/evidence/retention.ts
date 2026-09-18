@@ -17,18 +17,45 @@
  * A kind this table does not name keeps nothing. New frames arrive faster
  * than mandates are rewritten, so an unmapped kind failing open would retain
  * content no operator authorised, which is the failure that matters here.
+ *
+ * This table is the only one. `contentClassOf` in `frame-body.ts`, which the
+ * host asks when it decides whether to write a body at all, reads it too.
+ * They were two tables until one fell behind, and the shape of that failure
+ * is why they are now one: the host classified `tool_requested`,
+ * `token_denied` and `approval_request`, wrote their bodies and shipped
+ * them, and the control plane refused all three as
+ * `retention_class_excluded` because this table named none of them. A
+ * workspace paying for `content_exact` on tool calls lost every tool request
+ * body and recorded a `body_missing` gap for it, and a denied approval lost
+ * the only exact record of what was asked for. Nothing failed loudly,
+ * because refusing a body is an ordinary answer.
  */
 
+/** The content classes a mandate can authorise. */
+export type RetentionContentClass =
+  | "model_call"
+  | "tool_call"
+  | "approval_receipt";
+
 /** The content class each frame kind's body belongs to. */
-export const RETENTION_CLASS_BY_KIND: Readonly<Record<string, string>> = {
+export const RETENTION_CLASS_BY_KIND: Readonly<
+  Record<string, RetentionContentClass>
+> = {
   // What was asked and what came back: the content of the model exchange.
   turn_start: "model_call",
   turn_end: "model_call",
   llm_call: "model_call",
   "oxagen:message": "model_call",
   subagent_stop: "model_call",
-  // What a tool was handed and what it returned.
+  // What a tool was handed and what it returned. `tool_requested` carries
+  // the arguments as the agent proposed them, which is the only record of
+  // what it meant to do when the call is then denied, and `token_denied`
+  // carries the call the gateway refused.
+  tool_requested: "tool_call",
   tool_call: "tool_call",
+  token_denied: "tool_call",
+  // What a person was asked to approve.
+  approval_request: "approval_receipt",
 };
 
 export interface RetentionMandate {
