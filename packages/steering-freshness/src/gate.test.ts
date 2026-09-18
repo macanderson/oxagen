@@ -7,7 +7,8 @@ import type { GitRunner } from "./git";
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
 const BASE = "3333333333333333333333333333333333333333";
-const EXCL = ":(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
+const EXCL =
+  ":(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
 
 /**
  * A runner whose remote-side diff can be emptied, which is how a sync is
@@ -38,6 +39,12 @@ function stubRepo({ behind }: { behind: boolean }) {
       case `diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen ${EXCL}`:
         return "";
       case `status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen ${EXCL}`:
+        return "";
+      // The skip-worktree probe. It throws rather than answering "none" on
+      // a failure, and the check turns that into `unknown`, which the gate
+      // allows — so a stub that does not answer it makes every test below
+      // pass through the gate whatever the checkout's state.
+      case `ls-files -t -z -- .oxagen ${EXCL}`:
         return "";
       case `rev-list --count ${BASE}..${REMOTE} -- .oxagen`:
         return state.behind ? "1" : "0";
@@ -101,6 +108,11 @@ describe("evaluateGate", () => {
 
   it("warns on a stale checkout when blocking is off", async () => {
     const d = await gate(true);
+    // Named first so a stub the check has outgrown fails on the verdict it
+    // produced (`unknown`, with the git command it could not answer in
+    // `notes`) rather than on the action that followed from it.
+    expect(d.verdict.notes).toEqual([]);
+    expect(d.verdict.status).toBe("behind");
     expect(d.action).toBe("warn");
     // A warning still lets the prompt through.
     expect(d.exitCode).toBe(0);
