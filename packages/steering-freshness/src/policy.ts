@@ -106,7 +106,8 @@ export interface SteeringPolicy {
   suspended: boolean;
   suspendedReason: string | null;
   /**
-   * Exclusions named by `.oxagen/settings.local.json` and refused. Reported so
+   * Exclusions named by a personal settings file (`user` or `local`) and
+   * refused. Reported so
    * the developer is told their setting did nothing, rather than discovering
    * it by being blocked over a record they thought they had excluded.
    */
@@ -119,6 +120,17 @@ export interface SteeringPolicy {
  * otherwise.
  */
 export const ALWAYS_EXCLUDED = [".oxagen/settings.local.json"] as const;
+
+/**
+ * The scopes whose exclusions are honoured: the ones somebody other than the
+ * developer can read. `default` carries none of its own; it is listed so the
+ * set reads as the whole rule rather than as an exception list.
+ */
+const REVIEWED_EXCLUDE_SCOPES: ReadonlySet<PolicyScope> = new Set<PolicyScope>([
+  "default",
+  "project",
+  "workspace",
+]);
 
 export const DEFAULT_POLICY: SteeringPolicy = {
   autoSync: false,
@@ -214,7 +226,14 @@ export function resolveSteeringPolicy(
       //
       // `.oxagen/settings.local.json` itself stays excluded for everyone:
       // ALWAYS_EXCLUDED puts it there before any layer is read.
-      if (scope === "local") {
+      //
+      // `user` is refused for the same reason. `~/.config/oxagen/settings.json`
+      // is exactly as personal as `.oxagen/settings.local.json` — it is not in
+      // the repository and nobody reviews it — and refusing only `local` just
+      // moved the off switch one directory up. What remains able to exclude is
+      // what a team can see: `project` (committed, so it goes through review)
+      // and `workspace` (set by the workspace, on the platform).
+      if (!REVIEWED_EXCLUDE_SCOPES.has(scope)) {
         refused.add(path);
         continue;
       }

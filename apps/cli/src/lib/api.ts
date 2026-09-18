@@ -325,9 +325,17 @@ export async function userApiPostOrThrow<T>(
 export async function apiPostOrThrow<T>(
   path: string,
   body: unknown,
+  /**
+   * The org and workspace to address, when the caller knows better than the
+   * globally selected pair — typically a project whose `.oxagen/workspace.json`
+   * names its own. Slugs, as they appear in the URL. Omitted, the global
+   * selection applies as before.
+   */
+  scope?: { org: string; ws: string },
 ): Promise<T> {
-  const ctx = resolveApiContext();
-  if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  const resolved = resolveApiContext();
+  if (!resolved) throw new ApiError(NOT_LOGGED_IN);
+  const ctx = scope ? { ...resolved, org: scope.org, ws: scope.ws } : resolved;
   const category: DebugCategory = "api";
   const url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
   void debugLog(category, "api.post.request", {

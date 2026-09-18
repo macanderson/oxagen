@@ -92,6 +92,21 @@ const verdict = {
   platform: null,
 };
 
+/**
+ * Answer `git remote` and `git remote get-url <name>` from a table of remotes,
+ * the two calls the CLI makes to identify which remote is the bound
+ * repository. Anything else answers empty.
+ */
+function remotes(table: Record<string, string>): void {
+  execGit.mockImplementation(async (args: readonly string[]) => {
+    if (args.length === 1 && args[0] === "remote")
+      return Object.keys(table).join("\n");
+    if (args[0] === "remote" && args[1] === "get-url")
+      return table[args[2] ?? ""] ?? "";
+    return "";
+  });
+}
+
 beforeEach(() => {
   process.exitCode = undefined;
   apiPostOrThrow.mockReset();
@@ -164,7 +179,7 @@ describe("resolveContext", () => {
   it("ignores a platform answer about a different repository", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
-    execGit.mockResolvedValue("git@github.com:acme/this-one.git");
+    remotes({ origin: "git@github.com:acme/this-one.git" });
     apiPostOrThrow.mockResolvedValue({
       steeringVersion: 7,
       headCommit: null,
@@ -181,7 +196,7 @@ describe("resolveContext", () => {
   it("keeps the answer when the repository matches, whatever the URL shape", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
-    execGit.mockResolvedValue("https://github.com/Acme/This-One.git");
+    remotes({ origin: "https://github.com/Acme/This-One.git" });
     apiPostOrThrow.mockResolvedValue({
       steeringVersion: 7,
       headCommit: null,
@@ -215,6 +230,61 @@ describe("resolveContext", () => {
     const ctx = await resolveContext(tmp);
     // `workspace` is the last scope, so it outranks the personal file too.
     expect(ctx.policy.branch).toBe("release");
+  });
+
+  // Two workspaces can bind the same repository, and then a repository-name
+  // check passes for both. The checkout's own link is what tells them apart.
+  it("asks the workspace the checkout is linked to, not the global selection", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({ orgSlug: "acme", workspaceSlug: "payments" }),
+      "utf8",
+    );
+    await resolveContext(tmp);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/freshness",
+      {},
+      { org: "acme", ws: "payments" },
+    );
+  });
+
+  it("falls back to the global selection when the checkout is not linked", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await resolveContext(tmp);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "context/steering/freshness",
+      {},
+      undefined,
+    );
+  });
+
+  // Validating a hard-coded `origin` while a settings file pointed `remote`
+  // at a fork verified one repository and then fetched and synced another.
+  it("pins the check to the remote that points at the bound repository", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.local.json"),
+      JSON.stringify({ steering: { remote: "fork" } }),
+      "utf8",
+    );
+    remotes({
+      fork: "git@github.com:someone/app.git",
+      upstream: "git@github.com:acme/app.git",
+    });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/app",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.policy.remote).toBe("upstream");
+    expect(ctx.platform?.steeringVersion).toBe(7);
   });
 
   it("says so when a personal exclusion was refused", async () => {
@@ -350,6 +420,24 @@ describe("steering gate", () => {
     await steeringGate({}, w.writer, process.cwd());
     expect(w.out()).toBe("");
     expect(w.err()).toBe("");
+    expect(process.exitCode).toBe(0);
+  });
+
+  // A malformed `.oxagen/settings.json` loses its layer — and with it a
+  // project-level `blockStaleRuns` — so the gate must say why, on stderr, and
+  // still fail open. stdout stays clean for the harness's JSON.
+  it("reports a settings file it could not read, and still allows", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(join(tmp, ".oxagen", "settings.json"), "{ nope", "utf8");
+    evaluateGate.mockResolvedValue({
+      ...decision("allow"),
+      verdict: { ...verdict, status: "current", missing: [] },
+    });
+    const w = splitWriter();
+    await steeringGate({ harness: "claude-code" }, w.writer, tmp);
+    expect(w.err()).toContain("not valid JSON");
+    expect(w.out()).not.toContain("not valid JSON");
     expect(process.exitCode).toBe(0);
   });
 

@@ -58,6 +58,7 @@ import {
   type SteeringPolicyFile,
 } from "@oxagen/steering-freshness";
 import { apiPostOrThrow } from "../lib/api.js";
+import { readWorkspaceLink } from "./workspace-link.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -114,15 +115,65 @@ interface PlatformFreshness {
  * every time the API was unreachable. The whole point of this call is that
  * it is optional.
  */
-async function readPlatform(): Promise<PlatformFreshness | null> {
+async function readPlatform(
+  scope: { org: string; ws: string } | undefined,
+): Promise<PlatformFreshness | null> {
   try {
     return await apiPostOrThrow<PlatformFreshness>(
       "context/steering/freshness",
       {},
+      scope,
     );
   } catch {
     return null;
   }
+}
+
+/**
+ * The org and workspace this checkout is linked to, from its own
+ * `.oxagen/workspace.json`, or undefined when it is not linked.
+ *
+ * The link is the checkout's identity. Without it the platform read used the
+ * CLI's GLOBALLY selected workspace — which, for a developer with several
+ * checkouts, is routinely another one — and a repository-name check cannot
+ * catch that when two workspaces bind the same repository: both answers name
+ * it, and the wrong workspace's gates silently replaced the right one's.
+ */
+function checkoutScope(
+  projectRoot: string,
+): { org: string; ws: string } | undefined {
+  const link = readWorkspaceLink(projectRoot);
+  if (!link?.orgSlug || !link.workspaceSlug) return undefined;
+  return { org: link.orgSlug, ws: link.workspaceSlug };
+}
+
+/**
+ * The name of the remote whose URL is `repository`, or null when none is.
+ *
+ * The check has to run against the remote the gate will actually FETCH and
+ * SYNC from. Validating a hard-coded `origin` while a settings file pointed
+ * `remote` at a fork verified one repository and then pulled `.oxagen/` from
+ * another. Instead the bound repository chooses the remote.
+ */
+async function remoteFor(
+  projectRoot: string,
+  repository: string,
+): Promise<string | null> {
+  const { execGit } = await import("@oxagen/steering-freshness");
+  let names: string[];
+  try {
+    names = (await execGit(["remote"], { cwd: projectRoot, timeoutMs: 5_000 }))
+      .split("\n")
+      .map((n) => n.trim())
+      .filter((n) => n.length > 0);
+  } catch {
+    return null;
+  }
+  const wanted = repository.toLowerCase();
+  for (const name of names) {
+    if ((await checkoutRepository(projectRoot, name)) === wanted) return name;
+  }
+  return null;
 }
 
 /**
@@ -217,44 +268,47 @@ export async function resolveContext(
   { offline = false }: { offline?: boolean } = {},
 ): Promise<ResolvedContext> {
   const projectRoot = findProjectRoot(cwd);
-  const fromPlatform = offline ? null : await readPlatform();
+  const scope = checkoutScope(projectRoot);
+  const fromPlatform = offline ? null : await readPlatform(scope);
   const mismatch: string[] = [];
 
   // ── Is the platform answering about THIS checkout? ──────────────────────
   //
-  // The call is scoped by the CLI's globally selected org and workspace, not
-  // by the directory the prompt came from, and a developer with several
-  // checkouts routinely has one selected while working in another. Nothing
-  // reconciled the two: the answer's policy became this checkout's policy and
-  // its publication commit became the thing this checkout was compared
-  // against, so a workspace's blocking gate applied to an unrelated
-  // repository and refused prompts over records that had nothing to do with
-  // it.
+  // Two checks, because each catches what the other cannot.
   //
-  // The platform names the repository it is answering about, so the check is
-  // simply to ask. On a mismatch the whole answer is discarded — policy and
-  // signal together, since neither half is about this repository — and the
-  // developer is told which workspace they have selected. Discarding is safe
-  // in the direction that matters: git remains the primary signal, and the
-  // worst case is the local gates rather than the workspace's.
+  // 1. The request is scoped by the checkout's own `.oxagen/workspace.json`
+  //    when it has one (see `checkoutScope`), so a linked checkout asks its
+  //    own workspace however the CLI is globally configured. That is the
+  //    only thing that separates two workspaces binding the same repository.
   //
-  // A platform with no repository bound (`repository: null`) is not a
+  // 2. The answer names the repository it is about, and that repository must
+  //    be reachable through one of this checkout's remotes — and the check
+  //    then runs against THAT remote. An unlinked checkout still falls back
+  //    to the global selection, and this is what stops a workspace's gates
+  //    being applied to an unrelated repository. Pinning the remote here is
+  //    what stops a `remote` setting pointing the fetch and the sync at a
+  //    fork after the identity was verified against a different remote.
+  //
+  // On a mismatch the whole answer is discarded — policy and signal together,
+  // since neither half is about this repository — and the developer is told.
+  // Discarding is safe in the direction that matters: git remains the primary
+  // signal. A platform with no repository bound (`repository: null`) is not a
   // mismatch: steering is simply off for that workspace, and its policy still
   // legitimately applies.
-  const localRepo = await checkoutRepository(
-    projectRoot,
-    // Before the policy is resolved, so the default remote. A workspace that
-    // renames its remote is the rare case, and it only loses the check.
-    "origin",
-  );
-  const platformRepo = fromPlatform?.repository?.toLowerCase() ?? null;
-  const belongsHere =
-    fromPlatform !== null &&
-    (platformRepo === null || localRepo === null || platformRepo === localRepo);
-  if (fromPlatform !== null && !belongsHere) {
-    mismatch.push(
-      `the selected workspace steers ${String(fromPlatform.repository)} and this checkout is ${String(localRepo)}, so Oxagen's answer was ignored — run \`oxagen workspace use\` to select the workspace this repository belongs to`,
-    );
+  let boundRemote: string | null = null;
+  let belongsHere = fromPlatform !== null;
+  if (fromPlatform?.repository) {
+    boundRemote = await remoteFor(projectRoot, fromPlatform.repository);
+    if (boundRemote === null) {
+      belongsHere = false;
+      mismatch.push(
+        `Oxagen's answer is about ${fromPlatform.repository}, which no remote of this checkout points at, so it was ignored — ${
+          scope
+            ? `check the workspace named in .oxagen/workspace.json`
+            : `run \`oxagen init\` in this repository to link it to its workspace`
+        }`,
+      );
+    }
   }
   const platformFreshness = belongsHere ? fromPlatform : null;
 
@@ -280,6 +334,9 @@ export async function resolveContext(
             ...(platformFreshness.defaultBranch === null
               ? {}
               : { branch: platformFreshness.defaultBranch }),
+            // The remote that actually points at the bound repository, so a
+            // lower scope's `remote` cannot redirect the fetch and the sync.
+            ...(boundRemote === null ? {} : { remote: boundRemote }),
           },
   });
   const policy = resolveSteeringPolicy(
@@ -298,7 +355,7 @@ export async function resolveContext(
       // believe they excluded.
       ...policy.refusedExcludes.map(
         (path) =>
-          `\`${path}\` is excluded in .oxagen/settings.local.json and was ignored: a personal file cannot remove records from the freshness check`,
+          `\`${path}\` is excluded in a personal settings file and was ignored: only the committed .oxagen/settings.json or the workspace can remove records from the freshness check`,
       ),
     ],
   };
@@ -475,6 +532,18 @@ export async function steeringGate(
     const rendered = renderGate(decision, opts.harness ?? "text");
     if (rendered.stdout) writer.write(rendered.stdout.trimEnd());
     if (rendered.stderr) writer.writeErr(rendered.stderr.trimEnd());
+    // The settings diagnostics travel with the gate too, on stderr.
+    //
+    // `resolveContext` drops a layer it cannot read and says so in
+    // `warnings`, and the gate is the path that actually runs before every
+    // prompt — so discarding them here meant a malformed `.oxagen/settings.json`
+    // quietly lost a project-level `blockStaleRuns` and the prompt went ahead
+    // with no word of why. stderr, never stdout: stdout carries the harness's
+    // own JSON, and one stray line there would break the hook outright. The
+    // gate still fails open; it just no longer fails silently.
+    for (const warning of ctx.warnings) {
+      writer.writeErr(`oxagen steering: ${warning}`);
+    }
     process.exitCode = rendered.exitCode;
   } catch {
     // A gate that crashes must not take the prompt with it.

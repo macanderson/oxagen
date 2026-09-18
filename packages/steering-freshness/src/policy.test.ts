@@ -68,18 +68,27 @@ describe("resolveSteeringPolicy", () => {
     expect(policy.fetchIntervalSeconds).toBe(5);
   });
 
-  it("unions the excludes rather than replacing them", () => {
+  it("unions the excludes of the reviewed scopes rather than replacing them", () => {
     const policy = resolveSteeringPolicy([
-      { scope: "user", policy: { exclude: [".oxagen/notes"] } },
       { scope: "project", policy: { exclude: [".oxagen/scratch"] } },
       { scope: "workspace", policy: { exclude: [".oxagen/vendor"] } },
     ]);
     expect(policy.exclude).toEqual([
-      ".oxagen/notes",
       ".oxagen/scratch",
       ".oxagen/settings.local.json",
       ".oxagen/vendor",
     ]);
+  });
+
+  // `~/.config/oxagen/settings.json` is exactly as personal as the local
+  // file. Refusing only `local` moved the off switch one directory up.
+  it("refuses an exclusion written in the user settings file too", () => {
+    const policy = resolveSteeringPolicy([
+      { scope: "workspace", policy: { blockStaleRuns: true } },
+      { scope: "user", policy: { exclude: [".oxagen/rules"] } },
+    ]);
+    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
   });
 
   // `.oxagen/settings.local.json` is personal and gitignored. An exclusion

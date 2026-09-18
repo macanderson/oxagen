@@ -252,11 +252,33 @@ export async function checkSteeringFreshness(
   const branch =
     policy.branch ??
     (await defaultBranch(repoCtx, policy.remote, {
-      allowNetwork,
+      // Both of `defaultBranch`'s network calls — the cached-HEAD refresh and
+      // the `git remote show` fallback — sit behind the same throttle. Gating
+      // only the refresh left the fallback free to run on every prompt.
+      allowNetwork: remoteContactDue,
       refreshCachedHead: remoteContactDue,
     }));
   base.branch = branch;
   if (!branch) {
+    // Stamp the attempt even though it failed.
+    //
+    // Returning before the fetch below meant no stamp was ever written on
+    // this path, so the throttle had nothing to consult and every following
+    // prompt repeated both network calls — up to two git timeouts, against a
+    // 20-second hook budget — for as long as the remote stayed unreachable.
+    // The target records only that the branch was unresolved; `shouldFetch`
+    // matches targets exactly, so it cannot suppress a real fetch later.
+    if (remoteContactDue && stampDir) {
+      await writeFetchStamp(
+        stampDir,
+        {
+          attemptedAt: now(),
+          target: `${policy.remote}/<unresolved>`,
+          ok: false,
+        },
+        cacheIo,
+      );
+    }
     return unknown(
       base,
       `could not work out the default branch of remote "${policy.remote}"`,
