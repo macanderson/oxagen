@@ -67,6 +67,14 @@ interface Cursor {
   offset: number;
   /** The inode last seen at `path`; a different one is a new file. */
   ino?: number;
+  /**
+   * The file's first bytes (base64, at most `HEAD_BYTES`) as the cursor last
+   * read them. Linux hands a freed inode number straight to the next file
+   * created, so a transcript deleted and rewritten at the same path can keep
+   * its inode and outgrow the cursor; a changed head is how that is seen.
+   * A transcript only grows, so its head never changes on its own.
+   */
+  head?: string;
   /** Subagent transcripts already fed, so a replayed SubagentStop feeds none twice. */
   subagents: string[];
   /**
@@ -105,6 +113,9 @@ async function statIfExists(path: string): Promise<FileStat | undefined> {
     throw error;
   }
 }
+
+/** How many leading bytes of a transcript the cursor fingerprints. */
+const HEAD_BYTES = 64;
 
 /** Read `length` bytes at `offset`, or fewer at end of file. */
 async function readAt(
@@ -301,12 +312,22 @@ export class TranscriptTailer {
     // Claude Code creates the file on the first message, after SessionStart
     // has already reported its path; until then there is nothing to read.
     if (st === undefined) return;
-    if (
+    let replaced =
       st.size < cursor.offset ||
-      (cursor.ino !== undefined && cursor.ino !== st.ino)
-    ) {
+      (cursor.ino !== undefined && cursor.ino !== st.ino);
+    if (!replaced && cursor.offset > 0 && cursor.head !== undefined) {
+      const expected = Buffer.from(cursor.head, "base64");
+      try {
+        const actual = await readAt(cursor.path, 0, expected.length);
+        replaced = !actual.equals(expected);
+      } catch {
+        // Unreadable now; the read below reports it.
+      }
+    }
+    if (replaced) {
       // Truncated or replaced: what the cursor pointed into is gone.
       cursor.offset = 0;
+      delete cursor.head;
       this.dirty = true;
     }
     cursor.ino = st.ino;
@@ -352,6 +373,22 @@ export class TranscriptTailer {
       cursor.offset += consumed;
       remaining -= consumed;
       this.dirty = true;
+    }
+    // Fingerprint the head once enough of it has been consumed, so the next
+    // tick can tell a replaced file from the one this cursor read.
+    const headLength = Math.min(HEAD_BYTES, cursor.offset);
+    const known =
+      cursor.head === undefined
+        ? 0
+        : Buffer.from(cursor.head, "base64").length;
+    if (headLength > known) {
+      try {
+        const head = await readAt(cursor.path, 0, headLength);
+        cursor.head = head.toString("base64");
+        this.dirty = true;
+      } catch {
+        // Unreadable now; the next tick fingerprints it.
+      }
     }
   }
 
