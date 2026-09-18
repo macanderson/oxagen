@@ -40,6 +40,7 @@ import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import {
   AUTHOR,
+  MemoryStore,
   REPO,
   REVIEWER,
   ctx,
@@ -906,6 +907,51 @@ describe("merge_context_pr", () => {
     const mergedAt = h.github.pulls[0]!.mergedAt!;
     expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
     expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime() + 1000);
+  });
+
+  // GitHub reports `merged_at` to the second, so two PRs can merge inside
+  // one. Ordering on that alone picked either record, and picking the
+  // earlier merge let a checkout at that commit read as current while it
+  // lacked the later record.
+  it("picks the later of two publications that share a merge instant", async () => {
+    const store = new MemoryStore();
+    const at = new Date("2026-09-18T12:00:00.000Z");
+    const row = (slug: string, commitSha: string) => ({
+      id: `id-${slug}`,
+      publicId: `ctr_${slug}`,
+      createdAt: at,
+      createdById: null,
+      updatedById: null,
+      updatedAt: at,
+      deletedAt: null,
+      deletedById: null,
+      orgId: "org",
+      workspaceId: "ws",
+      slug,
+      activeVersionId: null,
+      version: null,
+      checksum: null,
+      title: slug,
+      status: "active" as const,
+      kind: "rule" as const,
+      force: null,
+      constraintEffect: null,
+      sharingScope: null,
+      statement: slug,
+      commitSha,
+      path: `.oxagen/rules/${slug}.toml`,
+      publishedAt: at,
+      activatedByUserId: null,
+      activatedAt: at,
+    });
+    store.records.push(
+      row("earlier", "commit-earlier") as never,
+      row("later", "commit-later") as never,
+    );
+    expect(await store.latestPublication({ workspaceId: "ws" })).toEqual({
+      commitSha: "commit-later",
+      publishedAt: at,
+    });
   });
 
   it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {

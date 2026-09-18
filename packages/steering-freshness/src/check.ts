@@ -424,19 +424,26 @@ export async function checkSteeringFreshness(
     // below the shallow boundary, and `merge-base` then answers nothing.
     // That read as `unknown`, and an enforced gate allowed the prompt: a
     // shallow feature clone was a way past `blockStaleRuns`. The history is
-    // deepened in growing steps until the ancestor appears, under the same
-    // network budget as every other remote call, and gives up before the
-    // budget does.
-    for (const by of [64, 256, 1024]) {
+    // deepened in growing steps until the ancestor appears, the clone is no
+    // longer shallow, a deepen fails, or the shared network deadline
+    // arrives. A fixed three steps (which this once was) stopped after
+    // 1,344 commits and left a branch with an older ancestor at `unknown`
+    // with the remote still answering; the deadline is the budget, and the
+    // only thing that ends the search early.
+    let total = 0;
+    for (let by = 64; ; by = Math.min(by * 4, 16_384)) {
       if (now() >= networkDeadline) break;
       if (!(await deepen(networkCtx(repoCtx), policy.remote, by))) break;
+      total += by;
       mergeBaseCommit = await mergeBase(repoCtx, head, remoteHead);
       if (mergeBaseCommit) {
         base.notes.push(
-          `deepened this shallow clone by ${by} commits to find the common ancestor with ${target}`,
+          `deepened this shallow clone by ${total} commits to find the common ancestor with ${target}`,
         );
         break;
       }
+      // Fully unshallowed with no ancestor: the branches are unrelated.
+      if (!(await isShallow(repoCtx))) break;
     }
   }
   if (!mergeBaseCommit) {

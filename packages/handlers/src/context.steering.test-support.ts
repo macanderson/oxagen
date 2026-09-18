@@ -261,9 +261,13 @@ export class MemoryStore implements SteeringStore {
   }
   /** The newest record in this workspace that a Context PR actually merged. */
   async latestPublication(scope: { workspaceId: string }) {
+    // Newest publication wins, and among publications that share an instant
+    // (GitHub reports `merged_at` to the second) the one written later. The
+    // array is insert-ordered, which is what `id` gives the real store.
     const published = this.records
+      .map((r, index) => ({ r, index }))
       .filter(
-        (r) =>
+        ({ r }) =>
           r.workspaceId === scope.workspaceId &&
           r.deletedAt === null &&
           r.commitSha !== null &&
@@ -271,8 +275,10 @@ export class MemoryStore implements SteeringStore {
       )
       .sort(
         (a, b) =>
-          (b.publishedAt as Date).getTime() - (a.publishedAt as Date).getTime(),
-      );
+          (b.r.publishedAt as Date).getTime() -
+            (a.r.publishedAt as Date).getTime() || b.index - a.index,
+      )
+      .map(({ r }) => r);
     const newest = published[0];
     if (!newest) return null;
     return {

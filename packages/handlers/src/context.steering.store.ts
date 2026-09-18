@@ -580,7 +580,17 @@ export const postgresSteeringStore: SteeringStore = {
         // every earlier one too, because they are all on one branch.
         // `published_at` is GitHub's merge instant (see `merge_context_pr`),
         // so a publication retried after a later merge still sorts earlier.
-        .orderBy(desc(schema.contextRecords.publishedAt))
+        //
+        // GitHub reports that instant to the second, and two PRs can merge
+        // inside one. Ordering on it alone then picked either row, and
+        // picking the earlier merge let a checkout at that commit read as
+        // current while it lacked the later record. `id` is a UUIDv7, so it
+        // rises with insert order, and among same-second merges the row
+        // inserted later is the one merged later.
+        .orderBy(
+          desc(schema.contextRecords.publishedAt),
+          desc(schema.contextRecords.id),
+        )
         .limit(1),
     );
     if (!row?.commitSha || !row.publishedAt) return null;
