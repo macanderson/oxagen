@@ -35,6 +35,13 @@ import type {
   RoleCatalog,
   WorkspaceList,
 } from "./contracts/org";
+import type {
+  RunCost,
+  RunDetail,
+  RunFrameBody,
+  RunTranscript,
+  TranscriptZoom,
+} from "./contracts/run";
 import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
@@ -108,9 +115,34 @@ export interface DataSource {
       q: { cursor: string | null },
     ): Promise<Read<InvoicePage>>;
   };
-  /** list_runs, one cursor page, newest first; caller: features/fleet/fleet.tsx. */
+  /**
+   * The Fleet runs table and the Run page (WL-35). `list` is one cursor page of
+   * `list_runs`, caller features/fleet/fleet.tsx. `get` is `get_run`: the same
+   * row with one page of frames, caller features/run/run.tsx; `framesAfter` is
+   * the opaque resume point the last page carried. `cost` is `get_run_cost`,
+   * and `transcript` is `get_run_transcript` at one zoom level, each read by
+   * its own tab, so a tab nobody opened makes no read. `frameBody` is
+   * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
+   * the Frames tab has a frame open, caller features/run/run.tsx.
+   */
   runs: {
     list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
+    get(
+      ctx: WsCtx,
+      runId: string,
+      q: { framesAfter: string | null },
+    ): Promise<Read<RunDetail>>;
+    frameBody(
+      ctx: WsCtx,
+      runId: string,
+      seq: string,
+    ): Promise<Read<RunFrameBody>>;
+    cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
+    transcript(
+      ctx: WsCtx,
+      runId: string,
+      zoom: TranscriptZoom,
+    ): Promise<Read<RunTranscript>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

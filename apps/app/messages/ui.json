@@ -34,6 +34,28 @@
       "sealed": "sealed",
       "halted": "halted"
     },
+    "generated": {
+      "label": "generated",
+      "provenance": "Written by {model} on {when}. The frames are the record."
+    },
+    "replayGrade": {
+      "inspect": {
+        "label": "inspect",
+        "help": "You can read what was recorded. No bodies were kept, so nothing can be replayed."
+      },
+      "view": {
+        "label": "view",
+        "help": "You can read what the agent asked, what the model returned, and what each tool was called with and returned."
+      },
+      "fork": {
+        "label": "fork",
+        "help": "You can branch from any frame and run on, with tool results served from the recording."
+      },
+      "retry": {
+        "label": "retry",
+        "help": "You can run the recording again and get the same frames."
+      }
+    },
     "readFailure": {
       "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",

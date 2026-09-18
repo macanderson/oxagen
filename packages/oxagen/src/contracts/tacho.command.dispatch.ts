@@ -110,7 +110,7 @@ export const tachoCommandDispatch = registerCapability({
     "Queue a pause, resume, cancel, steer or message command for one run, an agent's live runs, or every live run in the workspace, with a delivery mode on steer and message.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   mutates: true,
   // A control command is never refused for lack of governed action units:

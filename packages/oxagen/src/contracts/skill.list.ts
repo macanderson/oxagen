@@ -3,10 +3,15 @@
  * when they started, over a window of session start times (#3098).
  *
  * The record is `tacho.sessions.skills_available`, the name list a wrapped
- * harness reports at session start. Oxagen does not run, resolve or author a
- * skill (ADR-043; Mission Control spec §2): this read says which skills the
- * harness had, and nothing more. The row carries names only, so the output
+ * harness reports at session start. This read says which skills the harness
+ * actually had, and nothing more: the row carries names only, so the output
  * carries no version, digest, source, token cost or decision.
+ *
+ * That is a different question from which skills the workspace's config let
+ * the agent find. Oxagen governs that — skill *resolution* (ADR-090) — and
+ * still never runs a skill (ADR-043). Resolution is read through the
+ * `skills.*` capabilities over `.oxagen/skills.toml`; this contract is not
+ * one of them and is not the place to add version, digest or decision.
  *
  * A session whose inventory is null did not report one; it counts toward
  * `notReportedSessions` and never as a session with no skills.

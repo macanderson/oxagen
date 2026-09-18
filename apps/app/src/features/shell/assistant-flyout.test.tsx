@@ -371,20 +371,18 @@ describe("AssistantFlyout", () => {
     );
   });
 
-  // The Run page reads nothing until WL-35 builds it, and `get_run` declares
-  // no `app` layer, so a link here would advertise evidence that does not
-  // exist — and this is the one surface where the link would be the whole
-  // claim, because the run is excluded from every list. The id is the handle
-  // that reaches `get_run` on the API, MCP and CLI surfaces, which are built.
-  it("does not link the run while the Run page reads nothing (negative)", async () => {
+  // The run is excluded from every list, so this line is the one way from
+  // the answer to its evidence. The Run page reads `get_run` now (WL-35),
+  // so the id links there.
+  it("links the run id to its Run page", async () => {
     const { user } = await openFlyout();
     await ask(user, "what is live?");
     const line = await screen.findByTestId("assistant-recorded-as");
-    expect(line).toHaveTextContent("arun_01k9");
-    expect(line.querySelector("a")).toBeNull();
-    expect(
-      screen.getByTestId("assistant-answer").querySelector("a"),
-    ).toBeNull();
+    expect(line).toHaveTextContent("recorded as arun_01k9");
+    expect(line.querySelector("a")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/arun_01k9",
+    );
   });
 
   it("surfaces every parked write rather than dropping the ones it cannot show", async () => {

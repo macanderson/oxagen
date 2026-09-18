@@ -7,7 +7,7 @@
 | **Owner** | Mac Anderson |
 | **Supersedes** | The `oxagen-platform` and `oxagen` codebases as products. Carries forward the designs named in §16. |
 | **Builds on** | Context Graph Protocol `contextgraph/1.0` and the `contextgraph/lifecycle/1.0-draft` profile (repo at `origin/main`, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under `docs/specs/tacho/`, renamed here). |
-| **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.10 and Appendix E. |
+| **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.11 and Appendix E. (A.11 was A.10 before ADR-090 inserted the `skills` schema.) |
 
 ---
 
@@ -31,7 +31,7 @@ This table lists every decision that shapes the rest of the document, in one pla
 | 12 | Oxagen governs the toolbelt. An agent sees only the tools it is granted, and it can search them when the belt is large. The agent holds no credentials at all. Every call passes one pipeline: validate, taint-check, decide (allow, approve, or deny, deterministically), broker a per-call credential, dispatch idempotently, validate output, sign a receipt. A taint-check looks for data marked as untrusted or sensitive. Deterministic means the same input always gives the same decision. Idempotent dispatch means a repeated call has the same effect as a single call. A tool's safety classification describes the tool. The customer's approval rules decide, with auto-approval conditions Oxagen can apply to skip the human. Any consequence the customer marks (money, data destruction, production changes, external communication, access changes) requires a human-granted mandate. The mandate sets limits over the tool's declared measures and keeps a ledger. Kill switches exist at every level. Policy is versioned and simulated against real history before activation. An adversarial suite proves the guarantees per release. | §6.5–6.13 |
 | 13 | Oxagen accounts customer spend per model call by normalized token class, including cache reads and writes. It attributes spend up the chain operator → agent → run → turn → step. It reports proven versus unproven spend with a productive ratio and ranked optimization findings. It reconciles spend to the cent against provider statements. Oxagen bills per run on a plan allowance and never marks up tokens. It reports governed actions and retained storage as secondary meters. **Amendment 2026-09-13 (ADR-055):** Oxagen bills governed action units (GAUs) from a monthly bucket on the subscription, sells more in unit quantities at the customer's contracted rate, and never marks up tokens; see §12.1. | §12 |
 | 14 | Audit fidelity: **full bodies, seven years, write-once at seal time**. Seal time is the moment a record is closed and locked against change. Each organization has its own keys. Redaction happens before write. Erasure uses crypto-shredding: destroying the key so the encrypted data can never be read again. Frame nodes stay in the graph for a hot window. The run ledger stays forever. | §13 |
-| 15 | Mission Control is ten pages: seven in a workspace and three for the organization, down from 70. Everything else is deleted. Appendix F says where each old route went. | §14, App. F |
+| 15 | Mission Control is eleven pages: eight in a workspace and three for the organization, down from 70 (Skills joined with ADR-090). Everything else is deleted. Appendix F says where each old route went. | §14, App. F |
 | 16 | A run is proven only by a **witness** Oxagen wrote. A witness is a test built with one of several deterministic oracles, checkers whose result is fixed for a given input. The witness fails on the PR's target branch and passes on the PR. It runs in a witness runner the worker can never see or reach. The runner reports only pass or fail back to the worker. The flip from fail to pass stamps the run. Stamped runs are the training asset. | §8.5 |
 
 ---
@@ -50,7 +50,7 @@ The wedge is narrow on purpose. A customer wraps the agents they already run (St
 
 Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.
 
-**What this product is not.** It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one **in-app agent**. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).
+**What this product is not.** It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is **skill resolution**: which skills a workspace's `.oxagen/skills.toml` lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is procedure written down — a file, in a repository, with a version and a digest. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call (ADR-090). The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one **in-app agent**. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).
 
 ---
 
@@ -656,7 +656,7 @@ Commands are rows in `control.commands`. They travel on the control channel, eit
 | `sent` | Pushed onto the control channel or injected into an outbound request. Oxagen has done its part. | no |
 | `received` | The wrapper or the proxy took it. The connection point has it. | no |
 | `acknowledged` | The harness confirmed it entered the loop. | no |
-| `applied` | The effect is visible in the record: the `model.request` carrying the steer was made, or the pause took hold. This is the only success status. | **yes** |
+| `applied` | The effect is visible in the record: the `model.request` carrying the steer was made, the pause took hold, or — for an `answer` (ADR-090) — the `control.answer` frame was written and the run left the interjected state and reached its first `model.request`. This is the only success status. | **yes** |
 | `cancelled` | Withdrawn by the operator, or superseded by a later command on the same run, before delivery. | **yes** |
 | `expired` | The expiry passed with no boundary reached. Nobody withdrew it. Time ran out. | **yes** |
 | `failed` | The connection point refused it, or the host was gone. | **yes** |
@@ -671,6 +671,7 @@ Commands are rows in `control.commands`. They travel on the control channel, eit
 | `steer` (`interrupt`) | in-flight response stopped and billed. Steer injected at once | pending call abandoned, denied with reason `interrupted` | degrades to `next_step`. Frame records the degradation | immediate, except behind an irreversible tool call |
 | `steer` (`turn_boundary`) | injected on the first request of the next turn | n/a | injected at the next turn's prompt | at `turn_end` |
 | `cancel` | every request refused. Run token revoked | every call refused | denied. The collector sends SIGTERM (the standard shutdown signal to a process) where it owns the process | soft cancel guaranteed. Process kill best effort and recorded |
+| `answer` (ADR-090) | consumes it: the run is held **before** the first model call, so the proxy is what releases it | not involved | not involved | guarantee: the run resumes only after the answer is recorded. No answer by the 30-minute timeout is not a `failed` command — no command was ever written, and the run falls back to `deny`, so "nobody answered" stays distinguishable from "somebody denied it" |
 | `revoke` (agent or host) | credential dead. All run tokens dead | same | host suspended in bundle. Denies even if the daemon is down | guaranteed while any connection point is in the path. Visible as `hooks_removed` if hooks were stripped |
 | `deny_generation bump` (raises the deny generation, a counter that marks cached policy bundles as stale) | bundle stale. Non-read-only actions re-checked before they run, and fail closed | same | same | guaranteed for non-read-only tools |
 
@@ -718,6 +719,14 @@ A frame is the `oxagen.frame/1.0` envelope, kept as is. Its fields are `event_id
 | `model.response` | model proxy | full response, stop reason, usage by token class, latency, **cost record** (§12) |
 | `context.assembled` | model proxy or Stella | budget, context frame ids by `(provider_id, frame_id, content_digest)`, usage report, composition digest |
 | `record.appended` | exchange provider | record id, lineage id, record hash, kind |
+| `skills.searched` | gateway | query digest, resolved config version, returned ids, withheld count by reason class (never the withheld names), load cost, replay grade |
+| `skills.resolved` | gateway | the config version a run pinned at start, sources on, belt mode, cut-off, load budget |
+| `skills.loaded` | gateway | `id@version`, digest, token cost, the decision that admitted it |
+| `repo.unknown` | gateway | the workspace has no bound repository to resolve a config against; carries the policy in force (`ask`) and what it falls back to at timeout (`deny`) |
+| `repo.bound` | control plane | the binding that answered a `repo.unknown`, and the commit its config was read at |
+| `workspace.created` | control plane | a workspace created while a run was in flight; records that it came up with `skills.enabled` false, per ADR-090 |
+| `control.interject` | control channel | the question put to a person, why the loop stopped (e.g. `unbound_repo`), the timeout and what it falls back to (`deny`) |
+| `control.answer` | control channel | the answer, who gave it, and the frame it unblocked |
 | `control.command` | control channel | command, issuer, status (§7.4), the boundary it was applied at |
 | `control.steer` | control channel | steer text digest, issuer, `requested_mode` and `delivery_mode` (§7.3), `interrupted` (bool) with `interrupted_step {kind, seq}` when true, `degraded_reason` when the requested mode could not be honoured, `delivered_at_seq` (the `model.request` that carried it), status |
 | `proof.observed` | witness runner (§8.5), the isolated service that runs witnesses, or Stella's local ladder when the run came through Stella | witness id, oracle kind (the type of check the witness makes), target and PR refs and shas, normalized command digest, verdict, fail fingerprint (a hash of the failure output), tamper exclusion (a check that the witness was not altered), disclosure grain (how much detail the worker is told), runner attestation (the runner's signed statement of what it ran) |
@@ -1242,7 +1251,7 @@ GDPR (the EU privacy law) erasure works by **crypto-shredding**, which destroys 
 
 ## 14. Mission Control
 
-Mission Control has ten pages: seven at workspace scope and three at organization scope. No other pages ship in v1. Appendix F maps every current route onto these ten. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.
+Mission Control has eleven pages: eight at workspace scope and three at organization scope, Skills having joined them with ADR-090. `apps/app/ARCHITECTURE.md` sets the shipping page set and wins where it and this section differ — it records that this count and Appendix F have drifted in other directions too (Ontology cut, Audit rescoped), and reconciling those is not ADR-090's job. Appendix F maps current routes onto the ten that predate ADR-090 and does **not** cover Skills; it is therefore no longer a complete route map, and a cutover must take the page set from `apps/app/ARCHITECTURE.md` rather than from Appendix F. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.
 
 | Screen | Job | Primary actions |
 |---|---|---|
@@ -1252,6 +1261,7 @@ Mission Control has ten pages: seven at workspace scope and three at organizatio
 | **Agents** | Each agent's identity, run credential, roles, its toolbelt (the tools it may call, with schemas and per-tool decision rules), the mandates it holds, budgets, enrollment status, and tamper incidents | register, enroll, revoke, grant, set budget, request mandate |
 | **Tools** | The registry (servers, tools, versions, schemas, safety classification), approval rules and auto-approval conditions, connections and their owners, credential grants, the mandates ledger, policy versions with their tests and simulation, kill switches, and the last result from the assurance suite | import server, approve observed schema, add connection, grant mandate, edit and simulate policy, flip a switch |
 | **Ontology** | The workspace's model of its own business, and the page the product is known for. Tabs in order: **Model** (the live map: every class with its entity count, freshness, sources, and relations drawn, plus the consequence on hover: most cited by agents, rules that reference it, proven runs per class, drift found), **Graph** (explore instances, typed expansion, ask in plain English and see the Cypher graph query and the citations behind the answer), **Sources** (connectors, sync health, entity provenance), **Repositories** (main repo and linked repos, production branch, last indexed commit, event health, issue import, code graph, data-layer drift), **Versions** (the git history of `.oxagen/ontology/`, open proposals as pull requests with diffs, an `as_of` picker). The page also lists embedding indexes with their recall and citation rate | ask the graph, open an ontology proposal, link repo, set production branch, sync now, add source, resolve entity, upgrade an embedding index |
+| **Skills** | Which skills the workspace's `.oxagen/skills.toml` lets an agent find, which it may load, what that cost, and what was held back and why. Tabs: **Catalog**, **Search** (the `search_skills` console), **In the loop** (the interjection seat), **Reflection** (research-only, quarantined) and **Versions** (the config's git history, each version a pull request). Oxagen resolves; the harness runs. (ADR-090) | turn on, edit the config, approve a digest, add a skill — each a pull request |
 | **Steering** | Published records, proposals, open Context PRs, effect metrics, and retirement candidates | open Context PR, review, retire |
 | **Spend** | Findings ranked by the money at stake. Cost by operator, agent, model, provider key, and task. Proven spend versus unproven spend, and the productive ratio. Cache hit rate. Reconciliation status and variance. Budgets | act on a finding, set budget, open exception, export statement |
 | *(org)* **Organization** | People, roles, invitations, SSO (single sign-on), workspaces, model funding and routes, the data plane, and API keys | invite, change role, create workspace, set funding, set route |
@@ -1359,7 +1369,7 @@ The wedge ends when Customer 1 is in production, not on a date. M6 produces the 
 ---
 ## 19. Demo Wow! Scenarios
 
-Status: `complete` through W12 (2026-09-12, coverage audit, prompt W12). W13 is listed below because it is mocked and was previously missing from a table marked complete; its release status is set by `apps/app/ARCHITECTURE.md`, which wins over this document where the two differ, and which places W13 out of rev1.
+Status: `complete` through W12 (2026-09-12, coverage audit, prompt W12). W13 was adopted on 2026-09-18 by ADR-090, which puts skills resolution in scope; its page coverage is listed below with the rest.
 
 Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in `2026-09-11-oxagen-demo-mockup-prompts.md`, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.
 
@@ -1377,7 +1387,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 | W10 | The CIO's console: who can do what, where data lives, what happened, what can be proven, behind the firewall | Organization, Audit | [The CIO's console](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23) | mocked |
 | W11 | Configuration is a conversation: the assistant acts through the same governed actions, with receipts | Assistant panel (all pages), Account dialog, notifications, command menu | [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b) | mocked |
 | W12 | Coverage audit: every page and state mocked | all | [W12 audit](https://claude.ai/code/artifact/45c5e3f9-82f0-404e-ad69-b3279d84c649), [The Ten Pages](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) | mocked |
-| W13 | In the loop: the skills scenario — skills off by default, resolution as config, and a run interjected before the first model call | Skills (mocked tabs), skills-off gate, Run (interjected), Fleet (interjection banner) | [W13 scenario](https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md) | mocked; **out of rev1** — `apps/app/ARCHITECTURE.md` (2026-09-15) ships only the observed-inventory Skills read and keeps resolution, `search_skills`, interjection and reflection out |
+| W13 | In the loop: the skills scenario — skills off by default, resolution as config not model, and a run interjected before the first model call | Skills (Catalog, Search, In the loop, Reflection, Versions), skills-off gate, Run (interjected), Fleet (interjection banner) | [W13 scenario](https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md) | mocked; **adopted** — ADR-090 puts skills resolution in scope and the #3098 lane builds it |
 
 **Page coverage.** Every row must carry at least one link before the section is complete.
 
@@ -1391,6 +1401,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 | Agents (list, detail, mandate detail) | `/{org}/{ws}/agents`, `/{agent}` | loaded, empty, error, denied, phone | [W6 mockup](https://claude.ai/code/artifact/2bbadccb-92ff-4ade-8f6d-704d9c66dafe), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W9](https://claude.ai/code/artifact/c16a2951-1a79-4c70-b202-ec405c0563dc), [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Tools (registry, connections, mandates, policy, kill switches, assurance) | `/{org}/{ws}/tools` | loaded, empty, error, denied, phone | [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W9](https://claude.ai/code/artifact/c16a2951-1a79-4c70-b202-ec405c0563dc), [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Ontology (Model, Graph, Sources, Repositories, Versions) | `/{org}/{ws}/ontology` | loaded, empty, loading, error, denied, phone | [W7 mockup](https://claude.ai/code/artifact/8692f683-0eab-4a1f-ad66-20f4a1a2db5b), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
+| Skills (Catalog, Search, In the loop, Reflection, Versions) | `/{org}/{ws}/skills[/{tab}]` | loaded, empty, loading, error, denied, off (the gate), phone | [W13 scenario](https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md) |
 | Steering (records, proposals, Context PR, retirement) | `/{org}/{ws}/steering` | loaded, empty, error, denied, phone | [W6 mockup](https://claude.ai/code/artifact/2bbadccb-92ff-4ade-8f6d-704d9c66dafe), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Spend (findings, operator, agent, waterfall, reconciliation, budgets) | `/{org}/{ws}/spend` | loaded, empty, loading, error, denied, phone | [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W8 mockup](https://claude.ai/code/artifact/6a15975f-6719-4b4c-aae5-4b942dea0bb1), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Organization | `/{org}` | loaded, denied, phone | [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W10](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
@@ -1403,7 +1414,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 
 ## Appendix A. Postgres tables (target)
 
-Thirty-five tables in nine schemas in the wedge, thirty-seven for the full product (`cost.fx_rates` and `control.event_subscriptions` arrive in Series A), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.
+Thirty-eight tables in ten schemas in the wedge, forty for the full product (`cost.fx_rates` and `control.event_subscriptions` arrive in Series A; the `skills` schema arrives with ADR-090), down from about 110 tables in 20 schemas today. This is the definitive list. A table not here does not exist.
 
 ### A.0 Conventions that apply to every table
 
@@ -1749,7 +1760,7 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 |---|---|---|
 | `target_kind` | text | `run`, `agent`, `host`, `tool_version`, `tool_server`, `connection`, `workspace`, `org`, `class` |
 | `target_id` | text | |
-| `command` | text | `pause`, `resume`, `steer`, `message`, `cancel`, `revoke`, `kill_switch_on`, `kill_switch_off`, `refresh_bundle` |
+| `command` | text | `pause`, `resume`, `steer`, `message`, `cancel`, `revoke`, `kill_switch_on`, `kill_switch_off`, `refresh_bundle`, `answer` (ADR-090: the reply to a `control.interject`; its payload carries the answer text, the frame it unblocks, and the responder — a timeout writes none and the run falls back to `deny`) |
 | `payload` | jsonb | steer or message text, delivery mode, addressing |
 | `issued_by` | uuid → `iam.principals` | |
 | `issued_at`, `expires_at` | timestamptz | |
@@ -1978,7 +1989,68 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 | `placed_by`, `placed_at` | uuid, timestamptz | |
 | `released_by`, `released_at` | uuid, timestamptz | |
 
-### A.10 Where today's tables went
+### A.10 `skills` (3 tables, ADR-090)
+
+Skill **resolution** is the governed act; the config itself is a file in the customer's repository, not a row, and its
+version history is git history. These tables record what Oxagen decided against a given version of that file.
+
+**`skills.config_versions`** (class `workspace`; append-only; one row per merged change to `.oxagen/skills.toml`)
+
+| Column | Type | Notes |
+|---|---|---|
+| `version_label` | text | the label the product shows (`skl_v7`); unique per workspace |
+| `repository_id` | uuid → `wrk.repositories` | the bound repository the file was read through (#3241) |
+| `commit_sha` | text | the production-branch commit this version was read at; the provenance, in place of a column |
+| `pull_request_number` | int | the change that published it; nullable only for the initial import |
+| `enabled` | boolean | `.oxagen/skills.toml` absent or `enabled = false` means off; a workspace is created false |
+| `config_digest` | text | digest of the file as read back at the merged commit |
+| `sources`, `search`, `unbound_repo`, `reflection` | jsonb | the parsed sections, stored as read |
+| `published_at` | timestamptz | the merge, not the authoring |
+
+**`skills.resolutions`** (class `workspace`; append-only; one row per resolution a run performed)
+
+| Column | Type | Notes |
+|---|---|---|
+| `config_version_id` | uuid → `skills.config_versions` | pinned at run start; a replay resolves this version, never today's |
+| `run_id`, `attempt_id` | text | graph ids |
+| `skill_id`, `skill_version` | text | the `id@version` that was considered |
+| `skill_digest` | text | the digest at resolution time |
+| `source` | text | which configured source held it |
+| `decision` | text | `allowed`, `needs_approval`, `denied` |
+| `withheld_reason` | text | nullable; `out_of_scope`, `unapproved_digest`. Withholding happens **before ranking** |
+| `loaded` | boolean | whether the agent actually loaded it, as against being allowed to |
+| `token_cost` | int | the load cost charged to the search budget |
+| `resolved_at` | timestamptz | |
+
+**`skills.reflections`** (class `workspace`; **quarantined**; retention-bounded; read only under an org `research.read` grant)
+
+The quarantine is not §5.2, which supplies tenant isolation only and would let any ordinary workspace read reach
+these rows. It is four mechanisms the #3098 lane must build, named here because a fence nobody implements is not a
+fence: (1) a dedicated read capability — an ordinary workspace read must not return these rows; (2) an
+**org-scoped `research.read` IAM permission**, which does **not** exist in the catalogue today and is created by
+that lane; (3) an RLS predicate on this table, which needs a signal Postgres can actually see: §5.2 exposes only
+`app.current_org_id` and `app.current_workspace_id`, and an IAM permission is application state the database
+cannot read. So `withTenantDb` sets a **third transaction-local setting** — `app.research_read`, written only
+after the IAM check has passed and never from request input — and the predicate on this table requires it true **in addition to**
+the ordinary `org_id` and `workspace_id` checks, never in place of them — a research flag that replaced tenant
+isolation would let a researcher in one organization read another's reflections. Without that bridge the fence either denies
+every read or silently falls back to tenant scope and exposes the rows; and (4) a job that **deletes** rows past `retain_until`, since
+an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
+does not price the work, and is not evidence about a person.
+
+| Column | Type | Notes |
+|---|---|---|
+| `run_id`, `attempt_id` | text | the sealed run it is about; captured **after** the seal and outside the sealed chain |
+| `captured_after_seal` | boolean | always true; a reflection is a **post-seal record, not a frame** (§8.2 requires a dense `seq` and hash chain, §8.3 seals a Merkle root over every frame, so a frame appended after the seal would invalidate the attestation). The player draws it dashed because it is not a chain member, and a fork never replays it |
+| `rubric` | jsonb | axes, the agent's self-grade, and the record's value for each |
+| `contradictions` | jsonb | each citing the frame that disagrees with the self-grade |
+| `use` | text | `research` is the only accepted value; any other value is refused at write |
+| `consent_scope` | text | `organization` |
+| `billed_as` | text | `overhead`; never productive spend |
+| `retain_until` | timestamptz | set at capture; the row is deleted, not archived |
+| `captured_at` | timestamptz | |
+
+### A.11 Where today's tables went
 
 | Today | In the rebuild |
 |---|---|
@@ -1992,7 +2064,7 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 | `chat.*` conversations | runs of the in-app agent |
 | `mcp.*`, `plugin.*`, `content.*`, `cms.*`, `environments.*`, `eval.*`, `workflow.*`, `ai.*`, `ratelimit.*`, `engram.*`, `codegraph.*` | gone |
 
-The nine schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `billing`, `audit`. Thirty-five tables in the wedge, thirty-seven in full. Every tenant table uses one of the two policy classes in §5.2.
+The ten schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `billing`, `audit`, `skills`. Thirty-eight tables in the wedge, forty in full. Every tenant table uses one of the two policy classes in §5.2.
 
 ## Appendix B. Neo4j model (per organization database)
 
@@ -2154,7 +2226,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **109 agent tools** (91 of them in the wedge; twelve are the Skills tools — `list_skills` from 2026-09-15 and the eleven ADR-090 adds, `search_skills` and `preview_skill_search` plus nine controls), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2188,7 +2260,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `set_agent_role` | assign_agent_role, revoke_agent_role | |
 | `set_role_grants` | (new; grants were seeded) | role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page |
 
-**Wrapping and control (15)**
+**Wrapping and control (26)**
 
 | Agent tool | Absorbs | Does |
 |---|---|---|
@@ -2198,15 +2270,29 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `get_policy_bundle` | get_tacho_bundle, get_registry_config | signed bundle for a host or agent |
 | `ingest_frames` | ingest_tacho_events, record_execution, ingest_stella_operational_telemetry, debug_execution | the one evidence ingress; headless |
 | `fetch_commands` | fetch_tacho_commands | control channel; headless |
-| `dispatch_command` | dispatch_tacho_command | pause, resume, steer, cancel, revoke |
+| `dispatch_command` | dispatch_tacho_command | pause, resume, steer, cancel, revoke, answer (the reply to a `control.interject`, ADR-090) |
 | `list_runs` | list_executions, list_tacho_sessions | by operator, agent, task, tier, verdict |
 | `list_skills` | (new; `tacho.sessions.skills_available` had no reader) | read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098) |
+| `search_skills` | (new; ADR-090) | **metered** (no `noBillingGate`) and authorized by the belt rather than a human role — it is an agent-facing resolution the run pays for. The one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds **before ranking**, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move |
+| `get_skill_config` | (new; ADR-090) | read: `.oxagen/skills.toml` as resolved at a config version — sources, belt mode, cut-off, load budget, `unbound_repo` policy — with its version history and the pull request that published each |
+| `list_skill_resolutions` | (new; ADR-090) | read: the Catalog tab. Each skill considered at a config version with `id@version`, digest, source, load cost, decision, and for a held skill its reason class. Withheld names are visible to a person here and never to the agent |
+| `list_skill_interjections` | (new; ADR-090) | read: the In the loop tab — interjections over a window, the median answer time, what an unanswered one falls back to, and the one currently open |
+| `read_skill_reflection` | (new; ADR-090) | read: a quarantined reflection. Requires the org-scoped `research.read` grant, is refused without it, and is the only path to these rows — an ordinary workspace read returns none |
+| `set_skills_enabled` | (new; ADR-090) | write: turn resolution on or off for a workspace by opening a pull request against `.oxagen/skills.toml`. Adds `search_skills` to every belt and nothing else: no tool granted, no tier change, no budget move |
+| `update_skill_config` | (new; ADR-090) | write: change sources, cut-off or budget, as a pull request. The switch is the outcome; the pull request is the control, and its author is on the receipt |
+| `approve_skill_digest` | (new; ADR-090) | write: approve a changed digest so the skill stops being withheld as `unapproved_digest`. Recomputed at merge against the file read back at the head |
+| `propose_skill` | (new; ADR-090) | write: add a skill as a pull request — registry pin by digest, a drafted `SKILL.md`, or an uploaded bundle. Gated on frontmatter, semver, digest, grants, secret scan and the search budget |
+| `set_reflection_capture` | (new; ADR-090) | write: turn reflection capture on or off. Capture is research-only and never becomes evidence, so this grants no read — `read_skill_reflection` still needs `research.read` |
+| `preview_skill_search` | (new; ADR-090) | read: the Search tab's console. Runs the **same** resolution as `search_skills` against the same pinned config version, and returns a different projection: a person sees each withheld skill by name with its reason, where the agent is told only the count and the reason class. Human-authorized (org Owner/Admin/Member or workspace Owner/Member) and `noBillingGate: true`, because inspecting your own configuration is not an agent's governed action. It resolves and returns; it never loads a skill into a run |
+
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |
 | `resolve_approval` | resolve_approval, resolve_mcp_consent | approve or deny, mints the token |
 | `send_message` | (new) | message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6) |
 | `list_messages` | (new) | sent and received, with delivery outcome |
+
+**Roles and billing for the eleven Skills tools (ADR-090).** `checkIAM` allows every capability for a non-enterprise org (§5), so each asserts its own role in its handler rather than relying on the kernel. The five writes are org Owner or Admin; `read_skill_reflection` additionally requires the org-scoped `research.read` grant; the five console reads (`get_skill_config`, `list_skill_resolutions`, `list_skill_interjections`, `preview_skill_search`, `list_skills`) are org Owner, Admin or Member, or workspace Owner or Member. All ten of those declare `noBillingGate: true`, because an organization out of governed action units must still be able to read its configuration and **turn skills off** — a control you cannot switch off when the bill lapses is not a control. `search_skills` is the one exception: it is the agent's tool, authorized by the belt rather than a human role, and **metered**, because it is resolution a run consumes.
 
 **Toolbelt (17)**
 
@@ -2314,11 +2400,11 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 
 Two notes on that list. `read_file` has no registered contract on `main` — the only match is a test fixture in `packages/oxagen/src/contracts/tool.declaration.publish.test.ts` — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (`set_plugin_secret`, `revoke_plugin_credential`, `reauth_plugin_credential`) are absorbed into `set_connection` and `delete_connection` rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.
 
-Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = **96** for the full product. The wedge ships 78: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
+Count: **109** rows for the full product, counted from the table above, of which twelve are the Skills tools: `list_skills` (2026-09-15) and the eleven ADR-090 adds — `search_skills`, `preview_skill_search` and the nine controls. The wedge ships **91**: the 109 minus the eighteen marked new in the toolbelt, compliance, wrapping and knowledge families that land from M2 onward and in Series A. The per-family headings were recomputed from the rows rather than adjusted, after the Skills additions left Wrapping and control reading 15 against 26 actual rows.
 
 ## Appendix F. The pages that survive
 
-"Survive" here means *stays routed*. The ten pages below are what a user can reach in rev1. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its `page.tsx`, its components and its `actions.ts` stay in the tree. `DEREGISTERED.md` §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.
+"Survive" here means *stays routed*. The ten pages below predate ADR-090, which added Skills at `/{org}/{ws}/skills`; that page is reachable in rev1 and is **not** in this table. `apps/app/ARCHITECTURE.md` carries the current set. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its `page.tsx`, its components and its `actions.ts` stay in the tree. `DEREGISTERED.md` §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.
 
 The current web app has 70 page files. Ten remain: seven at workspace scope, three at organization scope. Sign-in flows (login, signup, password reset, two-factor, verify, accept an invite, create the first organization) are not screens and are not counted; there are seven of them and they stay as they are. Onboarding is not a page: it is the in-app agent's first run inside the workspace.
 

@@ -53,7 +53,13 @@ force = "should"
 
 - The file stem is the lineage id; the path is `.oxagen/rules/<lineage>.toml`;
   the branch is `context/<lineage>`.
-- `set_id` is the repository's full name with `/` as `.`.
+- `set_id` is the repository's full name with `/` as `.`, taken from the
+  **binding** (`repository_bindings.provider_full_name`) and never from live
+  GitHub. A repository rename therefore does not re-stamp later records: the
+  name moves only when an owner re-approves it through `bind_main_repository`,
+  which writes a successor binding — the same rule the production branch
+  follows. A legacy wizard connection has no binding, so there the live name is
+  the only one available.
 - `origin` is `user` for a proposal a person raised and `inferred` for one an
   agent raised over an API key (the proposal has no `created_by_id`),
   whoever opens the PR.
