@@ -240,6 +240,12 @@ export interface TurnLedgerModelCall {
   model: string;
   outcome: "completed" | "failed" | "cancelled";
   usage?: CompletionUsage;
+  /**
+   * What the provider answered, for the frame's body (MC spec §8.2). Absent
+   * on the paths where nothing was answered — a budget refusal, a transport
+   * failure, a cancellation — where the receipt is the whole record.
+   */
+  response?: unknown;
 }
 
 /**
@@ -255,6 +261,13 @@ export interface TurnLedgerModelIntent {
   provider: string;
   /** The CONFIGURED model id; the provider has not resolved one yet. */
   model: string;
+  /**
+   * The completion request about to leave the process — its messages, its
+   * tools and its parameters — for the frame's body (MC spec §8.2). The
+   * turn's prompt is inside it, so this is the frame a `view` reader opens
+   * to see what the agent was asked.
+   */
+  request?: unknown;
 }
 
 /**
@@ -676,7 +689,7 @@ export async function runGovernedTurn(
         // and the pair read together is what shows a gateway substitution.
         if (ledger) {
           await recorded(() =>
-            ledger.modelCallStarted({ ...receipt, model: modelId }),
+            ledger.modelCallStarted({ ...receipt, model: modelId, request }),
           );
         }
         let result: CompletionResult;
@@ -701,6 +714,7 @@ export async function runGovernedTurn(
               model: result.model,
               outcome: "completed",
               usage: result.usage,
+              response: result,
             }),
           );
         }

@@ -27,7 +27,10 @@ import {
   digestBytes,
   redactBytes,
 } from "@oxagen/tacho";
-import { isContentClassRetained } from "./event-payload-registry";
+import {
+  isContentClassRetained,
+  stepKindOfEventType,
+} from "./event-payload-registry";
 import type { AttemptTerminalStatus } from "./run-store";
 
 /** The bytes a producer hands the ledger with a frame. */
@@ -172,30 +175,21 @@ export interface SealedFrameRow {
   fidelity: string;
 }
 
-const TOOL_CALL_EVENT = "tool.call_completed";
-const MODEL_CALL_EVENT = "model.call_completed";
-
 /**
- * A completed tool call, whichever half of the vocabulary recorded it: the
- * receipt a submitting engine appends, and the receipt the in-app engine
- * appends for a call it made itself (`tool.engine_call_completed`). Counting
- * only the first left every in-app run's tool calls out of the seal rollup and
- * out of the `tool_bodies` gap, so a run that retained no tool result body at
- * all sealed without the gap that names it.
- *
- * The `*_started` write-ahead intentions are deliberately absent: a started
- * event with no matching completion is a dangling intention (see the registry),
- * and counting it would report a call the record does not claim happened.
+ * Both spellings of each call event, from the registry: the ledger's own
+ * `model.call_completed` / `tool.call_completed` and the in-app assistant's
+ * `model.engine_call_completed` / `tool.engine_call_completed`. The rollup
+ * and the gaps below counted only the first pair, so every run the assistant
+ * recorded sealed with `modelCalls: 0`, `toolCalls: 0` and no `tool_bodies`
+ * gap however many calls it made.
  */
-const TOOL_CALL_EVENTS: ReadonlySet<string> = new Set([
-  TOOL_CALL_EVENT,
-  "tool.engine_call_completed",
-]);
-/** The same, for the model side of the turn. */
-const MODEL_CALL_EVENTS: ReadonlySet<string> = new Set([
-  MODEL_CALL_EVENT,
-  "model.engine_call_completed",
-]);
+function isToolCallEvent(eventType: string): boolean {
+  return stepKindOfEventType(eventType) === "tool_call";
+}
+
+function isModelCallEvent(eventType: string): boolean {
+  return stepKindOfEventType(eventType) === "model_call";
+}
 
 /**
  * The seal's rollup (spec §13.3): what the run keeps of its counts once
@@ -216,8 +210,8 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
   let opaque = false;
   const turns = new Set<string>();
   for (const row of rows) {
-    if (TOOL_CALL_EVENTS.has(row.event_type)) toolCalls += 1;
-    if (!MODEL_CALL_EVENTS.has(row.event_type)) continue;
+    if (isToolCallEvent(row.event_type)) toolCalls += 1;
+    if (!isModelCallEvent(row.event_type)) continue;
     modelCalls += 1;
     const payload = row.payload_inline;
     const turn =
@@ -267,7 +261,7 @@ export function deriveCompletenessGaps(input: {
         input.policy.mode === "digest_only" ? "digest_only" : "body_missing",
       );
     }
-    if (TOOL_CALL_EVENTS.has(row.event_type)) {
+    if (isToolCallEvent(row.event_type)) {
       toolCalls += 1;
       if (row.body_ref !== null) toolBodies += 1;
     }
@@ -302,7 +296,8 @@ export function ledgerEnforcementTier(
 ): GradeEnforcementTier {
   let gatewayObserved = false;
   for (const row of rows) {
-    if (row.event_type === MODEL_CALL_EVENT) return "harness";
+    // A submitted receipt: evidence from an engine Oxagen did not host.
+    if (row.event_type === "model.call_completed") return "harness";
     if (row.event_type === "model.engine_call_completed")
       gatewayObserved = true;
   }
