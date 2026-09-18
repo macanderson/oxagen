@@ -521,7 +521,21 @@ export async function syncPriceBook(args: {
       const seed = writtenKeys.get(supersededKey(row));
       if (!seed) continue;
       if (seed.provider === row.provider) continue;
-      if (row.effectiveFrom.getTime() >= seed.effectiveFrom.getTime()) continue;
+      if (row.effectiveFrom.getTime() === seed.effectiveFrom.getTime())
+        // The old provider's row starts at this very instant, so it cannot be
+        // closed here (`effective_to > effective_from`) and the new row has
+        // already landed beside it: two open rows for one model and class
+        // with the same start, which `bestMatch` cannot tell apart. That is
+        // what the CLI's top-of-hour default produces when a re-run within
+        // the hour finds a different vendor string for a model. Refused, and
+        // the transaction rolls back, so the operator re-runs with a later
+        // --effective-from and the old row closes there.
+        throw new HandlerError({
+          code: "conflict",
+          reason: "price_book_provider_changed_at_same_instant",
+          message: `${supersededKey(row)} is already priced from ${seed.effectiveFrom.toISOString()} under provider ${row.provider}; re-pricing it under ${seed.provider} at the same instant would leave two open rows, so use a later effectiveFrom`,
+        });
+      if (row.effectiveFrom.getTime() > seed.effectiveFrom.getTime()) continue;
       await tx
         .update(schema.priceEntries)
         .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })

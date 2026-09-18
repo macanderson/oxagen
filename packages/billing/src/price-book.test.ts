@@ -999,6 +999,38 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(closed.microsPerMillion).toBe(3_000_000n);
   });
 
+  // The CLI defaults `effectiveFrom` to the top of the hour, so a re-run
+  // within the hour that finds a different vendor string writes a second row
+  // starting at the same instant as the first, and the first cannot be
+  // closed there. Two open rows with one start is a tie the resolver cannot
+  // break, so the sync refuses and rolls back.
+  it("refuses a provider change at the same instant as the open row it would supersede (negative)", async () => {
+    fake.rows.push(priceRow({ provider: "openrouter", effectiveFrom: T1 }));
+    await expect(
+      syncPriceBook({
+        effectiveFrom: T1,
+        seeds: [
+          {
+            provider: "anthropic",
+            model: "claude-sonnet-5",
+            modelAliases: [],
+            region: null,
+            tokenClass: "input_uncached",
+            unit: "token",
+            currency: "USD",
+            microsPerMillion: usdPerMillionToMicros(2),
+            effectiveFrom: T1,
+            effectiveTo: null,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_book_provider_changed_at_same_instant",
+    });
+  });
+
   it("leaves a row under a different model or class alone", async () => {
     fake.rows.push(priceRow({ provider: "openrouter", tokenClass: "output" }));
 
