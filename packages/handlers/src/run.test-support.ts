@@ -126,6 +126,9 @@ export function seal(
     merkleRoot: `sha256:${"f".repeat(64)}`,
     archiveSegmentRef: "evidence/o/w/segments/a/f.ndjson.zst",
     enforcementTier: "harness",
+    terminalStatus: "completed",
+    finalEventDigest: `sha256:${"e".repeat(64)}`,
+    eventStreamDigest: `sha256:${"d".repeat(64)}`,
     ...over,
   };
 }

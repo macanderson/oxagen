@@ -16,6 +16,7 @@ import {
   memoryStores,
   memoryTachoFrames,
   seal,
+  summary,
   tachoRow,
   tachoSession,
 } from "./run.test-support";
@@ -81,7 +82,11 @@ function ledgerHarness(sealOver: Record<string, unknown> = {}) {
     queries: stores.queries,
     store: {
       getRunByPublicId: (id) =>
-        Promise.resolve(id === LEDGER_ID ? { runId: RUN_UUID } : null),
+        Promise.resolve(
+          id === LEDGER_ID
+            ? summary({ runId: RUN_UUID, publicId: LEDGER_ID })
+            : null,
+        ),
       readAttemptEventsSince: memoryEvents([]),
     },
     readRunRollups: stores.readRunRollups,
@@ -196,9 +201,13 @@ describe("get_run_chain", () => {
     expect(out.hashRule).toBe("ledger.event_stream_digest_v1");
     expect(out.checkpoints).toEqual([]);
     expect(out.enforcementTier).toBe("gateway");
+    // The ATTEMPT's terminal status and digests, not the run's word for them.
     expect(out.seal).toMatchObject({
+      terminalStatus: "completed",
       eventCount: 3,
       finalRunSeq: "3",
+      finalEventDigest: `sha256:${"e".repeat(64)}`,
+      eventStreamDigest: `sha256:${"d".repeat(64)}`,
       merkleRoot: `sha256:${"f".repeat(64)}`,
     });
     expect(out.recordedGrade).toBe("view");

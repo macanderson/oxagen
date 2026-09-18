@@ -387,6 +387,12 @@ export function ledgerSealQuery(
       merkleRoot: seals.merkleRoot,
       archiveSegmentRef: seals.archiveSegmentRef,
       enforcementTier: seals.enforcementTier,
+      // The Chain-and-seal tab reads these; nothing else does, and reading
+      // the run's own status in their place would answer the run's word for
+      // the attempt's.
+      terminalStatus: seals.terminalStatus,
+      finalEventDigest: seals.finalEventDigest,
+      eventStreamDigest: seals.eventStreamDigest,
     })
     .from(seals)
     .where(
@@ -536,6 +542,12 @@ export type LedgerSeal = {
   archiveSegmentRef: string | null;
   /** Null on a seal written before the column existed; read as `harness`. */
   enforcementTier: string | null;
+  /** How the sealed attempt ended, as the seal recorded it. */
+  terminalStatus: string;
+  /** The digest of the attempt's last frame; null when it recorded none. */
+  finalEventDigest: string | null;
+  /** The fold of every frame digest in sequence; always written. */
+  eventStreamDigest: string;
 };
 
 export type LedgerRunRecord = LedgerRunRow & {

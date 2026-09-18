@@ -180,13 +180,14 @@ function sealOf(
     if (!seal) return null;
     return {
       sealedAt: seal.sealedAt.toISOString(),
-      terminalStatus: run.row.run.status,
+      // The attempt's terminal status, not the run's: a run can be `failed`
+      // while the attempt under the seal was `abandoned`, and the tab is
+      // reporting on the attempt.
+      terminalStatus: seal.terminalStatus,
       eventCount: seal.eventCount,
       finalRunSeq: seal.finalRunSeq,
-      // The ledger's seal row folds every frame digest into the stream digest;
-      // the per-frame final digest is not projected by the list read.
-      finalEventDigest: null,
-      eventStreamDigest: null,
+      finalEventDigest: seal.finalEventDigest,
+      eventStreamDigest: seal.eventStreamDigest,
       merkleRoot: seal.merkleRoot,
       archiveSegmentRef: seal.archiveSegmentRef,
     };
