@@ -89,6 +89,31 @@ bypasses the hooks. That is why the detector exists and why the session record
 carries `enforcement_tier`. Managed settings (`enroll --print-managed`) lock the
 hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
+## What the daemon is today, and what it grows into
+
+Today `tachod` is a recorder plus a kill switch. The policy bundle it verifies
+carries empty permissions, `budget.mode = "observed"` and, until ADR-091 lands
+(PR #3289), `context.system = null`. No model proxy exists: there is no
+`ANTHROPIC_BASE_URL` or `OPENAI_BASE_URL` handling anywhere in this package.
+Token and cost numbers for Claude Code are the harness's own OpenTelemetry
+export, which is self-reported. Codex and Stella export none, so their spend is
+absent from the record. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+and server-enforced, and it is registered only into Claude Desktop.
+
+The target is ADR-094: `tachod` grows into the gateway, with a loopback model
+proxy (Anthropic Messages and OpenAI Responses passthrough with streaming;
+enrollment writes the base URL) and an MCP aggregator that re-serves the
+harness's existing MCP servers through loopback, displace-and-restore. Prompt
+bodies never leave the machine; only digests and usage go up. The vendor
+credential stays on the machine. Metering becomes observed for every harness,
+`session_limit_usd` is enforced, and `interrupt` becomes real. That is Phase 4,
+in build now. The leaf constraint stays: the proxy imports no `@oxagen/*`
+runtime package.
+
+The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
+`contained`, computed from what was actually routed. Nothing at the `harness`
+tier is ever called "enforced".
+
 ## Modules
 
 | Module | What it is |
