@@ -37,10 +37,8 @@ export type PriceEntryRemoveDeps = {
     model: string;
     tokenClass: PriceTokenClass;
     region?: string | null;
-    at: Date;
-    now?: Date;
+    at?: Date;
   }) => Promise<NegotiatedPriceClose>;
-  now: () => Date;
 };
 
 export function createPriceEntryRemoveHandler(
@@ -77,20 +75,20 @@ export function createPriceEntryRemoveHandler(
     }
     assertDataPlaneUsable(plane);
 
-    const now = deps.now();
-    const at = input.at === undefined ? now : new Date(input.at);
     // The row in effect at `at` is closed there; a correction scheduled to
     // start after `at` is cancelled, because it would re-establish the rate
-    // the caller just ended. `now` is what decides whether a scheduled row has
-    // begun — one that has is refused rather than repriced.
-    const { closed, cancelled } = await deps.closeNegotiatedPriceEntry({
+    // the caller just ended. The write instant decides whether a scheduled
+    // row has begun — one that has is refused rather than repriced — and the
+    // store reads it under its locks, not here: a clock read before the lock
+    // wait is stale by the time the guard runs. An omitted `at` defaults to
+    // that same instant, so the store answers which instant it used.
+    const { at, closed, cancelled } = await deps.closeNegotiatedPriceEntry({
       orgId: ctx.orgId,
       provider: input.provider,
       model: input.model,
       tokenClass: input.tokenClass,
       region: input.region ?? null,
-      at,
-      now,
+      at: input.at === undefined ? undefined : new Date(input.at),
     });
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
@@ -138,5 +136,4 @@ export function createPriceEntryRemoveHandler(
 
 export const priceEntryRemoveHandler = createPriceEntryRemoveHandler({
   closeNegotiatedPriceEntry,
-  now: () => new Date(),
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The store half of this file exercises real statements against an in-memory
 // `cost.price_entries` (test-utils/price-book-fake-tx.ts), which evaluates the
@@ -590,6 +590,7 @@ describe("the negotiated write path", () => {
 
     // Re-ending what is already ended is a no-op, so a retry is safe.
     expect(await closeNegotiatedPriceEntry({ ...SET, at: T2 })).toEqual({
+      at: T2,
       closed: null,
       cancelled: [],
     });
@@ -999,6 +1000,100 @@ describe("the negotiated write path", () => {
       first.entry.id,
     );
     expect(priceAt(T2)?.source).toBe("list");
+  });
+
+  // The lock wait is unbounded: another negotiated write can hold the class
+  // lock until a scheduled start has passed. A write instant read before the
+  // wait then let a correction to the row at that start pass the
+  // shipped-window check and change, in place, the terms of a row that
+  // priced frames during the wait. These drive the real clock (no injected
+  // `now`) and move it while the lock is held.
+  describe("the write instant is read under the locks", () => {
+    const before = new Date("2026-09-09T23:59:00.000Z");
+    const after = new Date("2026-09-10T00:00:30.000Z");
+
+    afterEach(() => {
+      vi.useRealTimers();
+      fake.onLock = undefined;
+    });
+
+    it("refuses a correction whose window began while the write waited on the lock (negative)", async () => {
+      await setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: T1,
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(before);
+      fake.onLock = () => vi.setSystemTime(after);
+      await expect(
+        setNegotiatedPriceEntry({
+          ...SET,
+          now: undefined,
+          microsPerMillion: 2_000_000n,
+          effectiveFrom: T1,
+        }),
+      ).rejects.toMatchObject({
+        name: "HandlerError",
+        code: "conflict",
+        reason: "price_entry_already_effective",
+      });
+      expect(fake.rows).toHaveLength(1);
+      expect(fake.rows[0]!.microsPerMillion).toBe(2_400_000n);
+    });
+
+    it("starts an omitted effectiveFrom at the instant after the wait, not before it", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(before);
+      fake.onLock = () => vi.setSystemTime(after);
+      const written = await setNegotiatedPriceEntry({
+        ...SET,
+        now: undefined,
+        microsPerMillion: 2_400_000n,
+      });
+      expect(written.entry.effectiveFrom).toEqual(after);
+    });
+
+    it("ends an omitted `at` at the instant after the wait, so nothing shipped during it is repriced", async () => {
+      const first = await setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: new Date("2026-09-08T00:00:00.000Z"),
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(before);
+      fake.onLock = () => vi.setSystemTime(after);
+      const ended = await closeNegotiatedPriceEntry({ ...SET, now: undefined });
+      expect(ended.at).toEqual(after);
+      expect(ended.closed?.id).toBe(first.entry.id);
+      expect(ended.closed?.effectiveTo).toEqual(after);
+      // Every frame up to the instant the row actually closed still prices
+      // against it.
+      expect(priceAt(before)?.id).toBe(first.entry.id);
+      expect(priceAt(after)?.id).toBe(undefined);
+    });
+
+    it("refuses a cutoff that fell into the past while the removal waited on the lock (negative)", async () => {
+      await setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: new Date("2026-09-08T00:00:00.000Z"),
+      });
+      vi.useFakeTimers();
+      vi.setSystemTime(before);
+      fake.onLock = () => vi.setSystemTime(after);
+      // The caller sampled its own clock before the request: by the time the
+      // lock is held that instant is in the past, and a rollup during the
+      // wait may have priced a frame against the row.
+      await expect(
+        closeNegotiatedPriceEntry({ ...SET, now: undefined, at: before }),
+      ).rejects.toMatchObject({
+        name: "HandlerError",
+        code: "conflict",
+        reason: "price_entry_window_shipped",
+      });
+      expect(fake.rows[0]!.effectiveTo).toBeNull();
+    });
   });
 });
 

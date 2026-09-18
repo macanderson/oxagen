@@ -34,7 +34,6 @@ export type PriceEntrySetDeps = {
   setNegotiatedPriceEntry: (
     args: SetNegotiatedPriceEntryArgs,
   ) => Promise<NegotiatedPriceWrite>;
-  now: () => Date;
 };
 
 export function createPriceEntrySetHandler(
@@ -105,9 +104,15 @@ export function createPriceEntrySetHandler(
       });
     }
 
-    const now = deps.now();
+    // An omitted `effectiveFrom` is the write instant, and the store reads
+    // that under its advisory locks rather than taking one sampled here: the
+    // lock wait is unbounded, and a clock read before it is stale by the time
+    // the shipped-window check runs. The instant the store used comes back
+    // on the written entry.
     const effectiveFrom =
-      input.effectiveFrom === undefined ? now : new Date(input.effectiveFrom);
+      input.effectiveFrom === undefined
+        ? undefined
+        : new Date(input.effectiveFrom);
 
     // The customer states the contracted price the way the contract reads it
     // — USD per one million units — and the store records integer micro-USD.
@@ -128,9 +133,6 @@ export function createPriceEntrySetHandler(
       modelAliases: input.modelAliases,
       microsPerMillion: usdPerMillionToMicros(input.usdPerMillion),
       effectiveFrom,
-      // The write instant, so the store can refuse an in-place correction to
-      // a row whose window has already begun and priced runs.
-      now,
     });
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
@@ -178,5 +180,4 @@ export function createPriceEntrySetHandler(
 
 export const priceEntrySetHandler = createPriceEntrySetHandler({
   setNegotiatedPriceEntry,
-  now: () => new Date(),
 });
