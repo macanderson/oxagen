@@ -89,11 +89,13 @@ bypasses the hooks. That is why the detector exists and why the session record
 carries `enforcement_tier`. Managed settings (`enroll --print-managed`) lock the
 hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
-What the signed bundle carries today is nearly nothing. The server builds it with
-empty permissions, `budget.mode = "observed"` and `context.system = null`
+What the signed bundle carries today is one thing: the workspace's steering. The
+server compiles its active `must` and `should` context records into
+`context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
+`SessionStart` delivers. Permissions are empty and `budget.mode = "observed"`
 (`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can
-deny only on host status or a paused session, no published record steers a wrapped
-agent, and nothing reads `session_limit_usd`. Operator steer commands are the only
+deny only on host status or a paused session, and nothing reads
+`session_limit_usd`. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
 none. There is no model proxy and no sandbox.
@@ -104,9 +106,10 @@ Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md
 the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases in
 `docs/specs/mission-control/plan.md` §8):
 
-- **Phase 0**, in review as PR #3289 (ADR-091, issue #2592). The server compiles
-  active `must` and `should` records into the bundle's `context.system`, which
-  `SessionStart` already delivers.
+- **Phase 0**, merged as PR #3289 on 2026-09-18 (ADR-091, issue #2592). The
+  server compiles active `must` and `should` records into the bundle's
+  `context.system`, which `SessionStart` delivers. #2592 closes when a merged
+  record is seen in a real run.
 - **Phase 1** (issue #3296, ADR-093 and ADR-097). `UserPromptSubmit` calls `assembleSteering` with the prompt as the
   query, under a tight timeout, and fails open. Every assembly seals a
   `steering.manifest` frame.
@@ -127,8 +130,9 @@ the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases
   only egress is the gateway. `contained` becomes the top word of the tier ladder:
   observe, harness, gateway, contained (ADR-095).
 
-The order of build is Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3 and
-5. The epic is issue #3295. Nothing above is on `main` until those branches merge.
+The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and
+5. The epic is issue #3295. Only Phase 0 is on `main`; the rest lands when its
+branch merges.
 
 The words for the `harness` tier are "delivered", "recorded", "client-attested"
 and "fail-open". Never "enforced". "Fail-open" describes the tier: the person at

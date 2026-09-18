@@ -120,7 +120,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Plan</p>
   <h1>Oxagen Mission Control app: implementation plan</h1>
-  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Amended 2026-09-18</dt><dd>By the steering, graph and gateway review, approved in full by the maintainer on 2026-09-18 (<code>docs/audits/2026-09-18-steering-graph-gateway-review.md</code>). §0.2 records the decisions. §8 is the six-phase refactor path (Phase 0 to Phase 5), with the freeze on new governance ceremony in Phase 0. §8.7 is the dated decision that closed the review's one open risk. The build order is Phase 0 in review (oxagen PR #3289, ADR-091), Phase 4 in build, then Phases 1, 2, 3 and 5. The ADRs are ADR-091 and ADR-093 to ADR-097 (oxagen draft PR #3294), and the epic is oxagen issue #3295. §8.8 says where each phase sits against the batches, lanes and milestones, and which lanes it moves or retires.</dd><dt>Canonical copy</dt><dd>The canonical copy of this plan is <code>docs/implementation-plan.md</code> in https://github.com/macanderson/roadmap. This file is the copy carried in the oxagen monorepo. No build step joins the two, so a change is made in both by hand. §0.2 and §8 are identical in both copies. The rest of this copy predates the scope review of 2026-09-14 and the decisions of 2026-09-15 that the canonical copy carries. §0.1, the decisions of 2026-09-15, is in the canonical copy only.</dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd><dt>Deletes</dt><dd>nothing outside the new <code>apps/app</code>'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is <strong>de-registered, not deleted</strong>: <code>DEREGISTERED.md</code> at the repo root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if one of them disappears</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Amended 2026-09-18</dt><dd>By the steering, graph and gateway review, approved in full by the maintainer on 2026-09-18 (<code>docs/audits/2026-09-18-steering-graph-gateway-review.md</code>). §0.2 records the decisions. §8 is the six-phase refactor path (Phase 0 to Phase 5), with the freeze on new governance ceremony in Phase 0. §8.7 is the dated decision that closed the review's one open risk. The build order is Phase 0 merged (oxagen PR #3289, <code>c9db463e9</code>, ADR-091), Phase 4 in build, then Phases 1, 2, 3 and 5. The ADRs are ADR-091 and ADR-093 to ADR-097 (oxagen draft PR #3294), and the epic is oxagen issue #3295. §8.8 says where each phase sits against the batches, lanes and milestones, and which lanes it moves or retires.</dd><dt>Canonical copy</dt><dd>The canonical copy of this plan is <code>docs/implementation-plan.md</code> in https://github.com/macanderson/roadmap. This file is the copy carried in the oxagen monorepo. No build step joins the two, so a change is made in both by hand. §0.2 and §8 are identical in both copies. The rest of this copy predates the scope review of 2026-09-14 and the decisions of 2026-09-15 that the canonical copy carries. §0.1, the decisions of 2026-09-15, is in the canonical copy only.</dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd><dt>Deletes</dt><dd>nothing outside the new <code>apps/app</code>'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is <strong>de-registered, not deleted</strong>: <code>DEREGISTERED.md</code> at the repo root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if one of them disappears</dd></dl>
 </header>
 <div class="grid">
 <nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-decisions-in-one-place">0. Decisions in one place</a></li><li><a href="#1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</a></li><li><a href="#2-evaluation-the-wireframes">2. Evaluation: the wireframes</a></li><li><a href="#3-evaluation-the-data-mapping">3. Evaluation: the data mapping</a></li><li><a href="#4-architecture-of-the-new-apps-app">4. Architecture of the new <code>apps/app</code></a></li><li><a href="#5-batches-parallel-lanes">5. Batches: parallel lanes</a></li><li><a href="#6-open-decisions-each-blocks-a-named-lane-and-each-has-a-recommendation">6. Open decisions (each blocks a named lane, and each has a recommendation)</a></li><li><a href="#7-lane-prompt-template">7. Lane prompt template</a></li><li><a href="#8-the-steering-and-gateway-refactor-path-2026-09-18">8. The steering and gateway refactor path (2026-09-18)</a></li></ol></nav>
@@ -263,7 +263,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 </tr>
 <tr>
 <td>13</td>
-<td>The refactor path is six phases, and new governance ceremony is frozen until Phase 0 lands. The phase names and numbers are fixed. The order of build is Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3 and 5</td>
+<td>The refactor path is six phases, and new governance ceremony is frozen until Phase 0 is proven: a merged record seen in a real run, recorded on #2592. The phase names and numbers are fixed. The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and 5</td>
 <td>§8</td>
 <td>ADR-091 §6 for the freeze</td>
 </tr>
@@ -275,7 +275,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 </tr>
 </tbody>
 </table></div>
-<p>The ADR titles: ADR-091, Phase 0 (oxagen PR #3289). ADR-097 &quot;Steering and gating are two planes, authored on one surface and compiled twice&quot;. ADR-093 &quot;One assembler decides what reaches the agent, and records what it cut&quot;. ADR-094 &quot;tachod grows into the gateway: a loopback model proxy and an MCP aggregator&quot;. ADR-095 &quot;The tier ladder is four words, computed from what was routed&quot;. ADR-096 &quot;Oxagen may contain the process that runs turns: the contained tier&quot;. ADR-093 to ADR-097 are in oxagen draft PR #3294 (branch <code>steering-gateway-adrs</code>), which also amends ADR-008, 043, 051, 056, 064, 078 and 090. ADR-092 belongs to an unrelated decision (oxagen PR #3292).</p>
+<p>The ADR titles: ADR-091, Phase 0 (on <code>main</code>, oxagen PR #3289). ADR-097 &quot;Steering and gating are two planes, authored on one surface and compiled twice&quot;. ADR-093 &quot;One assembler decides what reaches the agent, and records what it cut&quot;. ADR-094 &quot;tachod grows into the gateway: a loopback model proxy and an MCP aggregator&quot;. ADR-095 &quot;The tier ladder is four words, computed from what was routed&quot;. ADR-096 &quot;Oxagen may contain the process that runs turns: the contained tier&quot;. ADR-093 to ADR-097 are in oxagen draft PR #3294 (branch <code>steering-gateway-adrs</code>), which also amends ADR-008, 043, 051, 056, 064, 078 and 090. ADR-092 belongs to an unrelated decision (oxagen PR #3292).</p>
 <hr />
 <h2 id="1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</h2>
 <div class="tw"><table>
@@ -2276,7 +2276,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 <hr />
 <h2 id="8-the-steering-and-gateway-refactor-path-2026-09-18">8. The steering and gateway refactor path (2026-09-18)</h2>
 <p>The adversarial review of 2026-09-18 (steering, the graph, and the gateway) read oxagen <code>main</code> and found that the spec's design was right and the code had diverged from it: almost nothing reaches a wrapped agent. The maintainer approved the review in full on 2026-09-18. This section is its refactor path: six phases, Phase 0 to Phase 5, each of which ships alone and is useful alone. The spec carries the design (§4.2, §7, §10.4 to §10.7, §13.6, §17.2, §21). File paths below were checked against oxagen <code>main</code> at <code>02278c913</code>.</p>
-<p><strong>Build order (2026-09-18).</strong> The phase names and numbers do not change. Only the order of build does: Phase 0 is in review, Phase 4 is in build now in parallel with it, then Phases 1, 2, 3 and 5. All issues are in macanderson/oxagen, and the epic is #3295.</p>
+<p><strong>Build order (2026-09-18).</strong> The phase names and numbers do not change. Only the order of build does: Phase 0 merged first (2026-09-18), Phase 4 is in build now, then Phases 1, 2, 3 and 5. All issues are in macanderson/oxagen, and the epic is #3295.</p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -2292,7 +2292,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 <td>1</td>
 <td>Phase 0 (§8.1)</td>
 <td>#2592 (reopened, P0)</td>
-<td>In review: PR #3289, branch <code>steering/phase0-one-record-steers</code></td>
+<td>Merged: PR #3289 (<code>c9db463e9</code>). #2592 closes when a merged record is seen in a real run</td>
 <td>ADR-091</td>
 </tr>
 <tr>
@@ -2333,7 +2333,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 </tbody>
 </table></div>
 <p>The review's defects are filed on their own and are fixed by the phase named: #3302 (the <code>publish_context_record</code> path leaves <code>kind</code> and <code>force</code> NULL, Phase 1), #3303 (<code>additionalInstructions</code> is unbudgeted and never checked against a rule, Phase 1), #3304 (Codex and Stella spend is absent, Phase 4) and #3305 (the public decks describe the removed runtime, no phase).</p>
-<p><strong>What is true on <code>main</code> today.</strong> Records, the bundle's <code>context.system</code> (hardcoded <code>null</code>), bundle permissions and budget (always empty, <code>budget.mode = &quot;observed&quot;</code>) and skills (inventory only) do not steer any Claude Code or Codex run. Operator steer commands are the only live text channel from the server to a running wrapped agent. The wrapped tier is a recorder plus a kill switch. No model proxy exists and no sandbox exists. The MCP gateway is real and server-enforced, and it is registered only into Claude Desktop. Spend for Claude Code is self-reported, and Codex and Stella report none. Memory reaches only the in-app agent, capped at 6. No application imports <code>packages/engram</code> or <code>packages/context-provider</code>, though <code>tools/scripts/package.json</code> and <code>apps/app/next.config.ts</code> still name <code>@oxagen/engram</code>. The graph holds no steering. This paragraph describes <code>main</code>, and it stays true until PR #3289 and the Phase 4 branches merge.</p>
+<p><strong>What is true on <code>main</code> today.</strong> Active <code>must</code> and <code>should</code> records reach a wrapped Claude Code run through the bundle's <code>context.system</code> at <code>SessionStart</code> (Phase 0, PR #3289, ADR-091). <code>may</code> and <code>info</code> records, bundle permissions and budget (always empty, <code>budget.mode = &quot;observed&quot;</code>) and skills (inventory only) do not steer any Claude Code or Codex run. Operator steer commands are the only live text channel from the server to a running wrapped agent. The wrapped tier is a recorder plus a kill switch that tells the agent what the workspace requires. No model proxy exists and no sandbox exists. The MCP gateway is real and server-enforced, and it is registered only into Claude Desktop. Spend for Claude Code is self-reported, and Codex and Stella report none. Memory reaches only the in-app agent, capped at 6. No application imports <code>packages/engram</code> or <code>packages/context-provider</code>, though <code>tools/scripts/package.json</code> and <code>apps/app/next.config.ts</code> still name <code>@oxagen/engram</code>. The graph holds no steering. This paragraph describes <code>main</code> with Phase 0 on it, and it stays true until the Phase 4 branches merge.</p>
 <h3 id="8-1-phase-0-make-one-record-steer-one-agent">8.1 Phase 0. Make one record steer one agent</h3>
 <div class="tw"><table>
 <thead>
@@ -2349,7 +2349,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 </tr>
 <tr>
 <td><strong>Seam</strong></td>
-<td><code>packages/handlers/src/lib/tacho-host.ts:255</code> (<code>unsignedBundle</code>; <code>context: { system: null }</code> is line 276). The records come from <code>agent.context_records</code> (<code>packages/database/src/schema/agent.ts:1303</code>) through <code>packages/handlers/src/context.steering.store.ts</code>. The wire already allows it (<code>packages/tacho/src/wire.ts:375</code>, 16 KiB), and the daemon already delivers it (<code>packages/tacho/src/collector/hook-handler.ts:322</code>). The bundle etag already covers content, and the steering version is already the promotion ledger length (<code>context.steering.store.ts:190</code>), so a merge bumps the bundle with no new plumbing.</td>
+<td><code>packages/handlers/src/lib/tacho-host.ts</code> (<code>unsignedBundle</code>, which took <code>context: { system: null }</code> before this phase and now takes <code>contextSystem</code> from <code>readWorkspaceSteering</code> in <code>packages/handlers/src/lib/tacho-steering.ts</code>). The records come from <code>agent.context_records</code> (<code>packages/database/src/schema/agent.ts:1303</code>) through <code>packages/handlers/src/context.steering.store.ts</code>. The wire already allows it (<code>packages/tacho/src/wire.ts:375</code>, 16 KiB), and the daemon already delivers it (<code>packages/tacho/src/collector/hook-handler.ts:322</code>). The bundle etag already covers content, and the steering version is already the promotion ledger length (<code>context.steering.store.ts:190</code>), so a merge bumps the bundle with no new plumbing.</td>
 </tr>
 <tr>
 <td><strong>Done when</strong></td>
@@ -2365,11 +2365,11 @@ stories for new components; PR body lists each §3 row you touched with its stat
 </tr>
 <tr>
 <td><strong>Tracking</strong></td>
-<td>Issue #2592 (reopened, P0). In review as oxagen PR #3289, branch <code>steering/phase0-one-record-steers</code>, which adds ADR-091. Its <code>compileSteering</code> is the first version of the stable prefix (ADR-093 §1).</td>
+<td>Issue #2592 (reopened, P0). Merged as oxagen PR #3289 (<code>c9db463e9</code>, 2026-09-18), which added ADR-091. Its <code>compileSteering</code> is the first version of the stable prefix (ADR-093 §1). #2592 closes when a merged record is seen in a real run's <code>agent_start</code>.</td>
 </tr>
 <tr>
 <td><strong>The freeze</strong></td>
-<td><strong>New governance ceremony is frozen until Phase 0 lands.</strong> No new check type, governance mode, review role, ledger field, promotion threshold or proposal workflow is started. The ceremony was built before the delivery, and this phase is the delivery. Work in flight on existing flows finishes. Bug fixes are not ceremony.</td>
+<td><strong>New governance ceremony is frozen until Phase 0 is proven: a merged record seen in a real run's <code>agent_start</code>, recorded on #2592</strong> (ADR-091 §6). No new check type, governance mode, review role, ledger field, promotion threshold or proposal workflow is started. The ceremony was built before the delivery, and this phase is the delivery. Work in flight on existing flows finishes. Bug fixes are not ceremony.</td>
 </tr>
 </tbody>
 </table></div>
@@ -2637,7 +2637,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 </tr>
 <tr>
 <td>Any lane or gap that adds steering ceremony (a new check, governance mode, review role, ledger field or promotion threshold)</td>
-<td>Frozen until Phase 0 lands</td>
+<td>Frozen until Phase 0 is proven on #2592</td>
 <td>§8.1</td>
 </tr>
 <tr>

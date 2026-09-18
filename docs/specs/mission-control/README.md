@@ -27,9 +27,9 @@ Sources and copies:
   walkthroughs.
 - The review that the 2026-09-18 amendments come from is
   `docs/audits/2026-09-18-steering-graph-gateway-review.md`. Its decisions are
-  ADR-091 (Phase 0, PR #3289) and ADR-093 to ADR-097 (draft PR #3294). The epic is
-  issue #3295. The order of build is Phase 0 in review, Phase 4 in build, then
-  Phases 1, 2, 3 and 5 (`plan.md` §8).
+  ADR-091 (Phase 0, merged as PR #3289) and ADR-093 to ADR-097 (draft PR #3294).
+  The epic is issue #3295. The order of build is Phase 0 merged, Phase 4 in build,
+  then Phases 1, 2, 3 and 5 (`plan.md` §8).
 - Oxagen Desktop (the installer app) is specified separately in `docs/specs/oxagen-desktop/`.
 - `docs/mission-control/PLAN.md`, `TOOL-MATRIX.md`, and `TRACEABILITY.md` are the
   build-time decision log and traceability over this spec; they do not restate it.
