@@ -2489,7 +2489,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 <tbody>
 <tr>
 <td><strong>Scope</strong></td>
-<td><code>tachod</code> grows into the gateway. Add the loopback model proxy: Anthropic Messages and OpenAI Responses passthrough with streaming, and enrollment writes the base URL. Move metering to observed. Enforce <code>session_limit_usd</code>. Re-land ADR-051's per-turn volatile injection at the proxy. Implement a real <code>interrupt</code>. Turn the MCP gateway into an aggregator for wrapped harnesses: enrollment re-serves the harness's existing MCP servers through loopback with displace-and-restore, and pins managed settings where a vendor offers them. Fill bundle permissions from the second compilation of Phase 1. Prompt bodies never leave the machine: only digests and usage go up. The vendor credential stays on the machine. Update the desktop installer to install and remove the gateway cleanly, with a line-by-line bug review of <code>apps/desktop</code> in the same effort.</td>
+<td><code>tachod</code> grows into the gateway. Add the loopback model proxy: Anthropic Messages and OpenAI Responses passthrough with streaming, and enrollment writes the base URL. Move metering to observed. Enforce <code>session_limit_usd</code>. Re-land ADR-051's per-turn volatile injection at the proxy. Implement a real <code>interrupt</code>. Turn the MCP gateway into an aggregator for wrapped harnesses: enrollment re-serves the harness's existing MCP servers through loopback with displace-and-restore, and pins managed settings where a vendor offers them. Fill bundle permissions from the second compilation of Phase 1. The proxy forwards prompt bodies to the vendor only. No prompt body is sent to Oxagen's servers: only digests and usage go up. The vendor credential stays on the machine. Update the desktop installer to install and remove the gateway cleanly, with a line-by-line bug review of <code>apps/desktop</code> in the same effort.</td>
 </tr>
 <tr>
 <td><strong>Seam</strong></td>
@@ -2513,7 +2513,7 @@ stories for new components; PR body lists each §3 row you touched with its stat
 </tr>
 <tr>
 <td><strong>Settled by ADR-094 and spec §13.6</strong></td>
-<td>Prompt bodies never leave the machine, so model-call frames from the gateway carry digests and usage only, never bodies. What hook-tier frames carry today is unchanged. The spec's audit rule of full frame bodies (§13.1) applies where Oxagen is itself in the path of the body. ADR-094 does not name where the volatile ranking runs. It is a build choice inside that rule, made when the Phase 1 assembler exists.</td>
+<td>No prompt body is sent to Oxagen's servers, so model-call frames from the gateway carry digests and usage only, never bodies. What hook-tier frames carry today is unchanged. The spec's audit rule of full frame bodies (§13.1) applies where Oxagen is itself in the path of the body. ADR-094 does not name where the volatile ranking runs. It is a build choice inside that rule, made when the Phase 1 assembler exists.</td>
 </tr>
 </tbody>
 </table></div>

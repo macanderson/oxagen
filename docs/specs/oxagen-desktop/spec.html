@@ -659,7 +659,7 @@ surface for <code>list_tacho_hosts</code>, which now returns a <code>tiers</code
 </tr>
 <tr>
 <td>Loopback model proxy</td>
-<td>Passes Anthropic Messages and OpenAI Responses requests through to the vendor with streaming. Prompt bodies never leave the machine: only digests and usage go up. The vendor credential stays on the machine and Oxagen never holds it</td>
+<td>Passes Anthropic Messages and OpenAI Responses requests through to the vendor with streaming. The proxy forwards each prompt body to the vendor, as the harness does today. No prompt body is sent to Oxagen's servers: only digests and usage go up. The vendor credential stays on the machine and Oxagen never holds it</td>
 <td>Phase 4, in build on <code>gateway-model-proxy</code></td>
 </tr>
 </tbody>

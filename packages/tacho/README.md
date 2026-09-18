@@ -118,8 +118,9 @@ the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases
   into the gateway: a loopback model proxy (Anthropic
   Messages and OpenAI Responses passthrough with streaming, enrollment writes the
   base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
-  with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. Prompt
-  bodies never leave the machine, and the vendor credential stays on it. Metering
+  with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. The
+  proxy forwards prompt bodies to the vendor only. No prompt body is sent to
+  Oxagen's servers, and the vendor credential stays on the machine. Metering
   becomes observed, `session_limit_usd` is enforced, and `interrupt` becomes real.
   Enrollment writes a base URL only after the daemon is confirmed listening, and
   unenroll restores every file it touched before it stops the daemon. Both OpenAI

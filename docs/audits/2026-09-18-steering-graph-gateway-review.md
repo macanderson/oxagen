@@ -207,8 +207,9 @@ The design move that makes this cheap: **run the model proxy on loopback inside 
 The daemon already exists, already listens on loopback, already receives telemetry.
 
 - No extra network hop and no new availability dependency on Oxagen's cloud.
-- Prompt bodies never leave the machine. Only digests and usage go up. You avoid taking
-  custody of every customer's source code in transit.
+- No prompt body is sent to Oxagen's servers. The proxy forwards bodies to the vendor,
+  as the harness does today; only digests and usage go up. You avoid taking custody of
+  every customer's source code in transit.
 - The vendor credential stays on the machine.
 - Metering becomes observed instead of self-reported, for every harness, including Codex
   and Stella.
