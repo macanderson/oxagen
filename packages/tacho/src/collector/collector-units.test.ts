@@ -566,6 +566,46 @@ describe("shipper", () => {
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
   });
 
+  it("splits a batch the route refuses as too large, and ships an oversized event without its body", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const heavy = events[1] as (typeof events)[number];
+    wal.append(events, [
+      {
+        event_id_idem: heavy.event_id_idem,
+        session_uuid: heavy.session_uuid,
+        seq: heavy.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes: new TextEncoder().encode("a retained prompt"),
+        content_class: "model_call",
+      },
+    ]);
+    const sent: Array<{ seqs: number[]; bodies: number }> = [];
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies = []) => {
+          sent.push({ seqs: batch.map((e) => e.seq), bodies: bodies.length });
+          // The route refuses any request that carries this body.
+          if (bodies.length > 0) throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    // Nothing is quarantined and nothing is left behind: the queue moves.
+    expect(result.quarantined).toBe(0);
+    expect(result.shipped).toBe(events.length);
+    expect(wal.stats().unshipped).toBe(0);
+    // The last attempt for the heavy event went out alone and bodiless.
+    const last = sent.filter((b) => b.seqs.includes(heavy.seq)).at(-1);
+    expect(last).toEqual({ seqs: [heavy.seq], bodies: 0 });
+    expect(logs.some((l) => l.includes("without its body"))).toBe(true);
+  });
+
   // ── Orphaned events after a re-enrollment ──────────────────────────────────
   //
   // Re-enrolling mints a new host_enrollment_id and leaves whatever is still

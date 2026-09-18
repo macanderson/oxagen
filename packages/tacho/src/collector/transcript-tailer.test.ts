@@ -205,7 +205,7 @@ describe("TranscriptTailer", () => {
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then drops its cursor", async () => {
+  it("drains a sealed session once more, then never reads it again", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
@@ -222,8 +222,15 @@ describe("TranscriptTailer", () => {
     await instance.tick();
     expect(session.lines).toHaveLength(3);
     expect(instance.state().cursors["s1"]?.drained).toBe(true);
+    // The sealed session stays in the registry for days: its drained cursor
+    // stays too, and no later tick reads the transcript again.
+    appendFileSync(path, "late\n");
     await instance.tick();
-    expect(instance.state().cursors["s1"]).toBeUndefined();
+    await instance.tick();
+    await instance.tick();
+    expect(session.lines).toHaveLength(3);
+    expect(instance.state().cursors["s1"]?.drained).toBe(true);
+    expect(instance.state().cursors["s1"]?.offset).toBeGreaterThan(0);
     // A session that left the registry loses its cursor too.
     const other = fakeSession("s2", path);
     const second = tailer([other]);

@@ -338,13 +338,15 @@ export class Detector {
     return events;
   }
 
-  private async checkTranscripts(): Promise<TachoEvent[]> {
+  /** The bounded, asynchronous part of a pass: which transcripts exist. */
+  private scanTranscripts(): Promise<TranscriptEntry[]> {
     const watched = new Set(
       [...this.sightings.values()].map((sighting) => sighting.path),
     );
-    const transcripts = await this.scanner.tick(watched);
-    // Everything from here is synchronous: the seals below must not
-    // interleave with a hook sealing on another chain mid-decision.
+    return this.scanner.tick(watched);
+  }
+
+  private checkTranscripts(transcripts: readonly TranscriptEntry[]): TachoEvent[] {
     const now = this.deps.now();
     const grace = this.deps.graceMs ?? 30_000;
     const processes = this.deps.listProcesses();
@@ -391,8 +393,17 @@ export class Detector {
     return events;
   }
 
-  /** One detector pass; returns the incidents it chained. */
+  /**
+   * One detector pass; returns the incidents it chained.
+   *
+   * The scan is awaited first and every seal happens after it, in one
+   * synchronous run. Sealing a hook-health frame before the await and handing
+   * it back after would let a model or gateway call seal the next sequence on
+   * the host chain and reach the WAL first, so the chain would be written out
+   * of order and a busy scan could ship past the held frame for good.
+   */
   async tick(): Promise<TachoEvent[]> {
-    return [...this.checkHooks(), ...(await this.checkTranscripts())];
+    const transcripts = await this.scanTranscripts();
+    return [...this.checkHooks(), ...this.checkTranscripts(transcripts)];
   }
 }
