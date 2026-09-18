@@ -249,3 +249,17 @@ cap sums whatever was actually charged under `consume_assistant_tokens`. It
 was never a margin figure, so it needs no change. An organisation on the
 platform key now reaches it more slowly at the same usage. The cap bounds
 Oxagen's real exposure, and that exposure is now smaller.
+
+**Consequence for the sub-credit carry.** Two differently priced reasons on
+one chokepoint cannot share a carry. The fractional-credit carry (#1413)
+was a single org-wide counter on `org_billing_settings`, and the ledger
+holds whole credits, so whichever call crossed the whole-credit boundary was
+debited for the fractions the other reasons had banked: a 0.9-credit
+marked-up embedding followed by a 0.1-credit assistant turn wrote one credit
+as `consume_assistant_tokens`, putting embedding margin on the at-cost line
+and counting it against the cap. The carry is now one bucket per ledger
+reason (`meter_carry_micro_credits_by_reason`, migration
+`20260918120000_meter_carry_per_billing_reason.sql`), so a fraction is
+debitable only under the reason that accrued it. Existing pooled residue
+migrated to `consume_embedding`: it was accrued under the old single markup,
+so it is marked-up money and belongs on a marked-up line.

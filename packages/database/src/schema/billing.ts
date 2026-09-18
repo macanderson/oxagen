@@ -528,18 +528,32 @@ export const orgBillingSettings = billingSchema.table(
       mode: "date",
     }),
 
-    // ── Cost-meter carry ────────────────────────────────────────────────────────
+    // ── Cost-meter carry, per billing reason ────────────────────────────────────
     // Fractional credits owed but not yet debited, in MICRO-credits (1 credit =
-    // 1,000,000 here). The ledger is whole credits, so a call worth 0.0014 of a
-    // credit used to be rounded UP to one — charging a 200-token embedding 739x
-    // its cost (#1413). The meter now banks the fraction here and debits a whole
-    // credit only once the fractions add up to one, which is exact over a
-    // sequence of calls and keeps the ledger integral. Always in [0, 1e6).
-    meterCarryMicroCredits: bigint("meter_carry_micro_credits", {
-      mode: "bigint",
-    })
+    // 1,000,000 here), keyed by the `credit_ledger.reason` that accrued them.
+    // The ledger is whole credits, so a call worth 0.0014 of a credit used to be
+    // rounded UP to one — charging a 200-token embedding 739x its cost (#1413).
+    // The meter banks the fraction here and debits a whole credit only once the
+    // fractions add up to one, which is exact over a sequence of calls and keeps
+    // the ledger integral.
+    //
+    // The map replaced a single pooled bigint, which was exact in total but wrong
+    // in attribution: fractions from every reason shared one counter, so whoever
+    // crossed the whole-credit boundary was billed for the others. With
+    // `consume_assistant_tokens` marked up at exactly cost (ADR-053 §3, amended
+    // 2026-09-18) and every other line carrying the solved blended markup, that
+    // pooling moved embedding margin onto the at-cost assistant line and counted
+    // it against the assistant spend cap. One bucket per reason makes a fraction
+    // debitable only under the reason that accrued it.
+    //
+    // Each value is always in [0, 1e6): consumeCredits reads the bucket, adds
+    // this call's micro-credits in BigInt, debits the whole credits and writes
+    // back only the remainder, so no value here is ever large enough to lose
+    // precision as a JSON number. Absent key == nothing carried.
+    meterCarryMicroCreditsByReason: jsonb("meter_carry_micro_credits_by_reason")
+      .$type<Record<string, number>>()
       .notNull()
-      .default(sql`0`),
+      .default(sql`'{}'::jsonb`),
 
     // ── Low-balance warning ─────────────────────────────────────────────────────
     // Surface a dismissible re-up banner when balance drops below this.
@@ -618,13 +632,14 @@ export const orgBillingSettings = billingSchema.table(
       "org_billing_settings_dunning_state_check",
       sql`${t.dunningState} IN ('active','grace','suspended')`,
     ),
-    // Only the lower bound. Between transactions the carry is under one credit,
-    // but the statement that accumulates it writes the running total before the
-    // same transaction reduces it to the remainder, so an upper bound here would
-    // reject the meter's own write.
-    meterCarryNonNegativeCheck: check(
-      "org_billing_settings_meter_carry_non_negative",
-      sql`${t.meterCarryMicroCredits} >= 0`,
+    // An object, and no bucket below zero. Only the lower bound: the upper bound
+    // is a consequence of how consumeCredits writes (it banks the remainder, not
+    // the running total), not something the column can assert per statement.
+    // `jsonb_path_exists` without a timezone-dependent predicate is immutable, so
+    // it is legal in a CHECK.
+    meterCarryByReasonNonNegativeCheck: check(
+      "org_billing_settings_meter_carry_by_reason_non_negative",
+      sql`jsonb_typeof(${t.meterCarryMicroCreditsByReason}) = 'object' AND NOT jsonb_path_exists(${t.meterCarryMicroCreditsByReason}, '$.* ? (@ < 0)')`,
     ),
     stripeCustomerIdx: uniqueIndex(
       "org_billing_settings_stripe_customer_idx",

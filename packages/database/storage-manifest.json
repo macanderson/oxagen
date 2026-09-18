@@ -3392,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "469f0990ccdf533c7c53990906b98cc9fe79fe6825cb241fc6e10bec159eabab",
+  "contentHash": "8e0ddba9b9ca4f82dfe965ce49e55161b998fc8b556c20150918398e960e3fb2",
   "domains": [
     {
       "name": "agent",
@@ -10220,10 +10220,10 @@
           "type": "timestamp with time zone"
         },
         {
-          "name": "meter_carry_micro_credits",
+          "name": "meter_carry_micro_credits_by_reason",
           "nullable": false,
           "primaryKey": false,
-          "type": "bigint"
+          "type": "jsonb"
         },
         {
           "name": "low_balance_threshold_cents",

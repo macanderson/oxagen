@@ -351,7 +351,11 @@ async function chargeCostUsd(params: {
     );
   }
   // Meter in micro-credits and let consumeCredits carry the fraction, so a call
-  // worth less than a credit is not rounded up to one (#1413).
+  // worth less than a credit is not rounded up to one (#1413). consumeCredits
+  // banks that fraction under THIS `reason` and no other, which is what keeps
+  // the markup chosen below from leaking across product lines: a pooled carry
+  // debited whichever reason happened to cross the whole-credit boundary, so a
+  // marked-up embedding fraction could be billed as an at-cost assistant turn.
   //
   // The markup is picked by REASON, not by caller: an explicit override
   // (tests, dry-run) still wins over both, but absent one, assistant tokens
