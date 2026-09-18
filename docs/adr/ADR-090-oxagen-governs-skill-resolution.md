@@ -80,7 +80,8 @@ Oxagen holds no credential and runs no tool, and still decides every call.
    resolve against would make the whole control optional.
 
 7. **Reflection is research-only and quarantined.** `use = "research"` is the only
-   accepted value. A capture is taken out of band after the seal, is excluded from the
+   accepted value. A capture is taken out of band after the seal, is a post-seal record rather than a frame (rule 9),
+   is excluded from the
    sealed chain, is not replayed on a fork, is billed as overhead rather than
    productive spend, is readable only under an organization-level `research.read`
    grant, and expires. It never enters a context frame, is never promoted to steering,
@@ -88,16 +89,26 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 
 8. **New stores**, defined in Appendix A (§A.10 `skills`), because that appendix is the
    definitive table list and says a table not listed does not exist: `skills.config_versions`,
-   `skills.resolutions`, and `skills.reflections` behind the quarantine — whose fence is the
-   `use` / `consent_scope` / `billed_as` / `retain_until` columns and the §5.2 policy over
-   them, not a convention. Config history is git history, not a table; a config version
+   `skills.resolutions`, and `skills.reflections` behind the quarantine. Its fence is **not**
+   §5.2, which is tenant isolation and would let an ordinary workspace read reach the rows.
+   It is four things the #3098 lane builds: a dedicated read capability, a new org-scoped
+   `research.read` IAM permission (absent from the catalogue today), an RLS predicate that
+   denies without it rather than the usual `org`/`workspace` one, and a job that deletes rows
+   past `retain_until` — an expiry nothing enforces is a comment. Config history is git history, not a table; a config version
    carries the `commit_sha` it was read at as its provenance.
 
-9. **New frame kinds** (added to the gateway-kind table in §7.5, beside `control.command`
-   and `control.steer`; Appendix C is a single envelope example and enumerates nothing):
-   `skills.searched`, `skills.loaded`,
-   `skills.resolved`, `control.interject`, `control.answer`, `reflection.captured`,
-   `repo.unknown`, `repo.bound`, `workspace.created`.
+9. **Eight new frame kinds** (added to the gateway-kind table in §7.5, beside
+   `control.command` and `control.steer`; Appendix C is a single envelope example and
+   enumerates nothing): `skills.searched`, `skills.resolved`, `skills.loaded`,
+   `control.interject`, `control.answer`, `repo.unknown`, `repo.bound`, `workspace.created`.
+
+   **A reflection is not among them, and is not a frame at all.** W13 and an earlier revision
+   of this ADR called it `reflection.captured`. That cannot hold: §8.2 requires every frame to
+   carry a dense `seq` with `prev_hash` and `hash`, and §8.3 seals a signed frame count and
+   Merkle root over every frame — so a frame appended after the seal would invalidate the
+   attestation, while a frame excluded from the chain has no valid sequence to belong to.
+   Rule 7 already puts the capture outside the sealed chain, so it is a **post-seal record**
+   in `skills.reflections`. The mockup draws it dashed for exactly this reason.
 
 10. **`list_skills` keeps its job and its name.** The observed-inventory read is not
     replaced by resolution; it answers a different question — what the harness
@@ -107,8 +118,8 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 ## Consequences
 
 - Spec §2 gains the run-versus-resolve sentence and keeps "no skills engine". §14's
-  page count and screen table, §7.5's gateway-kind table (all nine kinds, not
-  only the six skills ones), Appendix A's new §A.10 `skills` schema and its table count,
+  page count and screen table, §7.5's gateway-kind table (all eight frame kinds),
+  Appendix E's tool set (`search_skills`, and its totals), Appendix A's new §A.10 `skills` schema and its table count,
   App. E's `dispatch_command` entry and §19's page-coverage table all gain Skills and W13. Appendix F's route map is
   left alone: `ARCHITECTURE.md` records it as already drifted on other grounds (Ontology
   cut, Audit rescoped) and wins over it, so reconciling it is not this ADR's job.

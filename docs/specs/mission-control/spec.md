@@ -726,7 +726,6 @@ A frame is the `oxagen.frame/1.0` envelope, kept as is. Its fields are `event_id
 | `workspace.created` | control plane | a workspace created while a run was in flight; records that it came up with `skills.enabled` false, per ADR-090 |
 | `control.interject` | control channel | the question put to a person, why the loop stopped (e.g. `unbound_repo`), the timeout and what it falls back to (`deny`) |
 | `control.answer` | control channel | the answer, who gave it, and the frame it unblocked |
-| `reflection.captured` | out of band, after the seal | rubric axes, self-grade against the record, contradictions citing frames. **Outside the sealed chain and never replayed on a fork** (§quarantine, ADR-090) |
 | `control.command` | control channel | command, issuer, status (§7.4), the boundary it was applied at |
 | `control.steer` | control channel | steer text digest, issuer, `requested_mode` and `delivery_mode` (§7.3), `interrupted` (bool) with `interrupted_step {kind, seq}` when true, `degraded_reason` when the requested mode could not be honoured, `delivered_at_seq` (the `model.request` that carried it), status |
 | `proof.observed` | witness runner (§8.5), the isolated service that runs witnesses, or Stella's local ladder when the run came through Stella | witness id, oracle kind (the type of check the witness makes), target and PR refs and shas, normalized command digest, verdict, fail fingerprint (a hash of the failure output), tamper exclusion (a check that the witness was not altered), disclosure grain (how much detail the worker is told), runner attestation (the runner's signed statement of what it ran) |
@@ -2024,13 +2023,19 @@ version history is git history. These tables record what Oxagen decided against 
 
 **`skills.reflections`** (class `workspace`; **quarantined**; retention-bounded; read only under an org `research.read` grant)
 
-The quarantine is these columns plus the §5.2 policy over them, not a convention: a reflection never enters a context
-frame, is never promoted to steering, does not price the work, is not evidence about a person, and expires.
+The quarantine is not §5.2, which supplies tenant isolation only and would let any ordinary workspace read reach
+these rows. It is four mechanisms the #3098 lane must build, named here because a fence nobody implements is not a
+fence: (1) a dedicated read capability — an ordinary workspace read must not return these rows; (2) an
+**org-scoped `research.read` IAM permission**, which does **not** exist in the catalogue today and is created by
+that lane; (3) an RLS predicate on this table that denies unless that permission is held, rather than the
+`org`/`workspace` predicate every other table uses; and (4) a job that **deletes** rows past `retain_until`, since
+an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
+does not price the work, and is not evidence about a person.
 
 | Column | Type | Notes |
 |---|---|---|
 | `run_id`, `attempt_id` | text | the sealed run it is about; captured **after** the seal and outside the sealed chain |
-| `frame_seq` | int | the `reflection.captured` frame; dashed in the player, never replayed on a fork |
+| `captured_after_seal` | boolean | always true; a reflection is a **post-seal record, not a frame** (§8.2 requires a dense `seq` and hash chain, §8.3 seals a Merkle root over every frame, so a frame appended after the seal would invalidate the attestation). The player draws it dashed because it is not a chain member, and a fork never replays it |
 | `rubric` | jsonb | axes, the agent's self-grade, and the record's value for each |
 | `contradictions` | jsonb | each citing the frame that disagrees with the self-grade |
 | `use` | text | `research` is the only accepted value; any other value is refused at write |
@@ -2053,7 +2058,7 @@ frame, is never promoted to steering, does not price the work, is not evidence a
 | `chat.*` conversations | runs of the in-app agent |
 | `mcp.*`, `plugin.*`, `content.*`, `cms.*`, `environments.*`, `eval.*`, `workflow.*`, `ai.*`, `ratelimit.*`, `engram.*`, `codegraph.*` | gone |
 
-The nine schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `billing`, `audit`. Thirty-five tables in the wedge, thirty-seven in full. Every tenant table uses one of the two policy classes in §5.2.
+The ten schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `billing`, `audit`, `skills`. Thirty-eight tables in the wedge, forty in full. Every tenant table uses one of the two policy classes in §5.2.
 
 ## Appendix B. Neo4j model (per organization database)
 
@@ -2215,7 +2220,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **97 agent tools** (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **98 agent tools** (79 of them in the wedge; `search_skills` added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2262,6 +2267,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `dispatch_command` | dispatch_tacho_command | pause, resume, steer, cancel, revoke, answer (the reply to a `control.interject`, ADR-090) |
 | `list_runs` | list_executions, list_tacho_sessions | by operator, agent, task, tier, verdict |
 | `list_skills` | (new; `tacho.sessions.skills_available` had no reader) | read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098) |
+| `search_skills` | (new; ADR-090) | the one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds **before ranking**, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move |
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |

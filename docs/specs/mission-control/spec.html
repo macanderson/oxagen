@@ -1331,11 +1331,6 @@ sandbox = &quot;read-only&quot;
 <td>the answer, who gave it, and the frame it unblocked</td>
 </tr>
 <tr>
-<td><code>reflection.captured</code></td>
-<td>out of band, after the seal</td>
-<td>rubric axes, self-grade against the record, contradictions citing frames. <strong>Outside the sealed chain and never replayed on a fork</strong> (§quarantine, ADR-090)</td>
-</tr>
-<tr>
 <td><code>control.command</code></td>
 <td>control channel</td>
 <td>command, issuer, status (§7.4), the boundary it was applied at</td>
@@ -5152,8 +5147,14 @@ version history is git history. These tables record what Oxagen decided against 
 </tbody>
 </table></div>
 <p><strong><code>skills.reflections</code></strong> (class <code>workspace</code>; <strong>quarantined</strong>; retention-bounded; read only under an org <code>research.read</code> grant)</p>
-<p>The quarantine is these columns plus the §5.2 policy over them, not a convention: a reflection never enters a context
-frame, is never promoted to steering, does not price the work, is not evidence about a person, and expires.</p>
+<p>The quarantine is not §5.2, which supplies tenant isolation only and would let any ordinary workspace read reach
+these rows. It is four mechanisms the #3098 lane must build, named here because a fence nobody implements is not a
+fence: (1) a dedicated read capability — an ordinary workspace read must not return these rows; (2) an
+<strong>org-scoped <code>research.read</code> IAM permission</strong>, which does <strong>not</strong> exist in the catalogue today and is created by
+that lane; (3) an RLS predicate on this table that denies unless that permission is held, rather than the
+<code>org</code>/<code>workspace</code> predicate every other table uses; and (4) a job that <strong>deletes</strong> rows past <code>retain_until</code>, since
+an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
+does not price the work, and is not evidence about a person.</p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -5169,9 +5170,9 @@ frame, is never promoted to steering, does not price the work, is not evidence a
 <td>the sealed run it is about; captured <strong>after</strong> the seal and outside the sealed chain</td>
 </tr>
 <tr>
-<td><code>frame_seq</code></td>
-<td>int</td>
-<td>the <code>reflection.captured</code> frame; dashed in the player, never replayed on a fork</td>
+<td><code>captured_after_seal</code></td>
+<td>boolean</td>
+<td>always true; a reflection is a <strong>post-seal record, not a frame</strong> (§8.2 requires a dense <code>seq</code> and hash chain, §8.3 seals a Merkle root over every frame, so a frame appended after the seal would invalidate the attestation). The player draws it dashed because it is not a chain member, and a fork never replays it</td>
 </tr>
 <tr>
 <td><code>rubric</code></td>
@@ -5257,7 +5258,7 @@ frame, is never promoted to steering, does not price the work, is not evidence a
 </tr>
 </tbody>
 </table></div>
-<p>The nine schemas are <code>auth</code>, <code>org</code>, <code>wrk</code>, <code>iam</code>, <code>tools</code>, <code>control</code>, <code>cost</code>, <code>billing</code>, <code>audit</code>. Thirty-five tables in the wedge, thirty-seven in full. Every tenant table uses one of the two policy classes in §5.2.</p>
+<p>The ten schemas are <code>auth</code>, <code>org</code>, <code>wrk</code>, <code>iam</code>, <code>tools</code>, <code>control</code>, <code>cost</code>, <code>billing</code>, <code>audit</code>, <code>skills</code>. Thirty-eight tables in the wedge, forty in full. Every tenant table uses one of the two policy classes in §5.2.</p>
 <h2 id="appendix-b-neo4j-model-per-organization-database">Appendix B. Neo4j model (per organization database)</h2>
 <p>Every organization has its own database (§5.3). Every node and relationship carries <code>ws</code> (the workspace public id), and every node carries <code>id</code> (its public id), <code>created_at</code>, <code>valid_from</code>, <code>valid_to</code>, <code>recorded_at</code>, and <code>is_system</code>. The tables below list what is specific to each label and relationship type.</p>
 <h3 id="b-1-node-labels">B.1 Node labels</h3>
@@ -5908,7 +5909,7 @@ frame, is never promoted to steering, does not price the work, is not evidence a
 </table></div>
 <p>How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.</p>
 <h2 id="appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</h2>
-<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>97 agent tools</strong> (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
+<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>98 agent tools</strong> (79 of them in the wedge; <code>search_skills</code> added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
 <p><strong>Organization and workspace (11)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -6097,6 +6098,11 @@ frame, is never promoted to steering, does not price the work, is not evidence a
 <td><code>list_skills</code></td>
 <td>(new; <code>tacho.sessions.skills_available</code> had no reader)</td>
 <td>read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098)</td>
+</tr>
+<tr>
+<td><code>search_skills</code></td>
+<td>(new; ADR-090)</td>
+<td>the one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds <strong>before ranking</strong>, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move</td>
 </tr>
 <tr>
 <td><code>get_run</code></td>
