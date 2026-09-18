@@ -84,7 +84,7 @@ export function HexField({
     >
       <defs>
         <linearGradient id="oxHexEmber" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#977017" />
+          <stop offset="0" stopColor="#8A7223" />
           <stop offset="0.5" stopColor="#D4AF37" />
           <stop offset="1" stopColor="#F1CE65" />
         </linearGradient>

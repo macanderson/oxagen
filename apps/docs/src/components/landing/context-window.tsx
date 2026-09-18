@@ -125,7 +125,7 @@ export function ContextWindow() {
             width: `${used}%`,
             background: governed
               ? "var(--success, #7BC98A)"
-              : "linear-gradient(90deg, var(--_ember-a,#977017), var(--_ember-b,#D4AF37), var(--_ember-c,#F1CE65))",
+              : "linear-gradient(90deg, var(--_ember-a,#8A7223), var(--_ember-b,#D4AF37), var(--_ember-c,#F1CE65))",
           }}
         />
       </div>
