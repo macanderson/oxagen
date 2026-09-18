@@ -19,8 +19,10 @@ import {
   it,
   vi,
 } from "vitest";
+import type { ReactNode } from "react";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { PageRecord } from "./page-record";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
 declare global {
@@ -64,23 +66,29 @@ function OpenIt() {
 
 // A fresh element each time: React bails out of a re-render handed the very
 // same element, and these tests re-render to move the person to another page.
-const tree = () => (
+//
+// `page` stands in for what the layout puts beside the chrome. It sits outside
+// `ShellStateProvider` because the real page does: `ShellClient` renders chrome
+// only, which is why a page declares its record through a module store rather
+// than through the shell's context.
+const tree = (page?: ReactNode) => (
   <IntlProvider>
     <ShellStateProvider>
       <OpenIt />
       <AssistantFlyout />
     </ShellStateProvider>
+    {page}
   </IntlProvider>
 );
 
-async function openFlyout() {
+async function openFlyout(page?: ReactNode) {
   const user = userEvent.setup();
-  const { rerender } = render(tree());
+  const { rerender } = render(tree(page));
   await user.click(screen.getByRole("button", { name: "open assistant" }));
   /** Move to another page, the way a navigation does under the persistent shell. */
   const renavigate = (to: string) => {
     pathname.mockReturnValue(to);
-    rerender(tree());
+    rerender(tree(page));
   };
   return {
     user,
@@ -184,10 +192,11 @@ describe("AssistantFlyout", () => {
     });
   });
 
-  // `usePathname()` drops the query string, and Spend and Steering keep the
-  // record on screen there rather than in a path segment (`shared/safe-path.ts`
-  // mints `?finding=` and `?proposal=`). Without these the agent is asked
-  // about "this finding" with no indication of which one.
+  // The page declares what it is showing, and the shell believes it. It used to
+  // read the URL instead, which is guessing: `/spend?tab=budgets&finding=fnd_1`
+  // renders no finding, `/register/wrap?agent=...` keeps the record in the query
+  // and the step in the path, and any value under the cap was forwarded. All
+  // three are one defect, and the page's own parse is the thing that knows.
   it.each([
     {
       page: "a finding on Spend",
@@ -196,20 +205,22 @@ describe("AssistantFlyout", () => {
       entityId: "fnd_014",
     },
     {
-      page: "a key's drill on Spend",
-      url: "/acme/core-platform/spend?tab=keys&drill=key_88",
-      route: "spend",
-      entityId: "key_88",
-    },
-    {
       page: "a proposal on Steering",
-      url: "/acme/core-platform/steering?tab=proposals&proposal=prp_7",
+      url: "/acme/core-platform/steering?tab=prs&proposal=prp_7",
       route: "steering",
       entityId: "prp_7",
     },
-  ])("carries the record a query value selects on $page", async (view) => {
+    {
+      page: "the agent being registered, not the step",
+      url: "/acme/core-platform/register/wrap?agent=agt_31",
+      route: "register",
+      entityId: "agt_31",
+    },
+  ])("carries the record $page declares", async (view) => {
     pathname.mockReturnValue(view.url);
-    const { user } = await openFlyout();
+    const { user } = await openFlyout(
+      <PageRecord route={view.route} id={view.entityId} />,
+    );
     await ask(user, "explain this");
 
     expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
@@ -218,9 +229,43 @@ describe("AssistantFlyout", () => {
     });
   });
 
-  // An allow-list, not a pass-through: the query string is whatever the address
-  // bar says, so a value no route asked for is not page context.
-  it("carries no record for a query value no route names (negative)", async () => {
+  // The case the old URL reading got wrong, and the reason the page declares:
+  // `parseSpendView` ignores a `finding` outside the Findings tab, so the page
+  // renders none and says so, while the query string still names one.
+  it("carries no record when the page declares none, whatever the query says (negative)", async () => {
+    pathname.mockReturnValue(
+      "/acme/core-platform/spend?tab=budgets&finding=fnd_1",
+    );
+    const { user } = await openFlyout(<PageRecord route="spend" id={null} />);
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "spend",
+      entityId: null,
+    });
+  });
+
+  // The sharpest form of the same rule, and the original defect exactly. On
+  // `/register/name` no agent has been minted yet, so the page declares `null`
+  // while the path still carries a segment after the route. A declaration of
+  // "no record" has to outrank that segment, or the assistant is told the
+  // record on screen is `name` -- the step.
+  it("believes a page that declares no record over the path segment beside it (negative)", async () => {
+    pathname.mockReturnValue("/acme/core-platform/register/name");
+    const { user } = await openFlyout(
+      <PageRecord route="register" id={null} />,
+    );
+    await ask(user, "what do I do here?");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "register",
+      entityId: null,
+    });
+  });
+
+  // A page that declares nothing at all leaves the query alone too: the shell
+  // has no second way to read it any more.
+  it("carries no record for a query value on a page that declares nothing (negative)", async () => {
     pathname.mockReturnValue(
       "/acme/core-platform/spend?tab=keys&note=ignore+me&proposal=wrong-route",
     );
@@ -233,29 +278,15 @@ describe("AssistantFlyout", () => {
     });
   });
 
-  // A key present but empty is a cleared selection — Spend leaves `?finding=`
-  // behind when the finding is closed — so the next key is what is on screen.
-  it("reads past a query value that names nothing to the one that does", async () => {
-    pathname.mockReturnValue(
-      "/acme/core-platform/spend?tab=keys&finding=&drill=key_88",
+  // React may mount the next page before unmounting the last, so a declaration
+  // can outlive the page that made it. It carries its route, and the flyout
+  // reads it only for the route it is on, which makes a leftover unusable
+  // rather than wrong.
+  it("ignores a declaration left by another route (negative)", async () => {
+    pathname.mockReturnValue("/acme/core-platform/steering?tab=prs");
+    const { user } = await openFlyout(
+      <PageRecord route="spend" id="fnd_014" />,
     );
-    const { user } = await openFlyout();
-    await ask(user, "explain this");
-
-    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
-      route: "spend",
-      entityId: "key_88",
-    });
-  });
-
-  // `entityId` is capped at 256 characters by `assistantPageContextSchema`; a
-  // longer one is no id, and sending it would refuse the whole turn for being
-  // invalid rather than answer the question without it.
-  it("drops a record id longer than the contract accepts rather than refusing the turn (negative)", async () => {
-    pathname.mockReturnValue(
-      `/acme/core-platform/steering?proposal=${"p".repeat(257)}`,
-    );
-    const { user } = await openFlyout();
     await ask(user, "explain this");
 
     expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
@@ -264,27 +295,61 @@ describe("AssistantFlyout", () => {
     });
   });
 
-  // Register an agent is the route where the path segment is the *step* and the
-  // record is in the query: `routes.register` mints `/register/wrap?agent=…`.
-  // Without its row, "why has this agent not enrolled?" sent `entityId: "wrap"`.
-  it.each(["wrap", "run"])(
-    "carries the agent being registered, not the %s step it is on",
-    async (step) => {
-      pathname.mockReturnValue(
-        `/acme/core-platform/register/${step}?agent=agt_31`,
-      );
-      const { user } = await openFlyout();
-      await ask(user, "why has this not enrolled?");
+  // React is free to mount the next page before unmounting the last, and on
+  // that ordering the departing page's cleanup runs after the arriving page has
+  // already declared. A cleanup that clears unconditionally takes the new
+  // page's record with it, and the assistant is asked about nothing while a
+  // record is plainly on screen. The declaration is cleared only by whoever
+  // still owns it.
+  it("keeps the arriving page's record when the departing page unmounts after it (negative)", async () => {
+    pathname.mockReturnValue("/acme/core-platform/steering?tab=prs");
+    const user = userEvent.setup();
+    const { rerender } = render(
+      tree(
+        <>
+          <PageRecord key="leaving" route="spend" id="fnd_014" />
+          <PageRecord key="arriving" route="steering" id="prp_7" />
+        </>,
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "open assistant" }));
 
-      expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
-        route: "register",
-        entityId: "agt_31",
-      });
-    },
-  );
+    // The departing page goes; the arriving one stays mounted and does not
+    // re-declare, because nothing about it changed.
+    rerender(
+      tree(
+        <>
+          <PageRecord key="arriving" route="steering" id="prp_7" />
+        </>,
+      ),
+    );
 
-  // A query value on a route that keeps its record in the path is not the
-  // record: the table decides which half of the URL is read.
+    await ask(user, "explain this");
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "steering",
+      entityId: "prp_7",
+    });
+  });
+
+  // `entityId` is capped at 256 characters by `assistantPageContextSchema`; a
+  // longer one is no id, and sending it would refuse the whole turn for being
+  // invalid rather than answer the question without it.
+  it("drops a record id longer than the contract accepts rather than refusing the turn (negative)", async () => {
+    pathname.mockReturnValue("/acme/core-platform/steering?tab=prs");
+    const { user } = await openFlyout(
+      <PageRecord route="steering" id={"p".repeat(257)} />,
+    );
+    await ask(user, "explain this");
+
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      route: "steering",
+      entityId: null,
+    });
+  });
+
+  // A route whose record is the path segment after it needs no declaration:
+  // there the URL cannot disagree with the page, because there is nothing to
+  // parse. The query string is not read on any route any more.
   it("reads the path on a route that keeps its record there, whatever the query says", async () => {
     pathname.mockReturnValue(
       "/acme/core-platform/runs/arun_01k9?finding=not-this",
