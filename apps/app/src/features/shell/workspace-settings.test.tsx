@@ -291,11 +291,10 @@ describe("the control that opens it", () => {
     Shell();
     const list = screen.getByRole("list", { name: "Workspace" });
     const items = within(list).getAllByRole("listitem");
-    const last = items[items.length - 1];
-    expect(last?.textContent).toBe("Settings");
-    expect(
-      within(last as HTMLElement).getByTestId("open-workspace-settings"),
-    ).toBeTruthy();
+    const last = items.at(-1);
+    if (!last) throw new Error("the Workspace nav list rendered no items");
+    expect(last.textContent).toBe("Settings");
+    expect(within(last).getByTestId("open-workspace-settings")).toBeTruthy();
     cleanup();
     await openSettings();
     await waitFor(() => {
