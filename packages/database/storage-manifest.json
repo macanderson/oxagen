@@ -3392,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d6f7405445c415fcec4a30d6fe296d95d32b83428f80fd4d3b535d2c5ab1bca5",
+  "contentHash": "469f0990ccdf533c7c53990906b98cc9fe79fe6825cb241fc6e10bec159eabab",
   "domains": [
     {
       "name": "agent",
@@ -14309,6 +14309,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "created_at",

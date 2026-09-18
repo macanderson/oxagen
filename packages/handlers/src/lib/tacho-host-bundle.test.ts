@@ -46,6 +46,7 @@ function bundle(bundleFeatures: string[] = CURRENT) {
     host(bundleFeatures),
     { org: 1, workspace: 1 },
     { mode: "digest_only", classes: [] },
+    null,
     NOW,
   );
 }
