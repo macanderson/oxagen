@@ -1508,13 +1508,13 @@ sandbox = &quot;read-only&quot;
 <tbody>
 <tr>
 <td><code>model.request</code></td>
-<td>model proxy (Phase 4 of §17.2; until then a model call is known only from the harness's own telemetry, client-attested)</td>
-<td>provider, model, full request (messages, tools, params), injected steering digests, <code>injected_steer_ids[]</code> naming the <code>control.steer</code> frames this request carried, context frame ids and usage report, provider request id</td>
+<td>model proxy (Phase 4 of §17.2; until then a model call is known only from the harness's own telemetry, client-attested), or Oxagen's own model layer for the in-app agent (§4.5)</td>
+<td>provider, model, params (no messages, no tools), <code>content.digest</code> over the canonical request, request size, the input-token count and which estimator produced it, the output cap and whether the proxy set it, the run binding (<code>token</code>, <code>process</code>, <code>launcher</code>), <code>revocation_freshness</code> when admitted offline, injected steering digests, <code>injected_steer_ids[]</code> naming the <code>control.steer</code> frames this request carried, context frame ids, provider request id. From the proxy the body is never present and there is no <code>bytes_ref</code> (§13.6). From Oxagen's own model layer the body is retained under §13.1</td>
 </tr>
 <tr>
 <td><code>model.response</code></td>
-<td>model proxy</td>
-<td>full response, stop reason, usage by token class, latency, <strong>cost record</strong> (§12)</td>
+<td>model proxy, or Oxagen's own model layer</td>
+<td><code>content.digest</code> over the canonical response, response size, stop reason, usage by token class, latency, <strong>cost record</strong> (§12) with its basis and the settled reservation. From the proxy the body is never present and there is no <code>bytes_ref</code> (§13.6). From Oxagen's own model layer the body is retained under §13.1</td>
 </tr>
 <tr>
 <td><code>steering.manifest</code></td>
