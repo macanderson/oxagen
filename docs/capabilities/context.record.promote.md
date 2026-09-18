@@ -32,8 +32,8 @@ Append a lifecycle action to a context record's hash-chained promotions ledger (
 
 ## Side effects
 
-Inserts one `agent.context_promotions` row and updates `context_records.status` (and, for promote, `active_version_id`). The approver recorded on the ledger row is the calling user.
-- **Promoting a record is what makes it steer.** From the next turn, every active record in the workspace is rendered into the turn's messages (ADR-051). Before this, a promoted record changed nothing about how an agent behaved.
+Inserts one `agent.context_promotions` row and updates `context_records.status` (and, for promote, `active_version_id`). A promote also refreshes the record row's `kind`, `force`, `constraint_effect`, and `statement` from the version it pins, so the row and the steering text compiled from it describe the version in service rather than the one merged last. A version the legacy `publish_context_record` path wrote carries no classification of its own, and the row keeps what it has. The approver recorded on the ledger row is the calling user.
+- **Promoting a record is what makes it steer.** Every active `must` or `should` record in the workspace is compiled into the policy bundle's `context.system`, and a promote moves the bundle etag, so each enrolled host fetches the new text on its next poll (ADR-091, which supersedes ADR-051's per-turn delivery). Before this, a promoted record changed nothing about how an agent behaved.
 
 ## Errors
 

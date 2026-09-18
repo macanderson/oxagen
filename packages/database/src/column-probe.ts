@@ -178,10 +178,50 @@ export async function hasColumn(
   planeKey: string,
   nowMs: number = Date.now(),
 ): Promise<boolean> {
+  return probe(tx, ref, planeKey, nowMs, true);
+}
+
+/**
+ * The same question, without trusting a cached MISS.
+ *
+ * For a caller whose wrong answer does not heal itself. A read that projects a
+ * column away for one more request compiles from the fallback and is right
+ * again on the next call, so it can spend {@link NEGATIVE_PROBE_TTL_MS} being
+ * conservative. A WRITE that omits a column cannot: the row it wrote carries
+ * NULL for good, the one-time migration backfill has already run, and nothing
+ * afterwards fills it in (discussion_r4050451667).
+ *
+ * So a write path asks the database every time rather than believing a miss
+ * recorded up to a minute ago. A cached POSITIVE is still trusted, here as
+ * everywhere: a column that exists does not stop existing, and that is the
+ * answer on every call after the migration lands. The extra round trip is
+ * therefore paid only while the migration is genuinely pending, and only by
+ * writes, which are rare next to the reads this protects.
+ */
+export async function hasColumnFresh(
+  tx: ProbeTx,
+  ref: ColumnRef,
+  planeKey: string,
+  nowMs: number = Date.now(),
+): Promise<boolean> {
+  return probe(tx, ref, planeKey, nowMs, false);
+}
+
+async function probe(
+  tx: ProbeTx,
+  ref: ColumnRef,
+  planeKey: string,
+  nowMs: number,
+  trustCachedMiss: boolean,
+): Promise<boolean> {
   const key = keyOf(planeKey, ref);
   const seen = answers.get(key);
   if (seen?.present === true) return true;
-  if (seen !== undefined && nowMs - seen.probedAtMs < NEGATIVE_PROBE_TTL_MS) {
+  if (
+    trustCachedMiss &&
+    seen !== undefined &&
+    nowMs - seen.probedAtMs < NEGATIVE_PROBE_TTL_MS
+  ) {
     return false;
   }
   const rows = await tx.execute(sql`
