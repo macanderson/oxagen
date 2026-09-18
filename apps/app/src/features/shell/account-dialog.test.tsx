@@ -526,5 +526,8 @@ it.each(["profile", "preferences", "security", "privacy"] as const)(
     if (tab === "preferences") await screen.findByTestId("account-timezone");
     await expectNoAxe(dialog);
   },
-  15_000,
+  // Preferences draws every zone `Intl.supportedValuesOf` knows — around 400
+  // options — and axe walks all of them. It is the slowest check in the file
+  // and it expired at 15s on a loaded runner.
+  30_000,
 );
