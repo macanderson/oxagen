@@ -15,6 +15,7 @@ import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
 import { verifyBundle } from "../host/bundle";
 import {
+  ControlError,
   createControlClient,
   type ControlClient,
   type FetchLike,
@@ -80,6 +81,7 @@ import {
 import { Shipper } from "./spool";
 
 export const TACHO_WRAPPER_VERSION = "2.1.1";
+import { TranscriptTailer } from "./transcript-tailer";
 
 export interface DaemonTimers {
   shipMs: number;
@@ -141,6 +143,7 @@ export interface DaemonHandle {
   detector: Detector;
   hostRecorder: SessionRecorder;
   host: () => HostFile;
+  transcriptTailer: TranscriptTailer;
   port: number | undefined;
   /** The model proxy's bound port, or undefined when it is not listening. */
   modelProxyPort: number | undefined;
@@ -261,9 +264,20 @@ export async function startDaemon(
   // that cannot reach its control plane must get quieter, not louder.
   const COMMAND_POLL_MIN_BACKOFF_MS = 2_000;
   const COMMAND_POLL_MAX_BACKOFF_MS = 60_000;
+  // A 400 or 422 from the commands endpoint is not an outage, and doubling
+  // toward 60 s treats it as one. It means the daemon and the control plane
+  // disagree on the wire: on 2026-09-18 a daemon still sending
+  // `tacho.commands.v1` polled a control plane that requires v2 and collected
+  // 3,683 HTTP 400s in two and a half hours, which tripped the per-host
+  // limiter and throttled `/v1/tacho/events` with it. No retry fixes a
+  // schema, only an upgrade does, so the poll parks at a 15 minute floor,
+  // says so once with the server's own words, and leaves ingest (a separate
+  // path with its own budget) shipping.
+  const COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS = 15 * 60_000;
   let commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
   let commandPollNextAttemptAt = 0;
   let commandPollFailures = 0;
+  let commandPollProtocolMismatchLogged = false;
 
   // The client is built before the Shipper but must deliver rate-limit hints
   // to it, so the callback is indirected through a sink that the Shipper fills
@@ -457,9 +471,29 @@ export async function startDaemon(
       commandPollFailures = 0;
       commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
       commandPollNextAttemptAt = 0;
+      commandPollProtocolMismatchLogged = false;
     } catch (error) {
       pendingAcks.unshift(...acks);
       commandPollFailures += 1;
+      if (
+        error instanceof ControlError &&
+        (error.status === 400 || error.status === 422)
+      ) {
+        commandPollBackoffMs = COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
+        commandPollNextAttemptAt =
+          now() + COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
+        // Once, not every 15 minutes: the line is the same until someone
+        // upgrades, and repeating it is the log growth this guards against.
+        // The health report the host row shows cannot carry it yet, so the
+        // log is where the fact lives.
+        if (!commandPollProtocolMismatchLogged) {
+          commandPollProtocolMismatchLogged = true;
+          log(
+            `command poll refused with ${error.status}: this tachod (${host.wrapper_version}) and the control plane disagree on the wire, so the poll waits 15 minutes between attempts until tachod is upgraded; the server said: ${error.body.slice(0, 256)}`,
+          );
+        }
+        return;
+      }
       const retryInMs = commandPollBackoffMs;
       commandPollNextAttemptAt = now() + retryInMs;
       commandPollBackoffMs = Math.min(
@@ -470,6 +504,57 @@ export async function startDaemon(
       // watching this log needs to tell one failure from the eight hundredth,
       // and needs to know the daemon is holding off rather than wedged.
       log(
+  // --- transcript tailer -------------------------------------------------
+  // The detector above only stats a transcript's mtime. The tailer reads it:
+  // every session that reported a `transcript_path` has its file tailed on
+  // the tick, and a subagent's finished transcript is fed once when its
+  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
+  const transcriptTailer = new TranscriptTailer({
+    sessions: () => registry.list(),
+    session: (id) => registry.get(id),
+    record,
+    statePath: paths.transcriptTailState,
+    log,
+  });
+
+  /**
+   * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
+   * drains the session's transcript so the turn's model calls sit on the
+   * chain before the frame that closes it, and a `SubagentStop` feeds the
+   * subagent's transcript to the child chain before that chain is finalized.
+   */
+  function tailBeforeHook(payload: unknown): void {
+    if (payload === null || typeof payload !== "object") return;
+    const input = payload as Record<string, unknown>;
+    const sessionId = input["session_id"];
+    const hookName = input["hook_event_name"];
+    if (typeof sessionId !== "string") return;
+    try {
+      if (hookName === "SubagentStop") {
+        const agentId = input["agent_id"];
+        const path = input["agent_transcript_path"];
+        if (typeof agentId === "string" && typeof path === "string") {
+          const fed = transcriptTailer.ingestSubagentTranscript(
+            sessionId,
+            agentId,
+            path,
+          );
+          if (fed === undefined)
+            log(`subagent transcript ${path} was not there to read`);
+        }
+      }
+      if (hookName === "Stop" || hookName === "SessionEnd")
+        transcriptTailer.drain(sessionId);
+    } catch (error) {
+      // The hook must still be answered; a transcript that cannot be read
+      // is a gap in the record, not a reason to stall the agent.
+      log(
+        `transcript tail before ${String(hookName)} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  // --- end transcript tailer ---------------------------------------------
+
         `command poll failed (${commandPollFailures} in a row, retrying in ${Math.round(retryInMs / 1000)}s): ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -568,6 +653,7 @@ export async function startDaemon(
           gap_duration_ms: Math.max(0, now() - Date.parse(firstAt)),
           incident_kind: "telemetry_gap",
           incident_severity: 1,
+    tailBeforeHook(envelope.payload); // transcript tailer
         }),
       );
     }
@@ -1092,6 +1178,7 @@ export async function startDaemon(
     host: () => host,
     port,
     get modelProxyPort() {
+      transcriptTailer.tick(); // transcript tailer: bounded per file per tick
       return modelProxyListener.listening()
         ? modelProxyListener.port()
         : undefined;
@@ -1115,3 +1202,4 @@ export async function startDaemon(
     },
   };
 }
+    transcriptTailer,

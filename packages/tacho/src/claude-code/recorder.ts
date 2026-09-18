@@ -23,6 +23,12 @@ import {
   prepareContent,
 } from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
+import {
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  LlmCallLedger,
+  type LlmCallLedgerState,
+  withoutUsage,
+} from "./llm-call-dedupe";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   type ClaudeCodeContext,
@@ -91,6 +97,8 @@ export interface RecorderState {
   harnessVersion?: string;
   envSnapshot?: Record<string, string>;
   totals: Partial<TranscriptTotals>;
+  /** Model calls already sealed, keyed as `llm-call-dedupe.ts` keys them. */
+  llmCalls?: LlmCallLedgerState;
   children: Record<
     string,
     {
@@ -147,6 +155,7 @@ export class SessionRecorder {
   private envSnapshot: Record<string, string> | undefined;
   readonly totals: Partial<TranscriptTotals> = {};
   readonly metrics: OtelMetricPoint[] = [];
+  private llmCalls = new LlmCallLedger();
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -184,6 +193,7 @@ export class SessionRecorder {
     this.harnessVersion = state.harnessVersion ?? this.harnessVersion;
     this.envSnapshot = state.envSnapshot;
     Object.assign(this.totals, state.totals);
+    this.llmCalls = new LlmCallLedger(state.llmCalls);
     for (const [subagentId, link] of Object.entries(state.children)) {
       const recorder = new SessionRecorder({
         context: this.options.context,
@@ -242,6 +252,7 @@ export class SessionRecorder {
         ? { envSnapshot: this.envSnapshot }
         : {}),
       totals: { ...this.totals },
+      llmCalls: this.llmCalls.state(),
       children,
     };
   }
@@ -314,13 +325,21 @@ export class SessionRecorder {
       this.stopped = true;
       this.turnOpen = false;
     }
+    // A proxy frame is the first sighting of its call by construction (it
+    // is sealed as the response ends); noting it is what lets the transcript
+    // and OTel sightings that follow be stamped as its duplicates.
+    const duplicate =
+      kind === "llm_call"
+        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ??
+          {})
+        : {};
     return this.seal(kind, body, {
       ts: fields.ts ?? this.now(),
       source: fields.source ?? "collector",
       ...(fields.hook_event_name !== undefined
         ? { hook_event_name: fields.hook_event_name }
         : {}),
-      attrs: fields.attrs ?? {},
+      attrs: { ...fields.attrs, ...duplicate },
       ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
       ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
@@ -527,6 +546,22 @@ export class SessionRecorder {
     }
   }
 
+  /**
+   * The attrs an `llm_call` carries when another source already sealed the
+   * same call, or undefined when this sighting is a repeat from the same
+   * source and must not be sealed at all. See `llm-call-dedupe.ts`.
+   */
+  private llmCallDuplicateAttrs(
+    body: Record<string, unknown>,
+    source: string,
+  ): Record<string, string> | undefined {
+    const verdict = this.llmCalls.note(body, source);
+    if (verdict.kind === "repeat") return undefined;
+    if (verdict.kind === "duplicate")
+      return { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of };
+    return {};
+  }
+
   /** Ingest one hook payload with the hook process environment. */
   ingestHook(
     raw: unknown,
@@ -698,7 +733,8 @@ export class SessionRecorder {
         continue;
       const target = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
-      out.push(target.sealOtelDraft(draft));
+      const sealed = target.sealOtelDraft(draft);
+      if (sealed !== undefined) out.push(sealed);
     }
     return out;
   }
@@ -737,8 +773,16 @@ export class SessionRecorder {
       this.harnessVersion = standard.resource.harness_version;
   }
 
-  private sealOtelDraft(draft: OtelDraft): TachoEvent {
+  private sealOtelDraft(draft: OtelDraft): TachoEvent | undefined {
     this.absorbStandard(draft.standard);
+    // Only the log record takes part: the control plane counts tokens from
+    // `otel_log`, never from a span, so a span sealed first must not turn the
+    // log record that follows into the duplicate.
+    const duplicate =
+      draft.kind === "llm_call" && draft.source === "otel_log"
+        ? this.llmCallDuplicateAttrs(draft.body, draft.source)
+        : {};
+    if (duplicate === undefined) return undefined;
     return this.seal(draft.kind, draft.body, {
       ts: draft.ts,
       source: draft.source,
@@ -746,7 +790,7 @@ export class SessionRecorder {
       ...(draft.standard.harness_event_sequence !== undefined
         ? { harness_event_sequence: draft.standard.harness_event_sequence }
         : {}),
-      attrs: draft.attrs,
+      attrs: { ...draft.attrs, ...duplicate },
       ...(draft.span !== undefined ? { span: draft.span } : {}),
       ...(draft.content_digest !== undefined
         ? { content_digest: draft.content_digest }
@@ -775,11 +819,23 @@ export class SessionRecorder {
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
       this.absorbContext(draft.context);
+      let body = draft.body;
+      let duplicate =
+        draft.kind === "llm_call"
+          ? this.llmCallDuplicateAttrs(draft.body, "transcript")
+          : {};
+      if (duplicate === undefined) {
+        // A later content block of a message the chain already holds: its
+        // text still ships as a body, its usage does not count again.
+        body = withoutUsage(body);
+        duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
+      }
       out.push(
-        this.seal(draft.kind, draft.body, {
+        this.seal(draft.kind, body, {
           ts: draft.ts,
           source: "transcript",
-          attrs: draft.attrs,
+          attrs: { ...draft.attrs, ...duplicate },
+          ...(draft.content !== undefined ? { content: draft.content } : {}),
           raw_source_digest: draft.raw_source_digest,
           turn: draft.turn ?? {},
         }),
