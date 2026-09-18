@@ -584,15 +584,18 @@ describe("the negotiated write path", () => {
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
     });
-    const setLock = fake.log.find((l) => l.op === "lock")?.sql;
+    const setLocks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
     fake.log.length = 0;
 
     await closeNegotiatedPriceEntry({ ...SET, at: T2 });
     const ops = fake.log.map((l) => l.op);
     expect(ops[0]).toBe("lock");
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
-    // The SAME lock the write takes, not a second one the write never waits on.
-    expect(fake.log[0]?.sql).toBe(setLock);
+    // The SAME locks the write takes, in the same order: the class first,
+    // then the key. Not a second set the write never waits on.
+    const closeLocks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
+    expect(closeLocks).toEqual(setLocks);
+    expect(closeLocks[0]).toContain("price_entry_class:");
   });
 
   // After a future-dated correction the current row is already closed at that
@@ -707,10 +710,11 @@ describe("the negotiated write path", () => {
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]!.provider).toBe("openrouter");
 
-    // The lock is keyed without the provider, so the two writes above would
-    // have waited on each other rather than both reading an empty key.
+    // The locks are keyed without the provider, so the two writes above would
+    // have waited on each other rather than both reading an empty key. Two
+    // distinct locks per write: the class, then the key.
     const locks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
-    expect(new Set(locks).size).toBe(1);
+    expect(new Set(locks).size).toBe(2);
 
     // Once the first provider's rate is ended, the other can be set: the
     // ended window and the new one never overlap.
@@ -828,8 +832,10 @@ describe("the negotiated write path", () => {
       effectiveFrom: T1,
     });
     const locks = fake.log.filter((l) => l.op === "lock").map((l) => l.sql);
-    expect(locks).toHaveLength(1);
-    expect(locks[0]).toContain("vendor/foo|output|");
+    // The class lock, then the one name this write answers to.
+    expect(locks).toHaveLength(2);
+    expect(locks[0]).toContain("price_entry_class:");
+    expect(locks[1]).toContain("vendor/foo|output|");
 
     // Once the first rate is ended, the overlapping name is free.
     await closeNegotiatedPriceEntry({ ...SET, model: "foo", at: T2 });
@@ -1104,6 +1110,46 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(ops[0]).toBe("lock");
     expect(fake.log[0]?.sql).toContain("price_book:list");
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
+  });
+
+  // A model whose vendor string changed is not a model the book has never
+  // seen. Keying "seen" on the full row key, provider included, called it new,
+  // backdated the new-provider row to the floor, and the supersession pass
+  // then refused the old row starting at that same instant. Every hourly
+  // refresh rolled back for as long as the book stayed cold.
+  it("gives a provider rename the requested instant while the book is cold", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "openrouter",
+        microsPerMillion: 3_000_000n,
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        createdAt: new Date("2026-09-17T00:00:00.000Z"),
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      now: new Date("2026-09-18T00:00:00.000Z"),
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 3_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(result.coldStart).toBe(true);
+    expect(result.superseded).toBe(1);
+    const renamed = fake.rows.find((r) => r.provider === "anthropic");
+    expect(renamed?.effectiveFrom).toEqual(T1);
+    const old = fake.rows.find((r) => r.provider === "openrouter");
+    expect(old?.effectiveTo).toEqual(T1);
   });
 
   // A book whose rates never moved had no real-instant row, so it stayed cold

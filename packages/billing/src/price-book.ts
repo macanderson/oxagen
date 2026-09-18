@@ -494,7 +494,19 @@ export async function syncPriceBook(args: {
     // that row's `effective_to` to null — erasing the retirement window and
     // silently repricing every frame inside it. A returning key is a successor
     // at the requested instant, like any other change.
-    const seen = new Set<string>(existing.map((r) => key(r)));
+    // Seen WITHOUT the provider dimension. The floor is for a model and class
+    // the book has never priced, and a model whose vendor string changed
+    // between syncs is not that: it has been priced all along, under the old
+    // provider. Keying on the full row key (which carries the provider) called
+    // it new, backdated its new-provider row to the floor, and the supersession
+    // pass then found the old row starting at that same instant and refused
+    // with `price_book_provider_changed_at_same_instant`. That rolled back the
+    // whole refresh, every hour, for as long as the book stayed cold.
+    const seen = new Set<string>(
+      existing.map((r) =>
+        `${r.model}|${r.tokenClass}|${r.region ?? ""}`,
+      ),
+    );
     // Cold start is also bounded in time, by the book's own creation.
     //
     // Waiting for the first real-instant row alone never ended it for a book
@@ -525,7 +537,7 @@ export async function syncPriceBook(args: {
     const effectiveFrom = args.effectiveFrom;
     const seeds = coldStart
       ? requested.map((s) =>
-          seen.has(key(s))
+          seen.has(`${s.model}|${s.tokenClass}|${s.region ?? ""}`)
             ? s
             : { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM },
         )
@@ -872,6 +884,18 @@ async function readKeyRows(
  * same thing and must serialise; keyed on the model string alone they would
  * not.
  */
+/**
+ * The coarse lock every negotiated write in an org and class takes before it
+ * resolves which names it will carry. See the caller for the deadlock it
+ * prevents. Transaction-scoped, like the per-name locks.
+ */
+async function lockNegotiatedClass(tx: Tx, key: NegotiatedPriceKey): Promise<void> {
+  const region = key.region ?? null;
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`price_entry_class:${key.orgId}:${key.tokenClass}|${region ?? ""}`}::text, 0))`,
+  );
+}
+
 async function lockNegotiatedKey(
   tx: Tx,
   key: NegotiatedPriceKey,
@@ -947,18 +971,20 @@ export async function setNegotiatedPriceEntry(
     //
     // The key's own chain is read under its model-name lock first, which is
     // enough to make the inherited list stable; then every name is locked.
-    await lockNegotiatedKey(tx, args);
+    //
+    // Two phases of locking cannot be ordered against each other: a write for
+    // `foo` (alias `bar`) and one for `bar` (alias `foo`) each took their own
+    // model lock first and then waited on the other's, and Postgres broke the
+    // deadlock by aborting one, where the intended answer was an alias
+    // conflict. So a single coarse lock on the class goes first. It
+    // serialises the resolve-then-lock step for every negotiated write in
+    // this org and class, which makes the per-name locks below always be
+    // taken by one writer at a time, in one sorted order.
+    await lockNegotiatedClass(tx, args);
     const ownChain = await readKeyRows(tx, args, { includeList: false });
     const effectiveAliases = modelAliases ?? ownChain[0]?.modelAliases ?? [];
     const names = new Set([args.model, ...effectiveAliases]);
-    // The model's own lock is already held; the advisory lock is re-entrant
-    // within the transaction anyway, but not re-taking it keeps the statement
-    // log readable.
-    await lockNegotiatedKey(
-      tx,
-      args,
-      [...names].filter((name) => name !== args.model),
-    );
+    await lockNegotiatedKey(tx, args, [...names]);
     const everyModel = await readKeyRows(tx, args, {
       includeList: false,
       anyProvider: true,
@@ -1192,6 +1218,9 @@ export async function closeNegotiatedPriceEntry(args: {
   const now = args.now ?? new Date();
 
   return withTenantDb(async (tx) => {
+    // The same two locks a write takes, in the same order, so a close and a
+    // write for one key never interleave and never invert.
+    await lockNegotiatedClass(tx, args);
     await lockNegotiatedKey(tx, args);
     const rows = await readKeyRows(tx, args, { includeList: true });
     const own = rows.filter(
