@@ -78,6 +78,7 @@ import {
   digestOnlyColumns,
   type FrameBodyColumns,
   gradeSealedAttempt,
+  ledgerEnforcementTier,
   NO_BODY,
   type PreparedFrameBody,
   prepareFrameBody,
@@ -435,6 +436,12 @@ export interface AttemptSealRecord {
   toolCalls: number | null;
   /** Null when an encrypted model call hid its turn index. */
   turns: number | null;
+  /**
+   * Where the attempt's model calls were observed from (spec §8.4). Null on a
+   * seal written before the column existed; a reader treats that as `harness`,
+   * which is what the seal was graded under.
+   */
+  enforcementTier: string | null;
 }
 
 // ── The store surface ────────────────────────────────────────────────────────
@@ -716,6 +723,7 @@ export interface AttemptRow {
   model_calls: number | string | null;
   tool_calls: number | string | null;
   turns: number | string | null;
+  enforcement_tier: string | null;
 }
 
 const intOrNull = (v: number | string | null | undefined): number | null =>
@@ -775,6 +783,7 @@ export function mapAttemptRow(row: AttemptRow): AttemptRecord {
             modelCalls: intOrNull(row.model_calls),
             toolCalls: intOrNull(row.tool_calls),
             turns: intOrNull(row.turns),
+            enforcementTier: row.enforcement_tier ?? null,
           }
         : null,
   };
@@ -1440,6 +1449,8 @@ export interface InsertSealInput {
   modelCalls: number;
   toolCalls: number;
   turns: number | null;
+  /** Where the attempt's model calls were observed from (spec §8.4). */
+  enforcementTier: string;
 }
 
 /**
@@ -1456,7 +1467,7 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       event_count, final_run_seq, final_attempt_seq, final_event_digest,
       event_stream_digest, sealer_kind, sealer_worker_id,
       replay_grade, completeness_gaps, merkle_root, archive_segment_ref,
-      model_calls, tool_calls, turns
+      model_calls, tool_calls, turns, enforcement_tier
     )
     VALUES (
       ${input.orgId}::uuid,
@@ -1478,7 +1489,8 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.archiveSegmentRef},
       ${input.modelCalls},
       ${input.toolCalls},
-      ${input.turns}
+      ${input.turns},
+      ${input.enforcementTier}
     )
     RETURNING id
   `;
@@ -1530,7 +1542,7 @@ export function buildListRunAttemptsSql(runId: string): SQL {
       s.final_run_seq::text AS final_run_seq, s.final_attempt_seq,
       s.final_event_digest, s.event_stream_digest, s.sealed_at,
       s.replay_grade, s.completeness_gaps, s.merkle_root, s.archive_segment_ref,
-      s.model_calls, s.tool_calls, s.turns
+      s.model_calls, s.tool_calls, s.turns, s.enforcement_tier
     FROM agent.agent_run_attempts a
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
     WHERE a.run_id = ${runId}::uuid
@@ -1907,9 +1919,14 @@ async function sealAttemptInTx(
     policy: retentionPolicyOf(attempt),
     terminalStatus: input.terminalStatus,
   });
+  // One derivation, read twice: the grade is computed under this tier and the
+  // seal records it, so a reader never has to guess which tier produced the
+  // grade it is looking at.
+  const enforcementTier = ledgerEnforcementTier(input.rows);
   const replayGrade = gradeSealedAttempt(
     completenessGaps,
     countRetainedBodies(input.rows),
+    enforcementTier,
   );
   const rollup = deriveSealRollup(input.rows);
   const segment = buildArchiveSegment(input.rows.map(archiveFrameOf));
@@ -1943,6 +1960,7 @@ async function sealAttemptInTx(
       modelCalls: rollup.modelCalls,
       toolCalls: rollup.toolCalls,
       turns: rollup.turns,
+      enforcementTier,
     }),
   )) as unknown as Array<{ id: string }>;
   const seal = sealRows[0];

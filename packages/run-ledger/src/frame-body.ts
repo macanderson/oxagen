@@ -22,6 +22,7 @@ import {
   isContentBearingFrame,
   type JsonValue,
   type Redaction,
+  type GradeEnforcementTier,
   type ReplayGrade,
   digestBytes,
   redactBytes,
@@ -175,6 +176,28 @@ const TOOL_CALL_EVENT = "tool.call_completed";
 const MODEL_CALL_EVENT = "model.call_completed";
 
 /**
+ * A completed tool call, whichever half of the vocabulary recorded it: the
+ * receipt a submitting engine appends, and the receipt the in-app engine
+ * appends for a call it made itself (`tool.engine_call_completed`). Counting
+ * only the first left every in-app run's tool calls out of the seal rollup and
+ * out of the `tool_bodies` gap, so a run that retained no tool result body at
+ * all sealed without the gap that names it.
+ *
+ * The `*_started` write-ahead intentions are deliberately absent: a started
+ * event with no matching completion is a dangling intention (see the registry),
+ * and counting it would report a call the record does not claim happened.
+ */
+const TOOL_CALL_EVENTS: ReadonlySet<string> = new Set([
+  TOOL_CALL_EVENT,
+  "tool.engine_call_completed",
+]);
+/** The same, for the model side of the turn. */
+const MODEL_CALL_EVENTS: ReadonlySet<string> = new Set([
+  MODEL_CALL_EVENT,
+  "model.engine_call_completed",
+]);
+
+/**
  * The seal's rollup (spec §13.3): what the run keeps of its counts once
  * compaction has removed the hot frames. A step is one model call or one
  * tool call; a turn is a distinct `turn_index` among model calls, which
@@ -193,14 +216,18 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
   let opaque = false;
   const turns = new Set<string>();
   for (const row of rows) {
-    if (row.event_type === TOOL_CALL_EVENT) toolCalls += 1;
-    if (row.event_type !== MODEL_CALL_EVENT) continue;
+    if (TOOL_CALL_EVENTS.has(row.event_type)) toolCalls += 1;
+    if (!MODEL_CALL_EVENTS.has(row.event_type)) continue;
     modelCalls += 1;
     const payload = row.payload_inline;
     const turn =
       typeof payload === "object" && payload !== null
         ? (payload as Record<string, unknown>)["turn_index"]
         : undefined;
+    // A model call whose payload carries no turn index — an encrypted one, or
+    // an engine call, whose schema has no such field — hides the turn count.
+    // `turns: null` is "not recorded"; a number here would be a count of the
+    // calls that happened to be legible, presented as the run's turns.
     if (turn === undefined || turn === null) opaque = true;
     else turns.add(String(turn));
   }
@@ -240,7 +267,7 @@ export function deriveCompletenessGaps(input: {
         input.policy.mode === "digest_only" ? "digest_only" : "body_missing",
       );
     }
-    if (row.event_type === TOOL_CALL_EVENT) {
+    if (TOOL_CALL_EVENTS.has(row.event_type)) {
       toolCalls += 1;
       if (row.body_ref !== null) toolBodies += 1;
     }
@@ -256,19 +283,47 @@ export function countRetainedBodies(rows: readonly SealedFrameRow[]): number {
 }
 
 /**
- * A ledger run's evidence is submitted by an engine Oxagen did not host
- * (ADR-043), so its frames are client-attested: the `harness` tier, which
- * caps the grade at `view`. A gateway-observed ledger run and a harness that
- * reports a reproducible run are both seams a later lane opens; nothing here
- * infers either.
+ * Where a sealed attempt's model calls were observed, read from the rows.
+ *
+ * A model call an engine Oxagen did not host submits as evidence is
+ * client-attested (`model.call_completed`): the `harness` tier. A model call
+ * the in-app engine made through Oxagen's own gateway is recorded as the
+ * engine's own call (`model.engine_call_completed`), which means the request
+ * and the response passed through the seam that wrote the frame — the
+ * `gateway` tier, and the only tier §8.4 lets a recording reach `fork` from.
+ *
+ * A run with both was partly attested and grades at the weaker tier. A run with
+ * no model call at all is `harness`: nothing observed anything at the gateway,
+ * and inferring the stronger tier from an absence would raise a grade the
+ * record does not support.
+ */
+export function ledgerEnforcementTier(
+  rows: readonly SealedFrameRow[],
+): GradeEnforcementTier {
+  let gatewayObserved = false;
+  for (const row of rows) {
+    if (row.event_type === MODEL_CALL_EVENT) return "harness";
+    if (row.event_type === "model.engine_call_completed")
+      gatewayObserved = true;
+  }
+  return gatewayObserved ? "gateway" : "harness";
+}
+
+/**
+ * The grade a sealed attempt records (spec §8.4), from the gaps its rows show,
+ * the bodies it retained and the tier its model calls were observed at.
+ *
+ * `retry` is not reachable here: it needs a harness that reports a reproducible
+ * run, and no producer reports that in this revision. Nothing infers it.
  */
 export function gradeSealedAttempt(
   gaps: readonly string[],
   retainedBodies: number,
+  enforcementTier: GradeEnforcementTier = "harness",
 ): ReplayGrade {
   return computeReplayGrade({
     gaps,
-    enforcementTier: "harness",
+    enforcementTier,
     harnessReproducible: false,
     retainedBodies,
   });

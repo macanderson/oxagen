@@ -169,6 +169,13 @@ export const approvalRequests = agentSchema.table(
     // The chat turn that parked the call; null on a row the mandate gate
     // writes, where the call arrived through the kernel with no message.
     messageId: uuid("message_id"),
+    // The run the parked call belongs to, as a public id (#3286). Both kinds
+    // of run this product tracks have to be representable — the ledger's
+    // `agent_runs` (`arun_…`) and the wrapped `tacho.sessions` (`tse_…`) — and
+    // no one table holds both, so this is a public id rather than a foreign
+    // key. Null when no run was in scope when the call was parked; a null
+    // means "not recorded", never "some other run".
+    runPublicId: text("run_public_id"),
     capabilityName: text("capability_name").notNull(),
     inputPreview: jsonb("input_preview").notNull(),
     riskLevel: text("risk_level").notNull(),
@@ -216,6 +223,10 @@ export const approvalRequests = agentSchema.table(
     ),
     orgIdx: index("approval_requests_org_idx").on(t.orgId, t.workspaceId),
     messageIdx: index("approval_requests_message_idx").on(t.messageId),
+    // The Run page's Policy tab: one run's parked calls inside one workspace.
+    runIdx: index("approval_requests_run_idx")
+      .on(t.workspaceId, t.runPublicId)
+      .where(sql`run_public_id IS NOT NULL`),
     // The retry lookup: an approved, unused row for this call's digest.
     mandateDigestIdx: index("approval_requests_mandate_digest_idx")
       .on(t.workspaceId, t.mandateId, t.inputDigest)
@@ -223,6 +234,10 @@ export const approvalRequests = agentSchema.table(
     resolutionCheck: check(
       "approval_requests_resolution_check",
       sql`${t.resolution} IN ('approved', 'denied', 'expired') OR ${t.resolution} IS NULL`,
+    ),
+    runPublicIdCheck: check(
+      "approval_requests_run_public_id_check",
+      sql`${t.runPublicId} IS NULL OR ${t.runPublicId} ~ '^(arun|tse)_[0-9a-z]+$'`,
     ),
     riskLevelCheck: check(
       "approval_requests_risk_level_check",
@@ -986,6 +1001,13 @@ export const agentRunAttemptSeals = agentSchema.table(
     modelCalls: integer("model_calls"),
     toolCalls: integer("tool_calls"),
     turns: integer("turns"),
+    // Where the attempt's model calls were observed from (spec §8.4), derived
+    // at seal from the rows (`ledgerEnforcementTier`) exactly like the grade
+    // above it. `fork` is only reachable on `gateway`, so pinning every
+    // ledger attempt to `harness` capped every recording at `view`. Null on a
+    // seal written before this column existed; a reader treats that as
+    // `harness`, which is what the seal was graded under.
+    enforcementTier: text("enforcement_tier"),
   },
   (t) => ({
     rollupCheck: check(
@@ -999,6 +1021,10 @@ export const agentRunAttemptSeals = agentSchema.table(
     ),
     orgIdx: index("agent_run_attempt_seals_org_idx").on(t.orgId, t.workspaceId),
     runIdx: index("agent_run_attempt_seals_run_idx").on(t.runId),
+    enforcementTierCheck: check(
+      "agent_run_attempt_seals_enforcement_tier_check",
+      sql`${t.enforcementTier} IS NULL OR ${t.enforcementTier} IN ('gateway', 'harness', 'observe')`,
+    ),
     terminalStatusCheck: check(
       "agent_run_attempt_seals_terminal_status_check",
       sql`${t.terminalStatus} IN ('completed', 'failed', 'cancelled', 'denied', 'abandoned')`,

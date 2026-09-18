@@ -3,7 +3,9 @@ import { NO_BODY } from "./frame-body";
 import {
   bisectFrames,
   bisectKey,
+  filterFramesByKind,
   foldTranscript,
+  frameKinds,
   ledgerFrame,
   type RunFrame,
   tachoFrame,
@@ -114,6 +116,7 @@ describe("run frame projection", () => {
       policy: null,
       verdict: null,
       contextRows: null,
+      callId: null,
     });
   });
 
@@ -246,7 +249,8 @@ describe("transcript fold", () => {
       "frame",
       "model_call",
       "tool_call",
-      "frame",
+      // A decision frame is its own entry at this zoom, and says so.
+      "policy",
       "frame",
       "model_call",
       "frame",
@@ -304,5 +308,153 @@ describe("transcript fold", () => {
     const oneTurn = ledger.map((f) => ({ ...f, turnIndex: null }));
     expect(foldTranscript(oneTurn, "turns")).toHaveLength(1);
     expect(foldTranscript([], "turns")).toEqual([]);
+  });
+});
+
+describe("the engine's own call halves", () => {
+  it("names the tool by `tool_name`, pairs on `tool_call_id`, and phases the two halves", () => {
+    const started = ledgerFrame(
+      event(1, "tool.engine_call_started", {
+        tool_call_id: "tc_1",
+        tool_name: "read_file",
+        input_digest: `sha256:${"b".repeat(64)}`,
+      }),
+    );
+    const completed = ledgerFrame(
+      event(2, "tool.engine_call_completed", {
+        tool_call_id: "tc_1",
+        tool_name: "read_file",
+        outcome: "completed",
+        input_digest: `sha256:${"b".repeat(64)}`,
+        duration_ms: 12,
+      }),
+    );
+    expect(started.phase).toBe("request");
+    expect(completed.phase).toBe("response");
+    expect(started.summary).toBe("read_file");
+    expect(completed.summary).toBe("read_file completed");
+    expect(started.identity.callId).toBe("tc_1");
+    expect(completed.identity.tool).toBe("read_file");
+    // A submitted engine's single receipt stands for the whole exchange.
+    expect(
+      ledgerFrame(event(3, "tool.call_completed", { capability_name: "x" }))
+        .phase,
+    ).toBe("single");
+  });
+
+  it("folds an engine tool exchange into ONE step carrying both halves", () => {
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_1",
+          tool_name: "read_file",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_completed", {
+          tool_call_id: "tc_1",
+          tool_name: "read_file",
+          outcome: "completed",
+          input_digest: `sha256:${"b".repeat(64)}`,
+          duration_ms: 12,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.kind).toBe("tool_call");
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("2");
+  });
+
+  it("does not pair two halves of different calls", () => {
+    const frames = [
+      ledgerFrame(
+        event(1, "tool.engine_call_started", {
+          tool_call_id: "tc_1",
+          tool_name: "a",
+          input_digest: `sha256:${"b".repeat(64)}`,
+        }),
+      ),
+      ledgerFrame(
+        event(2, "tool.engine_call_completed", {
+          tool_call_id: "tc_2",
+          tool_name: "b",
+          outcome: "completed",
+          input_digest: `sha256:${"c".repeat(64)}`,
+          duration_ms: 1,
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.response).toBeNull();
+    expect(folded[1]?.request).toBeNull();
+  });
+
+  it("a model engine call opens a step: it used to fold into whatever came before it", () => {
+    const frames = [
+      ledgerFrame(event(1, "admission.run_admitted", { engine_name: "s" })),
+      ledgerFrame(
+        event(2, "model.engine_call_completed", {
+          engine_seq: 1,
+          model_call_id: "mc_1",
+          role: "assistant",
+          provider: "anthropic",
+          model: "haiku",
+          outcome: "completed",
+        }),
+      ),
+    ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["1", "frame"],
+      ["2", "model_call"],
+    ]);
+    expect(folded[1]?.opening.summary).toBe("anthropic/haiku");
+  });
+});
+
+describe("frameKinds and filterFramesByKind", () => {
+  const model = ledgerFrame(
+    event(1, "model.engine_call_started", {
+      engine_seq: 1,
+      model_call_id: "mc_1",
+      role: "assistant",
+      provider: "anthropic",
+      model: "haiku",
+    }),
+  );
+  const tool = tachoFrame(
+    tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "failed" }),
+  );
+  const usage = tachoFrame(
+    tachoRow(3, "llm_call", { model: "m", costUsdMicros: 9 }),
+  );
+  const policy = tachoFrame(
+    tachoRow(4, "policy_decision", { policyDecision: "deny" }),
+  );
+  const recall = ledgerFrame(
+    event(5, "context.frames_selected", { frame_count: 3 }),
+  );
+
+  it("derives every chip a frame answers to", () => {
+    expect(frameKinds(model)).toEqual(["prompt"]);
+    expect(frameKinds(tool).sort()).toEqual(["errors", "tools"]);
+    expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
+    expect(frameKinds(policy)).toEqual(["policy"]);
+    expect(frameKinds(recall)).toEqual(["recall"]);
+  });
+
+  it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
+    const frames = [model, tool, usage, policy, recall];
+    expect(filterFramesByKind(frames, [])).toHaveLength(5);
+    expect(filterFramesByKind(frames, ["errors"]).map((f) => f.seq)).toEqual([
+      "2",
+    ]);
+    expect(
+      filterFramesByKind(frames, ["prompt", "recall"]).map((f) => f.seq),
+    ).toEqual(["1", "5"]);
   });
 });

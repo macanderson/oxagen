@@ -37,6 +37,7 @@
 import type { CapabilityContext, CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
+  canSummarizeRun,
   IN_APP_AGENT_SURFACES,
   type RunItem,
   runList,
@@ -49,7 +50,12 @@ import {
   type Tx,
   withTenantDb,
 } from "@oxagen/database";
-import { isReplayGrade } from "@oxagen/tacho";
+import {
+  type CompletenessGapKind,
+  isCompletenessGapKind,
+  isGradeEnforcementTier,
+  isReplayGrade,
+} from "@oxagen/tacho";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
@@ -380,6 +386,7 @@ export function ledgerSealQuery(
       eventCount: seals.eventCount,
       merkleRoot: seals.merkleRoot,
       archiveSegmentRef: seals.archiveSegmentRef,
+      enforcementTier: seals.enforcementTier,
     })
     .from(seals)
     .where(
@@ -527,6 +534,8 @@ export type LedgerSeal = {
   eventCount: number;
   merkleRoot: string | null;
   archiveSegmentRef: string | null;
+  /** Null on a seal written before the column existed; read as `harness`. */
+  enforcementTier: string | null;
 };
 
 export type LedgerRunRecord = LedgerRunRow & {
@@ -619,6 +628,26 @@ export function recordedGaps(value: unknown): string[] {
     : [];
 }
 
+/**
+ * The gaps a row publishes: the recorded list narrowed to the closed
+ * vocabulary. A word the store holds that the vocabulary does not name is
+ * dropped rather than passed on, because a caller decides from a closed set
+ * and cannot act on a gap kind it has never heard of.
+ */
+export function publishedGaps(value: unknown): CompletenessGapKind[] {
+  return recordedGaps(value).filter(isCompletenessGapKind);
+}
+
+/**
+ * Where a recording's actions were observed from. A wrapped session records
+ * its own tier; a ledger run's seal records the tier it was graded under, and
+ * a seal written before that column existed — or a run that has not sealed —
+ * reads as `harness`, which is what a submitted recording is (ADR-043).
+ */
+export function publishedTier(value: unknown): RunItem["enforcementTier"] {
+  return isGradeEnforcementTier(value) ? value : "harness";
+}
+
 /** The generated summary, present only when all three columns were set together. */
 function generatedSummary(
   columns: GeneratedSummaryColumns,
@@ -665,6 +694,8 @@ export function toLedgerRunItem(
 ): RunItem {
   const { run, identity, rollup } = record;
   const status = ledgerRunStatus(run.status);
+  // A live run has sealed nothing, so it has recorded no gaps — not "none".
+  const gaps = status === "live" ? [] : publishedGaps(record.seal?.completenessGaps);
   return {
     id: run.publicId,
     source: "ledger",
@@ -688,6 +719,9 @@ export function toLedgerRunItem(
         ? null
         : recordedGrade(record.seal?.replayGrade ?? null),
     verdict: totals?.verdict ?? null,
+    enforcementTier: publishedTier(record.seal?.enforcementTier),
+    completenessGaps: gaps,
+    canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     name: run.name,
     summary: generatedSummary(run),
   };
@@ -713,12 +747,14 @@ export function toTachoRunItem(
   totals: RunRollup | undefined,
 ): RunItem {
   const { session } = row;
+  const status = tachoRunStatus(session.outcome);
+  const gaps = status === "live" ? [] : publishedGaps(session.completenessGaps);
   return {
     id: session.publicId,
     source: "tacho",
     agentKey: session.agentKey,
     operatorId: row.operatorPublicId,
-    status: tachoRunStatus(session.outcome),
+    status,
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
     frames: session.seqCount,
@@ -728,6 +764,9 @@ export function toTachoRunItem(
     sealedAt: session.sealedAt?.toISOString() ?? null,
     replayGrade: recordedGrade(session.replayGrade),
     verdict: totals?.verdict ?? null,
+    enforcementTier: publishedTier(session.enforcementTier),
+    completenessGaps: gaps,
+    canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     name: session.name,
     summary: generatedSummary(session),
   };

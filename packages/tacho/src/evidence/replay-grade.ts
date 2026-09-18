@@ -41,7 +41,21 @@ export const COMPLETENESS_GAP_KINDS = [
 export type CompletenessGapKind = (typeof COMPLETENESS_GAP_KINDS)[number];
 
 /** The enforcement tiers the ladder distinguishes (spec §8.4). */
-type GradeEnforcementTier = "gateway" | "harness" | "observe";
+export const GRADE_ENFORCEMENT_TIERS = [
+  "gateway",
+  "harness",
+  "observe",
+] as const;
+export type GradeEnforcementTier = (typeof GRADE_ENFORCEMENT_TIERS)[number];
+
+export function isGradeEnforcementTier(
+  value: unknown,
+): value is GradeEnforcementTier {
+  return (
+    typeof value === "string" &&
+    (GRADE_ENFORCEMENT_TIERS as readonly string[]).includes(value)
+  );
+}
 
 /**
  * Frames whose bodies a `view` reader reads (spec §8.4: what the agent
@@ -55,6 +69,15 @@ type GradeEnforcementTier = "gateway" | "harness" | "observe";
 const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
   "model.call_completed",
   "tool.call_completed",
+  // The engine's own halves of the same two exchanges (ADR-043: the in-app
+  // engine appends these). They carry exactly the content a `view` reader
+  // reads — the request that left the process and the result that came back —
+  // so a recording that drops their bodies is as unreadable as one that drops
+  // the submitted engine's. Omitting them graded a body-less in-app run `view`.
+  "model.engine_call_started",
+  "model.engine_call_completed",
+  "tool.engine_call_started",
+  "tool.engine_call_completed",
   "llm_call",
   "tool_call",
 ]);
@@ -63,7 +86,7 @@ export function isContentBearingFrame(type: string): boolean {
   return CONTENT_BEARING_FRAME_TYPES.has(type);
 }
 
-interface ReplayGradeInput {
+export interface ReplayGradeInput {
   /** The gaps the recorder observed, deduplicated by the caller or not. */
   gaps: readonly string[];
   /** Where the frames were observed from; `fork` needs the gateway. */
@@ -118,35 +141,99 @@ export function gradeAllows(
   return replayGradeRank(recorded) >= replayGradeRank(verb);
 }
 
+/** The grade alone; `explainReplayGrade` carries the ladder and its reasons. */
+export function computeReplayGrade(input: ReplayGradeInput): ReplayGrade {
+  return explainReplayGrade(input).grade;
+}
+
+/** One rung of the ladder: whether the recording reaches it, and why. */
+export interface ReplayGradeRung {
+  grade: ReplayGrade;
+  met: boolean;
+  /**
+   * Why the rung is or is not met, as a stable machine-readable reason. A met
+   * rung says what carries it; an unmet one names the single thing missing.
+   */
+  reason: string;
+}
+
+export interface ReplayGradeExplanation {
+  grade: ReplayGrade;
+  ladder: ReplayGradeRung[];
+}
+
 /**
- * The ladder, weakest rung first:
+ * The ladder, rung by rung, with the reason each is or is not reached — the
+ * Chain-and-seal tab's `GRADE_LADDER` (Mission Control spec §8.4). The grade
+ * is `computeReplayGrade`'s, so the panel and the gate can never disagree:
+ * both read this one function.
+ *
+ * The rules per rung:
  *
  * - `inspect`: frames only. Any gap that hides what was said, or breaks the
  *   chain, stops here; so does a recording with no retained body, and an
- *   `observe`-tier run, whose frames were not enforced (spec §8.4).
- * - `view`: every body present. A missing tool result body stops here.
- * - `fork`: `view` plus tool result bodies on a `gateway`-tier run, so a new
- *   model call can be made while tool results are served from the cassette.
+ *   `observe`-tier run, whose frames were not enforced.
+ * - `view`: every body present.
+ * - `fork`: `view` plus every tool result body on a `gateway`-tier run, so a
+ *   new model call can be made while tool results are served from the cassette.
  * - `retry`: `fork` plus a harness that reports a reproducible run.
  *
  * Unknown gap kinds are refused: a gap the vocabulary does not name cannot be
  * graded, and grading it as harmless would raise a grade the record does not
  * support.
  */
-export function computeReplayGrade(input: ReplayGradeInput): ReplayGrade {
+export function explainReplayGrade(
+  input: ReplayGradeInput,
+): ReplayGradeExplanation {
   const gaps = new Set(input.gaps);
   for (const gap of gaps) {
     if (!isCompletenessGapKind(gap)) {
       throw new RangeError(`unknown completeness gap kind: ${gap}`);
     }
   }
-  for (const gap of gaps) {
-    if (INSPECT_ONLY_GAPS.has(gap)) return "inspect";
-  }
-  if (input.retainedBodies === 0) return "inspect";
-  if (input.enforcementTier === "observe") return "inspect";
-  if (gaps.has("tool_bodies")) return "view";
-  if (input.enforcementTier !== "gateway") return "view";
-  if (input.harnessReproducible) return "retry";
-  return "fork";
+
+  // `inspect` is the floor: a recording that exists reaches it. Everything
+  // above it is a reason to stop, evaluated in ladder order.
+  const blocking = [...gaps].filter((gap) => INSPECT_ONLY_GAPS.has(gap)).sort();
+  const viewBlock =
+    blocking.length > 0
+      ? blocking.join(",")
+      : input.retainedBodies === 0
+        ? "no_retained_bodies"
+        : input.enforcementTier === "observe"
+          ? "observe_tier"
+          : null;
+  const forkBlock =
+    viewBlock !== null
+      ? viewBlock
+      : gaps.has("tool_bodies")
+        ? "tool_bodies"
+        : input.enforcementTier !== "gateway"
+          ? `enforcement_tier:${input.enforcementTier}`
+          : null;
+  const retryBlock =
+    forkBlock !== null
+      ? forkBlock
+      : input.harnessReproducible
+        ? null
+        : "harness_not_reproducible";
+
+  const rung = (grade: ReplayGrade, block: string | null, met: string) => ({
+    grade,
+    met: block === null,
+    reason: block ?? met,
+  });
+  const ladder: ReplayGradeRung[] = [
+    rung("inspect", null, "frames_recorded"),
+    rung("view", viewBlock, "bodies_retained"),
+    rung("fork", forkBlock, "tool_cassette_complete"),
+    rung("retry", retryBlock, "harness_reproducible"),
+  ];
+  // The grade is the highest rung reached; the ladder is monotone by
+  // construction, so the last met rung is it.
+  const grade = ladder.reduce<ReplayGrade>(
+    (best, r) => (r.met ? r.grade : best),
+    "inspect",
+  );
+  return { grade, ladder };
 }
