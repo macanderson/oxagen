@@ -29,6 +29,7 @@ vi.mock("./logger", () => ({
 
 import { verifyBundle } from "./lib/tacho-bundle-signing";
 import { signTachoEnrollment } from "./lib/tacho-enrollment-signing";
+import { clearSteeringCacheForTests } from "./lib/tacho-steering";
 import {
   deviceKeyFingerprint,
   resolveAllowedEndpoints,
@@ -82,8 +83,15 @@ function happyDb(clash = false): void {
           },
           authorizationDenyGenerations: { findMany: async () => [] },
           retentionPolicyVersions: { findFirst: async () => undefined },
-          contextRecords: { findMany: async () => [] },
         },
+        // The steering read: a workspace with an empty ledger and no records,
+        // so the first bundle carries no `context.system`.
+        select: () => ({
+          from: () => ({
+            where: async () => [{ ledger: 0, steering: 0 }],
+            leftJoin: () => ({ where: async () => [] }),
+          }),
+        }),
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => ({
             returning: async () => {
@@ -104,6 +112,7 @@ function happyDb(clash = false): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearSteeringCacheForTests();
   inserted = [];
   mocks.resolveActorOrgRole.mockResolvedValue("Owner");
   vi.stubEnv("TACHO_ENROLLMENT_SIGNING_SECRET", "test-secret");
