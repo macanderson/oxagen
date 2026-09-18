@@ -53,6 +53,63 @@ describe("runTachoHook", () => {
     });
   });
 
+  it("refuses a Cursor call when it cannot read the enrollment it has", async () => {
+    // An unenrolled machine is one Oxagen does not govern, so allowing is
+    // right. A machine whose host.json exists and will not parse is a
+    // governed machine with an unreadable mandate, and Cursor turns an empty
+    // answer into an explicit allow at a veto point. `failClosed` does not
+    // catch that: the hook did not crash or time out, it succeeded and
+    // granted permission.
+    const paths = scratchPaths();
+    const corrupt = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        conversation_id: "11111111-1111-4111-8111-1111111111aa",
+        generation_id: "gen-1",
+        hook_event_name: "preToolUse",
+        cursor_version: "1.7.2",
+        workspace_roots: ["/home/dev/proj"],
+        tool_name: "Shell",
+        tool_input: { command: "rm -rf /" },
+        tool_use_id: "toolu_1",
+        cwd: "/home/dev/proj",
+      }),
+      harness: "cursor",
+      readHost: () => {
+        throw new Error("corrupt");
+      },
+    });
+    expect(corrupt.path).toBe("unenrolled");
+    expect(corrupt.exitCode).toBe(0);
+    const answer = JSON.parse(corrupt.stdout) as Record<string, unknown>;
+    expect(answer["permission"]).toBe("deny");
+    expect(String(answer["user_message"])).toContain("enrollment");
+
+    // A machine with no enrollment at all is still allowed: Oxagen does not
+    // govern it and must not block it.
+    const absent = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        conversation_id: "11111111-1111-4111-8111-1111111111bb",
+        generation_id: "gen-1",
+        hook_event_name: "preToolUse",
+        cursor_version: "1.7.2",
+        workspace_roots: ["/home/dev/proj"],
+        tool_name: "Shell",
+        tool_input: { command: "ls" },
+        tool_use_id: "toolu_2",
+        cwd: "/home/dev/proj",
+      }),
+      harness: "cursor",
+    });
+    expect(absent.path).toBe("unenrolled");
+    expect(
+      (JSON.parse(absent.stdout) as Record<string, unknown>)["permission"],
+    ).toBe("allow");
+  });
+
   it("forwards to the daemon with the local bearer and a filtered env, and falls back locally", async () => {
     const paths = scratchPaths();
     const signer = bundleSigner();

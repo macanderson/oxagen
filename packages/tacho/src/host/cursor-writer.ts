@@ -134,9 +134,7 @@ export function cursorHooksPaths(
 }
 
 /** Why a `hooks.json` document cannot be merged into, or undefined when it can. */
-export function cursorHooksShapeProblem(
-  document: unknown,
-): string | undefined {
+export function cursorHooksShapeProblem(document: unknown): string | undefined {
   return documentShapeProblem(document, ["hooks"], "hooks");
 }
 
@@ -224,7 +222,16 @@ export function mergeCursorHooks(
 ): CursorMergeResult {
   const document = documentOf(existing);
   const before = JSON.stringify(document);
-  if (typeof document.version !== "number")
+  // Cursor's schema requires a positive integer, so a numeric-but-invalid
+  // version (0, -1, 1.5) is replaced rather than preserved. Keeping it would
+  // leave a document Cursor refuses to load while enrolment reported that it
+  // had written every hook, which is the worst pairing available here: a
+  // machine the fleet lists as covered and nothing on it reads the file.
+  if (
+    typeof document.version !== "number" ||
+    !Number.isInteger(document.version) ||
+    document.version < 1
+  )
     document.version = CURSOR_HOOKS_VERSION;
   const hooks = { ...(document.hooks ?? {}) };
   for (const [event, entries] of Object.entries(cursorHookEntries(config))) {
@@ -250,7 +257,9 @@ export function stripCursorHooks(
   if (document.hooks !== undefined) {
     const hooks: Record<string, HookEntry[]> = {};
     for (const [event, entries] of Object.entries(document.hooks)) {
-      const kept = entries.filter((entry) => !isTachoEntry(entry, enrollmentId));
+      const kept = entries.filter(
+        (entry) => !isTachoEntry(entry, enrollmentId),
+      );
       if (kept.length > 0) hooks[event] = kept;
     }
     if (Object.keys(hooks).length > 0) document.hooks = hooks;

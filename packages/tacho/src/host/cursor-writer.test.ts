@@ -69,7 +69,9 @@ describe("the hooks the writer emits", () => {
   });
 
   it("refuses a relative path, which Cursor would resolve in ~/.cursor", () => {
-    expect(absoluteHookCommandProblem("/opt/oxagen/tacho hook")).toBeUndefined();
+    expect(
+      absoluteHookCommandProblem("/opt/oxagen/tacho hook"),
+    ).toBeUndefined();
     expect(
       absoluteHookCommandProblem("'/opt/my apps/tacho' hook"),
     ).toBeUndefined();
@@ -119,9 +121,9 @@ describe("merging into an existing hooks.json", () => {
     expect(mergeCursorHooks(undefined, CONFIG).document["version"]).toBe(
       CURSOR_HOOKS_VERSION,
     );
-    expect(
-      mergeCursorHooks({ version: 2 }, CONFIG).document["version"],
-    ).toBe(2);
+    expect(mergeCursorHooks({ version: 2 }, CONFIG).document["version"]).toBe(
+      2,
+    );
   });
 
   it("replaces this enrollment's earlier entries instead of stacking them", () => {
@@ -163,8 +165,9 @@ describe("presence", () => {
     expect(presence.complete).toBe(true);
     expect(presence.missing).toEqual([]);
     expect(presence.failOpenEnforcement).toEqual([]);
-    expect(cursorHookPresence(merged, "tch_zzzzzzzzzzzzzzzzzzzzzz").present)
-      .toEqual([]);
+    expect(
+      cursorHookPresence(merged, "tch_zzzzzzzzzzzzzzzzzzzzzz").present,
+    ).toEqual([]);
   });
 
   it("names a veto hook someone edited to fail open", () => {
@@ -195,13 +198,17 @@ describe("where the file goes", () => {
       cursorConfigDir("/home/dev", "darwin", { CURSOR_CONFIG_DIR: "/etc/cur" }),
     ).toBe("/etc/cur");
     expect(
-      cursorHooksPaths("/home/dev", "darwin", { CURSOR_CONFIG_DIR: "/etc/cur" }),
+      cursorHooksPaths("/home/dev", "darwin", {
+        CURSOR_CONFIG_DIR: "/etc/cur",
+      }),
     ).toEqual(["/etc/cur/hooks.json", "/home/dev/.cursor/hooks.json"]);
   });
 
   it("follows XDG_CONFIG_HOME on Linux and BSD, and nowhere else", () => {
     expect(
-      cursorConfigDir("/home/dev", "linux", { XDG_CONFIG_HOME: "/home/dev/.config" }),
+      cursorConfigDir("/home/dev", "linux", {
+        XDG_CONFIG_HOME: "/home/dev/.config",
+      }),
     ).toBe("/home/dev/.config/cursor");
     expect(
       cursorConfigDir("/home/dev", "freebsd", { XDG_CONFIG_HOME: "/x" }),
@@ -210,5 +217,17 @@ describe("where the file goes", () => {
       expect(
         cursorConfigDir("/home/dev", platform, { XDG_CONFIG_HOME: "/x" }),
       ).toBe("/home/dev/.cursor");
+  });
+});
+
+describe("an invalid schema version", () => {
+  // Cursor's schema requires a positive integer. Preserving a numeric but
+  // invalid one leaves a document Cursor refuses to load while enrolment
+  // reported that it wrote every hook, so the fleet lists the machine as
+  // covered and nothing on it reads the file.
+  it.each([0, -1, 1.5])("replaces version %s", (version) => {
+    expect(
+      mergeCursorHooks({ version, hooks: {} }, CONFIG).document["version"],
+    ).toBe(1);
   });
 });

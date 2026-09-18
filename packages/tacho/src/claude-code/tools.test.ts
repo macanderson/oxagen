@@ -135,6 +135,11 @@ describe("git effect classification", () => {
       "git push --dry-run",
       "git push -n origin main",
       "git commit --dry-run",
+      // `gh pr create --dry-run` prints what it would do and creates
+      // nothing, so counting it would put a pull request on the run's
+      // record that does not exist.
+      "gh pr create --dry-run",
+      "gh pr create --dry-run --fill",
       "git --unknown-option push",
       "git $(cat sub) push",
       "gh pr list",

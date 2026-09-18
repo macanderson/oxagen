@@ -364,12 +364,39 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         ? cursorAnswer(response, input.hook_event_name)
         : `${JSON.stringify(response)}\n`;
   const emptyAnswer = answer({});
+  /**
+   * The answer for a machine that has enrollment state this hook cannot
+   * read, which is not the same as a machine with none.
+   *
+   * An unenrolled machine is one Oxagen does not govern, and allowing its
+   * calls is right. A machine whose `host.json` exists but will not parse is
+   * a governed machine whose mandate is unreadable, and the safe answer
+   * there is to refuse rather than to wave the call through.
+   *
+   * It matters more on Cursor than elsewhere. Claude Code reads `{}` as no
+   * opinion and applies its own default, but `cursorAnswer` turns the same
+   * empty response into an explicit `{"permission":"allow"}` at a veto
+   * point. Cursor's `failClosed` does not catch that, because the hook did
+   * not crash, time out or exit non-zero: it succeeded and granted
+   * permission. So a corrupted enrollment file would let every tool call on
+   * that machine proceed with no verified mandate, and the record would say
+   * each one was allowed.
+   */
+  const unreadableAnswer = cursor
+    ? answer({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `tacho status` to repair it.",
+        },
+      })
+    : emptyAnswer;
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
     return {
-      stdout: emptyAnswer,
+      stdout: unreadableAnswer,
       stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
       exitCode: 0,
       path: "unenrolled",
