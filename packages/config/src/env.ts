@@ -35,6 +35,9 @@ export const baseEnvSchema = z.object({
   NEO4J_USERNAME: z.string().min(1),
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
+  // Which OrgGraphProvisioner a PAID organisation gets at creation (ADR-091).
+  // Free and trial organisations are pooled whatever this says.
+  NEO4J_ORG_PROVISIONER: z.enum(["pooled", "cypher", "aura"]).default("pooled"),
 
   // Circuit breakers for external dependencies (Neo4j / Stripe / ClickHouse).
   // Global, conservative defaults shared by every per-dependency breaker so a

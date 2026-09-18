@@ -20,7 +20,15 @@ export function driver(): Driver {
   return _driver;
 }
 
-export function session(): Session {
+/**
+ * Open a session on the shared cluster. With no argument it opens the POOLED
+ * database (`NEO4J_DATABASE`), where free and trial organisations live under
+ * property scoping. An organisation provisioned into its own database
+ * (spec §5.3, ADR-091) passes that name, and the engine — not a `WHERE` clause
+ * — keeps every other tenant's graph out of reach.
+ */
+export function session(database?: string | null): Session {
+  if (database) return driver().session({ database });
   const env = requireEnv(["NEO4J_DATABASE"] as const);
   return driver().session({ database: env.NEO4J_DATABASE });
 }

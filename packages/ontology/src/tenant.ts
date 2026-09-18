@@ -204,9 +204,12 @@ export function scopedSession(scope?: GraphScope): {
     // quietly answering from the platform's own graph, which would leak one
     // tenant's ontology into a store the customer moved its data out of.
     assertDataPlaneUsable(plane);
+    // A shared plane is either the POOLED database (no `database` on the
+    // binding) or the organisation's own database on the platform cluster,
+    // created by an OrgGraphProvisioner at organisation creation (ADR-091).
     s =
       plane.mode === "shared"
-        ? session()
+        ? session(plane.database)
         : dedicatedSession({
             orgId,
             config: plane.config as Neo4jPlaneConfig,

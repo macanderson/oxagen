@@ -195,6 +195,17 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "static",
     staticValue: { "*": "neo4j" },
   },
+  NEO4J_ORG_PROVISIONER: {
+    group: "Neo4j",
+    description:
+      "Graph provisioner for paid organisations (ADR-091): pooled (Community, dev, CI), cypher (self-managed Enterprise: CREATE DATABASE org-<namespace>), aura (not implemented; refused).",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { "*": "pooled" },
+  },
 
   // ── OpenTelemetry (distributed tracing) ─────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: {
