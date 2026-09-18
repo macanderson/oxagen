@@ -21,7 +21,9 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
 
 const { unsignedBundle } = await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
-const { BUNDLE_FEATURE_GATEWAY_TOOLS } = await import("@oxagen/tacho");
+const { BUNDLE_FEATURE_GATEWAY_TOOLS, BUNDLE_FEATURE_MODEL_PRICES } =
+  await import("@oxagen/tacho");
+const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
 
@@ -195,5 +197,51 @@ describe("a host that cannot parse the field is not sent it", () => {
     expect(bundle([]).etag).toBe(bundle([]).etag);
     expect(bundle(CURRENT).etag).toBe(bundle(CURRENT).etag);
     expect(bundle([]).etag).not.toBe(bundle(CURRENT).etag);
+  });
+});
+
+describe("the prices the host's model proxy needs (ADR-094)", () => {
+  it("are signed into the bundle for a host that can parse them", () => {
+    const prices = served([BUNDLE_FEATURE_MODEL_PRICES]).model_prices ?? [];
+    expect(prices.length).toBeGreaterThan(0);
+    expect(new Set(prices.map((row) => row.provider))).toEqual(
+      new Set(["anthropic", "openai"]),
+    );
+    // One row, checked against the card it came from, in micro-USD per 1M.
+    const [model, rate] = Object.entries(PROVIDER_RATE_CARD).find(
+      ([, r]) => r.provider === "anthropic",
+    )!;
+    expect(prices.find((row) => row.model === model)).toEqual({
+      provider: "anthropic",
+      model,
+      input: Math.round(rate.inputPer1M * 1_000_000),
+      output: Math.round(rate.outputPer1M * 1_000_000),
+      cache_read: Math.round(rate.cachedInputPer1M * 1_000_000),
+      cache_write: Math.round(rate.cacheWritePer1M * 1_000_000),
+      cache_write_1h: Math.round(rate.inputPer1M * 2 * 1_000_000),
+    });
+    expect(prices.map((row) => row.model)).toEqual(
+      [...prices.map((row) => row.model)].sort((a, b) => a.localeCompare(b)),
+    );
+    expect(() =>
+      policyBundleSchema.parse(served([BUNDLE_FEATURE_MODEL_PRICES])),
+    ).not.toThrow();
+  });
+
+  it("are withheld from a host that did not name the field, which would refuse the whole mandate", () => {
+    expect(served(CURRENT)).not.toHaveProperty("model_prices");
+    expect(served([])).not.toHaveProperty("model_prices");
+    const older = policyBundleSchema.omit({ model_prices: true }).strict();
+    expect(() => older.parse(served(CURRENT))).not.toThrow();
+    expect(() => older.parse(served([BUNDLE_FEATURE_MODEL_PRICES]))).toThrow();
+  });
+
+  it("move the etag only when a price does", () => {
+    expect(bundle([BUNDLE_FEATURE_MODEL_PRICES]).etag).toBe(
+      bundle([BUNDLE_FEATURE_MODEL_PRICES]).etag,
+    );
+    expect(bundle([BUNDLE_FEATURE_MODEL_PRICES]).etag).not.toBe(
+      bundle(CURRENT).etag,
+    );
   });
 });

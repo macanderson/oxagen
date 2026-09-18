@@ -6,7 +6,7 @@
  * fake control plane and a scratch `TACHO_HOME`.
  */
 import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
-import { hostname as osHostname } from "node:os";
+import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
@@ -31,7 +31,9 @@ import {
   type HostFile,
   readHostFile,
   mcpEndpointFor,
+  modelProxyPortFor,
 } from "../host/host-file";
+import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec } from "../host/service";
@@ -41,6 +43,8 @@ import { toProtocolTimestamp } from "../timestamp";
 import {
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
   type CommandAcknowledgement,
   type ControlEnvelope,
   type DaemonHealth,
@@ -60,6 +64,13 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { type BeforeForward, createModelProxy } from "./model-proxy";
+import { createModelProxyListener } from "./model-proxy-listener";
+import {
+  DEFAULT_MODEL_UPSTREAMS,
+  MODEL_PROXY_ROUTES,
+  type ModelUpstreams,
+} from "./model-routes";
 import { parseRegistryState, SessionRegistry } from "./registry";
 import {
   type CollectorApi,
@@ -108,6 +119,18 @@ export interface DaemonOptions {
   platform?: NodeJS.Platform;
   kill?: (pid: number, signal: "SIGTERM" | "SIGKILL") => boolean;
   transcriptRoots?: string[];
+  /** Override the model proxy's port from the host file (0 = ephemeral). */
+  modelProxyPort?: number;
+  /**
+   * Where the model proxy forwards. Defaults to the vendors' own hosts, or to
+   * the base URL enrollment displaced from a harness's config, so a harness
+   * that was already pointed at a corporate gateway still reaches it.
+   */
+  modelUpstreams?: Partial<ModelUpstreams>;
+  /** The per-turn steering seam; a no-op until Phase 1's assembler exists. */
+  beforeForward?: BeforeForward;
+  /** The home directory the harness config files live under. */
+  home?: string;
 }
 
 export interface DaemonHandle {
@@ -119,6 +142,8 @@ export interface DaemonHandle {
   hostRecorder: SessionRecorder;
   host: () => HostFile;
   port: number | undefined;
+  /** The model proxy's bound port, or undefined when it is not listening. */
+  modelProxyPort: number | undefined;
   /** Run the periodic work once, in order; tests call this instead of waiting. */
   tick: () => Promise<void>;
   drainSpool: () => Promise<number>;
@@ -366,6 +391,7 @@ export async function startDaemon(
       });
       record(result.events);
       pendingAcks.push(...result.acknowledgements);
+      interruptModelCalls(control.commands);
     }
   }
 
@@ -669,6 +695,142 @@ export async function startDaemon(
     now,
   });
 
+  /**
+   * The loopback model proxy (story sheet item 10). Its frames land on the
+   * session's own chain when the call can be correlated to one, and on the
+   * daemon's chain otherwise.
+   */
+  let displacedUpstreams: Partial<ModelUpstreams> = {};
+  async function refreshUpstreams(): Promise<void> {
+    try {
+      const state = await readModelBaseUrlState({
+        home: options.home ?? homedir(),
+        port: modelProxyPortFor(host),
+        harnesses: ["claude-code", "codex"],
+      });
+      const next: Partial<ModelUpstreams> = {};
+      for (const entry of state.harnesses) {
+        if (entry.previous === null) continue;
+        if (entry.harness === "claude-code") next.anthropic = entry.previous;
+        else {
+          next.openai = entry.previous;
+          next.chatgpt = entry.previous;
+        }
+      }
+      displacedUpstreams = next;
+    } catch (error) {
+      log(
+        `model proxy: could not read the displaced base URLs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  await refreshUpstreams();
+
+  const modelProxy = createModelProxy({
+    registry,
+    hostRecorder: () => hostRecorder,
+    record,
+    policy: () => ({ bundle: host.bundle, hostStatus: host.host_status }),
+    upstreams: () => ({
+      ...DEFAULT_MODEL_UPSTREAMS,
+      ...displacedUpstreams,
+      ...options.modelUpstreams,
+    }),
+    // A restart must not hand a session its budget back: what the chain
+    // already holds is counted before the first call is admitted.
+    priorSpendMicros: (sessionUuid) => {
+      let total = 0;
+      for (const event of wal.read(sessionUuid)) {
+        if (event.kind !== "llm_call") continue;
+        if (event.attrs[TACHO_METERING_ATTR] !== TACHO_METERING_OBSERVED)
+          continue;
+        const cost = (event.body as { cost_usd_micros?: number })
+          .cost_usd_micros;
+        if (typeof cost === "number") total += cost;
+      }
+      return total;
+    },
+    ...(options.beforeForward !== undefined
+      ? { beforeForward: options.beforeForward }
+      : {}),
+    port: () => modelProxyListener.port(),
+    log,
+    now,
+  });
+  const modelProxyListener = createModelProxyListener({
+    proxy: modelProxy,
+    // A test that asks for an ephemeral collector port gets an ephemeral
+    // proxy port too, so parallel daemons never contend for `port + 1`.
+    port:
+      options.modelProxyPort ??
+      (options.port === 0 ? 0 : modelProxyPortFor(host)),
+    log,
+  });
+
+  /**
+   * The real interrupt. A pause, cancel or kill already stops the session at
+   * its next hook boundary; here it also cuts the model calls that are in
+   * flight, and the proxy refuses new ones until the session is resumed. A
+   * steer delivered as `interrupt` cuts the current call so the steer lands
+   * at the next boundary instead of after the step finishes.
+   */
+  function interruptModelCalls(commands: ControlEnvelope["commands"]): void {
+    for (const command of commands) {
+      const cuts =
+        command.command === "pause" ||
+        command.command === "cancel" ||
+        command.command === "kill" ||
+        (command.command === "steer" && command.delivery_mode === "interrupt");
+      if (!cuts) continue;
+      const targets =
+        command.session_uuid !== null
+          ? [registry.byUuid(command.session_uuid)]
+          : registry.live();
+      for (const target of targets) {
+        if (target === undefined) continue;
+        const cut = modelProxy.abortSession(
+          target.recorder.sessionUuid,
+          command.reason ?? `operator ${command.command}`,
+        );
+        if (cut > 0 && command.command === "steer") {
+          // The frame that records the steer says the step was cut short.
+          const queued = target.control.messages.find(
+            (message) => message.id === command.id,
+          );
+          if (queued !== undefined) queued.interrupted = true;
+        }
+        if (cut > 0)
+          log(
+            `interrupted ${cut} model call(s) of session ${target.harnessSessionId} (${command.command})`,
+          );
+      }
+    }
+  }
+
+  function gatewayStatus(): {
+    listening: boolean;
+    port: number;
+    routes: string[];
+    calls_observed: number;
+  } {
+    return {
+      listening: modelProxyListener.listening(),
+      port: modelProxyListener.port(),
+      routes: [...MODEL_PROXY_ROUTES],
+      calls_observed: modelProxy.stats().callsObserved,
+    };
+  }
+
+  /**
+   * The tier a session earned, computed from what was routed (ADR-095).
+   * `gateway` only when the proxy saw a model call for it: a base URL written
+   * into a config file is intent, not traffic.
+   */
+  function tierOf(sessionUuid: string): "gateway" | "harness" | "observe" {
+    if (modelProxy.callsObservedFor(sessionUuid) > 0) return TACHO_GATEWAY_TIER;
+    return host.bundle.mode === "enforce" ? "harness" : "observe";
+  }
+
   const api: CollectorApi = {
     localToken: host.local_token,
     enrollmentId: host.host_enrollment_id,
@@ -718,6 +880,7 @@ export async function startDaemon(
       ...health(),
       host_status: host.host_status,
       sessions: registry.live().length,
+      gateway: gatewayStatus(),
     }),
     status: () => ({
       ...health(),
@@ -762,6 +925,9 @@ export async function startDaemon(
         last_seen_at: seen.lastSeenAt,
       })),
       mcp_endpoint: mcpEndpointFor(host),
+      // The loopback model proxy. `calls_observed` counts model calls since
+      // the daemon started; a session's own count is on its row below.
+      gateway: gatewayStatus(),
       sessions: registry.list().map((session) => ({
         session_id: session.harnessSessionId,
         session_uuid: session.recorder.sessionUuid,
@@ -773,6 +939,10 @@ export async function startDaemon(
         ambient: session.ambient,
         paused: session.control.paused,
         cancelled: session.control.cancelled,
+        enforcement_tier: tierOf(session.recorder.sessionUuid),
+        model_calls_observed: modelProxy.callsObservedFor(
+          session.recorder.sessionUuid,
+        ),
         cwd: session.cwd ?? null,
         pid: session.pid ?? null,
         started_at: session.startedAt,
@@ -822,6 +992,9 @@ export async function startDaemon(
         ? `listening on ${paths.socket} and 127.0.0.1:${port ?? "?"}`
         : `listening on 127.0.0.1:${port ?? "?"}`,
     );
+    // Never throws: a port that is taken is retried on a backoff, and the
+    // status says `listening: false` until the bind succeeds.
+    await modelProxyListener.start();
   }
 
   /**
@@ -877,6 +1050,7 @@ export async function startDaemon(
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();
       await refreshBundle();
+      await refreshUpstreams();
     }
     await sendAcks();
     if (now() - lastCompact >= 60 * 60_000) {
@@ -917,6 +1091,11 @@ export async function startDaemon(
     hostRecorder,
     host: () => host,
     port,
+    get modelProxyPort() {
+      return modelProxyListener.listening()
+        ? modelProxyListener.port()
+        : undefined;
+    },
     tick,
     drainSpool: () => serial.run(drainSpool),
     refreshBundle,
@@ -924,6 +1103,8 @@ export async function startDaemon(
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
+      modelProxy.close();
+      await modelProxyListener.close();
       await server.close();
       await serial.run(async () => {
         record(hostRecorder.finalize("completed", toProtocolTimestamp(now())));

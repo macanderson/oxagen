@@ -5,7 +5,11 @@
  */
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
-import { readHostFile } from "../host/host-file";
+import { modelProxyPortFor, readHostFileLenient } from "../host/host-file";
+import type {
+  ModelBaseUrlHarness,
+  ModelBaseUrlHarnessState,
+} from "../host/model-base-url";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
@@ -17,6 +21,31 @@ export interface StatusOptions {
 
 export interface StatusReport {
   enrolled: boolean;
+  /**
+   * host.json is marked `revoked_at`: unenrolled on this machine, with the
+   * server-side revoke still to finish. `enrolled` is false.
+   */
+  retired?: boolean;
+  /** Files that could not be read, each with why. */
+  problems?: string[];
+  /**
+   * The daemon's loopback model proxy, as the daemon reports it (ADR-094).
+   * Absent when the daemon is not answering or predates the proxy.
+   */
+  gateway?: {
+    listening: boolean;
+    port: number;
+    routes: string[];
+    calls_observed: number;
+  };
+  /** Whether each harness's model base URL points at the proxy. */
+  modelBaseUrls?: ModelBaseUrlHarnessState[];
+  /**
+   * The tier each harness's runs earned since the collector started, from
+   * what was routed (ADR-095): `observe`, `harness` or `gateway`. A harness
+   * with no run yet has no entry. A base URL in a file is intent, not a tier.
+   */
+  tiers?: Record<string, "observe" | "harness" | "gateway">;
   host?: {
     host_enrollment_id: string;
     agent_key: string;
@@ -68,41 +97,145 @@ export interface StatusReport {
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
 }
 
+const TIER_RANK = { observe: 0, harness: 1, gateway: 2 } as const;
+type ObservedTier = keyof typeof TIER_RANK;
+
+/** The daemon's `gateway` block, when it reports a well-formed one. */
+export function gatewayOf(
+  daemon: Record<string, unknown> | null,
+): StatusReport["gateway"] {
+  const raw = daemon?.["gateway"];
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const g = raw as Record<string, unknown>;
+  if (typeof g["listening"] !== "boolean" || typeof g["port"] !== "number")
+    return undefined;
+  return {
+    listening: g["listening"],
+    port: g["port"],
+    routes: Array.isArray(g["routes"])
+      ? g["routes"].filter((r): r is string => typeof r === "string")
+      : [],
+    calls_observed:
+      typeof g["calls_observed"] === "number" ? g["calls_observed"] : 0,
+  };
+}
+
+/**
+ * The highest tier each harness's sessions earned this boot, from the
+ * daemon's own per-session `enforcement_tier`, which it computes from what
+ * was routed. Nothing here is inferred from what is installed.
+ */
+export function observedTiers(
+  daemon: Record<string, unknown> | null,
+): Record<string, ObservedTier> {
+  const out: Record<string, ObservedTier> = {};
+  const sessions = daemon?.["sessions"];
+  if (!Array.isArray(sessions)) return out;
+  for (const session of sessions as Array<Record<string, unknown>>) {
+    const harness = session["harness"];
+    const tier = session["enforcement_tier"];
+    if (typeof harness !== "string" || typeof tier !== "string") continue;
+    if (!(tier in TIER_RANK)) continue;
+    const current = out[harness];
+    if (
+      current === undefined ||
+      TIER_RANK[tier as ObservedTier] > TIER_RANK[current]
+    )
+      out[harness] = tier as ObservedTier;
+  }
+  return out;
+}
+
 export async function status(
   options: StatusOptions,
   deps: CliDeps,
 ): Promise<StatusReport> {
-  const host = readHostFile(deps.paths.hostFile);
+  // Lenient: `status` is what a person runs when something is wrong, so a
+  // host.json that does not validate is a finding to print, not a throw.
+  const read = readHostFileLenient(deps.paths.hostFile);
+  const host = read.host;
   if (host === undefined) {
-    const report: StatusReport = { enrolled: false };
+    const report: StatusReport = {
+      enrolled: false,
+      ...(read.error !== undefined ? { problems: [read.error] } : {}),
+    };
     if (options.json === true) deps.out(JSON.stringify(report, null, 2));
     else
       deps.out(
-        `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
+        read.error !== undefined
+          ? `Not enrolled: ${read.error}. Run \`tacho unenroll\` to clear it, then \`tacho enroll\`.`
+          : `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
       );
     return report;
   }
+  // Each harness file is read on its own: one the user has broken is named
+  // under `problems`, and the rest of the report still comes out as JSON the
+  // desktop app can parse.
+  const problems: string[] = [];
+  const guarded = <T>(read: () => T): T | undefined => {
+    try {
+      return read();
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+      return undefined;
+    }
+  };
   const service = deps.serviceManager.status();
   const daemon =
     ((await deps.daemonGet("/status")) as
       | Record<string, unknown>
       | undefined) ?? null;
-  const hooks = tachoHookPresence(deps.readSettings(), host.host_enrollment_id);
+  const hooks = tachoHookPresence(
+    guarded(deps.readSettings),
+    host.host_enrollment_id,
+  );
   const codexHooks = host.harnesses.includes("codex")
-    ? codexHookPresence(deps.readCodexHooks(), host.host_enrollment_id)
+    ? codexHookPresence(guarded(deps.readCodexHooks), host.host_enrollment_id)
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
-    ? stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id)
+    ? guarded(() =>
+        stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id),
+      )
     : undefined;
   const claudeDesktop = host.harnesses.includes("claude-desktop")
     ? claudeDesktopPresence(
-        deps.readClaudeDesktopConfig(),
+        guarded(deps.readClaudeDesktopConfig),
         host.host_enrollment_id,
       )
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
+  const gateway = gatewayOf(daemon);
+  const routedHarnesses = host.harnesses.filter(
+    (harness): harness is ModelBaseUrlHarness =>
+      harness === "claude-code" || harness === "codex",
+  );
+  let modelBaseUrls: ModelBaseUrlHarnessState[] | undefined;
+  if (deps.modelBaseUrls !== undefined && routedHarnesses.length > 0) {
+    try {
+      modelBaseUrls = (
+        await deps.modelBaseUrls.read({
+          home: deps.home,
+          port: gateway?.port ?? modelProxyPortFor(host),
+          harnesses: routedHarnesses,
+        })
+      ).harnesses;
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  const tiers = observedTiers(daemon);
+  // `revoked_at` means unenrolled on this machine: the hooks and the service
+  // are gone and only the server-side revoke is pending. Reporting that as
+  // enrolled (exit 0) disagreed with `tacho detect` about the same file and
+  // kept the desktop app on its "enrolled" screens for a host that was not.
+  const retired = host.revoked_at !== null;
   const report: StatusReport = {
-    enrolled: true,
+    enrolled: !retired,
+    ...(retired ? { retired: true } : {}),
+    ...(problems.length > 0 ? { problems } : {}),
+    ...(gateway !== undefined ? { gateway } : {}),
+    ...(modelBaseUrls !== undefined ? { modelBaseUrls } : {}),
+    ...(Object.keys(tiers).length > 0 ? { tiers } : {}),
     host: {
       host_enrollment_id: host.host_enrollment_id,
       agent_key: host.agent_key,
@@ -154,6 +287,25 @@ export async function status(
   }
   const h = report.host as NonNullable<StatusReport["host"]>;
   const b = report.bundle as NonNullable<StatusReport["bundle"]>;
+  if (retired)
+    deps.out(
+      `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`tacho unenroll\` again while signed in, or revoke it from the fleet page.`,
+    );
+  for (const problem of problems) deps.out(`Unreadable  ${problem}`);
+  if (gateway !== undefined)
+    deps.out(
+      `Gateway     model proxy ${gateway.listening ? `listening on 127.0.0.1:${gateway.port}` : "NOT LISTENING"}, ${gateway.calls_observed} model call${gateway.calls_observed === 1 ? "" : "s"} observed since the collector started`,
+    );
+  for (const entry of modelBaseUrls ?? [])
+    deps.out(
+      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)"}`,
+    );
+  // The tier is what runs earned, not what is installed (ADR-095). `contained`
+  // is the fourth word and is not available yet.
+  for (const harness of host.harnesses)
+    deps.out(
+      `Tier        ${harness}: ${tiers[harness] ?? "no run since the collector started"}`,
+    );
   deps.out(
     `Enrollment  ${h.agent_key} (${h.host_enrollment_id}) in ${h.organization_id}/${h.workspace_id}`,
   );
@@ -184,11 +336,15 @@ export async function status(
       `Sessions    ${Array.isArray(d.sessions) ? d.sessions.length : 0} known this boot, ${d.unobserved_sessions?.length ?? 0} unobserved`,
     );
   }
-  deps.out(
-    `Hooks       ${hooks.complete ? "complete" : "INCOMPLETE"}: ${hooks.present.length} present, ${hooks.missing.length} missing${hooks.disabledByFlag ? ", disableAllHooks is set" : ""}${hooks.envOk ? "" : ", env block missing"}`,
-  );
-  if (hooks.missing.length > 0)
-    deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  // Only for a host that hooks Claude Code: a Codex-only host used to read
+  // "Hooks INCOMPLETE: 0 present, 33 missing" about a harness it never asked for.
+  if (host.harnesses.includes("claude-code")) {
+    deps.out(
+      `Hooks       ${hooks.complete ? "complete" : "INCOMPLETE"}: ${hooks.present.length} present, ${hooks.missing.length} missing${hooks.disabledByFlag ? ", disableAllHooks is set" : ""}${hooks.envOk ? "" : ", env block missing"}`,
+    );
+    if (hooks.missing.length > 0)
+      deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  }
   if (claudeDesktop !== undefined) {
     deps.out(
       `Claude Desktop ${claudeDesktop.present ? "connected" : "NOT CONNECTED"}: serves the workspace toolbelt through the local gateway; records the Oxagen tools it calls, not what else the app does`,
