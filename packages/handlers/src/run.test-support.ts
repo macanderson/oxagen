@@ -337,9 +337,7 @@ export function memoryStores(
         const row = inScope(scope).tacho.find(
           (r) => r.session.publicId === publicId && !r.child,
         );
-        return Promise.resolve(
-          row ? tachoRowOf(row) : null,
-        );
+        return Promise.resolve(row ? tachoRowOf(row) : null);
       },
     },
     readRunRollups: (scope, runIds) => {

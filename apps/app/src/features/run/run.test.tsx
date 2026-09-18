@@ -179,6 +179,86 @@ describe("header", () => {
     expect(screen.queryByText("$0.00")).toBeNull();
   });
 
+  it("names the operator, the model and the machine the run ran on", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(facts.getByText("Marcus Bell")).toBeTruthy();
+    expect(facts.getByText("prn_marcusbell")).toBeTruthy();
+    expect(facts.getByText("claude-sonnet-5")).toBeTruthy();
+    expect(facts.getByText("anthropic \u00b7 sonnet")).toBeTruthy();
+    expect(facts.getByText("mac-studio.local")).toBeTruthy();
+    expect(
+      facts.getByText("darwin 15.6 \u00b7 arm64 \u00b7 v24.4.0"),
+    ).toBeTruthy();
+    await expectNoAxe(container);
+  });
+
+  it("reads a model and a machine the run does not carry as not recorded, never a placeholder", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ source: "ledger", model: null, machine: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(facts.getAllByText("not recorded")).toHaveLength(2);
+    expect(
+      facts.getByText("The evidence ledger records no host for a run."),
+    ).toBeTruthy();
+    expect(facts.queryByText("unknown")).toBeNull();
+  });
+
+  it("says a run an agent started has no person to name, and does not borrow one", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ operatorKind: "agent", operatorName: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(facts.getByText("An agent, not a person")).toBeTruthy();
+    expect(facts.queryByText("Marcus Bell")).toBeNull();
+  });
+
+  it("separates a person with no name recorded from a run with no operator at all", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ operatorKind: "human", operatorName: null }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(
+      within(screen.getByTestId("run-facts")).getByText(
+        "A person, name not recorded",
+      ),
+    ).toBeTruthy();
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorId: null,
+            operatorKind: null,
+            operatorName: null,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const facts = within(screen.getByTestId("run-facts"));
+    expect(facts.queryByText("A person, name not recorded")).toBeNull();
+    expect(facts.getByText("not recorded")).toBeTruthy();
+  });
+
   it("states that a witness run witnessed another and links no further", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),

@@ -109,7 +109,9 @@ export function modelTierOf(modelId: string): string | undefined {
  * no id. A recognised id keeps its unrecognised halves null rather than
  * guessing either one.
  */
-export function modelFactsOf(modelId: string | null | undefined): ModelFacts | null {
+export function modelFactsOf(
+  modelId: string | null | undefined,
+): ModelFacts | null {
   if (modelId === null || modelId === undefined) return null;
   const id = modelId.trim();
   if (id.length === 0) return null;

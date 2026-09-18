@@ -24,6 +24,8 @@ export function toRunRow(
     source: run.source,
     agentKey: run.agentKey,
     operatorId: run.operatorId,
+    operatorKind: run.operatorKind,
+    operatorName: run.operatorName,
     status: run.status,
     turns: run.turns,
     steps: run.steps,
@@ -35,6 +37,8 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
+    model: run.model,
+    machine: run.machine,
     taskRef: run.taskRef,
     name: run.name,
     summary:

@@ -101,10 +101,22 @@ function RunsPageView({
               />
             </td>
             <td className={cell}>
-              {run.operatorId === null ? (
-                notRecorded
+              {run.operatorName === null ? (
+                run.operatorId === null ? (
+                  notRecorded
+                ) : (
+                  // No name to print: the principal id is the identifier the
+                  // rest of the record is keyed on, so it stands in its own
+                  // right rather than as a stand-in for a name.
+                  <span className={mono}>{run.operatorId}</span>
+                )
               ) : (
-                <span className={mono}>{run.operatorId}</span>
+                <span className="flex flex-col">
+                  <span>{run.operatorName}</span>
+                  <span className={`${mono} text-xs text-muted-foreground`}>
+                    {run.operatorId}
+                  </span>
+                </span>
               )}
             </td>
             <td className={cell}>

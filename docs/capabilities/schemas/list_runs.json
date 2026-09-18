@@ -1,7 +1,7 @@
 {
   "name": "list_runs",
   "domain": "run",
-  "description": "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
+  "description": "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, the model, the machine, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -62,6 +62,31 @@
               ]
             },
             "operatorId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operatorKind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "human",
+                    "agent",
+                    "service"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "operatorName": {
               "anyOf": [
                 {
                   "type": "string"
@@ -189,6 +214,103 @@
                 }
               ]
             },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tier": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "provider",
+                    "tier"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "machine": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "hostname": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string"
+                    },
+                    "osVersion": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "arch": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "nodeVersion": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "hostname",
+                    "platform",
+                    "osVersion",
+                    "arch",
+                    "nodeVersion"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "name": {
               "anyOf": [
                 {
@@ -232,6 +354,8 @@
             "source",
             "agentKey",
             "operatorId",
+            "operatorKind",
+            "operatorName",
             "status",
             "turns",
             "steps",
@@ -242,6 +366,8 @@
             "sealedAt",
             "replayGrade",
             "verdict",
+            "model",
+            "machine",
             "name",
             "summary"
           ],

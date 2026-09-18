@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  modelFactsOf,
-  modelProviderOf,
-  modelTierOf,
-} from "./model-facts";
+import { modelFactsOf, modelProviderOf, modelTierOf } from "./model-facts";
 
 describe("modelProviderOf", () => {
   it("reads the vendor out of a bare Anthropic id", () => {
