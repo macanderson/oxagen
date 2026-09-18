@@ -12,6 +12,7 @@ import {
   keepPredicatePositions,
   SCOPE_LABELS_PARAM,
   SCOPE_REL_TYPES_PARAM,
+  scanLiteralsAndComments,
   stripLiteralsAndComments,
   type GraphScope,
 } from "./graph-scope";
@@ -2035,4 +2036,257 @@ describe("a subquery's clause baseline is its own", () => {
       else expect(kept).not.toContain("$orgId");
     });
   }
+});
+
+// ── The sanitizer, audited against the lexer rather than against a finding ──
+//
+// `stripLiteralsAndComments` is the layer UNDER every position rule in this
+// file: the tenancy anchor, the scope markers, the read-mode write rejection
+// and the clause tracking all read its output. Five rounds of position rules
+// each assumed it produced a faithful projection of which text is live, and
+// nothing had checked that it did.
+//
+// The reference is Neo4j's own `Cypher25Lexer.g4` (`neo4j/cypher-language-support`,
+// `packages/language-support/src/antlr-grammar`). Writing `CLOSE` for an
+// asterisk followed by a slash:
+//
+//     MULTI_LINE_COMMENT    : '/CLOSE' .*? 'CLOSE'   — non-greedy: FIRST close
+//     SINGLE_LINE_COMMENT   : '//' ~[\r\n]*          — CR or LF ends it
+//     STRING_LITERAL1       : '\'' (~['\\] | EscapeSequence)* '\''
+//     STRING_LITERAL2       : '"'  (~["\\] | EscapeSequence)* '"'
+//     fragment EscapeSequence : '\\' .               — backslash + ANY char
+//     ESCAPED_SYMBOLIC_NAME : '`' ( ~'`' | '``' )* '`' — doubling, no backslash
+describe("the sanitizer agrees with Cypher about which text is live", () => {
+  // ── Block comments do not nest ────────────────────────────────────────────
+  //
+  // Reported as a bypass on the premise that Neo4j keeps a doubled-open comment
+  // commented to the OUTER terminator while this module closes at the first.
+  // The grammar's `.*?` is non-greedy, so Neo4j closes at the first one too.
+  // These pin the agreement rather than the absence of a fix.
+  it("closes a block comment at the first terminator, as the lexer does", () => {
+    const doubled =
+      "/* outer /* inner */ WHERE n.orgId = $orgId */ MATCH (n) RETURN n";
+    // Everything after the FIRST terminator is live — including the stray
+    // second terminator, which is what makes the leftover a syntax error at the
+    // database rather than a query that runs unscoped.
+    expect(stripLiteralsAndComments(doubled)).toBe(
+      "  WHERE n.orgId = $orgId */ MATCH (n) RETURN n",
+    );
+    // If the construct DID nest, everything up to the second terminator would
+    // be comment and the live text would begin at ` MATCH`. It does not.
+    expect(stripLiteralsAndComments(doubled)).not.toBe("  MATCH (n) RETURN n");
+  });
+
+  it("a second opener inside a block comment is ordinary comment text", () => {
+    expect(stripLiteralsAndComments("MATCH (n) /* a /* b */ RETURN n")).toBe(
+      "MATCH (n)   RETURN n",
+    );
+  });
+
+  // ── A line comment ends at CR as well as LF ───────────────────────────────
+  //
+  // This was the real defect, and it failed in the dangerous direction: the
+  // sanitizer hid text the database executes, so `assertReadOnly` — a DENYLIST,
+  // which refuses only what it can SEE — found no write keyword.
+  const CR = "\r";
+  const lineTerminators: Array<[name: string, query: string]> = [
+    ["LF", "MATCH (n) // c\nWHERE n.orgId = $orgId RETURN n"],
+    ["CRLF", `MATCH (n) // c${CR}\nWHERE n.orgId = $orgId RETURN n`],
+    ["a lone CR", `MATCH (n) // c${CR}WHERE n.orgId = $orgId RETURN n`],
+  ];
+
+  for (const [name, query] of lineTerminators) {
+    it(`ends a line comment at ${name}`, () => {
+      // The anchor is on the far side of the terminator, so it is only visible
+      // if the comment ended where Cypher ends it.
+      expect(keepFilteringPositions(query)).toContain("$orgId");
+    });
+  }
+
+  it("does not hide a write behind a lone CR", () => {
+    // `RETURN n // c` CR `DETACH DELETE n`: Cypher ends the comment at the CR
+    // and executes the DELETE. Scanning only for LF hid it, and a read-mode
+    // scope let it through.
+    const hidden = `MATCH (n) WHERE n.orgId = $orgId RETURN n // c${CR}DETACH DELETE n`;
+    expect(() => assertReadOnly(hidden)).toThrow(GraphScopeError);
+    // Discriminating: the LF spelling of the same query was always refused, so
+    // this asserts the two now agree rather than that the guard rejects
+    // everything.
+    const visible =
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n // c\nDETACH DELETE n";
+    expect(() => assertReadOnly(visible)).toThrow(GraphScopeError);
+    // …and a write genuinely inside the comment is still permitted, on both.
+    expect(() =>
+      assertReadOnly(
+        `MATCH (n) WHERE n.orgId = $orgId RETURN n // DETACH DELETE n`,
+      ),
+    ).not.toThrow();
+  });
+
+  it("a comment that runs to end of input is complete, not unterminated", () => {
+    // `~[\r\n]*` matches happily to end of input, so the text after `//` with no
+    // newline is genuinely commented and the query is still well formed.
+    const q = "MATCH (n) WHERE n.orgId = $orgId RETURN n // DETACH DELETE n";
+    expect(keepFilteringPositions(q)).toContain("$orgId");
+    expect(() => assertReadOnly(q)).not.toThrow();
+  });
+
+  // ── Whichever delimiter opens first wins ──────────────────────────────────
+  //
+  // The property the single-pass design exists to provide, in both directions.
+  // Already correct; pinned because a future "tidy" into two regex passes could
+  // only ever get one of the two right.
+  const inert: Array<[name: string, query: string]> = [
+    [
+      "a block opener inside a string",
+      "MATCH (n) WHERE n.u = '/*' AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a line opener inside a string",
+      "MATCH (n) WHERE n.u = 'http://x' AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a block opener inside a backtick name",
+      "MATCH (n) WHERE n.`/*` = 1 AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "an apostrophe inside a block comment",
+      "MATCH (n) /* it's fine */ WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "an apostrophe inside a line comment",
+      "MATCH (n) // it's fine\nWHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a line opener inside a block comment",
+      "MATCH (n) /* // */ WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a block opener inside a line comment",
+      "MATCH (n) // /*\nWHERE n.orgId = $orgId RETURN n",
+    ],
+  ];
+
+  for (const [name, query] of inert) {
+    it(`treats ${name} as inert`, () => {
+      expect(keepFilteringPositions(query)).toContain("$orgId");
+      expect(() => assertReadOnly(query)).not.toThrow();
+    });
+  }
+
+  it("a write inside a string or a backtick name is not a write", () => {
+    // The other half of the same property: the sanitizer must not let a literal
+    // spoof the denylist either.
+    expect(() =>
+      assertReadOnly(
+        "MATCH (n) WHERE n.x = 'DETACH DELETE n' AND n.orgId = $orgId RETURN n",
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertReadOnly(
+        "MATCH (n) WHERE n.`DELETE` = 1 AND n.orgId = $orgId RETURN n",
+      ),
+    ).not.toThrow();
+  });
+
+  // ── Escapes are per the grammar, and the two rules differ ─────────────────
+  it("a backslash escapes any character inside a string", () => {
+    // `EscapeSequence : '\\' .` — so an escaped closing quote does not close.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE n.x = 'a\\'b' AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+    // A trailing escaped backslash DOES let the next quote close.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE n.x = 'a\\\\' AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+
+  it("a backtick name escapes by doubling and takes no backslash escape", () => {
+    // `ESCAPED_SYMBOLIC_NAME : '`' ( ~'`' | '``' )* '`'` has no EscapeSequence,
+    // so a backslash is an ordinary character and the next backtick closes.
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE n.`a``b` = 1 AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+    expect(
+      keepFilteringPositions(
+        "MATCH (n) WHERE n.`a\\` = 1 AND n.orgId = $orgId RETURN n",
+      ),
+    ).toContain("$orgId");
+  });
+
+  // ── Unterminated input has no faithful projection, so it is refused ───────
+  //
+  // None of these lex in Cypher, so none could ever have run — the query was
+  // rejected by the DATABASE. That is an external guarantee standing in for a
+  // local one, which is the arrangement this PR has spent several rounds
+  // replacing.
+  const unterminated: Array<[name: string, query: string]> = [
+    [
+      "a block comment",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n /* DETACH DELETE n",
+    ],
+    [
+      "a single-quoted string",
+      "MATCH (n) WHERE n.orgId = $orgId AND n.x = 'oops DETACH DELETE n",
+    ],
+    [
+      "a double-quoted string",
+      'MATCH (n) WHERE n.orgId = $orgId AND n.x = "oops DETACH DELETE n',
+    ],
+    [
+      "a backtick identifier",
+      "MATCH (n) WHERE n.orgId = $orgId AND n.`oops DETACH DELETE n",
+    ],
+  ];
+
+  for (const [name, query] of unterminated) {
+    it(`refuses ${name} that never closes`, () => {
+      // The allow-list guards fail closed by finding nothing in a filtering
+      // position…
+      expect(keepFilteringPositions(query)).not.toContain("$orgId");
+      expect(keepFilteringPositions(query).trim()).toBe("");
+      // …and the DENYLIST fails closed the opposite way, by refusing outright.
+      // Blanking would have been the most permissive possible answer here,
+      // since a blank string contains no write at all.
+      expect(() => assertReadOnly(query)).toThrow(GraphScopeError);
+      expect(() => assertReadOnly(query)).toThrow(/unterminated/);
+    });
+  }
+
+  it("is discriminating: the closed spelling of each is accepted", () => {
+    // Without this the block above would pass on a sanitizer that refused
+    // everything.
+    for (const q of [
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n /* fine */",
+      "MATCH (n) WHERE n.orgId = $orgId AND n.x = 'fine' RETURN n",
+      'MATCH (n) WHERE n.orgId = $orgId AND n.x = "fine" RETURN n',
+      "MATCH (n) WHERE n.orgId = $orgId AND n.`fine` = 1 RETURN n",
+    ]) {
+      expect(keepFilteringPositions(q)).toContain("$orgId");
+      expect(() => assertReadOnly(q)).not.toThrow();
+    }
+  });
+
+  it("reports unterminated separately from the projection", () => {
+    // The two entry points are one scanner. A second pass answering "is it
+    // unterminated" would be a second lexer to keep in agreement with the
+    // first, which is the class of defect this module exists to stop repeating.
+    expect(scanLiteralsAndComments("MATCH (n) RETURN n")).toEqual({
+      text: "MATCH (n) RETURN n",
+      unterminated: false,
+    });
+    expect(scanLiteralsAndComments("MATCH (n) /* x").unterminated).toBe(true);
+    expect(scanLiteralsAndComments("MATCH (n) 'x").unterminated).toBe(true);
+    expect(scanLiteralsAndComments("MATCH (n) `x").unterminated).toBe(true);
+    expect(scanLiteralsAndComments("MATCH (n) // x").unterminated).toBe(false);
+    expect(stripLiteralsAndComments("MATCH (n) /* x")).toBe(
+      scanLiteralsAndComments("MATCH (n) /* x").text,
+    );
+  });
 });

@@ -602,6 +602,105 @@ is sharper than that: the previous round's fix was correct, its enumeration was
 exhaustive *for the thing it enumerated*, and the defect was sitting inside the
 sentence where it wrote down what the fix cost.
 
+### Round 16: the layer underneath, and the first finding that was wrong
+
+Round 16 reported a nested-block-comment bypass — that Neo4j permits nested
+`/* ... */` while `stripLiteralsAndComments` stops at the first terminator, so a
+doubled-open comment would hand the guard an anchor the database keeps
+commented.
+
+**It is not true, and establishing that came first.** Neo4j's own Cypher 25
+lexer (`neo4j/cypher-language-support`,
+`packages/language-support/src/antlr-grammar/Cypher25Lexer.g4`) defines the
+construct as a NON-GREEDY match, so the first terminator closes it exactly as
+`indexOf` does here. Cypher block comments do not nest — which is also the
+SQL-family and C-family norm, though that is a reason to check rather than a
+reason to conclude. The two agree on which text is live, and what is left over
+after the first close is a syntax error rather than an unscoped query.
+
+This is the first round whose finding did not hold, and it is worth recording
+why the answer was still not "no change". The finding was wrong about the
+grammar and right about **where to look**.
+
+#### The category: which text is live at all
+
+Every previous round asked a question about the LIVE TEXT — which position, which
+prefix character, which order, which bracket, which clause sequence. This one
+attacks `stripLiteralsAndComments`, the projection those rules all read. It is
+one scale DOWN, not up, and it is load-bearing for all of them at once: the
+tenancy anchor, the scope markers, the read-mode write rejection and the clause
+tracking are four consumers of one sanitizer that five rounds had assumed was
+faithful without checking.
+
+So the sanitizer was audited against the lexer the way the node pattern was
+audited against its production — every construct enumerated, and for each, what
+Cypher does and what this module does:
+
+| construct | Cypher | this module | agreed |
+|---|---|---|---|
+| block comment | non-greedy, first close, no nesting | first close | yes |
+| line comment | `~[\r\n]*` — CR **or** LF ends it | scanned for LF only | **no** |
+| line comment at end of input | matches to end; complete token | consumes to end | yes |
+| single/double-quoted string | `(~['\\] \| EscapeSequence)*` | same | yes |
+| escape sequence | `'\\' .` — backslash + ANY char | skip two | yes |
+| backtick identifier | `( ~'`' \| '``' )*` — doubling, no backslash escape | same | yes |
+| opener of one inside the other | whichever opens first wins | single left-to-right scan | yes |
+| unterminated anything | does not lex; query rejected | swallowed to end of input | see below |
+
+#### What the audit found
+
+**A lone CR did not end a line comment, and in Cypher it does.** That is a real
+bypass and it failed in the dangerous direction — the sanitizer hid text the
+database EXECUTES:
+
+```
+MATCH (n) WHERE n.orgId = $orgId RETURN n // c<CR>DETACH DELETE n
+```
+
+Cypher ends the comment at the CR and runs the `DETACH DELETE`. Scanning only
+for LF hid it, so `assertReadOnly` found no write keyword and a read-mode scope
+permitted the delete. The same mechanism hid a second, unanchored `MATCH`, and
+in the other direction hid the anchor itself, so a legitimate CR-terminated
+query was refused.
+
+**The denylist is why hiding text is the dangerous direction**, and this is the
+general lesson of the round. Three of the four consumers are ALLOW-lists: they
+look for an anchor or a marker, so text that goes missing can only make them
+refuse. `assertReadOnly` is a DENYLIST: it refuses what it can SEE, so text that
+goes missing makes it permit. A sanitizer defect therefore fails closed for
+three guards and open for the fourth, and the fourth is the one that stops
+writes. Any future change to this function has to be judged against the denylist
+first.
+
+#### Unterminated input is refused rather than projected
+
+An unclosed comment, string or backtick does not lex in Cypher, so there is no
+faithful projection of it to produce. This module's answer had been to swallow
+to end of input, which hides whatever follows — and nothing executed, but only
+because the DATABASE rejects the query. That is an external guarantee standing
+in for a local one, which is the arrangement round 15 removed from the clamps
+and this removes here.
+
+The refusal takes opposite forms for the two kinds of consumer, which is the
+same asymmetry stated the other way round: `keepPositions` returns an all-blank
+projection, so the allow-list guards refuse for want of an anchor; and
+`assertReadOnly` throws, because blanking would be the most permissive possible
+answer to a denylist. Cost: 0 of the 63 corpus queries, and none of them can lex
+anyway.
+
+#### What this says about the method, a fifth time
+
+Rounds 10-14 went eleven-for-one, thirteen-for-two, seven-for-one,
+fifteen-for-one and ten-for-one. Round 16 is a different shape: the finding was
+FALSE, and auditing the thing it pointed at still produced a real bypass and a
+real false-reject that no review round had reported.
+
+That is worth more than the yield figures. It says the reviewer's instinct about
+WHERE was better than its claim about WHAT, and that a finding can be worth
+acting on for its target rather than its content. It also says the ladder of
+scales this ADR has been climbing has a rung below the one round 10 started on,
+and that nothing had been looking down.
+
 ### What follows
 
 This does **not** change the decision below — it strengthens the case for it and

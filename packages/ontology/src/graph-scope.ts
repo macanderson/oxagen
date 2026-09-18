@@ -175,28 +175,101 @@ const MUTATING_CALL =
  * FIRST wins, which is exactly how Cypher itself reads the text.
  */
 export function stripLiteralsAndComments(cypher: string): string {
+  return scanLiteralsAndComments(cypher).text;
+}
+
+/**
+ * The scan behind {@link stripLiteralsAndComments}, which also reports whether
+ * the input ended INSIDE a comment, a string or a backtick identifier.
+ *
+ * ROUND SIXTEEN AUDITED THIS AGAINST THE LEXER RATHER THAN AGAINST A FINDING,
+ * and it is the layer under every other rule in this file: the tenancy anchor,
+ * the scope markers, the read-mode write rejection and the clause tracking all
+ * read its output. Five rounds of position rules each assumed it produced a
+ * faithful projection; nothing had checked that it did.
+ *
+ * The reference is Neo4j's own `Cypher25Lexer.g4` (`neo4j/cypher-language-support`,
+ * `packages/language-support/src/antlr-grammar`), and the rules that matter are
+ * restated here so the next reader need not go and find them. `CLOSE` below is
+ * an asterisk followed by a slash, spelled out because writing it literally
+ * would end this comment:
+ *
+ *     MULTI_LINE_COMMENT    : '/CLOSE' .*? 'CLOSE'   // non-greedy: FIRST close
+ *     SINGLE_LINE_COMMENT   : '//' ~[\r\n]*          // CR **or** LF ends it
+ *     STRING_LITERAL1       : '\'' (~['\\] | EscapeSequence)* '\''
+ *     STRING_LITERAL2       : '"'  (~["\\] | EscapeSequence)* '"'
+ *     fragment EscapeSequence : '\\' .               // backslash + ANY char
+ *     ESCAPED_SYMBOLIC_NAME : '`' ( ~'`' | '``' )* '`'  // doubling, no backslash
+ *
+ * What the audit found, and what it did not:
+ *
+ *  - **Block comments do not nest.** The `.*?` is non-greedy, so Cypher closes
+ *    at the first terminator exactly as `indexOf` does here. A review round
+ *    reported a doubled-open comment as a bypass on the premise that Neo4j
+ *    keeps it commented to the OUTER terminator. It does not: the two agree on
+ *    which text is live, and what is left over is a syntax error rather than a
+ *    query. No change was needed and none was made.
+ *  - **A lone CR did not end a line comment here, and does in Cypher.** That
+ *    was real, and it failed in the dangerous direction: this function hid text
+ *    the database executes, so `assertReadOnly` — a DENYLIST — found no write
+ *    keyword in a query ending `RETURN n // c` CR `DETACH DELETE n`, and a
+ *    read-scoped session deleted. Fixed below by scanning for `~[\r\n]` as the
+ *    grammar writes it.
+ *  - **A quote inside a comment, and a comment marker inside a literal, are
+ *    both inert** — in the lexer and here, because both are decided by
+ *    whichever delimiter opens first. Already correct; now pinned, since it is
+ *    the property the single-pass design exists to provide.
+ *
+ * `unterminated` is the other half. An unclosed comment, string or backtick
+ * does not lex in Cypher at all, so there is no faithful projection of it to
+ * produce — and this function's answer was to swallow to end of input, which
+ * hides whatever follows. Nothing executed, but only because the database
+ * rejects the query: an external guarantee standing in for a local one. The
+ * flag lets each caller fail closed in ITS OWN direction, which is not the same
+ * direction for all of them — see `keepPositions` and `assertReadOnly`.
+ *
+ * One scanner with two entry points rather than two scanners: a separate pass
+ * answering "is it unterminated" would be a second lexer to keep in agreement
+ * with this one, which is the class of defect this module exists to stop
+ * repeating.
+ */
+export function scanLiteralsAndComments(cypher: string): {
+  text: string;
+  unterminated: boolean;
+} {
   let out = "";
   let i = 0;
   const n = cypher.length;
+  let unterminated = false;
 
   while (i < n) {
     const ch = cypher[i]!;
     const next = cypher[i + 1];
 
     // Block comment — collapse to a space, keeping tokens on either side apart.
+    // Non-greedy in the grammar, so the FIRST terminator closes it and the
+    // construct does not nest.
     if (ch === "/" && next === "*") {
       const end = cypher.indexOf("*/", i + 2);
       out += " ";
+      if (end === -1) unterminated = true;
       i = end === -1 ? n : end + 2;
       continue;
     }
 
-    // Line comment — collapse to a space and resume at the newline, which is
-    // preserved so line structure (and any trailing clause) survives.
+    // Line comment — collapse to a space and resume at the line terminator,
+    // which is preserved so line structure (and any trailing clause) survives.
+    //
+    // CR ends it as well as LF. Scanning only for LF hid every character
+    // between a lone CR and the next LF — text Cypher executes — from all four
+    // guards. Running off the end is NOT unterminated: `~[\r\n]*` matches
+    // happily to end of input, so a trailing comment with no newline is a
+    // complete token and the text after it is genuinely commented.
     if (ch === "/" && next === "/") {
-      const end = cypher.indexOf("\n", i + 2);
+      let end = i + 2;
+      while (end < n && cypher[end] !== "\n" && cypher[end] !== "\r") end += 1;
       out += " ";
-      i = end === -1 ? n : end;
+      i = end;
       continue;
     }
 
@@ -206,9 +279,13 @@ export function stripLiteralsAndComments(cypher: string): string {
       const closer = ch;
       out += closer + closer;
       i += 1;
+      let closed = false;
       while (i < n) {
         const c = cypher[i]!;
-        // Backtick identifiers escape by doubling; strings escape with `\`.
+        // Backtick identifiers escape by DOUBLING and take no backslash escape
+        // at all — the grammar has no EscapeSequence in that rule. Strings are
+        // the other way round: an escape is a backslash and ANY character,
+        // which is why the skip is two rather than a lookup table.
         if (closer === "`") {
           if (c === "`" && cypher[i + 1] === "`") {
             i += 2;
@@ -219,8 +296,12 @@ export function stripLiteralsAndComments(cypher: string): string {
           continue;
         }
         i += 1;
-        if (c === closer) break;
+        if (c === closer) {
+          closed = true;
+          break;
+        }
       }
+      if (!closed) unterminated = true;
       continue;
     }
 
@@ -228,7 +309,7 @@ export function stripLiteralsAndComments(cypher: string): string {
     i += 1;
   }
 
-  return out;
+  return { text: out, unterminated };
 }
 
 // ── Filtering positions ──────────────────────────────────────────────────────
@@ -589,8 +670,18 @@ type PositionPolicy =
  * and enforce on every query in the platform.
  */
 function keepPositions(cypher: string, policy: PositionPolicy): string {
-  const src = stripLiteralsAndComments(cypher);
+  const { text: src, unterminated } = scanLiteralsAndComments(cypher);
   const out = new Array<string>(src.length).fill(" ");
+  // An unterminated comment, string or backtick means there is no faithful
+  // projection to produce, so NOTHING is reported as a filtering position and
+  // both guards that read this refuse for want of an anchor or a marker.
+  //
+  // Blanking rather than throwing because this function is a projection, not a
+  // guard: its callers turn an empty result into their own error, with their own
+  // message, and `keepFilteringPositions` has no business deciding which of them
+  // is asking. `assertReadOnly` takes the opposite branch on the same flag, for
+  // the reason given there.
+  if (unterminated) return out.join("");
 
   let paren = 0;
   let bracket = 0;
@@ -1027,7 +1118,26 @@ export function keepPredicatePositions(cypher: string): string {
  * is `read`.
  */
 export function assertReadOnly(cypher: string): void {
-  const sanitized = stripLiteralsAndComments(cypher);
+  const { text: sanitized, unterminated } = scanLiteralsAndComments(cypher);
+  // THE OPPOSITE DIRECTION FROM `keepPositions`, and the asymmetry is the whole
+  // point of the flag rather than an inconsistency.
+  //
+  // This guard is a DENYLIST: it refuses when it FINDS a write keyword, so
+  // anything that hides text makes it pass. Blanking an unterminated query — the
+  // fail-closed answer for the two allow-list guards — would be the most
+  // permissive possible answer here, since a blank string contains no write at
+  // all. So an input this module cannot faithfully project is refused outright.
+  //
+  // It costs nothing real: an unclosed comment, string or backtick does not lex
+  // in Cypher, so the query could never have run. What it buys is that the
+  // refusal happens here rather than depending on the database to reject it,
+  // which is the same reason the clamps' output is now re-checked instead of
+  // argued about.
+  if (unterminated) {
+    throw new GraphScopeError(
+      `Cypher ends inside an unterminated comment, string or backtick identifier, so a read-mode scope cannot be enforced on it: ${cypher.slice(0, 80)}`,
+    );
+  }
   if (WRITE_KEYWORD.test(sanitized) || MUTATING_CALL.test(sanitized)) {
     throw new GraphScopeError(
       `Write clause rejected on a read-mode graph scope: ${cypher.slice(0, 80)}`,
