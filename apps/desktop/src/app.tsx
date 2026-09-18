@@ -15,12 +15,21 @@
  * The app owns no state: it reads what the CLIs wrote and runs a sidecar
  * for every change (see bridge.ts); the argv it builds is in commands.ts.
  */
+import {
+  binSkew,
+  createPoller,
+  describeInstallResult,
+  describeRemoval,
+  isEnrolled,
+  isRetired,
+} from "./machine-state";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
 import {
   type MouseEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -148,13 +157,17 @@ export function App() {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [alsoDefault, setAlsoDefault] = useState(true);
 
-  const refresh = useCallback(async (withHooks = false) => {
-    try {
+  // True while an action is changing the machine. The poll skips `tacho
+  // status` then: it would read the same files `enroll` or `unenroll` is
+  // rewriting, and its transient failure replaced the action's own error.
+  const busyRef = useRef(false);
+  const readMachine = useCallback(async (withHooks: boolean) => {
+    {
       const next = await readState();
       setState(next);
-      setFirstRun((prev) => (prev === null ? next.host === null : prev));
-      if (!next.host) setTacho(null);
-      else if (withHooks) {
+      setFirstRun((prev) => (prev === null ? !isEnrolled(next.host) : prev));
+      if (!isEnrolled(next.host)) setTacho(null);
+      else if (withHooks && !busyRef.current) {
         try {
           setTacho(await tachoStatus());
           statusErrorRef.current = null;
@@ -169,24 +182,51 @@ export function App() {
           }
         }
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
+  // One read at a time, and a slow old answer never replaces a newer one:
+  // see `createPoller`.
+  const pollers = useMemo(() => {
+    const onError = (e: unknown) =>
+      setError(e instanceof Error ? e.message : String(e));
+    return {
+      plain: createPoller(
+        () => readMachine(false),
+        () => undefined,
+        onError,
+      ),
+      withHooks: createPoller(
+        () => readMachine(true),
+        () => undefined,
+        onError,
+      ),
+    };
+  }, [readMachine]);
+  const refresh = useCallback(
+    (withHooks = false, force = true) =>
+      (withHooks ? pollers.withHooks : pollers.plain).poll({ force }),
+    [pollers],
+  );
 
   useEffect(() => {
     void refresh(true);
     let tick = 0;
     pollRef.current = window.setInterval(() => {
       tick += 1;
-      void refresh(tick % 4 === 0);
+      // A tick joins a read that is still out instead of stacking another.
+      void refresh(tick % 4 === 0, false);
     }, 5000);
     return () => {
       if (pollRef.current !== null) window.clearInterval(pollRef.current);
     };
   }, [refresh]);
 
-  const host = state?.host ?? null;
+  // `host` is an enrolled host or null. A host.json that `tacho unenroll`
+  // retired (an offline revoke) is `retiredHost`: not enrolled, not wrapped,
+  // and not a reason to refuse an uninstall. See `isEnrolled`.
+  const rawHost = state?.host ?? null;
+  const host = isEnrolled(rawHost) ? rawHost : null;
+  const retiredHost = isRetired(rawHost) ? rawHost : null;
   const hostHarnesses = (host?.harnesses ?? []) as Harness[];
   const configToken = state?.config.logged_in ?? false;
   const loggedIn = configToken && !sessionExpired;
@@ -304,6 +344,10 @@ export function App() {
     after?: (result: RunOutcome) => Promise<void> | void,
     onFail?: (result: RunOutcome) => void,
   ) {
+    // A second click that lands before React has disabled the button must
+    // not start a second `unenroll` or `reassign` beside the first.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(name);
     setError(null);
     setNotice(null);
@@ -326,10 +370,24 @@ export function App() {
       setError(text);
       onFail?.({ code: null, stderr: text });
     } finally {
+      busyRef.current = false;
       setBusy(null);
       await refresh(true);
     }
   }
+
+  // A destructive control confirms in place, and the confirm button takes
+  // the slot the first button had. The second click of a double click landed
+  // on it. A confirm is ignored for a moment after it appears.
+  const confirmShownAt = useRef(0);
+  const askConfirm = (key: string) => {
+    confirmShownAt.current = Date.now();
+    setConfirming(key);
+  };
+  const confirmed = (run: () => unknown) => () => {
+    if (Date.now() - confirmShownAt.current < 500) return;
+    void run();
+  };
 
   // `oxagen login --browser` replaces whatever session config.json holds,
   // so a sign-in after a 401 (or a Switch organization) starts the pickers
@@ -478,33 +536,38 @@ export function App() {
     );
 
   async function uninstallEverything() {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setConfirming(null);
     setBusy("uninstall");
     setError(null);
     setNotice(null);
     setLog([{ text: "$ tacho unenroll --purge", err: false }]);
     try {
+      // Always, enrolled or not: `unenroll` strips Tacho's hooks and the
+      // service whether or not host.json is there, and finishes a revoke an
+      // earlier offline run left pending.
       const result = await runSidecar("tacho", unenrollArgs(true), (line, s) =>
         setLog((prev) => [...prev, { text: line, err: s === "stderr" }]),
       );
       if (result.code !== 0)
-        throw new Error(`tacho unenroll exited ${result.code ?? "?"}`);
-      const removed = await uninstallCli();
+        throw new Error(
+          `tacho unenroll could not finish (exit ${result.code ?? "?"}). Nothing else was removed. The output below says what is still in place.`,
+        );
+      const report = await removeLocalData();
       setLog((prev) => [
         ...prev,
-        {
-          text: `removed PATH links: ${removed.join(", ") || "none"}`,
+        ...report.removed.map((path) => ({
+          text: `removed ${path}`,
           err: false,
-        },
+        })),
+        ...report.left.map((note) => ({ text: `left: ${note}`, err: true })),
       ]);
-      const dir = await removeLocalData();
-      setLog((prev) => [...prev, { text: `removed ${dir}`, err: false }]);
-      setNotice(
-        `Everything Oxagen put on this machine is gone. ${uninstallHint}`,
-      );
+      setNotice(describeRemoval(report, uninstallHint));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      busyRef.current = false;
       setBusy(null);
       await refresh(true);
     }
@@ -514,8 +577,7 @@ export function App() {
     setBusy("cli");
     setError(null);
     try {
-      const r = await installCli();
-      setNotice(`${r.files.length} links in ${r.dir}. ${r.note}`);
+      setNotice(describeInstallResult(await installCli()));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -541,7 +603,13 @@ export function App() {
     }
   }
   async function showLog() {
-    setTail(await logTail(120));
+    try {
+      setTail(await logTail(120));
+    } catch (e) {
+      setError(
+        `Could not read the collector log: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
   /**
    * Open the collector log in the system handler. `open_path` is scoped to
@@ -589,9 +657,19 @@ export function App() {
     setUpdate({ caption: `installing v${offered.version}…`, offered });
     setLog([{ text: `$ update to v${offered.version}`, err: false }]);
     try {
-      await installUpdate(offered, (line) =>
+      const { relaunched } = await installUpdate(offered, (line) =>
         setLog((prev) => [...prev, { text: line, err: false }]),
       );
+      if (!relaunched) {
+        setUpdate({
+          caption: `v${offered.version} installed; quit and reopen Oxagen`,
+          offered: null,
+        });
+        setNotice(
+          `Version ${offered.version} is installed. Quit Oxagen and open it again to use it.`,
+        );
+        setBusy(null);
+      }
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
       setLog((prev) => [...prev, { text, err: true }]);
@@ -641,7 +719,10 @@ export function App() {
     : daemonUp && host.host_status === "active"
       ? "on"
       : "half";
-  const agentRows = state ? computeAgentRows(state, tacho, Date.now()) : [];
+  const agentRows = state
+    ? computeAgentRows({ ...state, host }, tacho, Date.now())
+    : [];
+  const skewNote = host && state ? binSkew(host, state) : null;
   const cliInstallNote = describeCliInstall(state?.cli_install);
   // Whether there is anything for "Remove links" to remove. The two
   // `*_on_path` fields answer a different question: they resolve against the
@@ -1125,6 +1206,76 @@ export function App() {
     workspace: pickedWorkspace,
     harnesses: null,
   });
+  // Shown whether or not the machine is enrolled. It used to live only in
+  // the enrolled pane, so after the last agent was de-registered nothing in
+  // the app could remove the PATH links, the event log or the sign-in.
+  const uninstallPanel = (
+    <section className="panel" aria-labelledby="rm">
+      <p className="eyebrow" id="rm">
+        Uninstall
+      </p>
+      <p className="sub">
+        Removes everything Oxagen put on this machine: the hooks in every
+        wrapped agent's settings, the collector service, the host credentials
+        and event log, the PATH links, and <code>~/.config/oxagen</code>.{" "}
+        {uninstallHint}
+      </p>
+      <div className="row">
+        {confirming === "uninstall-2" ? (
+          <>
+            <button
+              type="button"
+              className="danger"
+              onClick={confirmed(uninstallEverything)}
+              disabled={busy !== null}
+            >
+              Yes, remove Oxagen from this machine
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : confirming === "uninstall-1" ? (
+          <>
+            <span className="sub">
+              {hostHarnesses.length > 0
+                ? `This de-registers ${joinLabels(hostHarnesses)} and deletes the local event log. Sure?`
+                : "This removes the command line links, the local event log and your sign-in on this machine. Sure?"}
+            </span>
+            <button
+              type="button"
+              className="danger"
+              onClick={confirmed(() => askConfirm("uninstall-2"))}
+              disabled={busy !== null}
+            >
+              I am sure
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="danger"
+            onClick={() => askConfirm("uninstall-1")}
+            disabled={busy !== null}
+          >
+            {busy === "uninstall" ? "Removing…" : "Uninstall Oxagen…"}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+
   const manage = host ? (
     <>
       <section className="panel" aria-labelledby="host">
@@ -1246,7 +1397,9 @@ export function App() {
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => deregister(row.key as Harness)}
+                        onClick={confirmed(() =>
+                          deregister(row.key as Harness),
+                        )}
                         disabled={busy !== null}
                       >
                         Confirm disconnect
@@ -1263,7 +1416,7 @@ export function App() {
                     <button
                       type="button"
                       className="danger"
-                      onClick={() => setConfirming(confirmKey)}
+                      onClick={() => askConfirm(confirmKey)}
                       disabled={busy !== null}
                       title="Remove Oxagen's entry from this app's settings"
                     >
@@ -1276,7 +1429,9 @@ export function App() {
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => deregister(row.key as Harness)}
+                        onClick={confirmed(() =>
+                          deregister(row.key as Harness),
+                        )}
                         disabled={busy !== null}
                       >
                         Confirm de-register
@@ -1303,7 +1458,7 @@ export function App() {
                       <button
                         type="button"
                         className="danger"
-                        onClick={() => setConfirming(confirmKey)}
+                        onClick={() => askConfirm(confirmKey)}
                         disabled={busy !== null}
                       >
                         De-register…
@@ -1429,71 +1584,30 @@ export function App() {
         </div>
       </section>
 
-      {activity}
-
-      <section className="panel" aria-labelledby="rm">
-        <p className="eyebrow" id="rm">
-          Uninstall
-        </p>
-        <p className="sub">
-          Removes everything Oxagen put on this machine: the hooks in every
-          wrapped agent's settings, the collector service, the host credentials
-          and event log, the PATH links, and <code>~/.config/oxagen</code>.{" "}
-          {uninstallHint}
-        </p>
-        <div className="row">
-          {confirming === "uninstall-2" ? (
-            <>
-              <button
-                type="button"
-                className="danger"
-                onClick={uninstallEverything}
-                disabled={busy !== null}
-              >
-                Yes, remove Oxagen from this machine
-              </button>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => setConfirming(null)}
-              >
-                Cancel
-              </button>
-            </>
-          ) : confirming === "uninstall-1" ? (
-            <>
-              <span className="sub">
-                This de-registers {joinLabels(hostHarnesses)} and deletes the
-                local event log. Sure?
-              </span>
-              <button
-                type="button"
-                className="danger"
-                onClick={() => setConfirming("uninstall-2")}
-                disabled={busy !== null}
-              >
-                I am sure
-              </button>
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => setConfirming(null)}
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
+      {skewNote && (
+        <section className="panel" aria-label="Tools out of date">
+          <p className="sub">{skewNote}</p>
+          <div className="row">
             <button
               type="button"
-              className="danger"
-              onClick={() => setConfirming("uninstall-1")}
+              onClick={() =>
+                act("reapply", "tacho", ["enroll"], () =>
+                  setNotice(
+                    "Hooks and the collector re-applied from this app.",
+                  ),
+                )
+              }
               disabled={busy !== null}
             >
-              {busy === "uninstall" ? "Removing…" : "Uninstall Oxagen…"}
+              Re-apply
             </button>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
+
+      {activity}
+
+      {uninstallPanel}
     </>
   ) : (
     <>
@@ -1502,6 +1616,13 @@ export function App() {
         <p className="sub">
           {notice ?? "Run the setup again to register your agents."}
         </p>
+        {retiredHost && (
+          <p className="sub">
+            This machine was unenrolled while offline. {retiredHost.agent_key}{" "}
+            still shows as active on the fleet page until the revoke goes
+            through: sign in and uninstall, or revoke it from the fleet page.
+          </p>
+        )}
         <div className="row">
           <button type="button" className="primary" onClick={restartWizard}>
             Set up again
@@ -1509,6 +1630,7 @@ export function App() {
         </div>
       </section>
       {activity}
+      {uninstallPanel}
     </>
   );
 
