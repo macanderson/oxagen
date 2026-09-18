@@ -1,4 +1,4 @@
-# ADR-100: Claude Code, Codex, Cursor and Stella are the four first-class harnesses
+# ADR-101: Claude Code, Codex, Cursor and Stella are the four first-class harnesses
 
 - **Status:** Accepted
 - **Date:** 2026-09-18
