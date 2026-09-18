@@ -387,13 +387,20 @@ describe("the workspace's main repository", () => {
    * on the TABLE the code passed to `.from()`, which is the real Drizzle table
    * object.
    *
-   * What this rig can and cannot prove: it discards every predicate and hands
-   * back whatever rows it was given, so these tests pin the BRANCHING — which
-   * read the code makes, given what the read before it answered — and what the
-   * code carries off a row into its answer. They pin nothing about the SQL
-   * filters or the column projection themselves. The status filter on the
-   * joined read is asserted nowhere here and cannot be; that would need a real
-   * Postgres.
+   * What this rig can and cannot prove. It discards every predicate, so these
+   * tests pin the BRANCHING — which read the code makes, given what the read
+   * before it answered — and what the code carries off a row into its answer.
+   * The status filter on the joined read is asserted nowhere here and cannot
+   * be; that would need a real Postgres.
+   *
+   * It DOES apply the column projection (#3265 review, cubic P2). Until it
+   * did, it handed every fixture row back wholesale, so a test asserting that
+   * `approvedDefaultRef` reaches the answer passed whether or not the query
+   * selected the column — it proved only that the function carried a field off
+   * a row it was given. Projecting by the aliases the caller asked for closes
+   * that: drop a column from the `.select()` and the row the handler reads no
+   * longer carries it. What remains out of reach is the predicates, not the
+   * projection.
    *
    * Returns a counter of the unjoined reads so a test can assert a read was
    * never reached at all, not merely that its rows went unused.
@@ -407,25 +414,45 @@ describe("the workspace's main repository", () => {
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
-          select: () => ({
-            from: (table: unknown) => ({
-              innerJoin: () => ({
+          select: (projection?: Record<string, unknown>) => {
+            // Apply the projection the caller asked for, keyed by its ALIASES
+            // — which is what a fixture row is keyed by. A column the query
+            // stops selecting is therefore absent from the row the handler
+            // reads, so dropping it fails the test that depends on it instead
+            // of passing on a fixture the rig handed back wholesale.
+            const project = (rows: unknown[]): unknown[] =>
+              projection === undefined
+                ? rows
+                : rows.map((row) => {
+                    const source = row as Record<string, unknown>;
+                    return Object.fromEntries(
+                      Object.keys(projection)
+                        .filter((alias) => alias in source)
+                        .map((alias) => [alias, source[alias]]),
+                    );
+                  });
+            return {
+              from: (table: unknown) => ({
                 innerJoin: () => ({
-                  where: () => ({ limit: async () => opts.bound ?? [] }),
+                  innerJoin: () => ({
+                    where: () => ({
+                      limit: async () => project(opts.bound ?? []),
+                    }),
+                  }),
+                }),
+                where: () => ({
+                  limit: async () => {
+                    if (table === schema.repositoryBindingHeads) {
+                      counts.headReads += 1;
+                      return project(opts.heads ?? []);
+                    }
+                    counts.connectionReads += 1;
+                    return project(opts.connections ?? []);
+                  },
                 }),
               }),
-              where: () => ({
-                limit: async () => {
-                  if (table === schema.repositoryBindingHeads) {
-                    counts.headReads += 1;
-                    return opts.heads ?? [];
-                  }
-                  counts.connectionReads += 1;
-                  return opts.connections ?? [];
-                },
-              }),
-            }),
-          }),
+            };
+          },
         }),
     );
     return counts;
