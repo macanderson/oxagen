@@ -598,12 +598,25 @@ export async function syncPriceBook(args: {
     // A key it has priced, under any provider and whether or not its row is
     // still open, takes the requested instant: a floor row it corrects is
     // closed there and succeeded, never rewritten.
+    //
+    // An operator override is floored only on the first sync of an empty
+    // book. The floor exists for a catalog that was down at first sync and
+    // comes back naming models it always priced; the overrides are this
+    // installation's own environment, read completely on every run, so an
+    // override for a key the book has never priced is not a source
+    // recovering, it is terms the operator introduced after an earlier
+    // snapshot. Frames for that key since the first sync were priced by the
+    // list or left unpriced, and a rollup retry against a floored override
+    // would change what they cost. It starts at the requested boundary,
+    // like any rate that begins today.
+    const emptyBook = bookCreatedAt === null;
     const seeds = coldStart
-      ? requested.map((s) =>
-          seen.has(`${s.model}|${s.tokenClass}|${s.region ?? ""}`)
-            ? s
-            : { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM },
-        )
+      ? requested.map((s) => {
+          if (seen.has(`${s.model}|${s.tokenClass}|${s.region ?? ""}`))
+            return s;
+          if (s.source === "override" && !emptyBook) return s;
+          return { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM };
+        })
       : requested;
 
     let written = 0;
