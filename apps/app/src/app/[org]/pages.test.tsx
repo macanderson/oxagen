@@ -484,12 +484,14 @@ describe("the Run page", () => {
   });
 });
 
-describe("Organization › People", () => {
-  // This page renders the real organization feature, and its first import is
-  // the slowest thing in this file: under coverage in CI it ran past the
-  // default 5 s test timeout. The timed-out render then finished inside the
-  // next test and counted a second `Workspaces` call there. Importing the page
-  // once up front, with a budget of its own, keeps that cost out of both.
+// This page renders the real organization feature, so it is the slowest page
+// in this file. Under coverage in CI its first import ran past the default 5 s
+// test timeout, and the timed-out render then finished inside the next test
+// and counted a second `Workspaces` call there. Importing the page once up
+// front, with a budget of its own, took the import out of the tests. The first
+// real render of the roster still ran past 5 s on a loaded runner (three failed
+// main runs on 2026-09-18), so the tests get a budget sized for that render too.
+describe("Organization › People", { timeout: 30_000 }, () => {
   beforeAll(async () => {
     await import("./page");
   }, 60_000);
