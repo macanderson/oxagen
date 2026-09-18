@@ -13,8 +13,10 @@ import {
   tachoHostStatusSchema,
 } from "@oxagen/oxagen/tacho/schemas";
 import { gatewayMandateTools } from "@oxagen/iam/machine-key-scope";
+import { PROVIDER_RATE_CARD, usdPerMillionToMicros } from "@oxagen/billing";
 import {
   BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_MODEL_PRICES,
   digestJcs,
   type JsonValue,
 } from "@oxagen/tacho";
@@ -254,6 +256,54 @@ function parsesGatewayTools(host: TachoHostRow): boolean {
 }
 
 /**
+ * The price rows the host's loopback model proxy prices an observed call with
+ * (ADR-094), so `budget.session_limit_usd` can be enforced on the machine.
+ *
+ * `@oxagen/tacho` is a leaf package and cannot read the price book, so the
+ * rows it needs are signed into the mandate. They are the list prices of the
+ * two vendors the proxy routes, from the same in-code card that seeds
+ * `cost.price_entries`, in the price book's own unit: integer micro-USD per one
+ * million tokens. An organization's negotiated rows are not sent. The host's
+ * figure decides only when a session is refused; the cost the platform records
+ * is priced here, from the full price book, when the frame is rolled up.
+ *
+ * Anthropic bills a one-hour cache write at twice the base input rate, which
+ * the card has no column for, so that row is derived.
+ *
+ * Emitted only to a host that advertised `BUNDLE_FEATURE_MODEL_PRICES`, for
+ * the reason `gatewayTools` gives: the host's bundle schema is strict. Sorted
+ * by model so the etag does not move when the card's key order does.
+ */
+function modelPrices(host: TachoHostRow): {
+  model_prices?: NonNullable<PolicyBundle["model_prices"]>;
+} {
+  const advertised: unknown = host.bundleFeatures;
+  if (
+    !Array.isArray(advertised) ||
+    !advertised.includes(BUNDLE_FEATURE_MODEL_PRICES)
+  )
+    return {};
+  const rows: NonNullable<PolicyBundle["model_prices"]> = [];
+  for (const [model, rate] of Object.entries(PROVIDER_RATE_CARD)) {
+    if (rate.provider !== "anthropic" && rate.provider !== "openai") continue;
+    const micros = (usd: number) => Number(usdPerMillionToMicros(usd));
+    rows.push({
+      provider: rate.provider,
+      model,
+      input: micros(rate.inputPer1M),
+      output: micros(rate.outputPer1M),
+      cache_read: micros(rate.cachedInputPer1M),
+      cache_write: micros(rate.cacheWritePer1M),
+      ...(rate.provider === "anthropic"
+        ? { cache_write_1h: micros(rate.inputPer1M * 2) }
+        : {}),
+    });
+  }
+  rows.sort((a, b) => a.model.localeCompare(b.model));
+  return { model_prices: rows };
+}
+
+/**
  * The unsigned bundle for a host at this moment (spec section 7.1).
  *
  * `contextSystem` is the workspace's compiled steering
@@ -287,6 +337,7 @@ export function unsignedBundle(
     retention,
     mode,
     ...gatewayTools(host),
+    ...modelPrices(host),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(
     "sha256:".length,

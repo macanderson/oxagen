@@ -68,7 +68,9 @@ import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest"
 import {
   enforcementTierOf,
   foldDelta,
+  isObservedModelCall,
   tachoEventsIngestHandler,
+  usageCountedEvents,
 } from "./tacho.events.ingest";
 
 const HOST_PUBLIC = "tch_0123456789abcdefghjkmn";
@@ -2889,5 +2891,214 @@ describe("a submitted enforcement tier is a claim, never the tier", () => {
 
     expect(db.sessions.get(SESSION)?.["enforcementTier"]).toBe("observe");
     expect(db.sessions.get(SESSION)?.["gatewayObservedAt"]).toBe(null);
+  });
+});
+
+/**
+ * Observed metering (ADR-094). A session routed through the host's loopback
+ * model proxy reports each model call twice: the proxy's observed frame, then
+ * the harness's own telemetry. The observed one counts and the other does not.
+ */
+describe("observed metering from the model proxy", () => {
+  const OBSERVED_AT = "2026-09-08T10:06:04.000Z";
+  const observedCall = (body: Record<string, unknown> = {}) =>
+    unsealed(
+      "llm_call",
+      {
+        provider: "anthropic",
+        model: "claude-sonnet-5",
+        input_tokens: 1000,
+        output_tokens: 500,
+        cache_read_tokens: 2000,
+        cache_creation_1h_tokens: 40,
+        thinking_tokens: 9,
+        cost_usd_micros: 11_100,
+        cost_basis: "observed",
+        api_duration_ms: 800,
+        ...body,
+      },
+      "collector",
+      CLAUDE_CODE,
+      {
+        fidelity: "proxy",
+        ts: OBSERVED_AT,
+        attrs: { "oxagen.metering": "observed" },
+      },
+    );
+  const selfReported = (source: TachoEvent["source"] = "otel_log") =>
+    unsealed(
+      "llm_call",
+      {
+        model: "claude-sonnet-5",
+        input_tokens: 990,
+        output_tokens: 480,
+        thinking_tokens: 8,
+        cost_usd_micros: 9_000,
+      },
+      source,
+    );
+  function chain(drafts: UnsealedTachoEvent[]): TachoEvent[] {
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    return drafts.map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+  }
+  const start = () =>
+    unsealed("agent_start", { session_start_source: "startup" });
+
+  it("recognises an observed frame by all three marks, not by the attribute alone", () => {
+    const [real, forged, otel] = chain([
+      observedCall(),
+      // What a process holding the local OTLP bearer can produce: the
+      // attribute, on a record the collector sealed as ordinary telemetry.
+      unsealed("llm_call", {}, "otel_log", CLAUDE_CODE, {
+        attrs: { "oxagen.metering": "observed" },
+      }),
+      selfReported(),
+    ]) as [TachoEvent, TachoEvent, TachoEvent];
+    expect(isObservedModelCall(real)).toBe(true);
+    expect(isObservedModelCall(forged)).toBe(false);
+    expect(isObservedModelCall(otel)).toBe(false);
+  });
+
+  it("drops self-reported usage once a session is observed, and only then", () => {
+    const events = chain([
+      start(),
+      selfReported(),
+      observedCall(),
+      selfReported(),
+      selfReported("transcript"),
+      unsealed("turn_start", {}),
+    ]);
+    // The call before the first observed frame was never routed: it counts.
+    expect(usageCountedEvents(events, false).map((e) => e.seq)).toEqual([
+      0, 1, 2, 5,
+    ]);
+    // A later batch of a session already observed drops every one of them.
+    expect(usageCountedEvents(events, true).map((e) => e.seq)).toEqual([
+      0, 2, 5,
+    ]);
+    // A session that bypassed the proxy is counted as it always was.
+    const bypassed = chain([
+      start(),
+      selfReported(),
+      selfReported("transcript"),
+    ]);
+    expect(usageCountedEvents(bypassed, false)).toEqual(bypassed);
+  });
+
+  it("counts the observed frame's own classes, which the OTel view does not carry", () => {
+    const delta = {} as Parameters<typeof foldDelta>[0];
+    for (const key of [
+      "numModelCalls",
+      "inputTokens",
+      "outputTokens",
+      "cacheReadTokens",
+      "cacheCreationTokens",
+      "cacheCreation5mTokens",
+      "cacheCreation1hTokens",
+      "thinkingTokens",
+      "webSearchRequests",
+      "webFetchRequests",
+      "totalCostMicros",
+    ] as const)
+      delta[key] = 0;
+    const [observed] = chain([observedCall()]) as [TachoEvent];
+    foldDelta(delta, observed);
+    expect(delta).toMatchObject({
+      numModelCalls: 1,
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 2000,
+      cacheCreation1hTokens: 40,
+      thinkingTokens: 9,
+      totalCostMicros: 11_100,
+    });
+  });
+
+  it("computes gateway from a routed model call on a verified chain, and from nothing less", () => {
+    const host = { mode: "enforce", gatewayLastSeenAt: null };
+    expect(enforcementTierOf(null, host, true, true, null, true)).toBe(
+      "gateway",
+    );
+    // The base URL was written and the run went around the proxy: no frame.
+    expect(enforcementTierOf(null, host, true, true, null, false)).toBe(
+      "harness",
+    );
+    expect(enforcementTierOf(null, host, true, true, null)).toBe("harness");
+    // A chain that does not verify proves nothing about the frames in it.
+    expect(enforcementTierOf(null, host, false, true, null, true)).toBe(
+      "harness",
+    );
+    // Nowhere to record the evidence yet: the tier is not assigned.
+    expect(enforcementTierOf(null, host, true, false, null, true)).toBe(
+      "harness",
+    );
+  });
+
+  it("counts a routed session once, files it under gateway, and records what the tier stands on", async () => {
+    const db = fakeDb();
+    (db.hosts[0] as Record<string, unknown>)["mode"] = "enforce";
+    wire(db);
+    const events = chain([
+      start(),
+      observedCall(),
+      selfReported(),
+      selfReported("transcript"),
+    ]);
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      enforcementTier: "gateway",
+      gatewayObservedAt: new Date(OBSERVED_AT),
+      costBasis: "observed",
+      chainVerified: true,
+    });
+    expect(db.models).toHaveLength(1);
+    expect(db.models[0]).toMatchObject({
+      model: "claude-sonnet-5",
+      provider: "anthropic",
+      requests: 1,
+      inputTokens: 1000,
+      outputTokens: 500,
+      thinkingTokens: 9,
+      costMicros: 11_100,
+    });
+    const increments = db.updates.find(
+      (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+    );
+    const dialect = new PgDialect();
+    const param = (key: string) =>
+      dialect.sqlToQuery(increments?.values[key] as SQL).params;
+    expect(param("numModelCalls")).toEqual([1]);
+    expect(param("inputTokens")).toEqual([1000]);
+    expect(param("totalCostMicros")).toEqual([11_100]);
+  });
+
+  it("keeps dropping self-reported usage in a later batch of the same session", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = chain([start(), observedCall(), selfReported()]);
+    await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+    const row = db.sessions.get(SESSION) as Record<string, unknown>;
+    Object.assign(row, {
+      seqCount: 2,
+      lastHash: (events[1] as TachoEvent).hash,
+      chainVerified: true,
+    });
+    db.updates.length = 0;
+    db.models.length = 0;
+    await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+    expect(db.models).toHaveLength(0);
+    const update = db.updates.find((u) => u.table === "sessions");
+    const dialect = new PgDialect();
+    expect(
+      dialect.sqlToQuery(update?.values["inputTokens"] as SQL).params,
+    ).toEqual([0]);
+    expect(
+      dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
+    ).toEqual([0]);
   });
 });

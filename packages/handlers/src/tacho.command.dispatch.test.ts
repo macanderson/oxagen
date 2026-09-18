@@ -215,6 +215,23 @@ beforeEach(() => {
   tenant("Admin");
 });
 
+describe("resolveDeliveryMode on the gateway tier", () => {
+  it("delivers interrupt as interrupt where the model proxy can cut the call", () => {
+    expect(resolveDeliveryMode("interrupt", "gateway")).toEqual({
+      deliveryMode: "interrupt",
+      degradedReason: null,
+    });
+    expect(resolveDeliveryMode("interrupt", "harness")).toEqual({
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+    });
+    expect(resolveDeliveryMode("next_step", "gateway")).toEqual({
+      deliveryMode: "next_step",
+      degradedReason: null,
+    });
+  });
+});
+
 describe("resolveDeliveryMode", () => {
   it("carries next_step and turn_boundary and degrades interrupt to next_step with the reason", () => {
     expect(resolveDeliveryMode("next_step")).toEqual({
@@ -535,13 +552,18 @@ describe("dispatch_command — broadcast", () => {
       degradedReason: null,
     });
     // The ceiling: each reachable recipient resolves at or below interrupt.
-    for (const row of store.rows.slice(0, 2)) {
-      expect(row).toMatchObject({
-        requestedMode: "interrupt",
-        deliveryMode: "next_step",
-        degradedReason: "harness_tier",
-      });
-    }
+    // The harness run cannot be cut mid-call, so it degrades and says so.
+    expect(store.rows[0]).toMatchObject({
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+    });
+    // The gateway run's model traffic is routed, so interrupt is real there.
+    expect(store.rows[1]).toMatchObject({
+      requestedMode: "interrupt",
+      deliveryMode: "interrupt",
+      degradedReason: null,
+    });
     // The failed row is never a supersession candidate.
     expect(store.cancelled).toEqual([]);
   });
