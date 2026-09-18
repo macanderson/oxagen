@@ -5921,7 +5921,7 @@ does not price the work, and is not evidence about a person.</p>
 </table></div>
 <p>How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.</p>
 <h2 id="appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</h2>
-<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>108 agent tools</strong> (89 of them in the wedge; eleven are the Skills tools, nine added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
+<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>108 agent tools</strong> (89 of them in the wedge; eleven are the Skills tools — <code>list_skills</code> from 2026-09-15 and the ten ADR-090 adds, <code>search_skills</code> plus nine controls), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
 <p><strong>Organization and workspace (11)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -6114,7 +6114,7 @@ does not price the work, and is not evidence about a person.</p>
 <tr>
 <td><code>search_skills</code></td>
 <td>(new; ADR-090)</td>
-<td>the one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds <strong>before ranking</strong>, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move</td>
+<td><strong>metered</strong> (no <code>noBillingGate</code>) and authorized by the belt rather than a human role — it is an agent-facing resolution the run pays for. The one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds <strong>before ranking</strong>, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move</td>
 </tr>
 <tr>
 <td><code>get_skill_config</code></td>
@@ -6161,38 +6161,15 @@ does not price the work, and is not evidence about a person.</p>
 <td>(new; ADR-090)</td>
 <td>write: turn reflection capture on or off. Capture is research-only and never becomes evidence, so this grants no read — <code>read_skill_reflection</code> still needs <code>research.read</code></td>
 </tr>
-<tr>
-<td><code>get_run</code></td>
-<td>get_tacho_session, get_execution_trace, get_message_execution</td>
-<td>run with turns, steps, frames, receipts, cost</td>
-</tr>
-<tr>
-<td><code>export_run</code></td>
-<td>export_data (run part)</td>
-<td>signed bundle with verifier</td>
-</tr>
-<tr>
-<td><code>list_approvals</code></td>
-<td>(new; approvals had no list)</td>
-<td>queue with the four-hop chain</td>
-</tr>
-<tr>
-<td><code>resolve_approval</code></td>
-<td>resolve_approval, resolve_mcp_consent</td>
-<td>approve or deny, mints the token</td>
-</tr>
-<tr>
-<td><code>send_message</code></td>
-<td>(new)</td>
-<td>message to <code>@&lt;agent-slug&gt;</code>, <code>@agents</code>, or a run id, with a delivery mode; reaches <code>applied</code> at the model request that carried it (§7.3, §7.6)</td>
-</tr>
-<tr>
-<td><code>list_messages</code></td>
-<td>(new)</td>
-<td>sent and received, with delivery outcome</td>
-</tr>
 </tbody>
 </table></div>
+<p><strong>Roles and billing for the ten (ADR-090).</strong> <code>checkIAM</code> allows every capability for a non-enterprise org (§5), so each of these asserts its own role in its handler rather than relying on the kernel. The five writes are org Owner or Admin; <code>read_skill_reflection</code> additionally requires the org-scoped <code>research.read</code> grant; the four console reads are org Owner, Admin or Member, or workspace Owner or Member. All nine declare <code>noBillingGate: true</code>, because an organization out of governed action units must still be able to read its configuration and <strong>turn skills off</strong> — a control you cannot switch off when the bill lapses is not a control. <code>search_skills</code> is the exception and is metered.
+| <code>get_run</code> | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
+| <code>export_run</code> | export_data (run part) | signed bundle with verifier |
+| <code>list_approvals</code> | (new; approvals had no list) | queue with the four-hop chain |
+| <code>resolve_approval</code> | resolve_approval, resolve_mcp_consent | approve or deny, mints the token |
+| <code>send_message</code> | (new) | message to <code>@&lt;agent-slug&gt;</code>, <code>@agents</code>, or a run id, with a delivery mode; reaches <code>applied</code> at the model request that carried it (§7.3, §7.6) |
+| <code>list_messages</code> | (new) | sent and received, with delivery outcome |</p>
 <p><strong>Toolbelt (17)</strong></p>
 <div class="tw"><table>
 <thead>
