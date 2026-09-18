@@ -294,13 +294,26 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
             .limit(1);
 
           if (targetOwnerPra) {
-            // Count the org's live Owner assignments. NOTE: this counts
-            // assignment rows only — it does NOT join principals to exclude a
-            // suspended/disabled Owner principal, so an org whose only usable
-            // Owner is this target can still pass the guard when a second,
-            // non-active Owner principal holds an undeleted assignment.
-            const allOwnerPras = await tx
-              .select({ id: schema.principalRoleAssignments.id })
+            // Count PRINCIPALS, not assignment rows.
+            //
+            // The question the guard asks is "is anyone else an Owner", and
+            // the answer is a count of people. Rows answer a different one:
+            // uniqueness on this table includes `role_id`, so one principal
+            // holding Owner through BOTH duplicate role rows is two perfectly
+            // legal rows — and repeated provisioning selects either duplicate,
+            // so it happens. Counting rows read that as two owners, the `<= 1`
+            // guard passed, and the revocation below then soft-deleted every
+            // org assignment the target had, demoting the only Owner the
+            // organisation has. That is the exact lockout this guard exists to
+            // prevent, reached through the guard itself.
+            //
+            // NOTE: still no join to `iam.principals`, so a suspended or
+            // disabled Owner principal holding an undeleted assignment counts
+            // as a second owner.
+            const ownerPrincipals = await tx
+              .selectDistinct({
+                principalId: schema.principalRoleAssignments.principalId,
+              })
               .from(schema.principalRoleAssignments)
               .where(
                 and(
@@ -314,7 +327,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
                 ),
               );
 
-            if (allOwnerPras.length <= 1) {
+            if (ownerPrincipals.length <= 1) {
               logger.warn(
                 {
                   orgId: ctx.orgId,

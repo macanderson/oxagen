@@ -35,6 +35,12 @@ vi.mock("@oxagen/database/security", () => ({
 // ── @oxagen/database mock ────────────────────────────────────────────────────
 const mockTx = {
   select: vi.fn(),
+  // The owner count reads PEOPLE, not assignment rows — one principal holding
+  // Owner through both duplicate role rows is two legal rows and one owner —
+  // so it goes through `selectDistinct`. It builds exactly like `select`, and
+  // the tests point both at the same fluent mock so the call sequence stays
+  // continuous.
+  selectDistinct: vi.fn(),
   update: vi.fn(),
   insert: vi.fn(),
 };
@@ -137,7 +143,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("actor has Member role → forbidden", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Member" }], // actor PRA = Member
     ]);
@@ -151,7 +157,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("target not a member → not_found (IDOR guard)", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Admin" }], // actor PRA = Admin
       [], // target orgUser — NOT found
@@ -169,7 +175,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("newRole does not exist in org → not_found", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // actor principal
       [{ roleName: "Owner" }], // actor PRA = Owner
       [{ id: "target-ou", role: "member" }], // target orgUser found
@@ -228,6 +234,9 @@ describe("orgMemberRoleChangeHandler", () => {
         .mockReturnValue({ where: whereWithLimit, innerJoin });
       return { from };
     });
+    // The owner count reads through `selectDistinct`; it shares this builder
+    // so the numbered call sequence above stays continuous.
+    mockTx.selectDistinct = mockTx.select;
 
     mockTx.update = vi.fn();
     mockTx.insert = vi.fn();
@@ -254,7 +263,7 @@ describe("orgMemberRoleChangeHandler", () => {
   // Owner look like a non-Owner, the guard never ran, and they were demoted out
   // of their own organisation.
   it("sees an Owner granted through a duplicate role row, and refuses to demote them", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser
@@ -264,8 +273,11 @@ describe("orgMemberRoleChangeHandler", () => {
       [{ id: "target-principal-id" }], // 6: target principal
       // 7: the target's Owner grant — written against the NEWER duplicate.
       [{ id: "target-owner-pra", roleId: "owner-role-new" }],
-      // 8: every live Owner assignment across both rows — just this one.
-      [{ id: "target-owner-pra" }],
+      // 8: distinct Owner PRINCIPALS. The target holds Owner through BOTH
+      // duplicate role rows, which is two perfectly legal assignment rows and
+      // exactly one person — counting rows read it as two owners and let the
+      // guard pass, which demoted the only Owner the organisation has.
+      [{ principalId: "target-principal-id" }],
     ]);
     mockTx.update = vi.fn();
     mockTx.insert = vi.fn();
@@ -285,7 +297,7 @@ describe("orgMemberRoleChangeHandler", () => {
   it("happy path → changes role, emits org.role_changed, returns changed:true", async () => {
     // All reads run inside withOrgDb on the same tx → continuous sequence:
     // 1-2 resolveActor, 3-7 main guards, 8 mutation principal lookup.
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [{ id: "target-ou-id", role: "member" }], // 3: target orgUser (role=member)
@@ -332,7 +344,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("a member named by public id is resolved to their user id, after the actor gate", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [{ userId: "target-user-uuid" }], // 3: usr_… → users.id, joined to org_users
@@ -367,7 +379,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("a public id that names nobody in this org → not_found, nothing written", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [], // 3: the public id resolves to no member of this org
@@ -397,7 +409,7 @@ describe("orgMemberRoleChangeHandler", () => {
   // is how the sole Owner of a production organisation lost every grant by
   // re-applying the role they already held.
   it("re-granting the role the member already holds resurrects the assignment, never drops it", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser, lowercase 'owner'
@@ -435,7 +447,7 @@ describe("orgMemberRoleChangeHandler", () => {
   });
 
   it("a role change that would leave the member with no org role refuses instead of committing", async () => {
-    mockTx.select = buildSelectMock([
+    mockTx.selectDistinct = mockTx.select = buildSelectMock([
       [{ id: "actor-principal-id" }], // 1: actor principal
       [{ roleName: "Owner" }], // 2: actor PRA = Owner
       [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser

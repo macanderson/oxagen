@@ -226,6 +226,14 @@ export async function readGitHubConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+          // Only the MAIN repository steers. `role` is 'main' for every head
+          // the binder writes, and 'linked' only for one the exclusivity
+          // migration demoted because an older head already claimed the
+          // repository. A reader that ignores the column goes on resolving
+          // through a demoted head, so the cross-workspace steering collision
+          // the index forbids would survive the reconciliation that was meant
+          // to end it.
+          eq(schema.repositoryBindingHeads.role, "main"),
           eq(schema.repositoryBindingHeads.provider, "github"),
           isNull(schema.sourceConnections.deletedAt),
           notInArray(schema.sourceConnections.status, [

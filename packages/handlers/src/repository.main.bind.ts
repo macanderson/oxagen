@@ -311,7 +311,17 @@ export function createMainRepositoryBindHandler(
         // and nothing is claimed. It is a read of `org.data_planes` on the
         // shared plane, so it costs one round trip and cannot itself be
         // affected by the move it is detecting.
-        const planeNow = await resolveDataPlane(scope.orgId, "postgres");
+        //
+        // `loadDataPlaneBinding`, NOT `resolveDataPlane`: the resolver caches
+        // per process and `set_data_plane` invalidates only the process it
+        // ran in, so within the cache window this re-ask would hand back the
+        // very same stale `shared` answer the pre-check already had — and
+        // check nothing at all. The uncached read is the whole point of
+        // asking twice.
+        const { loadDataPlaneBinding } = await import(
+          "@oxagen/database/data-plane"
+        );
+        const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
         assertDataPlaneUsable(planeNow);
         if (planeNow.mode !== "shared") {
           logger.warn(
@@ -333,6 +343,13 @@ export function createMainRepositoryBindHandler(
             and(
               eq(schema.repositoryBindingHeads.orgId, scope.orgId),
               eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+              // Only a MAIN head answers "does this workspace already bind a
+              // different repository". A head the exclusivity migration
+              // demoted to 'linked' is one this workspace is no longer steered
+              // by, and counting it would refuse `main_repo_bound` to a
+              // workspace that has no main repository at all — leaving it with
+              // no way to bind one.
+              eq(schema.repositoryBindingHeads.role, "main"),
             ),
           );
         const same = heads.find((h) => h.providerRepositoryId === repo.id);

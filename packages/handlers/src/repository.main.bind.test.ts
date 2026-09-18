@@ -24,6 +24,26 @@ const mocks = vi.hoisted(() => ({
     }),
   ),
   assertDataPlaneUsable: vi.fn(),
+  // The UNCACHED read the write transaction re-validates with. Separate from
+  // `resolveDataPlane` on purpose: the resolver caches per process, so a test
+  // that moved only the cached answer would prove nothing about the re-ask.
+  loadDataPlaneBinding: vi.fn(
+    async (): Promise<{
+      orgId: string;
+      kind: "postgres";
+      mode: "shared" | "dedicated";
+      status: "active";
+    }> => ({
+      orgId: "org-uuid",
+      kind: "postgres",
+      mode: "shared",
+      status: "active",
+    }),
+  ),
+}));
+
+vi.mock("@oxagen/database/data-plane", () => ({
+  loadDataPlaneBinding: mocks.loadDataPlaneBinding,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -174,6 +194,12 @@ beforeEach(() => {
   // test says otherwise. `resetAllMocks` drops these, so they are re-armed
   // here rather than only at the `vi.hoisted` definition.
   mocks.resolveDataPlane.mockResolvedValue({
+    orgId: "org-uuid",
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+  });
+  mocks.loadDataPlaneBinding.mockResolvedValue({
     orgId: "org-uuid",
     kind: "postgres",
     mode: "shared",
@@ -842,21 +868,16 @@ describe("bind_main_repository", () => {
     // shared global index cannot see — a claim nobody else can detect.
     it("refuses inside the transaction when the plane moves after the pre-check", async () => {
       const writes = wire({ connections: [CONNECTED_CONNECTION] });
-      mocks.resolveDataPlane
-        // The pre-check and the connection read see a shared plane...
-        .mockResolvedValueOnce({
-          orgId: "org-uuid",
-          kind: "postgres",
-          mode: "shared",
-          status: "active",
-        })
-        // ...and the re-validation inside the write transaction does not.
-        .mockResolvedValue({
-          orgId: "org-uuid",
-          kind: "postgres",
-          mode: "dedicated",
-          status: "active",
-        });
+      // The pre-check reads the cached resolver and sees `shared`; the
+      // re-validation inside the transaction reads `org.data_planes` directly
+      // and does not. That is exactly the split the uncached read exists for:
+      // a cached resolver would still be answering `shared` here.
+      mocks.loadDataPlaneBinding.mockResolvedValue({
+        orgId: "org-uuid",
+        kind: "postgres",
+        mode: "dedicated",
+        status: "active",
+      });
 
       const err = await handler()
         .run(INPUT, makeCTX())
