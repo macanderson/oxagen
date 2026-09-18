@@ -78,8 +78,9 @@ export const getInstallInstructions = defineTool({
     workspaceSlug: systemInstallInstructions.input.shape.workspaceSlug,
     /**
      * Carried by reference (#2967): with a one-time enrollment token the
-     * claude-code and codex instructions become the wrap (`oxagen agent
-     * enroll --token …`), the register flow's step 2. Never on the MCP tool.
+     * claude-code, codex, and cursor instructions become the wrap (`oxagen
+     * agent enroll --token …`), the register flow's step 2. Never on the MCP
+     * tool.
      */
     enrollmentToken: systemInstallInstructions.input.shape.enrollmentToken,
   }),
