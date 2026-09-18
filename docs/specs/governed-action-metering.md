@@ -379,8 +379,17 @@ accepted the following day, amends ADR-052 for one case: tokens the
 in-app agent spent on the **platform** key are a cost Oxagen did bear, and are
 billed back "at the rate card's vendor cost plus a published markup" under
 `consume_assistant_tokens`. Deleting the markup would delete the rate ADR-053
-requires. It keeps its name and its env resolution, and its only remaining
-charging caller is the platform-funded assistant path.
+requires. It keeps its name and its env resolution, and it has a second
+charging caller beyond the assistant path: platform-paid embeddings, under
+`consume_embedding`.
+
+**Amended 2026-09-18 (ADR-053).** The markup on `consume_assistant_tokens`
+is fixed at `ASSISTANT_TOKEN_MARKUP` (1, cost with no margin), not
+`resolveMeterMarkup()`. `chargeCostUsd` branches on the ledger reason before
+falling back to the solved markup, so `consume_embedding` is unaffected and
+keeps the number `resolveMeterMarkup` returns. `resolveMeterMarkup` is
+therefore no longer read on the assistant path at all. Its remaining
+charging caller is `consume_embedding`.
 
 ### 5.4 Ledger reasons
 
