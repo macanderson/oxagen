@@ -37,6 +37,7 @@ import {
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { assertOrgRole } from "@oxagen/iam/org-role";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
 import { upsertGithubInstallation } from "./github-installations";
@@ -293,6 +294,52 @@ const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
   expired: "OAuth state has expired — please start the OAuth flow again",
 };
 
+/**
+ * The org roles that may start a SETTINGS-level GitHub connect.
+ *
+ * The same pair `attach_github_installation`, `get_main_repository` and
+ * `bind_main_repository` admit (INV-29), and it has to be: a settings state
+ * names the workspace and nothing else, so whoever holds one can complete the
+ * identity leg as themselves and have the callback attach an installation THEY
+ * reach onto the workspace's authoritative GitHub connection — overwriting the
+ * one an Owner configured, and redirecting every repository operation this
+ * workspace runs through.
+ *
+ * The capability gate alone did not stop that, because the HTTP route is a
+ * second path to the same write and only one of them was gated. Membership is
+ * what the mounted middleware establishes; role is what this asserts.
+ */
+const SETTINGS_CONNECT_ROLES = ["Owner", "Admin"] as const;
+
+/**
+ * Refuse to mint a settings-scoped signed state for anyone below Owner/Admin.
+ *
+ * Mint time is the enforceable point. The callback is a public OAuth redirect
+ * with no session guarantee — that is exactly why it writes no `created_by_id`
+ * — so a role cannot be re-checked there; the only moment a person is known is
+ * when they ask for the URL. `assertOrgRole` throws `HandlerError
+ * { code: "forbidden" }`, which the API's error middleware maps to 403.
+ *
+ * An API-key caller has no `userId` and is refused as `no_principal`. That is
+ * the intended answer and not an oversight: a key identifies no human, and
+ * every capability on the other side of this flow requires one.
+ *
+ * Scoped by hand because this route makes no `invoke()` call, so nothing else
+ * has opened a tenant scope for the role lookup to read in.
+ */
+async function assertMaySettingsConnect(
+  orgId: string,
+  workspaceId: string,
+  userId: string | null,
+): Promise<void> {
+  await runInTenantScope({ orgId, workspaceId }, () =>
+    assertOrgRole(
+      { orgId, workspaceId, userId },
+      { org: [...SETTINGS_CONNECT_ROLES] },
+    ),
+  );
+}
+
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
 
 /**
@@ -339,6 +386,13 @@ githubOauthRoute.get("/auth-url", async (c) => {
       },
       503,
     );
+  }
+
+  // Only the settings leg. The legacy `sources` leg mints a state naming a
+  // pre-created `connectionId`, whose creation carries its own gate, so whether
+  // it should also assert a role is a separate question this does not answer.
+  if (returnTo === "settings") {
+    await assertMaySettingsConnect(orgId, workspaceId, c.get("userId") ?? null);
   }
 
   const statePayload = { orgId, workspaceId, connectionId, returnTo };
@@ -673,6 +727,12 @@ githubOauthRoute.get("/status", async (c) => {
       503,
     );
   }
+
+  // Both URLs below carry a SETTINGS state, so this route is the same door as
+  // /auth-url?returnTo=settings and takes the same gate. Refusing the whole
+  // response rather than blanking the two URLs keeps one rule with one shape:
+  // a settings-scoped signed state is an Owner/Admin thing to hold.
+  await assertMaySettingsConnect(orgId, workspaceId, c.get("userId") ?? null);
 
   const stateArgs = {
     orgId,

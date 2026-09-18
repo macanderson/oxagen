@@ -57,6 +57,8 @@ const mocks = vi.hoisted(() => ({
   resolveIngestionCryptoAdapterForKeyId: vi.fn(),
   // Env
   requireEnv: vi.fn(),
+  // Role gate on the settings connect legs
+  assertOrgRole: vi.fn(),
   // Fetch
   fetch: vi.fn(),
 }));
@@ -129,6 +131,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+// The role gate the settings-connect legs run before they mint a signed state.
+// Mocked rather than driven through the db seam so that suites counting
+// withSystemDb / withTenantDb calls keep counting what they came to count.
+vi.mock("@oxagen/iam/org-role", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/iam/org-role")>();
+  return { ...real, assertOrgRole: mocks.assertOrgRole };
+});
+
 vi.mock("@oxagen/crypto", () => ({
   encrypt: mocks.encrypt,
   decrypt: mocks.decrypt,
@@ -167,8 +177,15 @@ vi.mock("../routes/v1/github-installations", () => ({
 // Stub global fetch for GitHub API calls
 global.fetch = mocks.fetch as unknown as typeof fetch;
 
+import { HandlerError } from "@oxagen/oxagen";
 import { app } from "../app";
-import { makeRequest, bearerHeader, makeApiKeyOk } from "./_helpers";
+import {
+  makeRequest,
+  bearerHeader,
+  makeApiKeyOk,
+  TEST_ORG_ID,
+  TEST_WORKSPACE_ID,
+} from "./_helpers";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -353,6 +370,10 @@ beforeEach(() => {
   // Env: return DEFAULT_ENV by default
   mocks.requireEnv.mockReturnValue(DEFAULT_ENV);
 
+  // Role: an Owner by default, so the settings-connect legs mint their state.
+  // The refusal is asserted in its own suite, where it is the subject.
+  mocks.assertOrgRole.mockResolvedValue("Owner");
+
   // Crypto: simple pass-through stubs
   mocks.createIngestionCryptoAdapter.mockReturnValue({
     adapter: {},
@@ -401,6 +422,96 @@ describe("GET /connections/github/auth-url", () => {
     ) as { connectionId: string | null; returnTo: string };
     expect(payload.connectionId).toBeNull();
     expect(payload.returnTo).toBe("settings");
+  });
+
+  /**
+   * Who may start a SETTINGS-level connect (#3233 review, P1).
+   *
+   * The mounted middleware establishes workspace MEMBERSHIP; it says nothing
+   * about role. `attach_github_installation`, `get_main_repository` and
+   * `bind_main_repository` are all org Owner/Admin, so without a gate here an
+   * ordinary member reached the same write one layer down: ask this route for a
+   * settings state, complete the identity leg as themselves, and the callback
+   * attaches an installation THEY reach onto the workspace's authoritative
+   * GitHub connection — replacing the credentials every repository operation
+   * runs through. Two paths to one write, only one of them gated.
+   */
+  describe("the settings leg is Owner/Admin only", () => {
+    it("refuses a member, and mints no state for them", async () => {
+      mocks.assertOrgRole.mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: "Requires one of the org roles Owner, Admin",
+        }),
+      );
+      const res = await authGet(`${BASE}/auth-url?returnTo=settings`);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as { error?: { code?: string } };
+      expect(body.error?.code).toBe("forbidden");
+      // Nothing that could be carried to GitHub came back.
+      expect(JSON.stringify(body)).not.toContain("github.com");
+    });
+
+    it("checks the org roles the capabilities admit, for this org and workspace", async () => {
+      await authGet(`${BASE}/auth-url?returnTo=settings`);
+      expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: TEST_ORG_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        }),
+        { org: ["Owner", "Admin"] },
+      );
+    });
+
+    for (const role of ["Owner", "Admin"] as const) {
+      it(`mints a state for an ${role}`, async () => {
+        mocks.assertOrgRole.mockResolvedValueOnce(role);
+        const res = await authGet(`${BASE}/auth-url?returnTo=settings`);
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as { authUrl: string };
+        expect(new URL(body.authUrl).searchParams.get("state")).not.toBeNull();
+      });
+    }
+
+    it("refuses a caller with no signed-in user at all", async () => {
+      // An API key identifies no human, and every capability on the other side
+      // of this flow requires one. `assertOrgRole` answers `no_principal`.
+      mocks.assertOrgRole.mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "no_principal",
+          message: "No signed-in user on the request",
+        }),
+      );
+      expect((await authGet(`${BASE}/auth-url?returnTo=settings`)).status).toBe(
+        403,
+      );
+    });
+
+    it("gates /status the same way — it mints a settings state too", async () => {
+      mocks.assertOrgRole.mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "org_role_required",
+          message: "Requires one of the org roles Owner, Admin",
+        }),
+      );
+      const res = await authGet(`${BASE}/status`);
+      expect(res.status).toBe(403);
+      // Both of that route's URLs carry a settings state, so withholding the
+      // response is what withholds them.
+      expect(JSON.stringify(await res.json())).not.toContain("state=");
+    });
+
+    it("leaves the legacy sources leg's authorization exactly as it was (negative)", async () => {
+      // A `sources` state names a pre-created connectionId, whose creation
+      // carries its own gate. Whether that leg should also assert a role is a
+      // separate question, and this change does not answer it.
+      const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
+      expect(res.status).toBe(200);
+      expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+    });
   });
 
   it("returns 503 when GITHUB_APP_SLUG is missing", async () => {
