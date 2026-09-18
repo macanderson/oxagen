@@ -109,6 +109,7 @@ describe("get_run_transcript", () => {
         ["6", "frame", null, "digest_only"],
       ],
     );
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 1, 1, 2, 2, 2]);
     expect(out.entries[2]?.cost).toEqual({
       micros: "40",
       currency: "USD",
@@ -144,6 +145,7 @@ describe("get_run_transcript", () => {
       ["1", "3", 3, "40"],
       ["4", "6", 3, "60"],
     ]);
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 2]);
   });
 
   it("a digest_only recording answers every entry with text null and says so", async () => {
