@@ -82,6 +82,7 @@ function happyDb(clash = false): void {
           },
           authorizationDenyGenerations: { findMany: async () => [] },
           retentionPolicyVersions: { findFirst: async () => undefined },
+          contextRecords: { findMany: async () => [] },
         },
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => ({

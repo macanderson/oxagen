@@ -531,6 +531,12 @@ export const repositoryBindingHeads = ingestionSchema.table(
     provider: text("provider").notNull(),
     providerRepositoryId: text("provider_repository_id").notNull(),
     currentBindingId: uuid("current_binding_id").notNull(),
+    // 'main' — the repository whose `.oxagen/rules/` steers this workspace, of
+    // which a workspace has exactly one; 'linked' — a repository the workspace
+    // can see but is not steered by, of which it may have many and which may be
+    // shared with other workspaces. Every v1 head is 'main': the only writer
+    // admits one head per workspace and steering resolves through it.
+    role: text("role").notNull().default("main"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -543,9 +549,26 @@ export const repositoryBindingHeads = ingestionSchema.table(
       t.connectionId,
       t.providerRepositoryId,
     ),
+    // A repository is the MAIN repository of at most one workspace ANYWHERE.
+    // Global on purpose — no org_id, no workspace_id in the key — because the
+    // case that matters most is one repository claimed as main by two
+    // ORGANISATIONS: `.oxagen/rules/` is keyed by repository full name, so both
+    // would write their steering into the same files and read each other's
+    // records back as their own. `provider` is in the key because
+    // `provider_repository_id` is only unique within a provider.
+    // See 20260918040000_repository_main_binding_is_exclusive.sql.
+    mainRepositoryUniq: uniqueIndex(
+      "repository_binding_heads_main_repository_uq",
+    )
+      .on(t.provider, t.providerRepositoryId)
+      .where(sql`${t.role} = 'main'`),
     orgIdx: index("repository_binding_heads_org_idx").on(
       t.orgId,
       t.workspaceId,
+    ),
+    roleCheck: check(
+      "repository_binding_heads_role_check",
+      sql`${t.role} IN ('main', 'linked')`,
     ),
   }),
 );

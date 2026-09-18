@@ -36,6 +36,7 @@ import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
 import { hostReadColumns } from "./tacho-gateway-columns";
+import { readWorkspaceSteering } from "./tacho-steering";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -50,6 +51,7 @@ interface TachoTx {
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    contextRecords: { findMany: (args: unknown) => Promise<unknown> };
   };
   update: (table: unknown) => {
     set: (values: Record<string, unknown>) => {
@@ -186,7 +188,6 @@ export async function readWorkspaceRetention(
   return { mode: "content_exact", classes: [...row.retainedContentClasses] };
 }
 
-/** The unsigned bundle for a host at this moment (spec section 7.1). */
 /**
  * The gateway mandate, materialised for the host that has to serve it
  * (ADR-078 §4).
@@ -252,10 +253,19 @@ function parsesGatewayTools(host: TachoHostRow): boolean {
   );
 }
 
+/**
+ * The unsigned bundle for a host at this moment (spec section 7.1).
+ *
+ * `contextSystem` is the workspace's compiled steering
+ * (`readWorkspaceSteering`), or `null` when nothing steers. It is required so
+ * that a caller cannot build a bundle and forget it: a record that silently
+ * failed to reach the agent is the defect #2592 was filed about.
+ */
 export function unsignedBundle(
   host: TachoHostRow,
   denyGeneration: DenyGeneration,
   retention: BundleRetention,
+  contextSystem: string | null,
   now: Date = new Date(),
 ): Omit<PolicyBundle, "signature"> {
   const status = tachoHostStatusSchema.parse(host.status);
@@ -273,7 +283,7 @@ export function unsignedBundle(
     },
     tools: {} as PolicyBundle["tools"],
     budget: { mode: "observed" as const },
-    context: { system: null },
+    context: { system: contextSystem },
     retention,
     mode,
     ...gatewayTools(host),
@@ -416,11 +426,12 @@ export async function controlEnvelope(
   host: TachoHostRow,
   now: Date = new Date(),
 ): Promise<ControlEnvelope> {
-  const [denyGeneration, retention] = await Promise.all([
+  const [denyGeneration, retention, steering] = await Promise.all([
     readDenyGeneration(tx, ctx.orgId, ctx.workspaceId),
     readWorkspaceRetention(tx, ctx.orgId, ctx.workspaceId),
+    readWorkspaceSteering(tx, ctx.orgId, ctx.workspaceId),
   ]);
-  const bundle = unsignedBundle(host, denyGeneration, retention, now);
+  const bundle = unsignedBundle(host, denyGeneration, retention, steering, now);
   const commands = await drainCommands(tx, host, now);
   return controlEnvelopeSchema.parse({
     host_status: tachoHostStatusSchema.parse(host.status),
