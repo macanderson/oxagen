@@ -167,7 +167,6 @@ describe("context.record.promote handler", () => {
   // row saying what v1 says, in the same update that moves the pin.
   it("copies the pinned version's classification onto the record row, clearing a constraint effect the row no longer earns", async () => {
     const v1 = {
-      id: "version-1",
       kind: "rule",
       force: "should",
       constraintEffect: null,
@@ -175,7 +174,16 @@ describe("context.record.promote handler", () => {
     };
     // The chain head is v2's promote: the row currently carries v2's
     // classification (a must constraint), which is what the bug left behind.
-    queueSelects([RECORD], [v1], [{ seq: 2, chainDigest: "d".repeat(64) }]);
+    //
+    // Four reads now, in this order: the record, the version lookup (id and
+    // ownership only), the chain head, and -- inside the writing transaction --
+    // the pinned version's classification.
+    queueSelects(
+      [RECORD],
+      [{ id: "version-1" }],
+      [{ seq: 2, chainDigest: "d".repeat(64) }],
+      [v1],
+    );
 
     const out = await contextRecordPromoteHandler(
       {
@@ -212,19 +220,11 @@ describe("context.record.promote handler", () => {
   // outright -- the operator cannot move the pin at all.
   it("still moves the pin while migration 20260918160000 is pending, leaving the row's classification alone", async () => {
     mocks.classificationColumns = false;
-    // The read projects a literal NULL in place of each column, so the row
-    // comes back classified as a legacy version would be.
+    // Only three reads: with the columns missing the classification select is
+    // never issued, so nothing names them and none can raise 42703.
     queueSelects(
       [RECORD],
-      [
-        {
-          id: "version-1",
-          kind: null,
-          force: null,
-          constraintEffect: null,
-          statement: null,
-        },
-      ],
+      [{ id: "version-1" }],
       [{ seq: 2, chainDigest: "d".repeat(64) }],
     );
 
@@ -249,18 +249,57 @@ describe("context.record.promote handler", () => {
     expect(mocks.updateSets[0]).not.toHaveProperty("statement");
   });
 
+  // The classification is read in the transaction that writes it, not in the
+  // version lookup, because that lookup commits first. A migration landing in
+  // between used to leave the pin moved and the classification uncopied, so
+  // the row described the PREVIOUSLY active version -- and nothing guarantees
+  // anyone ever promotes again to correct it (discussion_r4050583312).
+  it("reads the classification after the lookup, so a migration landing in between is still seen", async () => {
+    mocks.classificationColumns = false;
+    mocks.selectResults.push(
+      () => Promise.resolve([RECORD]),
+      // The version lookup. The migration lands as it returns: on the old
+      // code the probe had already run by now and the answer was no.
+      () => {
+        mocks.classificationColumns = true;
+        return Promise.resolve([{ id: "version-1" }]);
+      },
+      () => Promise.resolve([{ seq: 2, chainDigest: "d".repeat(64) }]),
+      () =>
+        Promise.resolve([
+          {
+            kind: "rule",
+            force: "should",
+            constraintEffect: null,
+            statement: "What the pinned version says.",
+          },
+        ]),
+    );
+
+    await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(mocks.updateSets[0]).toMatchObject({
+      activeVersionId: "version-1",
+      kind: "rule",
+      force: "should",
+      statement: "What the pinned version says.",
+    });
+  });
+
   it("leaves the row's classification alone when a supersede names a classified version", async () => {
+    // A supersede reads no classification: only a promote copies one, so the
+    // version lookup is the id-and-ownership read and nothing follows it.
     queueSelects(
       [RECORD],
-      [
-        {
-          id: "version-2",
-          kind: "constraint",
-          force: "must",
-          constraintEffect: "forbid",
-          statement: "Never A.",
-        },
-      ],
+      [{ id: "version-2" }],
       [{ seq: 1, chainDigest: "e".repeat(64) }],
     );
 

@@ -59,62 +59,13 @@ export const contextRecordPromoteHandler: CapabilityHandler<
 
   // promote pins a version; the other actions may name one for the ledger.
   let versionUuid: string | null = null;
-  // The pinned version's classification, copied onto the record row by a
-  // promote so the row (and the steering text compiled from it) describes
-  // the version in service, not the one merged last (#3312). Empty for a
-  // version the legacy publish path wrote without one: the row keeps what it
-  // has, which is the only classification that version ever had.
-  let classification: Partial<
-    Pick<
-      typeof schema.contextRecords.$inferInsert,
-      "kind" | "force" | "constraintEffect" | "statement"
-    >
-  > = {};
   if (input.version_id) {
-    // Migration `20260918160000` adds the four classification columns, and
-    // production applies migrations by hand while `deploy-node` ships on merge
-    // without waiting. Naming them before they exist raises 42703 and would
-    // fail the promote, so until then the promote only moves the pin and the
-    // record row keeps the classification it has -- the behaviour before
-    // #3312, and the only one available on a database whose versions cannot
-    // carry a classification.
-    //
-    // The probe and the select it guards run in ONE `withTenantDb`, so both
-    // speak to the database that one scope resolved. Two calls resolve the
-    // plane twice: a `set_data_plane` landing between them could carry a yes
-    // from the old plane into a select on a new one that lacks the columns,
-    // and a migration landing between them would project NULL over a
-    // classification that is now there, leaving the promoted row stale.
-    //
-    // A literal NULL in place of each column while the migration is pending
-    // keeps one row shape, so the classified-or-not branch below is the same
-    // code that already handles a legacy version.
-    const absent = sql<string | null>`null`;
-    const [version] = (await withTenantDb(async (tx) => {
-      // Fresh, like the merge: a cached miss here copies nothing onto the
-      // record row, so the row keeps a classification the pin no longer
-      // matches -- #3312's symptom -- until something promotes again.
-      const versionClassificationReady = await hasColumnFresh(
-        tx,
-        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-        await ambientPlaneKey(),
-      );
-      return tx
-        .select({
-          id: schema.contextRecordVersions.id,
-          kind: versionClassificationReady
-            ? schema.contextRecordVersions.kind
-            : absent,
-          force: versionClassificationReady
-            ? schema.contextRecordVersions.force
-            : absent,
-          constraintEffect: versionClassificationReady
-            ? schema.contextRecordVersions.constraintEffect
-            : absent,
-          statement: versionClassificationReady
-            ? schema.contextRecordVersions.statement
-            : absent,
-        })
+    // Existence and ownership only. The classification is NOT read here: it is
+    // read in the same transaction that writes it, further down, because this
+    // one commits long before that one opens.
+    const [version] = await withTenantDb((tx) =>
+      tx
+        .select({ id: schema.contextRecordVersions.id })
         .from(schema.contextRecordVersions)
         .where(
           and(
@@ -122,32 +73,14 @@ export const contextRecordPromoteHandler: CapabilityHandler<
             eq(schema.contextRecordVersions.recordId, record.id),
           ),
         )
-        .limit(1);
-    })) as Array<{
-      id: string;
-      kind: string | null;
-      force: string | null;
-      constraintEffect: string | null;
-      statement: string | null;
-    }>;
+        .limit(1),
+    );
     if (!version) {
       throw new Error(
         `[context.record.promote] Version "${input.version_id}" does not belong to record "${input.record_id}".`,
       );
     }
     versionUuid = version.id;
-    // A merge writes all four together, so `kind` alone tells a classified
-    // version from a legacy one. `constraintEffect` is copied even when NULL:
-    // a rule version promoted over a constraint must clear it, or the row's
-    // check constraint refuses the update.
-    if (version.kind != null) {
-      classification = {
-        kind: version.kind,
-        force: version.force,
-        constraintEffect: version.constraintEffect,
-        statement: version.statement,
-      };
-    }
   } else if (input.action === "promote") {
     throw new Error(
       "[context.record.promote] `version_id` is required for a promote.",
@@ -185,6 +118,65 @@ export const contextRecordPromoteHandler: CapabilityHandler<
 
   const status = STATUS_BY_ACTION[input.action];
   await withTenantDb(async (tx) => {
+    // The pinned version's classification, copied onto the record row so the
+    // row -- and the steering text compiled from it, and the listing and the
+    // classification filters that read it -- describes the version in service
+    // rather than the one merged last (#3312).
+    //
+    // Read HERE, in the transaction that writes it, and not in the lookup
+    // above: that one commits first, so a migration landing between the two
+    // would leave this update copying nothing while the pin moved, and the row
+    // would describe the PREVIOUSLY active version until somebody promoted
+    // again -- which nothing guarantees ever happens
+    // (discussion_r4050583312).
+    //
+    // ACCESS SHARE before the probe, for the same reason `publishMerge` takes
+    // ROW EXCLUSIVE: `information_schema` locks nothing, so without it the
+    // `ALTER TABLE` could still commit between a `false` answer and this read.
+    // ACCESS SHARE is what the SELECT below takes anyway and conflicts only
+    // with ACCESS EXCLUSIVE, so it serializes against the DDL and against
+    // nothing else.
+    let classification: Partial<
+      Pick<
+        typeof schema.contextRecords.$inferInsert,
+        "kind" | "force" | "constraintEffect" | "statement"
+      >
+    > = {};
+    if (input.action === "promote" && versionUuid) {
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in access share mode`,
+      );
+      const ready = await hasColumnFresh(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
+      if (ready) {
+        const [pinned] = await tx
+          .select({
+            kind: schema.contextRecordVersions.kind,
+            force: schema.contextRecordVersions.force,
+            constraintEffect: schema.contextRecordVersions.constraintEffect,
+            statement: schema.contextRecordVersions.statement,
+          })
+          .from(schema.contextRecordVersions)
+          .where(eq(schema.contextRecordVersions.id, versionUuid))
+          .limit(1);
+        // A merge writes all four together, so `kind` alone tells a classified
+        // version from a legacy one. `constraintEffect` is copied even when
+        // NULL: a rule version promoted over a constraint must clear it, or
+        // the row's check constraint refuses the update.
+        if (pinned?.kind != null) {
+          classification = {
+            kind: pinned.kind,
+            force: pinned.force,
+            constraintEffect: pinned.constraintEffect,
+            statement: pinned.statement,
+          };
+        }
+      }
+    }
+
     await tx.insert(schema.contextPromotions).values({
       orgId: ctx.orgId,
       workspaceId: ctx.workspaceId,
