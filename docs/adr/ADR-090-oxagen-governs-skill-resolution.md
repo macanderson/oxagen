@@ -96,7 +96,9 @@ Oxagen holds no credential and runs no tool, and still decides every call.
    without it — which needs a signal the database can see, because §5.2 exposes only
    `app.current_org_id` and `app.current_workspace_id` and an IAM permission is application
    state Postgres cannot read, so `withTenantDb` sets a third transaction-local setting
-   `app.research_read` after the IAM check passes and the predicate requires it — and a job that deletes rows
+   `app.research_read` after the IAM check passes and the predicate requires it **in addition
+   to** the ordinary `org_id`/`workspace_id` checks rather than in place of them, since a
+   research flag that replaced tenant isolation would cross organizations — and a job that deletes rows
    past `retain_until` — an expiry nothing enforces is a comment. Config history is git history, not a table; a config version
    carries the `commit_sha` it was read at as its provenance.
 
@@ -122,7 +124,8 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 
 - Spec §2 gains the run-versus-resolve sentence and keeps "no skills engine". §14's
   page count and screen table, §7.5's gateway-kind table (all eight frame kinds),
-  Appendix E's tool set (`search_skills`, and its totals), Appendix A's new §A.10 `skills` schema and its table count,
+  Appendix E's tool set (the eleven Skills tools —
+  `search_skills` and the nine reads and writes the five tabs need — and its totals), Appendix A's new §A.10 `skills` schema and its table count,
   App. E's `dispatch_command` entry and §19's page-coverage table all gain Skills and W13. Appendix F's route map is
   left alone: `ARCHITECTURE.md` records it as already drifted on other grounds (Ontology
   cut, Audit rescoped) and wins over it, so reconciling it is not this ADR's job.

@@ -5154,8 +5154,9 @@ fence: (1) a dedicated read capability — an ordinary workspace read must not r
 that lane; (3) an RLS predicate on this table, which needs a signal Postgres can actually see: §5.2 exposes only
 <code>app.current_org_id</code> and <code>app.current_workspace_id</code>, and an IAM permission is application state the database
 cannot read. So <code>withTenantDb</code> sets a <strong>third transaction-local setting</strong> — <code>app.research_read</code>, written only
-after the IAM check has passed and never from request input — and the predicate on this table requires it true
-instead of the <code>org</code>/<code>workspace</code> predicate every other table uses. Without that bridge the fence either denies
+after the IAM check has passed and never from request input — and the predicate on this table requires it true <strong>in addition to</strong>
+the ordinary <code>org_id</code> and <code>workspace_id</code> checks, never in place of them — a research flag that replaced tenant
+isolation would let a researcher in one organization read another's reflections. Without that bridge the fence either denies
 every read or silently falls back to tenant scope and exposes the rows; and (4) a job that <strong>deletes</strong> rows past <code>retain_until</code>, since
 an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
 does not price the work, and is not evidence about a person.</p>
@@ -5913,7 +5914,7 @@ does not price the work, and is not evidence about a person.</p>
 </table></div>
 <p>How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.</p>
 <h2 id="appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</h2>
-<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>98 agent tools</strong> (79 of them in the wedge; <code>search_skills</code> added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
+<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>107 agent tools</strong> (89 of them in the wedge; the eleven Skills tools, nine of them added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
 <p><strong>Organization and workspace (11)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -6107,6 +6108,51 @@ does not price the work, and is not evidence about a person.</p>
 <td><code>search_skills</code></td>
 <td>(new; ADR-090)</td>
 <td>the one tool turning skills on adds to every belt in the workspace. Answers against the config version the run pinned at start, withholds <strong>before ranking</strong>, and returns the withheld count and reason class but never the withheld names. Grants nothing else: no tool, no tier change, no budget move</td>
+</tr>
+<tr>
+<td><code>get_skill_config</code></td>
+<td>(new; ADR-090)</td>
+<td>read: <code>.oxagen/skills.toml</code> as resolved at a config version — sources, belt mode, cut-off, load budget, <code>unbound_repo</code> policy — with its version history and the pull request that published each</td>
+</tr>
+<tr>
+<td><code>list_skill_resolutions</code></td>
+<td>(new; ADR-090)</td>
+<td>read: the Catalog tab. Each skill considered at a config version with <code>id@version</code>, digest, source, load cost, decision, and for a held skill its reason class. Withheld names are visible to a person here and never to the agent</td>
+</tr>
+<tr>
+<td><code>list_skill_interjections</code></td>
+<td>(new; ADR-090)</td>
+<td>read: the In the loop tab — interjections over a window, the median answer time, what an unanswered one falls back to, and the one currently open</td>
+</tr>
+<tr>
+<td><code>read_skill_reflection</code></td>
+<td>(new; ADR-090)</td>
+<td>read: a quarantined reflection. Requires the org-scoped <code>research.read</code> grant, is refused without it, and is the only path to these rows — an ordinary workspace read returns none</td>
+</tr>
+<tr>
+<td><code>set_skills_enabled</code></td>
+<td>(new; ADR-090)</td>
+<td>write: turn resolution on or off for a workspace by opening a pull request against <code>.oxagen/skills.toml</code>. Adds <code>search_skills</code> to every belt and nothing else: no tool granted, no tier change, no budget move</td>
+</tr>
+<tr>
+<td><code>update_skill_config</code></td>
+<td>(new; ADR-090)</td>
+<td>write: change sources, cut-off or budget, as a pull request. The switch is the outcome; the pull request is the control, and its author is on the receipt</td>
+</tr>
+<tr>
+<td><code>approve_skill_digest</code></td>
+<td>(new; ADR-090)</td>
+<td>write: approve a changed digest so the skill stops being withheld as <code>unapproved_digest</code>. Recomputed at merge against the file read back at the head</td>
+</tr>
+<tr>
+<td><code>propose_skill</code></td>
+<td>(new; ADR-090)</td>
+<td>write: add a skill as a pull request — registry pin by digest, a drafted <code>SKILL.md</code>, or an uploaded bundle. Gated on frontmatter, semver, digest, grants, secret scan and the search budget</td>
+</tr>
+<tr>
+<td><code>set_reflection_capture</code></td>
+<td>(new; ADR-090)</td>
+<td>write: turn reflection capture on or off. Capture is research-only and never becomes evidence, so this grants no read — <code>read_skill_reflection</code> still needs <code>research.read</code></td>
 </tr>
 <tr>
 <td><code>get_run</code></td>
@@ -6563,7 +6609,7 @@ does not price the work, and is not evidence about a person.</p>
 </table></div>
 <p><strong>De-registered, by family</strong> (everything not named above, all of it kept in the tree per the preamble and <code>DEREGISTERED.md</code>): <code>environment.*</code> and <code>bind/unbind_agent_environment</code> (no runtime); <code>plugin.*</code>, <code>browse_plugin_catalog</code>, <code>add/remove_plugin_registry</code>, <code>install_plugins_bulk</code>, <code>sync_plugin_catalog</code>, <code>get_catalog_plugin</code>, <code>get_plugin_schema</code>, <code>validate_plugin_schema</code>, <code>list_plugin_registries</code>, <code>list_plugin_versions</code>, <code>set_plugin_enabled</code> (no marketplace in v1; sources and tool servers replace it); <code>prompt.settings.*</code> (steering replaces prompt settings); <code>import_env_secrets</code>, <code>export_secrets</code>, <code>reveal_secret</code> (secrets are connections and are never revealed); <code>parse_memory_import</code>, <code>commit_memory_import</code> (records are appended, not imported); <code>get_pr</code>, <code>get_pr_diff</code>, <code>list_branches</code>, <code>get_ci_status</code>, <code>read_file</code> (the graph and the GitHub events hold these; agents read code through their own harness); <code>upload_asset</code> (no content); <code>get_org_settings</code>, <code>get_workspace_settings</code>, <code>get_environment</code>, <code>get_connection</code>, <code>get_connection_mappings</code>, <code>get_memory_policy</code>, <code>get_prompt_settings</code>, <code>get_routing_policy</code> (reads folded into the objects above); everything in the test fixtures.</p>
 <p>Two notes on that list. <code>read_file</code> has no registered contract on <code>main</code> — the only match is a test fixture in <code>packages/oxagen/src/contracts/tool.declaration.publish.test.ts</code> — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (<code>set_plugin_secret</code>, <code>revoke_plugin_credential</code>, <code>reauth_plugin_credential</code>) are absorbed into <code>set_connection</code> and <code>delete_connection</code> rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.</p>
-<p>Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96, plus <code>list_skills</code> (2026-09-15) and <code>search_skills</code> (ADR-090) = <strong>98</strong> for the full product. The wedge ships 79: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.</p>
+<p>Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96, plus the eleven Skills tools (<code>list_skills</code>, 2026-09-15; <code>search_skills</code> and the nine controls ADR-090 adds) = <strong>107</strong> for the full product. The wedge ships <strong>89</strong>: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.</p>
 <h2 id="appendix-f-the-pages-that-survive">Appendix F. The pages that survive</h2>
 <p>&quot;Survive&quot; here means <em>stays routed</em>. The ten pages below predate ADR-090, which added Skills at <code>/{org}/{ws}/skills</code>; that page is reachable in rev1 and is <strong>not</strong> in this table. <code>apps/app/ARCHITECTURE.md</code> carries the current set. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its <code>page.tsx</code>, its components and its <code>actions.ts</code> stay in the tree. <code>DEREGISTERED.md</code> §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.</p>
 <p>The current web app has 70 page files. Ten remain: seven at workspace scope, three at organization scope. Sign-in flows (login, signup, password reset, two-factor, verify, accept an invite, create the first organization) are not screens and are not counted; there are seven of them and they stay as they are. Onboarding is not a page: it is the in-app agent's first run inside the workspace.</p>
