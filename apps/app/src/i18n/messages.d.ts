@@ -1348,6 +1348,19 @@ type Messages = {
         title: string;
         body: string;
       };
+      filter: {
+        label: string;
+        active: string;
+        all: string;
+        allWithCount: string;
+      };
+      pager: {
+        label: string;
+        range: string;
+        previous: string;
+        next: string;
+      };
+      emptyFiltered: string;
     };
     denied: {
       title: string;

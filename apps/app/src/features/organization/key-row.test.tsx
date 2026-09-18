@@ -22,6 +22,8 @@ vi.mock("./api-key-actions", () => ({
 const { KeyRow } = await import("./key-row");
 
 const HERE = routes.apiKeys("acme", { workspace: "core-platform" });
+/** Where a rotation returns: the first page of the filter in view. */
+const AFTER_MINT = routes.apiKeys("acme", { workspace: "core-platform" });
 const NOW = Date.parse("2026-09-16T12:00:00.000Z");
 
 afterEach(() => {
@@ -42,6 +44,7 @@ function renderRow(key: ApiKey, now = NOW, archived = false) {
             now={now}
             listedIds={[key.id]}
             here={HERE}
+            afterMint={AFTER_MINT}
           />
         </tbody>
       </table>
