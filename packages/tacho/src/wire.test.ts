@@ -3,6 +3,7 @@ import {
   bundleResponseSchema,
   controlEnvelopeSchema,
   ingestResponseSchema,
+  commandsResponseSchema,
   tachoBatchSchema,
   TACHO_BATCH_SCHEMA,
 } from "./wire";
@@ -91,6 +92,20 @@ describe("responses from the control plane", () => {
         // no `control`
       }),
     ).toThrow();
+  });
+});
+
+describe("the command-poll response wrapper", () => {
+  // The wrapper is parsed before `control` is ever read, so a tolerant
+  // envelope inside a strict wrapper still stopped a host polling the moment
+  // a newer control plane added one top-level field.
+  it("accepts a field a newer control plane added at the top level", () => {
+    const parsed = commandsResponseSchema.safeParse({
+      acknowledged: 0,
+      control: CONTROL,
+      server_hint: "added later",
+    });
+    expect(parsed.success).toBe(true);
   });
 });
 

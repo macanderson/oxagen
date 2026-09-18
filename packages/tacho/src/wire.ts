@@ -659,12 +659,21 @@ export type CommandAcknowledgement = z.output<
   typeof commandAcknowledgementSchema
 >;
 
+/**
+ * Tolerant, for the reason on `controlEnvelopeSchema`: this is a response,
+ * and a host is updated when its owner gets round to it. Making only the
+ * nested `control` envelope tolerant changed nothing while this wrapper stayed
+ * strict — `createControlClient.commands()` parses the wrapper FIRST, so one
+ * additive top-level field from a newer control plane still stopped the host
+ * polling and delivering acknowledgements, the exact skew this exists to
+ * survive.
+ */
 export const commandsResponseSchema = z
   .object({
     acknowledged: z.number().int().nonnegative(),
     control: controlEnvelopeSchema,
   })
-  .strict();
+  .passthrough();
 
 export type CommandsResponse = z.output<typeof commandsResponseSchema>;
 
@@ -695,7 +704,12 @@ export const enrollmentResponseSchema = z
     bundlePublicKeyPem: z.string().min(1),
     expiresAt: z.string(),
   })
-  .strict();
+  // The outer wrapper is unsigned and tolerant, like every other response
+  // here, so a control plane that adds a field does not break enrollment on
+  // hosts older than it. The signed `enrollment` document inside stays
+  // `.strict()`: its claims are verified against a signature, and an
+  // unexpected key there is a defect in what was signed, not version skew.
+  .passthrough();
 
 export type EnrollmentResponse = z.output<typeof enrollmentResponseSchema>;
 
@@ -710,7 +724,7 @@ export const tokenEnrollmentResponseSchema = enrollmentResponseSchema
     orgSlug: z.string().min(1),
     workspaceSlug: z.string().min(1),
   })
-  .strict();
+  .passthrough();
 
 export type TokenEnrollmentResponse = z.output<
   typeof tokenEnrollmentResponseSchema
