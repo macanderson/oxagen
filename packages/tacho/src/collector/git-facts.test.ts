@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
-import type { Exec, ExecResult } from "../host/service";
+import type { ExecAsync, ExecResult } from "../host/service";
 import {
+  MAX_UNTRACKED_LINE_COUNTS,
   parseNumstat,
   parsePorcelainZ,
   readGitFacts,
@@ -11,12 +12,20 @@ import {
 } from "./git-facts";
 import { MAX_OBSERVED_CHANGES, observedChangeSchema } from "../envelope";
 
-/** A git that answers canned stdout, keyed by the sub-command it is given. */
+/**
+ * A git that answers canned stdout, keyed by the sub-command it is given.
+ *
+ * It resolves on a later tick on purpose. A fake that returned a settled
+ * promise would pass whether or not the reader awaited it, so every
+ * assertion below would hold against a reader that still blocked. Resolving
+ * after a macrotask means an unawaited read reads as undefined.
+ */
 function fakeGit(
   answers: Record<string, string | ExecResult>,
   calls: string[][] = [],
-): Exec {
-  return (command, args) => {
+): ExecAsync {
+  return async (command, args) => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
     calls.push([command, ...args]);
     if (command !== "git") return { status: 127, stdout: "", stderr: "" };
     for (const [key, value] of Object.entries(answers)) {
@@ -33,14 +42,14 @@ function fakeGit(
 const FAIL: ExecResult = { status: 128, stdout: "", stderr: "fatal" };
 
 describe("readGitFacts", () => {
-  it("reads head, branch, dirtiness and the digested remote", () => {
+  it("reads head, branch, dirtiness and the digested remote", async () => {
     const exec = fakeGit({
       "rev-parse --abbrev-ref HEAD": "feature/one\n",
       "rev-parse HEAD": "a".repeat(40) + "\n",
       "status --porcelain": " M src/a.ts\n",
       "remote get-url origin": "git@github.com:acme/widgets.git\n",
     });
-    expect(readGitFacts(exec, "/repo")).toEqual({
+    expect(await readGitFacts(exec, "/repo")).toEqual({
       head_sha: "a".repeat(40),
       branch: "feature/one",
       dirty: true,
@@ -48,7 +57,7 @@ describe("readGitFacts", () => {
     });
   });
 
-  it("never stores the remote url in the clear", () => {
+  it("never stores the remote url in the clear", async () => {
     const url = "https://user:token@github.com/acme/widgets.git";
     const exec = fakeGit({
       "rev-parse --abbrev-ref HEAD": "main\n",
@@ -56,64 +65,119 @@ describe("readGitFacts", () => {
       "status --porcelain": "",
       "remote get-url origin": `${url}\n`,
     });
-    const facts = readGitFacts(exec, "/repo");
+    const facts = await readGitFacts(exec, "/repo");
     expect(facts?.remote_digest).toBe(digestBytes(url));
     expect(JSON.stringify(facts)).not.toContain("token");
     expect(JSON.stringify(facts)).not.toContain("github.com");
   });
 
-  it("reports a clean tree as not dirty", () => {
+  it("reports a clean tree as not dirty", async () => {
     const exec = fakeGit({
       "rev-parse --abbrev-ref HEAD": "main\n",
       "rev-parse HEAD": "c".repeat(40) + "\n",
       "status --porcelain": "\n",
       "remote get-url origin": "origin-url\n",
     });
-    expect(readGitFacts(exec, "/repo")?.dirty).toBe(false);
+    expect((await readGitFacts(exec, "/repo"))?.dirty).toBe(false);
   });
 
-  it("omits the branch when the head is detached", () => {
+  it("omits the branch when the head is detached", async () => {
     const exec = fakeGit({
       "rev-parse --abbrev-ref HEAD": "HEAD\n",
       "rev-parse HEAD": "d".repeat(40) + "\n",
       "status --porcelain": "",
     });
-    const facts = readGitFacts(exec, "/repo");
+    const facts = await readGitFacts(exec, "/repo");
     expect(facts?.head_sha).toBe("d".repeat(40));
     expect(facts?.branch).toBeUndefined();
     expect(facts?.remote_digest).toBeUndefined();
   });
 
-  it("returns undefined for a directory that is not a repository", () => {
-    expect(readGitFacts(fakeGit({ "rev-parse HEAD": FAIL }), "/tmp")).toBeUndefined();
+  it("returns undefined for a directory that is not a repository", async () => {
+    expect(
+      await readGitFacts(fakeGit({ "rev-parse HEAD": FAIL }), "/tmp"),
+    ).toBeUndefined();
   });
 
-  it("returns undefined when git is not installed", () => {
-    const exec: Exec = () => {
+  it("returns undefined when git is not installed", async () => {
+    const exec: ExecAsync = () => {
       throw new Error("spawn git ENOENT");
     };
-    expect(readGitFacts(exec, "/repo")).toBeUndefined();
+    expect(await readGitFacts(exec, "/repo")).toBeUndefined();
   });
 
-  it("leaves dirtiness off when the status read fails", () => {
+  it("leaves dirtiness off when the status read fails", async () => {
     const exec = fakeGit({
       "rev-parse --abbrev-ref HEAD": "main\n",
       "rev-parse HEAD": "e".repeat(40) + "\n",
       "status --porcelain": FAIL,
     });
-    expect(readGitFacts(exec, "/repo")?.dirty).toBeUndefined();
+    expect((await readGitFacts(exec, "/repo"))?.dirty).toBeUndefined();
   });
 
-  it("reads without taking the index lock", () => {
+  it("leaves the event loop free while a read is in flight", async () => {
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+    }, 1);
+    const slow: ExecAsync = (_command, args) =>
+      new Promise((resolve) =>
+        setTimeout(
+          () =>
+            resolve({
+              status: 0,
+              stdout:
+                args.at(-2) === "rev-parse" && args.at(-1) === "HEAD"
+                  ? "a".repeat(40)
+                  : "",
+              stderr: "",
+            }),
+          25,
+        ),
+      );
+    const facts = await readGitFacts(slow, "/repo");
+    clearInterval(timer);
+    expect(facts?.head_sha).toBe("a".repeat(40));
+    // A synchronous probe would have stopped the timer from ever firing,
+    // which is the daemon failing to answer a hook.
+    expect(ticks).toBeGreaterThan(0);
+  });
+
+  it("issues the reads that do not gate each other together", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const exec: ExecAsync = async (_command, args) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return {
+        status: 0,
+        stdout:
+          args.at(-2) === "rev-parse" && args.at(-1) === "HEAD"
+            ? "a".repeat(40)
+            : "",
+        stderr: "",
+      };
+    };
+    await readGitFacts(exec, "/repo");
+    // `HEAD` alone, then branch, status and remote at once.
+    expect(peak).toBe(3);
+  });
+
+  it("reads without taking the index lock", async () => {
     const calls: string[][] = [];
-    readGitFacts(fakeGit({ "rev-parse HEAD": "f".repeat(40) }, calls), "/repo");
+    await readGitFacts(
+      fakeGit({ "rev-parse HEAD": "f".repeat(40) }, calls),
+      "/repo",
+    );
     expect(calls[0]).toContain("--no-optional-locks");
     expect(calls[0]?.slice(0, 3)).toEqual(["git", "-C", "/repo"]);
   });
 });
 
 describe("parsePorcelainZ", () => {
-  it("separates entries on NUL and keeps the status code", () => {
+  it("separates entries on NUL and keeps the status code", async () => {
     const parsed = parsePorcelainZ(" M src/a.ts\0?? new.txt\0 D gone.ts\0");
     expect(parsed).toEqual([
       { code: " M", path: "src/a.ts" },
@@ -122,7 +186,7 @@ describe("parsePorcelainZ", () => {
     ]);
   });
 
-  it("consumes the original path that follows a rename", () => {
+  it("consumes the original path that follows a rename", async () => {
     const parsed = parsePorcelainZ("R  new.ts\0old.ts\0 M other.ts\0");
     expect(parsed).toEqual([
       { code: "R ", path: "new.ts" },
@@ -132,31 +196,31 @@ describe("parsePorcelainZ", () => {
 });
 
 describe("resolveNumstatPath", () => {
-  it("resolves the arrow form to the new path", () => {
+  it("resolves the arrow form to the new path", async () => {
     expect(resolveNumstatPath("old.ts => new.ts")).toBe("new.ts");
   });
 
-  it("resolves the braced form to the new path", () => {
+  it("resolves the braced form to the new path", async () => {
     expect(resolveNumstatPath("src/{old => new}/a.ts")).toBe("src/new/a.ts");
   });
 
-  it("collapses the empty half of a braced rename", () => {
+  it("collapses the empty half of a braced rename", async () => {
     expect(resolveNumstatPath("src/{ => nested}/a.ts")).toBe("src/nested/a.ts");
   });
 
-  it("leaves an ordinary path alone", () => {
+  it("leaves an ordinary path alone", async () => {
     expect(resolveNumstatPath("src/a.ts")).toBe("src/a.ts");
   });
 });
 
 describe("parseNumstat", () => {
-  it("reads counts and treats a binary file as zero on both", () => {
+  it("reads counts and treats a binary file as zero on both", async () => {
     const parsed = parseNumstat("12\t3\tsrc/a.ts\n-\t-\tlogo.png\n");
     expect(parsed.get("src/a.ts")).toEqual({ added: 12, removed: 3 });
     expect(parsed.get("logo.png")).toEqual({ added: 0, removed: 0 });
   });
 
-  it("unquotes a path git escaped", () => {
+  it("unquotes a path git escaped", async () => {
     const parsed = parseNumstat('1\t0\t"a\\tb.ts"\n');
     expect(parsed.get("a\tb.ts")).toEqual({ added: 1, removed: 0 });
   });
@@ -168,13 +232,13 @@ describe("readWorkingTreeChanges", () => {
   const numstat =
     "12\t3\tsrc/a.ts\n0\t9\tgone.ts\n2\t2\trenamed-old.ts => renamed-new.ts\n";
 
-  it("reports one entry per changed path, with status and line counts", () => {
+  it("reports one entry per changed path, with status and line counts", async () => {
     const exec = fakeGit({
       "status --porcelain=v1 -z": status,
       "diff --numstat HEAD": numstat,
       "rev-parse --show-toplevel": "/repo\n",
     });
-    expect(readWorkingTreeChanges(exec, "/repo/src")).toEqual([
+    expect(await readWorkingTreeChanges(exec, "/repo/src")).toEqual([
       {
         path: "/repo/src/a.ts",
         repo_relative_path: "src/a.ts",
@@ -206,18 +270,127 @@ describe("readWorkingTreeChanges", () => {
     ]);
   });
 
-  it("keeps an untracked file even though no diff mentions it", () => {
+  it("measures an untracked file that no diff mentions", async () => {
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "?? new.txt\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+        // `--no-index` exits 1 to say the two inputs differ, which is the
+        // answer, not a failure.
+        "--no-index": {
+          status: 1,
+          stdout: "412\t0\t/dev/null => /repo/new.txt\n",
+          stderr: "",
+        },
+      },
+      calls,
+    );
+    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    expect(only?.status).toBe("added");
+    // The count that used to be recorded as zero, which ingest then kept as
+    // the run's observed line count.
+    expect(only?.lines_added).toBe(412);
+    expect(only?.lines_removed).toBe(0);
+    expect(
+      calls.filter((call) => call.includes("--no-index")),
+    ).toHaveLength(1);
+  });
+
+  it("leaves an untracked count at zero when the probe cannot answer", async () => {
     const exec = fakeGit({
-      "status --porcelain=v1 -z": "?? build/out.js\0",
+      "status --porcelain=v1 -z": "?? new.txt\0",
       "diff --numstat HEAD": "",
       "rev-parse --show-toplevel": "/repo\n",
+      "--no-index": FAIL,
     });
-    const [only] = readWorkingTreeChanges(exec, "/repo");
-    expect(only?.status).toBe("added");
+    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.lines_added).toBe(
+      0,
+    );
+  });
+
+  it("does not probe a tracked path the numstat left out", async () => {
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        // A mode change: git reports the path and no line count for it.
+        "status --porcelain=v1 -z": " M src/a.ts\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+      },
+      calls,
+    );
+    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    expect(only?.status).toBe("modified");
+    // Diffing a tracked file against nothing would count all of it as added.
+    expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
     expect(only?.lines_added).toBe(0);
   });
 
-  it("falls back to the unstaged diff in a repository with no commits", () => {
+  it("does not probe an untracked directory entry", async () => {
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "?? build/\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+      },
+      calls,
+    );
+    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    // A directory entry names a subtree, and `--no-index` has no line count
+    // to give for one.
+    expect(only?.repo_relative_path).toBe("build/");
+    expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
+  });
+
+  it("probes no more untracked files than the bound allows", async () => {
+    const count = MAX_UNTRACKED_LINE_COUNTS + 20;
+    const paths = Array.from({ length: count }, (_value, index) =>
+      String(index).padStart(4, "0"),
+    );
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": paths
+          .map((name) => `?? ${name}.txt\0`)
+          .join(""),
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+        "--no-index": { status: 1, stdout: "1\t0\tx\n", stderr: "" },
+      },
+      calls,
+    );
+    const changes = await readWorkingTreeChanges(exec, "/repo");
+    expect(changes).toHaveLength(count);
+    expect(
+      calls.filter((call) => call.includes("--no-index")),
+    ).toHaveLength(MAX_UNTRACKED_LINE_COUNTS);
+    // Path order decides which files are measured, so the same ones are
+    // measured on every pass.
+    const probed = calls
+      .filter((call) => call.includes("--no-index"))
+      .map((call) => call[call.length - 1]);
+    expect(probed).toContain("/repo/0000.txt");
+    expect(probed).not.toContain(`/repo/${paths[count - 1]}.txt`);
+  });
+
+  it("skips the untracked probe when the repository root is unknown", async () => {
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "?? new.txt\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": FAIL,
+      },
+      calls,
+    );
+    await readWorkingTreeChanges(exec, "/repo");
+    expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
+  });
+
+  it("falls back to the unstaged diff in a repository with no commits", async () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
@@ -228,46 +401,50 @@ describe("readWorkingTreeChanges", () => {
       },
       calls,
     );
-    expect(readWorkingTreeChanges(exec, "/repo")[0]?.lines_added).toBe(4);
+    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.lines_added).toBe(
+      4,
+    );
     expect(calls.some((call) => call.includes("HEAD"))).toBe(true);
   });
 
-  it("falls back to the repo-relative path when the root cannot be read", () => {
+  it("falls back to the repo-relative path when the root cannot be read", async () => {
     const exec = fakeGit({
       "status --porcelain=v1 -z": " M src/a.ts\0",
       "diff --numstat HEAD": "",
       "rev-parse --show-toplevel": FAIL,
     });
-    expect(readWorkingTreeChanges(exec, "/repo")[0]?.path).toBe("src/a.ts");
+    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.path).toBe(
+      "src/a.ts",
+    );
   });
 
-  it("reports a binary file that changed, with zero on both counts", () => {
+  it("reports a binary file that changed, with zero on both counts", async () => {
     const exec = fakeGit({
       "status --porcelain=v1 -z": " M logo.png\0",
       "diff --numstat HEAD": "-\t-\tlogo.png\n",
       "rev-parse --show-toplevel": "/repo\n",
     });
-    expect(readWorkingTreeChanges(exec, "/repo")[0]).toMatchObject({
+    expect((await readWorkingTreeChanges(exec, "/repo"))[0]).toMatchObject({
       status: "modified",
       lines_added: 0,
       lines_removed: 0,
     });
   });
 
-  it("returns nothing for a directory that is not a repository", () => {
-    expect(readWorkingTreeChanges(fakeGit({}), "/tmp")).toEqual([]);
+  it("returns nothing for a directory that is not a repository", async () => {
+    expect(await readWorkingTreeChanges(fakeGit({}), "/tmp")).toEqual([]);
   });
 
-  it("returns nothing when git is not installed", () => {
-    const exec: Exec = () => {
+  it("returns nothing when git is not installed", async () => {
+    const exec: ExecAsync = () => {
       throw new Error("spawn git ENOENT");
     };
-    expect(readWorkingTreeChanges(exec, "/repo")).toEqual([]);
+    expect(await readWorkingTreeChanges(exec, "/repo")).toEqual([]);
   });
 
-  it("returns nothing for a clean tree", () => {
+  it("returns nothing for a clean tree", async () => {
     const exec = fakeGit({ "status --porcelain=v1 -z": "" });
-    expect(readWorkingTreeChanges(exec, "/repo")).toEqual([]);
+    expect(await readWorkingTreeChanges(exec, "/repo")).toEqual([]);
   });
 });
 
@@ -280,7 +457,7 @@ describe("worktreeReconciledBody", () => {
     lines_removed: 0,
   });
 
-  it("carries the whole list when it fits, sorted by path", () => {
+  it("carries the whole list when it fits, sorted by path", async () => {
     const body = worktreeReconciledBody([change("b.ts"), change("a.ts")]);
     expect(body["observed_changes_total"]).toBe(2);
     expect(body["observed_changes_truncated"]).toBe(false);
@@ -291,7 +468,7 @@ describe("worktreeReconciledBody", () => {
     ).toEqual(["a.ts", "b.ts"]);
   });
 
-  it("records the cut rather than making it silently", () => {
+  it("records the cut rather than making it silently", async () => {
     const changes = Array.from({ length: MAX_OBSERVED_CHANGES + 10 }, (_, i) =>
       change(`f${String(i).padStart(4, "0")}.ts`),
     );
@@ -301,14 +478,14 @@ describe("worktreeReconciledBody", () => {
     expect(body["observed_changes_truncated"]).toBe(true);
   });
 
-  it("produces rows the envelope schema accepts", () => {
+  it("produces rows the envelope schema accepts", async () => {
     const body = worktreeReconciledBody([change("a.ts")]);
     for (const row of body["observed_changes"] as unknown[]) {
       expect(observedChangeSchema.parse(row)).toBeTruthy();
     }
   });
 
-  it("says nothing changed for a clean tree", () => {
+  it("says nothing changed for a clean tree", async () => {
     const body = worktreeReconciledBody([]);
     expect(body["observed_changes"]).toEqual([]);
     expect(body["observed_changes_total"]).toBe(0);

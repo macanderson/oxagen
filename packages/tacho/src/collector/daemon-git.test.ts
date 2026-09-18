@@ -20,7 +20,7 @@ import {
   testHostFile,
 } from "../host/test-support";
 import { unsignedBundle } from "../host/test-support";
-import type { Exec } from "../host/service";
+import type { Exec, ExecAsync } from "../host/service";
 import type { TachoEvent } from "../envelope";
 import { type DaemonHandle, startDaemon } from "./daemon";
 
@@ -51,6 +51,8 @@ const REPO_ANSWERS: Record<string, string> = {
   "remote get-url origin": "git@github.com:acme/repo.git\n",
   "diff --numstat HEAD": "4\t1\tsrc/a.ts\n",
   "rev-parse --show-toplevel": `${CWD}\n`,
+  // The untracked probe: `--no-index` exits 1 to say the inputs differ.
+  "--no-index": "27\t0\t/dev/null => /repo/src/new.ts\n",
 };
 
 function hook(name: string, extra: Record<string, unknown> = {}) {
@@ -71,7 +73,11 @@ describe("the daemon's git seam", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(exec: Exec, now: () => number) {
+  async function boot(
+    exec: Exec,
+    now: () => number,
+    execAsync?: ExecAsync,
+  ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
@@ -101,6 +107,7 @@ describe("the daemon's git seam", () => {
         throw new Error("ECONNREFUSED");
       },
       exec,
+      ...(execAsync !== undefined ? { execAsync } : {}),
       now,
       log: () => undefined,
       listen: false,
@@ -136,6 +143,45 @@ describe("the daemon's git seam", () => {
     expect(calls.filter((call) => call[0] === "git")).toEqual([]);
   });
 
+  it("answers a hook while a worktree read is still in flight", async () => {
+    // The reason the reads are asynchronous. A tick may read up to four
+    // worktrees, several git commands apiece with a ten second ceiling on
+    // each, and a synchronous probe would hold the only event loop for all
+    // of it. Every hook arriving in that window would wait out its budget
+    // and fall back to deciding locally, which is the mandate going
+    // unenforced.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = false;
+    const slow: ExecAsync = async (command, args) => {
+      started = true;
+      await held;
+      for (const [key, value] of Object.entries(REPO_ANSWERS)) {
+        if (args.join(" ").includes(key))
+          return { status: 0, stdout: value, stderr: "" };
+      }
+      return { status: 1, stdout: "", stderr: "no answer" };
+    };
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      slow,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    const ticking = handle.tick();
+    // Let the tick reach its first git command and block there.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toBe(true);
+    const answered = await handle.api.handleHook(
+      hook("PreToolUse", { tool_name: "Read", tool_input: { file_path: "a" } }),
+    );
+    expect(answered).toBeDefined();
+    release();
+    await ticking;
+  });
+
   it("reconciles the worktree at the end of a turn", async () => {
     const calls: string[][] = [];
     const handle = await boot(
@@ -159,12 +205,13 @@ describe("the daemon's git seam", () => {
         lines_removed: 1,
       },
       {
-        // An untracked file appears in no diff, so git offers no line count
-        // for it and none is invented.
+        // An untracked file appears in no diff against `HEAD`, so its count
+        // comes from a separate `--no-index` probe rather than from a zero
+        // the record would then keep.
         path: "/repo/src/new.ts",
         repo_relative_path: "src/new.ts",
         status: "added",
-        lines_added: 0,
+        lines_added: 27,
         lines_removed: 0,
       },
     ]);
