@@ -19,7 +19,13 @@ describe("worktreeRootOf", () => {
     // `project_dir` is where the agent was pointed, which in a monorepo is a
     // package. Stripping it would leave every package's `src/x.ts` looking
     // like the same file, so the field stays null instead.
-    const contexts = [{ project_dir: "/repo/packages/tacho" }, undefined];
+    // Typed as a context rather than as a bare literal: the parameter names
+    // `worktree_path` only, and a fresh literal that shares none of its
+    // members is an excess-property error rather than the case under test.
+    const contexts: readonly (
+      | { worktree_path?: string; project_dir?: string }
+      | undefined
+    )[] = [{ project_dir: "/repo/packages/tacho" }, undefined];
     expect(worktreeRootOf(contexts)).toBeUndefined();
     expect(
       repoRelativePathOf("/repo/packages/tacho/src/x.ts", undefined),
