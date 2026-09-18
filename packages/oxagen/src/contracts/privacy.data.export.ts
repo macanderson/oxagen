@@ -1,6 +1,20 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * The fields, before the cross-field rule below.
+ *
+ * Exported because the registered `input` is a `ZodEffects` once refined, and
+ * `.shape` does not exist on one. The MCP tool spreads these into its flat
+ * xmcp schema and the v2 contract narrows them; both need the object itself.
+ */
+export const exportDataFields = z.object({
+  /** "user" = current user's data only; "org" = full org export (Owner/Admin only). */
+  scope: z.enum(["user", "org"]),
+  /** Required when scope = "org", and must be the org the request is made in. */
+  orgId: z.string().uuid().optional(),
+});
+
 export const privacyDataExport = registerCapability({
   name: "export_data",
   domain: "privacy",
@@ -49,12 +63,16 @@ export const privacyDataExport = registerCapability({
     },
     workspace: {},
   },
-  input: z.object({
-    /** "user" = current user's data only; "org" = full org export (Owner/Admin only). */
-    scope: z.enum(["user", "org"]),
-    /** Required when scope = "org". */
-    orgId: z.string().uuid().optional(),
-  }),
+  input: exportDataFields.refine(
+    // `{ scope: "org" }` with no `orgId` is invalid input, and it is refused as
+    // such rather than reaching the handler: now that the role map admits every
+    // member, a schema-valid body like that would otherwise reach a bare throw
+    // and surface as a 500 instead of a 400 (discussion_r4050860632). The
+    // kernel runs `input.safeParse`, so this holds on every surface, including
+    // the MCP tool, whose flat schema cannot express a cross-field rule.
+    (value) => value.scope !== "org" || value.orgId !== undefined,
+    { message: 'orgId is required when scope is "org"', path: ["orgId"] },
+  ),
   output: z.object({
     exportId: z.string().uuid(),
     status: z.enum(["queued", "processing", "ready", "failed"]),

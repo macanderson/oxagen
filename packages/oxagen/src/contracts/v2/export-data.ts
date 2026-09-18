@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { privacyDataExport } from "../privacy.data.export";
+import {
+  exportDataFields,
+  privacyDataExport,
+} from "../privacy.data.export";
 
 /**
  * Appendix E: `export_data` — "organization export". Absorbs `export_data`.
@@ -68,13 +71,13 @@ export const exportData = defineTool({
      * removed so the request stays self-describing in the audit record: an
      * export event that does not say what was exported ages badly.
      */
-    scope: privacyDataExport.input.shape.scope.extract(["org"]),
+    scope: exportDataFields.shape.scope.extract(["org"]),
     /**
      * Carried, now required. v1 made it optional with "required when scope =
      * 'org'" in a comment; with `user` gone the condition always holds, so the
      * schema enforces what the comment asked for.
      */
-    orgId: privacyDataExport.input.shape.orgId.unwrap(),
+    orgId: exportDataFields.shape.orgId.unwrap(),
   }),
 
   output: z.object({

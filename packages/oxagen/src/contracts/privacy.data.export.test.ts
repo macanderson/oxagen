@@ -21,6 +21,18 @@ describe("privacy.data.export capability", () => {
     ).not.toThrow();
   });
 
+  // The kernel runs `input.safeParse` on every surface, so this is where an
+  // org-scope request missing its orgId is refused -- as invalid input (400),
+  // not as a bare throw inside the handler (500). The MCP tool's flat xmcp
+  // schema cannot express a cross-field rule, so it has to live here.
+  it("rejects org-scope input with no orgId", () => {
+    const result = privacyDataExport.input.safeParse({ scope: "org" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.path).toEqual(["orgId"]);
+    }
+  });
+
   it("rejects unknown scope", () => {
     expect(() =>
       privacyDataExport.input.parse({ scope: "workspace" }),
