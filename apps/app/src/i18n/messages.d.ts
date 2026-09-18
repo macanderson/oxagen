@@ -1454,7 +1454,6 @@ type Messages = {
       transcript: string;
       frames: string;
       cost: string;
-      policy: string;
     };
     transcript: {
       title: string;
@@ -1550,9 +1549,6 @@ type Messages = {
         cost: string;
         tokens: string;
       };
-    };
-    policy: {
-      basis: string;
     };
     commands: {
       reasonLabel: string;

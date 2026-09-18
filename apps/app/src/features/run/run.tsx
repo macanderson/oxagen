@@ -6,14 +6,20 @@
 // when that tab is open, so opening the page costs one invoke and no tab
 // nobody looked at is paid for (§3.5's poll budget).
 //
-// Four sections have a store behind them: Transcript (`get_run_transcript` at
+// Three sections have a store behind them: Transcript (`get_run_transcript` at
 // one of three zoom levels), Frames (`get_run`'s own page, plus one frame's
-// bytes from `get_run_frame_body` when `?body=` names it), Cost
-// (`get_run_cost`) and Policy (`list_approvals` narrowed to the run, with the
-// mandate ledger when a parked call names one).
+// bytes from `get_run_frame_body` when `?body=` names it) and Cost
+// (`get_run_cost`).
 //
-// Three of the mockup's tabs are not drawn here (§3.6: a slice with no backing
+// Four of the mockup's tabs are not drawn here (§3.6: a slice with no backing
 // has no read at all):
+//   - Policy would be `list_approvals` narrowed to the run, but no approval
+//     row records a run (`agent.approval_requests` carries `message_id`,
+//     `execution_step_id` and `tool_call_id`, none naming `agent_runs` or
+//     `tacho_sessions`; the contract header says so), so the handler answers
+//     every run filter with an empty page. A tab that can only ever say "no
+//     parked calls" is a lie about the record, so it is not drawn until the
+//     linkage exists.
 //   - Proof, and the four-tab set a witness run renders, need `get_run_proof`
 //     and the witness vocabulary; #2955 owns them. The header states that a run
 //     witnessed another, and links no further.
@@ -36,10 +42,9 @@ import { ReadFailure } from "@/ui/read-failure";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
-import { PolicySection, readRunApprovals } from "./policy";
 import { TranscriptSection } from "./transcript";
 
-const TABS = ["transcript", "frames", "cost", "policy"] as const;
+const TABS = ["transcript", "frames", "cost"] as const;
 type Tab = (typeof TABS)[number];
 
 /** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
@@ -137,15 +142,6 @@ export async function Run({
     case "cost":
       section = (
         <CostSection read={await source.runs.cost(ctx, detail.run.id)} />
-      );
-      break;
-    case "policy":
-      section = (
-        <PolicySection
-          read={await readRunApprovals(ctx, source, detail.run.id)}
-          org={place.org}
-          ws={place.ws}
-        />
       );
       break;
   }

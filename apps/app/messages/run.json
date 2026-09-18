@@ -21,8 +21,7 @@
       "label": "Run sections",
       "transcript": "Transcript",
       "frames": "Frames",
-      "cost": "Cost",
-      "policy": "Policy"
+      "cost": "Cost"
     },
     "transcript": {
       "title": "Transcript",
@@ -118,9 +117,6 @@
         "cost": "Cost",
         "tokens": "Tokens"
       }
-    },
-    "policy": {
-      "basis": "These are the calls this run parked for a person. The rules that decided each call, and the auto-approvals in force, are not drawn here yet."
     },
     "commands": {
       "reasonLabel": "Reason",

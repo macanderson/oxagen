@@ -9,7 +9,6 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ApprovalItem } from "@/data/contracts/approvals";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -72,7 +71,6 @@ const DENIED = {
   permission: "run.read",
 } as const;
 const DOWN = readError("frame_store_unreachable", 502);
-const NO_APPROVALS = readOk<ApprovalItem[]>([]);
 
 /** The same workspace seen by an organization Member: `export_run` refuses this role. */
 const memberCtx = unsafeMint(WsCtx, {
@@ -288,7 +286,6 @@ describe("tabs", () => {
     expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
     expect(calls.transcript).toHaveLength(1);
     expect(calls.cost).toHaveLength(0);
-    expect(calls.approvals).toHaveLength(0);
   });
 
   it("reads the transcript by steps when the zoom is not a level (negative)", async () => {
@@ -310,12 +307,17 @@ describe("tabs", () => {
     expect(calls.transcript[0]).toEqual([ctx, "tse_7k2m9q", "turns"]);
   });
 
-  it("opens Transcript for a tab that is not a section (negative)", async () => {
-    await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
-      { tab: "proof" },
-    );
-    expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+  it("opens Transcript for a tab that is not a section, Policy included (negative)", async () => {
+    for (const tab of ["proof", "policy"]) {
+      cleanup();
+      const { calls } = await renderRun(
+        { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+        { tab },
+      );
+      expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
+      expect(calls.approvals).toHaveLength(0);
+    }
+    expect(screen.queryByRole("link", { name: "Policy" })).toBeNull();
   });
 });
 
@@ -673,23 +675,6 @@ describe("cost", () => {
       "A zero here would be a measurement",
     );
     expect(screen.queryByTestId("cost-model-row")).toBeNull();
-  });
-});
-
-describe("policy", () => {
-  it("reads the approvals of this run alone and makes no mandate read when none is named", async () => {
-    const { calls, container } = await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript()),
-        approvals: NO_APPROVALS,
-      },
-      { tab: "policy" },
-    );
-    expect(calls.approvals[0]).toEqual([ctx, { runId: "tse_7k2m9q" }]);
-    expect(calls.mandates).toHaveLength(0);
-    expect(screen.getByRole("region", { name: "Approvals" })).toBeTruthy();
-    await expectNoAxe(container);
   });
 });
 

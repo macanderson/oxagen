@@ -2,8 +2,6 @@
 // detail read, its frames, the cost rollup, a transcript, and a DataSource
 // that answers the Run page's reads with what a test hands it. Importable from
 // tests only (`testOnlyTarget` in src/test/arch/layers.ts).
-import type { ApprovalItem } from "@/data/contracts/approvals";
-import type { MandateList } from "@/data/contracts/mandates";
 import type {
   RunCost,
   RunDetail,
@@ -175,10 +173,6 @@ type RunReads = {
   frameBody?: Read<RunFrameBody>;
   /** Only read when the Transcript tab is open; refused when absent. */
   transcript?: Read<RunTranscript>;
-  /** Only read when the Policy tab is open; refused when absent. */
-  approvals?: Read<ApprovalItem[]>;
-  /** Only read when a parked call names a mandate; refused when absent. */
-  mandates?: Read<MandateList>;
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -188,15 +182,14 @@ export function runSource(reads: RunReads) {
     frameBody: unknown[][];
     cost: unknown[][];
     transcript: unknown[][];
+    /** The Run page reads no approvals: the store records no run on one. */
     approvals: unknown[][];
-    mandates: unknown[][];
   } = {
     get: [],
     frameBody: [],
     cost: [],
     transcript: [],
     approvals: [],
-    mandates: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -220,7 +213,7 @@ export function runSource(reads: RunReads) {
       cost: answer("cost", reads.cost),
       transcript: answer("transcript", reads.transcript),
     },
-    approvals: { pending: answer("approvals", reads.approvals) },
+    approvals: { pending: answer("approvals", undefined) },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     billing: {
       plan: refuse,
@@ -245,7 +238,7 @@ export function runSource(reads: RunReads) {
       workspaces: refuse,
       apiKeys: refuse,
     },
-    mandates: { list: answer("mandates", reads.mandates) },
+    mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

@@ -77,7 +77,7 @@ export const runTranscriptGet = registerCapability({
     "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies, with the cost each entry folds.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
