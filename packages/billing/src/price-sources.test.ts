@@ -10,6 +10,7 @@ import {
   parseOpenRouterCatalog,
   seedsFromPublishedPrices,
   type FetchLike,
+  type PriceSourceId,
   type PublishedModelPrice,
 } from "./price-sources";
 import {
