@@ -305,12 +305,18 @@ export async function deepen(
  * entry is in the index, so every diff against a commit reads it as present
  * and unchanged, and `status` says nothing, while the file is not on disk.
  * `ls-files -t` marks such an entry `S`.
+ *
+ * A failure here throws. This probe is the only check that sees a governed
+ * file a sparse checkout left off disk; answering "none" on a timeout or a
+ * corrupt index let the verdict read `current` with those records absent,
+ * so the caller's comparison guard turns the failure into `unknown` and
+ * says why.
  */
 export async function skipWorktreePaths(
   ctx: GitContext,
   pathspecs: readonly string[],
 ): Promise<string[]> {
-  const raw = await gitOrNull(ctx, "ls-files", "-t", "-z", "--", ...pathspecs);
+  const raw = await git(ctx, "ls-files", "-t", "-z", "--", ...pathspecs);
   if (!raw) return [];
   const out: string[] = [];
   for (const entry of raw.split("\0")) {

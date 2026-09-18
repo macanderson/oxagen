@@ -37,7 +37,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, join, parse as parsePath } from "node:path";
+import { dirname, join, normalize, parse as parsePath } from "node:path";
 import {
   checkSteeringFreshness,
   evaluateGate,
@@ -81,9 +81,14 @@ export function findProjectRoot(start: string): string {
   // checkout's, and the gate then read that workspace, compared that
   // repository, and could block or sync it while the agent was working in the
   // inner one. The outer checkout is a different repository, full stop.
-  const gitRoot = gitRootOr(start);
-  // git answers with the real path; `start` may reach the same directory
-  // through a symlink (`/tmp` on macOS), and the two must compare equal.
+  // Both ends of the comparison go through the same path function. git
+  // answers with the real path, and `start` may reach the same directory
+  // through a symlink (`/tmp` on macOS); on Git for Windows git's answer is
+  // slash-separated while `dirname` produces backslashes, so an unnormalised
+  // root never matched, the walk never stopped, and a nested repository
+  // found the outer checkout's `.oxagen/` after all.
+  const rawGitRoot = gitRootOr(start);
+  const gitRoot = rawGitRoot === null ? null : realpathOr(rawGitRoot);
   const from = realpathOr(start);
   // Outside a repository there is no root to stop at, and the old behaviour
   // (walk to the filesystem root, fall back to where we started) stands.
@@ -113,7 +118,7 @@ function realpathOr(path: string): string {
   try {
     return realpathSync(path);
   } catch {
-    return path;
+    return normalize(path);
   }
 }
 

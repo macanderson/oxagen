@@ -776,6 +776,19 @@ describe("checkSteeringFreshness, governed files excluded from the working tree"
     expect(v.notes.join(" ")).toContain("could not compare");
   });
 
+  // The probe is the only check that sees a record a sparse checkout left
+  // off disk. Reading its failure as "none skipped" let the verdict say
+  // `current` with those records absent.
+  it("is unknown when the skip-worktree probe fails", async () => {
+    const v = await check({
+      ...table(),
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+        new Error("index file corrupt"),
+    });
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("could not compare");
+  });
+
   // Excluded records are outstanding alongside whatever else production
   // changed, so one sync puts everything on disk rather than two.
   it("names excluded records next to the other outstanding ones", async () => {
