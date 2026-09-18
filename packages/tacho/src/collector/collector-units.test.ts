@@ -582,7 +582,9 @@ describe("shipper", () => {
     );
     await s.drain();
 
-    expect(sent).toEqual([bodyOf(first as { event_id_idem: string }, "ship it")]);
+    expect(sent).toEqual([
+      bodyOf(first as { event_id_idem: string }, "ship it"),
+    ]);
     // Acknowledged means settled. Holding the prompt text on the machine
     // after that is holding it for nothing.
     expect(store.stats()).toEqual({ bodies: 0, bytes: 0 });
@@ -621,8 +623,7 @@ describe("shipper", () => {
 
     expect(
       logs.some(
-        (l) =>
-          l.includes(first.event_id_idem) && l.includes("digest_mismatch"),
+        (l) => l.includes(first.event_id_idem) && l.includes("digest_mismatch"),
       ),
     ).toBe(true);
     expect(store.stats().bodies).toBe(0);
@@ -683,6 +684,55 @@ describe("shipper", () => {
     // oversized event got through.
     expect(wal.stats().unshipped).toBe(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  it("quarantines an event too large for any request without sending it", async () => {
+    // The 413 branch only helps when the refusal arrives as a clean 413. A
+    // proxy that resets the connection on a large body reads as unreachable,
+    // which is retried for ever. The host can measure the frame itself, so
+    // it never sends one it knows will be refused.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const huge = {
+      ...events[1],
+      attrs: { blob: "A".repeat(1_000_000) },
+    } as (typeof events)[number];
+    wal.append([events[0], huge, ...events.slice(2)] as typeof events);
+
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.seq === huge.seq))
+            throw new ControlUnreachable(new Error("ECONNRESET"));
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+
+    expect(result.quarantined).toBe(1);
+    expect(result.shipped).toBe(events.length - 1);
+    expect(wal.stats().unshipped).toBe(0);
+    expect(
+      logs.some((l) => l.includes(`#${huge.seq}`) && l.includes("bytes")),
+    ).toBe(true);
+  });
+
+  it("sets aside a head event whose frame alone overflows a request", async () => {
+    const events = minimalSession();
+    const huge = {
+      ...events[0],
+      attrs: { blob: "A".repeat(1_000_000) },
+    } as (typeof events)[number];
+    const fitted = fitRequest([huge, ...events.slice(1)], []);
+
+    expect(fitted.tooLarge.map((t) => t.event)).toEqual([huge]);
+    expect(fitted.tooLarge[0]?.bytes).toBeGreaterThan(1_000_000);
+    expect(fitted.batch).toEqual(events.slice(1));
   });
 
   it("trims a request to what the route will accept, and ships the rest next time", async () => {

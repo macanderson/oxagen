@@ -69,21 +69,34 @@ export interface ShipperOptions {
  */
 const MAX_REQUEST_BYTES = 900_000;
 
-/** What one request will carry, and the bodies that will never fit in any. */
+/** An event whose frame alone overflows a request, with its size. */
+export interface TooLargeEvent {
+  event: TachoEvent;
+  bytes: number;
+}
+
+/** What one request will carry, and what will never fit in any. */
 interface FittedRequest {
   batch: TachoEvent[];
   bodies: TachoBody[];
   /** Event ids whose body alone overflows a request. */
   oversized: string[];
+  /**
+   * Events at the head of the queue whose frame alone overflows a request.
+   * Sending one would only earn a 413, or a reset connection from a proxy
+   * that reads as unreachable and is retried for ever.
+   */
+  tooLarge: TooLargeEvent[];
 }
 
 /**
  * Trim a batch and its bodies to what one request can hold.
  *
  * Events keep their order and the remainder ships on the next drain, so
- * nothing is lost by shipping fewer. The first event always ships, with its
- * body only if it fits: a batch of none would not advance the WAL, which is
- * the wedge this exists to avoid.
+ * nothing is lost by shipping fewer. The first event that fits always ships,
+ * with its body only if the body fits too. A head event whose frame alone is
+ * over the budget goes to `tooLarge` for the caller to quarantine. Either way
+ * the WAL head advances, which is the wedge this exists to avoid.
  */
 export function fitRequest(
   events: readonly TachoEvent[],
@@ -93,10 +106,18 @@ export function fitRequest(
   const batch: TachoEvent[] = [];
   const bodies: TachoBody[] = [];
   const oversized: string[] = [];
+  const tooLarge: TooLargeEvent[] = [];
   let used = 0;
   for (const event of events) {
     const body = bodyFor.get(event.event_id_idem);
     const eventBytes = Buffer.byteLength(JSON.stringify(event), "utf8");
+    if (batch.length === 0 && eventBytes > MAX_REQUEST_BYTES) {
+      // No request can carry this frame, with or without its body. A later
+      // event over the budget stops the batch below and reaches the head on
+      // the next drain, so events leave the WAL in order.
+      tooLarge.push({ event, bytes: eventBytes });
+      continue;
+    }
     const bodyBytes =
       body === undefined
         ? 0
@@ -115,7 +136,7 @@ export function fitRequest(
     used += eventBytes + bodyBytes;
     if (body !== undefined) bodies.push(body);
   }
-  return { batch, bodies, oversized };
+  return { batch, bodies, oversized, tooLarge };
 }
 
 export interface ShipResult {
@@ -303,7 +324,7 @@ export class Shipper {
         full.map((event) => event.event_id_idem),
         this.options.retention?.(),
       ) ?? [];
-    const { batch, bodies, oversized } = fitRequest(full, held);
+    const { batch, bodies, oversized, tooLarge } = fitRequest(full, held);
     const ids = batch.map((event) => event.event_id_idem);
     // A body no request can carry is dropped rather than held: it would be
     // offered on every drain and refused on every drain.
@@ -313,6 +334,34 @@ export class Shipper {
         `dropped ${oversized.length} body(ies) too large for one request`,
       );
     }
+    // An event no request can carry is quarantined here, before it is sent.
+    // The host already knows the answer, and the 413 branch below only helps
+    // when the refusal arrives as a clean 413.
+    for (const { event, bytes } of tooLarge) {
+      this.quarantine(
+        event,
+        `event is ${bytes} bytes; one request carries at most ${MAX_REQUEST_BYTES}`,
+      );
+    }
+    if (tooLarge.length > 0)
+      this.options.bodies?.drop(
+        tooLarge.map(({ event }) => event.event_id_idem),
+      );
+    if (batch.length === 0)
+      return {
+        shipped: 0,
+        quarantined: tooLarge.length,
+        reachable: this.reachable,
+      };
+    const sent = await this.sendBatch(batch, bodies, ids);
+    return { ...sent, quarantined: sent.quarantined + tooLarge.length };
+  }
+
+  private async sendBatch(
+    batch: TachoEvent[],
+    bodies: TachoBody[],
+    ids: string[],
+  ): Promise<ShipResult> {
     try {
       const response = await this.options.client.ingest(
         batch,
@@ -367,7 +416,7 @@ export class Shipper {
           reachable: left.reachable && right.reachable,
         };
       }
-      // 401/403 (revoked or denied key), 413, 429, 5xx: keep the batch, back off.
+      // 401/403 (revoked or denied key), 429, 5xx: keep the batch, back off.
       this.fail(error);
       this.options.log(`ingest failed: ${this.lastError ?? "unknown"}`);
       return {
