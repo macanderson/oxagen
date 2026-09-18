@@ -172,3 +172,9 @@ Three gaps stay open and are named here rather than left to be discovered:
   before the body is built and is fail-closed by design. An unserialisable
   model request loses only its body. The asymmetry is deliberate: a tool call
   nobody can attribute should not run.
+- `model.engine_call_completed` has no `turn_index`, because the assistant
+  tracks an engine sequence rather than a turn. So an assistant run's seal
+  rollup reports `turns: null` and its `turns` zoom folds on the run's
+  boundaries instead of on an index. Giving the assistant a turn index is a
+  schema addition and a change to what the engine reports, not a reader fix,
+  so it is left for whoever needs the count.

@@ -2568,20 +2568,26 @@ describe("the seal's rollup", () => {
       {
         ...modelRow(1, 0),
         event_type: "model.engine_call_completed",
+        // The engine event's schema has no `turn_index`, so the assistant
+        // writes none. `turns` reads null for the same reason an encrypted
+        // model call makes it null: the count is not knowable from the rows.
+        payload_inline: { model_call_id: "mc_1" },
       },
       {
         ...modelRow(2, 1),
         event_type: "model.engine_call_completed",
+        payload_inline: { model_call_id: "mc_2" },
       },
       {
         ...modelRow(3, 0),
         event_type: "tool.engine_call_completed",
+        payload_inline: { tool_call_id: "tc_1" },
       },
     ];
     expect(deriveSealRollup(rows)).toEqual({
       modelCalls: 2,
       toolCalls: 1,
-      turns: 2,
+      turns: null,
     });
   });
 

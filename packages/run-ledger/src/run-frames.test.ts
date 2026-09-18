@@ -368,3 +368,35 @@ describe("the steps zoom on a run the in-app assistant recorded", () => {
     ]);
   });
 });
+
+describe("a frame's summary and identity on a run the assistant recorded", () => {
+  const modelFrame = ledgerFrame(
+    event(1, "model.engine_call_completed", {
+      model_call_id: "prov-1-0",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+    }),
+  );
+  const toolFrame = ledgerFrame(
+    event(2, "tool.engine_call_completed", {
+      tool_call_id: "tool-1-0",
+      tool_name: "search_tools",
+      outcome: "completed",
+    }),
+  );
+
+  it("names the model and the tool instead of falling through to the event type", () => {
+    expect(modelFrame.summary).toBe("oxagen/anthropic/claude-sonnet-4");
+    expect(modelFrame.identity.model).toBe("oxagen/anthropic/claude-sonnet-4");
+    // The engine event calls it `tool_name` where the ledger's own event
+    // calls it `capability_name`; both read.
+    expect(toolFrame.summary).toBe("search_tools completed");
+    expect(toolFrame.identity.tool).toBe("search_tools");
+    expect(toolFrame.identity.toolStatus).toBe("completed");
+  });
+
+  it("reads no turn index, because the engine event carries none", () => {
+    expect(modelFrame.turnIndex).toBeNull();
+  });
+});
