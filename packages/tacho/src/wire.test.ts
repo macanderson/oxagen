@@ -4,6 +4,7 @@ import {
   controlEnvelopeSchema,
   ingestResponseSchema,
   tachoBatchSchema,
+  TACHO_BATCH_SCHEMA,
 } from "./wire";
 import { minimalSession } from "./test-helpers";
 
@@ -101,7 +102,7 @@ describe("what this host sends", () => {
     // the wrong reason while the strictness regression went unnoticed. The
     // unknown key has to be the only thing wrong with it.
     const batch = {
-      schema: "oxagen.tacho.batch.v1",
+      schema: TACHO_BATCH_SCHEMA,
       host_enrollment_id: "tch_0123456789abcdefghijkl",
       events: minimalSession(),
     };
