@@ -53,6 +53,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "developer",
   "governance",
   "members",
+  "model-funding",
   "new-workspace",
   "register",
   "roles",

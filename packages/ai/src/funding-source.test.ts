@@ -24,6 +24,8 @@ const STORED = {
   apiKey: "sk-or-v1-customer-secret",
   digest: "sha256:abc",
   keyHint: "cret",
+  baseUrl: null,
+  modelMap: {},
 };
 
 beforeEach(() => {
@@ -49,6 +51,8 @@ describe("resolveModelFundingSource", () => {
         provider: "openrouter",
         apiKey: "sk-or-v1-customer-secret",
         digest: "sha256:abc",
+        baseUrl: null,
+        modelMap: {},
       },
       keyHint: "cret",
     });
@@ -58,6 +62,8 @@ describe("resolveModelFundingSource", () => {
     mocks.loadModelCredential.mockResolvedValue(STORED);
     const source = await resolveModelFundingSource(ORG);
     if (source.fundedBy !== "org") throw new Error("expected org funding");
+    // The endpoint and the per-tier models travel with the key: the factory
+    // needs them to build the provider. The orgId and the hint do not.
     expect(Object.keys(source.credential).sort()).toEqual([
       "apiKey",
       "baseUrl",
