@@ -66,6 +66,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Run } = await import("./run");
+const { RunLoading } = await import("./loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -1103,5 +1104,19 @@ describe("cost", () => {
       "steps",
     ]);
     expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
+  });
+});
+
+describe("loading", () => {
+  it("replaces the page body with a skeleton shaped like the answer, and never the shell", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <RunLoading />
+      </IntlProvider>,
+    );
+    const loading = screen.getByRole("status");
+    expect(loading).toHaveAttribute("aria-busy", "true");
+    expect(loading).toHaveTextContent("Loading this run");
+    await expectNoAxe(container);
   });
 });
