@@ -49,16 +49,23 @@ describe("the hook-removal detector", () => {
     ]);
   });
 
-  it("seals nothing until the transcript scan has returned", async () => {
+  it("records hook seals before the transcript scan awaits", async () => {
     const d = detector();
-    const host = (d as unknown as { deps: { hostRecorder: () => { chainCursor: { seq: number } } } }).deps.hostRecorder();
+    const host = (
+      d as unknown as {
+        deps: { hostRecorder: () => { chainCursor: { seq: number } } };
+      }
+    ).deps.hostRecorder();
     const before = host.chainCursor.seq;
-    const pass = d.tick();
-    // Nothing is on the host chain while the scan is still in flight, so no
-    // other caller can seal a later sequence that reaches the WAL first.
-    expect(host.chainCursor.seq).toBe(before);
-    expect((await pass).map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
+    const recordedLengths: number[] = [];
+    // Hooks are sealed and handed to `record` before the scan yields, so they
+    // reach the WAL ahead of any model or gateway call sealed during the wait.
+    const pass = d.tick((events) => {
+      recordedLengths.push(events.length);
+    });
     expect(host.chainCursor.seq).toBe(before + 1);
+    expect(recordedLengths).toEqual([1]);
+    expect((await pass).map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
   });
 
   it("says nothing on a host that never hooked Claude Code, and notices when that changes", async () => {
