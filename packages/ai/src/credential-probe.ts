@@ -32,7 +32,16 @@
  * connects to `169.254.169.254` with the key attached has already leaked
  * whatever it was going to leak by the time it could refuse.
  */
+import { fetchWithoutRedirects } from "@oxagen/config/public-url";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
+
+/**
+ * Every probe request goes out through this. The URL was checked by the
+ * handler, but a redirect target is a URL nobody checked, so none is
+ * followed: a 3xx is refused with its `Location` named, and the refusal
+ * reaches the operator through `fail` like any other transport error.
+ */
+const probeFetch = fetchWithoutRedirects({ refusing: "Refusing to test" });
 
 /** The vendors a key can be checked against — the `provider` column's CHECK. */
 export type CredentialProbeProvider = ModelCredentialProvider;
@@ -183,7 +192,7 @@ async function probeToolCalling(
   apiKey: string,
   model: string,
 ): Promise<{ supported: boolean; message: string | null }> {
-  const response = await fetch(endpointUrl(baseUrl, "chat/completions"), {
+  const response = await probeFetch(endpointUrl(baseUrl, "chat/completions"), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -241,7 +250,7 @@ export async function probeModelCredential(
   if (!url) return fail("an openai_compatible credential needs a base URL");
 
   try {
-    const response = await fetch(url, {
+    const response = await probeFetch(url, {
       method: "GET",
       headers: authHeaders(provider, apiKey),
       signal: AbortSignal.timeout(CREDENTIAL_PROBE_TIMEOUT_MS),
