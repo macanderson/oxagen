@@ -654,7 +654,13 @@ export async function listRunsAwaitingRollup(args: {
   });
 }
 
-/** The workspaces that have run rows starting on `day`. */
+/** One row of {@link listRunsWithIncompleteCost}, and the cursor for the page after it. */
+export interface IncompleteCostRun {
+  runId: string;
+  /** RFC 3339, millisecond precision. */
+  startedAt: string;
+}
+
 /**
  * Rolled-up runs whose cost is incomplete: `cost_basis` null (no frame
  * priced at all) or `estimated` (some class had no price). Oldest first.
@@ -666,23 +672,44 @@ export async function listRunsAwaitingRollup(args: {
  * sync, and a sync that ran with a catalog down leaves that catalog's models
  * unpriced until it recovers, so without this their cost stayed blank for
  * ever.
+ *
+ * `after` is the last row of the previous page. A run whose model no source
+ * prices stays incomplete after its rebuild, so a caller that re-read the
+ * head of the list would see the same rows again and never reach the rest.
+ * The cursor compares at millisecond precision because it travels as an ISO
+ * string, which drops the microseconds Postgres keeps.
  */
 export async function listRunsWithIncompleteCost(args: {
   limit: number;
-}): Promise<string[]> {
+  after?: IncompleteCostRun;
+}): Promise<IncompleteCostRun[]> {
+  const startedMs = sql<Date>`date_trunc('milliseconds', ${totals.startedAt})`;
+  const incomplete = or(
+    isNull(totals.costBasis),
+    eq(totals.costBasis, "estimated"),
+  );
   return withSystemDb(async (tx) => {
     const rows = await tx
-      .select({ runId: totals.runId })
+      .select({ runId: totals.runId, startedAt: totals.startedAt })
       .from(totals)
       .where(
-        or(isNull(totals.costBasis), eq(totals.costBasis, "estimated")),
+        args.after
+          ? and(
+              incomplete,
+              sql`(${startedMs}, ${totals.runId}) > (${args.after.startedAt}::timestamptz, ${args.after.runId})`,
+            )
+          : incomplete,
       )
-      .orderBy(asc(totals.startedAt))
+      .orderBy(asc(startedMs), asc(totals.runId))
       .limit(args.limit);
-    return rows.map((r) => r.runId);
+    return rows.map((r) => ({
+      runId: r.runId,
+      startedAt: r.startedAt.toISOString(),
+    }));
   });
 }
 
+/** The workspaces that have run rows starting on `day`. */
 export async function listWorkspacesWithRuns(args: {
   day: string;
 }): Promise<{ orgId: string; workspaceId: string }[]> {
