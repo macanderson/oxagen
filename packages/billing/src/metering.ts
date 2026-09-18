@@ -194,11 +194,14 @@ export async function assertCanStartTurn(
  * `action-metering.ts`, driven from the kernel's usage recorder.
  *
  * ADR-053 §3 amends that for exactly one case: tokens the in-app agent spent on
- * the PLATFORM key are a cost Oxagen did bear, and are billed back at vendor
- * cost plus the published markup under `consume_assistant_tokens`. Every
- * surviving caller of the charge path is gated on `fundedBy === "platform"`,
- * which is why {@link resolveMeterMarkup} still exists — it is the ADR-053
- * markup now, and it has no other charging caller. Inputs are exactly what providers bill on — tokens in/out for text,
+ * the PLATFORM key are a cost Oxagen did bear, and are billed back under
+ * `consume_assistant_tokens`. The 2026-09-18 amendment sets that reason's
+ * markup to exactly 1 (cost, no margin), so {@link chargeCostUsd} special-cases
+ * it below rather than reading {@link resolveMeterMarkup}. Platform-paid
+ * embeddings (`consume_embedding`, ingestion and recall) are a separate line
+ * the amendment did not touch and still carry the solved blended markup, which
+ * is why `resolveMeterMarkup` is still live and still has a real caller.
+ * Inputs are exactly what providers bill on — tokens in/out for text,
  * images/seconds for media — so the meter matches the real invoice.
  *
  * Text, image, and video all funnel through one DB-charging chokepoint
@@ -300,6 +303,16 @@ export interface ChargeUsageResult {
  * Instrumentation: logs orgId, model, costUsdMicros, creditsMetered/charged,
  * shortfall, durationMs, plus any modality-specific `logFields`, on every call.
  */
+/**
+ * The markup on `consume_assistant_tokens` (ADR-053 §3, amended 2026-09-18):
+ * the platform key's cost, passed through exactly. Set once, here, rather
+ * than left as a literal in {@link chargeCostUsd}'s branch, so
+ * `metering.test.ts` can assert on the number rather than on the absence of a
+ * multiplier. A markup silently reintroduced would otherwise pass every test
+ * that only checks "some markup applied," which a value of 1 also satisfies.
+ */
+export const ASSISTANT_TOKEN_MARKUP = 1;
+
 async function chargeCostUsd(params: {
   orgId: string;
   model: string;
@@ -338,11 +351,32 @@ async function chargeCostUsd(params: {
     );
   }
   // Meter in micro-credits and let consumeCredits carry the fraction, so a call
-  // worth less than a credit is not rounded up to one (#1413).
-  const microCredits = microCreditsForCostUsd(
-    params.costUsd,
-    params.markup ?? resolveMeterMarkup(),
-  );
+  // worth less than a credit is not rounded up to one (#1413). consumeCredits
+  // banks that fraction under THIS `reason` and no other, which is what keeps
+  // the markup chosen below from leaking across product lines: a pooled carry
+  // debited whichever reason happened to cross the whole-credit boundary, so a
+  // marked-up embedding fraction could be billed as an at-cost assistant turn.
+  //
+  // The markup is picked by REASON, not by caller: an explicit override
+  // (tests, dry-run) still wins over both, but absent one, assistant tokens
+  // are exactly ASSISTANT_TOKEN_MARKUP (1, cost with no margin) and everything
+  // else on this chokepoint (today, only consume_embedding) keeps the solved
+  // blended markup. Branching on the reason here, in the one function every
+  // charge funnels through, is what makes "assistant tokens bill at cost"
+  // true regardless of which caller reaches this line.
+  //
+  // Resolved lazily, behind the override: `resolveMeterMarkup()` reads
+  // OXAGEN_METER_MARKUP through requireEnv and falls back to the margin solve,
+  // either of which throws on absent or invalid meter configuration. A caller
+  // that supplies its own markup (a test, a dry run) must not be made to
+  // depend on that configuration, which is why the override is checked first
+  // rather than after both branches have already run.
+  const markup =
+    params.markup ??
+    (params.reason === CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS
+      ? ASSISTANT_TOKEN_MARKUP
+      : resolveMeterMarkup());
+  const microCredits = microCreditsForCostUsd(params.costUsd, markup);
   if (microCredits <= 0n) {
     logger.debug(
       {
