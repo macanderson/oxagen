@@ -133,6 +133,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "delete_model_credential": {
+      "route": "/[org]/model-funding",
+      "page": "apps/app/src/app/[org]/model-funding/page.tsx",
+      "entry": "/[org]/model-funding: the surface that invokes delete_model_credential (features/organization/model-funding-actions.ts)",
+      "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-343b879e-byok"
+    },
     "delete_role": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -253,6 +261,14 @@
       "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+    },
+    "get_model_credential": {
+      "route": "/[org]/model-funding",
+      "page": "apps/app/src/app/[org]/model-funding/page.tsx",
+      "entry": "/[org]/model-funding: the surface that invokes get_model_credential (data/live/org.ts, data/live/mappers/org.ts)",
+      "proof": "apps/app/src/features/organization/model-funding.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-343b879e-byok"
     },
     "get_onboarding_state": {
       "route": "/[org]/[ws]/register/[step]",
@@ -650,6 +666,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "set_model_credential": {
+      "route": "/[org]/model-funding",
+      "page": "apps/app/src/app/[org]/model-funding/page.tsx",
+      "entry": "/[org]/model-funding: the surface that invokes set_model_credential (features/organization/model-funding-actions.ts)",
+      "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-343b879e-byok"
+    },
     "set_role_grants": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -715,6 +739,14 @@
       "proof": "apps/app/src/features/organization/workspaces.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "verify_model_credential": {
+      "route": "/[org]/model-funding",
+      "page": "apps/app/src/app/[org]/model-funding/page.tsx",
+      "entry": "/[org]/model-funding: the surface that invokes verify_model_credential (features/organization/model-funding-actions.ts)",
+      "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-343b879e-byok"
     }
   }
 }

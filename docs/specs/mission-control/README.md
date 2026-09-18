@@ -12,11 +12,24 @@ repository. The mockups they render live in a separate repository.
 
 Sources and copies:
 
-- The canonical copies live in `~/Documents/Oxagen/Specs/` under their dated
-  names, and the mockups repository (https://github.com/macanderson/tmp-oxagen-mockups,
-  `docs/`) carries the same files. `mc.html` there (The Ten Pages) is the
-  reference implementation the plan builds from; `w1` to `w13` are the per-flow
-  walkthroughs. When one copy changes, change all three.
+- **The canonical copies are in the roadmap repository**
+  (https://github.com/macanderson/roadmap, formerly `tmp-oxagen-mockups`):
+  `docs/mission-control-spec.md` and `docs/implementation-plan.md`. They are the
+  copies the mockups render, and they carry the maintainer decisions of 2026-09-14
+  and 2026-09-15 that this repository's copies do not have yet. The copies here are
+  carried for build agents. No build step joins the two, so a change is made in
+  both by hand, in the same change set. Each file's header names the sections that
+  are identical in both and the sections that still differ. The dated files in
+  `~/Documents/Oxagen/Specs/` are the 2026-09-11 originals and are no longer
+  canonical.
+- `mockups/missioncontrol.html` in the roadmap repository is the reference
+  implementation the plan builds from, and its scenarios are the per-flow
+  walkthroughs.
+- The review that the 2026-09-18 amendments come from is
+  `docs/audits/2026-09-18-steering-graph-gateway-review.md`. Its decisions are
+  ADR-091 (Phase 0, merged as PR #3289) and ADR-093 to ADR-097 (draft PR #3294).
+  The epic is issue #3295. The order of build is Phase 0 merged, Phase 4 in build,
+  then Phases 1, 2, 3 and 5 (`plan.md` §8).
 - Oxagen Desktop (the installer app) is specified separately in `docs/specs/oxagen-desktop/`.
 - `docs/mission-control/PLAN.md`, `TOOL-MATRIX.md`, and `TRACEABILITY.md` are the
   build-time decision log and traceability over this spec; they do not restate it.

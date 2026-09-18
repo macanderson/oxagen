@@ -25,7 +25,8 @@ type OrganizationTarget =
   | "/{org}"
   | "/{org}/api-keys"
   | "/{org}/audit"
-  | "/{org}/billing";
+  | "/{org}/billing"
+  | "/{org}/model-funding";
 
 type WorkspaceTarget =
   | OrganizationTarget
@@ -72,7 +73,7 @@ export const LEGACY_ROUTES: readonly LegacyRoute[] = [
   { from: "/{org}/workspaces", to: "/{org}" },
   { from: "/{org}/new-workspace", to: "/{org}" },
   { from: "/{org}/settings/general", to: "/{org}" },
-  { from: "/{org}/settings/model-funding", to: "/{org}" },
+  { from: "/{org}/settings/model-funding", to: "/{org}/model-funding" },
   { from: "/{org}/settings/privacy", to: "/{org}" },
   { from: "/{org}/developer", to: "/{org}/api-keys" },
   { from: "/{org}/developer/tokens", to: "/{org}/api-keys" },

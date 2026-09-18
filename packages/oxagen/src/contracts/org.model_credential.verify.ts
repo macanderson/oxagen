@@ -106,7 +106,7 @@ export const orgModelCredentialVerify = registerCapability({
     "Check a model-vendor API key against the vendor. Pass provider and apiKey (and baseUrl plus toolProbeModel for an OpenAI-compatible endpoint) to test a candidate before storing it, or nothing to test the organisation's stored key. Reports whether the vendor accepted it, whether the endpoint can call tools, and the vendor's reason when either fails. Free for the named vendors; an OpenAI-compatible endpoint is asked one forced tool call of at most 16 tokens.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "high",
   defaultEffect: "deny",
