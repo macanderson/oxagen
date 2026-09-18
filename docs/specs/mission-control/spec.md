@@ -1359,7 +1359,7 @@ The wedge ends when Customer 1 is in production, not on a date. M6 produces the 
 ---
 ## 19. Demo Wow! Scenarios
 
-Status: `complete` (2026-09-12, coverage audit, prompt W12).
+Status: `complete` through W12 (2026-09-12, coverage audit, prompt W12). W13 is listed below because it is mocked and was previously missing from a table marked complete; its release status is set by `apps/app/ARCHITECTURE.md`, which wins over this document where the two differ, and which places W13 out of rev1.
 
 Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in `2026-09-11-oxagen-demo-mockup-prompts.md`, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.
 
@@ -1377,6 +1377,7 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 | W10 | The CIO's console: who can do what, where data lives, what happened, what can be proven, behind the firewall | Organization, Audit | [The CIO's console](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23) | mocked |
 | W11 | Configuration is a conversation: the assistant acts through the same governed actions, with receipts | Assistant panel (all pages), Account dialog, notifications, command menu | [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b) | mocked |
 | W12 | Coverage audit: every page and state mocked | all | [W12 audit](https://claude.ai/code/artifact/45c5e3f9-82f0-404e-ad69-b3279d84c649), [The Ten Pages](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) | mocked |
+| W13 | In the loop: the skills scenario — skills off by default, resolution as config, and a run interjected before the first model call | Skills (mocked tabs), skills-off gate, Run (interjected), Fleet (interjection banner) | [W13 scenario](https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md) | mocked; **out of rev1** — `apps/app/ARCHITECTURE.md` (2026-09-15) ships only the observed-inventory Skills read and keeps resolution, `search_skills`, interjection and reflection out |
 
 **Page coverage.** Every row must carry at least one link before the section is complete.
 
