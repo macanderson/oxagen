@@ -209,12 +209,13 @@ export const TranscriptBody = z.object({
 export type TranscriptBody = z.infer<typeof TranscriptBody>;
 
 /** A decision a rule or a person made about the call the entry records. */
-const TranscriptDecision = z.object({
+export const TranscriptDecision = z.object({
   seq: z.string().regex(/^\d+$/),
   decision: z.string(),
   type: z.string(),
   at: z.iso.datetime({ offset: true }),
 });
+export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */

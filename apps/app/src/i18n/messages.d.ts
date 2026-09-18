@@ -1729,6 +1729,9 @@ type Messages = {
       pageFailed: string;
       followLost: string;
       followSealed: string;
+      request: string;
+      response: string;
+      decision: string;
     };
     frames: {
       title: string;

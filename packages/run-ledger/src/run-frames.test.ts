@@ -8,6 +8,7 @@ import {
   frameKinds,
   ledgerFrame,
   type RunFrame,
+  stepKind,
   tachoFrame,
   tachoStage,
   tachoTimestamp,
@@ -475,5 +476,108 @@ describe("frameKinds and filterFramesByKind", () => {
     expect(
       filterFramesByKind(frames, ["prompt", "recall"]).map((f) => f.seq),
     ).toEqual(["1", "5"]);
+  });
+});
+
+describe("the steps zoom on a run the in-app assistant recorded", () => {
+  // The assistant writes `model.engine_call_completed` and
+  // `tool.engine_call_completed`, and it is the only ledger producer in the
+  // tree. This list named neither, so every one of its runs folded into a
+  // single `frame` entry however many calls it made.
+  const assistant = [
+    ledgerFrame(
+      event(1, "admission.run_admitted", {
+        engine_name: "stella",
+        engine_version: "1",
+      }),
+    ),
+    ledgerFrame(
+      event(2, "model.engine_call_started", { model_call_id: "prov-1-0" }),
+    ),
+    ledgerFrame(
+      event(3, "model.engine_call_completed", {
+        model_call_id: "prov-1-0",
+        turn_index: 0,
+      }),
+    ),
+    ledgerFrame(
+      event(4, "tool.engine_call_started", { tool_call_id: "tool-1-0" }),
+    ),
+    ledgerFrame(
+      event(5, "tool.engine_call_completed", {
+        tool_call_id: "tool-1-0",
+        outcome: "completed",
+      }),
+    ),
+  ];
+
+  it("opens a step at its intention and closes it at the completion, so both halves are one entry", () => {
+    expect(
+      foldTranscript(assistant, "steps").map((f) => [
+        f.opening.seq,
+        f.endSeq,
+        f.kind,
+        f.frames,
+      ]),
+    ).toEqual([
+      ["1", "1", "frame", 1],
+      ["2", "3", "model_call", 2],
+      ["4", "5", "tool_call", 2],
+    ]);
+  });
+
+  it("puts each call's request on the same entry as its result", () => {
+    // Why the intention opens the step rather than folding into what came
+    // before it: the entry carries `request` and `response`, and the request
+    // is on the intention. Folding intentions into the preceding entry put
+    // the model call's prompt in the entry before it and the tool call's
+    // input inside the MODEL step — each call's request stranded away from
+    // the call it belongs to. An intention is still not a step of its own;
+    // it is the frame its step opens on.
+    const [, model, tool] = foldTranscript(assistant, "steps");
+    expect([model?.request?.seq, model?.response?.seq]).toEqual(["2", "3"]);
+    expect([tool?.request?.seq, tool?.response?.seq]).toEqual(["4", "5"]);
+  });
+
+  it("names the step kind of both halves of each call", () => {
+    expect(assistant.map((f) => stepKind(f))).toEqual([
+      null,
+      "model_call",
+      "model_call",
+      "tool_call",
+      "tool_call",
+    ]);
+  });
+});
+
+describe("a frame's summary and identity on a run the assistant recorded", () => {
+  const modelFrame = ledgerFrame(
+    event(1, "model.engine_call_completed", {
+      model_call_id: "prov-1-0",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+    }),
+  );
+  const toolFrame = ledgerFrame(
+    event(2, "tool.engine_call_completed", {
+      tool_call_id: "tool-1-0",
+      tool_name: "search_tools",
+      outcome: "completed",
+    }),
+  );
+
+  it("names the model and the tool instead of falling through to the event type", () => {
+    expect(modelFrame.summary).toBe("oxagen/anthropic/claude-sonnet-4");
+    expect(modelFrame.identity.model).toBe("oxagen/anthropic/claude-sonnet-4");
+    // The engine event calls it `tool_name` where the ledger's own event
+    // calls it `capability_name`; both read.
+    expect(toolFrame.summary).toBe("search_tools completed");
+    expect(toolFrame.identity.tool).toBe("search_tools");
+    expect(toolFrame.identity.toolStatus).toBe("completed");
+  });
+
+  it("reads no turn index, because the engine event carries none", () => {
+    expect(modelFrame.turnIndex).toBeNull();
   });
 });

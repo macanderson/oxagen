@@ -15,6 +15,12 @@
  * transcript entry shows is fetched by the caller for the frames the fold
  * names, and folded in with `withText`.
  */
+import {
+  MODEL_CALL_EVENT_TYPES,
+  type RunStepKind,
+  stepKindOfEventType,
+  TOOL_CALL_EVENT_TYPES,
+} from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import {
@@ -113,70 +119,90 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const frames = field(p, "frame_count");
       return frames ? `frames=${frames}` : event.eventType;
     }
-    case "model.call_completed":
-    case "model.engine_call_started":
-    case "model.engine_call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return provider && model ? `${provider}/${model}` : event.eventType;
-    }
-    case "tool.call_completed": {
-      const capability = field(p, "capability_name");
-      const outcome = field(p, "outcome");
-      return capability && outcome
-        ? `${capability} ${outcome}`
-        : event.eventType;
-    }
-    case "tool.engine_call_started":
-    case "tool.engine_call_completed": {
-      // The engine's own halves name the tool `tool_name`, not
-      // `capability_name`; reading only the latter left every in-app tool
-      // call labelled with its bare event type.
-      const tool = field(p, "tool_name");
-      const outcome = field(p, "outcome");
-      if (!tool) return event.eventType;
-      return outcome ? `${tool} ${outcome}` : tool;
-    }
     default:
-      return event.eventType;
+      // Both spellings of each call, and both spellings of the tool's name:
+      // the ledger's own event calls it `capability_name`, the assistant's
+      // engine event calls it `tool_name`. Read through the registry rather
+      // than another literal case, because a summary that falls through to
+      // the raw event type is what the transcript showed for every run the
+      // assistant recorded.
+      switch (ledgerStepKind(event.eventType)) {
+        case "model_call": {
+          const provider = field(p, "provider");
+          const model = field(p, "model");
+          return provider && model ? `${provider}/${model}` : event.eventType;
+        }
+        case "tool_call": {
+          const tool = toolNameOf(p);
+          const outcome = field(p, "outcome");
+          if (tool && outcome) return `${tool} ${outcome}`;
+          // An intention has no outcome by design — it is the frame that says
+          // a call is about to happen — so its tool name is the whole truth
+          // about it, and a paired step takes its label from it. A RECEIPT
+          // with no outcome is malformed, and falls through to its bare type
+          // rather than reading as a call that did something.
+          return tool && isIntention(event.eventType) ? tool : event.eventType;
+        }
+        default:
+          return event.eventType;
+      }
   }
+}
+
+/**
+ * The two write-ahead intentions and the step each opens.
+ *
+ * The registry gives a `step` only to the frame that COMPLETES a call, because
+ * counting an intention there would report every call twice. A transcript asks
+ * which frame OPENS the exchange, and that is the intention — it carries the
+ * request. Naming them here keeps both answers right without widening the
+ * registry and double-counting every run's steps.
+ */
+const INTENTION_STEP_KIND: Readonly<Record<string, RunStepKind>> = {
+  "model.engine_call_started": "model_call",
+  "tool.engine_call_started": "tool_call",
+};
+
+/** The step an event belongs to, the intention that opens it included. */
+function ledgerStepKind(eventType: string): RunStepKind | null {
+  return (
+    stepKindOfEventType(eventType) ?? INTENTION_STEP_KIND[eventType] ?? null
+  );
+}
+
+/** Is this the write-ahead frame of a call, rather than its receipt? */
+function isIntention(eventType: string): boolean {
+  return Object.hasOwn(INTENTION_STEP_KIND, eventType);
+}
+
+/** The called tool, under either payload's name for it. */
+function toolNameOf(payload: unknown): string | null {
+  return field(payload, "capability_name") ?? field(payload, "tool_name");
 }
 
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
+  const step = ledgerStepKind(event.eventType);
+  // The call id is what pairs an intention with its receipt (`foldTranscript`).
+  // Only the engine's own events record one; a submitted receipt stands for a
+  // whole exchange and needs no pairing, so its null is correct.
+  if (step === "tool_call")
+    return {
+      ...NO_IDENTITY,
+      tool: toolNameOf(p),
+      toolStatus: field(p, "outcome"),
+      callId: field(p, "tool_call_id"),
+    };
+  if (step === "model_call") {
+    const provider = field(p, "provider");
+    const model = field(p, "model");
+    return {
+      ...NO_IDENTITY,
+      model: provider && model ? `${provider}/${model}` : model,
+      callId: field(p, "model_call_id"),
+    };
+  }
   switch (event.eventType) {
-    case "tool.call_completed":
-      return {
-        ...NO_IDENTITY,
-        tool: field(p, "capability_name"),
-        toolStatus: field(p, "outcome"),
-      };
-    case "tool.engine_call_started":
-    case "tool.engine_call_completed":
-      return {
-        ...NO_IDENTITY,
-        tool: field(p, "tool_name"),
-        toolStatus: field(p, "outcome"),
-        callId: field(p, "tool_call_id"),
-      };
-    case "model.call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return {
-        ...NO_IDENTITY,
-        model: provider && model ? `${provider}/${model}` : model,
-      };
-    }
-    case "model.engine_call_started":
-    case "model.engine_call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return {
-        ...NO_IDENTITY,
-        model: provider && model ? `${provider}/${model}` : model,
-        callId: field(p, "model_call_id"),
-      };
-    }
     case "tool.approval_recorded":
       return { ...NO_IDENTITY, policy: field(p, "decision") };
     case "verification.completed":
@@ -216,8 +242,11 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
     summary: ledgerFrameSummary(event),
     body: event.body,
     costMicros: null,
+    // A turn index only travels on the ledger's own model event; the
+    // assistant's engine event has no such field, so an assistant run's
+    // `turns` zoom falls back to the boundaries rather than to an index.
     turnIndex:
-      event.eventType === "model.call_completed"
+      stepKindOfEventType(event.eventType) === "model_call"
         ? numberField(event.payload, "turn_index")
         : null,
     phase: ledgerPhase(event.eventType),
@@ -457,29 +486,6 @@ export type TranscriptEntryKind =
 // list. Re-exported here so a caller over frames has one import site.
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
-/**
- * Model-stage frame types, both vocabularies and both halves. The engine's own
- * calls (`model.engine_call_*`, ADR-043) were missing here, so every in-app
- * run's model exchanges folded into whatever step preceded them instead of
- * opening one, and the `steps` transcript of an in-app run showed no model
- * calls at all.
- */
-const MODEL_TYPES: ReadonlySet<string> = new Set([
-  "model.call_completed",
-  "model.engine_call_started",
-  "model.engine_call_completed",
-  "llm_call",
-  "model.request",
-  "model.response",
-]);
-/** Tool-stage frame types, both vocabularies and both halves. */
-const TOOL_TYPES: ReadonlySet<string> = new Set([
-  "tool.call_completed",
-  "tool.engine_call_started",
-  "tool.engine_call_completed",
-  "tool_call",
-  "tool_requested",
-]);
 /** Frames that record a decision a rule or a person made about a call. */
 const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
@@ -495,9 +501,6 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.assembled",
 ]);
-/** Frames a producer writes to open a turn. */
-const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
-
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "failed",
@@ -580,6 +583,38 @@ export interface TranscriptFold {
   /** The last decision frame folded into the entry; null when none was. */
   decision: TranscriptDecision | null;
 }
+
+/**
+ * The frame types that open a step, in the `steps` zoom. The ledger's own
+ * names come from the registry, so both spellings of each call event are
+ * covered — the in-app assistant writes `model.engine_call_completed` and
+ * `tool.engine_call_completed`, which this list named neither of, so every
+ * ledger-recorded run folded into one `frame` entry however many calls it
+ * made. The wrapped-session names are added beside them: a tacho recording
+ * is not in the ledger's registry and never will be.
+ *
+ * The write-ahead intentions are here too, and are NOT in the registry's step
+ * sets. The two sets answer different questions. The registry's answers "which
+ * frame completes a call", and counting an intention there would report every
+ * call twice. This one answers "which frame opens an exchange", and the
+ * intention is exactly that: it carries the request the step was made with, so
+ * a fold that did not open on it would leave the request stranded in the entry
+ * before and make one tool call two entries again.
+ */
+const MODEL_TYPES: ReadonlySet<string> = new Set([
+  ...MODEL_CALL_EVENT_TYPES,
+  "model.engine_call_started",
+  "llm_call",
+  "model.request",
+  "model.response",
+]);
+const TOOL_TYPES: ReadonlySet<string> = new Set([
+  ...TOOL_CALL_EVENT_TYPES,
+  "tool.engine_call_started",
+  "tool_call",
+  "tool_requested",
+]);
+const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
 
 export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
   if (MODEL_TYPES.has(frame.type)) return "model_call";

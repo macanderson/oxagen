@@ -110,6 +110,7 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({ ...entry, elapsedMs: -1 }).success,
     ).toBe(false);
+    // A frame recorded before the run's first turn is in no turn.
     expect(
       transcriptEntrySchema.safeParse({ ...entry, turn: null }).success,
     ).toBe(true);

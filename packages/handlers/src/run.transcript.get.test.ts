@@ -122,6 +122,7 @@ describe("get_run_transcript", () => {
     ]);
     // A single terminal receipt has no request half to show.
     expect(out.entries.every((e) => e.request === null)).toBe(true);
+    // The turn numbering is the same at every zoom.
     expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 1, 1, 2, 2, 2]);
     expect(out.entries[2]?.cost).toEqual({
       micros: "40",

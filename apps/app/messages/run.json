@@ -92,7 +92,10 @@
       "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
       "pageFailed": "The next page could not be read. Everything above is still the record.",
       "followLost": "The connection to the live head dropped. The run kept recording; read more to catch up.",
-      "followSealed": "The run sealed while you were following it. This is the whole recording."
+      "followSealed": "The run sealed while you were following it. This is the whole recording.",
+      "request": "Sent",
+      "response": "Returned",
+      "decision": "Decision: {decision}, at frame {seq}"
     },
     "frames": {
       "title": "Frames",

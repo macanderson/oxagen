@@ -42,6 +42,7 @@ import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ZOOMS,
+  type TranscriptDecision,
   type TranscriptEntry,
   type TranscriptKind,
   type TranscriptZoom,
@@ -57,12 +58,10 @@ import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
 import { useRunStream } from "./use-run-stream";
 import {
-  bodyOf,
   buildTranscript,
-  costAt,
-  elapsedAt,
   type Frames,
   frameAt,
+  frameBody,
   frameCost,
   idsAt,
   openAtZoom,
@@ -130,6 +129,19 @@ function Chip({
   );
 }
 
+/** The decision a rule or a person made about the call this frame records. */
+function Decision({ decision }: { decision: TranscriptDecision }) {
+  const t = useTranslations("run.transcript");
+  return (
+    <p
+      data-testid="entry-decision"
+      className="m-0 text-xs text-muted-foreground"
+    >
+      {t("decision", { decision: decision.decision, seq: decision.seq })}
+    </p>
+  );
+}
+
 function FrameDetail({
   frame,
   org,
@@ -138,10 +150,11 @@ function FrameDetail({
 }: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
-  // A frame the server gave no half has no retained body to show.
-  const body = bodyOf(frame);
-  const fidelity = body?.fidelity ?? "digest_only";
-  const text = body?.text ?? null;
+  // One frame carries one half of an exchange: what went out, or what came
+  // back. The heading says which, so a reader never has to guess whether a
+  // body is a prompt or a reply.
+  const body = frameBody(frame);
+  const half = frame.response === null ? t("request") : t("response");
   return (
     <div
       data-testid="transcript-frame"
@@ -151,11 +164,20 @@ function FrameDetail({
         <span className="font-mono text-[11px] text-foreground">
           {frame.type}
         </span>
+        {body === null ? null : (
+          <span
+            data-testid="transcript-half"
+            data-half={half}
+            className="text-[10.5px] font-medium text-muted-foreground"
+          >
+            {half}
+          </span>
+        )}
         <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
           {t("frameHead", {
             seq: frame.seq,
             time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
-            fidelity: t(`fidelity.${fidelity}`),
+            fidelity: t(`fidelity.${body?.fidelity ?? "digest_only"}`),
           })}
         </span>
       </div>
@@ -165,16 +187,19 @@ function FrameDetail({
             {frame.label}
           </p>
         ) : null}
-        {text === null ? (
+        {frame.decision === null ? null : (
+          <Decision decision={frame.decision} />
+        )}
+        {body === null || body.text === null ? (
           <p className="m-0 text-xs text-muted-foreground">
-            {t(fidelity === "digest_only" ? "digestOnly" : "noBody")}
+            {t(body?.fidelity === "digest_only" ? "digestOnly" : "noBody")}
           </p>
         ) : (
           <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
-            {text}
+            {body.text}
           </pre>
         )}
-        {body?.truncated ? (
+        {body?.truncated === true ? (
           <p
             data-testid="entry-truncated"
             className="m-0 text-xs text-muted-foreground"
@@ -416,7 +441,11 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
   const locale = useLocale();
   const head = entries.length - 1;
   const here = frameAt(entries, pos);
-  const cost: MoneyValue | null = costAt(entries, pos);
+  // Elapsed and cumulative cost come from the read, not from this page: the
+  // contract measures both from the run's start, so a transcript that was cut
+  // short still reports what the run had spent and how far into it this frame
+  // sits.
+  const cost: MoneyValue | null = here.cumulativeCost;
   return (
     <span
       data-testid="transport-readout"
@@ -427,8 +456,8 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
       </b>{" "}
       {t("of", { seq: frameAt(entries, head).seq })}
       {" · "}
-      {formatClock(elapsedAt(entries, pos) / 1000, locale)} /{" "}
-      {formatClock(elapsedAt(entries, head) / 1000, locale)}
+      {formatClock(here.elapsedMs / 1000, locale)} /{" "}
+      {formatClock(frameAt(entries, head).elapsedMs / 1000, locale)}
       {cost === null ? null : (
         <>
           {" · "}

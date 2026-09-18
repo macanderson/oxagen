@@ -10,12 +10,13 @@ import { type Money, sumMoney } from "@/data/contracts/money";
 import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
 
 /**
- * The body a frame carries. At `everything` each entry is one frame, and the
- * server puts it in `request` when the frame opened an exchange and in
- * `response` otherwise, so exactly one half is set.
+ * The half of the exchange an entry carries. At `everything` an entry is one
+ * frame, so exactly one half is recorded: the frame that carried what came
+ * back, or the one that carried what went out. Null when the frame recorded
+ * neither.
  */
-export function bodyOf(frame: TranscriptEntry): TranscriptBody | null {
-  return frame.request ?? frame.response;
+export function frameBody(entry: TranscriptEntry): TranscriptBody | null {
+  return entry.response ?? entry.request;
 }
 
 /** A transcript with at least one frame: the only kind the view draws. */
@@ -140,9 +141,9 @@ function textOf(
 ): string | null {
   const ordered = last ? [...frames].reverse() : frames;
   const found = ordered.find(
-    (frame) => frame.type === type && (bodyOf(frame)?.text ?? null) !== null,
+    (frame) => frame.type === type && (frameBody(frame)?.text ?? null) !== null,
   );
-  return found === undefined ? null : (bodyOf(found)?.text ?? null);
+  return found === undefined ? null : (frameBody(found)?.text ?? null);
 }
 
 /**
@@ -271,25 +272,6 @@ export function frameCost(frames: readonly TranscriptEntry[]): Money | null {
   return sumMoney(
     frames.flatMap((frame) => (frame.cost === null ? [] : [frame.cost])),
   );
-}
-
-/** Cumulative cost up to and including position `pos` (§8.4: a prefix sum, computed on read). */
-export function costAt(
-  entries: readonly TranscriptEntry[],
-  pos: number,
-): Money | null {
-  return frameCost(entries.slice(0, pos + 1));
-}
-
-/** Milliseconds from the first frame to the frame at `pos`. */
-export function elapsedAt(
-  entries: readonly TranscriptEntry[],
-  pos: number,
-): number {
-  const first = entries[0];
-  const here = entries[Math.min(pos, entries.length - 1)];
-  if (first === undefined || here === undefined) return 0;
-  return Math.max(0, Date.parse(here.at) - Date.parse(first.at));
 }
 
 /**

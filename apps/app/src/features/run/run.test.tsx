@@ -475,6 +475,22 @@ describe("transcript", () => {
     replaceState.mockRestore();
   });
 
+  it("says which half a frame carried, and the decision a rule made about the call", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", zoom: "everything" },
+    );
+    // A tool request is what went out; its call is what came back.
+    const halves = screen
+      .getAllByTestId("transcript-half")
+      .map((half) => half.getAttribute("data-half"));
+    expect(halves).toContain("Sent");
+    expect(halves).toContain("Returned");
+    const decisions = screen.getAllByTestId("entry-decision");
+    expect(decisions[0]).toHaveTextContent("Decision: allow, at frame 6");
+    expect(decisions[1]).toHaveTextContent("Decision: deny, at frame 12");
+  });
+
   it("links a cut body to its frame's whole body on the Frames tab", async () => {
     await renderRun(
       {
