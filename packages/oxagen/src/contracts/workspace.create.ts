@@ -1,20 +1,46 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";
+import { repositoryMainBind } from "./repository.main.bind";
 
 /**
- * create_workspace — a workspace in the caller's org.
+ * create_workspace — a workspace in the caller's org, with its main repository.
  *
- * The handler bootstraps the workspace (its namespace, the creator's Owner
- * membership, its registry seed) and refuses a slug already used in the org
- * (`conflict`, `slug_taken`). Org Owners and Admins, and a workspace Owner
- * calling from a workspace, are checked in the handler (INV-29).
+ * Mission Control spec §10.1 and the §17 M0 acceptance test: a workspace
+ * cannot exist without a main repo. So `mainRepo` is required, and the handler
+ * writes the workspace, its GitHub connection, the version-1 repository
+ * binding and its `role = 'main'` head in ONE transaction — a creation that
+ * cannot bind writes nothing (ADR-099).
+ *
+ * The caller names the repository, never an installation. The installation is
+ * the one the org's stored GitHub authorization reaches on the repository's
+ * owner account (`GET /user/installations`), the same reachability rule
+ * `attach_github_installation` applies, because an installation id a caller
+ * could choose would let one tenant mint tokens for another account's
+ * installation. Refusals: `conflict: github_not_authorized` (the org has no
+ * usable GitHub authorization), `not_found: installation_unreachable` (the App
+ * is not installed on that owner, or the authorization cannot reach it),
+ * `not_found: repository_not_installed` (the installation cannot see the
+ * repository), `conflict: main_repo_claimed` (another workspace already
+ * steers by it), `conflict: repository_linked_elsewhere` (another workspace
+ * has linked it, and a repository that receives one workspace's Context PRs
+ * cannot hold another's `.oxagen/` governance tree), `conflict: slug_taken`.
+ * The two repository refusals are held by the store as well as by the
+ * handler's pre-check: the trigger `repository_binding_heads_exclusive_main`
+ * refuses a lost race with the same reasons.
+ *
+ * The production branch is GitHub's default branch, recorded as the binding's
+ * configured default ref exactly as `bind_main_repository` records it; a
+ * re-approval there is how it later moves.
+ *
+ * Org Owners and Admins, and a workspace Owner calling from a workspace, are
+ * checked in the handler (INV-29).
  */
 export const workspaceCreate = registerCapability({
   name: "create_workspace",
   domain: "workspace",
   description:
-    "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
+    "Create a workspace within the active tenant together with its main GitHub repository, which is required. Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -36,6 +62,16 @@ export const workspaceCreate = registerCapability({
     // `update_workspace_settings` also takes, so a workspace this creates can
     // always be edited afterwards (#3110).
     slug: workspaceSlug,
+    // Required: §17 M0, "a workspace cannot be created without a main repo".
+    // Owner and name carry `bind_main_repository`'s GitHub-shaped validation
+    // by import, so the two doors to a main repository refuse the same names.
+    mainRepo: z
+      .object({
+        provider: z.literal("github").default("github"),
+        owner: repositoryMainBind.input.shape.owner,
+        name: repositoryMainBind.input.shape.name,
+      })
+      .strict(),
   }),
   output: z.object({
     publicId: z.string(),
@@ -43,6 +79,14 @@ export const workspaceCreate = registerCapability({
     slug: z.string(),
     orgSlug: z.string(),
     createdAt: z.string(),
+    mainRepo: z.object({
+      bindingId: repositoryMainBind.output.shape.bindingId,
+      connectionId: repositoryMainBind.output.shape.connectionId,
+      /** `owner/name` as GitHub reports it. */
+      fullName: z.string().min(1),
+      /** The approved production ref: GitHub's default branch at creation. */
+      defaultRef: z.string().min(1),
+    }),
   }),
 });
 

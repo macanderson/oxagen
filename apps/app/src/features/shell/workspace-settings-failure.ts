@@ -1,8 +1,9 @@
 // The sentence a refused Workspace settings read or write shows. The kernel
 // seam classified the refusal and put the handler's reason in `code` (§3.2);
 // every reason `get_main_repository`, `list_installation_repositories`,
-// `list_github_installations`, `attach_github_installation` and
-// `bind_main_repository` can give has its own sentence, and any other code is
+// `list_github_installations`, `attach_github_installation`,
+// `bind_main_repository`, `list_repositories`, `link_repository` and
+// `unlink_repository` can give has its own sentence, and any other code is
 // printed as recorded rather than collapsed into "something went wrong".
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
@@ -33,6 +34,21 @@ export function useWorkspaceSettingsFailure(): (
             return t("githubNotAuthorized");
           case "installation_unreachable":
             return t("installationUnreachable");
+          // The Repositories section's link and unlink (§10.1).
+          case "main_repo":
+            return t("mainRepo");
+          case "repository_already_linked":
+            return t("repositoryAlreadyLinked");
+          case "main_repo_claimed":
+            return t("mainRepoClaimed");
+          case "main_repo_unbound":
+            return t("mainRepoUnbound");
+          case "repository_linked_elsewhere":
+            return t("repositoryLinkedElsewhere");
+          case "main_repo_unlink_refused":
+            return t("mainRepoUnlinkRefused");
+          case "repository_not_linked":
+            return t("repositoryNotLinked");
           default:
             return t("refused", { code: failure.code });
         }
