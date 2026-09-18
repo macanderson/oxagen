@@ -1276,6 +1276,8 @@ type Messages = {
         scope: string;
         slug: string;
         slugHint: string;
+        mainRepo: string;
+        mainRepoHint: string;
         permissions: string;
         roleNameHint: string;
       };
@@ -1352,6 +1354,12 @@ type Messages = {
         targetNotMember: string;
         roleNotGrantable: string;
         insufficientRole: string;
+        githubNotAuthorized: string;
+        installationUnreachable: string;
+        repositoryNotInstalled: string;
+        mainRepoClaimed: string;
+        repositoryLinkedElsewhere: string;
+        repositoryUnparsable: string;
       };
     };
     invitations: {
@@ -2886,6 +2894,34 @@ type Messages = {
         none: string;
       };
     };
+    repositories: {
+      heading: string;
+      about: string;
+      loading: string;
+      listLabel: string;
+      none: string;
+      onlyMain: string;
+      roleMain: string;
+      roleLinked: string;
+      defaultRef: string;
+      boundAt: string;
+      open: string;
+      retired: string;
+      unlink: string;
+      unlinkConfirm: string;
+      unlinkYes: string;
+      unlinkNo: string;
+      unlinking: string;
+      link: {
+        heading: string;
+        label: string;
+        hint: string;
+        placeholder: string;
+        unparsable: string;
+        submit: string;
+        pending: string;
+      };
+    };
     failure: {
       denied: string;
       githubNotConnected: string;
@@ -2897,6 +2933,13 @@ type Messages = {
       unavailable: string;
       githubNotAuthorized: string;
       installationUnreachable: string;
+      mainRepo: string;
+      repositoryAlreadyLinked: string;
+      mainRepoClaimed: string;
+      mainRepoUnbound: string;
+      repositoryLinkedElsewhere: string;
+      mainRepoUnlinkRefused: string;
+      repositoryNotLinked: string;
     };
   };
 };

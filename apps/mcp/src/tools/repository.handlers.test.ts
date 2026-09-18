@@ -1,0 +1,131 @@
+// repository.handlers.test.ts — the workspace-repository tools (MC spec §10.1):
+// `list_repositories`, `link_repository`, `unlink_repository`.
+//
+// Same pattern as agent.handlers.test.ts: the kernel `invoke` and the context
+// seam are mocked, and each tool must dispatch its own contract with the MCP
+// surface and hand back the contract-parsed output.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  buildContext: vi.fn(),
+  headers: vi.fn(),
+}));
+
+vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
+vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
+vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
+
+const fakeCtx = {
+  orgId: "org_test",
+  workspaceId: "ws_test",
+  userId: null,
+  apiKeyId: "key_test",
+  requestId: "req_test",
+  surface: "mcp" as const,
+  messageId: null,
+  clientIp: null,
+};
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.buildContext.mockResolvedValue(fakeCtx);
+  mocks.headers.mockReturnValue({ authorization: "Bearer test_key" });
+});
+
+import linkTool, {
+  metadata as linkMetadata,
+  schema as linkSchema,
+} from "./repository.link";
+import listTool, { metadata as listMetadata } from "./repository.list";
+import unlinkTool, {
+  metadata as unlinkMetadata,
+  schema as unlinkSchema,
+} from "./repository.unlink";
+
+describe("list_repositories tool", () => {
+  it("is read-only and returns the workspace's repositories, main first", async () => {
+    expect(listMetadata.name).toBe("list_repositories");
+    expect(listMetadata.annotations?.readOnlyHint).toBe(true);
+    const output = {
+      repositories: [
+        {
+          bindingId: "rpb_0a",
+          role: "main",
+          owner: "acme",
+          name: "platform",
+          fullName: "acme/platform",
+          defaultRef: "main",
+          htmlUrl: "https://github.com/acme/platform",
+          boundAt: "2026-09-18T00:00:00.000Z",
+          connectionLive: true,
+        },
+      ],
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(listTool({})).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "list_repositories",
+      {},
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+});
+
+describe("link_repository tool", () => {
+  it("dispatches the link and answers the linked binding", async () => {
+    expect(linkMetadata.name).toBe("link_repository");
+    expect(linkMetadata.annotations?.readOnlyHint).toBe(false);
+    const output = {
+      bindingId: "rpb_0b",
+      connectionId: "con_0b",
+      fullName: "acme/shared-lib",
+      defaultRef: "main",
+      role: "linked",
+      linkedAt: "2026-09-18T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    const args = {
+      provider: "github" as const,
+      owner: "acme",
+      name: "shared-lib",
+    };
+    await expect(linkTool(args)).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "link_repository",
+      args,
+      fakeCtx,
+      {
+        surface: "mcp",
+      },
+    );
+  });
+
+  it("refuses a repository name GitHub would refuse (negative)", () => {
+    expect(() => linkSchema.name.parse("shared lib")).toThrow();
+  });
+});
+
+describe("unlink_repository tool", () => {
+  it("dispatches the unlink by binding id", async () => {
+    expect(unlinkMetadata.name).toBe("unlink_repository");
+    const output = {
+      bindingId: "rpb_0b",
+      fullName: "acme/shared-lib",
+      unlinkedAt: "2026-09-18T00:00:00.000Z",
+    };
+    mocks.invoke.mockResolvedValue(output);
+    await expect(unlinkTool({ bindingId: "rpb_0b" })).resolves.toEqual(output);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "unlink_repository",
+      { bindingId: "rpb_0b" },
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("refuses an id that is not a binding id (negative)", () => {
+    expect(() => unlinkSchema.bindingId.parse("con_0b")).toThrow();
+  });
+});
