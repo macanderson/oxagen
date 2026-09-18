@@ -1112,6 +1112,57 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
   });
 
+  // An operator scheduled a correction for one key beyond the next boundary.
+  // Refusing the whole refresh over it rolled back every other model's update,
+  // every hour, until the scheduled instant arrived.
+  it("leaves a key with a scheduled correction alone and refreshes the rest", async () => {
+    const SCHEDULED = new Date("2026-10-01T00:00:00.000Z");
+    fake.rows.push(
+      priceRow({
+        model: "claude-sonnet-5",
+        microsPerMillion: 2_500_000n,
+        effectiveFrom: SCHEDULED,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+      priceRow({
+        model: "claude-haiku-5",
+        microsPerMillion: 1_000_000n,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
+    const seedFor = (model: string, micros: bigint): PriceEntrySeed => ({
+      provider: "anthropic",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: micros,
+      effectiveFrom: T1,
+      effectiveTo: null,
+    });
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      now: new Date("2026-09-18T00:00:00.000Z"),
+      seeds: [
+        seedFor("claude-sonnet-5", 3_000_000n),
+        seedFor("claude-haiku-5", 1_200_000n),
+      ],
+    });
+    expect(result.deferred).toBe(1);
+    expect(result.written).toBe(1);
+    // The scheduled row is untouched...
+    const scheduled = fake.rows.find(
+      (r) => r.model === "claude-sonnet-5" && r.effectiveFrom === SCHEDULED,
+    );
+    expect(scheduled?.effectiveTo).toBeNull();
+    expect(scheduled?.microsPerMillion).toBe(2_500_000n);
+    // ...and the other key refreshed.
+    const haiku = fake.rows.filter((r) => r.model === "claude-haiku-5");
+    expect(haiku.some((r) => r.microsPerMillion === 1_200_000n)).toBe(true);
+  });
+
   // A model whose vendor string changed is not a model the book has never
   // seen. Keying "seen" on the full row key, provider included, called it new,
   // backdated the new-provider row to the floor, and the supersession pass

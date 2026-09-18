@@ -61,6 +61,15 @@ export function parseFlags(argv: string[], now: Date): Flags {
       const at = new Date(arg.slice("--effective-from=".length));
       if (Number.isNaN(at.getTime()))
         throw new Error(`--effective-from must be an RFC 3339 instant: ${arg}`);
+      // Never the past. A list row that starts at an instant already gone
+      // reprices every frame settled since then on its next rollup, or makes
+      // it unpriced, and `syncPriceBook` cannot catch it for a key with no
+      // open row (one newly seen, or retired). Backdating is the cold-start
+      // path's job alone, and it does it under its own rules.
+      if (at.getTime() < now.getTime())
+        throw new Error(
+          `--effective-from must not be in the past (${at.toISOString()} is before ${now.toISOString()}): a list price that starts in the past reprices runs already settled`,
+        );
       flags.effectiveFrom = at;
     } else throw new Error(`unknown flag: ${arg}`);
   }
@@ -134,7 +143,7 @@ async function main(): Promise<void> {
 
   console.log(
     kleur.bold().cyan("\n══ Done ══\n") +
-      `  ${report.written} rows written, ${report.renamed} renamed, ${report.superseded} superseded, ${report.retired} retired, ${report.unchanged} unchanged.\n`,
+      `  ${report.written} rows written, ${report.renamed} renamed, ${report.superseded} superseded, ${report.retired} retired, ${report.unchanged} unchanged, ${report.deferred} deferred to a scheduled correction.\n`,
   );
 }
 

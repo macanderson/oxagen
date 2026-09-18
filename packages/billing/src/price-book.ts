@@ -386,6 +386,12 @@ interface PriceBookSyncResult {
    */
   renamed: number;
   /**
+   * Keys this run left alone because an operator has scheduled a correction
+   * for them beyond this run's instant. That row is the authority from its
+   * start; the refresh continues for every other key.
+   */
+  deferred: number;
+  /**
    * Open rows closed because this sync re-priced the same model and class
    * under a different provider name. Left open they would be a second row
    * the reader could pick, so one of two prices would apply and neither
@@ -546,6 +552,7 @@ export async function syncPriceBook(args: {
     let written = 0;
     let unchanged = 0;
     let renamed = 0;
+    let deferred = 0;
     for (const seed of seeds) {
       const current = open.get(key(seed));
       const pricedTheSame =
@@ -593,12 +600,18 @@ export async function syncPriceBook(args: {
       if (
         current &&
         current.effectiveFrom.getTime() > seed.effectiveFrom.getTime()
-      )
-        // Backdating under an open row would leave two rows open for one
-        // key; a correction is always a later row.
-        throw new RangeError(
-          `price for ${key(seed)} is already effective from ${current.effectiveFrom.toISOString()}; a sync must not start earlier`,
-        );
+      ) {
+        // The key's open row is a correction an operator SCHEDULED, with an
+        // `--effective-from` beyond this run's instant. That row is the
+        // authority for this key from its start, and this run has nothing to
+        // say about it: writing under it would leave two rows open for one
+        // key. Refusing the whole refresh over it (which this once did, as a
+        // RangeError) rolled back every other model's update, every hour,
+        // until the scheduled instant arrived. The key is left alone and
+        // counted, and the rest of the book refreshes.
+        deferred += 1;
+        continue;
+      }
       if (
         current &&
         current.effectiveFrom.getTime() < seed.effectiveFrom.getTime()
@@ -734,7 +747,15 @@ export async function syncPriceBook(args: {
       }
     }
 
-    return { written, unchanged, renamed, superseded, retired, coldStart };
+    return {
+      written,
+      unchanged,
+      renamed,
+      deferred,
+      superseded,
+      retired,
+      coldStart,
+    };
   });
 }
 

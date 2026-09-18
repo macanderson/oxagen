@@ -48,6 +48,8 @@ export interface PriceBookSyncReport {
    * Updated in place — a rename is not a repricing (see {@link syncPriceBook}).
    */
   renamed: number;
+  /** Keys left alone because an operator scheduled a later correction. */
+  deferred: number;
   /**
    * Open rows closed because this sync re-priced the same model and class
    * under a different provider name (see {@link syncPriceBook}).
@@ -105,6 +107,7 @@ export interface SyncPriceBookFromSourcesArgs {
     written: number;
     unchanged: number;
     renamed?: number;
+    deferred?: number;
     superseded?: number;
     retired?: number;
     coldStart?: boolean;
@@ -188,6 +191,7 @@ export async function syncPriceBookFromSources(
       written: 0,
       unchanged: 0,
       renamed: 0,
+      deferred: 0,
       superseded: 0,
       retired: 0,
       coldStart: false,
@@ -220,6 +224,7 @@ export async function syncPriceBookFromSources(
     written: result.written,
     unchanged: result.unchanged,
     renamed: result.renamed ?? 0,
+    deferred: result.deferred ?? 0,
     superseded: result.superseded ?? 0,
     retired: result.retired ?? 0,
     coldStart: result.coldStart ?? false,

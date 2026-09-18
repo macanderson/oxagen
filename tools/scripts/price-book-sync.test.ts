@@ -36,6 +36,14 @@ describe("parseFlags", () => {
     expect(flags.effectiveFrom.toISOString()).toBe("2026-10-01T00:00:00.000Z");
   });
 
+  // A list price that starts in the past reprices settled runs on their next
+  // rollup, and the sync cannot catch it for a key with no open row.
+  it("refuses an --effective-from in the past", () => {
+    expect(() =>
+      parseFlags(["--effective-from=2026-09-14T00:00:00Z"], NOW),
+    ).toThrow(/must not be in the past/);
+  });
+
   it("refuses an unparseable instant and an unknown flag", () => {
     expect(() => parseFlags(["--effective-from=yesterday"], NOW)).toThrow(
       /RFC 3339/,
