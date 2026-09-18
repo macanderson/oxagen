@@ -60,7 +60,7 @@ const MAIN_REPOSITORY_CONSTRAINT =
  * choices of one customer to another. The operator can see the claim from the
  * GitHub side, which is the side they control.
  */
-function repositoryClaimedElsewhere(fullName: string): HandlerError {
+export function repositoryClaimedElsewhere(fullName: string): HandlerError {
   return new HandlerError({
     code: "conflict",
     reason: "main_repo_claimed",
@@ -77,7 +77,7 @@ function repositoryClaimedElsewhere(fullName: string): HandlerError {
  * send the operator to look for a workspace that does not exist. Postgres
  * carries the name on the error; the driver nests it under `cause`.
  */
-function isMainRepositoryConflict(err: unknown): boolean {
+export function isMainRepositoryConflict(err: unknown): boolean {
   for (let e: unknown = err, hops = 0; e != null && hops < 5; hops++) {
     const row = e as {
       code?: unknown;
@@ -122,7 +122,7 @@ function isMainRepositoryConflict(err: unknown): boolean {
  * cannot be stored on the plane it describes — so one `withSystemDb` read
  * answers (2) for every tenant at once.
  */
-async function assertGlobalClaimIsKnowable(orgId: string): Promise<void> {
+export async function assertGlobalClaimIsKnowable(orgId: string): Promise<void> {
   const plane = await resolveDataPlane(orgId, "postgres");
   // Throws DataPlaneUnavailableError for any binding that is not active.
   assertDataPlaneUsable(plane);
@@ -159,6 +159,40 @@ function planeUnsupported(): HandlerError {
   });
 }
 
+/**
+ * Re-ask which plane the organisation is on, uncached, from inside the
+ * transaction that writes a main-repository claim. The reasoning — why it is
+ * asked twice, why uncached, and the window it narrows without closing (#3288)
+ * — is at the call site in the bind below. `create_workspace` writes the same
+ * claim and asks the same question through this.
+ */
+export async function assertPlaneStillShared(scope: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<void> {
+  const { loadDataPlaneBinding } = await import("@oxagen/database/data-plane");
+  const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
+  assertDataPlaneUsable(planeNow);
+  if (planeNow.mode !== "shared") {
+    logger.warn(
+      { orgId: scope.orgId, workspaceId: scope.workspaceId },
+      "repository.main.bind: refused mid-transaction — the organisation's Postgres plane moved after the pre-check",
+    );
+    throw planeUnsupported();
+  }
+}
+
+/**
+ * The transaction-scoped advisory lock every writer of a workspace's binding
+ * heads takes — `bind_main_repository`, `link_repository`,
+ * `unlink_repository` — so each reads the heads the previous one committed.
+ * The key keeps its original spelling so a deploy that mixes old and new
+ * processes still serialises on one lock.
+ */
+export function workspaceRepositoriesLock(workspaceId: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
+}
+
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
   repository(
@@ -168,7 +202,7 @@ export interface MainRepositoryDeps {
   ): Promise<GitHubRepoInfo | null>;
 }
 
-const githubMainRepositoryDeps: MainRepositoryDeps = {
+export const githubMainRepositoryDeps: MainRepositoryDeps = {
   async repository(installationId, owner, name) {
     const appId = process.env["GITHUB_APP_ID"];
     const privateKey = process.env["GITHUB_APP_PRIVATE_KEY"];
@@ -290,7 +324,7 @@ export function createMainRepositoryBindHandler(
         // A second bind in this workspace waits here until the first commits,
         // then reads the head it wrote.
         await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${scope.workspaceId}`}::text, 0))`,
+          workspaceRepositoriesLock(scope.workspaceId),
         );
 
         // Re-ask which plane this organisation is on, INSIDE the transaction
@@ -328,18 +362,7 @@ export function createMainRepositoryBindHandler(
         // very same stale `shared` answer the pre-check already had — and
         // check nothing at all. The uncached read is the whole point of
         // asking twice.
-        const { loadDataPlaneBinding } = await import(
-          "@oxagen/database/data-plane"
-        );
-        const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
-        assertDataPlaneUsable(planeNow);
-        if (planeNow.mode !== "shared") {
-          logger.warn(
-            { orgId: scope.orgId, workspaceId: scope.workspaceId },
-            "repository.main.bind: refused mid-transaction — the organisation's Postgres plane moved after the pre-check",
-          );
-          throw planeUnsupported();
-        }
+        await assertPlaneStillShared(scope);
         const heads = await tx
           .select({
             id: schema.repositoryBindingHeads.id,
