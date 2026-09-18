@@ -203,7 +203,20 @@
       "error": {
         "title": "API keys could not be loaded",
         "body": "{status} {code}. Nothing was changed. Reload the page to try again."
-      }
+      },
+      "filter": {
+        "label": "Which keys",
+        "active": "Active",
+        "all": "All",
+        "allWithCount": "All ({revoked} revoked)"
+      },
+      "pager": {
+        "label": "Pages of API keys",
+        "range": "{from}–{to} of {total}",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "emptyActive": "No key in this workspace is still active. {revoked, plural, one {One revoked key is} other {# revoked keys are}} hidden — choose All to see {revoked, plural, one {it} other {them}}."
     },
     "denied": {
       "title": "You cannot see this organization’s people",

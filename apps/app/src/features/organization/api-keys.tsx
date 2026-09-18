@@ -18,16 +18,34 @@
 // disagree as a page ages past an expiry. `rotate_api_key` refuses an expired,
 // revoked or service-owned key regardless — that refusal is the guarantee and
 // the row is the courtesy.
-import { useTranslations } from "next-intl";
+//
+// `list_api_keys` answers the workspace's whole roster, revoked rows included,
+// with no filter and no page of its own. The cut is made here: the page opens
+// on the keys that still work, hides the revoked ones behind one link, and
+// shows `API_KEYS_PAGE` rows at a time. Both are query values on this one route
+// (`api-keys-view.ts`), so a filtered page survives a reload and a shared link.
+import { useLocale, useTranslations } from "next-intl";
 import type { ApiKey, Workspace, WorkspaceList } from "@/data/contracts/org";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { OrgCtx, OrgRole } from "@/server/viewer";
 import { WsCtx } from "@/server/viewer";
-import { routes, type SafePath } from "@/shared/safe-path";
+import { linkText } from "@/ui/control-styles";
 import { OutcomePanel } from "@/ui/form-feedback";
+import { formatCount } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
 import { RouteTabs } from "@/ui/route-tabs";
 import { Table } from "@/ui/table";
+import {
+  API_KEYS_PAGE,
+  API_KEYS_SHOW,
+  type ApiKeysPage,
+  type ApiKeysShow,
+  type ApiKeysView,
+  apiKeysLink,
+  filterKeys,
+  pageOfKeys,
+} from "./api-keys-view";
 import { CreateKeyDialog } from "./create-key-dialog";
 import { KeyRow } from "./key-row";
 import { emptyLine } from "./parts";
@@ -87,32 +105,37 @@ export async function ApiKeys({
   ctx,
   source,
   workspaces,
+  view,
 }: {
   /** A `WsCtx` once a workspace is in scope; an `OrgCtx` when there is none. */
   ctx: OrgCtx;
   source: DataSource;
   workspaces: Read<WorkspaceList>;
+  /** The filter and the page the URL asked for (`api-keys-view.ts`). */
+  view: ApiKeysView;
 }) {
   const { current, keys, now } = await readKeys(ctx, source);
   return (
-    <ApiKeysView
+    <ApiKeysSection
       orgSlug={ctx.orgSlug}
       orgRole={ctx.orgRole}
       workspaces={workspaces}
       current={current}
       read={keys}
       now={now}
+      view={view}
     />
   );
 }
 
-function ApiKeysView({
+function ApiKeysSection({
   orgSlug,
   orgRole,
   workspaces,
   current,
   read,
   now,
+  view,
 }: {
   orgSlug: string;
   orgRole: OrgRole;
@@ -123,6 +146,7 @@ function ApiKeysView({
   read: Read<ApiKey[]> | null;
   /** The instant the page was rendered, against which an expiry is judged. */
   now: number;
+  view: ApiKeysView;
 }) {
   const t = useTranslations("organization");
   // Computed once: the picker lists these and the archived note asks which of
@@ -151,6 +175,7 @@ function ApiKeysView({
             orgSlug={orgSlug}
             workspaces={mine}
             current={current}
+            show={view.show}
           />
           {chosen !== undefined && chosen.archivedAt !== null ? (
             <OutcomePanel
@@ -168,7 +193,8 @@ function ApiKeysView({
               ws={current}
               archived={chosen?.archivedAt != null}
               now={now}
-              here={routes.apiKeys(orgSlug, { workspace: current })}
+              show={view.show}
+              offset={view.offset}
             />
           ) : (
             <Refused read={read} orgRole={orgRole} />
@@ -224,22 +250,30 @@ function Refused({
   );
 }
 
-/** The workspaces the viewer may enter, as links on this one route (ADR-073). */
+/**
+ * The workspaces the viewer may enter, as links on this one route (ADR-073).
+ * A link carries the filter across — a person who asked to see revoked keys
+ * asked about keys, not about this workspace — and drops the page, because the
+ * next workspace has a roster of its own and page four of this one says
+ * nothing about it.
+ */
 function WorkspacePicker({
   orgSlug,
   workspaces,
   current,
+  show,
 }: {
   orgSlug: string;
   workspaces: readonly Workspace[];
   current: string;
+  show: ApiKeysShow;
 }) {
   const t = useTranslations("organization.apiKeys");
   return (
     <RouteTabs
       label={t("workspace.label")}
       tabs={workspaces.map((ws) => ({
-        to: routes.apiKeys(orgSlug, { workspace: ws.slug }),
+        to: apiKeysLink(orgSlug, { workspace: ws.slug, show }),
         // An archived workspace is named as archived. It is here because its
         // keys still authenticate and a key nobody can reach is a key nobody
         // can revoke; the label says it is not a workspace in use.
@@ -259,8 +293,10 @@ function Keys({
   ws,
   archived,
   now,
-  here,
+  show,
+  offset,
 }: {
+  /** The workspace's whole roster, newest first, revoked rows included. */
   keys: readonly ApiKey[];
   org: string;
   /** The workspace the keys belong to, and the one a new key is minted in. */
@@ -274,55 +310,182 @@ function Keys({
    */
   archived: boolean;
   now: number;
-  /** This page, reloaded after a key was minted, rotated or revoked. */
-  here: SafePath;
+  /** Whether the revoked keys are on the roster; they are not, by default. */
+  show: ApiKeysShow;
+  /** The page the URL asked for, before it is clamped to one that exists. */
+  offset: number;
 }) {
   const t = useTranslations("organization.apiKeys");
-  // The ids the server just listed: the client island drops a shown secret the
-  // moment its key appears here, so no reload can leave one on screen.
+  const kept = filterKeys(keys, show);
+  const page = pageOfKeys(kept, offset);
+  // How many rows the default filter is holding back. It names the link that
+  // brings them, so "show the revoked ones" is never a guess about whether
+  // there are any.
+  const revoked = keys.length - filterKeys(keys, "active").length;
+  // Every id the server just listed, not just this page's: the client island
+  // drops a shown secret the moment its key appears here, and a key minted
+  // while the roster was filtered or paged past the first is somewhere in this
+  // read even when it is not on screen. Narrowing this to the visible rows
+  // would leave that secret up with nothing left to clear it.
   const listedIds = keys.map((key) => key.id);
+  // Where a write returns to. A mint puts a new key at the top of the roster,
+  // so create and rotate land on the first page of the filter in view — the
+  // one place the new key is certain to be. Revoke changes no order and holds
+  // its place, so it returns to the page the person was reading; under the
+  // default filter the row it ended leaves that page, which is the point.
+  const here = apiKeysLink(org, { workspace: ws, show, offset: page.offset });
+  const afterMint = apiKeysLink(org, { workspace: ws, show });
   return (
     <div className="flex flex-col gap-3">
       <p className="max-w-prose text-sm text-muted-foreground">{t("lead")}</p>
-      {archived ? null : (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <RevokedFilter org={org} ws={ws} show={show} revoked={revoked} />
+        {archived ? null : (
           <CreateKeyDialog
             org={org}
             ws={ws}
             listedIds={listedIds}
-            after={here}
+            after={afterMint}
           />
-        </div>
-      )}
-      {keys.length === 0 ? (
-        <p className={emptyLine}>{t("empty")}</p>
-      ) : (
-        <Table
-          label={t("tableLabel")}
-          columns={[
-            { label: t("columns.name") },
-            { label: t("columns.prefix") },
-            { label: t("columns.created") },
-            { label: t("columns.lastUsed") },
-            { label: t("columns.expires") },
-            { label: t("columns.status") },
-            { label: t("columns.actions") },
-          ]}
+        )}
+      </div>
+      {page.total === 0 ? (
+        <p
+          className={emptyLine}
+          data-state={
+            show === "all" || revoked === 0 ? "empty" : "empty-active"
+          }
         >
-          {keys.map((key) => (
-            <KeyRow
-              key={key.id}
-              apiKey={key}
-              org={org}
-              ws={ws}
-              archived={archived}
-              now={now}
-              listedIds={listedIds}
-              here={here}
-            />
-          ))}
-        </Table>
+          {show === "all" || revoked === 0
+            ? t("empty")
+            : t("emptyActive", { revoked })}
+        </p>
+      ) : (
+        <>
+          <Table
+            label={t("tableLabel")}
+            columns={[
+              { label: t("columns.name") },
+              { label: t("columns.prefix") },
+              { label: t("columns.created") },
+              { label: t("columns.lastUsed") },
+              { label: t("columns.expires") },
+              { label: t("columns.status") },
+              { label: t("columns.actions") },
+            ]}
+          >
+            {page.rows.map((key) => (
+              <KeyRow
+                key={key.id}
+                apiKey={key}
+                org={org}
+                ws={ws}
+                archived={archived}
+                now={now}
+                listedIds={listedIds}
+                here={here}
+                afterMint={afterMint}
+              />
+            ))}
+          </Table>
+          <Pager org={org} ws={ws} show={show} page={page} />
+        </>
       )}
     </div>
+  );
+}
+
+/**
+ * The one control that brings the revoked keys back, and sends them away
+ * again. Two links rather than a checkbox: the filter is a query value, so it
+ * has to be reachable without JavaScript and shareable once chosen, and a link
+ * per state is the shape the workspace picker above it already uses. Switching
+ * drops the offset — page four of the active keys is not page four of all of
+ * them.
+ */
+function RevokedFilter({
+  org,
+  ws,
+  show,
+  revoked,
+}: {
+  org: string;
+  ws: string;
+  show: ApiKeysShow;
+  /** How many revoked keys the roster holds, for the label. */
+  revoked: number;
+}) {
+  const t = useTranslations("organization.apiKeys.filter");
+  return (
+    <nav aria-label={t("label")} className="flex gap-1">
+      {API_KEYS_SHOW.map((option) => (
+        <SafeLink
+          key={option}
+          to={apiKeysLink(org, { workspace: ws, show: option })}
+          data-show={option}
+          aria-current={show === option ? "page" : undefined}
+          className="inline-flex min-h-9 items-center rounded-md border border-transparent px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring aria-[current=page]:border-border aria-[current=page]:text-foreground"
+        >
+          {option === "all" && revoked > 0
+            ? t("allWithCount", { revoked })
+            : t(option)}
+        </SafeLink>
+      ))}
+    </nav>
+  );
+}
+
+/** Previous and next pages of the filtered roster; nothing when one page holds it all. */
+function Pager({
+  org,
+  ws,
+  show,
+  page,
+}: {
+  org: string;
+  ws: string;
+  show: ApiKeysShow;
+  page: ApiKeysPage;
+}) {
+  const t = useTranslations("organization.apiKeys.pager");
+  const locale = useLocale();
+  const previous = page.offset - API_KEYS_PAGE;
+  const next = page.offset + page.rows.length;
+  if (page.offset === 0 && next >= page.total) return null;
+  return (
+    <nav
+      aria-label={t("label")}
+      className="flex flex-wrap items-center gap-4 text-sm"
+    >
+      <span className="text-muted-foreground">
+        {t("range", {
+          from: formatCount(page.offset + 1, locale),
+          to: formatCount(next, locale),
+          total: formatCount(page.total, locale),
+        })}
+      </span>
+      {page.offset > 0 ? (
+        <SafeLink
+          to={apiKeysLink(org, {
+            workspace: ws,
+            show,
+            offset: Math.max(previous, 0),
+          })}
+          data-page="previous"
+          className={linkText}
+        >
+          {t("previous")}
+        </SafeLink>
+      ) : null}
+      {next < page.total ? (
+        <SafeLink
+          to={apiKeysLink(org, { workspace: ws, show, offset: next })}
+          data-page="next"
+          className={linkText}
+        >
+          {t("next")}
+        </SafeLink>
+      ) : null}
+    </nav>
   );
 }
