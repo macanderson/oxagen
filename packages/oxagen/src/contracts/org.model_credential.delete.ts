@@ -27,7 +27,7 @@ export const orgModelCredentialDelete = registerCapability({
     "Remove the organisation's stored model-vendor API key. From the next turn on, the in-app agent runs on the platform key and its tokens are billed as assistant usage. Idempotent when no key is stored. Returns the redacted credential view.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "high",
   defaultEffect: "deny",
