@@ -137,9 +137,15 @@ export interface ControlClientOptions {
 }
 
 export interface ControlClient {
+  /**
+   * Ship one batch. `bodies` are the frame bodies of events IN THIS BATCH:
+   * the control plane refuses a body naming an event it did not receive in
+   * the same request (`unknown_event`), so a body never rides a later one.
+   */
   ingest: (
     events: TachoBatch["events"],
     daemon?: DaemonHealth,
+    bodies?: TachoBatch["bodies"],
   ) => Promise<IngestResponse>;
   bundle: (etag?: string) => Promise<BundleResponse>;
   commands: (
@@ -194,12 +200,13 @@ export function createControlClient(
   }
 
   return {
-    ingest: async (events, daemon) =>
+    ingest: async (events, daemon, bodies) =>
       ingestResponseSchema.parse(
         await post(options.endpoints.ingest, {
           schema: TACHO_BATCH_SCHEMA,
           host_enrollment_id: options.hostEnrollmentId,
           events,
+          ...(bodies !== undefined && bodies.length > 0 ? { bodies } : {}),
           ...(daemon !== undefined ? { daemon } : {}),
         }),
       ),

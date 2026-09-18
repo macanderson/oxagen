@@ -16,6 +16,12 @@ import type {
   UnsealedTachoEvent,
 } from "../envelope";
 import { withoutAddressMembers } from "../envelope";
+import {
+  contentClassOf,
+  type DraftContent,
+  type FrameBody,
+  prepareContent,
+} from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -123,6 +129,12 @@ export class SessionRecorder {
   private readonly children = new Map<string, SubagentLink>();
   /** Genesis events sealed by child creation, drained by the ingest that caused it. */
   private pendingChildGenesis: TachoEvent[] = [];
+  /**
+   * Bodies of events sealed since the last `takeBodies`. The chain hash
+   * covers the digest, never the bytes, so the bytes cannot live on the
+   * event; they wait here for the daemon to write them next to it.
+   */
+  private pendingBodies: FrameBody[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -253,6 +265,19 @@ export class SessionRecorder {
     return this.cursor;
   }
 
+  /**
+   * Drain the bodies of every event sealed on this chain and its children
+   * since the last drain. The caller that took the events takes these in the
+   * same breath, so a body is written next to its event and never to a WAL
+   * whose event is still in memory.
+   */
+  takeBodies(): FrameBody[] {
+    const out = this.pendingBodies.splice(0);
+    for (const link of this.children.values())
+      out.push(...link.recorder.takeBodies());
+    return out;
+  }
+
   /** Open child recorders, for routing and status. */
   get openChildren(): ReadonlyMap<string, SessionRecorder> {
     const out = new Map<string, SessionRecorder>();
@@ -280,6 +305,8 @@ export class SessionRecorder {
        * Everything else the collector seals is `sdk`, the default.
        */
       fidelity?: TachoEvent["fidelity"];
+      /** The bytes this frame's `content.digest` names; see `HookDraft.content`. */
+      content?: DraftContent;
     } = {},
   ): TachoEvent {
     if (kind === "agent_start") this.started = true;
@@ -295,6 +322,7 @@ export class SessionRecorder {
         : {}),
       attrs: fields.attrs ?? {},
       ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
+      ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
     });
   }
@@ -397,11 +425,30 @@ export class SessionRecorder {
       fidelity?: TachoEvent["fidelity"];
       span?: TachoEvent["span"];
       content_digest?: `sha256:${string}`;
+      content?: DraftContent;
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
   ): TachoEvent {
     const parent = this.options.parent;
+    // Redacted and digested here, before the seal, so the digest the chain
+    // hash covers is the digest of the bytes that ship. A frame with bytes
+    // chains that digest; one with only a `content_digest` (an OTel record,
+    // whose bytes the harness never handed over) chains the digest as given.
+    const prepared =
+      fields.content !== undefined ? prepareContent(fields.content) : undefined;
+    const content =
+      prepared !== undefined
+        ? prepared.digest !== undefined
+          ? { digest: prepared.digest, redactions: prepared.redactions }
+          : undefined
+        : fields.content_digest !== undefined
+          ? { digest: fields.content_digest, redactions: [] }
+          : undefined;
+    const attrs =
+      prepared?.omitted !== undefined
+        ? { ...fields.attrs, body_omitted: prepared.omitted }
+        : (fields.attrs ?? {});
     const unsealed = compact({
       v: "tacho/1.0",
       event_id: newEventId(Date.parse(fields.ts)),
@@ -444,11 +491,8 @@ export class SessionRecorder {
           ? { ...this.anthropic }
           : undefined,
       span: fields.span,
-      attrs: fields.attrs ?? {},
-      content:
-        fields.content_digest !== undefined
-          ? { digest: fields.content_digest, redactions: [] }
-          : undefined,
+      attrs,
+      content,
       raw_source_digest: fields.raw_source_digest,
       kind,
       body,
@@ -456,6 +500,17 @@ export class SessionRecorder {
     const sealed = sealEvent(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
+    const contentClass = contentClassOf(kind);
+    if (prepared?.body !== undefined && contentClass !== undefined) {
+      this.pendingBodies.push({
+        event_id_idem: sealed.event.event_id_idem,
+        session_uuid: sealed.event.session_uuid,
+        seq: sealed.event.seq,
+        content_type: prepared.body.content_type,
+        bytes: prepared.body.bytes,
+        content_class: contentClass,
+      });
+    }
     return sealed.event;
   }
 
@@ -608,6 +663,7 @@ export class SessionRecorder {
       ...(draft.content_digest !== undefined
         ? { content_digest: draft.content_digest }
         : {}),
+      ...(draft.content !== undefined ? { content: draft.content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
     });
