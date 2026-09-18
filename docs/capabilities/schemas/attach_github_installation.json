@@ -1,0 +1,55 @@
+{
+  "name": "attach_github_installation",
+  "domain": "repository",
+  "description": "Make one of the workspace's reachable GitHub App installations the installation it acts through.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "installationId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "installationId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "connectionId": {
+        "type": "string"
+      },
+      "accountLogin": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "connectionId",
+      "accountLogin"
+    ],
+    "additionalProperties": false
+  }
+}

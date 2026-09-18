@@ -10,7 +10,9 @@
 //      repository the installation cannot see is a not_found.
 //   4. One transaction, holding a transaction-scoped advisory lock on the
 //      workspace so two binds read the heads one after the other: the
-//      workspace's current binding heads decide idempotent / conflict; else
+//      workspace's current binding heads decide idempotent / repair (the same
+//      repository through a replacement connection, which supersedes the
+//      binding onto it) / conflict; else
 //      the version-1 binding and its head, the connection marked connected,
 //      and the gate's provisional window closed when this workspace is the
 //      gate's. No table constraint holds one head per workspace
@@ -28,9 +30,13 @@ import type { GitHubRepoInfo } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import {
+  GITHUB_PROVIDER,
+  resolveWorkspaceGithubInstallation,
+} from "./repository.github-connection";
 
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
-const PROVIDER = "github";
+const PROVIDER = GITHUB_PROVIDER;
 
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
@@ -39,17 +45,6 @@ export interface MainRepositoryDeps {
     owner: string,
     name: string,
   ): Promise<GitHubRepoInfo | null>;
-}
-
-/** The workspace's GitHub connection: the installation id the callback attached. */
-function installationIdOf(deliveryConfig: unknown): string | null {
-  if (typeof deliveryConfig !== "object" || deliveryConfig === null)
-    return null;
-  const raw = (deliveryConfig as { installationId?: unknown }).installationId;
-  if (typeof raw === "string" && /^\d{1,20}$/.test(raw)) return raw;
-  if (typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0)
-    return String(raw);
-  return null;
 }
 
 const githubMainRepositoryDeps: MainRepositoryDeps = {
@@ -98,29 +93,7 @@ export function createMainRepositoryBindHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const now = new Date();
 
-    const connection = await withTenantDb(async (tx) => {
-      const rows = await tx
-        .select({
-          id: schema.sourceConnections.id,
-          publicId: schema.sourceConnections.publicId,
-          status: schema.sourceConnections.status,
-          deliveryConfig: schema.sourceConnections.deliveryConfig,
-        })
-        .from(schema.sourceConnections)
-        .where(
-          and(
-            eq(schema.sourceConnections.orgId, scope.orgId),
-            eq(schema.sourceConnections.workspaceId, scope.workspaceId),
-            eq(schema.sourceConnections.connectorId, PROVIDER),
-            isNull(schema.sourceConnections.deletedAt),
-          ),
-        );
-      for (const row of rows) {
-        const installationId = installationIdOf(row.deliveryConfig);
-        if (installationId !== null) return { ...row, installationId };
-      }
-      return null;
-    });
+    const connection = await resolveWorkspaceGithubInstallation(scope);
     if (!connection) {
       throw new HandlerError({
         code: "conflict",
@@ -151,6 +124,8 @@ export function createMainRepositoryBindHandler(
       );
       const heads = await tx
         .select({
+          id: schema.repositoryBindingHeads.id,
+          connectionId: schema.repositoryBindingHeads.connectionId,
           providerRepositoryId:
             schema.repositoryBindingHeads.providerRepositoryId,
           currentBindingId: schema.repositoryBindingHeads.currentBindingId,
@@ -176,8 +151,10 @@ export function createMainRepositoryBindHandler(
       if (same) {
         const [existing] = await tx
           .select({
+            id: schema.repositoryBindings.id,
             publicId: schema.repositoryBindings.publicId,
             createdAt: schema.repositoryBindings.createdAt,
+            version: schema.repositoryBindings.version,
           })
           .from(schema.repositoryBindings)
           .where(eq(schema.repositoryBindings.id, same.currentBindingId))
@@ -187,8 +164,77 @@ export function createMainRepositoryBindHandler(
             "repository_binding_heads names a binding that does not exist",
           );
         }
-        bindingPublicId = existing.publicId;
-        boundAt = existing.createdAt;
+        if (same.connectionId === connection.id) {
+          // Same repository, same connection: nothing has moved, so nothing is
+          // written. The first bind's identity is the answer.
+          bindingPublicId = existing.publicId;
+          boundAt = existing.createdAt;
+        } else {
+          // Same repository, DIFFERENT connection — the head still points at a
+          // connection this workspace no longer acts through. That is the
+          // reconnect state: `delete_connection` leaves the old row at
+          // `status = 'deleting'` with a null `deleted_at`, and the install
+          // callback's attach then inserts a fresh connection because the
+          // retired one is not live. Every reader that joins the head back to
+          // its connection — `readGitHubConnection`, the one steering resolves
+          // the main repository through — then finds nothing, and steering goes
+          // silently off with the head still claiming a repository is bound.
+          //
+          // The conceptual line: re-binding the SAME repository through a
+          // replacement connection is a REPAIR, not a change of main repo. The
+          // `main_repo_bound` conflict above (spec §10.1, an org owner's
+          // decision) governs moving to a DIFFERENT repository and still fires
+          // for one, unchanged. Only the connection behind the same repository
+          // moves here.
+          //
+          // Safe because `deps.repository` already refused
+          // `repository_not_installed` unless this installation can reach this
+          // repository, so a repair can never point the workspace at a
+          // repository the replacement installation cannot read.
+          //
+          // A binding is immutable and versioned, so the move INSERTS the next
+          // version naming the one it supersedes (the table's
+          // `repository_bindings_supersedes_check` requires exactly that) and
+          // leaves the superseded row untouched. The head is a pointer, not
+          // evidence, so it is updated in place: a second head row would leave
+          // two heads for one workspace repository, and the reader that took
+          // the wrong one would disagree with the binding about the connection.
+          const [successor] = await tx
+            .insert(schema.repositoryBindings)
+            .values({
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+              connectionId: connection.id,
+              provider: PROVIDER,
+              providerRepositoryId: repo.id,
+              providerOwner: repo.owner,
+              providerName: repo.name,
+              providerFullName: repo.fullName,
+              configuredDefaultRef: repo.defaultBranch,
+              observedAt: now,
+              version: existing.version + 1,
+              supersedesBindingId: existing.id,
+              createdAt: now,
+              createdById: userId,
+            })
+            .returning({
+              id: schema.repositoryBindings.id,
+              publicId: schema.repositoryBindings.publicId,
+            });
+          if (!successor)
+            throw new Error("repository_bindings insert returned no row");
+          await tx
+            .update(schema.repositoryBindingHeads)
+            .set({
+              connectionId: connection.id,
+              currentBindingId: successor.id,
+              updatedAt: now,
+            })
+            .where(eq(schema.repositoryBindingHeads.id, same.id));
+          bindingPublicId = successor.publicId;
+          // The successor's `created_at` is the `now` it was just inserted with.
+          boundAt = now;
+        }
       } else {
         const [binding] = await tx
           .insert(schema.repositoryBindings)

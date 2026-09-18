@@ -327,9 +327,13 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 
-## Repository (1)
+## Repository (5)
 
+- [repository.installation.attach](repository.installation.attach.md) — Make one of the workspace's reachable GitHub App installations the installation it acts through
+- [repository.installation.candidates](repository.installation.candidates.md) — The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept
+- [repository.installation.list](repository.installation.list.md) — The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept
 - [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
+- [repository.main.get](repository.main.get.md) — The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches
 
 ## Router (4)
 

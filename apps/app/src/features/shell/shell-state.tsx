@@ -20,6 +20,8 @@ type ShellState = {
   setDrawerOpen: (open: boolean) => void;
   accountOpen: boolean;
   setAccountOpen: (open: boolean) => void;
+  workspaceSettingsOpen: boolean;
+  setWorkspaceSettingsOpen: (open: boolean) => void;
   assistantOpen: boolean;
   setAssistantOpen: (open: boolean) => void;
   theme: Theme;
@@ -51,6 +53,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
@@ -75,12 +78,22 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setDrawerOpen,
       accountOpen,
       setAccountOpen,
+      workspaceSettingsOpen,
+      setWorkspaceSettingsOpen,
       assistantOpen,
       setAssistantOpen,
       theme,
       setTheme,
     }),
-    [commandOpen, drawerOpen, accountOpen, assistantOpen, theme, setTheme],
+    [
+      commandOpen,
+      drawerOpen,
+      accountOpen,
+      workspaceSettingsOpen,
+      assistantOpen,
+      theme,
+      setTheme,
+    ],
   );
   return <ShellStateContext value={value}>{children}</ShellStateContext>;
 }

@@ -1,0 +1,135 @@
+{
+  "name": "get_main_repository",
+  "domain": "repository",
+  "description": "The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to connect GitHub or to change which repositories the installation reaches.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repository": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "bindingId": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fullName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "defaultRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "htmlUrl": {
+                "type": "string",
+                "format": "uri"
+              },
+              "boundAt": {
+                "type": "string"
+              },
+              "connectionLive": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "bindingId",
+              "owner",
+              "name",
+              "fullName",
+              "defaultRef",
+              "htmlUrl",
+              "boundAt",
+              "connectionLive"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "github": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "connectUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "installUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manageUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "connected",
+          "connectUrl",
+          "installUrl",
+          "manageUrl"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "repository",
+      "github"
+    ],
+    "additionalProperties": false
+  }
+}

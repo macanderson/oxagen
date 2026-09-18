@@ -20,11 +20,24 @@
  */
 
 import { Hono } from "hono";
-import { createHmac } from "node:crypto";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+// The install URL, its signed state and the verification of that state live in
+// @oxagen/github: a capability handler needs the same install URL and cannot
+// import from apps/api, and two copies of one HMAC scheme drift apart silently.
+import {
+  GITHUB_SETTINGS_INSTALLATIONS_URL,
+  buildIdentityAuthUrl,
+  buildInstallAuthUrl,
+  buildManageInstallationUrl,
+  parseReturnTo,
+  verifyInstallState,
+  type GithubInstallState,
+  type GithubInstallStateError,
+} from "@oxagen/github";
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
+import { assertOrgRole, type OrgRoleRequirement } from "@oxagen/iam/org-role";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
 import { upsertGithubInstallation } from "./github-installations";
@@ -38,18 +51,6 @@ import { logger } from "../../middleware/logger";
 export const githubOauthRoute = new Hono<AppEnv>();
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-function buildStateHmac(stateJson: string, secret: string): string {
-  return createHmac("sha256", secret).update(stateJson).digest("hex");
-}
-
-function encodeState(stateJson: string): string {
-  return Buffer.from(stateJson).toString("base64url");
-}
-
-function decodeState(encoded: string): string {
-  return Buffer.from(encoded, "base64url").toString("utf8");
-}
 
 /**
  * Decrypt an access token stored as { keyId, ciphertext } JSON payload.
@@ -276,122 +277,150 @@ function buildManageInstallationsUrl(
   const slug =
     configuredSlug?.trim() || installations.find((i) => i.app_slug)?.app_slug;
   return slug
-    ? `https://github.com/apps/${slug}/installations/new`
-    : "https://github.com/settings/installations";
+    ? buildManageInstallationUrl(slug)
+    : GITHUB_SETTINGS_INSTALLATIONS_URL;
 }
 
 /**
- * Where the OAuth callback should land the user after a connect. The install
- * now lives in Workspace Settings → GitHub (1 workspace = 1 app install), while
- * the legacy in-wizard connect still returns to the sources picker. The value is
- * carried in the signed state so the (single, global) callback can route back to
- * the surface the connect started from.
+ * The callback's wording for each way a state fails to verify. The verifier
+ * returns a reason rather than a message so this route keeps the exact strings
+ * its clients and tests already read.
  */
-type GithubConnectReturnTo = "settings" | "sources";
-
-function parseReturnTo(raw: string | undefined): GithubConnectReturnTo {
-  return raw === "settings" ? "settings" : "sources";
-}
-
-/** Signed-state payload round-tripped through GitHub's `state` query param. */
-interface GithubInstallState {
-  orgId: string;
-  workspaceId: string;
-  /** publicId of a pre-created source_connection, or null for a settings-level connect. */
-  connectionId: string | null;
-  returnTo: GithubConnectReturnTo;
-  expiresAt: number;
-  nonce: string;
-}
+const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
+  invalid_format: "Invalid state format",
+  invalid_encoding: "Invalid state encoding",
+  invalid_signature: "Invalid state signature",
+  invalid_json: "Invalid state JSON",
+  expired: "OAuth state has expired — please start the OAuth flow again",
+};
 
 /**
- * Build the signed GitHub App installation URL (`installations/new?state=…`).
+ * The org roles that may start a SETTINGS-level GitHub connect.
  *
- * Drive the user through the App *installation* flow, NOT the bare
- * `login/oauth/authorize` flow: the connector needs the App installed on the
- * target org to read repos, and `installations/new` both installs the App and —
- * with "Request user authorization (OAuth) during installation" enabled — returns
- * an OAuth `code` to the configured callback. GitHub round-trips the `state` we
- * pass here back to the callback, so it can verify the HMAC and attribute the
- * install to the right org/workspace (and connection, when present). The
- * post-install redirect target is the App's configured Callback URL, so no
- * redirect_uri is passed.
+ * The same pair `attach_github_installation`, `get_main_repository` and
+ * `bind_main_repository` admit (INV-29), and it has to be: a settings state
+ * names the workspace and nothing else, so whoever holds one can complete the
+ * identity leg as themselves and have the callback attach an installation THEY
+ * reach onto the workspace's authoritative GitHub connection — overwriting the
+ * one an Owner configured, and redirecting every repository operation this
+ * workspace runs through.
+ *
+ * The capability gate alone did not stop that, because the HTTP route is a
+ * second path to the same write and only one of them was gated. Membership is
+ * what the mounted middleware establishes; role is what this asserts.
  */
-function buildInstallAuthUrl(
-  appSlug: string,
-  stateSecret: string,
-  payload: {
-    orgId: string;
-    workspaceId: string;
-    connectionId: string | null;
-    returnTo: GithubConnectReturnTo;
-  },
-): string {
-  const stateJson = JSON.stringify({
-    orgId: payload.orgId,
-    workspaceId: payload.workspaceId,
-    connectionId: payload.connectionId,
-    returnTo: payload.returnTo,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    nonce: crypto.randomUUID(),
-  } satisfies GithubInstallState);
+const SETTINGS_CONNECT_ROLES: OrgRoleRequirement = {
+  org: ["Owner", "Admin"],
+};
 
-  const hmac = buildStateHmac(stateJson, stateSecret);
-  const encodedState = encodeState(stateJson);
+/**
+ * The roles that may start the LEGACY IN-WIZARD connect — a state that NAMES a
+ * pre-created `source_connection`.
+ *
+ * The same pair `create_connection` and `delete_connection` admit
+ * (`packages/oxagen/src/contracts/connection.create.ts`: org Owner/Admin, or
+ * workspace Owner), so the route and the capability give one answer about who
+ * may set a connection's credentials up rather than two.
+ *
+ * It needs a gate, and it never had one. The three earlier attempts at this
+ * finding all spared this leg, each time on the reasoning that it "keeps the
+ * authorization it already has" — and it had none. The mounted middleware
+ * establishes workspace MEMBERSHIP and says nothing about role, and
+ * `list_connections` admits a workspace Member, so a Member could read an
+ * Owner-created connection's `publicId` out of the list, ask this route for a
+ * state naming it, and authorize their own GitHub account into the callback's
+ * `conn` branch — which:
+ *
+ *   - repoints `source_connections.oauth_account_id` at whichever GitHub
+ *     account authorized the callback, unconditionally, so every later
+ *     `/installations` and `/repositories` read for that connection resolves
+ *     THEIR token;
+ *   - overwrites `deliveryConfig.installationId` with any installation that
+ *     account reaches (`installationClaimVerified` proves reachability BY THE
+ *     AUTHORIZING USER, which is exactly what an attacker has), and that id is
+ *     what `resolveWorkspaceGithubInstallation` hands to
+ *     `list_installation_repositories` / `bind_main_repository`, which mint a
+ *     token with the platform App's private key;
+ *   - resets `status` to `pending_setup`, taking a live connection out of
+ *     service.
+ *
+ * None of that is a read. Membership is not the bar for it.
+ */
+const CONNECTION_SETUP_ROLES: OrgRoleRequirement = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+};
 
-  return (
-    `https://github.com/apps/${encodeURIComponent(appSlug)}/installations/new` +
-    `?state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
+/**
+ * Refuse to mint a signed install state for anyone who does not hold the roles
+ * the write on the other side of it admits.
+ *
+ * Mint time is the enforceable point. The callback is a public OAuth redirect
+ * with no session guarantee — that is exactly why it writes no `created_by_id`
+ * — so a role cannot be re-checked there; the only moment a person is known is
+ * when they ask for the URL. `assertOrgRole` throws `HandlerError
+ * { code: "forbidden" }`, which the API's error middleware maps to 403.
+ *
+ * A caller with no `userId` is refused as `no_principal`. That is the intended
+ * answer and not an oversight: every capability on the other side of this flow
+ * requires a human. It does not refuse the CLI, which is a real caller of the
+ * connection leg (`oxagen init` creates the connection and then asks for its
+ * auth URL): `ApiKeyResult.userId` carries the key's creator for a CLI session
+ * key, so the gate resolves that person's roles. A key that names no creator —
+ * every other kind — is the one this turns away.
+ *
+ * Scoped by hand because this route makes no `invoke()` call, so nothing else
+ * has opened a tenant scope for the role lookup to read in.
+ */
+async function assertMayMintInstallState(
+  orgId: string,
+  workspaceId: string,
+  userId: string | null,
+  required: OrgRoleRequirement,
+): Promise<void> {
+  await runInTenantScope({ orgId, workspaceId }, () =>
+    assertOrgRole({ orgId, workspaceId, userId }, required),
   );
 }
 
 /**
- * Build the signed GitHub user-authorization URL (`login/oauth/authorize`) — the
- * IDENTITY leg, and the PRIMARY "Connect GitHub" entry point.
+ * Whether `connectionPublicId` names a live `source_connection` of THIS org and
+ * workspace.
  *
- * Why this and not `installations/new`: the install URL only round-trips an OAuth
- * `code` on the FIRST install of the App on an account. Once the App is already
- * installed on an org, GitHub degrades to its stateless Setup-URL "update"
- * redirect, which carries NO `code` and NO signed `state` — so a SECOND Oxagen
- * tenant (a different org/workspace) can never establish its own token and dead-
- * ends at "not connected". The bare user-authorization endpoint has no such
- * dependence: it ALWAYS returns a fresh `code` and echoes our signed `state`,
- * installed-or-not (and silently round-trips with no prompt if the user already
- * authorized). That single fresh `code` is exactly what the callback's
- * oauth_accounts upsert needs, so the second tenant becomes connected and can
- * then attach to the already-installed org via `/user/installations`.
+ * A state is a signed, ten-minute bearer of the connection it names, so the
+ * name is checked before it is signed rather than after it comes back. The
+ * callback fences the same lookup and 404s an unresolvable id, which stops the
+ * write; it does not stop the state existing, and a signed state for a
+ * connection that does not resolve is a credential for nothing that still reads
+ * as one. Refusing at mint keeps the two answers identical and moves the
+ * failure to the moment a person is on the other end of it.
  *
- * GitHub redirects to the App's configured Callback URL (our
- * `/oauth/github/callback`) — the same endpoint the install leg lands on — so no
- * `redirect_uri` is passed.
+ * Read inside the tenant scope so RLS bounds it to this org, with the org and
+ * workspace written out as well — the same shape `resolveConnectionAccessToken`
+ * and the callback both use.
  */
-function buildIdentityAuthUrl(
-  clientId: string,
-  stateSecret: string,
-  payload: {
-    orgId: string;
-    workspaceId: string;
-    connectionId: string | null;
-    returnTo: GithubConnectReturnTo;
-  },
-): string {
-  const stateJson = JSON.stringify({
-    orgId: payload.orgId,
-    workspaceId: payload.workspaceId,
-    connectionId: payload.connectionId,
-    returnTo: payload.returnTo,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-    nonce: crypto.randomUUID(),
-  } satisfies GithubInstallState);
-
-  const hmac = buildStateHmac(stateJson, stateSecret);
-  const encodedState = encodeState(stateJson);
-
-  return (
-    `https://github.com/login/oauth/authorize` +
-    `?client_id=${encodeURIComponent(clientId)}` +
-    `&state=${encodeURIComponent(`${encodedState}.${hmac}`)}`
+async function connectionExistsInScope(
+  orgId: string,
+  workspaceId: string,
+  connectionPublicId: string,
+): Promise<boolean> {
+  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ id: schema.sourceConnections.id })
+        .from(schema.sourceConnections)
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1),
+    ),
   );
+  return rows.length > 0;
 }
 
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
@@ -440,6 +469,48 @@ githubOauthRoute.get("/auth-url", async (c) => {
       },
       503,
     );
+  }
+
+  // EVERY state this route mints is gated. Which roles, by what the state can
+  // DO — never by the label the caller typed.
+  //
+  // `returnTo` is a free query parameter and the callback does not dispatch on
+  // it: it picks the write path from the RESOLVED CONNECTION, and `returnTo`
+  // only decides which page the redirect lands on at the end. So it appears in
+  // neither predicate below. It appeared in two earlier ones and both were
+  // walked around by asking for the other word.
+  //
+  //   - No `connectionId` → the callback reaches
+  //     `attachVerifiedSettingsInstallation` / `resolveSettingsInstallationFromUser`,
+  //     the settings write onto the workspace's authoritative GitHub
+  //     connection → `SETTINGS_CONNECT_ROLES`.
+  //   - A `connectionId` → the callback's `conn` branch, which repoints that
+  //     connection's OAuth account, its installation id and its status →
+  //     `CONNECTION_SETUP_ROLES`. See that constant for why membership was
+  //     never the bar for it.
+  //
+  // A named connection is then resolved before it is signed into anything: a
+  // state is a ten-minute bearer of the connection it names, so an id that does
+  // not resolve in this org and workspace is refused here rather than carried
+  // to GitHub and refused on the way back.
+  const userId = c.get("userId") ?? null;
+  if (connectionId === null) {
+    await assertMayMintInstallState(
+      orgId,
+      workspaceId,
+      userId,
+      SETTINGS_CONNECT_ROLES,
+    );
+  } else {
+    await assertMayMintInstallState(
+      orgId,
+      workspaceId,
+      userId,
+      CONNECTION_SETUP_ROLES,
+    );
+    if (!(await connectionExistsInScope(orgId, workspaceId, connectionId))) {
+      return c.json({ error: "Connection not found" }, 404);
+    }
   }
 
   const statePayload = { orgId, workspaceId, connectionId, returnTo };
@@ -775,6 +846,17 @@ githubOauthRoute.get("/status", async (c) => {
     );
   }
 
+  // Both URLs below carry a SETTINGS state, so this route is the same door as
+  // /auth-url?returnTo=settings and takes the same gate. Refusing the whole
+  // response rather than blanking the two URLs keeps one rule with one shape:
+  // a settings-scoped signed state is an Owner/Admin thing to hold.
+  await assertMayMintInstallState(
+    orgId,
+    workspaceId,
+    c.get("userId") ?? null,
+    SETTINGS_CONNECT_ROLES,
+  );
+
   const stateArgs = {
     orgId,
     workspaceId,
@@ -838,6 +920,450 @@ githubOauthRoute.get("/status", async (c) => {
   });
 });
 
+/** The connector id of a workspace's GitHub source connection. */
+const GITHUB_CONNECTOR_ID = "github";
+
+/**
+ * A GitHub installation id this route is willing to persist onto a connection:
+ * a plain positive integer, which is exactly the shape `installationIdOf`
+ * (packages/handlers/src/repository.github-connection.ts) accepts when the
+ * repository capabilities read it back. Anything else would create a row every
+ * reader silently skips — a connection that looks attached and is not — so the
+ * settings leg logs and drops it instead of writing it.
+ */
+const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
+
+/**
+ * What the callback settled about which installation this workspace acts
+ * through. Five states, because the operator's next click differs in each and
+ * a redirect that flattened them would put the wrong door in front of them.
+ *
+ *   attached    an installation was verified and written.
+ *   refused     one was claimed and declined — say so; do not swallow it.
+ *   unverified  one was claimed and there was nothing to check it against: the
+ *               install leg returned no `code`, so no user token exists and
+ *               `GET /user/installations` cannot be asked. Distinct from
+ *               `refused` because the person did nothing wrong and the next
+ *               click differs — the App IS installed now, so the identity leg
+ *               finishes it in one step, whereas `refused` means installing
+ *               again on the right account. Whether a `code` comes back is the
+ *               App's "request user authorization (OAuth) during installation"
+ *               setting, which is external configuration neither leg controls.
+ *   choose      the authorizing user reaches several and the platform will not
+ *               guess which one this workspace should act through.
+ *   uninstalled the authorizing user reaches none: the App is installed on no
+ *               account they administer, so the next click is to install it,
+ *               not to authorize again.
+ *   none        nothing was claimed and nothing could be looked up — there is
+ *               no question to answer, so the honest acknowledgement is silence.
+ */
+type InstallAttachOutcome =
+  | "none"
+  | "attached"
+  | "refused"
+  | "unverified"
+  | "choose"
+  | "uninstalled";
+
+/**
+ * The query the settings redirect appends for each outcome — the whole contract
+ * the Workspace settings dialog reads. The dialog treats anything it does not
+ * recognise as no acknowledgement, which is what makes adding a state here
+ * safe: a new word reaches an old dialog as silence, never as a claim.
+ */
+const GITHUB_ACK: Record<InstallAttachOutcome, string> = {
+  attached: "&github=connected",
+  refused: "&github=failed",
+  unverified: "&github=authorize",
+  choose: "&github=choose",
+  uninstalled: "&github=install",
+  none: "",
+};
+
+/**
+ * Whether the user who authorized THIS callback can actually reach the
+ * installation the redirect names.
+ *
+ * `installation_id` is a query parameter on a public endpoint. The state HMAC
+ * proves which org+workspace started the flow; it proves nothing whatever about
+ * the id, and the `code` is optional on this leg, so a person who legitimately
+ * administers their own workspace can obtain a valid state for it (ten minutes)
+ * and then call this callback directly with any numeric id they like — say, one
+ * belonging to another tenant.
+ *
+ * That used not to matter, on either leg. The legacy wizard also took the id
+ * from this parameter, but everything downstream of it called GitHub with the
+ * **user OAuth token** (`GET /user/installations/:id/repositories`), and GitHub
+ * itself refuses an installation that user cannot reach. The three repository
+ * capabilities added in #2967 do not: `list_installation_repositories` and
+ * `bind_main_repository` mint a token with the **platform App's private key**
+ * (`getInstallationToken`), which checks no caller entitlement at all. GitHub's
+ * own check is gone, so an unverified id is cross-tenant access to another
+ * account's repositories — listed, and bindable.
+ *
+ * So the id is checked against `GET /user/installations`, the authenticated
+ * user's own authoritative list, through the same `fetchAllInstallations` the
+ * `/installations` and `/status` routes page with. Anything that is not a
+ * positive match — a fetch that fails, a fetch that throws, a list the id is
+ * absent from — is a refusal. Fail closed: the cost of a false refusal is the
+ * operator clicking Connect again, and the cost of a false acceptance is
+ * another tenant's source code.
+ *
+ * Both callback legs check through this; `installationClaimVerified` is the
+ * shared gate that calls it.
+ */
+async function userCanReachInstallation(
+  accessToken: string,
+  installationId: string,
+): Promise<boolean> {
+  let fetched: FetchInstallationsResult;
+  try {
+    fetched = await fetchAllInstallations(accessToken);
+  } catch (err) {
+    // A network failure or the 10s per-page timeout. Never fatal to the
+    // callback — the redirect below still lands the operator on the dialog.
+    logger.warn(
+      { err: String(err), installationId },
+      "github install callback: could not verify the installation against /user/installations — not attached",
+    );
+    return false;
+  }
+  if (!fetched.ok) {
+    logger.warn(
+      { status: fetched.status, installationId },
+      "github install callback: /user/installations answered non-OK while verifying the installation — not attached",
+    );
+    return false;
+  }
+  return fetched.installations.some(
+    (inst) => String(inst.id) === installationId,
+  );
+}
+
+/** Which of the callback's two legs a claim arrived on, for the log line. */
+type InstallLeg = "settings" | "wizard";
+
+/**
+ * Whether an `installation_id` the redirect carried is one this callback is
+ * willing to write onto a connection at all: syntactically usable by the
+ * readers, and demonstrably reachable by the user who authorized this leg.
+ *
+ * The syntax guard runs first as a cheap pre-filter — it is what keeps a value
+ * `installationIdOf` would silently skip out of the connection, so a row never
+ * looks attached while every reader ignores it — and the reachability check
+ * runs second, because it costs a GitHub round trip.
+ *
+ * BOTH legs go through this. The settings leg gained the check first; the
+ * legacy wizard leg was left alone on the reasoning that everything it fed
+ * called GitHub with the user token, which GitHub scopes to that user itself.
+ * That reasoning expired with #2967: `resolveWorkspaceGithubInstallation`
+ * (packages/handlers/src/repository.github-connection.ts) hands **any** github
+ * connection row carrying an `installationId` — legacy wizard rows included —
+ * to `list_installation_repositories` and `bind_main_repository`, and those
+ * mint a token with the **platform App's private key**, which checks no caller
+ * entitlement. So an id written by the wizard leg is an id the App acts
+ * through, and the wizard leg's `installation_id` is the same unproven query
+ * parameter on the same public endpoint as the settings leg's. One door or two
+ * does not change what is behind it, so there is one check.
+ */
+type InstallClaimVerdict =
+  /** Syntactically usable and demonstrably reachable by the authorizing user. */
+  | "ok"
+  /** Not a shape `installationIdOf` would ever read back. */
+  | "malformed"
+  /** No `code` on this leg, so no user token, so nothing to check it against. */
+  | "unverifiable"
+  /** Checked against the user's own list and absent from it. */
+  | "unreachable";
+
+async function installationClaimVerified(args: {
+  orgId: string;
+  workspaceId: string;
+  installationId: string;
+  userAccessToken: string | null;
+  leg: InstallLeg;
+}): Promise<InstallClaimVerdict> {
+  const { orgId, workspaceId, installationId, userAccessToken, leg } = args;
+
+  if (!INSTALLATION_ID_PATTERN.test(installationId)) {
+    logger.warn(
+      { orgId, workspaceId, installationId, leg },
+      "github install callback: the install carried a malformed installation_id — not attached to the workspace connection",
+    );
+    return "malformed";
+  }
+
+  // No `code` on this leg → no user token → nothing can testify that this
+  // person reaches this installation. An unverifiable claim is not a weaker
+  // claim, it is no claim, and it is the exact shape the forgery takes.
+  //
+  // It is named apart from the other refusals only so the redirect can say
+  // which next click finishes the job. Nothing is attached either way: the
+  // install DID happen, and an honest person's next step is one click, but a
+  // forged id arrives in exactly this shape too, so the answer is the same.
+  if (!userAccessToken) {
+    logger.warn(
+      { orgId, workspaceId, installationId, leg },
+      "github install callback: the install carried an installation_id but no OAuth code to verify it against — not attached",
+    );
+    return "unverifiable";
+  }
+
+  if (!(await userCanReachInstallation(userAccessToken, installationId))) {
+    logger.warn(
+      { orgId, workspaceId, installationId, leg },
+      "github install callback: the authorizing user cannot reach this installation — not attached to the workspace connection",
+    );
+    return "unreachable";
+  }
+
+  return "ok";
+}
+
+/**
+ * Attach a settings-level `installation_id` to the workspace, but only once the
+ * authorizing user is shown to reach it. Answers the outcome the redirect needs.
+ */
+async function attachVerifiedSettingsInstallation(args: {
+  orgId: string;
+  workspaceId: string;
+  installationId: string;
+  userAccessToken: string | null;
+  oauthAccountId: string | null;
+  now: Date;
+}): Promise<InstallAttachOutcome> {
+  const verdict = await installationClaimVerified({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    installationId: args.installationId,
+    userAccessToken: args.userAccessToken,
+    leg: "settings",
+  });
+  // Nothing but "ok" attaches. The split exists so the dialog can name the
+  // right next click: an install that came back without a `code` needs one
+  // identity round trip, and everything else needs the App put on the account
+  // that owns the repository.
+  if (verdict === "unverifiable") return "unverified";
+  if (verdict !== "ok") return "refused";
+
+  await attachWorkspaceGithubInstallation({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    installationId: args.installationId,
+    oauthAccountId: args.oauthAccountId,
+    now: args.now,
+  });
+  return "attached";
+}
+
+/**
+ * Settle a settings-level connect that arrived with NO `installation_id`.
+ *
+ * This is the identity leg, and it is now the leg the dialog opens. It has to
+ * be: `installations/new` only round-trips a `code` and our signed state on the
+ * FIRST install of the App on an account, so with it in the Connect button a
+ * reconnect, and a second workspace connecting to an account that already has
+ * the App, both dead-ended at the callback's no-state branch. The identity URL
+ * (`login/oauth/authorize`) always returns a `code` and echoes the state —
+ * and never returns an `installation_id`.
+ *
+ * So for a first-time user this callback used to end holding a live user token,
+ * with `github.connected` still false and one button on the dialog that would
+ * do the very same thing again. The token is not nothing, though: it is
+ * authority to ask GitHub what this person reaches. `GET /user/installations`
+ * answers, and each answer has its own next click.
+ *
+ *   one   attach it, and the person lands on the repository picker. It came
+ *         from their own authenticated list, so it is verified by
+ *         construction — and it still goes through
+ *         `attachVerifiedSettingsInstallation`, which asks GitHub again. That
+ *         second round trip is deliberate: one gate, taken by every path, is
+ *         worth more than the 200ms, and a gate with an exemption is a gate
+ *         with a way past it.
+ *   many  say so and attach nothing. Which account a workspace acts through is
+ *         a choice with consequences — the repository capabilities mint tokens
+ *         with the platform App's key against whatever is attached — and
+ *         guessing it is exactly the kind of quiet decision this product
+ *         exists not to make. `list_github_installations` offers the choice on
+ *         the dialog and `attach_github_installation` settles it.
+ *   none  the App is installed nowhere they administer. Authorizing again
+ *         would loop; the door they need is `installations/new`, which the
+ *         dialog holds as `manageUrl`.
+ *
+ * A GitHub failure is `none`, not `refused`: nothing was claimed, so there is
+ * nothing to decline, and the dialog re-reads its own state on arrival anyway.
+ */
+async function resolveSettingsInstallationFromUser(args: {
+  orgId: string;
+  workspaceId: string;
+  userAccessToken: string;
+  oauthAccountId: string | null;
+  now: Date;
+}): Promise<InstallAttachOutcome> {
+  let fetched: FetchInstallationsResult;
+  try {
+    fetched = await fetchAllInstallations(args.userAccessToken);
+  } catch (err) {
+    logger.warn(
+      { err: String(err), orgId: args.orgId, workspaceId: args.workspaceId },
+      "github identity callback: could not list the authorizing user's installations — nothing attached",
+    );
+    return "none";
+  }
+  if (!fetched.ok) {
+    logger.warn(
+      {
+        status: fetched.status,
+        orgId: args.orgId,
+        workspaceId: args.workspaceId,
+      },
+      "github identity callback: /user/installations answered non-OK — nothing attached",
+    );
+    return "none";
+  }
+
+  // Keep the platform catalog fresh from the user's authoritative view, exactly
+  // as the /installations listing does. Best-effort: a registry hiccup must
+  // never decide whether a connect completes.
+  await Promise.allSettled(
+    fetched.installations.map(registerInstallationFromApi),
+  );
+
+  if (fetched.installations.length === 0) return "uninstalled";
+  if (fetched.installations.length > 1) return "choose";
+
+  const only = fetched.installations[0];
+  if (!only) return "none";
+
+  return attachVerifiedSettingsInstallation({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    installationId: String(only.id),
+    userAccessToken: args.userAccessToken,
+    oauthAccountId: args.oauthAccountId,
+    now: args.now,
+  });
+}
+
+/**
+ * Attach a settings-level GitHub App install to the workspace's GitHub source
+ * connection, creating that connection when the workspace has none.
+ *
+ * Why this exists: `get_main_repository`, `bind_main_repository` and
+ * `list_installation_repositories` all read the workspace's installation out of
+ * `ingestion.source_connections` through one shared resolver
+ * (`resolveWorkspaceGithubInstallation`). The platform catalog the callback
+ * writes a few lines above — `ingestion.github_installations` — is a different,
+ * org-less table that no capability reads. So without this, a settings-level
+ * install (`connectionId: null`) landed the operator back on the dialog that
+ * sent them to GitHub with `connected: false` still showing and nothing to
+ * click: the install completed and the product could not see it.
+ *
+ * Scoped by BOTH ids from the HMAC-verified state, on the system seam because a
+ * public OAuth redirect runs in no tenant scope. The select matches the
+ * resolver's predicate exactly (org + workspace + connector + not soft-deleted)
+ * so the row written is the row the readers read; picking by any narrower rule
+ * would risk writing one row while they resolve another. Ordering is newest
+ * first so a workspace carrying several legacy wizard connections gets a
+ * deterministic answer — and `resolveWorkspaceGithubInstallation` now orders the
+ * same way, because a predicate the two share and an ordering they do not is
+ * still two rules: this could attach to the newest connection while the resolver
+ * answered an older one, and the repository capabilities would go on acting
+ * through a stale installation.
+ *
+ * The caller has already established that the authorizing user can reach this
+ * installation (`attachVerifiedSettingsInstallation`). Nothing below re-checks
+ * it, so this must not be called from anywhere that has not.
+ */
+async function attachWorkspaceGithubInstallation(args: {
+  orgId: string;
+  workspaceId: string;
+  installationId: string;
+  oauthAccountId: string | null;
+  now: Date;
+}): Promise<void> {
+  const { orgId, workspaceId, installationId, oauthAccountId, now } = args;
+
+  await withSystemDb(async (tx) => {
+    const existing = await tx
+      .select({
+        id: schema.sourceConnections.id,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
+      })
+      .from(schema.sourceConnections)
+      .where(
+        and(
+          eq(schema.sourceConnections.orgId, orgId),
+          eq(schema.sourceConnections.workspaceId, workspaceId),
+          eq(schema.sourceConnections.connectorId, GITHUB_CONNECTOR_ID),
+          isNull(schema.sourceConnections.deletedAt),
+          // Same exclusion the resolver makes: `delete_connection` sets
+          // `deleting` and leaves `deleted_at` to the purge job, so a row mid
+          // delete is not a row to attach to. Skipping it here means a fresh
+          // install after a delete inserts a fresh connection rather than
+          // reviving the dying one — and, because this predicate and the
+          // resolver's are the same, the row written stays the row read.
+          notInArray(schema.sourceConnections.status, ["deleting", "deleted"]),
+        ),
+      )
+      .orderBy(desc(schema.sourceConnections.createdAt))
+      .limit(1);
+
+    const row = existing[0];
+    if (row) {
+      // Merge, never replace: a connection the legacy wizard already configured
+      // carries operational keys (owner/repo/defaultBranch, syncDepthDays) the
+      // resync path reads. Status is left alone on purpose — a workspace that
+      // has already bound a repository is `connected`, and re-installing the App
+      // is not a reason to demote it.
+      await tx
+        .update(schema.sourceConnections)
+        .set({
+          deliveryConfig: {
+            ...((row.deliveryConfig as Record<string, unknown> | null) ?? {}),
+            installationId,
+          },
+          ...(oauthAccountId ? { oauthAccountId } : {}),
+          updatedAt: now,
+        })
+        .where(eq(schema.sourceConnections.id, row.id));
+      return;
+    }
+
+    await tx.insert(schema.sourceConnections).values({
+      orgId,
+      workspaceId,
+      connectorId: GITHUB_CONNECTOR_ID,
+      displayName: "GitHub",
+      // The pair `connection.create` would record for a github connection: the
+      // install leg runs the App's authorization-code grant ("Request user
+      // authorization (OAuth) during installation"), and the connector declares
+      // webhook delivery (packages/ingestion/src/connectors/github).
+      authScheme: "oauth2_authorization_code",
+      deliveryMethod: "webhook",
+      deliveryConfig: { installationId },
+      // `pending_setup`, not `connected`. The installation exists but nothing is
+      // bound through it yet, and `status = 'connected'` is precisely what the
+      // ingestion poll scheduler claims
+      // (`source_connections_poll_due_partial_idx`), so marking it connected
+      // here would enrol a workspace with no record-type mappings into the sync
+      // loop. `bind_main_repository` promotes it to `connected` when it binds a
+      // repository, and all three repository reads match on the installation id
+      // rather than the status — so `pending_setup` blocks nothing the dialog
+      // needs while keeping an unbound install out of the poller.
+      status: "pending_setup",
+      ...(oauthAccountId ? { oauthAccountId } : {}),
+      createdAt: now,
+      updatedAt: now,
+      // No `created_by_id`. This is the public OAuth redirect: its security
+      // boundary is the state HMAC, not an HTTP session, so there is no acting
+      // user in context. The column is nullable (ADR-077) and a fabricated id
+      // would be worse than an honest null — the install is evidenced by the
+      // signed state and the `github_installations` catalog row.
+    });
+  });
+}
+
 // ── Public OAuth callback route ───────────────────────────────────────────────
 
 /**
@@ -850,8 +1376,11 @@ githubOauthRoute.get("/status", async (c) => {
  *   1. Decode + verify the state HMAC (rejects tampered/expired state).
  *   2. Exchange the code for an access token via GitHub.
  *   3. Encrypt + store the tokens in ingestion.oauth_accounts.
- *   4. Link the oauth_account to the source_connection row.
- *   5. Redirect user back to the app's knowledge/sources page.
+ *   4. Attach the installation to the workspace's GitHub source connection —
+ *      the legacy wizard's own connection, or, for a settings-level connect,
+ *      the workspace's one GitHub connection, created here if it has none.
+ *   5. Redirect the user back to the surface the connect started from: the
+ *      Workspace settings dialog, or the legacy knowledge/sources wizard.
  */
 export const githubOauthCallbackRoute = new Hono<AppEnv>();
 
@@ -913,51 +1442,15 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     return c.json({ error: "Missing state parameter" }, 400);
   }
 
-  // State format: "{base64url_json}.{hmac_hex}"
-  const dotIdx = rawState.lastIndexOf(".");
-  if (dotIdx === -1) {
-    return c.json({ error: "Invalid state format" }, 400);
+  // Signature, shape and expiry, verified in @oxagen/github against the same
+  // scheme that minted the state. `connectionId` is null for a settings-level
+  // connect (1 workspace = 1 app install, no source_connection yet); `returnTo`
+  // may be absent on states minted before that field existed → "sources".
+  const verified = verifyInstallState(rawState, stateSecret);
+  if (!verified.ok) {
+    return c.json({ error: STATE_ERROR_MESSAGES[verified.error] }, 400);
   }
-
-  const encodedState = rawState.slice(0, dotIdx);
-  const receivedHmac = rawState.slice(dotIdx + 1);
-
-  let stateJson: string;
-  try {
-    stateJson = decodeState(encodedState);
-  } catch {
-    return c.json({ error: "Invalid state encoding" }, 400);
-  }
-
-  const expectedHmac = buildStateHmac(stateJson, stateSecret);
-  // Constant-time comparison to prevent timing attacks
-  if (receivedHmac.length !== expectedHmac.length) {
-    return c.json({ error: "Invalid state signature" }, 400);
-  }
-  let hmacMismatch = 0;
-  for (let i = 0; i < expectedHmac.length; i++) {
-    hmacMismatch |= expectedHmac.charCodeAt(i) ^ receivedHmac.charCodeAt(i);
-  }
-  if (hmacMismatch !== 0) {
-    return c.json({ error: "Invalid state signature" }, 400);
-  }
-
-  // Parse state payload. `connectionId` is null for a settings-level connect
-  // (1 workspace = 1 app install, no source_connection yet); `returnTo` may be
-  // absent on states minted before this field existed → default to "sources".
-  let statePayload: GithubInstallState;
-  try {
-    statePayload = JSON.parse(stateJson) as GithubInstallState;
-  } catch {
-    return c.json({ error: "Invalid state JSON" }, 400);
-  }
-
-  if (Date.now() > statePayload.expiresAt) {
-    return c.json(
-      { error: "OAuth state has expired — please start the OAuth flow again" },
-      400,
-    );
-  }
+  const statePayload: GithubInstallState = verified.state;
 
   const { orgId, workspaceId, connectionId: connectionPublicId } = statePayload;
   const returnTo = parseReturnTo(statePayload.returnTo);
@@ -990,6 +1483,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     );
     conn = connRows[0] ?? null;
     if (!conn) {
+      // Refused, never downgraded. A state that NAMED a connection and whose
+      // connection does not resolve in its own org+workspace is not the same
+      // thing as a state that named none: letting it through would land on the
+      // `else` branches below — the settings write onto the workspace's
+      // authoritative GitHub connection — which is a different, more powerful
+      // write than the one the state asked for. So the leg stops here.
       return c.json({ error: "Connection not found" }, 404);
     }
   }
@@ -1000,6 +1499,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // the installation and let the user re-authorize from the wizard rather than
   // failing the whole connect.
   let oauthAccountId: string | null = null;
+  // Kept beyond the exchange block: the settings-level attach below must prove
+  // the person who authorized this callback can actually reach the
+  // `installation_id` the redirect names, and GitHub's own
+  // `/user/installations` is the only thing that can say so. See
+  // `userCanReachInstallation`.
+  let userAccessToken: string | null = null;
   if (code) {
     const tokenResp = await fetch(
       "https://github.com/login/oauth/access_token",
@@ -1050,6 +1555,7 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     }
 
     const { access_token, refresh_token, expires_in } = tokenData;
+    userAccessToken = access_token;
 
     // Encrypt both tokens using envelope encryption
     const { adapter, keyId } = createIngestionCryptoAdapter();
@@ -1166,19 +1672,60 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     );
   }
 
-  // When the connect started from a source_connection (the legacy in-wizard
-  // flow), link the oauth_account (when obtained) and record the GitHub App
-  // installation id onto the connection, resetting to pending_setup (the user
-  // still picks repos). installationId is merged into deliveryConfig so the
-  // wizard can pre-select the just-installed org, without clobbering existing
-  // config keys. The settings connect has no connection, so this is skipped —
-  // the org's OAuth token (stored above) is all the settings surface needs.
+  // Attach the install to the workspace, by whichever of the two routes it came
+  // in on.
+  //
+  // Legacy in-wizard flow (`conn` resolved from the state's connectionId): link
+  // the oauth_account (when obtained) and record the GitHub App installation id
+  // onto that connection, resetting to pending_setup (the user still picks
+  // repos). installationId is merged into deliveryConfig so the wizard can
+  // pre-select the just-installed org, without clobbering existing config keys —
+  // and only once the authorizing user is shown to reach it, because the
+  // repository capabilities read this connection too.
+  //
+  // Settings-level connect (no connectionId — 1 workspace = 1 app install):
+  // there is no connection yet and one is still required, because the three
+  // repository capabilities behind the Workspace settings dialog read the
+  // workspace's installation out of `ingestion.source_connections`. The org's
+  // OAuth token stored above is NOT all that surface needs — that was true of
+  // the deprecated settings page, which read the org token through
+  // /connections/github/status, and false since #2967. See
+  // attachWorkspaceGithubInstallation for the whole argument.
+  let attachOutcome: InstallAttachOutcome = "none";
   if (conn) {
+    // The id goes through exactly the check the settings leg makes — see
+    // `installationClaimVerified` for why this leg is no longer exempt.
+    //
+    // What a refusal costs is deliberately bounded to the id. The other two
+    // things this update writes are not claims made by the redirect's query
+    // string: `oauthAccountId` names a token GitHub itself minted a few lines
+    // above in exchange for a `code` GitHub issued, and the `pending_setup`
+    // reset follows from the state HMAC, which proves which org, workspace and
+    // connection started this flow. Only `installation_id` is unproven. So a
+    // refusal drops the unproven fact and keeps the proven ones: the operator
+    // returns to the wizard holding a live token, picks an installation from
+    // `/user/installations` — where GitHub answers for reachability — and the
+    // connect completes. Refusing the whole update instead would strip a
+    // legitimately exchanged token from the connection and dead-end an honest
+    // user at "OAuth token not found for connection", which punishes the wrong
+    // party for a parameter the attacker, not they, controls.
+    let verifiedInstallationId: string | null = null;
+    if (installationId != null) {
+      const verdict = await installationClaimVerified({
+        orgId,
+        workspaceId,
+        installationId,
+        userAccessToken,
+        leg: "wizard",
+      });
+      verifiedInstallationId = verdict === "ok" ? installationId : null;
+    }
+
     const mergedDeliveryConfig =
-      installationId != null
+      verifiedInstallationId != null
         ? {
             ...((conn.deliveryConfig as Record<string, unknown> | null) ?? {}),
-            installationId,
+            installationId: verifiedInstallationId,
           }
         : undefined;
 
@@ -1195,6 +1742,31 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
         })
         .where(eq(schema.sourceConnections.id, conn.id)),
     );
+    attachOutcome = mergedDeliveryConfig
+      ? "attached"
+      : installationId != null
+        ? "refused"
+        : "none";
+  } else if (installationId != null) {
+    attachOutcome = await attachVerifiedSettingsInstallation({
+      orgId,
+      workspaceId,
+      installationId,
+      userAccessToken,
+      oauthAccountId,
+      now,
+    });
+  } else if (userAccessToken) {
+    // The identity leg: a code came back and an installation id never does.
+    // See resolveSettingsInstallationFromUser — this is where a first-time
+    // connect from an account that already carries the App stops dead-ending.
+    attachOutcome = await resolveSettingsInstallationFromUser({
+      orgId,
+      workspaceId,
+      userAccessToken,
+      oauthAccountId,
+      now,
+    });
   }
 
   // Determine org and workspace slugs from the state-encoded IDs.
@@ -1227,9 +1799,32 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // Route back to the surface the connect started from. Settings is the new home
   // for the install (1 workspace = 1 app install); the legacy wizard resumes at
   // the sources repo-picker, carrying the connectionId so it lands on Step 2.
+  //
+  // The settings target is the workspace landing route with the params that
+  // open the Workspace settings dialog on its Repository section. It used to be
+  // `/{org}/{ws}/settings/github?github_connected=1`, a route apps/app does not
+  // have: legacy-routes.ts 308s it to `/{org}/{ws}` and a 308 drops the query
+  // string, so a completed App install landed the operator on Fleet with no
+  // acknowledgement and nothing to do — the one moment the product had to say
+  // "now bind a repository" was spent on a silent redirect.
+  //
+  // The acknowledgement is the ATTACH's, not the redirect's. `github=connected`
+  // used to be unconditional, so a leg that attached nothing — no
+  // `installation_id` at all, or one the verification above refused — still told
+  // the dialog the App was attached, and the dialog's very next read answered
+  // `connected: false` and rendered the install panel. Announcing a connection
+  // the product cannot see is the exact dishonesty this work exists to remove,
+  // so each outcome gets its own word: `connected` only on a real attach,
+  // `failed` when a claim was made and declined, `authorize` when one was made
+  // and there was nothing to check it against (the install leg without a
+  // `code`: the App is on the account now, and one identity round trip
+  // finishes the job — a different next click from `failed`, which means
+  // install it on the right account), and nothing at all when there was no
+  // claim to make (the identity-only leg), because silence is the honest
+  // answer to a question nobody asked.
   const redirectUrl =
     returnTo === "settings"
-      ? `${appBaseUrl}/${orgSlug}/${wsSlug}/settings/github?github_connected=1`
+      ? `${appBaseUrl}/${orgSlug}/${wsSlug}?settings=repository${GITHUB_ACK[attachOutcome]}`
       : `${appBaseUrl}/${orgSlug}/${wsSlug}/knowledge/sources?setup=github` +
         (connectionPublicId
           ? `&connectionId=${encodeURIComponent(connectionPublicId)}`

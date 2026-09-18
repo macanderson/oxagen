@@ -9,11 +9,18 @@ const router = vi.hoisted(() => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
+const { parseGitHubUrl } = await import("@/shared/github-url");
 const { parseHostedInvoiceUrl } = await import("@/shared/invoice-url");
 const { parsePullRequestUrl } = await import("@/shared/pull-request-url");
 const { routes } = await import("@/shared/safe-path");
-const { HostedInvoiceLink, PullRequestLink, SafeForm, SafeLink, useNavigate } =
-  await import("./navigation");
+const {
+  GitHubLink,
+  HostedInvoiceLink,
+  PullRequestLink,
+  SafeForm,
+  SafeLink,
+  useNavigate,
+} = await import("./navigation");
 
 afterEach(() => {
   cleanup();
@@ -78,6 +85,20 @@ describe("PullRequestLink", () => {
     if (url === null) throw new Error("fixture url refused");
     render(<PullRequestLink to={url}>pull request</PullRequestLink>);
     const link = screen.getByRole("link", { name: "pull request" });
+    expect(link).toHaveAttribute("href", url);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  });
+});
+
+describe("GitHubLink", () => {
+  it("opens the App's install page in a new tab without an opener", () => {
+    const url = parseGitHubUrl(
+      "https://github.com/apps/oxagen/installations/new?state=signed",
+    );
+    if (url === null) throw new Error("fixture url refused");
+    render(<GitHubLink to={url}>install</GitHubLink>);
+    const link = screen.getByRole("link", { name: "install" });
     expect(link).toHaveAttribute("href", url);
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");

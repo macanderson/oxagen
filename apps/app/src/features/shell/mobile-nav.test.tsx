@@ -28,16 +28,46 @@ import { phoneWidth } from "@/test/phone";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
+import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
-const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform" }));
+const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname.split("?")[0],
-  useSearchParams: () => new URLSearchParams(nav.pathname.split("?")[1] ?? ""),
-  useRouter: () => ({ push: vi.fn() }),
+  // Both conventions, as in shell-client.test.tsx: `nav.query`, or a query
+  // carried on `nav.pathname`.
+  useSearchParams: () =>
+    new URLSearchParams(nav.query || (nav.pathname.split("?")[1] ?? "")),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+}));
+
+// The Workspace settings dialog reads through server actions on open. What is
+// under test here is the drawer, so the reads are stubbed at their seam and the
+// panel's own states are proven in workspace-settings.test.tsx.
+vi.mock("./workspace-settings-actions", () => ({
+  readWorkspaceRepository: vi.fn().mockResolvedValue({
+    ok: true,
+    value: {
+      repository: null,
+      github: {
+        connected: false,
+        connectUrl: null,
+        installUrl: null,
+        manageUrl: null,
+      },
+    },
+  }),
+  listInstallationRepositories: vi.fn(),
+  bindWorkspaceRepository: vi.fn(),
+  listGithubInstallations: vi.fn().mockResolvedValue({
+    ok: false,
+    reason: "conflict",
+    code: "github_not_authorized",
+  }),
+  attachGithubInstallation: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -105,7 +135,12 @@ function renderPhone(data: ShellData, page: ReactNode = null) {
     <NextIntlClientProvider
       locale="en"
       timeZone="UTC"
-      messages={{ ...en, ...shellMessages, ...uiMessages }}
+      messages={{
+        ...en,
+        ...shellMessages,
+        ...uiMessages,
+        ...workspaceSettingsMessages,
+      }}
     >
       <ShellClient data={data} />
       <div data-shell-page="">
@@ -331,6 +366,26 @@ describe("the other dialogs on a phone", () => {
     expect(within(flyout).getByTestId("assistant-composer")).toBeTruthy();
   });
 
+  // The drawer is a modal of its own. Opening Workspace settings from inside it
+  // without closing it first stacks two modal roots and two scrims, and the
+  // drawer is still there when the settings dialog closes — so the person lands
+  // back in the navigation they left rather than on the page. The nav links and
+  // the assistant launcher already take the drawer's `close`; so does this.
+  it("the workspace settings control closes the drawer before opening the dialog", async () => {
+    const user = userEvent.setup();
+    renderPhone(shellData());
+    await user.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = await screen.findByTestId("nav-drawer");
+    await user.click(within(drawer).getByTestId("open-workspace-settings"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("nav-drawer")).toBeNull();
+    });
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    // One modal surface, one scrim — not the drawer's stacked under the sheet's.
+    expect(document.querySelectorAll("[data-scrim]")).toHaveLength(1);
+  });
+
   // On a phone the control that opened the assistant is gone by the time the
   // assistant is open — the drawer unmounted it on the way out — so there is
   // nothing to hand focus back to. What must not happen is focus stranded on
@@ -403,7 +458,12 @@ describe("card tables", () => {
       <NextIntlClientProvider
         locale="en"
         timeZone="UTC"
-        messages={{ ...en, ...shellMessages, ...uiMessages }}
+        messages={{
+          ...en,
+          ...shellMessages,
+          ...uiMessages,
+          ...workspaceSettingsMessages,
+        }}
       >
         <ShellClient data={shellData()} />
         <div data-shell-page="">

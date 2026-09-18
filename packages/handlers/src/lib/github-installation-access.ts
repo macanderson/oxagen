@@ -1,12 +1,15 @@
-import { schema, withTenantDb } from "@oxagen/database";
-import { and, desc, eq } from "drizzle-orm";
-import { decrypt, resolveIngestionCryptoAdapterForKeyId } from "@oxagen/crypto";
+// One implementation of "what can this workspace's GitHub authorization
+// reach", shared with the two repository capabilities that offer and settle
+// the same choice. This file used to carry its own copy of the token lookup
+// and the `/user/installations` paging; a second copy of a reachability check
+// is a second place for it to drift, and the thing it guards is another
+// account's source code.
+import {
+  GithubUserInstallationsError,
+  listUserGithubInstallations,
+  resolveWorkspaceGithubUserToken,
+} from "../repository.github-user-installations";
 import { HTTPException } from "hono/http-exception";
-
-interface EncryptedToken {
-  keyId: string;
-  ciphertext: string;
-}
 
 /**
  * Authorization gate for binding a GitHub App installation to a workspace's
@@ -35,50 +38,21 @@ export async function assertGithubInstallationAccessible(
 ): Promise<void> {
   const targetId = String(installationId);
 
-  // The workspace's org GitHub OAuth token. oauth_accounts is org-keyed (one row
-  // per GitHub user per org); most-recently-refreshed wins. RLS (org_only) plus
-  // the explicit orgId filter bound this to the caller's org.
-  const [account] = await withTenantDb((tx) =>
-    tx
-      .select({ accessTokenEnc: schema.oauthAccounts.accessTokenEnc })
-      .from(schema.oauthAccounts)
-      .where(
-        and(
-          eq(schema.oauthAccounts.orgId, ctx.orgId),
-          eq(schema.oauthAccounts.provider, "github"),
-        ),
-      )
-      .orderBy(desc(schema.oauthAccounts.updatedAt))
-      .limit(1),
-  );
-
-  if (!account?.accessTokenEnc) {
+  // The workspace's org GitHub OAuth token. `oauth_accounts` is org-keyed (one
+  // row per GitHub user per org); most-recently-refreshed wins. RLS (org_only)
+  // plus the explicit orgId filter bound this to the caller's org. The two
+  // failures stay distinguishable because their next clicks differ.
+  const token = await resolveWorkspaceGithubUserToken(ctx);
+  if (!token.ok) {
     throw new HTTPException(403, {
       message:
-        "Cannot verify GitHub access for this installation — connect GitHub for this workspace first.",
+        token.reason === "no_account"
+          ? "Cannot verify GitHub access for this installation — connect GitHub for this workspace first."
+          : "Cannot verify GitHub access for this installation — the stored GitHub token is unreadable; reconnect GitHub.",
     });
   }
 
-  let userToken: string;
-  try {
-    const enc = account.accessTokenEnc as EncryptedToken;
-    // Route by the envelope's stored keyId, not the current provider env — the
-    // token may have been wrapped under a different provider than this runtime.
-    const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
-    const plain = await decrypt(
-      Buffer.from(enc.ciphertext, "base64"),
-      enc.keyId,
-      { adapter },
-    );
-    userToken = plain.toString("utf8");
-  } catch {
-    throw new HTTPException(403, {
-      message:
-        "Cannot verify GitHub access for this installation — the stored GitHub token is unreadable; reconnect GitHub.",
-    });
-  }
-
-  if (!(await userCanReachInstallation(userToken, targetId))) {
+  if (!(await userCanReachInstallation(token.accessToken, targetId))) {
     throw new HTTPException(403, {
       message:
         `You do not have access to GitHub installation ${targetId}. ` +
@@ -87,68 +61,28 @@ export async function assertGithubInstallationAccessible(
   }
 }
 
-const PER_PAGE = 100;
-// 5,000 installations is far more than any account reaches; the ceiling exists
-// only so a server that keeps reporting a total it never delivers cannot spin
-// the loop forever.
-const MAX_PAGES = 50;
-
 /**
- * True if `GET /user/installations` (paged) contains `installationId`. Throws a
- * 403 on a non-OK GitHub response (revoked/expired token) — fail-closed: we must
- * not allow the bind when we cannot verify access.
- *
- * Pagination stops on the first page that comes back empty, and at MAX_PAGES
- * regardless: `total_count` is the server's claim, and trusting it alone means
- * an inconsistent or truncated response (a concurrent uninstall, a filtered
- * page) leaves `seen < total` forever while every further page returns nothing.
+ * True if `GET /user/installations` (paged) contains `installationId`. A non-OK
+ * GitHub response (revoked or expired token) becomes a 403 — fail-closed: we
+ * must not allow the bind when we cannot verify access, and "we could not ask"
+ * is never "there is nothing there".
  */
 async function userCanReachInstallation(
   userToken: string,
   installationId: string,
 ): Promise<boolean> {
-  let page = 1;
-  let total = 0;
-  let seen = 0;
-
-  do {
-    const resp = await fetch(
-      `https://api.github.com/user/installations?per_page=${PER_PAGE}&page=${page}`,
-      {
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-          Accept: "application/vnd.github.v3+json",
-          "User-Agent": "oxagen-ingestion/1.0",
-        },
-        // This runs in a paged do/while — without a timeout one stalled
-        // GitHub page hangs the whole capability, not just one request.
-        signal: AbortSignal.timeout(10_000),
-      },
-    );
-
-    if (!resp.ok) {
+  let installations;
+  try {
+    installations = await listUserGithubInstallations(userToken);
+  } catch (err) {
+    if (err instanceof GithubUserInstallationsError) {
       throw new HTTPException(403, {
         message:
-          `Could not verify GitHub installation access (GitHub returned ${resp.status}). ` +
+          `Could not verify GitHub installation access (GitHub returned ${err.status}). ` +
           "Reconnect GitHub for this workspace and try again.",
       });
     }
-
-    // Parsed from a remote response — every field is optional until proven.
-    const data = (await resp.json()) as {
-      total_count?: number;
-      installations?: Array<{ id: number | string }>;
-    };
-    total = data.total_count ?? 0;
-    const installations = data.installations ?? [];
-    for (const inst of installations) {
-      if (String(inst.id) === installationId) return true;
-      seen++;
-    }
-    // An empty page means the listing is exhausted, whatever total_count says.
-    if (installations.length === 0) break;
-    page++;
-  } while (seen < total && page <= MAX_PAGES);
-
-  return false;
+    throw err;
+  }
+  return installations.some((inst) => inst.installationId === installationId);
 }

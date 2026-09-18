@@ -50,6 +50,7 @@ export type PageKey =
   | "steering"
   | "mandates"
   | "tools"
+  | "workspaceSettings"
   | "shell";
 
 type PageFailure = {
@@ -123,6 +124,14 @@ export const PAGE_FAILURES = {
   tools: {
     error: { code: "tool_registry_unavailable", status: 503 },
     permission: "tools.read",
+  },
+  // The Workspace settings dialog reads the workspace's main repository and,
+  // when an installation is attached, the repositories it reaches. Both are
+  // org Owner-or-Admin reads, and the second is a live call to GitHub: what is
+  // down is GitHub, not a store of ours, so the failure says so.
+  workspaceSettings: {
+    error: { code: "github_unreachable", status: 502 },
+    permission: "org.admin",
   },
   // The shell's one read fails with the control plane and needs organization
   // membership alone.

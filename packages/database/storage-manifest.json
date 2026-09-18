@@ -108,6 +108,15 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "attach_github_installation",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "attach_memory_evidence",
       "reads": [],
@@ -1027,6 +1036,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "get_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "get_mandate",
       "reads": [],
@@ -1727,6 +1746,16 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "list_github_installations",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "iam",
       "name": "list_iam_roles",
       "reads": [],
@@ -1740,6 +1769,16 @@
     {
       "domain": "tacho",
       "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_installation_repositories",
       "reads": [],
       "surfaces": [
         "api",
@@ -3353,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "610e25394f8f4ec99131ed51ad390f860ccd2c6322c48c6f840ae4cf6fa172fb",
+  "contentHash": "fe1635692c86e080177258ba0412407761e98dc44b46f0980b767406a6aa5e8e",
   "domains": [
     {
       "name": "agent",

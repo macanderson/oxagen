@@ -341,9 +341,15 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "kernel-write-no-directive.ts": [
     { at: "src/features/fleet/actions.ts", expect: "layer" },
   ],
+  // A read a person asks for, from a module that resolves its own viewer: the
+  // Workspace settings dialog's on-demand read (§2, the `features` row).
   "kernel-read-use-server.ts": [
-    { at: "src/features/fleet/actions.ts", expect: "layer" },
+    { at: "src/features/fleet/actions.ts", expect: null },
     { at: "src/data/live/runs.ts", expect: null },
+  ],
+  // Without the directive it is not an action, so it never resolved a viewer.
+  "kernel-read-no-directive.ts": [
+    { at: "src/features/fleet/reads.ts", expect: "layer" },
   ],
   "kernel-types-from-feature.ts": [
     { at: "src/features/fleet/approvals.tsx", expect: null },

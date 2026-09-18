@@ -2390,6 +2390,77 @@ type Messages = {
       };
     };
   };
+  workspaceSettings: {
+    open: string;
+    title: string;
+    mainRepository: {
+      heading: string;
+      about: string;
+      loading: string;
+      connected: string;
+      installRefused: string;
+      installUnverified: string;
+      install: {
+        heading: string;
+        body: string;
+        unreachable: string;
+        action: string;
+        connect: string;
+      };
+      unconfigured: string;
+      picker: {
+        heading: string;
+        loading: string;
+        filterLabel: string;
+        filterPlaceholder: string;
+        listLabel: string;
+        empty: string;
+        noMatch: string;
+        private: string;
+        defaultBranch: string;
+        truncated: string;
+        bind: string;
+        binding: string;
+        none: string;
+      };
+      bound: {
+        heading: string;
+        defaultRef: string;
+        boundAt: string;
+        open: string;
+        retired: string;
+        reconnect: string;
+        reconnecting: string;
+        fixed: string;
+      };
+      manage: string;
+      installChoose: string;
+      installNone: string;
+      installations: {
+        heading: string;
+        about: string;
+        loading: string;
+        listLabel: string;
+        allRepositories: string;
+        selectedRepositories: string;
+        attach: string;
+        attaching: string;
+        none: string;
+      };
+    };
+    failure: {
+      denied: string;
+      githubNotConnected: string;
+      repositoryNotInstalled: string;
+      mainRepoBound: string;
+      invalid: string;
+      pendingApproval: string;
+      refused: string;
+      unavailable: string;
+      githubNotAuthorized: string;
+      installationUnreachable: string;
+    };
+  };
 };
 
 declare module "next-intl" {

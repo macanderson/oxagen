@@ -2,11 +2,12 @@
 // Client-side navigation (ARCHITECTURE.md §3.8, INV-13): the only useRouter
 // importer and the only file with a computed href or form action. Links take a
 // SafePath, so a target that did not come from sanitizeNext or a route builder
-// does not compile; the two external links take a HostedInvoiceUrl and a
-// PullRequestUrl.
+// does not compile; the three external links take a HostedInvoiceUrl, a
+// PullRequestUrl and a GitHubUrl.
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type ComponentProps, useMemo } from "react";
+import type { GitHubUrl } from "@/shared/github-url";
 import type { HostedInvoiceUrl } from "@/shared/invoice-url";
 import type { PullRequestUrl } from "@/shared/pull-request-url";
 import type { SafePath } from "@/shared/safe-path";
@@ -74,6 +75,16 @@ export function PullRequestLink({
   ...props
 }: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
   to: PullRequestUrl;
+}) {
+  return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
+}
+
+/** A page on github.com — a repository, the App's install page, its settings — opened without handing it this window. */
+export function GitHubLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "target" | "rel"> & {
+  to: GitHubUrl;
 }) {
   return <a href={to} target="_blank" rel="noopener noreferrer" {...props} />;
 }

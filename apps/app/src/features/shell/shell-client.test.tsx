@@ -27,6 +27,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
+import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
@@ -34,13 +35,23 @@ import type { ShellData } from "./shell-data";
 
 const nav = vi.hoisted(() => ({
   pathname: "/acme/core-platform",
+  query: "",
   push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname.split("?")[0],
-  useSearchParams: () => new URLSearchParams(nav.pathname.split("?")[1] ?? ""),
-  useRouter: () => ({ push: nav.push }),
+  // Two conventions meet here: a case that sets `nav.query`, and one that puts
+  // the query on `nav.pathname`. Both are read so neither lane's tests break.
+  useSearchParams: () =>
+    new URLSearchParams(nav.query || (nav.pathname.split("?")[1] ?? "")),
+  useRouter: () => ({
+    push: nav.push,
+    replace: nav.replace,
+    refresh: nav.refresh,
+  }),
 }));
 
 vi.mock("next/link", () => ({
@@ -88,7 +99,10 @@ beforeAll(() => {
 
 beforeEach(() => {
   nav.pathname = "/acme/core-platform";
+  nav.query = "";
   nav.push.mockReset();
+  nav.replace.mockReset();
+  nav.refresh.mockReset();
 });
 
 afterEach(async () => {
@@ -107,7 +121,12 @@ function renderShell(data: ShellData) {
     <NextIntlClientProvider
       locale="en"
       timeZone="UTC"
-      messages={{ ...en, ...shellMessages, ...uiMessages }}
+      messages={{
+        ...en,
+        ...shellMessages,
+        ...uiMessages,
+        ...workspaceSettingsMessages,
+      }}
     >
       <ShellClient data={data} />
       <main id="main" />

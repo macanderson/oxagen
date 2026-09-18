@@ -43,6 +43,15 @@
       "verifiedAt": "2026-09-17",
       "verifiedBy": "session-7172f7a7-in-app-assistant"
     },
+    "attach_github_installation": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — “Use this installation” on the picked GitHub account (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+    },
     "authorize_cli": {
       "route": "/cli/authorize",
       "page": "apps/app/src/app/cli/authorize/page.tsx",
@@ -52,12 +61,13 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "bind_main_repository": {
-      "route": "/[org]/[ws]/register/[step]",
-      "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] — the rev1 surface that invokes bind_main_repository (features/onboarding/actions.ts)",
-      "proof": "apps/app/src/features/onboarding/register.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — “Bind as main repo” on the picked repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts); also the onboarding gate's provisional banner at /[org]/[ws]/register/[step] (features/onboarding/ui/bind-repository.tsx, features/onboarding/actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
     "change_member_role": {
       "route": "/[org]",
@@ -219,6 +229,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_main_repository": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings beside the workspace switcher on every workspace page — the shell's Workspace settings dialog, whose Main repository panel invokes get_main_repository (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+    },
     "get_onboarding_state": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
@@ -307,6 +326,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_github_installations": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — the installation picker, shown when GitHub is authorized and no installation is attached to this workspace, invokes list_github_installations (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
+    },
     "list_iam_roles": {
       "route": "/[org]/roles",
       "page": "apps/app/src/app/[org]/roles/page.tsx",
@@ -322,6 +350,15 @@
       "proof": "apps/app/src/features/agents/agents.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_installation_repositories": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Main repository — the repository picker, shown once a GitHub App installation is attached and no main repo is bound, invokes list_installation_repositories (features/shell/workspace-settings.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
     "list_invoices": {
       "route": "/[org]/billing",

@@ -527,19 +527,29 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_CLIENT_ID: {
     group: "github",
     description:
-      "GitHub App OAuth client id — used for the data-connector OAuth flow.",
+      "GitHub App OAuth client id — used for the data-connector OAuth flow. " +
+      "Also read in-process by apps/app's Workspace settings dialog and by " +
+      "apps/mcp's get_main_repository tool (envGithubUrls in " +
+      "packages/handlers/src/repository.main.get.ts, invoked through the " +
+      "kernel's invoke() rather than an HTTP call), so it must reach both of " +
+      "those services too, not only the callback route in api.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },
   GITHUB_APP_CLIENT_SECRET: {
     group: "github",
-    description: "GitHub App OAuth client secret.",
+    description:
+      "GitHub App OAuth client secret — what the public callback in api " +
+      "exchanges the returned code with. envGithubUrls (see " +
+      "GITHUB_APP_CLIENT_ID) also checks this is set in app and mcp, before " +
+      "publishing a Connect URL that api's callback could not finish " +
+      "without it.",
     secret: true,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },
@@ -568,20 +578,24 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_INSTALL_STATE_SECRET: {
     group: "github",
     description:
-      "HMAC secret used to sign the OAuth state parameter for GitHub App installs.",
+      "HMAC secret used to sign the OAuth state parameter for GitHub App " +
+      "installs. Signed and verified by api's callback, and also signed by " +
+      "envGithubUrls (see GITHUB_APP_CLIENT_ID) minting the same URLs " +
+      "in-process from app and mcp.",
     secret: true,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },
   GITHUB_APP_SLUG: {
     group: "github",
     description:
-      "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation.",
+      "GitHub App public slug (the path segment in https://github.com/apps/<slug>). Used to deep-link users to GitHub's install/configure page so they can add or remove orgs and repos. Optional — when unset the connection dialog derives the slug from an existing installation. " +
+      "Also minted by envGithubUrls (see GITHUB_APP_CLIENT_ID) in-process from app and mcp.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },
@@ -594,10 +608,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_ID: {
     group: "github",
     description:
-      "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page.",
+      "GitHub App numeric ID. Required (with GITHUB_APP_PRIVATE_KEY) for the installation-token path in resolveGitHubToken(). Find it on the GitHub App settings page. " +
+      "Also required in-process by app: repository.main.bind.ts and " +
+      "repository.installation.list.ts mint installation tokens directly " +
+      "when invoked from the Workspace settings dialog, not only from api/mcp.",
     secret: false,
     clientExposed: false,
-    services: ["api", "mcp"],
+    services: ["api", "mcp", "app"],
     requiredIn: [],
     valueOrigin: "manual",
   },
@@ -605,10 +622,11 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_APP_PRIVATE_KEY: {
     group: "github",
     description:
-      "PEM-encoded RSA private key for the GitHub App. Required (with GITHUB_APP_ID) for the installation-token path in resolveGitHubToken(). Generate in the GitHub App settings → Private keys.",
+      "PEM-encoded RSA private key for the GitHub App. Required (with GITHUB_APP_ID) for the installation-token path in resolveGitHubToken(). Generate in the GitHub App settings → Private keys. " +
+      "Also required in-process by app — see GITHUB_APP_ID.",
     secret: true,
     clientExposed: false,
-    services: ["api", "mcp"],
+    services: ["api", "mcp", "app"],
     requiredIn: [],
     valueOrigin: "manual",
   },
@@ -1682,10 +1700,16 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   INGESTION_CRYPTO_PROVIDER: {
     group: "Ingestion",
     description:
-      "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS).",
+      "Credential encryption backend for ingestion: 'env' (AES-256-GCM via INGESTION_ENCRYPTION_KEY) or 'kms' (AWS KMS). " +
+      "Also read in-process by app and mcp: resolveGitHubToken's " +
+      "stored-OAuth-token path (packages/github/src/workspace-token.ts) " +
+      "decrypts through resolveIngestionCryptoAdapterForKeyId whenever " +
+      "repository.main.bind.ts or repository.installation.list.ts falls back " +
+      "off the installation-token path, and resolveWorkspaceGithubUserToken " +
+      "opens the stored token that backs the list_github_installations tool.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "static",
     staticValue: { development: "env", preview: "env", production: "env" },
@@ -1693,20 +1717,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   INGESTION_ENCRYPTION_KEY: {
     group: "Ingestion",
     description:
-      "Base64-encoded 32-byte master key for AES-256-GCM credential encryption (INGESTION_CRYPTO_PROVIDER=env).",
+      "Base64-encoded 32-byte master key for AES-256-GCM credential encryption (INGESTION_CRYPTO_PROVIDER=env). " +
+      "Also required in-process by app and mcp — see INGESTION_CRYPTO_PROVIDER.",
     secret: true,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: ["preview", "production"],
     valueOrigin: "manual",
   },
   AWS_KMS_INGESTION_KEY_ARN: {
     group: "Ingestion",
     description:
-      "AWS KMS key ARN for credential encryption (INGESTION_CRYPTO_PROVIDER=kms).",
+      "AWS KMS key ARN for credential encryption (INGESTION_CRYPTO_PROVIDER=kms). " +
+      "Also required in-process by app and mcp — see INGESTION_CRYPTO_PROVIDER.",
     secret: false,
     clientExposed: false,
-    services: ["api"],
+    services: ["api", "app", "mcp"],
     requiredIn: [],
     valueOrigin: "manual",
   },

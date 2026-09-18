@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import { schema } from "@oxagen/database";
 import type { GitHubClient } from "@oxagen/github";
-import { createSteeringGitHub } from "./context.steering.github";
+
+const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
+});
+
+import {
+  createSteeringGitHub,
+  readGitHubConnection,
+} from "./context.steering.github";
 
 const SCOPE = { orgId: "org", workspaceId: "ws" };
 
@@ -273,5 +286,201 @@ describe("the GitHub seam", () => {
         "main",
       ),
     ).rejects.toThrow("no client for o/r");
+  });
+});
+
+/**
+ * Which repository the seam resolves as the workspace's main repo.
+ *
+ * `bind_main_repository` writes a binding head and a binding version; the
+ * settings-path connection it binds through carries only the installation id
+ * the install callback attached, never an owner/repo. A read that looked only
+ * at `delivery_config` answered null right after a successful bind, and every
+ * Context PR behaved as though no repository were connected.
+ */
+describe("the workspace's main repository", () => {
+  const SELECT_SCOPE = { orgId: "org", workspaceId: "ws" };
+
+  /**
+   * The three reads `readGitHubConnection` can make, told apart by what each
+   * one actually asks for rather than by the order it asks in:
+   *
+   *   `bound`       the joined read (heads → bindings → connections) — the only
+   *                 chain that joins, so the join depth identifies it.
+   *   `heads`       the unjoined read of `repository_binding_heads` — "does
+   *                 this workspace declare a main repository at all".
+   *   `connections` the unjoined read of `source_connections` — the legacy
+   *                 sources-wizard fallback.
+   *
+   * The two unjoined reads take the same chain shape, so the fake dispatches
+   * on the TABLE the code passed to `.from()`, which is the real Drizzle table
+   * object.
+   *
+   * What this rig can and cannot prove: it discards every predicate, so these
+   * tests pin the BRANCHING — which read the code makes, given what the read
+   * before it answered — and nothing about the SQL filters themselves. The
+   * status filter on the joined read is asserted nowhere here and cannot be;
+   * that would need a real Postgres.
+   *
+   * Returns a counter of the unjoined reads so a test can assert a read was
+   * never reached at all, not merely that its rows went unused.
+   */
+  function db(opts: {
+    bound?: unknown[];
+    heads?: unknown[];
+    connections?: unknown[];
+  }): { readonly headReads: number; readonly connectionReads: number } {
+    const counts = { headReads: 0, connectionReads: 0 };
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: (table: unknown) => ({
+              innerJoin: () => ({
+                innerJoin: () => ({
+                  where: () => ({ limit: async () => opts.bound ?? [] }),
+                }),
+              }),
+              where: () => ({
+                limit: async () => {
+                  if (table === schema.repositoryBindingHeads) {
+                    counts.headReads += 1;
+                    return opts.heads ?? [];
+                  }
+                  counts.connectionReads += 1;
+                  return opts.connections ?? [];
+                },
+              }),
+            }),
+          }),
+        }),
+    );
+    return counts;
+  }
+
+  it("resolves the repository the bind recorded, on a connection that names none", async () => {
+    db({
+      bound: [{ owner: "Acme", repo: "Widgets" }],
+      connections: [{ deliveryConfig: { installationId: "555" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "Acme",
+      repo: "Widgets",
+    });
+  });
+
+  it("prefers the binding over a legacy connection's ingestion sync target", async () => {
+    db({
+      bound: [{ owner: "Acme", repo: "Widgets" }],
+      connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "Acme",
+      repo: "Widgets",
+    });
+  });
+
+  it("falls back to the legacy sources wizard's connection when no binding exists", async () => {
+    db({
+      bound: [],
+      connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      owner: "a-intel",
+      repo: "platform",
+    });
+  });
+
+  /**
+   * Also the shape of the reconnect state (#3233): when the head names a
+   * connection that has been deleted, the join above yields nothing, and the
+   * replacement connection the install callback inserted carries an
+   * installation id and no owner/repo — so steering resolves null with a
+   * repository still bound. `bind_main_repository` on the SAME repository is
+   * what moves the head onto the live connection and brings the join back.
+   */
+  it("answers null when neither a binding nor a configured connection names a repository", async () => {
+    db({
+      bound: [],
+      connections: [{ deliveryConfig: { installationId: "5" } }],
+    });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+    db({ bound: [], connections: [] });
+    await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+  });
+
+  /**
+   * The legacy fallback is for workspaces that never bound anything (#3233
+   * review, P1).
+   *
+   * The joined read misses for two different reasons — no head was ever
+   * written, or a head exists and the connection it was bound through is
+   * retired — and the join cannot tell them apart. Treating the second as the
+   * first hands steering and every Context PR to whatever repository a
+   * still-connected legacy sources connection happens to name in its ingestion
+   * `delivery_config`, which is an UNRELATED repository: `owner`/`repo` there
+   * mean the sync target, not the main repo. Writing steering into the wrong
+   * repository is worse than steering being off, so the head's existence is
+   * read explicitly and a workspace that has one answers null.
+   */
+  describe("a bound head whose connection is unusable is not a workspace with no binding", () => {
+    it("answers null rather than the legacy repo when a head exists and the join missed", async () => {
+      const counts = db({
+        // The joined read misses: the head's connection is retired, so the
+        // status filter drops the row.
+        bound: [],
+        // The head itself is still there — the binding rows outlive the
+        // connection.
+        heads: [{ id: "head-1" }],
+        // And an unrelated legacy sources connection is still connected,
+        // naming its ingestion sync target.
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+      // Not merely unused — the fallback read is never made.
+      expect(counts.headReads).toBe(1);
+      expect(counts.connectionReads).toBe(0);
+    });
+
+    it("still falls back for a workspace that never bound anything", async () => {
+      // The reason the fallback exists: connected through the legacy sources
+      // wizard, which populates owner/repo at its mappings step and writes no
+      // binding. Narrowing must not take this away.
+      const counts = db({
+        bound: [],
+        heads: [],
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        owner: "a-intel",
+        repo: "platform",
+      });
+      expect(counts.headReads).toBe(1);
+      expect(counts.connectionReads).toBe(1);
+    });
+
+    it("answers the bound repository without asking either follow-up question", async () => {
+      // The joined read hit, so there is nothing to disambiguate.
+      const counts = db({
+        bound: [{ owner: "Acme", repo: "Widgets" }],
+        heads: [{ id: "head-1" }],
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        owner: "Acme",
+        repo: "Widgets",
+      });
+      expect(counts.headReads).toBe(0);
+      expect(counts.connectionReads).toBe(0);
+    });
   });
 });

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 315,
+  "generatedCount": 319,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -113,6 +113,16 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "attach_github_installation",
+      "domain": "repository",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -1125,6 +1135,17 @@
       "consumes": []
     },
     {
+      "name": "get_main_repository",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_mandate",
       "domain": "mandate",
       "surfaces": [
@@ -1897,6 +1918,17 @@
       "consumes": []
     },
     {
+      "name": "list_github_installations",
+      "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_iam_roles",
       "domain": "iam",
       "surfaces": [
@@ -1911,6 +1943,17 @@
     {
       "name": "list_incidents",
       "domain": "tacho",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_installation_repositories",
+      "domain": "repository",
       "surfaces": [
         "api",
         "mcp"

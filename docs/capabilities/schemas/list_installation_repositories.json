@@ -1,0 +1,83 @@
+{
+  "name": "list_installation_repositories",
+  "domain": "repository",
+  "description": "The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repositories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fullName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultBranch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "private": {
+              "type": "boolean"
+            },
+            "htmlUrl": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "required": [
+            "id",
+            "owner",
+            "name",
+            "fullName",
+            "defaultBranch",
+            "private",
+            "htmlUrl"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "truncated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "repositories",
+      "truncated"
+    ],
+    "additionalProperties": false
+  }
+}

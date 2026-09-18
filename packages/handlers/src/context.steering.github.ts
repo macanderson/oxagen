@@ -1,14 +1,15 @@
 // context.steering.github.ts — the GitHub seam under the Context PR handlers
-// (ADR-061; MC spec §10.1, §10.3). The workspace's repository is the one its
-// GitHub source connection names (`source_connections.delivery_config.owner`
-// and `.repo`, connector `github`, status `connected`); its production branch
-// is the repository's default branch. Every operation runs with the
-// workspace's own token (ADR-020: installation token, then the connecting
-// user's OAuth token, then the local-only PAT).
+// (ADR-061; MC spec §10.1, §10.3). The workspace's repository is its **main
+// repository**: the repository binding `bind_main_repository` wrote
+// (`ingestion.repository_binding_heads` → `ingestion.repository_bindings`),
+// which is the system of record for repository identity per MC spec §10.1.
+// Its production branch is the repository's default branch. Every operation
+// runs with the workspace's own token (ADR-020: installation token, then the
+// connecting user's OAuth token, then the local-only PAT).
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { createGitHubClient, type GitHubClient } from "@oxagen/github";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { resolveGitHubToken } from "./lib/github-token";
 
 export interface SteeringRepository {
@@ -94,13 +95,107 @@ interface DeliveryConfig {
   repo?: unknown;
 }
 
-/** The workspace's connected GitHub repository, from its source connection. */
-async function readGitHubConnection(scope: {
+/**
+ * Statuses that mean the connection is on its way out. `delete_connection`
+ * sets `status = 'deleting'` and leaves `deleted_at` for a later purge, so
+ * `deleted_at IS NULL` alone does not mean live — the same rule
+ * `resolveWorkspaceGithubInstallation` applies before it mints a token.
+ * Duplicated rather than imported because that resolver is the installation
+ * seam and this is the repository-identity seam; they share the rule, not a
+ * dependency.
+ */
+const RETIRED_CONNECTION_STATUSES = ["deleting", "deleted"] as const;
+
+/**
+ * The workspace's main repository.
+ *
+ * Read from the repository binding first. `repository_bindings` exists
+ * precisely because `source_connections.delivery_config` is a mutable JSONB
+ * bag whose `owner`/`repo` keys mean *the ingestion sync target* to every
+ * other reader of that column — `ingestion.sync-requested` dispatches a full
+ * tree sync at them, and `reference.search` lists them as searchable repos.
+ * The main repository is a different fact, and writing it into that bag would
+ * silently retarget a legacy wizard connection's sync. So identity comes from
+ * the binding, keyed on the provider's immutable repository id, which is what
+ * MC spec §10.1 makes the system of record.
+ *
+ * The binding is joined back to its connection so that revoking the GitHub
+ * connection stops steering from the moment of the revoke, not from whenever
+ * the purge catches up — the binding rows outlive the connection.
+ *
+ * Falls back to the connection's delivery config for a workspace connected
+ * through the legacy sources wizard, which populates `owner`/`repo` at its
+ * mappings step and never writes a binding. Without the fallback those
+ * workspaces would lose steering; with it, a workspace that later binds a main
+ * repository is answered from the binding, which wins.
+ *
+ * The fallback is narrowed to the case it exists for: NO BINDING HEAD AT ALL.
+ * The joined read above misses for two different reasons — no head was ever
+ * written, or a head exists and the connection it was bound through is
+ * retired — and they are not the same fact. Falling back on the second one
+ * silently retargets steering and every Context PR at whatever unrelated
+ * repository a still-connected legacy sources connection happens to name in
+ * its ingestion `delivery_config`. Writing steering into the wrong repository
+ * is worse than steering being off, so a workspace whose main repository is
+ * bound but unreachable answers null and its callers refuse; the repair is
+ * `bind_main_repository` on the live connection, which moves the head.
+ */
+export async function readGitHubConnection(scope: {
   orgId: string;
   workspaceId: string;
 }): Promise<{ owner: string; repo: string } | null> {
-  const [connection] = await withTenantDb((tx) =>
-    tx
+  return withTenantDb(async (tx) => {
+    const [bound] = await tx
+      .select({
+        owner: schema.repositoryBindings.providerOwner,
+        repo: schema.repositoryBindings.providerName,
+      })
+      .from(schema.repositoryBindingHeads)
+      .innerJoin(
+        schema.repositoryBindings,
+        eq(
+          schema.repositoryBindings.id,
+          schema.repositoryBindingHeads.currentBindingId,
+        ),
+      )
+      .innerJoin(
+        schema.sourceConnections,
+        eq(
+          schema.sourceConnections.id,
+          schema.repositoryBindingHeads.connectionId,
+        ),
+      )
+      .where(
+        and(
+          eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+          eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+          eq(schema.repositoryBindingHeads.provider, "github"),
+          isNull(schema.sourceConnections.deletedAt),
+          notInArray(schema.sourceConnections.status, [
+            ...RETIRED_CONNECTION_STATUSES,
+          ]),
+        ),
+      )
+      .limit(1);
+    if (bound) return { owner: bound.owner, repo: bound.repo };
+
+    // Why the join missed. A head is the workspace's declaration that it HAS a
+    // main repository; its presence survives the connection being retired,
+    // which is exactly the state the join cannot tell apart from "never bound".
+    const [head] = await tx
+      .select({ id: schema.repositoryBindingHeads.id })
+      .from(schema.repositoryBindingHeads)
+      .where(
+        and(
+          eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+          eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+          eq(schema.repositoryBindingHeads.provider, "github"),
+        ),
+      )
+      .limit(1);
+    if (head) return null;
+
+    const [connection] = await tx
       .select({ deliveryConfig: schema.sourceConnections.deliveryConfig })
       .from(schema.sourceConnections)
       .where(
@@ -112,12 +207,12 @@ async function readGitHubConnection(scope: {
           isNull(schema.sourceConnections.deletedAt),
         ),
       )
-      .limit(1),
-  );
-  const config = (connection?.deliveryConfig as DeliveryConfig | null) ?? {};
-  const owner = typeof config.owner === "string" ? config.owner : null;
-  const repo = typeof config.repo === "string" ? config.repo : null;
-  return connection && owner && repo ? { owner, repo } : null;
+      .limit(1);
+    const config = (connection?.deliveryConfig as DeliveryConfig | null) ?? {};
+    const owner = typeof config.owner === "string" ? config.owner : null;
+    const repo = typeof config.repo === "string" ? config.repo : null;
+    return connection && owner && repo ? { owner, repo } : null;
+  });
 }
 
 /** What the seam is built from; the tests pass fakes. */

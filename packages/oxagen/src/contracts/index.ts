@@ -74,6 +74,10 @@ import { onboardingStateGet } from "./onboarding.state.get";
 import { onboardingAdvance } from "./onboarding.advance";
 import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
 import { repositoryMainBind } from "./repository.main.bind";
+import { repositoryMainGet } from "./repository.main.get";
+import { repositoryInstallationList } from "./repository.installation.list";
+import { repositoryInstallationCandidates } from "./repository.installation.candidates";
+import { repositoryInstallationAttach } from "./repository.installation.attach";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runProofGet } from "./run.proof.get";
@@ -605,6 +609,10 @@ export {
   onboardingAdvance,
   onboardingFirstFrameGet,
   repositoryMainBind,
+  repositoryMainGet,
+  repositoryInstallationList,
+  repositoryInstallationCandidates,
+  repositoryInstallationAttach,
   runList,
   runGet,
   runFrameBodyGet,
@@ -932,6 +940,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   onboardingAdvance,
   onboardingFirstFrameGet,
   repositoryMainBind,
+  repositoryMainGet,
+  repositoryInstallationList,
+  repositoryInstallationCandidates,
+  repositoryInstallationAttach,
   runList,
   runGet,
   runFrameBodyGet,

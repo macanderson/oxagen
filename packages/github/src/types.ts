@@ -116,6 +116,26 @@ export interface GitHubRepoInfo {
   defaultBranch: string;
 }
 
+/**
+ * A repository as the installation-repositories listing reports it: the same
+ * identity `GitHubRepoInfo` carries, plus the visibility a picker shows so a
+ * person can tell two same-named repositories apart.
+ */
+export interface GitHubInstallationRepo extends GitHubRepoInfo {
+  private: boolean;
+}
+
+/**
+ * One bounded walk of `GET /installation/repositories`. `truncated` is true
+ * when the installation reaches more repositories than the walk collected —
+ * honest rather than paginated, so a caller tells the person to narrow the
+ * App's repository access instead of silently hiding a repository.
+ */
+export interface GitHubInstallationRepositories {
+  repositories: GitHubInstallationRepo[];
+  truncated: boolean;
+}
+
 export interface GitHubClient {
   /**
    * Create a new repository.
@@ -335,6 +355,21 @@ export interface GitHubClient {
     repo: string;
     number: number;
   }): Promise<void>;
+
+  /**
+   * List the repositories this token's GitHub App installation can reach
+   * (`GET /installation/repositories`). Requires an INSTALLATION token — a
+   * user OAuth token answers 403, because the endpoint is scoped to the
+   * installation the token was minted for and to no other.
+   *
+   * This is exactly the set `bind_main_repository` accepts: the bind resolves
+   * a repository through the same installation's token, so a picker built
+   * from any other list would offer options that refuse on submit.
+   *
+   * Walks a bounded number of pages and reports `truncated` rather than
+   * paginating; see `GitHubInstallationRepositories`.
+   */
+  listInstallationRepositories(): Promise<GitHubInstallationRepositories>;
 
   /**
    * Delete a branch (DELETE /git/refs/heads/{branch}). GitHub answers 422
