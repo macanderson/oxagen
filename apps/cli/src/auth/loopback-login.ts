@@ -21,6 +21,14 @@
  * - A 5-minute timeout closes the server and rejects the promise if the user
  *   doesn't complete the flow.
  *
+ * Shutdown: `server.close()` alone stops the listener but leaves every open
+ * connection attached to the event loop, so the process stays alive until the
+ * last one times out — up to Node's 5-minute `requestTimeout` for a socket a
+ * browser preconnected and never used. The caller is usually a one-shot
+ * process (and, in the desktop app, a sidecar whose exit is what clears the
+ * "Waiting for the browser…" state), so `shutdown()` below closes the
+ * connections as well as the listener.
+ *
  * UI-agnostic by design: status lines go through the optional `onStatus`
  * callback instead of a hardcoded `process.stdout.write` (the default
  * preserves the one-shot CLI behavior exactly), and the wait can be cancelled
@@ -37,6 +45,15 @@ import {
 import { openBrowser } from "./open-browser.js";
 
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * How long `shutdown()` gives a connection before destroying it. Every
+ * response is flushed (`res.end`'s callback) before the flow settles, so this
+ * covers only the last bytes in a loopback socket's buffer — and a socket a
+ * browser opened and never used, which Node does not count as idle and so
+ * would otherwise hold until `requestTimeout`.
+ */
+const DRAIN_GRACE_MS = 500;
 
 /** The credential triple the token-exchange endpoint returns on success. */
 interface TokenExchangeResponse {
@@ -151,6 +168,13 @@ export async function browserLogin({
 
   // Bind a loopback server to an OS-assigned ephemeral port.
   const server = http.createServer();
+  // This server exists for exactly one short request from a browser on the
+  // same machine. Node's defaults (5s keep-alive, 60s headers, 5min request)
+  // are sized for a public server and would each hold the process open long
+  // after the login is done; these are sized for the one request.
+  server.keepAliveTimeout = 1_000;
+  server.headersTimeout = 5_000;
+  server.requestTimeout = 15_000;
   const port = await new Promise<number>((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
@@ -191,11 +215,26 @@ export async function browserLogin({
     (resolve, reject) => {
       let settled = false;
 
+      /**
+       * Stop listening and release every socket, so the process can exit the
+       * moment the flow is over. `close()` waits for open connections, and a
+       * browser routinely leaves one behind: the keep-alive socket that
+       * carried the callback, plus any it preconnected and never used. An
+       * idle one is destroyed at once; one still writing its response gets
+       * `DRAIN_GRACE_MS`, on an unref'd timer so the wait is never the reason
+       * the process is still running.
+       */
+      const shutdown = (): void => {
+        server.close();
+        server.closeIdleConnections();
+        setTimeout(() => server.closeAllConnections(), DRAIN_GRACE_MS).unref();
+      };
+
       const timeoutId = setTimeout(() => {
         if (!settled) {
           settled = true;
           signal?.removeEventListener("abort", onAbort);
-          server.close();
+          shutdown();
           reject(
             new Error(
               "Login timed out after 5 minutes. Run `oxagen login` to try again.",
@@ -208,7 +247,7 @@ export async function browserLogin({
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        server.close();
+        shutdown();
         reject(new Error("Login cancelled."));
       };
       signal?.addEventListener("abort", onAbort);
@@ -219,7 +258,7 @@ export async function browserLogin({
         settled = true;
         clearTimeout(timeoutId);
         signal?.removeEventListener("abort", onAbort);
-        server.close();
+        shutdown();
         action();
       };
 
@@ -243,7 +282,12 @@ export async function browserLogin({
         /** Write an HTML response and wait for it to flush. */
         const sendHtml = (html: string): Promise<void> =>
           new Promise<void>((r) => {
-            res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+            res.writeHead(200, {
+              "Content-Type": "text/html; charset=utf-8",
+              // One request per server: tell the browser not to keep the
+              // socket for reuse, so nothing survives the response.
+              Connection: "close",
+            });
             res.end(html, r);
           });
 
@@ -253,6 +297,7 @@ export async function browserLogin({
             res.writeHead(302, {
               Location: location,
               "Cache-Control": "no-store",
+              Connection: "close",
             });
             res.end(r);
           });

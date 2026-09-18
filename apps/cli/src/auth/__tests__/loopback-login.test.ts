@@ -15,9 +15,12 @@
  *   2. State mismatch in callback → rejects "state mismatch (possible CSRF)".
  *   3. `error` query param in callback → rejects with that error string.
  *   4. Non-200 token exchange → rejects with the server's error_description.
+ *   5. A socket the browser opened and never used is destroyed when the flow
+ *      settles, so the process is free to exit.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as http from "node:http";
+import * as net from "node:net";
 
 // Mock open-browser BEFORE importing browserLogin so the module resolver sees
 // the stub when loopback-login.ts imports open-browser.js.
@@ -182,6 +185,56 @@ describe("browserLogin", () => {
     // code_verifier must be present and non-empty (but never logged/exposed further)
     const verifier = body["code_verifier"] ?? "";
     expect(verifier.length).toBeGreaterThan(0);
+  });
+
+  it("releases every socket once the flow settles, so the process can exit", async () => {
+    // The bug this covers: `server.close()` stops the listener but waits for
+    // open connections, and a browser leaves them behind — the keep-alive
+    // socket that carried the callback, and any it preconnected and never
+    // used. Node holds an unused one for `requestTimeout` (5 minutes by
+    // default), which kept the `oxagen login` process — and with it the
+    // desktop app's "Waiting for the browser…" state — alive that long after
+    // the user was already signed in.
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        token: "tok_test_abc123",
+        orgSlug: "acme",
+        workspaceSlug: "main",
+      }),
+    } as Response);
+
+    const loginPromise = browserLogin({
+      apiUrl: "https://api.test.oxagen.sh",
+      appUrl: "https://app.test.oxagen.sh",
+    });
+    await waitFor(() => expect(mockOpenBrowser).toHaveBeenCalledOnce());
+    const authorizeUrl = mockOpenBrowser.mock.calls[0]![0];
+    const port = portFromAuthorizeUrl(authorizeUrl);
+    const state = stateFromAuthorizeUrl(authorizeUrl);
+
+    // What a browser preconnect looks like: connected, nothing sent.
+    const idle = net.connect(port, "127.0.0.1");
+    await new Promise<void>((r, reject) => {
+      idle.once("connect", () => r());
+      idle.once("error", reject);
+    });
+    expect(idle.destroyed).toBe(false);
+
+    await sendCallback(
+      port,
+      new URLSearchParams({ code: "authcode_xyz", state }).toString(),
+    );
+    await loginPromise;
+
+    // The listener is gone and the unused socket with it — both ends see the
+    // close, so nothing is left attached to the event loop.
+    await waitFor(() =>
+      expect(idle.readableEnded || idle.destroyed).toBe(true),
+    );
+    await expect(sendCallback(port, "code=late&state=late")).rejects.toThrow();
+    idle.destroy();
   });
 
   it("signup opens the sign-up page with the consent page as its returnTo, and the callback is unchanged", async () => {
