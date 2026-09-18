@@ -10,6 +10,7 @@
  * a test to update.
  */
 import { describe, it, expect } from "vitest";
+import { isContentBearingFrame } from "@oxagen/tacho";
 import {
   advanceEventStreamDigest,
   assertInlinePayloadWithinCap,
@@ -25,6 +26,9 @@ import {
   isRunEventType,
   isTerminalEventType,
   MAX_INLINE_PAYLOAD_BYTES,
+  MODEL_CALL_EVENT_TYPES,
+  stepKindOfEventType,
+  TOOL_CALL_EVENT_TYPES,
   requireEventTypeDefinition,
   retentionContentClassOf,
   RETENTION_CONTENT_CLASSES,
@@ -701,5 +705,44 @@ describe("event stream digest", () => {
     expect(computeEventStreamDigest([withExtras])).toBe(
       computeEventStreamDigest([entry(1, DIGEST_A)]),
     );
+  });
+});
+
+describe("the step a completed event marks", () => {
+  it("names both spellings of each call, because both are produced", () => {
+    // `model.call_completed` is the ledger's own name; the in-app assistant
+    // writes `model.engine_call_completed`. A reader that knows only one of
+    // them reports zero for every run of the other, which is what every
+    // reader here did before this field existed.
+    expect([...MODEL_CALL_EVENT_TYPES].sort()).toEqual([
+      "model.call_completed",
+      "model.engine_call_completed",
+    ]);
+    expect([...TOOL_CALL_EVENT_TYPES].sort()).toEqual([
+      "tool.call_completed",
+      "tool.engine_call_completed",
+    ]);
+  });
+
+  it("does not count a write-ahead intention as a step", () => {
+    // Counting it would report every call twice — the same reason the
+    // assistant's Recorder keeps intentions off its receipts array.
+    expect(stepKindOfEventType("model.engine_call_started")).toBeNull();
+    expect(stepKindOfEventType("tool.engine_call_started")).toBeNull();
+  });
+
+  it("answers null for a type it does not register", () => {
+    expect(stepKindOfEventType("llm_call")).toBeNull();
+  });
+
+  it("is the set @oxagen/tacho calls content-bearing", () => {
+    // `isContentBearingFrame` is what both seals derive `body_missing` from,
+    // and a frame absent from it can never carry a run to `view`. It lives in
+    // @oxagen/tacho, the package this one depends on, so the names are
+    // spelled there rather than imported — and drift between the two lists
+    // would silently cost a grade. This is the test that refuses the drift.
+    for (const type of [...MODEL_CALL_EVENT_TYPES, ...TOOL_CALL_EVENT_TYPES]) {
+      expect(isContentBearingFrame(type)).toBe(true);
+    }
   });
 });

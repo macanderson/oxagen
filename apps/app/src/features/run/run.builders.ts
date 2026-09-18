@@ -116,7 +116,75 @@ export function transcriptEntry(
     truncated: false,
     fidelity: "full",
     frames: 4,
+    turn: 1,
     cost: { micros: "18240", currency: "USD", basis: "gateway_observed" },
+    ...overrides,
+  };
+}
+
+/**
+ * A wrapped run read at `everything`, shaped like the mockup's release run:
+ * the agent starting, then two turns, each opening on the operator's prompt
+ * and closing on the agent's reply, with a model call, an allowed tool call,
+ * and in the second turn a tool call the policy denied.
+ */
+export function mockupTranscript(
+  overrides: Partial<RunTranscript> = {},
+): RunTranscript {
+  const frame = (
+    seq: number,
+    type: string,
+    kind: TranscriptEntry["kind"],
+    label: string,
+    turn: number | null,
+    over: Partial<TranscriptEntry> = {},
+  ): TranscriptEntry =>
+    transcriptEntry({
+      seq: String(seq),
+      endSeq: String(seq),
+      at: at(-3600 + seq * 2),
+      kind,
+      type,
+      label,
+      turn,
+      frames: 1,
+      text: null,
+      fidelity: "full",
+      cost: null,
+      ...over,
+    });
+  const cost = (micros: string) =>
+    ({ micros, currency: "USD", basis: "gateway_observed" }) as const;
+  return {
+    zoom: "everything",
+    entries: [
+      frame(0, "agent_start", "frame", "agent_start", null),
+      frame(1, "context.assembled", "frame", "context.assembled", null),
+      frame(2, "turn_start", "frame", "turn_start", 1, {
+        text: "Cut the 2026.9.2 release candidate.",
+      }),
+      frame(3, "model.request", "model_call", "anthropic/claude-fable-5-1", 1),
+      frame(4, "model.response", "model_call", "anthropic/claude-fable-5-1", 1, {
+        text: "I will list the open pull requests first.",
+        cost: cost("380000"),
+      }),
+      frame(5, "tool_requested", "tool_call", "list_pull_requests", 1),
+      frame(6, "policy_decision", "frame", "policy allow", 1),
+      frame(7, "tool_call", "tool_call", "list_pull_requests ok", 1, {
+        text: '{"open":34}',
+      }),
+      frame(8, "turn_end", "frame", "turn_end", 1, {
+        text: "Both failures predate the release scope.",
+      }),
+      frame(9, "turn_start", "frame", "turn_start", 2),
+      frame(10, "llm_call", "model_call", "anthropic/claude-fable-5-1", 2, {
+        cost: cost("520000"),
+        fidelity: "digest_only",
+      }),
+      frame(11, "tool_requested", "tool_call", "create_tag", 2),
+      frame(12, "policy_decision", "frame", "policy deny", 2),
+    ],
+    complete: true,
     ...overrides,
   };
 }

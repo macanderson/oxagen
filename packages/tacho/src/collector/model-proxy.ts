@@ -4,11 +4,27 @@
  *
  * It is a passthrough. The method, path, query, headers and body a harness
  * sends are what the vendor receives, and the vendor's answer streams back as
- * it arrives. The caller's credential crosses untouched, in memory only: this
- * module never logs a header value, never writes a body, and seals nothing
- * onto a chain but digests, counts and timings. Prompt bodies never leave the
- * machine through Oxagen. They go to the vendor the harness chose, and only
- * the frame goes up.
+ * it arrives. The caller's credential crosses untouched, in memory only, and
+ * this module never logs a header value.
+ *
+ * It does record the exchange, and until Phase 5 it did not. The proxy used
+ * to seal digests, counts and timings and nothing else, which left a run it
+ * observed at replay grade `inspect`: a reader could see that a model was
+ * called and what it cost, but never what was asked or answered (Mission
+ * Control spec 8.4). So the request the vendor read and the response it sent
+ * now ride the `llm_call` frame as its body. Three rules govern those bytes,
+ * and none of them is this module's to make:
+ *
+ *   - Redaction runs on the host before the digest (`evidence/frame-body.ts`),
+ *     so a secret is cut out of the body and the digest the chain carries
+ *     names the bytes that ship, never the bytes the vendor saw.
+ *   - A body over `TACHO_MAX_BODY_BYTES` is never held. The proxy stops
+ *     accumulating at the cap rather than buying the agent's memory with
+ *     bytes no host could ship, and the frame says why it has none.
+ *   - The workspace's retention mode decides whether a body reaches the WAL
+ *     at all. The daemon applies it on the way in and the control plane
+ *     enforces it again on ingest, so a workspace on `digest_only` gets
+ *     exactly what this proxy produced before: digests, counts and timings.
  *
  * Standing in the path is what makes four things possible, and each is here:
  *
@@ -70,12 +86,19 @@ import {
 } from "node:zlib";
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
+import { digestBytes, jcs } from "../digest";
 import type { TachoEvent } from "../envelope";
+import {
+  type DraftContent,
+  type FrameBody,
+  jsonContent,
+} from "../evidence/frame-body";
 import {
   type PolicyBundle,
   TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
+  TACHO_MAX_BODY_BYTES,
   TACHO_METERING_OBSERVED,
   TACHO_MODEL_SESSION_HEADER,
   type TachoHarness,
@@ -151,8 +174,16 @@ export interface ModelProxyDeps {
   registry: SessionRegistry;
   /** The daemon's own chain, for a call no session can be found for. */
   hostRecorder: () => SessionRecorder;
-  /** Append sealed events to the WAL; the daemon's `record`. */
-  record: (events: readonly TachoEvent[]) => void;
+  /**
+   * Append sealed events, and the bodies of those that carry one, to the WAL;
+   * the daemon's `record`. The bodies are drained from the recorder in the
+   * same call that takes the events, because the WAL files a body next to its
+   * event and the recorder holds it nowhere else.
+   */
+  record: (
+    events: readonly TachoEvent[],
+    bodies?: readonly FrameBody[],
+  ) => void;
   policy: () => ModelProxyPolicy;
   upstreams?: () => ModelUpstreams;
   /** Observed spend already on a session's chain, read once per session. */
@@ -206,6 +237,69 @@ function header(req: IncomingMessage, name: string): string | undefined {
   const value = req.headers[name];
   const first = Array.isArray(value) ? value[0] : value;
   return typeof first === "string" && first.length > 0 ? first : undefined;
+}
+
+/**
+ * One half of an exchange, decoded, held for the frame body and dropped the
+ * moment it passes what one body may carry.
+ *
+ * The cap is not an optimisation. The proxy sits in the agent's critical path
+ * and a model response has no ceiling of its own, so buffering one the host
+ * could never ship would spend the agent's memory on bytes `prepareContent`
+ * would refuse anyway. Past the cap the chunks already held are released and
+ * the frame records that it has no body, which reads as a size limit rather
+ * than as a proxy that never captured.
+ */
+class BodyCapture {
+  private chunks: Buffer[] = [];
+  private held = 0;
+  private dropped = false;
+
+  write(chunk: Buffer): void {
+    if (this.dropped) return;
+    this.held += chunk.length;
+    if (this.held > TACHO_MAX_BODY_BYTES) {
+      this.dropped = true;
+      this.chunks = [];
+      return;
+    }
+    this.chunks.push(chunk);
+  }
+
+  /** The bytes as text, or nothing when none came or they were dropped. */
+  text(): string | undefined {
+    if (this.dropped || this.chunks.length === 0) return undefined;
+    return Buffer.concat(this.chunks).toString("utf8");
+  }
+
+  get tooLarge(): boolean {
+    return this.dropped;
+  }
+}
+
+/**
+ * The call as one frame body: the request the vendor read and the response it
+ * sent, both decoded, in one JSON object.
+ *
+ * They ride together because a frame carries at most one body. `tachoBodySchema`
+ * keys bodies by `event_id_idem` and the WAL answers at most one per event,
+ * and one model call seals exactly one `llm_call` frame, so either both halves
+ * are in that body or neither half replays. A `tool_call` frame from a hook
+ * carries its input and its output the same way (`toolCallContent` in
+ * `claude-code/hooks.ts`).
+ *
+ * Each half is a string holding the exact decoded text rather than re-parsed
+ * JSON. A reader who wants structure parses the member; one who wants to check
+ * the body against what crossed the wire can, which re-serialising would cost
+ * them. JCS drops an absent member, so a call whose response was too large to
+ * hold ships `{"request":...}` alone.
+ */
+function exchangeContent(
+  request: string | undefined,
+  response: string | undefined,
+): DraftContent | undefined {
+  if (request === undefined && response === undefined) return undefined;
+  return jsonContent(jcs({ request, response }));
 }
 
 /** The request body decoded for reading only; the forwarded bytes are the caller's. */
@@ -577,7 +671,18 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       (typeof json()?.["model"] === "string"
         ? (json()?.["model"] as string)
         : undefined);
-    // Nothing of the request is kept past this point but its bytes to send.
+    // The request half of the exchange, decoded: the bytes the vendor is about
+    // to read, not the gzip or zstd the harness wrapped them in, and the
+    // injected body when `beforeForward` changed one, because the request that
+    // was made is the request a fork has to replay.
+    const sent = injected ? body : readable();
+    const requestTooLarge =
+      sent !== undefined && sent.length > TACHO_MAX_BODY_BYTES;
+    const requestText =
+      sent !== undefined && !requestTooLarge
+        ? sent.toString("utf8")
+        : undefined;
+    // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
 
@@ -597,6 +702,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     let responseType: string | undefined;
     let responseBytes = 0;
     const responseHash = createHash("sha256");
+    const responseBody = new BodyCapture();
     let meter: UsageMeter | undefined;
 
     const headers = upstreamRequestHeaders(
@@ -661,79 +767,108 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const failed =
         errorClass ??
         (status !== undefined && status >= 400 ? `http_${status}` : undefined);
-      deps.record([
-        recorder.sealCollectorEvent(
-          "llm_call",
-          {
-            provider: route.provider,
-            ...(model !== undefined ? { model } : {}),
-            ...(usage.inputTokens !== undefined
-              ? { input_tokens: usage.inputTokens }
-              : {}),
-            ...(usage.outputTokens !== undefined
-              ? { output_tokens: usage.outputTokens }
-              : {}),
-            ...(usage.cacheReadTokens !== undefined
-              ? { cache_read_tokens: usage.cacheReadTokens }
-              : {}),
-            ...(usage.cacheCreationTokens !== undefined
-              ? { cache_creation_tokens: usage.cacheCreationTokens }
-              : {}),
-            ...(usage.cacheCreation5mTokens !== undefined
-              ? { cache_creation_5m_tokens: usage.cacheCreation5mTokens }
-              : {}),
-            ...(usage.cacheCreation1hTokens !== undefined
-              ? { cache_creation_1h_tokens: usage.cacheCreation1hTokens }
-              : {}),
-            ...(usage.thinkingTokens !== undefined
-              ? { thinking_tokens: usage.thinkingTokens }
-              : {}),
-            ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
-            cost_basis:
-              priced !== undefined
-                ? "observed"
-                : hasTokenCounts(usage)
-                  ? "observed_unpriced"
-                  : "observed_no_usage",
-            ...(usage.serviceTier !== undefined
-              ? { service_tier: usage.serviceTier }
-              : {}),
-            ...(usage.stopReason !== undefined
-              ? { stop_reason: usage.stopReason }
-              : {}),
-            ...(firstByteAt !== undefined
-              ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
-              : {}),
-            api_duration_ms: Math.max(0, deps.now() - startedAt),
-            ...(status !== undefined ? { api_status_code: status } : {}),
-            ...(failed !== undefined ? { api_error_class: failed } : {}),
-            ...(requestId !== undefined ? { request_id: requestId } : {}),
-            ...(usage.responseId !== undefined
-              ? { message_id: usage.responseId }
-              : {}),
-          },
-          {
-            fidelity: "proxy",
-            attrs: {
-              ...attrs,
-              [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
-              "oxagen.request_digest": requestDigest,
-              "oxagen.request_bytes": String(requestBytes),
-              "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
-              "oxagen.response_bytes": String(responseBytes),
-              "oxagen.stream": meter?.isStreaming === true ? "1" : "0",
-              "oxagen.upstream_host": target.host,
-              ...(responseType !== undefined
-                ? { "oxagen.response_content_type": responseType }
+      const responseText = responseBody.text();
+      // Bytes came back and none of them are here, so the encoding the vendor
+      // chose is one this build has no decoder for. That is a different gap
+      // from a response too large to hold, and a replay that cannot tell them
+      // apart cannot tell a host that is behind from a host that is working.
+      const responseOmitted = responseBody.tooLarge
+        ? "too_large"
+        : responseText === undefined && responseBytes > 0
+          ? "not_decoded"
+          : undefined;
+      const exchange = exchangeContent(requestText, responseText);
+      deps.record(
+        [
+          recorder.sealCollectorEvent(
+            "llm_call",
+            {
+              provider: route.provider,
+              ...(model !== undefined ? { model } : {}),
+              ...(usage.inputTokens !== undefined
+                ? { input_tokens: usage.inputTokens }
                 : {}),
-              ...(injected ? { "oxagen.request_injected": "1" } : {}),
-              ...(abortReason !== undefined
-                ? { "oxagen.interrupted": "1" }
+              ...(usage.outputTokens !== undefined
+                ? { output_tokens: usage.outputTokens }
+                : {}),
+              ...(usage.cacheReadTokens !== undefined
+                ? { cache_read_tokens: usage.cacheReadTokens }
+                : {}),
+              ...(usage.cacheCreationTokens !== undefined
+                ? { cache_creation_tokens: usage.cacheCreationTokens }
+                : {}),
+              ...(usage.cacheCreation5mTokens !== undefined
+                ? { cache_creation_5m_tokens: usage.cacheCreation5mTokens }
+                : {}),
+              ...(usage.cacheCreation1hTokens !== undefined
+                ? { cache_creation_1h_tokens: usage.cacheCreation1hTokens }
+                : {}),
+              ...(usage.thinkingTokens !== undefined
+                ? { thinking_tokens: usage.thinkingTokens }
+                : {}),
+              ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
+              cost_basis:
+                priced !== undefined
+                  ? "observed"
+                  : hasTokenCounts(usage)
+                    ? "observed_unpriced"
+                    : "observed_no_usage",
+              ...(usage.serviceTier !== undefined
+                ? { service_tier: usage.serviceTier }
+                : {}),
+              ...(usage.stopReason !== undefined
+                ? { stop_reason: usage.stopReason }
+                : {}),
+              ...(firstByteAt !== undefined
+                ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
+                : {}),
+              api_duration_ms: Math.max(0, deps.now() - startedAt),
+              ...(status !== undefined ? { api_status_code: status } : {}),
+              ...(failed !== undefined ? { api_error_class: failed } : {}),
+              ...(requestId !== undefined ? { request_id: requestId } : {}),
+              ...(usage.responseId !== undefined
+                ? { message_id: usage.responseId }
                 : {}),
             },
-          },
-        ),
-      ]);
+            {
+              fidelity: "proxy",
+              // The recorder redacts these bytes, digests what is left and puts
+              // that digest on the frame as `content.digest`, overriding any the
+              // caller supplies. So `content.digest` is the one a reader
+              // verifies the body against, and the proxy does not compute it:
+              // the proxy has not redacted, and a digest of the bytes before
+              // redaction would name a body that never ships. The two wire
+              // digests below are a different claim and keep their meaning, that
+              // these exact bytes crossed the wire to this vendor.
+              ...(exchange !== undefined ? { content: exchange } : {}),
+              attrs: {
+                ...attrs,
+                [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
+                "oxagen.request_digest": requestDigest,
+                "oxagen.request_bytes": String(requestBytes),
+                "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
+                "oxagen.response_bytes": String(responseBytes),
+                "oxagen.stream": meter?.isStreaming === true ? "1" : "0",
+                "oxagen.upstream_host": target.host,
+                ...(responseType !== undefined
+                  ? { "oxagen.response_content_type": responseType }
+                  : {}),
+                ...(injected ? { "oxagen.request_injected": "1" } : {}),
+                ...(requestTooLarge
+                  ? { "oxagen.request_body_omitted": "too_large" }
+                  : {}),
+                ...(responseOmitted !== undefined
+                  ? { "oxagen.response_body_omitted": responseOmitted }
+                  : {}),
+                ...(abortReason !== undefined
+                  ? { "oxagen.interrupted": "1" }
+                  : {}),
+              },
+            },
+          ),
+        ],
+        recorder.takeBodies(),
+      );
     };
 
     // The caller went away: stop paying for tokens nobody will read.
@@ -765,7 +900,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       const decoder = decoderFor(
         typeof contentEncoding === "string" ? contentEncoding : undefined,
       );
-      decoder?.on("data", (chunk: Buffer) => meter?.write(chunk));
+      decoder?.on("data", (chunk: Buffer) => {
+        meter?.write(chunk);
+        responseBody.write(chunk);
+      });
       decoder?.on("error", () => undefined);
       const compressed =
         typeof contentEncoding === "string" &&
@@ -783,7 +921,10 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         responseBytes += chunk.length;
         responseHash.update(chunk);
         if (decoder !== undefined) decoder.write(chunk);
-        else if (!compressed) meter?.write(chunk);
+        else if (!compressed) {
+          meter?.write(chunk);
+          responseBody.write(chunk);
+        }
       });
       upstream.on("end", () => {
         if (decoder === undefined) {
@@ -830,10 +971,6 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     });
 
     upstreamReq.end(body);
-  }
-
-  function digestBytes(bytes: Buffer): string {
-    return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
   }
 
   return {

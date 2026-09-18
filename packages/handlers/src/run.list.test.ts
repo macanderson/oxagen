@@ -602,6 +602,25 @@ describe("list_runs queries name the tenant", () => {
       expect(query.sql).not.toMatch(/"evidence"\."verdicts"/);
   });
 
+  it("counts both spellings of a model call and a tool call", () => {
+    // The in-app assistant writes `model.engine_call_completed` and
+    // `tool.engine_call_completed`; this query matched only
+    // `model.call_completed` / `tool.call_completed`, so a real run listed
+    // zero model calls, zero tool calls and zero turns beside a climbing
+    // frame count.
+    const query = ledgerRollupQuery(db, SCOPE, [RUN]).toSQL();
+    for (const type of [
+      "model.call_completed",
+      "model.engine_call_completed",
+      "tool.call_completed",
+      "tool.engine_call_completed",
+    ])
+      expect(query.params).toContain(type);
+    // Bound, never interpolated: an event type reaches Postgres as a
+    // parameter like every other value this query sends.
+    expect(query.sql).not.toContain("model.engine_call_completed");
+  });
+
   it("a different scope binds different tenant ids (negative)", () => {
     const query = ledgerPageQuery(db, OTHER_WORKSPACE, page).toSQL();
     expect(query.params).not.toContain(SCOPE.workspaceId);

@@ -42,22 +42,47 @@
         "steps": "Steps",
         "everything": "Everything"
       },
-      "kind": {
-        "turn": "Turn",
-        "model_call": "Model call",
-        "tool_call": "Tool call",
-        "frame": "Frame"
-      },
-      "frame": "frame {seq}",
-      "frames": "frames {from} to {to}",
-      "folded": "{count} frames",
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
       "openFrame": "Read the whole body of frame {seq}",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
       "complete": "{count} entries. This is the whole run.",
-      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end."
+      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end.",
+      "runStart": "Run start",
+      "turn": "turn {n}",
+      "turnDone": "done",
+      "turnRunning": "running",
+      "you": "YOU",
+      "agent": "AGENT",
+      "stepCount": "{count, plural, one {# step} other {# steps}}",
+      "frameCount": "{count, plural, one {# frame} other {# frames}}",
+      "seqSpan": "seq {from} to {to}",
+      "ms": "{ms} ms",
+      "live": "live",
+      "goLive": "go live",
+      "recorded": {
+        "sealed": "sealed",
+        "halted": "halted"
+      },
+      "back": "Step back",
+      "play": "Play",
+      "pause": "Pause playback",
+      "forward": "Step forward",
+      "scrub": "Scrub to frame",
+      "position": "seq {seq}",
+      "of": "/ {seq}",
+      "speedLabel": "Playback speed",
+      "speed": "×{speed}",
+      "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
+      "transportNoteGraded": "Replay grade {grade}. The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
+      "frameHead": "seq {seq} · {time} · {fidelity}",
+      "fidelity": {
+        "full": "body retained",
+        "digest_only": "digest only"
+      },
+      "envelope": "Frame {seq} on the Frames tab",
+      "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives. This view re-reads the run every few seconds while you follow its head."
     },
     "frames": {
       "title": "Frames",
