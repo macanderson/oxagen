@@ -5,17 +5,24 @@
 // The header maps through `toRunRow`, the same function the Fleet table's rows
 // go through, so the two surfaces cannot disagree about one run.
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
+import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import type { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { z } from "zod";
 import { moneyFromMicros } from "@/data/contracts/money";
-import type { RunCost, RunDetail, RunTranscript } from "@/data/contracts/run";
+import type {
+  RunCost,
+  RunDetail,
+  RunFrameBody,
+  RunTranscript,
+} from "@/data/contracts/run";
 import type { ContractOutput } from "@/server/kernel";
 import { toRunRow } from "./runs";
 
 type RunGetOutput = ContractOutput<typeof runGet>;
 type RunCostOutput = ContractOutput<typeof runCostGet>;
 type RunTranscriptOutput = ContractOutput<typeof runTranscriptGet>;
+type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 
 type ContractCost = { micros: string; currency: string; basis: string | null };
 
@@ -47,7 +54,16 @@ function toTokens(tokens: ContractTokens) {
   };
 }
 
-export function toRunDetail(out: RunGetOutput): z.input<typeof RunDetail> {
+/**
+ * `pageSize` is the `frameLimit` the read asked for: a page that filled it and
+ * carries a resume point may have more behind it; a short page is the end of
+ * what was recorded, whatever its cursor says (the cursor is a stream's resume
+ * point and is set on every non-empty batch).
+ */
+export function toRunDetail(
+  out: RunGetOutput,
+  pageSize: number,
+): z.input<typeof RunDetail> {
   return {
     run: toRunRow(out.run),
     frames: {
@@ -72,8 +88,40 @@ export function toRunDetail(out: RunGetOutput): z.input<typeof RunDetail> {
         cost: toCost(frame.cost),
       })),
       cursor: out.frames.cursor,
+      more: out.frames.cursor !== null && out.frames.frames.length >= pageSize,
     },
     witnessed: out.witnessFor !== null,
+  };
+}
+
+const utf8 = new TextDecoder("utf-8", { fatal: true });
+
+/** The base64 the contract carries, as text when it decodes as UTF-8. */
+function decodeBody(base64: string): { text: string | null; bytes: number } {
+  const buffer = Buffer.from(base64, "base64");
+  try {
+    return { text: utf8.decode(buffer), bytes: buffer.byteLength };
+  } catch {
+    return { text: null, bytes: buffer.byteLength };
+  }
+}
+
+export function toRunFrameBody(
+  seq: string,
+  out: RunFrameBodyOutput,
+): z.input<typeof RunFrameBody> {
+  const decoded = out.bytes === null ? null : decodeBody(out.bytes);
+  return {
+    seq,
+    contentType: out.contentType,
+    text: decoded === null ? null : decoded.text,
+    bytes: decoded === null ? null : decoded.bytes,
+    digest: out.digest,
+    redactions: out.redactions.map((redaction) => ({
+      path: redaction.path,
+      reason: redaction.reason,
+      originalDigest: redaction.originalDigest,
+    })),
   };
 }
 

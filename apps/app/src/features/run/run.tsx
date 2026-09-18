@@ -7,7 +7,8 @@
 // nobody looked at is paid for (§3.5's poll budget).
 //
 // Four sections have a store behind them: Transcript (`get_run_transcript` at
-// one of three zoom levels), Frames (`get_run`'s own page), Cost
+// one of three zoom levels), Frames (`get_run`'s own page, plus one frame's
+// bytes from `get_run_frame_body` when `?body=` names it), Cost
 // (`get_run_cost`) and Policy (`list_approvals` narrowed to the run, with the
 // mandate ledger when a parked call names one).
 //
@@ -41,6 +42,9 @@ import { TranscriptSection } from "./transcript";
 const TABS = ["transcript", "frames", "cost", "policy"] as const;
 type Tab = (typeof TABS)[number];
 
+/** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
+const FRAME_SEQ = /^\d{1,19}$/;
+
 type Place = { org: string; ws: string; runId: string };
 
 function Tabs({ selected, org, ws, runId }: { selected: Tab } & Place) {
@@ -71,6 +75,7 @@ export async function Run({
   tab,
   zoom,
   frames,
+  body,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -82,6 +87,8 @@ export async function Run({
   zoom: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
+  /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
+  body: string | null;
 }) {
   const selected = TABS.find((name) => name === tab) ?? "transcript";
   const level = TranscriptZoom.safeParse(zoom);
@@ -97,10 +104,10 @@ export async function Run({
   }
   const detail = read.value;
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug, runId: detail.run.id };
-  let body: ReactNode;
+  let section: ReactNode;
   switch (selected) {
     case "transcript":
-      body = (
+      section = (
         <TranscriptSection
           read={await source.runs.transcript(ctx, detail.run.id, zoomed)}
           zoom={zoomed}
@@ -108,14 +115,32 @@ export async function Run({
         />
       );
       break;
-    case "frames":
-      body = <FramesSection read={read} frames={frames} {...place} />;
+    case "frames": {
+      const seq = body !== null && FRAME_SEQ.test(body) ? body : null;
+      section = (
+        <FramesSection
+          read={read}
+          frames={frames}
+          body={
+            seq === null
+              ? null
+              : {
+                  seq,
+                  read: await source.runs.frameBody(ctx, detail.run.id, seq),
+                }
+          }
+          {...place}
+        />
+      );
       break;
+    }
     case "cost":
-      body = <CostSection read={await source.runs.cost(ctx, detail.run.id)} />;
+      section = (
+        <CostSection read={await source.runs.cost(ctx, detail.run.id)} />
+      );
       break;
     case "policy":
-      body = (
+      section = (
         <PolicySection
           read={await readRunApprovals(ctx, source, detail.run.id)}
           org={place.org}
@@ -129,11 +154,12 @@ export async function Run({
       <RunHeader
         run={detail.run}
         witnessed={detail.witnessed}
+        orgRole={ctx.orgRole}
         org={place.org}
         ws={place.ws}
       />
       <Tabs selected={selected} {...place} />
-      {body}
+      {section}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   runCost,
   runDetail,
   runFrame,
+  runFrameBody,
   runRow,
   runSource,
   runTranscript,
@@ -73,18 +74,38 @@ const DENIED = {
 const DOWN = readError("frame_store_unreachable", 502);
 const NO_APPROVALS = readOk<ApprovalItem[]>([]);
 
+/** The same workspace seen by an organization Member: `export_run` refuses this role. */
+const memberCtx = unsafeMint(WsCtx, {
+  userId: "usr_priyanair",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "member",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "member",
+});
+
 async function renderRun(
   reads: Parameters<typeof runSource>[0],
-  view: { tab?: string; zoom?: string; frames?: string } = {},
+  view: {
+    tab?: string;
+    zoom?: string;
+    frames?: string;
+    body?: string;
+    viewer?: typeof ctx;
+  } = {},
 ) {
   const { source, calls } = runSource(reads);
   const element = await Run({
-    ctx,
+    ctx: view.viewer ?? ctx,
     source,
     runId: "tse_7k2m9q",
     tab: view.tab ?? null,
     zoom: view.zoom ?? null,
     frames: view.frames ?? null,
+    body: view.body ?? null,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
@@ -199,6 +220,28 @@ describe("controls", () => {
     });
     expect(screen.getByTestId("run-summarize")).toBeTruthy();
   });
+
+  it("draws Export disabled for an organization Member and says which role it needs (negative)", async () => {
+    const { container } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { viewer: memberCtx },
+    );
+    expect(screen.getByTestId("run-export")).toBeDisabled();
+    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+      "Owner or Admin role",
+    );
+    expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
+    await expectNoAxe(container);
+  });
+
+  it("offers Export to an Owner with no reason attached", async () => {
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-export")).not.toBeDisabled();
+    expect(screen.queryByTestId("export-no-role")).toBeNull();
+  });
 });
 
 describe("tabs", () => {
@@ -269,6 +312,30 @@ describe("transcript", () => {
     expect(screen.getByText(/kept a digest and no body/)).toBeTruthy();
   });
 
+  it("links a cut entry to its frame's whole body on the Frames tab", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            entries: [transcriptEntry({ seq: "37", truncated: true })],
+          }),
+        ),
+      },
+      { tab: "transcript" },
+    );
+    const note = screen.getByTestId("entry-truncated");
+    expect(note).toHaveTextContent("Cut at the length one entry carries.");
+    expect(
+      within(note).getByRole("link", {
+        name: "Read the whole body of frame 37",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=frames&body=37",
+    );
+  });
+
   it("says when the transcript stopped short of the end (negative)", async () => {
     await renderRun(
       {
@@ -328,6 +395,7 @@ describe("frames", () => {
                 }),
               ],
               cursor: null,
+              more: false,
             },
           }),
         ),
@@ -340,12 +408,12 @@ describe("frames", () => {
     );
   });
 
-  it("links to the next frame page only when the read carried a cursor", async () => {
+  it("links to the next frame page when the page came back full with a cursor", async () => {
     await renderRun(
       {
         detail: ok(
           runDetail({
-            frames: { frames: [runFrame()], cursor: "ZjoyMA" },
+            frames: { frames: [runFrame()], cursor: "ZjoyMA", more: true },
           }),
         ),
         transcript: ok(runTranscript()),
@@ -358,6 +426,43 @@ describe("frames", () => {
     );
   });
 
+  it("links to no later page when the read carried a resume point but the page was short (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            frames: { frames: [runFrame()], cursor: "ZjoyMA", more: false },
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "frames" },
+    );
+    expect(screen.queryByRole("link", { name: "Later frames" })).toBeNull();
+    expect(
+      screen.queryByRole("navigation", { name: "Frame pages" }),
+    ).toBeNull();
+  });
+
+  it("keeps the way back to the first frames on a later page that came back empty", async () => {
+    const { container } = await renderRun(
+      {
+        detail: ok(
+          runDetail({ frames: { frames: [], cursor: null, more: false } }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "frames", frames: "ZjoyMA" },
+    );
+    expect(screen.getByText(/Nothing lies past the frame/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "First frames" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=frames",
+    );
+    expect(screen.queryByRole("link", { name: "Later frames" })).toBeNull();
+    await expectNoAxe(container);
+  });
+
   it("passes the cursor the URL carried to get_run", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
@@ -368,6 +473,132 @@ describe("frames", () => {
       "tse_7k2m9q",
       { framesAfter: "ZjoyMA" },
     ]);
+  });
+
+  it("offers to open the body of a frame with retained bytes, and not of a digest_only one", async () => {
+    await renderRun(
+      {
+        detail: ok(
+          runDetail({
+            frames: {
+              frames: [
+                runFrame(),
+                runFrame({
+                  cursor: "ZjoxMg",
+                  seq: "12",
+                  body: {
+                    digest: "sha256:0c1d",
+                    bytesRef: null,
+                    redactions: [],
+                    fidelity: "digest_only",
+                  },
+                }),
+              ],
+              cursor: null,
+              more: false,
+            },
+          }),
+        ),
+        transcript: ok(runTranscript()),
+      },
+      { tab: "frames", frames: "ZjoxMA" },
+    );
+    const links = screen.getAllByTestId("frame-open-body");
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=frames&frames=ZjoxMA&body=11",
+    );
+  });
+
+  it("makes no body read when the URL opens no frame", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "frames" },
+    );
+    expect(calls.frameBody).toHaveLength(0);
+    expect(screen.queryByTestId("frame-body")).toBeNull();
+  });
+
+  it("makes no body read for a value that is not a frame seq (negative)", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "frames", body: "../etc" },
+    );
+    expect(calls.frameBody).toHaveLength(0);
+  });
+
+  it("reads and draws the open frame's body as text, with its digest, type and size", async () => {
+    const { calls, container } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        frameBody: ok(runFrameBody()),
+      },
+      { tab: "frames", frames: "ZjoxMA", body: "11" },
+    );
+    expect(calls.frameBody[0]).toEqual([ctx, "tse_7k2m9q", "11"]);
+    const body = screen.getByTestId("frame-body");
+    expect(body).toHaveTextContent("sha256:9a1b4e7c");
+    expect(body).toHaveTextContent("application/json");
+    expect(body).toHaveTextContent("92 bytes");
+    expect(body).toHaveTextContent("Cut release/3.2 from main.");
+    expect(screen.getByRole("region", { name: "Frame 11 body" })).toBeTruthy();
+    expect(screen.getByTestId("frame-body-close")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=frames&frames=ZjoxMA",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says a digest_only frame has no bytes to read rather than drawing an empty box (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        frameBody: ok(
+          runFrameBody({ contentType: null, text: null, bytes: null }),
+        ),
+      },
+      { tab: "frames", body: "11" },
+    );
+    expect(screen.getByTestId("frame-body")).toHaveTextContent(
+      "kept this frame's digest and no bytes",
+    );
+    expect(screen.getByTestId("frame-body")).toHaveTextContent(
+      "no bytes retained",
+    );
+  });
+
+  it("says retained bytes that are not text are not shown, and keeps their size (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        frameBody: ok(
+          runFrameBody({ contentType: "image/png", text: null, bytes: 4096 }),
+        ),
+      },
+      { tab: "frames", body: "11" },
+    );
+    const body = screen.getByTestId("frame-body");
+    expect(body).toHaveTextContent("not UTF-8 text");
+    expect(body).toHaveTextContent("4,096 bytes");
+  });
+
+  it("names the body read's own failure and keeps the frames page beneath it (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        frameBody: readError("not_found", 404),
+      },
+      { tab: "frames", body: "999" },
+    );
+    expect(
+      screen.getByRole("region", { name: "Frame 999 body" }),
+    ).toHaveTextContent("not_found");
+    expect(screen.getAllByTestId("frame-row")).toHaveLength(1);
   });
 });
 

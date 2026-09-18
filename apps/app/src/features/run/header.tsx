@@ -9,6 +9,7 @@
 // is never mistaken for the recording.
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
+import type { OrgRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { eyebrow, mono } from "@/ui/control-styles";
 import { GeneratedSummary } from "@/ui/generated-summary";
@@ -38,12 +39,15 @@ function Figure({
 export function RunHeader({
   run,
   witnessed,
+  orgRole,
   org,
   ws,
 }: {
   run: RunRow;
   /** True when this run witnessed another (spec §8.5); #2955 builds its tabs. */
   witnessed: boolean;
+  /** The viewer's organization role: `export_run` admits an Owner or Admin and no one else. */
+  orgRole: OrgRole;
   org: string;
   ws: string;
 }) {
@@ -120,6 +124,7 @@ export function RunHeader({
             runId={run.id}
             sealed={run.status !== "live"}
             hasSummary={run.summary !== null}
+            canExport={orgRole === "owner" || orgRole === "admin"}
           />
         </div>
       </div>

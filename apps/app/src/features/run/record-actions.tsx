@@ -6,7 +6,8 @@
 // was queued and offers to re-read the run rather than claiming a result it
 // cannot see yet. Summarize is offered on a sealed run with no summary, and
 // again once one exists, because a run can be re-read after its bodies change
-// hands; the label says which of the two it is.
+// hands; the label says which of the two it is. Export is drawn disabled, with
+// the reason, for a viewer whose org role `export_run` would refuse.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
@@ -133,6 +134,7 @@ export function RecordActions({
   runId,
   sealed,
   hasSummary,
+  canExport,
 }: {
   org: string;
   ws: string;
@@ -140,29 +142,57 @@ export function RecordActions({
   /** Both writes need a sealed record: a live run is refused by both handlers. */
   sealed: boolean;
   hasSummary: boolean;
+  /**
+   * Whether `export_run` would admit this viewer: its handler asserts an org
+   * Owner or Admin, where `summarize_run` admits a Member too. A viewer it
+   * would refuse sees Export disabled with the reason, not a button that ends
+   * in `org_role_required`.
+   */
+  canExport: boolean;
 }) {
   const t = useTranslations("run.record");
   const here = routes.run(org, ws, runId);
   if (!sealed) return null;
   const summarizeAction = hasSummary ? "resummarize" : "summarize";
   return (
-    <div className="flex flex-wrap gap-2">
-      <RecordDialog
-        action={summarizeAction}
-        label={t(`${summarizeAction}.open`)}
-        runId={runId}
-        after={here}
-        write={() => summarizeRun(org, ws, runId)}
-        receipt={(value) => value.runId}
-      />
-      <RecordDialog
-        action="export"
-        label={t("export.open")}
-        runId={runId}
-        after={here}
-        write={() => exportRun(org, ws, runId)}
-        receipt={(value) => value.exportId}
-      />
+    <div className="flex flex-col items-start gap-2 lg:items-end">
+      <div className="flex flex-wrap gap-2">
+        <RecordDialog
+          action={summarizeAction}
+          label={t(`${summarizeAction}.open`)}
+          runId={runId}
+          after={here}
+          write={() => summarizeRun(org, ws, runId)}
+          receipt={(value) => value.runId}
+        />
+        {canExport ? (
+          <RecordDialog
+            action="export"
+            label={t("export.open")}
+            runId={runId}
+            after={here}
+            write={() => exportRun(org, ws, runId)}
+            receipt={(value) => value.exportId}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled
+            data-testid="run-export"
+            className={buttonSecondary}
+          >
+            {t("export.open")}
+          </button>
+        )}
+      </div>
+      {canExport ? null : (
+        <p
+          data-testid="export-no-role"
+          className="max-w-prose text-xs text-muted-foreground lg:text-right"
+        >
+          {t("export.needsRole")}
+        </p>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import type {
   RunCost,
   RunDetail,
   RunFrame,
+  RunFrameBody,
   RunTranscript,
   TranscriptEntry,
 } from "@/data/contracts/run";
@@ -69,8 +70,22 @@ export function runFrame(overrides: Partial<RunFrame> = {}): RunFrame {
 export function runDetail(overrides: Partial<RunDetail> = {}): RunDetail {
   return {
     run: runRow(),
-    frames: { frames: [runFrame()], cursor: null },
+    frames: { frames: [runFrame()], cursor: null, more: false },
     witnessed: false,
+    ...overrides,
+  };
+}
+
+export function runFrameBody(
+  overrides: Partial<RunFrameBody> = {},
+): RunFrameBody {
+  return {
+    seq: "11",
+    contentType: "application/json",
+    text: '{"model":"claude-opus-5","messages":[{"role":"user","content":"Cut release/3.2 from main."}]}',
+    bytes: 92,
+    digest: "sha256:9a1b4e7c",
+    redactions: [],
     ...overrides,
   };
 }
@@ -156,6 +171,8 @@ type RunReads = {
   detail: Read<RunDetail>;
   /** Only read when the Cost tab is open; refused when absent. */
   cost?: Read<RunCost>;
+  /** Only read when the Frames tab has a frame body open; refused when absent. */
+  frameBody?: Read<RunFrameBody>;
   /** Only read when the Transcript tab is open; refused when absent. */
   transcript?: Read<RunTranscript>;
   /** Only read when the Policy tab is open; refused when absent. */
@@ -168,11 +185,19 @@ type RunReads = {
 export function runSource(reads: RunReads) {
   const calls: {
     get: unknown[][];
+    frameBody: unknown[][];
     cost: unknown[][];
     transcript: unknown[][];
     approvals: unknown[][];
     mandates: unknown[][];
-  } = { get: [], cost: [], transcript: [], approvals: [], mandates: [] };
+  } = {
+    get: [],
+    frameBody: [],
+    cost: [],
+    transcript: [],
+    approvals: [],
+    mandates: [],
+  };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
     name: keyof typeof calls,
@@ -191,6 +216,7 @@ export function runSource(reads: RunReads) {
     runs: {
       list: refuse,
       get: answer("get", reads.detail),
+      frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),
       transcript: answer("transcript", reads.transcript),
     },

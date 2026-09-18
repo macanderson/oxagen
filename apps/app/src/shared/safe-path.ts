@@ -164,12 +164,13 @@ export const routes = {
     org: string,
     ws: string,
     run: string,
-    q?: { tab?: string; zoom?: string; frames?: string },
+    q?: { tab?: string; zoom?: string; frames?: string; body?: string },
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
       tab: q?.tab,
       zoom: q?.zoom,
       frames: q?.frames,
+      body: q?.body,
     }),
   /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
   spend: (

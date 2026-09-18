@@ -6,21 +6,37 @@
 //
 // `get_run` is called with `waitMs: 0`: the page renders one frames page per
 // request, and the long poll the contract offers belongs to the stream, not to
-// a server render that would hold the response open for it (§3.5).
+// a server render that would hold the response open for it (§3.5). It asks
+// for `FRAME_PAGE` frames by name, because the mapper needs the size it asked
+// for to tell a full page from the end of the recording.
 import "server-only";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
-import { runGet } from "@oxagen/oxagen/contracts/run.get";
+import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
+import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
-import { RunCost, RunDetail, RunTranscript } from "@/data/contracts/run";
+import {
+  RunCost,
+  RunDetail,
+  RunFrameBody,
+  RunTranscript,
+} from "@/data/contracts/run";
 import { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toRunCost, toRunDetail, toRunTranscript } from "./mappers/run";
+import {
+  toRunCost,
+  toRunDetail,
+  toRunFrameBody,
+  toRunTranscript,
+} from "./mappers/run";
 import { toRunPage } from "./mappers/runs";
+
+/** Frames per page of the Frames tab: the contract's own default, named so the mapper can see it. */
+const FRAME_PAGE = FRAME_LIMIT_DEFAULT;
 
 /** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
 function view<S extends z.ZodType>(
@@ -55,12 +71,36 @@ export const runs: DataSource["runs"] = {
       contract: runGet,
       input:
         q.framesAfter === null
-          ? { runId, waitMs: 0 }
-          : { runId, framesAfter: q.framesAfter, waitMs: 0 },
+          ? { runId, frameLimit: FRAME_PAGE, waitMs: 0 }
+          : {
+              runId,
+              framesAfter: q.framesAfter,
+              frameLimit: FRAME_PAGE,
+              waitMs: 0,
+            },
       page: "run",
     });
     if (!read.ok) return read;
-    return view(ctx.orgId, RunDetail, toRunDetail(read.value), "runs.get");
+    return view(
+      ctx.orgId,
+      RunDetail,
+      toRunDetail(read.value, FRAME_PAGE),
+      "runs.get",
+    );
+  },
+  async frameBody(ctx, runId, seq) {
+    const read = await kernelRead(ctx, {
+      contract: runFrameBodyGet,
+      input: { runId, seq },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunFrameBody,
+      toRunFrameBody(seq, read.value),
+      "runs.frameBody",
+    );
   },
   async cost(ctx, runId) {
     const read = await kernelRead(ctx, {

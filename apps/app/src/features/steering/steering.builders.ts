@@ -181,6 +181,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
     runs: {
       list: refuse,
       get: refuse,
+      frameBody: refuse,
       cost: refuse,
       transcript: refuse,
     },

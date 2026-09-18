@@ -4,15 +4,16 @@
 //
 // Nothing here is stored, and nothing is inferred. An entry whose body was not
 // retained says `digest_only` rather than showing an empty bubble, an entry cut
-// at the contract's ceiling says it was cut, and a transcript that could not
-// carry the whole run says how far it reached. The zoom is a query value, so a
-// level is a link and the page keeps one route.
+// at the contract's ceiling says it was cut and links to the frame's whole
+// body on the Frames tab (`get_run_frame_body`), and a transcript that could
+// not carry the whole run says how far it reached. The zoom is a query value,
+// so a level is a link and the page keeps one route.
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import { TRANSCRIPT_ZOOMS } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -21,7 +22,7 @@ import { Panel } from "./parts";
 
 type Place = { org: string; ws: string; runId: string };
 
-function Entry({ entry }: { entry: TranscriptEntry }) {
+function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
   const locale = useLocale();
@@ -67,7 +68,13 @@ function Entry({ entry }: { entry: TranscriptEntry }) {
           data-testid="entry-truncated"
           className="text-xs text-muted-foreground"
         >
-          {t("truncated")}
+          {t("truncated")}{" "}
+          <SafeLink
+            to={routes.run(org, ws, runId, { tab: "frames", body: entry.seq })}
+            className={linkText}
+          >
+            {t("openFrame", { seq: entry.seq })}
+          </SafeLink>
         </p>
       ) : null}
     </li>
@@ -123,7 +130,13 @@ export function TranscriptSection({
         <>
           <ul className="flex flex-col">
             {read.value.entries.map((entry) => (
-              <Entry key={`${entry.seq}-${entry.endSeq}`} entry={entry} />
+              <Entry
+                key={`${entry.seq}-${entry.endSeq}`}
+                entry={entry}
+                org={org}
+                ws={ws}
+                runId={runId}
+              />
             ))}
           </ul>
           <p className="pt-3 text-xs text-muted-foreground">

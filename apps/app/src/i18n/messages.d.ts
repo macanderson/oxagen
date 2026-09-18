@@ -1463,6 +1463,7 @@ type Messages = {
       digestOnly: string;
       noBody: string;
       truncated: string;
+      openFrame: string;
       empty: string;
       complete: string;
       cut: string;
@@ -1484,11 +1485,23 @@ type Messages = {
       };
       noContent: string;
       redacted: string;
+      openBody: string;
       pager: string;
       first: string;
       next: string;
       empty: string;
       emptyPage: string;
+      body: {
+        title: string;
+        close: string;
+        digest: string;
+        contentType: string;
+        size: string;
+        bytes: string;
+        noBytes: string;
+        digestOnly: string;
+        notText: string;
+      };
     };
     cost: {
       title: string;
@@ -1604,6 +1617,7 @@ type Messages = {
         confirm: string;
         pending: string;
         queued: string;
+        needsRole: string;
       };
     };
   };

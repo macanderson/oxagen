@@ -2,6 +2,7 @@
 // cursor, mapped into the Fleet view, with a refusal passed through and an
 // unmappable record reported once.
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
+import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
@@ -161,7 +162,7 @@ describe("runs.get", () => {
     expect(read.ok && read.value.witnessed).toBe(false);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runGet,
-      input: { runId: "tse_4f0a", waitMs: 0 },
+      input: { runId: "tse_4f0a", frameLimit: 200, waitMs: 0 },
       page: "run",
     });
   });
@@ -173,9 +174,44 @@ describe("runs.get", () => {
     await runs.get(ctx, "tse_4f0a", { framesAfter: "ZjoyMA" });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runGet,
-      input: { runId: "tse_4f0a", framesAfter: "ZjoyMA", waitMs: 0 },
+      input: {
+        runId: "tse_4f0a",
+        framesAfter: "ZjoyMA",
+        frameLimit: 200,
+        waitMs: 0,
+      },
       page: "run",
     });
+  });
+
+  it("promises a later page only when the page came back full with a resume point", async () => {
+    const full = Array.from({ length: 200 }, (_, i) => ({
+      ...frame,
+      cursor: `c${String(i)}`,
+      seq: String(i + 1),
+    }));
+    kernelRead.mockResolvedValue(
+      readOk({
+        run,
+        frames: { frames: full, cursor: "ZjoyMDA" },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.frames.more).toBe(true);
+  });
+
+  it("promises no later page for a short batch, whatever its cursor says (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        run,
+        frames: { frames: [frame], cursor: "ZjoxMQ" },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.frames.more).toBe(false);
+    expect(read.ok && read.value.frames.cursor).toBe("ZjoxMQ");
   });
 
   it("carries a witness link as a boolean and nothing more", async () => {
@@ -202,6 +238,86 @@ describe("runs.get", () => {
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.frameBody", () => {
+  const redaction = {
+    path: "bytes:1-4",
+    reason: "api key",
+    originalDigest: "sha256:cut",
+  };
+
+  it("reads one frame by its seq and decodes UTF-8 bytes as text", async () => {
+    const text = '{"role":"user","content":"Cut release/3.2 — go"}';
+    kernelRead.mockResolvedValue(
+      readOk({
+        contentType: "application/json",
+        bytes: Buffer.from(text, "utf8").toString("base64"),
+        digest: "sha256:9a1b",
+        redactions: [redaction],
+      }),
+    );
+    const read = await runs.frameBody(ctx, "tse_4f0a", "11");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runFrameBodyGet,
+      input: { runId: "tse_4f0a", seq: "11" },
+      page: "run",
+    });
+    expect(read).toEqual(
+      readOk({
+        seq: "11",
+        contentType: "application/json",
+        text,
+        bytes: Buffer.byteLength(text, "utf8"),
+        digest: "sha256:9a1b",
+        redactions: [redaction],
+      }),
+    );
+  });
+
+  it("keeps bytes that are not UTF-8 as a size with no text (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        contentType: "image/png",
+        bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]).toString(
+          "base64",
+        ),
+        digest: "sha256:9a1b",
+        redactions: [],
+      }),
+    );
+    const read = await runs.frameBody(ctx, "tse_4f0a", "11");
+    expect(read.ok && read.value).toMatchObject({
+      contentType: "image/png",
+      text: null,
+      bytes: 6,
+    });
+  });
+
+  it("answers a digest_only frame with its digest and no bytes", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        contentType: null,
+        bytes: null,
+        digest: "sha256:9a1b",
+        redactions: [],
+      }),
+    );
+    const read = await runs.frameBody(ctx, "tse_4f0a", "11");
+    expect(read.ok && read.value).toMatchObject({
+      contentType: null,
+      text: null,
+      bytes: null,
+      digest: "sha256:9a1b",
+    });
+  });
+
+  it("passes a refused read through (negative)", async () => {
+    kernelRead.mockResolvedValue(readError("not_found", 404));
+    expect(await runs.frameBody(ctx, "tse_4f0a", "999")).toEqual(
+      readError("not_found", 404),
+    );
   });
 });
 

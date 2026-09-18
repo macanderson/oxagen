@@ -38,6 +38,7 @@ const source: DataSource = {
   runs: {
     list: refuse,
     get: refuse,
+    frameBody: refuse,
     cost: refuse,
     transcript: refuse,
   },

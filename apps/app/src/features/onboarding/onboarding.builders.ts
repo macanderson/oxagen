@@ -101,6 +101,7 @@ export function onboardingSource(reads: Reads): {
     runs: {
       list: refuse("runs.list"),
       get: refuse("runs.get"),
+      frameBody: refuse("runs.frameBody"),
       cost: refuse("runs.cost"),
       transcript: refuse("runs.transcript"),
     },

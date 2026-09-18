@@ -59,6 +59,7 @@ async function renderWorkspaces(
     runs: {
       list: vi.fn(),
       get: vi.fn(),
+      frameBody: vi.fn(),
       cost: vi.fn(),
       transcript: vi.fn(),
     },

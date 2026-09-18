@@ -43,7 +43,8 @@
       "folded": "{count} frames",
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
-      "truncated": "Cut at the length one entry carries. Open the frame to read the whole body.",
+      "truncated": "Cut at the length one entry carries.",
+      "openFrame": "Read the whole body of frame {seq}",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
       "complete": "{count} entries. This is the whole run.",
       "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end."
@@ -65,11 +66,23 @@
       },
       "noContent": "no content",
       "redacted": "removed {path}: {reason}",
+      "openBody": "Open body",
       "pager": "Frame pages",
       "first": "First frames",
       "next": "Later frames",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
-      "emptyPage": "Nothing lies past the frame this page starts from."
+      "emptyPage": "Nothing lies past the frame this page starts from.",
+      "body": {
+        "title": "Frame {seq} body",
+        "close": "Close body",
+        "digest": "Digest",
+        "contentType": "Content type",
+        "size": "Size",
+        "bytes": "{count} bytes",
+        "noBytes": "no bytes retained",
+        "digestOnly": "The recorder kept this frame's digest and no bytes, so there is no body to read. The digest still proves what was recorded.",
+        "notText": "The retained bytes are not UTF-8 text, so they are not shown here. Read them through the API with get_run_frame_body and check them against the digest."
+      }
     },
     "cost": {
       "title": "Cost",
@@ -184,7 +197,8 @@
         "body": "Oxagen queues a signed bundle: the frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id, and a script that verifies all of it offline.",
         "confirm": "Queue the bundle",
         "pending": "Queueing",
-        "queued": "The bundle is queued."
+        "queued": "The bundle is queued.",
+        "needsRole": "Exporting a signed bundle needs an organization Owner or Admin role."
       }
     }
   }

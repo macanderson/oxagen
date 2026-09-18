@@ -38,6 +38,7 @@ import type {
 import type {
   RunCost,
   RunDetail,
+  RunFrameBody,
   RunTranscript,
   TranscriptZoom,
 } from "./contracts/run";
@@ -119,7 +120,9 @@ export interface DataSource {
    * row with one page of frames, caller features/run/run.tsx; `framesAfter` is
    * the opaque resume point the last page carried. `cost` is `get_run_cost`,
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
-   * its own tab, so a tab nobody opened makes no read.
+   * its own tab, so a tab nobody opened makes no read. `frameBody` is
+   * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
+   * the Frames tab has a frame open, caller features/run/run.tsx.
    */
   runs: {
     list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
@@ -128,6 +131,11 @@ export interface DataSource {
       runId: string,
       q: { framesAfter: string | null },
     ): Promise<Read<RunDetail>>;
+    frameBody(
+      ctx: WsCtx,
+      runId: string,
+      seq: string,
+    ): Promise<Read<RunFrameBody>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
     transcript(
       ctx: WsCtx,

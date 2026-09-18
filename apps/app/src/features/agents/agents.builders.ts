@@ -240,6 +240,7 @@ export function agentsSource(reads: AgentReads) {
     runs: {
       list: refuse,
       get: refuse,
+      frameBody: refuse,
       cost: refuse,
       transcript: refuse,
     },

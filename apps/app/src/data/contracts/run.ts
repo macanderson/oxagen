@@ -68,8 +68,36 @@ export const RunFramePage = z.object({
   frames: z.array(RunFrame),
   /** Past every frame this read consumed; null when nothing lay beyond it. */
   cursor: z.string().nullable(),
+  /**
+   * True when a later page may hold frames: the read carried a resume point
+   * and filled the page it was asked for. The contract's cursor is a resume
+   * point, not a has-more signal — `get_run` sets it on every non-empty batch
+   * so a stream can continue — so a page that came back short is the end of
+   * what was recorded, and the pager says so rather than linking to nothing.
+   */
+  more: z.boolean(),
 });
 export type RunFramePage = z.infer<typeof RunFramePage>;
+
+/**
+ * `get_run_frame_body`: one frame's redacted bytes, read on demand (§3.5).
+ * `text` is the body decoded as UTF-8 when it is; a body that is not text
+ * keeps its size and content type and says the bytes are not readable here.
+ * A `digest_only` frame answers the digest with no bytes at all.
+ */
+export const RunFrameBody = z.object({
+  seq: z.string().regex(/^\d+$/),
+  /** Null exactly when no bytes were retained. */
+  contentType: z.string().nullable(),
+  /** The redacted body as text; null when no bytes were retained or they are not UTF-8. */
+  text: z.string().nullable(),
+  /** The retained bytes' length; null when none were retained. */
+  bytes: z.number().int().nonnegative().nullable(),
+  /** sha256 over the redacted bytes, recorded at write. */
+  digest: z.string(),
+  redactions: z.array(FrameRedaction),
+});
+export type RunFrameBody = z.infer<typeof RunFrameBody>;
 
 /** `get_run`: the header row and one page of the run's frames. */
 export const RunDetail = z.object({

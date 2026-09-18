@@ -161,7 +161,7 @@ describe("run controls", () => {
 });
 
 describe("record writes", () => {
-  function renderRecord(hasSummary: boolean) {
+  function renderRecord(hasSummary: boolean, canExport = true) {
     return render(
       <IntlProvider>
         <RecordActions
@@ -170,6 +170,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed
           hasSummary={hasSummary}
+          canExport={canExport}
         />
       </IntlProvider>,
     );
@@ -226,6 +227,20 @@ describe("record writes", () => {
     });
   });
 
+  it("draws Export disabled, with the reason, for a viewer export_run would refuse (negative)", async () => {
+    const user = userEvent.setup();
+    renderRecord(true, false);
+    const button = screen.getByTestId("run-export");
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId("export-no-role")).toHaveTextContent(
+      "needs an organization Owner or Admin role",
+    );
+    await user.click(button);
+    expect(screen.queryByTestId("run-export-dialog")).toBeNull();
+    expect(exportRun).not.toHaveBeenCalled();
+    expect(screen.getByTestId("run-resummarize")).not.toBeDisabled();
+  });
+
   it("offers neither write while the run is live (negative)", () => {
     render(
       <IntlProvider>
@@ -235,6 +250,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed={false}
           hasSummary={false}
+          canExport
         />
       </IntlProvider>,
     );
