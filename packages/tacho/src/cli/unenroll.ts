@@ -463,6 +463,7 @@ async function unenrollLocked(
     deps.paths.deviceKey,
     deps.paths.socket,
     deps.paths.daemonState,
+    deps.paths.transcriptTailState,
     deps.paths.pid,
     deps.paths.daemonLauncher,
   ]) {

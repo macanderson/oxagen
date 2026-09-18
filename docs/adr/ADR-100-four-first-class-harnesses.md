@@ -1,4 +1,4 @@
-# ADR-099: Claude Code, Codex, Cursor and Stella are the four first-class harnesses
+# ADR-100: Claude Code, Codex, Cursor and Stella are the four first-class harnesses
 
 - **Status:** Accepted
 - **Date:** 2026-09-18
@@ -7,8 +7,8 @@
   (wrapped and connected tiers), `packages/tacho/src/wire.ts`,
   `packages/tacho/src/claude-code/cursor-adapter.ts`,
   `packages/tacho/src/host/cursor-writer.ts`,
-  `packages/database/atlas/migrations/20260918200000_tacho_sessions_runtime_cursor.sql`,
-  `packages/database/atlas/migrations/20260918200100_agents_harness_codex_cursor.sql`
+  `packages/database/atlas/migrations/20260918210000_tacho_sessions_runtime_cursor.sql`,
+  `packages/database/atlas/migrations/20260918210100_agents_harness_codex_cursor.sql`
 
 ## Context
 

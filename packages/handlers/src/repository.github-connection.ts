@@ -40,7 +40,7 @@ const GITHUB_OAUTH_PROVIDER = "github";
  *
  * Read on the caller's transaction so RLS bounds it to this org.
  */
-async function orgGithubOauthAccountId(
+export async function orgGithubOauthAccountId(
   tx: Tx,
   orgId: string,
 ): Promise<string | null> {

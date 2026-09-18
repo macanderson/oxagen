@@ -66,7 +66,7 @@ export const agents = agentSchema.table(
     // The harness the agent runs under (MC spec §6.2): the identity half
     // records it so the identities table can print it without a host row.
     // CHECK: harness IN ('stella', 'claude-code', 'codex', 'cursor',
-    // 'claude-agent-sdk', 'custom') (migration 20260918200100).
+    // 'claude-agent-sdk', 'custom') (migration 20260918210100).
     harness: text("harness").notNull().default("custom"),
     // How the identity came to exist (#2967, ADR-065): `ui` (the default),
     // `cli` (for register_agent to write on the CLI surface), or

@@ -272,6 +272,56 @@ describe("control client", () => {
     await expect(c.ingest([])).rejects.toThrow(); // "{}" is not an ingest response
   });
 
+  it("sends the batch's bodies in the same request as its events, and none when there are none", async () => {
+    const posted: unknown[] = [];
+    const c = client(async (_url, init) => {
+      posted.push(JSON.parse(init.body ?? "{}"));
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            accepted: 1,
+            event_ids: [],
+            chain_breaks: [],
+            body_rejections: [
+              {
+                event_id_idem: `evt_${"a".repeat(64)}`,
+                reason: "digest_mismatch",
+              },
+            ],
+            control: {
+              host_status: "active",
+              deny_generation: { org: 1, workspace: 1 },
+              bundle_etag: "e",
+              commands: [],
+            },
+          }),
+      };
+    });
+    const body = {
+      event_id_idem: `evt_${"a".repeat(64)}`,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: Buffer.from("hi").toString("base64"),
+    };
+    const response = await c.ingest([], { version: "1" }, [body]);
+    expect(response.body_rejections).toEqual([
+      { event_id_idem: body.event_id_idem, reason: "digest_mismatch" },
+    ]);
+    expect(posted[0]).toMatchObject({
+      schema: "tacho.batch.v1",
+      events: [],
+      bodies: [body],
+      daemon: { version: "1" },
+    });
+    // An empty list is not sent at all: the wire field is optional, and a
+    // control plane older than the field would refuse an unknown key.
+    await c.ingest([], undefined, []);
+    expect(posted[1]).not.toHaveProperty("bodies");
+    await c.ingest([]);
+    expect(posted[2]).not.toHaveProperty("bodies");
+  });
+
   it("distinguishes refusals from unreachable and non-JSON answers", async () => {
     await expect(
       client(async () => ({

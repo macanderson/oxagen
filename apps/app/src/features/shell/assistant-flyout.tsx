@@ -103,6 +103,8 @@ import {
 } from "react";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantThinkingDots } from "./assistant-thinking-dots";
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
@@ -151,6 +153,13 @@ type Refusal = "denied" | "invalid" | "exhausted" | "parked" | "unavailable";
  * `md` (48rem), the breakpoint the class list below switches on.
  */
 const COVERS_THE_APP = "(max-width: 47.99rem)";
+
+/**
+ * How close to the bottom still counts as reading the newest turn. A few
+ * pixels of rounding or a trailing margin must not unpin a reader who never
+ * scrolled.
+ */
+const PIN_SLACK_PX = 32;
 
 function subscribeToWidth(onChange: () => void): () => void {
   const mql = window.matchMedia(COVERS_THE_APP);
@@ -293,6 +302,17 @@ export function AssistantFlyout() {
   const [threads, setThreads] = useState<ReadonlyMap<string, Thread>>(
     () => new Map(),
   );
+  // Answers whose reveal has already run. Only the thread on screen is
+  // mounted, so a workspace round trip remounts every answer in it; without
+  // this each would start over from nothing and the transcript would retype.
+  const [revealed, setRevealed] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Whether the reader is at the bottom of the transcript. A reveal grows the
+  // newest answer frame by frame, which the `entries` effect below never sees,
+  // so the growth follows the tail only while the reader has not scrolled up
+  // to read something else.
+  const pinnedRef = useRef(true);
 
   // The workspace the person is standing in, "org/ws". Null on an organization
   // page, which owns no conversation.
@@ -386,6 +406,18 @@ export function AssistantFlyout() {
     if (log === null || typeof log.scrollTo !== "function") return;
     log.scrollTo({ top: log.scrollHeight });
   }, [entries]);
+
+  /** Follow a growing answer down, unless the reader has scrolled away from the bottom. */
+  function followReveal() {
+    const log = logRef.current;
+    if (
+      log === null ||
+      !pinnedRef.current ||
+      typeof log.scrollTo !== "function"
+    )
+      return;
+    log.scrollTo({ top: log.scrollHeight });
+  }
 
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
@@ -552,6 +584,11 @@ export function AssistantFlyout() {
         ref={logRef}
         role="log"
         className="min-h-0 flex-1 overflow-y-auto p-4"
+        onScroll={(e) => {
+          const log = e.currentTarget;
+          pinnedRef.current =
+            log.scrollHeight - log.scrollTop - log.clientHeight < PIN_SLACK_PX;
+        }}
       >
         {entries.length === 0 ? (
           <div
@@ -571,7 +608,14 @@ export function AssistantFlyout() {
                   </p>
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
-                    <p className="whitespace-pre-wrap text-sm">{entry.text}</p>
+                    <AssistantStreamingText
+                      text={entry.text}
+                      reveal={!revealed.has(entry.id)}
+                      onRevealed={() => {
+                        setRevealed((prior) => new Set(prior).add(entry.id));
+                      }}
+                      onGrow={followReveal}
+                    />
                     <p
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
@@ -616,14 +660,7 @@ export function AssistantFlyout() {
             ))}
           </ol>
         )}
-        {pending ? (
-          <p
-            data-testid="assistant-thinking"
-            className="mt-3 text-[13px] text-muted-foreground"
-          >
-            {t("thinking")}
-          </p>
-        ) : null}
+        {pending ? <AssistantThinkingDots label={t("thinking")} /> : null}
       </div>
 
       <div className="flex-none border-t border-border px-3 py-3">

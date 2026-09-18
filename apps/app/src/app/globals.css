@@ -7,3 +7,9 @@
 
 /* Scan the app's own source for utility classes. */
 @source "../";
+
+/* Tailwind v4 @source — include Streamdown's and its Shiki code plugin's
+ * dist output so the utility classes they emit at runtime are generated at
+ * build time (assistant-markdown.tsx). */
+@source "../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../node_modules/@streamdown/code/dist/*.js";

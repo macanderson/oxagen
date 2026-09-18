@@ -5,6 +5,7 @@ import {
   hostFactsFromEnv,
   snapshotEnv,
 } from "./context";
+import { tachoEnv } from "../host/settings-writer";
 
 describe("host and environment facts", () => {
   it("snapshots harness-relevant env and never anything secret-shaped", () => {
@@ -13,6 +14,7 @@ describe("host and environment facts", () => {
       ANTHROPIC_API_KEY: "sk-x",
       CLAUDE_CODE_MESSAGING_TOKEN: "t",
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Bearer x",
+      CLAUDE_CODE_OAUTH_AUTHORIZATION: "a",
       MY_PASSWORD: "p",
       TERM_PROGRAM: "ghostty",
       HOME: "/home/dev",
@@ -22,11 +24,27 @@ describe("host and environment facts", () => {
     expect(Object.keys(snapshot).sort()).toEqual([
       "CLAUDE_CODE_ENTRYPOINT",
       "CLAUDE_LONG",
-      "OTEL_EXPORTER_OTLP_HEADERS",
       "TERM_PROGRAM",
     ]);
     expect(snapshot["CLAUDE_LONG"]?.length).toBe(1027);
     expect(snapshotEnv({ CLAUDE_SPECIAL: "x" }, /SPECIAL/)).toEqual({});
+  });
+
+  it("never ships the daemon's own bearer header, the exact value the installer writes", () => {
+    const localToken = "tlt_0123456789abcdef0123456789abcdef";
+    const snapshot = snapshotEnv(
+      tachoEnv({
+        enrollmentId: "enr_1",
+        hookCommand: "tacho",
+        port: 4242,
+        localToken,
+      }),
+    );
+    expect(snapshot["OTEL_EXPORTER_OTLP_HEADERS"]).toBeUndefined();
+    expect(JSON.stringify(snapshot)).not.toContain(localToken);
+    expect(snapshot["OTEL_EXPORTER_OTLP_ENDPOINT"]).toBe(
+      "http://127.0.0.1:4242",
+    );
   });
 
   it("derives host and context facts from the hook environment", () => {

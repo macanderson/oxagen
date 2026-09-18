@@ -1,0 +1,91 @@
+{
+  "name": "list_repositories",
+  "domain": "repository",
+  "description": "List the workspace's repositories — its one main repository and every linked one — with each one's role and approved default ref.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "repositories": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "bindingId": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "main",
+                "linked"
+              ]
+            },
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fullName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "defaultRef": {
+              "type": "string",
+              "minLength": 1
+            },
+            "htmlUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "boundAt": {
+              "type": "string"
+            },
+            "connectionLive": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "bindingId",
+            "role",
+            "owner",
+            "name",
+            "fullName",
+            "defaultRef",
+            "htmlUrl",
+            "boundAt",
+            "connectionLive"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "repositories"
+    ],
+    "additionalProperties": false
+  }
+}

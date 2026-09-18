@@ -621,6 +621,128 @@ describe("enroll → status → unenroll", () => {
     ).toBeUndefined();
   });
 
+  it("re-applies the service and the hooks from the binary running now, not the one that enrolled", async () => {
+    // The regression this guards: on 2026-09-18 `tacho enroll` from a fresh
+    // install reused host.json's hook_command and daemon_command, so it wrote
+    // the launchd unit and every hook back to the wedged binary it was run to
+    // replace, and reported "already present; nothing to change" because the
+    // settings did match that stale command.
+    const clean = deps();
+    expect(
+      (
+        await enroll(
+          {
+            token: "tok",
+            org: "acme",
+            workspace: "core",
+            apiUrl: "http://localhost:4000",
+          },
+          clean,
+        )
+      ).ok,
+    ).toBe(true);
+    const enrolled = readHostFile(clean.paths.hostFile);
+    expect(enrolled?.hook_command).toBe("node /opt/tacho/tacho-hook.mjs");
+
+    // A newer install at another path re-enrolls without --force.
+    const upgraded = deps({
+      paths: clean.paths,
+      runtime: {
+        hookCommand: "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+        daemonCommand: ["/Applications/Oxagen.app/Contents/MacOS/tachod"],
+        mcpStdioCommand: [
+          "/Applications/Oxagen.app/Contents/MacOS/tacho",
+          "mcp-stdio",
+        ],
+        binDir: "/Applications/Oxagen.app/Contents/MacOS",
+      },
+    });
+    const result = await enroll({}, upgraded);
+    expect(result.ok).toBe(true);
+    expect(
+      upgraded.requests.filter((r) => r.url.endsWith("/tacho/enrollments")),
+    ).toHaveLength(0);
+    expect(readHostFile(clean.paths.hostFile)).toMatchObject({
+      host_enrollment_id: enrolled?.host_enrollment_id,
+      hook_command: "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+      daemon_command: ["/Applications/Oxagen.app/Contents/MacOS/tachod"],
+      mcp_stdio_command: [
+        "/Applications/Oxagen.app/Contents/MacOS/tacho",
+        "mcp-stdio",
+      ],
+    });
+    expect(upgraded.service.installed).toMatchObject({
+      command: ["/Applications/Oxagen.app/Contents/MacOS/tachod"],
+    });
+    // The factory's readSettings closes over its own scratch paths, so the
+    // file the upgraded run wrote is read through the same deps.
+    const settings = upgraded.readSettings() as {
+      hooks: Record<string, { hooks: { command?: string }[] }[]>;
+    };
+    const commands = Object.values(settings.hooks)
+      .flat()
+      .flatMap((group) => group.hooks)
+      .map((hook) => hook.command)
+      .filter((command): command is string => command !== undefined);
+    expect(commands.length).toBeGreaterThan(0);
+    expect(
+      commands.every((command) =>
+        command.startsWith("/Applications/Oxagen.app/Contents/MacOS/tacho-hook"),
+      ),
+    ).toBe(true);
+    expect(
+      upgraded.lines.some(
+        (l) =>
+          l.includes("service and hooks now run from") &&
+          l.includes("/Applications/Oxagen.app/Contents/MacOS") &&
+          l.includes("was node /opt/tacho/tacho-hook.mjs"),
+      ),
+    ).toBe(true);
+    expect(upgraded.lines.some((l) => l.includes("already present"))).toBe(
+      false,
+    );
+
+    // The same binary again: nothing moves and nothing is said about it.
+    const same = deps({
+      paths: clean.paths,
+      env: upgraded.env,
+      runtime: upgraded.runtime,
+      readSettings: upgraded.readSettings,
+      writeSettings: upgraded.writeSettings,
+    });
+    expect((await enroll({}, same)).ok).toBe(true);
+    expect(same.lines.some((l) => l.includes("now run from"))).toBe(false);
+    expect(same.lines.some((l) => l.includes("already present"))).toBe(true);
+
+    // A transient bin dir (a mounted .dmg) is not recorded on a re-apply any
+    // more than on a fresh enrollment: the recorded commands stay and the
+    // run says why.
+    const mounted = deps({
+      paths: clean.paths,
+      runtime: {
+        hookCommand: "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho-hook",
+        daemonCommand: ["/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tachod"],
+        mcpStdioCommand: [
+          "/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho",
+          "mcp-stdio",
+        ],
+        binDir: "/Volumes/Oxagen/Oxagen.app/Contents/MacOS",
+        transient: "a mounted disk image",
+      },
+    });
+    const kept = await enroll({}, mounted);
+    expect(kept.ok).toBe(true);
+    expect(kept.warnings.some((w) => w.includes("a mounted disk image"))).toBe(
+      true,
+    );
+    expect(readHostFile(clean.paths.hostFile)?.hook_command).toBe(
+      "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+    );
+    expect(mounted.service.installed).toMatchObject({
+      command: ["/Applications/Oxagen.app/Contents/MacOS/tachod"],
+    });
+  });
+
   it("warns on a re-apply whose TACHO_MCP_ENDPOINT is not a URL, and keeps the endpoint it had", async () => {
     // The fresh-enrollment path already warns for this input. An operator who
     // reaches the re-apply path is by definition repairing a setup that is
