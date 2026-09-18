@@ -77,8 +77,8 @@ describe("readGatePolicy", () => {
 /** The predicate each `where` received, in call order, so a test can read it. */
 const wheres: unknown[] = [];
 
-/** The three `withTenantDb` reads the handler makes, in call order. */
-function stubReads(binding: unknown, settings: unknown): void {
+/** The workspace-settings read the handler makes. */
+function stubReads(settings: unknown): void {
   const chain = (rows: unknown[]) => {
     const self: Record<string, unknown> = {};
     for (const key of ["from", "innerJoin", "orderBy"]) {
@@ -91,24 +91,7 @@ function stubReads(binding: unknown, settings: unknown): void {
     self.limit = async () => rows;
     return self;
   };
-  mocks.select
-    .mockReturnValueOnce(chain(binding === null ? [] : [binding]))
-    .mockReturnValueOnce(chain([{ settings }]));
-}
-
-/** Every column a drizzle predicate tree names, by its column name. */
-function columnsIn(predicate: unknown, out = new Set<string>()): Set<string> {
-  if (predicate === null || typeof predicate !== "object") return out;
-  const node = predicate as Record<string, unknown>;
-  if (typeof node["name"] === "string" && "table" in node) {
-    out.add(node["name"]);
-    return out;
-  }
-  for (const value of Object.values(node)) {
-    if (Array.isArray(value)) for (const v of value) columnsIn(v, out);
-    else if (value && typeof value === "object") columnsIn(value, out);
-  }
-  return out;
+  mocks.select.mockReturnValueOnce(chain([{ settings }]));
 }
 
 describe("get_steering_freshness handler", () => {
@@ -125,13 +108,19 @@ describe("get_steering_freshness handler", () => {
     })),
   };
 
+  const bound = vi.fn(async () => ({
+    source: "binding" as const,
+    owner: "acme",
+    repo: "platform",
+    approvedFullName: "acme/platform",
+    approvedDefaultRef: "main",
+  }));
+
   it("reports the version, the publishing commit, the branch and the gates", async () => {
-    stubReads(
-      { fullName: "acme/platform", defaultRef: "main" },
-      { steering: { blockStaleRuns: true } },
-    );
+    stubReads({ steering: { blockStaleRuns: true } });
     const handler = createGetSteeringFreshnessHandler({
       store: store as never,
+      readConnection: bound as never,
     });
     const out = await handler({}, CTX);
     expect(out).toEqual({
@@ -146,29 +135,34 @@ describe("get_steering_freshness handler", () => {
 
   // Steering is off for a workspace until a repository is bound, and the
   // read has to say so rather than invent a branch.
-  // A `linked` head, or one the exclusivity migration demoted, is a
-  // repository the workspace can see but is not steered by. Without this
-  // filter an unordered `limit(1)` could report it as the steering
-  // repository, and the CLI would compare and auto-sync against it.
-  it("reads only the main repository head", async () => {
-    stubReads(
-      { fullName: "acme/platform", defaultRef: "main" },
-      { steering: {} },
-    );
+  // A workspace still on the legacy sources wizard has no binding head.
+  // Reading bindings alone reported `repository: null`, the CLI discarded
+  // the whole platform answer, and neither gate could be enforced there.
+  it("names the repository a legacy connection carries", async () => {
+    stubReads({ steering: { blockStaleRuns: true } });
     const handler = createGetSteeringFreshnessHandler({
       store: store as never,
+      readConnection: vi.fn(async () => ({
+        source: "legacy_delivery_config" as const,
+        owner: "acme",
+        repo: "platform",
+      })) as never,
     });
-    await handler({}, CTX);
-    expect(columnsIn(wheres[0]).has("role")).toBe(true);
+    const out = await handler({}, CTX);
+    expect(out.repository).toBe("acme/platform");
+    // A legacy connection states no ref; the CLI resolves the remote's own.
+    expect(out.defaultBranch).toBeNull();
+    expect(out.policy.blockStaleRuns).toBe(true);
   });
 
   it("reports nulls, not guesses, when no repository is bound", async () => {
-    stubReads(null, null);
+    stubReads(null);
     const handler = createGetSteeringFreshnessHandler({
       store: {
         ledgerLength: vi.fn(async () => 0),
         latestPublication: vi.fn(async () => null),
       } as never,
+      readConnection: vi.fn(async () => null) as never,
     });
     const out = await handler({}, CTX);
     expect(out.repository).toBeNull();

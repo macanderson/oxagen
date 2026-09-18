@@ -7,7 +7,7 @@
 // freshness check. See the contract for why a developer's git is the primary
 // signal and this is the check on it.
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   contextSteeringFreshness,
@@ -15,6 +15,7 @@ import {
   type ContextSteeringFreshnessOutput,
 } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import { readGitHubConnection } from "./context.steering.github";
 
 /**
  * Read the `steering` block out of `workspaces.settings`.
@@ -44,8 +45,12 @@ export function readGatePolicy(
 }
 
 export function createGetSteeringFreshnessHandler(
-  deps: Pick<SteeringDeps, "store">,
+  deps: Pick<SteeringDeps, "store"> & {
+    /** The connection seam; injected so a test can answer without a database. */
+    readConnection?: typeof readGitHubConnection;
+  },
 ): CapabilityHandler<typeof contextSteeringFreshness> {
+  const readConnection = deps.readConnection ?? readGitHubConnection;
   return async (_input, ctx): Promise<ContextSteeringFreshnessOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
@@ -55,39 +60,29 @@ export function createGetSteeringFreshnessHandler(
       [
         deps.store.ledgerLength(scope),
         deps.store.latestPublication(scope),
-        withTenantDb(async (tx) => {
-          const rows = await tx
-            .select({
-              fullName: schema.repositoryBindings.providerFullName,
-              defaultRef: schema.repositoryBindings.configuredDefaultRef,
-            })
-            .from(schema.repositoryBindingHeads)
-            .innerJoin(
-              schema.repositoryBindings,
-              eq(
-                schema.repositoryBindings.id,
-                schema.repositoryBindingHeads.currentBindingId,
-              ),
-            )
-            .where(
-              and(
-                eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-                eq(
-                  schema.repositoryBindingHeads.workspaceId,
-                  scope.workspaceId,
-                ),
-                // Only the MAIN repository steers. A `linked` head (or one the
-                // exclusivity migration demoted) is one the workspace can see
-                // but is not steered by, and an unordered `limit(1)` over both
-                // could hand the CLI a linked repository as the one to compare
-                // and auto-sync against. Same filter as
-                // context.steering.github.ts.
-                eq(schema.repositoryBindingHeads.role, "main"),
-              ),
-            )
-            .limit(1);
-          return rows[0] ?? null;
-        }),
+        // The same seam Context PRs resolve through, not a binding-only
+        // query of its own. A workspace still on the legacy sources wizard
+        // has no `repository_binding_heads` row, and the wizard's
+        // `delivery_config` is what `context.steering.github.ts` falls back
+        // to; reading bindings alone reported `repository: null`, the CLI
+        // discarded the whole platform answer, and neither `autoSync` nor
+        // `blockStaleRuns` could be enforced for that workspace. A legacy
+        // connection states no default ref, so the CLI resolves the remote's
+        // own, which is what it does whenever the platform names none.
+        readConnection(scope).then((connection) =>
+          connection === null
+            ? null
+            : {
+                fullName:
+                  connection.source === "binding"
+                    ? connection.approvedFullName
+                    : `${connection.owner}/${connection.repo}`,
+                defaultRef:
+                  connection.source === "binding"
+                    ? connection.approvedDefaultRef
+                    : null,
+              },
+        ),
         withTenantDb(async (tx) => {
           const rows = await tx
             .select({ settings: schema.workspaces.settings })

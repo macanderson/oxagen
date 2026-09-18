@@ -197,6 +197,19 @@ describe("findProjectRoot", () => {
     expect(findProjectRoot(deep)).toBe(inner);
   });
 
+  // A second `.oxagen/` below the repository root (a vendored copy, a
+  // fixture, a second project in one checkout) was found first by the walk,
+  // and the gate read that workspace link and policy while every git
+  // comparison stayed pinned to the repository root.
+  it("ignores a nested .oxagen inside the same repository", async () => {
+    const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
+    await promisify(execFile)("git", ["init", "--quiet"], { cwd: tmp });
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    const nested = join(tmp, "fixtures", "project");
+    await mkdir(join(nested, ".oxagen"), { recursive: true });
+    expect(findProjectRoot(nested)).toBe(tmp);
+  });
+
   it("falls back to the repository root, not the subdirectory, inside a repository", async () => {
     const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
     await promisify(execFile)("git", ["init", "--quiet"], { cwd: tmp });

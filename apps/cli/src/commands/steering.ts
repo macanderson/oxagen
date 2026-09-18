@@ -92,14 +92,23 @@ export function findProjectRoot(start: string): string {
   const from = realpathOr(start);
   // Outside a repository there is no root to stop at, and the old behaviour
   // (walk to the filesystem root, fall back to where we started) stands.
-  const inRepo = gitRoot !== null;
+  // Inside a repository the answer is the repository root, and only the
+  // repository root. A nested `.oxagen/` below it (a vendored copy, a
+  // fixture, a second project in one checkout) was found first by the walk,
+  // and the gate then read that workspace link and its policy while every
+  // git comparison stayed pinned to the repository root: a nested directory
+  // could replace the root workspace's `blockStaleRuns`. The check answers
+  // `unknown` with a reason when the root has no `.oxagen/`, which is the
+  // honest outcome, not a nested guess.
+  if (gitRoot !== null) return gitRoot;
+  // Outside a repository there is no root to stop at, so the old behaviour
+  // stands: walk to the filesystem root, fall back to where we started.
   let dir = from;
   for (;;) {
     if (existsSync(join(dir, PROJECT_DIR_NAME))) return dir;
-    if (inRepo && dir === gitRoot) return gitRoot;
-    if (dir === root) return inRepo ? gitRoot : from;
+    if (dir === root) return from;
     const parent = dirname(dir);
-    if (parent === dir) return inRepo ? gitRoot : from;
+    if (parent === dir) return from;
     dir = parent;
   }
 }
