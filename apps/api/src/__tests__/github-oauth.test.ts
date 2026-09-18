@@ -514,6 +514,92 @@ describe("GET /connections/github/auth-url", () => {
     });
   });
 
+  /**
+   * The gate keys on the connection, not on `returnTo` (#3233 review, P1).
+   *
+   * `returnTo` is a query parameter the caller types, and the CALLBACK does not
+   * dispatch on it: it picks its write path from the resolved connection, so a
+   * state naming no `connectionId` reaches the settings write — the workspace's
+   * authoritative GitHub connection — whatever word `returnTo` carries.
+   * `returnTo` only chooses the page the redirect lands on.
+   *
+   * So a gate reading `returnTo === "settings"` closed nothing: an ordinary
+   * member asked for `?mode=identity&returnTo=sources` with no connectionId,
+   * skipped the check, and got a validly signed state for the same write.
+   */
+  describe("the gate keys on the connection, not on returnTo", () => {
+    const forbidden = () =>
+      new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+        message: "Requires one of the org roles Owner, Admin",
+      });
+
+    // Every way to ask for a state that names no connection. All of them reach
+    // the settings write, so all of them take the gate.
+    const NULL_CONNECTION_QUERIES = [
+      "returnTo=sources",
+      "returnTo=sources&mode=identity",
+      "mode=identity",
+      "",
+    ] as const;
+
+    for (const query of NULL_CONNECTION_QUERIES) {
+      const label = query || "(no query at all)";
+
+      it(`refuses a member asking with ${label}, and mints no state`, async () => {
+        mocks.assertOrgRole.mockRejectedValueOnce(forbidden());
+        const res = await authGet(
+          `${BASE}/auth-url${query ? `?${query}` : ""}`,
+        );
+        expect(res.status).toBe(403);
+        const body = (await res.json()) as { error?: { code?: string } };
+        expect(body.error?.code).toBe("forbidden");
+        expect(JSON.stringify(body)).not.toContain("github.com");
+      });
+
+      for (const role of ["Owner", "Admin"] as const) {
+        it(`admits an ${role} asking with ${label}`, async () => {
+          mocks.assertOrgRole.mockResolvedValueOnce(role);
+          const res = await authGet(
+            `${BASE}/auth-url${query ? `?${query}` : ""}`,
+          );
+          expect(res.status).toBe(200);
+          const body = (await res.json()) as { authUrl: string };
+          expect(
+            new URL(body.authUrl).searchParams.get("state"),
+          ).not.toBeNull();
+        });
+      }
+    }
+
+    it("checks the same org roles for a null-connection sources state", async () => {
+      await authGet(`${BASE}/auth-url?returnTo=sources`);
+      expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: TEST_ORG_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        }),
+        { org: ["Owner", "Admin"] },
+      );
+    });
+
+    it("still does not gate a sources state that NAMES a connection", async () => {
+      // The genuine legacy wizard leg, unchanged: the connectionId is what the
+      // callback dispatches on, so this state cannot reach the settings write.
+      for (const query of [
+        "connectionId=con_ABC",
+        "connectionId=con_ABC&returnTo=sources",
+        "connectionId=con_ABC&mode=identity",
+      ]) {
+        mocks.assertOrgRole.mockClear();
+        const res = await authGet(`${BASE}/auth-url?${query}`);
+        expect(res.status).toBe(200);
+        expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+      }
+    });
+  });
+
   it("returns 503 when GITHUB_APP_SLUG is missing", async () => {
     mocks.requireEnv.mockReturnValue({
       ...DEFAULT_ENV,
@@ -1994,6 +2080,65 @@ describe("GET /oauth/github/callback", () => {
     for (const [url] of mocks.fetch.mock.calls as [string, unknown][]) {
       expect(url).not.toContain("/user/installations");
     }
+  });
+
+  // ── which write path the state picks, and what happens in between ─────────
+  //
+  // The callback dispatches on the RESOLVED CONNECTION, not on `returnTo`:
+  // `conn` non-null takes the legacy wizard write against that connection,
+  // `conn` null takes the settings write against the workspace's authoritative
+  // GitHub connection. There is a third case between them — a state that NAMED
+  // a connection which does not resolve in its own org+workspace — and it must
+  // be neither, because downgrading it to the settings path would hand a bogus
+  // connectionId the MORE powerful of the two writes.
+
+  it("refuses a state naming a connection that does not resolve, and attaches nothing", async () => {
+    // The lookup answers no row: wrong publicId, another workspace's
+    // connection, or one already soft-deleted. The leg stops at the lookup.
+    const update = vi.fn();
+    mocks.withSystemDb.mockImplementation((fn: Parameters<DbFn>[0]) =>
+      fn({ ...makeTxChain([]), update } as unknown as TxLike),
+    );
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: "con_GHOST" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "Connection not found",
+    );
+    // Nothing written, and the `code` never even exchanged — so no settings
+    // connection was created and no oauth account linked.
+    expect(update).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.encrypt).not.toHaveBeenCalled();
+  });
+
+  it("still takes the settings write path for a state that legitimately names no connection", async () => {
+    // The mirror of the refusal above, so it is not merely proven that the
+    // callback refuses everything: the same request differing only in that the
+    // state names NO connection creates the workspace's github connection.
+    queueVerifiedInstallFetches([999999]);
+    const { tx, captured } = makeCapturingTx([]);
+    queueOauthUpsert();
+    queueSettingsAttach(tx);
+
+    const res = await makeCallbackReq({
+      code: "auth-code",
+      state: buildValidState({ connectionId: null, returnTo: "settings" }),
+      installation_id: "999999",
+      setup_action: "install",
+    });
+
+    expect(res.status).toBe(302);
+    expect(captured.insertValues).toMatchObject({
+      connectorId: "github",
+      deliveryConfig: { installationId: "999999" },
+    });
   });
 });
 

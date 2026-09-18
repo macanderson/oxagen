@@ -128,6 +128,17 @@ const RETIRED_CONNECTION_STATUSES = ["deleting", "deleted"] as const;
  * mappings step and never writes a binding. Without the fallback those
  * workspaces would lose steering; with it, a workspace that later binds a main
  * repository is answered from the binding, which wins.
+ *
+ * The fallback is narrowed to the case it exists for: NO BINDING HEAD AT ALL.
+ * The joined read above misses for two different reasons — no head was ever
+ * written, or a head exists and the connection it was bound through is
+ * retired — and they are not the same fact. Falling back on the second one
+ * silently retargets steering and every Context PR at whatever unrelated
+ * repository a still-connected legacy sources connection happens to name in
+ * its ingestion `delivery_config`. Writing steering into the wrong repository
+ * is worse than steering being off, so a workspace whose main repository is
+ * bound but unreachable answers null and its callers refuse; the repair is
+ * `bind_main_repository` on the live connection, which moves the head.
  */
 export async function readGitHubConnection(scope: {
   orgId: string;
@@ -167,6 +178,22 @@ export async function readGitHubConnection(scope: {
       )
       .limit(1);
     if (bound) return { owner: bound.owner, repo: bound.repo };
+
+    // Why the join missed. A head is the workspace's declaration that it HAS a
+    // main repository; its presence survives the connection being retired,
+    // which is exactly the state the join cannot tell apart from "never bound".
+    const [head] = await tx
+      .select({ id: schema.repositoryBindingHeads.id })
+      .from(schema.repositoryBindingHeads)
+      .where(
+        and(
+          eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+          eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+          eq(schema.repositoryBindingHeads.provider, "github"),
+        ),
+      )
+      .limit(1);
+    if (head) return null;
 
     const [connection] = await tx
       .select({ deliveryConfig: schema.sourceConnections.deliveryConfig })

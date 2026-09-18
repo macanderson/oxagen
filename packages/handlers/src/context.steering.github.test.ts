@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { schema } from "@oxagen/database";
 import type { GitHubClient } from "@oxagen/github";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
@@ -301,25 +302,60 @@ describe("the workspace's main repository", () => {
   const SELECT_SCOPE = { orgId: "org", workspaceId: "ws" };
 
   /**
-   * The binding read joins (heads → bindings → connections); the legacy read
-   * does not join at all, so the chain each takes is what tells them apart.
+   * The three reads `readGitHubConnection` can make, told apart by what each
+   * one actually asks for rather than by the order it asks in:
+   *
+   *   `bound`       the joined read (heads → bindings → connections) — the only
+   *                 chain that joins, so the join depth identifies it.
+   *   `heads`       the unjoined read of `repository_binding_heads` — "does
+   *                 this workspace declare a main repository at all".
+   *   `connections` the unjoined read of `source_connections` — the legacy
+   *                 sources-wizard fallback.
+   *
+   * The two unjoined reads take the same chain shape, so the fake dispatches
+   * on the TABLE the code passed to `.from()`, which is the real Drizzle table
+   * object.
+   *
+   * What this rig can and cannot prove: it discards every predicate, so these
+   * tests pin the BRANCHING — which read the code makes, given what the read
+   * before it answered — and nothing about the SQL filters themselves. The
+   * status filter on the joined read is asserted nowhere here and cannot be;
+   * that would need a real Postgres.
+   *
+   * Returns a counter of the unjoined reads so a test can assert a read was
+   * never reached at all, not merely that its rows went unused.
    */
-  function db(opts: { bound?: unknown[]; connections?: unknown[] }): void {
+  function db(opts: {
+    bound?: unknown[];
+    heads?: unknown[];
+    connections?: unknown[];
+  }): { readonly headReads: number; readonly connectionReads: number } {
+    const counts = { headReads: 0, connectionReads: 0 };
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
           select: () => ({
-            from: () => ({
+            from: (table: unknown) => ({
               innerJoin: () => ({
                 innerJoin: () => ({
                   where: () => ({ limit: async () => opts.bound ?? [] }),
                 }),
               }),
-              where: () => ({ limit: async () => opts.connections ?? [] }),
+              where: () => ({
+                limit: async () => {
+                  if (table === schema.repositoryBindingHeads) {
+                    counts.headReads += 1;
+                    return opts.heads ?? [];
+                  }
+                  counts.connectionReads += 1;
+                  return opts.connections ?? [];
+                },
+              }),
             }),
           }),
         }),
     );
+    return counts;
   }
 
   it("resolves the repository the bind recorded, on a connection that names none", async () => {
@@ -371,5 +407,80 @@ describe("the workspace's main repository", () => {
     await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
     db({ bound: [], connections: [] });
     await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+  });
+
+  /**
+   * The legacy fallback is for workspaces that never bound anything (#3233
+   * review, P1).
+   *
+   * The joined read misses for two different reasons — no head was ever
+   * written, or a head exists and the connection it was bound through is
+   * retired — and the join cannot tell them apart. Treating the second as the
+   * first hands steering and every Context PR to whatever repository a
+   * still-connected legacy sources connection happens to name in its ingestion
+   * `delivery_config`, which is an UNRELATED repository: `owner`/`repo` there
+   * mean the sync target, not the main repo. Writing steering into the wrong
+   * repository is worse than steering being off, so the head's existence is
+   * read explicitly and a workspace that has one answers null.
+   */
+  describe("a bound head whose connection is unusable is not a workspace with no binding", () => {
+    it("answers null rather than the legacy repo when a head exists and the join missed", async () => {
+      const counts = db({
+        // The joined read misses: the head's connection is retired, so the
+        // status filter drops the row.
+        bound: [],
+        // The head itself is still there — the binding rows outlive the
+        // connection.
+        heads: [{ id: "head-1" }],
+        // And an unrelated legacy sources connection is still connected,
+        // naming its ingestion sync target.
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toBeNull();
+      // Not merely unused — the fallback read is never made.
+      expect(counts.headReads).toBe(1);
+      expect(counts.connectionReads).toBe(0);
+    });
+
+    it("still falls back for a workspace that never bound anything", async () => {
+      // The reason the fallback exists: connected through the legacy sources
+      // wizard, which populates owner/repo at its mappings step and writes no
+      // binding. Narrowing must not take this away.
+      const counts = db({
+        bound: [],
+        heads: [],
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        owner: "a-intel",
+        repo: "platform",
+      });
+      expect(counts.headReads).toBe(1);
+      expect(counts.connectionReads).toBe(1);
+    });
+
+    it("answers the bound repository without asking either follow-up question", async () => {
+      // The joined read hit, so there is nothing to disambiguate.
+      const counts = db({
+        bound: [{ owner: "Acme", repo: "Widgets" }],
+        heads: [{ id: "head-1" }],
+        connections: [
+          { deliveryConfig: { owner: "a-intel", repo: "platform" } },
+        ],
+      });
+
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        owner: "Acme",
+        repo: "Widgets",
+      });
+      expect(counts.headReads).toBe(0);
+      expect(counts.connectionReads).toBe(0);
+    });
   });
 });

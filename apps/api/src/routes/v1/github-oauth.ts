@@ -312,7 +312,10 @@ const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
 const SETTINGS_CONNECT_ROLES = ["Owner", "Admin"] as const;
 
 /**
- * Refuse to mint a settings-scoped signed state for anyone below Owner/Admin.
+ * Refuse to mint a state that reaches the settings write for anyone below
+ * Owner/Admin. That is every state naming no `connectionId`, whatever its
+ * `returnTo` — see the call site for why the connection, not the label, is the
+ * predicate.
  *
  * Mint time is the enforceable point. The callback is a public OAuth redirect
  * with no session guarantee — that is exactly why it writes no `created_by_id`
@@ -388,10 +391,25 @@ githubOauthRoute.get("/auth-url", async (c) => {
     );
   }
 
-  // Only the settings leg. The legacy `sources` leg mints a state naming a
-  // pre-created `connectionId`, whose creation carries its own gate, so whether
-  // it should also assert a role is a separate question this does not answer.
-  if (returnTo === "settings") {
+  // Gate on what the state can DO, not on the label the caller typed.
+  //
+  // `returnTo` is a free query parameter and the callback does not dispatch on
+  // it: it picks the write path from the RESOLVED CONNECTION. A state naming no
+  // `connectionId` reaches `attachVerifiedSettingsInstallation` /
+  // `resolveSettingsInstallationFromUser` — the settings write, onto the
+  // workspace's authoritative GitHub connection — whatever `returnTo` says.
+  // `returnTo` only decides which page the redirect lands on at the end.
+  //
+  // So a null `connectionId` is the predicate, for every `returnTo`. Gating on
+  // `returnTo === "settings"` alone closed nothing: `?mode=identity&returnTo=sources`
+  // with no `connectionId` asked for the same state and skipped the check.
+  //
+  // `returnTo === "settings"` stays in the predicate as well. It is redundant
+  // for the states the app mints (a settings connect carries no connectionId),
+  // but the union is the safe direction: it can only refuse more, never less,
+  // and the legacy leg keeps exactly the authorization it has today —
+  // `returnTo=sources` WITH a connectionId is untouched.
+  if (connectionId === null || returnTo === "settings") {
     await assertMaySettingsConnect(orgId, workspaceId, c.get("userId") ?? null);
   }
 
@@ -1360,6 +1378,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     );
     conn = connRows[0] ?? null;
     if (!conn) {
+      // Refused, never downgraded. A state that NAMED a connection and whose
+      // connection does not resolve in its own org+workspace is not the same
+      // thing as a state that named none: letting it through would land on the
+      // `else` branches below — the settings write onto the workspace's
+      // authoritative GitHub connection — which is a different, more powerful
+      // write than the one the state asked for. So the leg stops here.
       return c.json({ error: "Connection not found" }, 404);
     }
   }
