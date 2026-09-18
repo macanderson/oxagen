@@ -1430,9 +1430,10 @@ describe("harnesses and reassign", () => {
     expect(d.lines.join("\n")).toContain("Cursor");
 
     const found = detect({ json: true }, d);
-    expect(found.harnesses.find((h) => h.harness === "cursor")).toMatchObject(
-      { installed: true, enrolled: true },
-    );
+    expect(found.harnesses.find((h) => h.harness === "cursor")).toMatchObject({
+      installed: true,
+      enrolled: true,
+    });
 
     await unenroll({ token: "tok" }, d);
     expect(d.readCursorHooks()).toEqual({
@@ -2061,12 +2062,14 @@ describe("export and verify", () => {
     ).toEqual([
       ["claude-code", true, false],
       ["codex", true, false],
+      ["cursor", true, false],
       ["stella", true, false],
       // The connected tier (ADR-078): a GUI app, detected on disk rather
       // than on PATH, and reported with its tier so no surface has to guess.
       ["claude-desktop", true, false],
     ]);
     expect(fresh.harnesses.map((h) => h.tier)).toEqual([
+      "harness",
       "harness",
       "harness",
       "harness",
@@ -2095,6 +2098,14 @@ describe("export and verify", () => {
       harnesses: [
         { harness: "claude-code", installed: true, enrolled: true },
         { harness: "codex", installed: false, enrolled: false },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: true,
+          path: "/usr/local/bin/cursor-agent",
+          version: "2026.09.16",
+          enrolled: false,
+        },
         {
           harness: "stella",
           label: "Stella",
@@ -2424,7 +2435,11 @@ describe("stella", () => {
     expect(d.lines.join("\n")).toContain(
       "Stella      complete: 8 present, 0 missing",
     );
-    expect(detect({ json: true }, d).harnesses[2]).toEqual({
+    // By name, not by index: the roster follows the harness enum, so a
+    // fifth harness must not silently move this assertion onto another row.
+    expect(
+      detect({ json: true }, d).harnesses.find((h) => h.harness === "stella"),
+    ).toEqual({
       harness: "stella",
       label: "Stella",
       installed: true,
