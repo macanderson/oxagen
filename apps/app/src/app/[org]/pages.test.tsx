@@ -485,14 +485,18 @@ describe("the Run page", () => {
 });
 
 describe("Organization › People", () => {
-  // This page renders the real organization feature, and its first import is
-  // the slowest thing in this file: under coverage in CI it ran past the
-  // default 5 s test timeout. The timed-out render then finished inside the
-  // next test and counted a second `Workspaces` call there. Importing the page
-  // once up front, with a budget of its own, keeps that cost out of both.
+  // People renders for real, so this page pulls the whole organization
+  // feature graph. Loaded cold inside a test, under coverage instrumentation,
+  // that import alone outran the 5 s test budget, and the render that timed
+  // out went on to call Workspaces during the next test. Load it once here,
+  // under a hook budget sized for the import, and clear the stub per test.
+  const people = import("./page");
   beforeAll(async () => {
-    await import("./page");
+    await people;
   }, 60_000);
+  beforeEach(() => {
+    Workspaces.mockClear();
+  });
 
   it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
     const ctx = { orgSlug: "acme", orgRole: "owner" };
@@ -512,11 +516,7 @@ describe("Organization › People", () => {
         invitations: [],
       },
     });
-    await expectPageTitle(
-      await import("./page"),
-      routeProps(SEGMENTS),
-      title("people"),
-    );
+    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
     expect(requireViewer).toHaveBeenCalledWith(...ORG);
     expect(members).toHaveBeenCalledWith(ctx);
     expect(screen.getByRole("main")).toHaveTextContent("Marcus Bell");
@@ -530,11 +530,7 @@ describe("Organization › People", () => {
       ok: true,
       value: { members: [], invitations: [] },
     });
-    await expectPageTitle(
-      await import("./page"),
-      routeProps(SEGMENTS),
-      title("people"),
-    );
+    await expectPageTitle(await people, routeProps(SEGMENTS), title("people"));
     expect(Workspaces).toHaveBeenCalledOnce();
     expect(Workspaces.mock.calls[0]?.[0]).toEqual({ ctx, source });
   });

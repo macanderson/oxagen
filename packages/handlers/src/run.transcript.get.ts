@@ -20,6 +20,7 @@ import {
   foldTranscript,
   type RunFrame,
   type TranscriptFold,
+  turnOrdinals,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
@@ -93,6 +94,7 @@ async function mapConcurrent<T, R>(
 function toEntry(
   fold: TranscriptFold,
   body: { text: string | null; truncated: boolean },
+  turn: number | null,
 ): TranscriptEntry {
   const { opening } = fold;
   return {
@@ -106,6 +108,7 @@ function toEntry(
     truncated: body.truncated,
     fidelity: opening.body.fidelity,
     frames: fold.frames,
+    turn,
     cost:
       fold.costMicros === null
         ? null
@@ -125,6 +128,10 @@ export function createRunTranscriptGetHandler(
     const run = await resolveRun(deps, ctx, input.runId);
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     const folds = foldTranscript(read.frames, input.zoom);
+    const ordinals = turnOrdinals(read.frames);
+    const turnOf = new Map(
+      read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
+    );
     const kept = folds.slice(0, TRANSCRIPT_ENTRY_MAX);
     const texts = await mapConcurrent(kept, BODY_CONCURRENCY, (fold) =>
       bodyText(deps.bodies, scope, fold.opening),
@@ -132,7 +139,11 @@ export function createRunTranscriptGetHandler(
     return {
       zoom: input.zoom,
       entries: kept.map((fold, i) =>
-        toEntry(fold, texts[i] as { text: string | null; truncated: boolean }),
+        toEntry(
+          fold,
+          texts[i] as { text: string | null; truncated: boolean },
+          turnOf.get(fold.opening.seq) ?? null,
+        ),
       ),
       complete: read.complete && folds.length === kept.length,
     };

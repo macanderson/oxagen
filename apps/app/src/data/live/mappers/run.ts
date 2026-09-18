@@ -175,6 +175,7 @@ export function toRunTranscript(
       truncated: entry.truncated,
       fidelity: entry.fidelity,
       frames: entry.frames,
+      turn: entry.turn,
       cost: toCost(entry.cost),
     })),
     complete: out.complete,

@@ -7,7 +7,8 @@
 // nobody looked at is paid for (§3.5's poll budget).
 //
 // Three sections have a store behind them: Transcript (`get_run_transcript` at
-// one of three zoom levels), Frames (`get_run`'s own page, plus one frame's
+// `everything`, grouped into turns and steps in the view, with `?zoom=` naming
+// which disclosures start open), Frames (`get_run`'s own page, plus one frame's
 // bytes from `get_run_frame_body` when `?body=` names it) and Cost
 // (`get_run_cost`).
 //
@@ -88,7 +89,7 @@ export async function Run({
   runId: string;
   /** `?tab=`; anything but a section's name opens Transcript. */
   tab: string | null;
-  /** `?zoom=`; anything but a level reads the transcript by steps. */
+  /** `?zoom=`; anything but a level opens the transcript at steps. */
   zoom: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
@@ -114,8 +115,9 @@ export async function Run({
     case "transcript":
       section = (
         <TranscriptSection
-          read={await source.runs.transcript(ctx, detail.run.id, zoomed)}
+          read={await source.runs.transcript(ctx, detail.run.id, "everything")}
           zoom={zoomed}
+          run={detail.run}
           {...place}
         />
       );
