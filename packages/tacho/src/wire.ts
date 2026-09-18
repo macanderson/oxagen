@@ -601,12 +601,24 @@ export const TACHO_MAX_BATCH = 200;
 export const TACHO_MAX_BODY_BYTES = 1_048_576;
 
 /**
- * The most body bytes one batch carries, before base64. A batch of 200
- * events could otherwise ship 200 MiB, and the shipper splits the batch at
- * the event whose body would cross this line so every body still travels
- * with its own event.
+ * The most bytes one ingest request may carry, as JSON on the wire. The
+ * control plane's route refuses anything larger with 413, and the API runs
+ * on Vercel, whose functions refuse a request body over 4.5 MB before the
+ * route sees it, so this sits under both.
+ *
+ * The shipper measures events and base64-encoded bodies against this number,
+ * not raw body bytes. Base64 inflates a body by a third, so one
+ * `TACHO_MAX_BODY_BYTES` body is about 1.4 MB on the wire and always fits
+ * with its event.
  */
-export const TACHO_MAX_BATCH_BODY_BYTES = 4 * 1_048_576;
+export const TACHO_MAX_REQUEST_BYTES = 4 * 1_048_576;
+
+/**
+ * Room the shipper keeps under `TACHO_MAX_REQUEST_BYTES` for what it does not
+ * measure per event: the batch envelope, `daemon` health, and JSON
+ * punctuation.
+ */
+export const TACHO_REQUEST_ENVELOPE_BYTES = 64 * 1024;
 
 /**
  * A frame body shipped next to its event (Mission Control spec §8.2; tacho

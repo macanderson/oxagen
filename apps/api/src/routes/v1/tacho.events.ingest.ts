@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
+import { TACHO_MAX_REQUEST_BYTES } from "@oxagen/tacho";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
@@ -13,7 +14,12 @@ import type { AppEnv } from "../../app";
  * workspace scope, so this route lives on the static /v1/tacho router and
  * rejects anything but an API key before the body is read.
  */
-const MAX_BODY_BYTES = 1048576;
+/**
+ * The request ceiling the host's shipper packs batches against. Bodies ride
+ * base64-encoded, so 1 MiB here refused any batch holding more than about
+ * 750 KiB of bodies, including a single body at the 1 MiB cap.
+ */
+const MAX_BODY_BYTES = TACHO_MAX_REQUEST_BYTES;
 
 export const tachoEventsIngestRoute = new Hono<AppEnv>();
 

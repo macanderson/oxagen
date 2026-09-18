@@ -1,6 +1,8 @@
 import {
   GENESIS_CURSOR,
   type UnsealedTachoEvent,
+  TACHO_MAX_BODY_BYTES,
+  TACHO_MAX_REQUEST_BYTES,
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
@@ -208,9 +210,20 @@ describe("POST /v1/tacho/events", () => {
   });
 
   it("refuses a body over the limit", async () => {
-    const huge = { ...VALID_BATCH, padding: "x".repeat(1024 * 1024 + 1) };
+    const huge = {
+      ...VALID_BATCH,
+      padding: "x".repeat(TACHO_MAX_REQUEST_BYTES + 1),
+    };
     expect((await post(huge)).status).toBe(413);
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("admits a batch carrying a body at the 1 MiB cap", async () => {
+    const atCap = {
+      ...VALID_BATCH,
+      padding: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString("base64"),
+    };
+    expect((await post(atCap)).status).not.toBe(413);
   });
 });
 
