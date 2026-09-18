@@ -84,6 +84,13 @@ export const hostFileSchema = z
     device_key_fingerprint: z.string().min(1),
     device_public_key: z.string().min(1),
     port: z.number().int().min(1024).max(65535),
+    /**
+     * The loopback port of the daemon's model proxy (story sheet item 10).
+     * Optional: a host enrolled before the proxy existed has none, and
+     * `modelProxyPortFor` derives the port next to `port` so the file still
+     * loads and the daemon still serves the proxy.
+     */
+    model_proxy_port: z.number().int().min(1024).max(65535).optional(),
     local_token: z.string().min(16),
     hostname: z.string(),
     os_user: z.string(),
@@ -211,6 +218,18 @@ export function mcpEndpointFor(
   api.pathname = "/mcp";
   api.search = "";
   return api.toString().replace(/\/$/, "");
+}
+
+/**
+ * The port the model proxy listens on, and the one enrollment writes into a
+ * harness's base URL. The pinned value when `host.json` carries one, otherwise
+ * the port after the collector's, or the one before it at the top of the range.
+ */
+export function modelProxyPortFor(
+  host: Pick<HostFile, "port"> & Partial<Pick<HostFile, "model_proxy_port">>,
+): number {
+  if (host.model_proxy_port !== undefined) return host.model_proxy_port;
+  return host.port < 65535 ? host.port + 1 : host.port - 1;
 }
 
 export function readHostFile(path: string): HostFile | undefined {
