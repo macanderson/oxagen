@@ -9,6 +9,8 @@ import {
 import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { eq } from "drizzle-orm";
 import { grantSignupCredits } from "@oxagen/billing";
+import { recordOrgGraphDatabase } from "@oxagen/database/data-plane";
+import { provisionOrgGraph } from "@oxagen/ontology/provision";
 import { logger } from "./logger";
 import { bootstrapOrgIAM } from "./iam-provision";
 import { openOnboardingGate } from "./lib/onboarding";
@@ -16,6 +18,7 @@ import { bootstrapWorkspace } from "./workspace-bootstrap";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
+ * the org's graph placement (pooled, or its own Neo4j database — ADR-091),
  * the IAM roles and grants, the first workspace with everything a workspace
  * needs, the onboarding gate opened on that workspace (#2967: the
  * organization exists, so the gate is at `wrap` with its 14-day provisional
@@ -110,6 +113,30 @@ export const organizationCreateHandler: CapabilityHandler<
         createdById: userId,
         updatedById: userId,
       });
+
+      // The org's graph (spec §5.3 rules 1, 3, 4; ADR-091). A free or trial
+      // org is placed in the pooled database and nothing is created. A paid
+      // org on a deployment that runs a real provisioner gets `org-<namespace>`
+      // created (idempotently) and the routing row written on THIS
+      // transaction, so the org never exists without the binding that sends
+      // its sessions to its own database. A provisioning failure is typed
+      // (`org_graph_provision_failed` / `org_graph_provisioner_not_configured`)
+      // and rolls the org back: a paid org silently left in the pool is the
+      // isolation downgrade the spec forbids. The catch below logs it and
+      // rethrows. A database created here and orphaned by a later rollback is
+      // empty and is reused by `IF NOT EXISTS` if its namespace ever returns.
+      const graph = await provisionOrgGraph({
+        orgId: org.id,
+        namespace,
+        planType: input.planSlug,
+      });
+      if (graph.mode === "database") {
+        await recordOrgGraphDatabase(tx, {
+          orgId: org.id,
+          database: graph.database,
+          actorUserId: userId,
+        });
+      }
 
       // Bootstrap full IAM state for the org — system roles, owner principal,
       // owner role assignment, and role_grants from capability defaultRoles.

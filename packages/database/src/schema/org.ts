@@ -247,6 +247,10 @@ export const dataPlanes = orgSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // ADR-091: the organisation's own database on the SHARED Neo4j cluster
+    // (`org-<namespace>`), written when an OrgGraphProvisioner creates it.
+    // NULL = the pooled database. Only on a shared-mode neo4j row; CHECK below.
+    graphDatabase: text("graph_database"),
   },
   (t) => ({
     // One LIVE binding per (organisation, store). Partial on deleted_at so a
@@ -273,6 +277,10 @@ export const dataPlanes = orgSchema.table(
       "data_planes_config_pairing_check",
       sql`(${t.mode} = 'shared' AND ${t.configCiphertext} IS NULL AND ${t.configKeyId} IS NULL)
        OR (${t.mode} = 'dedicated' AND ${t.configCiphertext} IS NOT NULL AND ${t.configKeyId} IS NOT NULL)`,
+    ),
+    graphDatabaseCheck: check(
+      "data_planes_graph_database_check",
+      sql`${t.graphDatabase} IS NULL OR (${t.kind} = 'neo4j' AND ${t.mode} = 'shared' AND ${t.graphDatabase} ~ '^org-[a-z0-9]{2,6}$')`,
     ),
   }),
 );

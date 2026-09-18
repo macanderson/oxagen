@@ -36,7 +36,7 @@ import {
   type PostgresPlaneConfig,
 } from "@oxagen/tenancy";
 import { schema } from "./index";
-import { withSystemDb } from "./tenant";
+import { withSystemDb, type Tx } from "./tenant";
 import { evictOrg } from "./data-plane-pool";
 import { logger } from "./logger";
 
@@ -229,6 +229,9 @@ export async function loadDataPlaneBinding(
       status,
       configDigest: row.configDigest ?? null,
       schemaVersion: row.schemaVersion ?? null,
+      // ADR-091: a provisioned organisation's own database on the platform
+      // cluster. Only a neo4j row can carry one (DB CHECK); null = the pool.
+      database: kind === "neo4j" ? (row.graphDatabase ?? null) : null,
     };
   }
 
@@ -307,6 +310,41 @@ export function bootstrapDataPlaneResolver(): void {
       "data-plane: platform resolver wired into the tenancy seam",
     );
   }
+}
+
+/**
+ * Record that an organisation's graph lives in its own database on the shared
+ * cluster (ADR-091). Written by organisation creation, on the SAME transaction
+ * as the organisation row, right after an OrgGraphProvisioner returned a
+ * `database` placement — so an organisation is never visible with a database
+ * that exists and no row routing to it, or a row routing to one that does not.
+ * Idempotent: a repeat for the same organisation updates the live row.
+ */
+export async function recordOrgGraphDatabase(
+  tx: Tx,
+  args: { orgId: string; database: string; actorUserId: string },
+): Promise<void> {
+  await tx
+    .insert(schema.dataPlanes)
+    .values({
+      orgId: args.orgId,
+      kind: "neo4j",
+      mode: "shared",
+      status: "active",
+      graphDatabase: args.database,
+      createdById: args.actorUserId,
+      updatedById: args.actorUserId,
+    })
+    .onConflictDoUpdate({
+      target: [schema.dataPlanes.orgId, schema.dataPlanes.kind],
+      targetWhere: isNull(schema.dataPlanes.deletedAt),
+      set: {
+        graphDatabase: args.database,
+        updatedById: args.actorUserId,
+        updatedAt: new Date(),
+      },
+    });
+  invalidateDataPlaneCache(args.orgId, "neo4j");
 }
 
 /** Test-only reset of the one-shot bootstrap log latch. */

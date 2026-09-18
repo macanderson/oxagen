@@ -31,8 +31,10 @@ import {
   loadDataPlaneBinding,
   parsePlaneConfig,
   platformDataPlaneResolver,
+  recordOrgGraphDatabase,
   resolveDataPlaneKms,
 } from "./data-plane-resolver";
+import type { Tx } from "./tenant";
 import {
   clearDataPlaneResolver,
   hasDataPlaneResolver,
@@ -303,5 +305,74 @@ describe("resolveDataPlaneKms", () => {
 
   it("returns the versioned key id when configured", () => {
     expect(resolveDataPlaneKms()?.keyId).toBe(DATA_PLANE_KEY_ID);
+  });
+});
+
+describe("the organisation's own graph database (ADR-091)", () => {
+  const sharedRow = (graphDatabase: string | null) => ({
+    mode: "shared",
+    status: "active",
+    configCiphertext: null,
+    configKeyId: null,
+    configDigest: null,
+    schemaVersion: null,
+    graphDatabase,
+  });
+
+  it("carries the provisioned database on a shared neo4j binding", async () => {
+    mocks.findFirst.mockResolvedValue(sharedRow("org-acme"));
+    const binding = await loadDataPlaneBinding(ORG, "neo4j");
+    expect(binding).toMatchObject({ mode: "shared", database: "org-acme" });
+  });
+
+  it("answers the pool (null) for a shared neo4j row with no database", async () => {
+    mocks.findFirst.mockResolvedValue(sharedRow(null));
+    expect((await loadDataPlaneBinding(ORG, "neo4j")).database).toBeNull();
+  });
+
+  it("never hands a database name to a non-graph store", async () => {
+    mocks.findFirst.mockResolvedValue(sharedRow("org-acme"));
+    expect((await loadDataPlaneBinding(ORG, "clickhouse")).database).toBeNull();
+  });
+
+  it("records the binding as an idempotent upsert and drops the cached answer", async () => {
+    const onConflictDoUpdate = vi.fn(async () => undefined);
+    const values = vi.fn(() => ({ onConflictDoUpdate }));
+    const insert = vi.fn(() => ({ values }));
+    const tx = { insert } as unknown as Tx;
+
+    // Prime the cache with the pooled answer, then record the database.
+    mocks.findFirst.mockResolvedValue(undefined);
+    await platformDataPlaneResolver(ORG, "neo4j");
+
+    await recordOrgGraphDatabase(tx, {
+      orgId: ORG,
+      database: "org-acme",
+      actorUserId: "00000000-0000-0000-0000-0000000000u1",
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orgId: ORG,
+        kind: "neo4j",
+        mode: "shared",
+        status: "active",
+        graphDatabase: "org-acme",
+      }),
+    );
+    expect(onConflictDoUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        set: expect.objectContaining({ graphDatabase: "org-acme" }),
+      }),
+    );
+    // A graph binding change evicts no Postgres pool.
+    expect(mocks.evictOrg).not.toHaveBeenCalled();
+
+    mocks.findFirst.mockResolvedValue(sharedRow("org-acme"));
+    await expect(
+      platformDataPlaneResolver(ORG, "neo4j"),
+    ).resolves.toMatchObject({
+      database: "org-acme",
+    });
   });
 });
