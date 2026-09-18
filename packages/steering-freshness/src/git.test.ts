@@ -1,0 +1,209 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  defaultBranch,
+  fetchBranch,
+  gitOrNull,
+  parseNameStatus,
+  parsePorcelain,
+  type GitContext,
+  type GitRunner,
+} from "./git";
+
+/** A runner over a table keyed by the joined argv, with a fallthrough. */
+function runner(table: Record<string, string | Error>): GitRunner {
+  return async (args) => {
+    const key = args.join(" ");
+    const hit = table[key];
+    if (hit === undefined) throw new Error(`unexpected git ${key}`);
+    if (hit instanceof Error) throw hit;
+    return hit;
+  };
+}
+
+function ctx(run: GitRunner): GitContext {
+  return { cwd: "/repo", run, timeoutMs: 1000 };
+}
+
+describe("parseNameStatus", () => {
+  it("reads added, modified and removed", () => {
+    const raw =
+      "A\0.oxagen/rules/a.toml\0M\0.oxagen/rules/b.toml\0D\0.oxagen/rules/c.toml\0";
+    expect(parseNameStatus(raw)).toEqual([
+      { status: "added", path: ".oxagen/rules/a.toml" },
+      { status: "modified", path: ".oxagen/rules/b.toml" },
+      { status: "removed", path: ".oxagen/rules/c.toml" },
+    ]);
+  });
+
+  it("is empty for empty output", () => {
+    expect(parseNameStatus("")).toEqual([]);
+    expect(parseNameStatus("\0")).toEqual([]);
+  });
+
+  // A lineage id becomes a file stem, so a path can hold anything a filename
+  // can, including a newline. The NUL form is the only one that survives it.
+  it("keeps a path containing a newline in one piece", () => {
+    const raw = "A\0.oxagen/rules/we\nird.toml\0";
+    expect(parseNameStatus(raw)).toEqual([
+      { status: "added", path: ".oxagen/rules/we\nird.toml" },
+    ]);
+  });
+
+  it("takes the destination of a rename and skips the source", () => {
+    const raw = "R100\0.oxagen/rules/old.toml\0.oxagen/rules/new.toml\0";
+    expect(parseNameStatus(raw)).toEqual([
+      { status: "renamed", path: ".oxagen/rules/new.toml" },
+    ]);
+  });
+
+  it("calls a type change a modification and an unknown letter other", () => {
+    expect(parseNameStatus("T\0a\0")).toEqual([
+      { status: "modified", path: "a" },
+    ]);
+    expect(parseNameStatus("X\0a\0")).toEqual([{ status: "other", path: "a" }]);
+  });
+});
+
+describe("parsePorcelain", () => {
+  it("reads modified, staged and untracked paths", () => {
+    const raw =
+      " M .oxagen/rules/a.toml\0M  .oxagen/rules/b.toml\0?? .oxagen/rules/c.toml\0";
+    expect(parsePorcelain(raw)).toEqual([
+      ".oxagen/rules/a.toml",
+      ".oxagen/rules/b.toml",
+      ".oxagen/rules/c.toml",
+    ]);
+  });
+
+  it("skips the original path of a rename", () => {
+    const raw = "R  .oxagen/rules/new.toml\0.oxagen/rules/old.toml\0";
+    expect(parsePorcelain(raw)).toEqual([".oxagen/rules/new.toml"]);
+  });
+
+  it("is empty for a clean tree", () => {
+    expect(parsePorcelain("")).toEqual([]);
+  });
+});
+
+describe("gitOrNull", () => {
+  it("returns null instead of throwing", async () => {
+    const result = await gitOrNull(
+      ctx(runner({ "rev-parse x": new Error("bad") })),
+      "rev-parse",
+      "x",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("trims the output", async () => {
+    const result = await gitOrNull(
+      ctx(runner({ "a b": "  out \n" })),
+      "a",
+      "b",
+    );
+    expect(result).toBe("out");
+  });
+});
+
+describe("defaultBranch", () => {
+  const SYMREF = "symbolic-ref --quiet --short refs/remotes/origin/HEAD";
+
+  it("uses the cached remote HEAD first, without touching the network", async () => {
+    const run = vi.fn(runner({ [SYMREF]: "origin/main" }));
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("main");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a branch name containing a slash intact", async () => {
+    const run = runner({ [SYMREF]: "origin/release/2026" });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("release/2026");
+  });
+
+  it("asks the server when the cached ref is missing", async () => {
+    const run = runner({
+      [SYMREF]: new Error("no symref"),
+      "remote show origin": "* remote origin\n  HEAD branch: trunk\n",
+    });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("trunk");
+  });
+
+  it("does not ask the server when the network is not allowed", async () => {
+    const run = vi.fn(
+      runner({
+        [SYMREF]: new Error("no symref"),
+        "rev-parse --verify --quiet refs/remotes/origin/main": "abc",
+      }),
+    );
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: false }),
+    ).toBe("main");
+    expect(run).not.toHaveBeenCalledWith(
+      ["remote", "show", "origin"],
+      expect.anything(),
+    );
+  });
+
+  it("falls back to probing the conventional names", async () => {
+    const run = runner({
+      [SYMREF]: new Error("no symref"),
+      "remote show origin": new Error("offline"),
+      "rev-parse --verify --quiet refs/remotes/origin/main": new Error("no"),
+      "rev-parse --verify --quiet refs/remotes/origin/master": "abc123",
+    });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("master");
+  });
+
+  // Guessing "main" here would produce a confident, wrong verdict.
+  it("returns null rather than guessing", async () => {
+    const run = runner({
+      [SYMREF]: new Error("no symref"),
+      "remote show origin": new Error("offline"),
+      "rev-parse --verify --quiet refs/remotes/origin/main": new Error("no"),
+      "rev-parse --verify --quiet refs/remotes/origin/master": new Error("no"),
+      "rev-parse --verify --quiet refs/remotes/origin/trunk": new Error("no"),
+    });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBeNull();
+  });
+
+  it("ignores a server that answers (unknown)", async () => {
+    const run = runner({
+      [SYMREF]: new Error("no symref"),
+      "remote show origin": "  HEAD branch: (unknown)\n",
+      "rev-parse --verify --quiet refs/remotes/origin/main": "abc",
+    });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("main");
+  });
+});
+
+describe("fetchBranch", () => {
+  it("reports failure instead of throwing, so a check can carry on offline", async () => {
+    const run = runner({});
+    const result = await fetchBranch(ctx(run), "origin", "main");
+    expect(result.ok).toBe(false);
+  });
+
+  it("fetches into the remote-tracking ref explicitly", async () => {
+    const run = vi.fn(async () => "");
+    await fetchBranch(ctx(run), "origin", "main");
+    expect(run).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        "fetch",
+        "origin",
+        "+refs/heads/main:refs/remotes/origin/main",
+      ]),
+      expect.anything(),
+    );
+  });
+});
