@@ -23,7 +23,12 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
-import { cursorAnswer, translateCursorPayload } from "./cursor-adapter";
+import {
+  cursorAnswer,
+  CURSOR_TO_CLAUDE_EVENT,
+  type CursorHookEventName,
+  translateCursorPayload,
+} from "./cursor-adapter";
 import { hookInputSchema } from "./hooks";
 import {
   parseAnswerBody,
@@ -39,6 +44,41 @@ import {
  * and the repair rather than saying only that something was denied, because
  * the person seeing it did nothing wrong and can act on it.
  */
+/**
+ * Refuse a Cursor hook whose payload could not be parsed, in the shape the
+ * event it names actually reads.
+ *
+ * `cursorAnswer` does this from a parsed event. Here the parse is what
+ * failed, so the event comes off the raw payload defensively, and a payload
+ * that does not name one is answered in both shapes.
+ */
+function cursorRefusal(raw: unknown, message: string): string {
+  const named =
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)["hook_event_name"]
+      : undefined;
+  const claudeEvent =
+    typeof named === "string" && named in CURSOR_TO_CLAUDE_EVENT
+      ? CURSOR_TO_CLAUDE_EVENT[named as CursorHookEventName]
+      : undefined;
+  if (claudeEvent !== undefined)
+    return cursorAnswer(
+      {
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: message,
+        },
+      },
+      claudeEvent,
+    );
+  return `${JSON.stringify({
+    permission: "deny",
+    continue: false,
+    user_message: message,
+    agent_message: message,
+  })}\n`;
+}
+
 const CURSOR_UNREADABLE_PAYLOAD =
   "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
 
@@ -364,18 +404,17 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       // allowed. The refusal is explicit instead, for the same reason an
       // unreadable enrollment refuses below.
       //
-      // The event is unknown here, since the parse is what failed, so the
-      // refusal goes out whatever the event was. Cursor reads no permission
-      // field on its observational events, so the cost of being wrong in
-      // that direction is nothing, and the cost of being wrong in the other
-      // is an unenforced mandate.
-      stdout: cursor
-        ? `${JSON.stringify({
-            permission: "deny",
-            user_message: CURSOR_UNREADABLE_PAYLOAD,
-            agent_message: CURSOR_UNREADABLE_PAYLOAD,
-          })}\n`
-        : "{}\n",
+      // The shape has to match the event, which an earlier version of this
+      // got wrong. Cursor reads `permission` at `preToolUse` and `continue`
+      // at `beforeSubmitPrompt`, so one blanket `permission: deny` was
+      // ignored outright at the prompt veto and the malformed prompt went
+      // through. The event name is read off the raw payload rather than the
+      // parsed one, because parsing is what failed, and a payload too broken
+      // to name its own event is answered in both shapes at once: Cursor
+      // reads the member its event defines and ignores the other, and
+      // refusing an event that needed no refusal costs nothing next to
+      // allowing one that did.
+      stdout: cursor ? cursorRefusal(raw, CURSOR_UNREADABLE_PAYLOAD) : "{}\n",
       stderr: `tacho-hook: payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",

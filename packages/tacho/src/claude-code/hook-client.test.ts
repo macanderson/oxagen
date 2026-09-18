@@ -72,6 +72,36 @@ describe("runTachoHook", () => {
       (JSON.parse(cursor.stdout) as Record<string, unknown>)["permission"],
     ).toBe("deny");
 
+    // The refusal has to take the shape the event reads. Cursor reads
+    // `permission` at preToolUse and `continue` at beforeSubmitPrompt, so one
+    // blanket permission deny was ignored outright at the prompt veto and the
+    // malformed prompt went through.
+    const prompt = await runTachoHook({
+      paths,
+      env: {},
+      stdin: '{"hook_event_name":"beforeSubmitPrompt"}',
+      harness: "cursor",
+    });
+    expect(prompt.path).toBe("invalid");
+    const promptAnswer = JSON.parse(prompt.stdout) as Record<string, unknown>;
+    expect(promptAnswer["continue"]).toBe(false);
+
+    // A payload too broken to name its own event is refused in both shapes,
+    // since refusing an event that needed no refusal costs nothing next to
+    // allowing one that did.
+    const nameless = await runTachoHook({
+      paths,
+      env: {},
+      stdin: "{}",
+      harness: "cursor",
+    });
+    const namelessAnswer = JSON.parse(nameless.stdout) as Record<
+      string,
+      unknown
+    >;
+    expect(namelessAnswer["permission"]).toBe("deny");
+    expect(namelessAnswer["continue"]).toBe(false);
+
     // Claude Code keeps its own answer: `{}` is how a hook says nothing
     // there, and changing it would alter behaviour this finding is not about.
     const claude = await runTachoHook({
