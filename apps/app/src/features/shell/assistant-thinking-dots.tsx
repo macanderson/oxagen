@@ -1,13 +1,14 @@
 // Three dots that pulse in sequence while a turn is in flight. Kept inside
 // the flyout's one `role="log"` live region (assistant-flyout.tsx) rather than
-// carrying a live-region role of its own — a second live region nested in the
+// carrying a live-region role of its own. A second live region nested in the
 // first risks a double announcement, so the accessible name is a plain
 // `sr-only` span the log's existing announcement already reads.
 //
-// Pure CSS: `animate-bounce` is a stock Tailwind utility, and the global
+// Pure CSS: `animate-bounce` is a stock Tailwind utility. The global
 // `prefers-reduced-motion: reduce` kill switch (`packages/ui/src/styles/
-// globals.css`) already floors every animation's duration, so a reduced-
-// motion viewer sees three static dots with no extra handling here.
+// globals.css`) only shortens `animation-duration`, and an infinite animation
+// at 0.01ms still cycles and jitters between keyframes, so the dots opt out
+// explicitly with `motion-reduce:animate-none` and sit still.
 const DOTS = [0, 1, 2] as const;
 
 export function AssistantThinkingDots({ label }: { label: string }) {
@@ -21,7 +22,7 @@ export function AssistantThinkingDots({ label }: { label: string }) {
         <span
           key={i}
           aria-hidden="true"
-          className="size-1.5 animate-bounce rounded-full bg-muted-foreground"
+          className="size-1.5 animate-bounce rounded-full bg-muted-foreground motion-reduce:animate-none"
           style={{ animationDelay: `${String(i * 0.15)}s` }}
         />
       ))}
