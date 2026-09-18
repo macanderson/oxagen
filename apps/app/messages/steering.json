@@ -17,6 +17,19 @@
       "previous": "Previous page",
       "next": "Next page"
     },
+    "freshness": {
+      "title": "Steering freshness",
+      "lead": "An agent reads the records in the checkout it is running in. These two switches decide what happens when that checkout is behind the production branch.",
+      "version": "Steering version",
+      "repository": "Repository",
+      "published": "Newest record",
+      "unbound": "No repository is bound, so steering is off for this workspace.",
+      "gatesLegend": "Steering freshness gates",
+      "autoSync": "Sync .oxagen/ automatically",
+      "autoSyncHint": "Take the records merged on the production branch into the developer's checkout before the prompt runs. It never runs while .oxagen/ holds uncommitted work or records the branch is still authoring.",
+      "blockStaleRuns": "Refuse prompts on stale steering",
+      "blockStaleRunsHint": "Stop a prompt while the checkout is missing records that are in force. The developer is warned either way. Run oxagen steering hooks install on each machine for this to reach the prompt."
+    },
     "status": {
       "proposed": "proposed",
       "pr_open": "pull request open",

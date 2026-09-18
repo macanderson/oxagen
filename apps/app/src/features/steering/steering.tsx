@@ -7,7 +7,9 @@
 import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { ContextPrs } from "./context-prs";
+import { Freshness } from "./freshness";
 import { Proposals } from "./proposals";
+import { ReadFailure } from "./read-failure";
 import { Records } from "./records";
 import { SteeringTabs } from "./tabs";
 import { parseSteeringView, type SteeringAt, type SteeringView } from "./view";
@@ -70,10 +72,34 @@ export async function Steering({
 }) {
   const view = parseSteeringView(searchParams);
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
+  // The freshness panel sits above the tabs, not inside one: the two gates
+  // govern every tab's records at once, and a person looking for "why did my
+  // agent refuse to run" should not have to guess which tab holds the
+  // answer. It is read on every tab for the same reason.
+  const freshness = await source.steering.freshness(ctx);
   return (
     <div className="flex flex-col gap-6">
+      {freshness.ok ? (
+        <Freshness at={at} read={freshness.value} canEdit={canEditGates(ctx)} />
+      ) : (
+        <ReadFailure read={freshness} section="freshness" />
+      )}
       <SteeringTabs at={at} current={view.tab} />
       {await TabBody({ ctx, source, view, at })}
     </div>
   );
+}
+
+/**
+ * Who may set the gates, mirroring `update_workspace_settings`'s own gate
+ * (INV-29): an org Owner or Admin, or the Owner or Admin of this workspace.
+ *
+ * The handler decides, not this; the check here only stops the page offering
+ * a checkbox that would come back `denied`. Getting it wrong in the strict
+ * direction hides a control from someone entitled to it, so it admits
+ * exactly the roles the handler does and no fewer.
+ */
+function canEditGates(ctx: WsCtx): boolean {
+  const admin = (role: string) => role === "owner" || role === "admin";
+  return admin(ctx.orgRole) || admin(ctx.wsRole);
 }

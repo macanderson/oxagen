@@ -31,6 +31,7 @@ vi.mock("./actions", () => ({
   openContextPr: vi.fn(),
   mergeContextPr: vi.fn(),
   dismissProposal: vi.fn(),
+  setSteeringGate: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -87,6 +88,8 @@ describe("tabs", () => {
       records: [[ctx, { kind: null, offset: 0 }]],
       proposals: [],
       contextPr: [],
+      // The freshness panel is above the tabs, so it is read on every tab.
+      freshness: [[ctx]],
     });
     const tabs = screen.getByRole("navigation", { name: "Steering views" });
     expect(
@@ -282,6 +285,7 @@ describe("Proposals", () => {
       records: [],
       proposals: [[ctx, { offset: 0 }]],
       contextPr: [],
+      freshness: [[ctx]],
     });
     const card = within(section("Proposals")).getByRole("article");
     expect(card.querySelector("[data-status]")).toHaveTextContent(
