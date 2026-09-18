@@ -43,6 +43,15 @@ const RESERVED_WORKSPACE_SLUGS = new Set([
 // only evaluate the org_id GUC)
 const ORG_ONLY_WS = "00000000-0000-0000-0000-000000000000";
 
+// The name and slug rules of `create_workspace`, without its `mainRepo`. The
+// contract requires a main repository (Mission Control spec §17 M0, ADR-099)
+// and this deprecated form never collects one: it predates the rule and is
+// not deployed (`APP_DIR` selects `apps/app`, whose create-workspace dialog
+// binds the repository). Parsing the full contract here would refuse every
+// submission before the slug was even read. The live path is
+// `apps/app/src/features/organization/actions.ts`.
+const workspaceNameAndSlug = workspaceCreate.input.omit({ mainRepo: true });
+
 /**
  * Create a workspace inside the active org. `orgSlug` is bound in the page so
  * the client form passes only the FormData. Validates against the shared
@@ -85,7 +94,7 @@ export async function createWorkspaceAction(
         };
       }
 
-      const parsed = workspaceCreate.input.safeParse({
+      const parsed = workspaceNameAndSlug.safeParse({
         name: formData.get("name"),
         slug: formData.get("slug"),
       });

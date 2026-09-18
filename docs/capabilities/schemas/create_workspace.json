@@ -1,7 +1,7 @@
 {
   "name": "create_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant. Refused for a slug already used in the organization.",
+  "description": "Create a workspace within the active tenant together with its main GitHub repository, which is required. Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -33,11 +33,36 @@
         "type": "string",
         "minLength": 2,
         "maxLength": 40
+      },
+      "mainRepo": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "const": "github",
+            "default": "github"
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 39
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "owner",
+          "name"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
       "name",
-      "slug"
+      "slug",
+      "mainRepo"
     ],
     "additionalProperties": false
   },
@@ -59,6 +84,32 @@
       },
       "createdAt": {
         "type": "string"
+      },
+      "mainRepo": {
+        "type": "object",
+        "properties": {
+          "bindingId": {
+            "type": "string"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "defaultRef": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "bindingId",
+          "connectionId",
+          "fullName",
+          "defaultRef"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -66,7 +117,8 @@
       "name",
       "slug",
       "orgSlug",
-      "createdAt"
+      "createdAt",
+      "mainRepo"
     ],
     "additionalProperties": false
   }
