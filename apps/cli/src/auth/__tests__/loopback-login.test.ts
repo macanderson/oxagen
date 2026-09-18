@@ -189,12 +189,12 @@ describe("browserLogin", () => {
 
   it("releases every socket once the flow settles, so the process can exit", async () => {
     // The bug this covers: `server.close()` stops the listener but waits for
-    // open connections, and a browser leaves them behind — the keep-alive
-    // socket that carried the callback, and any it preconnected and never
-    // used. Node holds an unused one for `requestTimeout` (5 minutes by
-    // default), which kept the `oxagen login` process — and with it the
-    // desktop app's "Waiting for the browser…" state — alive that long after
-    // the user was already signed in.
+    // open connections, and a browser leaves them behind. Two of them: the
+    // keep-alive socket that carried the callback, and any it preconnected
+    // and never used. Node holds an unused one for `requestTimeout` (5
+    // minutes by default). That kept the `oxagen login` process alive for
+    // five minutes after the user was already signed in, and with it the
+    // desktop app's "Waiting for the browser" state.
     mockFetch.mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -228,7 +228,7 @@ describe("browserLogin", () => {
     );
     await loginPromise;
 
-    // The listener is gone and the unused socket with it — both ends see the
+    // The listener is gone and the unused socket with it. Both ends see the
     // close, so nothing is left attached to the event loop.
     await waitFor(() =>
       expect(idle.readableEnded || idle.destroyed).toBe(true),

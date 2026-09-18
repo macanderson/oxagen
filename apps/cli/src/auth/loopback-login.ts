@@ -23,7 +23,7 @@
  *
  * Shutdown: `server.close()` alone stops the listener but leaves every open
  * connection attached to the event loop, so the process stays alive until the
- * last one times out — up to Node's 5-minute `requestTimeout` for a socket a
+ * last one times out, up to Node's 5-minute `requestTimeout` for a socket a
  * browser preconnected and never used. The caller is usually a one-shot
  * process (and, in the desktop app, a sidecar whose exit is what clears the
  * "Waiting for the browser…" state), so `shutdown()` below closes the
@@ -49,7 +49,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 /**
  * How long `shutdown()` gives a connection before destroying it. Every
  * response is flushed (`res.end`'s callback) before the flow settles, so this
- * covers only the last bytes in a loopback socket's buffer — and a socket a
+ * covers only the last bytes in a loopback socket's buffer, plus a socket a
  * browser opened and never used, which Node does not count as idle and so
  * would otherwise hold until `requestTimeout`.
  */

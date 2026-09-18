@@ -155,7 +155,7 @@ export interface SessionView {
  * finished with it, so a login that is slow to exit would otherwise hold the
  * organization and workspace pickers disabled behind a sign-in that already
  * worked. A same-organization re-login writes nothing this can see, so that
- * one still waits for the process — there is nothing to detect and nothing
+ * one still waits for the process. There is nothing to detect and nothing
  * to be wrong about.
  */
 export function sessionLanded(before: SessionView, now: SessionView): boolean {

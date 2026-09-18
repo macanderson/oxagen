@@ -347,7 +347,7 @@ export function App() {
    * cancel its loser, and this one would otherwise outlive the action that
    * started it: a login that fails, or one whose session fields never change,
    * would leave it calling `readState` every 500ms for the rest of the app
-   * session — and on an enrolled machine each of those waits on the daemon.
+   * session, and on an enrolled machine each of those waits on the daemon.
    */
   async function waitForLanding(
     landed: () => Promise<boolean>,
@@ -799,6 +799,13 @@ export function App() {
       : (state.cli_links_present ??
         (state.oxagen_on_path !== null || state.tacho_on_path !== null));
 
+  // A running sidecar locks the pickers, with one exception: the sign-in that
+  // fills them. Picking changes local state only, but `applyWorkspace` reads
+  // that state when it starts and clears it when it succeeds, so a change made
+  // while `tacho reassign` runs would move the machine to the old target and
+  // drop the new choice without saying so.
+  const pickersLocked = busy !== null && busy !== "signin" && busy !== "signup";
+
   const orgPicker = (
     <select
       aria-label="Organization"
@@ -808,9 +815,7 @@ export function App() {
         setPickedOrg(e.target.value);
         setPickedWorkspace(null);
       }}
-      // Not gated on `busy`: picking is local state, and the one command
-      // that runs while this step is open is the sign-in that filled it.
-      disabled={orgs === null}
+      disabled={pickersLocked || orgs === null}
     >
       {(orgs ?? []).map((o) => (
         <option key={o.slug} value={o.slug}>
@@ -828,7 +833,7 @@ export function App() {
       id="workspace"
       value={workspaceTarget ?? ""}
       onChange={(e) => setPickedWorkspace(e.target.value)}
-      disabled={workspaces === null}
+      disabled={pickersLocked || workspaces === null}
     >
       {workspaceTarget === null && <option value="">Pick a workspace…</option>}
       {(workspaces ?? []).map((w) => (
@@ -961,11 +966,13 @@ export function App() {
                     type="button"
                     className="primary"
                     onClick={() => setTargetChosen(true)}
-                    // Continue only moves the wizard on; nothing it does
-                    // touches the machine, so a running sidecar is not a
-                    // reason to refuse it.
+                    // The sign-in that fills this step is not a reason to
+                    // refuse it. Anything else running is.
                     disabled={
-                      !orgForPicker || !workspaceTarget || workspaces === null
+                      pickersLocked ||
+                      !orgForPicker ||
+                      !workspaceTarget ||
+                      workspaces === null
                     }
                   >
                     Continue
