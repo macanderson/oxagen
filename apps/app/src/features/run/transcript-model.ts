@@ -218,8 +218,9 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     };
   }
   if (step.kind === "tool") {
+    // The call's own frame carries the outcome; the request only names the tool.
     const named =
-      step.frames.find((frame) => frame.kind === "tool_call") ?? first;
+      step.frames.find((frame) => frame.type === TOOL_CALL) ?? first;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
     const status = toolStatus(named.label);
     const denied =

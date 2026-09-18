@@ -51,7 +51,6 @@
       "live": "live",
       "goLive": "go live",
       "recorded": {
-        "live": "live",
         "sealed": "sealed",
         "halted": "halted"
       },
