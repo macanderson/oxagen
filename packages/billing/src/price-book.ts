@@ -914,11 +914,18 @@ export interface SetNegotiatedPriceEntryArgs extends NegotiatedPriceKey {
   currency?: string;
   /** Derived from the token class when omitted. */
   unit?: PriceUnit;
-  /** The instant the rate starts applying. */
-  effectiveFrom: Date;
+  /**
+   * The instant the rate starts applying. Omitted, it is the write instant —
+   * sampled under the locks, so a wait on another writer cannot leave the
+   * rate starting before the write that recorded it.
+   */
+  effectiveFrom?: Date;
   /**
    * The write instant. A row whose `effectiveFrom` is at or before it has
-   * shipped and is refused a non-identical in-place correction.
+   * shipped and is refused a non-identical in-place correction. Injected by
+   * tests; omitted, it is read AFTER the advisory locks, because the lock
+   * wait is unbounded and a clock read before it can be stale by the time
+   * the check runs.
    */
   now?: Date;
 }
@@ -1081,8 +1088,6 @@ export async function setNegotiatedPriceEntry(
   // carries — every caller that corrects a price without retyping the alias
   // list depends on that — while an explicit empty array clears them.
   const modelAliases = args.modelAliases;
-  const from = args.effectiveFrom;
-  const now = args.now ?? new Date();
   const key = entryKey({ ...args, region });
   return withTenantDb(async (tx) => {
     // The names this write will end up carrying, resolved BEFORE the locks
@@ -1109,6 +1114,14 @@ export async function setNegotiatedPriceEntry(
     const effectiveAliases = modelAliases ?? ownChain[0]?.modelAliases ?? [];
     const names = new Set([args.model, ...effectiveAliases]);
     await lockNegotiatedKey(tx, args, [...names]);
+    // The write instant is read here, under the locks, and not before
+    // `withTenantDb`. The lock wait is unbounded: another negotiated write
+    // can hold the class lock until a scheduled `effectiveFrom` has passed,
+    // and a clock read before the wait then let a correction to the row at
+    // that instant pass the shipped-window check and change, in place, the
+    // terms of a row that priced frames during the wait.
+    const now = args.now ?? new Date();
+    const from = args.effectiveFrom ?? now;
     const everyModel = await readKeyRows(tx, args, {
       includeList: false,
       anyProvider: true,
@@ -1289,6 +1302,11 @@ export async function setNegotiatedPriceEntry(
 /** What ending a negotiated rate at an instant did. */
 export interface NegotiatedPriceClose {
   /**
+   * The instant the rate ended: the caller's `at`, or the write instant read
+   * under the locks when the caller gave none.
+   */
+  at: Date;
+  /**
    * The row that was in effect at `at`, now ending there; null when the
    * organization had no rate in effect at that instant.
    */
@@ -1332,20 +1350,34 @@ export async function closeNegotiatedPriceEntry(args: {
   model: string;
   tokenClass: PriceTokenClass;
   region?: string | null;
-  /** The instant the negotiated rate stops applying. */
-  at: Date;
-  /** The write instant, which decides whether a scheduled row has begun. */
+  /**
+   * The instant the negotiated rate stops applying. Omitted, it is the write
+   * instant, sampled under the locks: a cutoff fixed before the lock wait
+   * would be in the past by the time the wait ends, and the shipped-window
+   * guard below would then refuse an end nobody backdated.
+   */
+  at?: Date;
+  /**
+   * The write instant, which decides whether a scheduled row has begun.
+   * Injected by tests; omitted, it is read after the locks, for the reason
+   * `at` is.
+   */
   now?: Date;
 }): Promise<NegotiatedPriceClose> {
   const region = args.region ?? null;
   const key = entryKey({ ...args, region });
-  const now = args.now ?? new Date();
 
   return withTenantDb(async (tx) => {
     // The same two locks a write takes, in the same order, so a close and a
     // write for one key never interleave and never invert.
     await lockNegotiatedClass(tx, args);
     await lockNegotiatedKey(tx, args);
+    // Read under the locks, like the setter's: a removal that waited on a
+    // write can otherwise carry a `now` from before the wait, pass the
+    // shipped-window guard, and close the row behind a frame the rollup
+    // priced against it during the wait.
+    const now = args.now ?? new Date();
+    const atInstant = args.at ?? now;
     const rows = await readKeyRows(tx, args, { includeList: true });
     const own = rows.filter(
       (r) => r.orgId === args.orgId && r.source !== "list",
@@ -1363,7 +1395,7 @@ export async function closeNegotiatedPriceEntry(args: {
             : ``),
       });
 
-    const at = args.at.getTime();
+    const at = atInstant.getTime();
     // The row in effect at `at`, not the open one: after a future-dated
     // correction the current row is already closed at that future instant and
     // the scheduled row is the only open one, so "the open row" is the wrong
@@ -1388,11 +1420,11 @@ export async function closeNegotiatedPriceEntry(args: {
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_ends_before_it_starts",
-        message: `the negotiated price for ${key} effective from ${begun.effectiveFrom.toISOString()} is already in force; it cannot end at ${args.at.toISOString()}, before it starts — end it at or after that instant`,
+        message: `the negotiated price for ${key} effective from ${begun.effectiveFrom.toISOString()} is already in force; it cannot end at ${atInstant.toISOString()}, before it starts — end it at or after that instant`,
       });
 
     if (active === null && scheduled.length === 0)
-      return { closed: null, cancelled: [] };
+      return { at: atInstant, closed: null, cancelled: [] };
 
     // A cutoff in the past shortens a window that has already priced runs:
     // every frame between `at` and now would resolve to the list price on a
@@ -1403,13 +1435,13 @@ export async function closeNegotiatedPriceEntry(args: {
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_window_shipped",
-        message: `the negotiated price for ${key} has priced runs between ${args.at.toISOString()} and ${now.toISOString()}; a rate cannot be ended in the past — end it now or at a later instant`,
+        message: `the negotiated price for ${key} has priced runs between ${atInstant.toISOString()} and ${now.toISOString()}; a rate cannot be ended in the past — end it now or at a later instant`,
       });
 
     if (active) {
       await tx
         .update(schema.priceEntries)
-        .set({ effectiveTo: args.at, updatedAt: new Date() })
+        .set({ effectiveTo: atInstant, updatedAt: new Date() })
         .where(eq(schema.priceEntries.id, active.id));
     }
     if (scheduled.length > 0) {
@@ -1421,10 +1453,11 @@ export async function closeNegotiatedPriceEntry(args: {
       );
     }
     return {
+      at: atInstant,
       closed:
         active === null
           ? null
-          : rowToEntry({ ...active, effectiveTo: args.at }),
+          : rowToEntry({ ...active, effectiveTo: atInstant }),
       cancelled: scheduled.map(rowToEntry),
     };
   });

@@ -72,7 +72,6 @@ function harness(result?: NegotiatedPriceWrite) {
   return {
     handler: createPriceEntrySetHandler({
       setNegotiatedPriceEntry,
-      now: () => NOW,
     }),
     setNegotiatedPriceEntry,
   };
@@ -124,7 +123,7 @@ describe("set_price_entry", () => {
     expect(gate.actors).toEqual([null, "u_key_creator"]);
   });
 
-  it("converts the contract's USD per million to micros and defaults the instant to now", async () => {
+  it("converts the contract's USD per million to micros and leaves an omitted instant to the store", async () => {
     const h = harness();
     const out = await h.handler(input(), ctx());
 
@@ -142,9 +141,13 @@ describe("set_price_entry", () => {
       // $2.40 per 1M, never a float: the customer types 2.40, the store keeps
       // integer micro-USD.
       microsPerMillion: 2_400_000n,
-      effectiveFrom: NOW,
-      now: NOW,
+      // Omitted, not defaulted here: the store reads the write instant under
+      // its advisory locks, because a clock sampled before the lock wait is
+      // stale by the time the shipped-window check runs. The instant the
+      // store used comes back on the entry.
+      effectiveFrom: undefined,
     });
+    expect(out.entry.effectiveFrom).toBe(NOW.toISOString());
     expect(out.entry.microsPerMillion).toBe("2400000");
     expect(out.closed).toBeNull();
     expect(() => costPriceEntrySet.output.parse(out)).not.toThrow();

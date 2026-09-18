@@ -59,14 +59,16 @@ function harness(
   result: PriceEntry | null = closedEntry,
   cancelled: PriceEntry[] = [],
 ) {
-  const closeNegotiatedPriceEntry = vi.fn(async () => ({
+  const closeNegotiatedPriceEntry = vi.fn(async (args: { at?: Date }) => ({
+    // The store answers the instant it used: the caller's, or the write
+    // instant it read under its locks.
+    at: args.at ?? NOW,
     closed: result,
     cancelled,
   }));
   return {
     handler: createPriceEntryRemoveHandler({
       closeNegotiatedPriceEntry,
-      now: () => NOW,
     }),
     closeNegotiatedPriceEntry,
   };
@@ -111,7 +113,7 @@ describe("remove_price_entry", () => {
     expect(gate.actors).toEqual([null, "u_key_creator"]);
   });
 
-  it("ends the row at the write instant when none is given, and answers it as closed", async () => {
+  it("leaves an omitted instant to the store, and answers the instant the store used", async () => {
     const h = harness();
     const out = await h.handler(input(), ctx());
 
@@ -121,8 +123,10 @@ describe("remove_price_entry", () => {
       model: "claude-sonnet-5",
       tokenClass: "output",
       region: null,
-      at: NOW,
-      now: NOW,
+      // Omitted, not defaulted here: the store reads the write instant under
+      // its advisory locks, so a removal that waited on a write does not carry
+      // a cutoff from before the wait.
+      at: undefined,
     });
     expect(out.at).toBe(NOW.toISOString());
     expect(out.closed).toMatchObject({
@@ -152,9 +156,6 @@ describe("remove_price_entry", () => {
       expect.objectContaining({
         region: "eu-west-1",
         at: new Date("2026-10-01T00:00:00.000Z"),
-        // The write instant travels separately: it decides whether a
-        // correction scheduled after `at` has already begun.
-        now: NOW,
       }),
     );
   });
