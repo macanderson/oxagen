@@ -57,6 +57,7 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { Detector } from "./detector";
+import { type GitFacts, readGitFacts } from "./git-facts";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -591,9 +592,84 @@ export async function startDaemon(
     },
   });
 
+  /**
+   * Git facts per working directory, with the time they were read.
+   *
+   * The seam is here, in the daemon, rather than in `contextFactsFromEnv` or
+   * in the hook handler. `contextFactsFromEnv` is pure and reads environment
+   * variables only; shelling out from it would put a process spawn inside a
+   * normalizer that the transcript reader and the OTel path also call. The
+   * hook handler runs on the serial queue that every wrapped agent on this
+   * host waits on, and a hook has a decision budget measured in seconds. The
+   * daemon already owns the `Exec` port, already knows each session's cwd,
+   * and already has a place to hold state across frames, so it reads the
+   * facts once per worktree and hands them to the recorder, which merges
+   * them into the context block of every frame it seals afterwards.
+   *
+   * The cache is what keeps this off the per-frame path: a turn fires many
+   * hooks, and the head sha does not move between them. Entries refresh at
+   * turn boundaries and whenever one goes stale, so a commit made mid-session
+   * is picked up without four `git` invocations per tool call.
+   */
+  const gitFactsByCwd = new Map<string, { at: number; facts?: GitFacts }>();
+  const GIT_FACTS_TTL_MS = 30_000;
+
+  function gitFactsFor(cwd: string, force: boolean): GitFacts | undefined {
+    const cached = gitFactsByCwd.get(cwd);
+    if (cached !== undefined && !force && now() - cached.at < GIT_FACTS_TTL_MS)
+      return cached.facts;
+    const facts = readGitFacts(exec, cwd);
+    gitFactsByCwd.set(cwd, {
+      at: now(),
+      ...(facts !== undefined ? { facts } : {}),
+    });
+    return facts;
+  }
+
+  /**
+   * Hand every live session the git context of the worktree it runs in.
+   *
+   * `force` is passed at turn boundaries, where a commit, a checkout or a
+   * branch switch is most likely to have happened since the last read.
+   */
+  function refreshGitContext(force: boolean): void {
+    for (const session of registry.live()) {
+      const cwd = session.cwd;
+      if (cwd === undefined || session.sealed) continue;
+      const facts = gitFactsFor(cwd, force);
+      if (facts === undefined) continue;
+      session.recorder.noteContext({
+        ...(facts.head_sha !== undefined ? { git_head_sha: facts.head_sha } : {}),
+        ...(facts.branch !== undefined ? { git_branch: facts.branch } : {}),
+        ...(facts.dirty !== undefined ? { git_dirty: facts.dirty } : {}),
+        ...(facts.remote_digest !== undefined
+          ? { git_remote_digest: facts.remote_digest }
+          : {}),
+      });
+    }
+  }
+
+  /** The hook events that open or close a turn, where the worktree may have moved. */
+  const TURN_BOUNDARY_HOOKS = new Set([
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop",
+    "SubagentStop",
+    "SessionEnd",
+  ]);
+
   async function handleHookInner(
     envelope: HookEnvelope,
   ): Promise<Record<string, unknown>> {
+    // Before the frame is sealed, so it carries the facts rather than the
+    // frame after it. A session's very first hook opens the chain, so there is
+    // no recorder to absorb into yet and `SessionStart` alone goes without;
+    // every frame from the next one on has them.
+    const hookName = (envelope.payload as { hook_event_name?: string })
+      .hook_event_name;
+    refreshGitContext(
+      hookName !== undefined && TURN_BOUNDARY_HOOKS.has(hookName),
+    );
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},

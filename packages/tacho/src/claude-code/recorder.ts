@@ -268,6 +268,16 @@ export class SessionRecorder {
     for (const link of this.children.values()) link.recorder.relabel(context);
   }
 
+  /**
+   * Record context facts the collector observed rather than the harness
+   * reported, such as the git head the worktree is on. They merge into the
+   * context block the same way a hook's own facts do, so the next frame this
+   * recorder seals carries them and every frame after it does too.
+   */
+  noteContext(facts: Partial<Context>): void {
+    this.absorbContext(facts as Record<string, unknown>);
+  }
+
   /** The chain head after the last sealed event. */
   get chainCursor(): ChainCursor {
     return this.cursor;
