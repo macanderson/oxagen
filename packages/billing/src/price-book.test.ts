@@ -30,6 +30,7 @@ import {
   priceEntriesFromRateCards,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
+  syncPriceBook,
   usdPerMillionToMicros,
   usdPerUnitToMicrosPerMillion,
   type PriceEntry,
@@ -432,5 +433,85 @@ describe("the negotiated write path", () => {
     await expect(closeNegotiatedPriceEntry({ ...SET, at: T2 })).rejects.toThrow(
       /cannot end at or before it starts/,
     );
+  });
+});
+
+describe("syncPriceBook supersedes a row whose provider changed", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    store.tx = makeFakePriceTx(fake);
+  });
+
+  const openRows = () => fake.rows.filter((r) => r.effectiveTo === null);
+
+  it("leaves exactly one open row per model and class when the vendor string changes", async () => {
+    // The book already prices this model under one vendor name.
+    fake.rows.push(
+      priceRow({ provider: "openrouter", microsPerMillion: 3_000_000n }),
+    );
+
+    // A later sync prices the same model and class, but the source that won
+    // it now names a different vendor. The row key includes `provider`, so
+    // without the supersede pass this writes a second row and leaves the
+    // first one open — and `bestMatch` would then pick between two live
+    // prices by whichever sorted first.
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: usdPerMillionToMicros(2),
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+
+    expect(result.written).toBe(1);
+    expect(result.superseded).toBe(1);
+
+    const open = openRows();
+    expect(open).toHaveLength(1);
+    expect(open[0]!.provider).toBe("anthropic");
+    expect(open[0]!.microsPerMillion).toBe(usdPerMillionToMicros(2));
+
+    // The old row is closed at the new row's instant, not deleted: a run
+    // priced before T1 can still name the entry it was priced with.
+    const closed = fake.rows.find((r) => r.provider === "openrouter")!;
+    expect(closed.effectiveTo).toEqual(T1);
+    expect(closed.microsPerMillion).toBe(3_000_000n);
+  });
+
+  it("leaves a row under a different model or class alone", async () => {
+    fake.rows.push(priceRow({ provider: "openrouter", tokenClass: "output" }));
+
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: usdPerMillionToMicros(2),
+          effectiveFrom: T1,
+          effectiveTo: null,
+        },
+      ],
+    });
+
+    expect(result.superseded).toBe(0);
+    expect(openRows()).toHaveLength(2);
   });
 });

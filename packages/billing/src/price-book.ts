@@ -310,6 +310,13 @@ interface PriceBookSyncResult {
   written: number;
   /** Rows whose price was unchanged. */
   unchanged: number;
+  /**
+   * Open rows closed because this sync re-priced the same model and class
+   * under a different provider name. Left open they would be a second row
+   * the reader could pick, so one of two prices would apply and neither
+   * would be predictable.
+   */
+  superseded: number;
 }
 
 /**
@@ -404,7 +411,38 @@ export async function syncPriceBook(args: {
       `);
       written += 1;
     }
-    return { written, unchanged };
+
+    // Close any open row this sync has superseded under a DIFFERENT provider
+    // name. The row key includes `provider`, so a model whose vendor string
+    // changes between syncs — the catalog that won it changed, or a vendor
+    // renamed itself — writes a NEW row and leaves the old one open. Two open
+    // rows for one model and class is not a duplicate the reader tolerates:
+    // `bestMatch` picks by longest name and then by latest `effective_from`,
+    // so whichever row happens to win keeps winning, and a price correction
+    // can land on the row nothing reads. Superseding by (model, class, region)
+    // is what keeps exactly one row open per thing a frame can be priced by.
+    const supersededKey = (e: {
+      model: string;
+      tokenClass: string;
+      region: string | null;
+    }) => `${e.model}|${e.tokenClass}|${e.region ?? ""}`;
+    const writtenKeys = new Map<string, PriceEntrySeed>();
+    for (const seed of seeds) writtenKeys.set(supersededKey(seed), seed);
+    let superseded = 0;
+    for (const row of existing) {
+      if (row.effectiveTo !== null) continue;
+      const seed = writtenKeys.get(supersededKey(row));
+      if (!seed) continue;
+      if (seed.provider === row.provider) continue;
+      if (row.effectiveFrom.getTime() >= seed.effectiveFrom.getTime()) continue;
+      await tx
+        .update(schema.priceEntries)
+        .set({ effectiveTo: seed.effectiveFrom, updatedAt: new Date() })
+        .where(eq(schema.priceEntries.id, row.id));
+      superseded += 1;
+    }
+
+    return { written, unchanged, superseded };
   });
 }
 

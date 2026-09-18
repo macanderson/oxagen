@@ -54,6 +54,7 @@ export const [costPriceBookSync] = createFunction(
       return {
         written: result.written,
         unchanged: result.unchanged,
+        superseded: result.superseded,
         models: result.models,
         counts: result.counts,
         failures: result.failures,
@@ -65,6 +66,7 @@ export const [costPriceBookSync] = createFunction(
         {
           written: report.written,
           unchanged: report.unchanged,
+          superseded: report.superseded,
           models: report.models,
           counts: report.counts,
           failures: report.failures,
@@ -76,6 +78,7 @@ export const [costPriceBookSync] = createFunction(
         {
           written: report.written,
           unchanged: report.unchanged,
+          superseded: report.superseded,
           models: report.models,
           counts: report.counts,
         },

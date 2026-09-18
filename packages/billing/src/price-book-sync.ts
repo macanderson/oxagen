@@ -43,6 +43,11 @@ export interface PriceBookSyncReport {
   written: number;
   /** Rows whose price was already what the sources say. */
   unchanged: number;
+  /**
+   * Open rows closed because this sync re-priced the same model and class
+   * under a different provider name (see {@link syncPriceBook}).
+   */
+  superseded: number;
   /** Distinct models the book now prices. */
   models: number;
   /** How many models each source ended up being the authority for. */
@@ -75,7 +80,7 @@ export interface SyncPriceBookFromSourcesArgs {
   write?: (args: {
     effectiveFrom: Date;
     seeds: readonly PriceEntrySeed[];
-  }) => Promise<{ written: number; unchanged: number }>;
+  }) => Promise<{ written: number; unchanged: number; superseded?: number }>;
 }
 
 /**
@@ -122,6 +127,7 @@ export async function syncPriceBookFromSources(
     return {
       written: 0,
       unchanged: 0,
+      superseded: 0,
       models: merged.prices.length,
       counts: merged.counts,
       failures,
@@ -137,6 +143,7 @@ export async function syncPriceBookFromSources(
   return {
     written: result.written,
     unchanged: result.unchanged,
+    superseded: result.superseded ?? 0,
     models: merged.prices.length,
     counts: merged.counts,
     failures,
