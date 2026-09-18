@@ -3,7 +3,9 @@ title: Wrap an agent
 description: "What wrapping means, how Claude Code, Codex, and Stella get wrapped in one enrollment, and how to wrap a custom agent by calling tacho hook around its steps."
 ---
 
-Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. Oxagen enforces the access and budget clauses through the capabilities it hands the agent; Tacho, the wrapper this page covers, is how a run's steps become that record.
+Wrapping an agent puts its runs under a mandate: the access it used, the budget it spent, and a record of every step, all attributed to the workspace it ran for. For the capabilities it hands the agent, Oxagen checks the access and budget clauses on the server. Tacho, the wrapper this page covers, is how a run's steps become that record.
+
+What wrapping does today is narrower than a mandate, and this page says so. A wrapped run is on the `harness` tier: its steps are recorded, an operator can pause or stop it, and what the hooks deliver is client-attested and fail-open, because the hook runs in a process you own and can be removed. Nothing at this tier is enforced against the person at the keyboard. Token and cost figures for Claude Code come from Claude Code's own telemetry, so they are self-reported. Codex and Stella export none, so their spend does not appear. A model proxy that meters every harness the same way is in build, and a sandboxed tier for CI and managed machines comes after it.
 
 Three harnesses wrap by installing hooks into files the harness already reads: Claude Code, Codex, and Stella. Any other agent wraps by calling `tacho hook` around its own steps. Both paths produce the same kind of session on the control plane, and both show up the same way in Mission Control and in the app's Wrapped agents panel.
 
@@ -21,7 +23,7 @@ tacho enroll --harness claude-code,codex,stella
 | --- | --- | --- | --- |
 | Hook file | `~/.claude/settings.json` (`CLAUDE_CONFIG_DIR`) | `~/.codex/hooks.json` (`CODEX_HOME`) | `~/.stella/stella.toml`, or `~/.stella/settings.json` when only that exists (`STELLA_HOME`) |
 | How the entry is written | merged into the JSON hook block | merged into the JSON hook block | a marker-delimited block, `# >>> tacho enrollment tch_… >>>` to `# <<< … <<<`, so your own comments and settings around it survive |
-| Events wrapped | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop as enforcement; PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd, Interrupt as telemetry | same shape as Claude Code; no PermissionRequest as its own event, no OTel export | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, SubagentStart, SubagentStop. Stella has no SessionEnd, PermissionRequest, PostCompact, or Interrupt hook |
+| Events wrapped | SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, Stop as blocking command hooks; PostToolUse, SubagentStart, SubagentStop, PreCompact, PostCompact, SessionEnd, Interrupt as telemetry | same shape as Claude Code; no PermissionRequest as its own event, no OTel export | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, PreCompact, SubagentStart, SubagentStop. Stella has no SessionEnd, PermissionRequest, PostCompact, or Interrupt hook |
 | Hook command | `tacho hook --enrollment tch_…` | `tacho hook --enrollment tch_… --harness codex` | `tacho hook --enrollment tch_… --harness stella` |
 | Session boundary | one hooked Claude Code session | one hooked Codex session | keyed on the Stella process; the session closes when the process exits, since Stella sends no session id and no SessionEnd |
 | Session label | `agent.harness = claude-code`, `runtime = claude-code` | `agent.harness = codex`, `runtime = codex` | `agent.harness = stella`, `runtime = stella` |

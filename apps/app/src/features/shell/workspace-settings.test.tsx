@@ -37,7 +37,7 @@ import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
 import { shellData } from "./shell.builders";
 import { ShellStateProvider } from "./shell-state";
-import { SidebarHeader } from "./sidebar";
+import { SidebarNav } from "./sidebar";
 
 const readWorkspaceRepository = vi.fn();
 const listInstallationRepositories = vi.fn();
@@ -227,7 +227,7 @@ function Shell({ container }: { container?: HTMLElement } = {}) {
   return render(
     <IntlProvider>
       <ShellStateProvider>
-        <SidebarHeader data={data} />
+        <SidebarNav data={data} />
         <WorkspaceSettingsDialog data={data} />
       </ShellStateProvider>
     </IntlProvider>,
@@ -287,7 +287,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the control that opens it", () => {
-  it("sits beside the workspace tile and reads for the workspace in the URL", async () => {
+  it("is the last Workspace nav item, labelled Settings, and reads for the workspace in the URL", async () => {
+    Shell();
+    const list = screen.getByRole("list", { name: "Workspace" });
+    const items = within(list).getAllByRole("listitem");
+    const last = items.at(-1);
+    if (!last) throw new Error("the Workspace nav list rendered no items");
+    expect(last.textContent).toBe("Settings");
+    expect(within(last).getByTestId("open-workspace-settings")).toBeTruthy();
+    cleanup();
     await openSettings();
     await waitFor(() => {
       expect(readWorkspaceRepository).toHaveBeenCalledWith(
@@ -308,7 +316,7 @@ describe("the control that opens it", () => {
     render(
       <IntlProvider>
         <ShellStateProvider>
-          <SidebarHeader
+          <SidebarNav
             data={shellData({
               context: { ok: false, reason: "error", code: "x", status: 503 },
             })}

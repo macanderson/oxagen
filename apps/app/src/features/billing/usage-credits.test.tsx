@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// In-app AI usage over a fake top-up action: the balance in credits and at
+// Usage credits over a fake top-up action: the balance in credits and at
 // face value, what credits pay for, the line a spent balance shows, the
 // presets at the CREDIT_PACKS prices, and each refusal the action returns said
 // in words. An admin sees who can top up; a read that returned no value says
@@ -49,7 +49,7 @@ function renderSection({
   );
 }
 
-const region = () => screen.getByRole("region", { name: "In-app AI usage" });
+const region = () => screen.getByRole("region", { name: "Usage credits" });
 const amount = () => screen.getByRole("spinbutton", { name: "Top-up amount" });
 const fact = (name: string) => {
   const found = region().querySelector(`[data-fact="${name}"] dd`);
@@ -71,7 +71,7 @@ afterEach(async () => {
   }
 });
 
-describe("In-app AI usage", () => {
+describe("Usage credits", () => {
   it("prints the balance in credits and its face value, and says what credits pay for", () => {
     renderSection();
     expect(fact("balance")).toHaveTextContent(/^4,200 credits$/);
@@ -208,12 +208,12 @@ describe("In-app AI usage", () => {
     [
       "denied",
       { ok: false, reason: "denied", permission: "org.billing" } as const,
-      "You cannot see In-app AI usage for this organization. Your role does not include org.billing",
+      "You cannot see Usage credits for this organization. Your role does not include org.billing",
     ],
     [
       "error",
       readError("stripe_unreachable", 502),
-      "In-app AI usage could not be loaded: the billing service answered stripe_unreachable",
+      "Usage credits could not be loaded: the billing service answered stripe_unreachable",
     ],
   ])(
     "says why the balance could not be read: %s (negative)",
