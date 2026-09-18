@@ -341,3 +341,146 @@ describe("tier resolution (@oxagen/ai)", () => {
     });
   });
 });
+
+describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
+  beforeEach(() => {
+    resetMocks();
+    envValues = {
+      OXAGEN_LLM_FAST: "anthropic/claude-haiku-4.5",
+      OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-5",
+      OXAGEN_LLM_PRECISE: "anthropic/claude-fable-5",
+      OXAGEN_MODEL_PROVIDER: "gateway",
+    };
+  });
+
+  const compat = (over: Partial<ModelCredential> = {}): ModelCredential => ({
+    provider: "openai_compatible",
+    apiKey: "sk-together-0123456789",
+    digest: "digest-compat",
+    baseUrl: "https://api.together.xyz/v1",
+    modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+    ...over,
+  });
+
+  const idOf = (m: unknown) => (m as { modelId: string }).modelId;
+
+  it("builds an openai_compatible client on the CUSTOMER's endpoint", () => {
+    selectModel({ tier: "balanced", credential: compat() });
+    expect(mocks.createOpenAICompatible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: "https://api.together.xyz/v1",
+        apiKey: "sk-together-0123456789",
+      }),
+    );
+  });
+
+  it("spells the endpoint for openai and anthropic, so the customer pastes only a key", () => {
+    selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "openai",
+        apiKey: "sk-openai-0123456789",
+        digest: "d-openai",
+        modelMap: { balanced: "gpt-5.2" },
+      },
+    });
+    selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "anthropic",
+        apiKey: "sk-ant-0123456789",
+        digest: "d-anthropic",
+        modelMap: { balanced: "claude-sonnet-4-6" },
+      },
+    });
+    const urls = mocks.createOpenAICompatible.mock.calls.map(
+      (c) => (c[0] as { baseURL: string }).baseURL,
+    );
+    expect(urls).toEqual([
+      "https://api.openai.com/v1",
+      "https://api.anthropic.com/v1",
+    ]);
+  });
+
+  it("asks a direct-vendor key for the CUSTOMER's model id, not the platform's", () => {
+    // `api.openai.com` has no `anthropic/claude-sonnet-5`. Sending it would
+    // 404 on the customer's first question.
+    expect(idOf(selectModel({ tier: "balanced", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+  });
+
+  it("runs an unmapped tier on the BALANCED model — never on a platform id the vendor does not know", () => {
+    // The engine asks for fast (summarisation) and precise (verdicts), not
+    // just the worker tier. Falling through to `anthropic/claude-haiku-4.5`
+    // would fail the turn halfway through on a correctly configured key.
+    expect(idOf(selectModel({ tier: "fast", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+    expect(idOf(selectModel({ tier: "precise", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+  });
+
+  it("uses a tier's own mapping when the customer gave one", () => {
+    const model = selectModel({
+      tier: "fast",
+      credential: compat({
+        modelMap: { balanced: "big-model", fast: "small-model" },
+      }),
+    });
+    expect(idOf(model)).toBe("small-model");
+  });
+
+  it("leaves a routed key on the platform id — OpenRouter understands it, and a stray map is ignored", () => {
+    const model = selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "openrouter",
+        apiKey: "sk-or-v1-0123456789",
+        digest: "d-or",
+        modelMap: { balanced: "should-be-ignored" },
+      },
+    });
+    expect(idOf(model)).toBe("anthropic/claude-sonnet-5");
+  });
+
+  it("never rewrites an explicit model id — a caller that named one has decided", () => {
+    const model = selectModel({
+      model: "explicit/model-id",
+      credential: compat(),
+    });
+    expect(idOf(model)).toBe("explicit/model-id");
+  });
+
+  it("rebuilds the client when the endpoint moves but the key does not", () => {
+    // Same key, same digest, new URL. Keyed on the digest alone, the cache
+    // would keep serving the client built on the OLD endpoint.
+    selectModel({ tier: "balanced", credential: compat() });
+    selectModel({
+      tier: "balanced",
+      credential: compat({ baseUrl: "https://api.fireworks.ai/inference/v1" }),
+    });
+    expect(mocks.createOpenAICompatible).toHaveBeenCalledTimes(2);
+    expect(
+      (mocks.createOpenAICompatible.mock.calls[1]?.[0] as { baseURL: string })
+        .baseURL,
+    ).toBe("https://api.fireworks.ai/inference/v1");
+  });
+
+  it("refuses an openai_compatible credential with no endpoint rather than guessing one", () => {
+    expect(() =>
+      selectModel({ tier: "balanced", credential: compat({ baseUrl: null }) }),
+    ).toThrow(/no baseUrl/);
+  });
+
+  it("keeps embeddings on the platform key for every direct vendor, and says so for billing", () => {
+    for (const provider of [
+      "openai",
+      "anthropic",
+      "openai_compatible",
+    ] as const) {
+      expect(embeddingProvider(compat({ provider })).fundedBy).toBe("platform");
+    }
+  });
+});

@@ -8,6 +8,9 @@ import {
   type ModelCredentialView,
   modelCredentialProviderSchema,
 } from "@oxagen/oxagen/contracts/org.model_credential.shared";
+// From the pure shape module, not the resolver: the set, delete and verify
+// suites mock the resolver wholesale, and this view is built on all of them.
+import { parseModelMap } from "@oxagen/database/model-credential-shape";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   type ModelCredentialRow,
@@ -18,8 +21,10 @@ import { logger } from "./logger";
 
 /**
  * Project a credential row onto the REDACTED wire shape (ADR-053 §2): the
- * provider, the status, the last four characters, and two timestamps. Never
- * the ciphertext, never the digest, never the key. Anything not listed here
+ * provider, the status, the last four characters, the endpoint and model map,
+ * and two timestamps. Never the ciphertext, never the digest, never the key.
+ * The endpoint and model map are not secrets and the settings page cannot
+ * show an operator their configuration without them. Anything not listed here
  * does not leave the process.
  *
  * `null` is an organisation with no stored key — the same answer the
@@ -29,7 +34,13 @@ import { logger } from "./logger";
 export function toCredentialView(
   row: Pick<
     ModelCredentialRow,
-    "provider" | "status" | "keyHint" | "lastVerifiedAt" | "rotatedAt"
+    | "provider"
+    | "status"
+    | "keyHint"
+    | "baseUrl"
+    | "modelMap"
+    | "lastVerifiedAt"
+    | "rotatedAt"
   > | null,
 ): ModelCredentialView {
   if (!row) {
@@ -38,6 +49,8 @@ export function toCredentialView(
       provider: null,
       status: null,
       keyHint: null,
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
     };
@@ -55,6 +68,11 @@ export function toCredentialView(
     provider,
     status,
     keyHint: row.keyHint,
+    baseUrl: row.baseUrl ?? null,
+    // Through the same defensive parse the resolver uses, so the page shows
+    // exactly the mapping the runtime will act on — not a jsonb blob that
+    // might carry keys the runtime ignores.
+    modelMap: parseModelMap(row.modelMap),
     lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
     rotatedAt: row.rotatedAt?.toISOString() ?? null,
   };

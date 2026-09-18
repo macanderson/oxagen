@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertPublicHttpUrl } from "@oxagen/config/public-url";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgModelCredentialSet } from "@oxagen/oxagen/contracts/org.model_credential.set";
 import { and, eq, isNull } from "drizzle-orm";
@@ -39,6 +40,12 @@ export function keyHintOf(apiKey: string): string {
  * replace the one it has (ADR-053 §2).
  *
  * Order matters and is deliberate:
+ *   0. Range-check a customer endpoint BEFORE anything else. The contract has
+ *      already held it to https; this is the half a schema cannot do —
+ *      `https://169.254.169.254/` is https too. It runs before encryption not
+ *      because encryption is unsafe but because nothing after this line
+ *      should run for an endpoint we will refuse, and because the verify
+ *      capability probes the stored URL WITH the key attached.
  *   1. Encrypt FIRST. If the KEK is unconfigured we refuse before anything
  *      touches a column — a plaintext vendor key must never reach Postgres,
  *      not even transiently, and "degrade gracefully by storing it
@@ -61,6 +68,16 @@ export function keyHintOf(apiKey: string): string {
 export const orgModelCredentialSetHandler: CapabilityHandler<
   typeof orgModelCredentialSet
 > = async (input, ctx) => {
+  // The contract already refused an internal endpoint as `invalid_input`.
+  // This is the backstop for a caller that reaches the handler without the
+  // kernel's parse — a test, a script, a future internal path — since the
+  // verify capability connects to this URL with the key attached.
+  if (input.baseUrl) {
+    assertPublicHttpUrl(input.baseUrl, {
+      refusing: "Refusing to store model credential",
+      requireTls: true,
+    });
+  }
   const kms = resolveModelCredentialKms();
   if (!kms) {
     throw new Error(
@@ -90,6 +107,12 @@ export const orgModelCredentialSetHandler: CapabilityHandler<
       keyKeyId: kms.keyId,
       keyDigest: digest,
       keyHint: hint,
+      // Written on every set, including a rotation that switches provider:
+      // leaving a stale base_url on a row that now names `openrouter` is the
+      // state the pairing CHECK refuses, and leaving a stale model map would
+      // send the new vendor the old vendor's model ids.
+      baseUrl: input.baseUrl ?? null,
+      modelMap: input.modelMap ?? {},
       // A new or replaced key is active and unverified until the vendor has
       // been asked, so the verification stamp is reset rather than carried
       // over from the key it replaces.

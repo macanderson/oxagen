@@ -48,14 +48,17 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
     const probe = await probeModelCredential({
       provider: input.provider,
       apiKey: input.apiKey,
+      baseUrl: input.baseUrl ?? null,
+      toolProbeModel: input.toolProbeModel ?? null,
     });
     logger.info(
-      // Never the key: provider and the vendor's verdict only.
+      // Never the key, never the endpoint: provider and verdict only.
       {
         orgId: ctx.orgId,
         provider: input.provider,
         candidate: true,
         ok: probe.ok,
+        toolCalling: probe.toolCalling,
         latencyMs: probe.latencyMs,
         surface: ctx.surface,
       },
@@ -66,6 +69,7 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
       provider: input.provider,
       latencyMs: probe.latencyMs,
       error: probe.error,
+      toolCalling: probe.toolCalling,
     };
   }
 
@@ -76,9 +80,17 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
   const probe = await probeModelCredential({
     provider: stored.provider,
     apiKey: stored.apiKey,
+    baseUrl: stored.baseUrl,
+    // The stored key is asked about the model it actually runs the assistant
+    // on, so a health sweep catches a model that lost tool support after the
+    // key was saved.
+    toolProbeModel: stored.modelMap.balanced ?? null,
   });
 
-  if (probe.ok) {
+  // Stamp "last worked" only when it would actually work: a key the vendor
+  // accepts on an endpoint that cannot call tools is not a working assistant,
+  // and `last_verified_at` is what the settings page shows as healthy.
+  if (probe.ok && probe.toolCalling !== false) {
     // A health fact, not an edit: the audit columns are left alone so
     // `updated_at` keeps meaning "the last time somebody changed the key".
     const now = new Date();
@@ -101,6 +113,7 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
       provider: stored.provider,
       candidate: false,
       ok: probe.ok,
+      toolCalling: probe.toolCalling,
       latencyMs: probe.latencyMs,
       surface: ctx.surface,
     },
@@ -111,5 +124,6 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
     provider: stored.provider,
     latencyMs: probe.latencyMs,
     error: probe.error,
+    toolCalling: probe.toolCalling,
   };
 };

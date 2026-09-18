@@ -19,6 +19,8 @@ describe("org.model_credential.delete capability", () => {
       provider: null,
       status: null,
       keyHint: null,
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
       // A handler bug that echoed the removed key — stripped by the schema.

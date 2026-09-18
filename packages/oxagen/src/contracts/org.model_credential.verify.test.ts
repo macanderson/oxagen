@@ -17,7 +17,7 @@ describe("org.model_credential.verify capability", () => {
   it("exposes the base object so the MCP tool can read .shape", () => {
     expect(
       Object.keys(orgModelCredentialVerifyInputObject.shape).sort(),
-    ).toEqual(["apiKey", "provider"]);
+    ).toEqual(["apiKey", "baseUrl", "provider", "toolProbeModel"]);
   });
 
   it("accepts a candidate: provider and apiKey together", () => {
@@ -78,6 +78,7 @@ describe("org.model_credential.verify capability", () => {
       provider: "openrouter",
       latencyMs: 120,
       error: "Invalid API key",
+      toolCalling: null,
       apiKey: KEY,
     });
     expect(refused).toEqual({
@@ -85,6 +86,7 @@ describe("org.model_credential.verify capability", () => {
       provider: "openrouter",
       latencyMs: 120,
       error: "Invalid API key",
+      toolCalling: null,
     });
     expect(refused).not.toHaveProperty("apiKey");
     const accepted = orgModelCredentialVerify.output.parse({
@@ -92,6 +94,7 @@ describe("org.model_credential.verify capability", () => {
       provider: "gateway",
       latencyMs: 0,
       error: null,
+      toolCalling: null,
     });
     expect(accepted.error).toBeNull();
   });
@@ -103,6 +106,7 @@ describe("org.model_credential.verify capability", () => {
         provider: "gateway",
         latencyMs: -1,
         error: null,
+        toolCalling: null,
       }),
     ).toThrow();
     expect(() =>
@@ -111,6 +115,7 @@ describe("org.model_credential.verify capability", () => {
         provider: "gateway",
         latencyMs: 1.5,
         error: null,
+        toolCalling: null,
       }),
     ).toThrow();
   });

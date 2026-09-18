@@ -96,6 +96,8 @@ describe("org.model_credential.delete handler — a key was stored", () => {
       provider: null,
       status: null,
       keyHint: null,
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
     });

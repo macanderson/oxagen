@@ -4,6 +4,7 @@ import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
 import type { EmbeddingModelV4, LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
+import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
 import type { ResolvedTierCatalog } from "./catalog";
 
 /**
@@ -84,9 +85,22 @@ export function modelIdOf(model: LanguageModel): string {
  * is dropped rather than reused. Never log the key.
  */
 export interface ModelCredential {
-  provider: "openrouter" | "gateway";
+  provider: ModelCredentialProvider;
   apiKey: string;
   digest: string;
+  /**
+   * The customer's endpoint. Set for `openai_compatible` and null for every
+   * provider whose URL Oxagen spells. The database enforces that pairing and
+   * that this is https; the loopback/RFC1918/metadata range check ran in the
+   * handler before the row was ever written.
+   */
+  baseUrl?: string | null;
+  /**
+   * Which concrete model each tier means on THIS key. A direct-vendor key
+   * needs it — `api.openai.com` does not know `anthropic/claude-sonnet-5` —
+   * and a routed key ignores it.
+   */
+  modelMap?: Partial<Record<OxagenTier, string>> | null;
 }
 
 export interface ModelSelector {
@@ -169,10 +183,57 @@ export function selectModel(selector: ModelSelector = {}): LanguageModel {
     "OXAGEN_LLM_BALANCED",
     "OXAGEN_LLM_PRECISE",
   ] as const);
+  const tier = selector.tier ?? DEFAULT_TIER;
   const modelId =
-    selector.model ?? tierFromEnv(env, selector.tier ?? DEFAULT_TIER);
+    selector.model ??
+    tierModelFor(tier, tierFromEnv(env, tier), selector.credential);
   return applyDevtools(
     languageProvider(selector.credential).languageModel(modelId),
+  );
+}
+
+/**
+ * The model id a tier means on the key that is about to serve it.
+ *
+ * The platform's tier ids are gateway-shaped (`anthropic/claude-sonnet-5`).
+ * OpenRouter and the Gateway both parse that shape, so for those two — and for
+ * the platform's own key — the tier's id is the answer and this is a pass
+ * through. A direct-vendor key is a different namespace: `api.openai.com` has
+ * no model called `anthropic/claude-sonnet-5` and answers 404. The
+ * credential's `modelMap` is the organisation's statement of what its own key
+ * calls each tier, and it is consulted only when the credential could not
+ * understand the platform id anyway.
+ *
+ * An unmapped tier on a direct-vendor key falls back to the BALANCED mapping,
+ * never to the platform id. The contract requires balanced for these keys, so
+ * there is always one of the customer's own models to fall back to — and it
+ * matters, because the engine asks for more than the worker tier: the provider
+ * port sends summarisation to `fast` and a verdict to `precise`
+ * (`modelForRole`). Falling through to the platform id there would send
+ * `anthropic/claude-haiku-4.5` to `api.openai.com` and fail the turn halfway
+ * through, on a customer who configured everything the form asked for.
+ *
+ * The cost is stated rather than hidden: with only balanced mapped, a verdict
+ * runs on the same model as the worker, so the judge is not independent in
+ * the way `modelForRole` intends. That is a quality reduction on the
+ * customer's own choice of model. A 404 mid-turn is an outage.
+ *
+ * `selector.model` — an explicit id — is never rewritten. A caller that names
+ * a model has already decided, and remapping it would make an explicit choice
+ * mean something else.
+ */
+export function tierModelFor(
+  tier: OxagenTier,
+  platformModelId: string,
+  credential?: ModelCredential,
+): string {
+  if (!credential) return platformModelId;
+  if (credential.provider === "openrouter" || credential.provider === "gateway")
+    return platformModelId;
+  return (
+    credential.modelMap?.[tier] ??
+    credential.modelMap?.balanced ??
+    platformModelId
   );
 }
 
@@ -189,7 +250,13 @@ function cachedCredentialClient(
   credential: ModelCredential,
   build: () => LanguageProviderClient,
 ): LanguageProviderClient {
-  const key = `${credential.provider}:${credential.digest}`;
+  // The endpoint is part of the identity, not just the key. An organisation
+  // that moves its `openai_compatible` credential to a new URL and keeps the
+  // same key has the same digest — keyed on the digest alone, it would keep
+  // getting the client built on the OLD endpoint until the process restarted.
+  // `modelMap` is deliberately absent: it picks the model id per call and is
+  // not baked into the client.
+  const key = `${credential.provider}:${credential.digest}:${credential.baseUrl ?? ""}`;
   const hit = credentialClients.get(key);
   if (hit) return hit;
   if (credentialClients.size >= CREDENTIAL_CLIENT_BOUND)
@@ -209,11 +276,26 @@ interface LanguageProviderClient {
 }
 
 /**
- * The provider that serves embeddings. The platform key's gateway by default;
- * a customer's key only when it is a gateway key, because OpenRouter does not
- * serve embeddings. The caller learns which one answered from the second
- * field, so it can bill an embedding the platform paid for and not one the
- * customer did.
+ * The provider that serves embeddings, and who paid for it.
+ *
+ * Not every BYOK provider serves embeddings, and the ones that do not are not
+ * a failure — they fall back to the platform key and the embedding is billed.
+ * The caller learns which happened from `fundedBy`, so it bills an embedding
+ * Oxagen paid for and not one the customer did. Getting this backwards in
+ * either direction is a billing error, which is why the answer is returned
+ * rather than inferred.
+ *
+ *   gateway     serves embeddings; the customer's key answers
+ *   openrouter  language models only — platform key, billed
+ *   anthropic   has no embeddings API at all — platform key, billed
+ *   openai      serves them, and openai_compatible endpoints often do, but
+ *   openai_compatible
+ *               the embedding model id is a gateway id their namespace does
+ *               not have, and `modelMap` has no embedding dimension. The
+ *               platform key answers rather than sending an id the endpoint
+ *               would reject. Widening this needs an embedding entry in the
+ *               model map, not a change here — and it is a billing change,
+ *               because those tokens stop being Oxagen's to charge for.
  */
 export function embeddingProvider(credential?: ModelCredential): {
   provider: { embeddingModel: (id: string) => EmbeddingModelV4 };
@@ -258,11 +340,7 @@ function languageProvider(
   // below is about which key OXAGEN pays with, and it is not consulted when
   // Oxagen is not paying. Built once per key and reused across turns.
   if (credential) {
-    return cachedCredentialClient(credential, () =>
-      credential.provider === "gateway"
-        ? createGateway({ apiKey: credential.apiKey })
-        : openRouterClient(credential.apiKey),
-    );
+    return cachedCredentialClient(credential, () => customerClient(credential));
   }
 
   const { OXAGEN_MODEL_PROVIDER, OPENROUTER_API_KEY } = requireEnv([
@@ -284,6 +362,92 @@ function languageProvider(
   }
 
   return openRouterClient(OPENROUTER_API_KEY);
+}
+
+/**
+ * The endpoint for each provider whose URL Oxagen spells, so a customer pastes
+ * a key and nothing else. `openai_compatible` is absent on purpose: its URL is
+ * the customer's.
+ *
+ * Both of these are the vendor's OpenAI-compatible surface, reached through
+ * `createOpenAICompatible` rather than a vendor SDK. That is a deliberate
+ * choice and it has one cost worth stating plainly: Anthropic's compatible
+ * endpoint does not carry prompt caching or extended thinking, so an
+ * organisation on an `anthropic` credential pays full input price for the
+ * assistant's system prompt on every turn where a native client would have
+ * cached it.
+ *
+ * The alternative was `@ai-sdk/anthropic` and `@ai-sdk/openai`, which pull
+ * `@ai-sdk/provider@4.0.17` while this workspace pins `4.0.2` — and the two
+ * are not structurally compatible (`JSONValue` gained a `Readonly<JSONObject>`
+ * arm), so every model built by one cannot be passed where the other is
+ * expected. Fixing that properly means upgrading `ai`, `@ai-sdk/gateway` and
+ * `@ai-sdk/provider` together across every LLM call in the repo. That is worth
+ * doing and it is not this change. An organisation that wants native Anthropic
+ * today has two working routes that both cache: an `openrouter` key or a
+ * `gateway` key.
+ */
+const PROVIDER_BASE_URL = {
+  openai: "https://api.openai.com/v1",
+  anthropic: "https://api.anthropic.com/v1",
+} as const;
+
+/**
+ * The client for one customer's credential — the whole of BYOK's reach, in
+ * one switch.
+ *
+ * Two of the five are ROUTED: one key reaches every model in the catalog, and
+ * the platform's gateway-shaped tier ids work untranslated. Three are DIRECT:
+ * the key is for one vendor, those tier ids mean nothing there, and the
+ * credential's `modelMap` is what makes it usable (see `tierModelFor`).
+ *
+ * The `openai_compatible` arm is the only one that touches a URL the customer
+ * supplied. It was validated before the row was written — https by a database
+ * CHECK, and off loopback/RFC1918/169.254.169.254 by the handler's
+ * `assertPublicHttpUrl` — so this function does not re-validate. It also does
+ * not fall back: a credential naming a provider whose client cannot be built
+ * is a row the database should have refused, and guessing here would move the
+ * customer's traffic onto a vendor they did not choose.
+ */
+function customerClient(credential: ModelCredential): LanguageProviderClient {
+  switch (credential.provider) {
+    case "gateway":
+      return createGateway({ apiKey: credential.apiKey });
+    case "openrouter":
+      return openRouterClient(credential.apiKey);
+    case "openai":
+    case "anthropic":
+      return compatibleClient(
+        credential.provider,
+        PROVIDER_BASE_URL[credential.provider],
+        credential.apiKey,
+      );
+    case "openai_compatible": {
+      if (!credential.baseUrl) {
+        // Unreachable through the handler — the pairing CHECK refuses the row
+        // — so this message is for a credential inserted by hand or a resolver
+        // that dropped the column, not for anything a customer can do.
+        throw new Error(
+          "an openai_compatible credential has no baseUrl; the row is invalid",
+        );
+      }
+      return compatibleClient("byok", credential.baseUrl, credential.apiKey);
+    }
+  }
+}
+
+/** One OpenAI-compatible endpoint, on whichever key is paying. */
+function compatibleClient(
+  name: string,
+  baseURL: string,
+  apiKey: string,
+): LanguageProviderClient {
+  return createOpenAICompatible({
+    name,
+    baseURL,
+    apiKey,
+    supportsStructuredOutputs: true,
+  });
 }
 
 /** The OpenRouter client, on whichever key is paying. */
