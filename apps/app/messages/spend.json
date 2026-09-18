@@ -259,7 +259,7 @@
         "aliases": "Other names for this model",
         "aliasesHint": "Separate them with commas. Leave it empty to keep the names already stored — an empty list would replace them.",
         "effectiveFrom": "In effect from",
-        "effectiveFromHint": "A UTC day. Leave it empty to start now. Runs already priced keep the rate they were priced with.",
+        "effectiveFromHint": "A UTC day, tomorrow or later. Leave it empty to start now. A rate cannot start in the past: runs already priced keep the rate they were priced with.",
         "rates": "Rates, in US dollars per one million units",
         "ratesHint": "Type the figure the way your contract reads it: 2.40 is $2.40 per million. Leave a class empty to leave it as it is.",
         "showAllClasses": "Show every token class",

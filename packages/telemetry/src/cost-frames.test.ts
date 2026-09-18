@@ -101,7 +101,9 @@ describe("readModelCallFrames", () => {
     expect(query).toContain(
       "argMin(source, indexOf({sources:Array(String)}, source))",
     );
-    expect(query).toContain("GROUP BY session_uuid");
+    expect(query).toContain(
+      "GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)",
+    );
 
     expect(frames).toEqual([
       {
@@ -309,9 +311,16 @@ describe("readObservedModels", () => {
     // count over the admitted sources would bill the call twice and rank the
     // model above ones that need pricing more.
     expect(query).toContain(
-      "(session_uuid, source) IN (\n          SELECT session_uuid,\n                 argMin(source, indexOf({sources:Array(String)}, source))",
+      "(session_uuid, ifNull(toInt64(turn_seq), -1), source) IN (",
     );
-    expect(query).toContain("GROUP BY session_uuid");
+    expect(query).toContain(
+      "argMin(source, indexOf({sources:Array(String)}, source))",
+    );
+    // Per turn, not per session: a stream that drops mid-session must not
+    // discard the calls a lower source alone recorded afterwards.
+    expect(query).toContain(
+      "GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)",
+    );
     expect(query).toContain("GROUP BY model");
     expect(query).toContain("ORDER BY tokens DESC, model");
     expect(query).toContain("LIMIT {limit:UInt32}");

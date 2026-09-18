@@ -222,11 +222,15 @@ describe("resolvePriceEntry", () => {
 // effective-dating rule the whole table exists for: a correction is a new row,
 // never an edit to a row a run has already been priced against.
 
+// Every write below carries a write instant BEFORE T1, so a rate starting at
+// T1 or T2 is a future start and not a backdating; a test that needs the
+// instant elsewhere states its own `now` after the spread.
 const SET = {
   orgId: ORG,
   provider: "anthropic",
   model: "claude-sonnet-5",
   tokenClass: "input_uncached",
+  now: new Date("2026-09-05T00:00:00.000Z"),
 } as const;
 
 const T1 = new Date("2026-09-10T00:00:00.000Z");
@@ -648,13 +652,13 @@ describe("the negotiated write path", () => {
   // it in priceEntryIds. Correcting it in place would change what a settled
   // run cost the next time its rollup is recomputed, under the same entry id.
   it("refuses to correct a row in place once its window has begun (negative)", async () => {
-    const now = new Date("2026-09-15T00:00:00.000Z");
+    // Written ahead of T1 (SET's own instant), then corrected after T1.
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: 2_400_000n,
       effectiveFrom: T1,
-      now,
     });
+    const now = new Date("2026-09-15T00:00:00.000Z");
     await expect(
       setNegotiatedPriceEntry({
         ...SET,
@@ -757,6 +761,40 @@ describe("the negotiated write path", () => {
         effectiveFrom: T2,
       }),
     ).resolves.toMatchObject({ closed: null });
+  });
+
+  // With no row at the instant there is nothing to compare, so the shipped-
+  // window guard above never fires — yet a first rate starting in the past
+  // wins over the list price for every historical frame and a rollup retry
+  // would change settled costs. Refused beyond the grace that covers the
+  // instant a caller took just before its request.
+  it("refuses a first negotiated rate that starts in the past, beyond the grace (negative)", async () => {
+    const now = new Date("2026-09-18T12:00:00.000Z");
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: T1,
+        now,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_starts_in_past",
+    });
+    expect(fake.rows).toHaveLength(0);
+
+    // The instant the dialog took a moment before its request is "now".
+    const justBefore = new Date(now.getTime() - 30_000);
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: justBefore,
+        now,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+    expect(fake.rows).toHaveLength(1);
   });
 
   it("leaves a different token class under another provider alone", async () => {
@@ -1043,10 +1081,45 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
         },
       ],
     });
-    expect(again.coldStart).toBe(false);
+    // The book was still cold when that sync began (every row sat at the
+    // floor), but the key was already priced, so the correction takes the
+    // requested instant — and that real-instant row is what ends cold start.
+    expect(again.coldStart).toBe(true);
     expect(
       fake.rows.find((r) => r.effectiveTo === null)!.effectiveFrom,
     ).toEqual(T2);
+    const warm = await syncPriceBook({ effectiveFrom: T2, seeds: [] });
+    expect(warm.coldStart).toBe(false);
+  });
+
+  // A first sync that ran with a catalog down seeds only the card's models.
+  // If that alone ended cold start, the catalog's models would arrive at
+  // recovery time and calls made before recovery would stay unpriced.
+  it("stays cold after a partial first sync, so a model a recovered catalog adds is backdated too", async () => {
+    const seed = (model: string): PriceEntrySeed => ({
+      provider: "moonshot",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+      effectiveTo: null,
+    });
+    // First tick: only the card answered.
+    await syncPriceBook({ effectiveFrom: T1, seeds: [seed("card-model")] });
+    // Next tick: the catalog is back and names a model the book never saw.
+    const result = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [seed("card-model"), seed("catalog-model")],
+    });
+    expect(result.coldStart).toBe(true);
+    expect(
+      fake.rows.find((r) => r.model === "catalog-model")!.effectiveFrom,
+    ).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+    expect(result.unchanged).toBe(1);
   });
 
   it("reports a row whose price and names both match as unchanged", async () => {

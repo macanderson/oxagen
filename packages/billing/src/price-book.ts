@@ -45,6 +45,14 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
  */
 export const COLD_BOOK_EFFECTIVE_FROM = new Date("2020-01-01T00:00:00.000Z");
 
+/**
+ * How far before the write instant a negotiated rate may start and still be
+ * "now": the instant a caller took before its request, less request latency
+ * and clock skew. Anything older is a backdating and is refused, because a
+ * start in the past reprices frames already settled at the list price.
+ */
+export const PAST_START_GRACE_MS = 5 * 60 * 1_000;
+
 /** One resolved price: what the rollup multiplies a frame's units by. */
 export interface PriceEntry {
   id: string;
@@ -400,17 +408,20 @@ export async function syncPriceBook(args: {
     // before its first tick has frames earlier than the instant those rows
     // would otherwise start at — a price effective from the tick could never
     // resolve them, even on a retry, and their cost would stay unrecorded for
-    // ever. When the book holds no list row at all, the first snapshot is
-    // written effective from {@link COLD_BOOK_EFFECTIVE_FROM}, an instant
-    // before any frame Oxagen could have recorded, so every earlier frame
-    // prices at the first known rate rather than at nothing.
-    const coldStart = existing.length === 0;
-    const effectiveFrom = coldStart
-      ? COLD_BOOK_EFFECTIVE_FROM
-      : args.effectiveFrom;
-    const seeds = coldStart
-      ? requested.map((s) => ({ ...s, effectiveFrom }))
-      : requested;
+    // ever. While the book is cold, a key it has never priced is written
+    // effective from {@link COLD_BOOK_EFFECTIVE_FROM}, an instant before any
+    // frame Oxagen could have recorded, so every earlier frame prices at the
+    // first known rate rather than at nothing.
+    //
+    // Cold is not "empty". A first sync that ran with a catalog down seeds
+    // only the card's models; if that alone ended cold start, the catalog's
+    // models would arrive at recovery time when it came back, and calls made
+    // before recovery would stay unpriced for ever. So the book stays cold
+    // until it holds a row effective from a real instant — the first
+    // repricing, which happens once the sources are all answering and a rate
+    // moves. Until then a newly discovered key is backdated to the floor,
+    // which prices only frames of a model the book had never seen; a key the
+    // book already prices is handled at the requested instant as always.
     const key = (e: {
       provider: string;
       model: string;
@@ -420,6 +431,17 @@ export async function syncPriceBook(args: {
     const open = new Map<string, Row>();
     for (const row of existing)
       if (row.effectiveTo === null) open.set(key(row), row);
+    const coldStart = !existing.some(
+      (r) => r.effectiveFrom.getTime() > COLD_BOOK_EFFECTIVE_FROM.getTime(),
+    );
+    const effectiveFrom = args.effectiveFrom;
+    const seeds = coldStart
+      ? requested.map((s) =>
+          open.has(key(s))
+            ? s
+            : { ...s, effectiveFrom: COLD_BOOK_EFFECTIVE_FROM },
+        )
+      : requested;
 
     let written = 0;
     let unchanged = 0;
@@ -908,6 +930,23 @@ export async function setNegotiatedPriceEntry(
         code: "conflict",
         reason: "price_entry_already_effective",
         message: `the negotiated price for ${key} effective from ${from.toISOString()} is already in force and has priced runs; state the correction as a new row with a later effectiveFrom`,
+      });
+
+    // A FIRST write for a key is guarded the same way: with no row at the
+    // instant there is nothing to compare, but a start in the past would win
+    // over the list price for every historical frame, and a rollup retry
+    // would change settled costs while their records still cite the list
+    // entries they were priced with. Refused beyond a short grace — the
+    // instant a caller took before its request, minus request latency and
+    // clock skew, is "now", not backdating; a start hours old is.
+    if (
+      atInstant === undefined &&
+      from.getTime() < now.getTime() - PAST_START_GRACE_MS
+    )
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_starts_in_past",
+        message: `a negotiated price for ${key} cannot start at ${from.toISOString()}, before the write instant ${now.toISOString()}: frames already priced would be repriced on their next rollup; start it now or later`,
       });
 
     const open = rows.find((r) => r.effectiveTo === null) ?? null;

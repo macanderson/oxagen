@@ -16,11 +16,15 @@
  * does NOT collapse two sources' records of one call: each source carries its
  * own `seq`, so a session that reports a call through the OTel log AND a
  * collector or hook event holds two token-bearing rows for it, and a plain
- * `count()`/`sum()` over the admitted sources bills the call twice. So one
- * source is authoritative per session — the first of `otel_log`, `collector`,
- * `hook` that the session reports any model call under (`TACHO_TOKEN_SOURCES`
- * is in that order) — and every reader below admits only that source's rows
- * for that session ({@link ONE_TOKEN_SOURCE_PER_SESSION}). Those
+ * `count()`/`sum()` over the admitted sources bills the call twice. No column
+ * correlates one call across sources, so authority is decided per TURN: for
+ * each (session, turn) the first of `otel_log`, `collector`, `hook` that
+ * recorded any model call under it (`TACHO_TOKEN_SOURCES` is in that order)
+ * is the one that counts, and every reader below admits only that source's
+ * rows for that turn ({@link ONE_TOKEN_SOURCE_PER_TURN}). Per turn rather
+ * than per session so a stream that drops mid-session — the OTel log stops
+ * after one call while collector events go on recording — does not discard
+ * every later call the lower source alone saw. Those
  * sources carry cache writes as one `cache_creation_tokens` figure (the
  * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
  * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
@@ -63,24 +67,27 @@ export type FrameRunRef =
 
 const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
 
-/** In order of authority: the first source a session reports under is the one that counts. */
+/** In order of authority: the first source a turn reports under is the one that counts. */
 const TACHO_TOKEN_SOURCES = ["otel_log", "collector", "hook"];
 
 /**
- * The predicate that admits one token-bearing source per session. The inner
- * query finds, per session, the highest-authority source that recorded any
- * model call under the same filter as the outer read (`{where}`), and the
- * outer read keeps only rows in that source. `indexOf` over the sources
- * array is the authority rank, so the order of `TACHO_TOKEN_SOURCES` is the
- * rule, not a second copy of it.
+ * The predicate that admits one token-bearing source per (session, turn).
+ * The inner query finds, per turn, the highest-authority source that
+ * recorded any model call under the same filter as the outer read
+ * (`{where}`), and the outer read keeps only rows in that source. `indexOf`
+ * over the sources array is the authority rank, so the order of
+ * `TACHO_TOKEN_SOURCES` is the rule, not a second copy of it. A row with no
+ * turn (`turn_seq` NULL) is grouped as turn -1: NULL never equals NULL in an
+ * `IN`, so the tuple carries a value on both sides.
  */
-function ONE_TOKEN_SOURCE_PER_SESSION(where: string): string {
-  return `(session_uuid, source) IN (
+function ONE_TOKEN_SOURCE_PER_TURN(where: string): string {
+  return `(session_uuid, ifNull(toInt64(turn_seq), -1), source) IN (
           SELECT session_uuid,
+                 ifNull(toInt64(turn_seq), -1),
                  argMin(source, indexOf({sources:Array(String)}, source))
           FROM tacho_events FINAL
           WHERE ${where}
-          GROUP BY session_uuid
+          GROUP BY session_uuid, ifNull(toInt64(turn_seq), -1)
         )`;
 }
 
@@ -161,7 +168,7 @@ export async function readModelCallFrames(args: {
         cost_usd_micros                    AS cost_micros
       FROM tacho_events FINAL
       WHERE ${tachoWhere}
-        AND ${ONE_TOKEN_SOURCE_PER_SESSION(tachoWhere)}
+        AND ${ONE_TOKEN_SOURCE_PER_TURN(tachoWhere)}
       ORDER BY ts, seq
     `,
       query_params: {
@@ -443,7 +450,7 @@ export async function readObservedModels(args: {
           max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
         FROM tacho_events FINAL
         WHERE ${tachoWhere}
-          AND ${ONE_TOKEN_SOURCE_PER_SESSION(tachoWhere)}
+          AND ${ONE_TOKEN_SOURCE_PER_TURN(tachoWhere)}
         GROUP BY toString(model), toString(provider)
       )
       GROUP BY model
