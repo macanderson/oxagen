@@ -44,6 +44,7 @@ import {
   hookStatus,
   installHook,
   loadSteeringSettings,
+  publishedCommits,
   readEmergencyOverride,
   removeHook,
   renderGate,
@@ -151,6 +152,8 @@ function gitRootOr(start: string): string | null {
 interface PlatformFreshness {
   steeringVersion: number;
   headCommit: string | null;
+  /** Every commit tied at the newest instant. Absent from an older platform. */
+  headCommits?: string[];
   /** `owner/repo` of the workspace's main repository, or null if none is bound. */
   repository: string | null;
   defaultBranch: string | null;
@@ -413,23 +416,32 @@ async function toSignal(
 ): Promise<PlatformSignal | null> {
   if (!platform) return null;
   let aheadOfCheckout = false;
-  if (platform.headCommit) {
+  // Two merges can share a second, and the platform then names both commits
+  // without ordering them. HEAD is current only if it reaches each one.
+  const commits = publishedCommits(platform);
+  if (commits.length > 0) {
     const { execGit } = await import("@oxagen/steering-freshness");
-    try {
-      await execGit(
-        ["merge-base", "--is-ancestor", platform.headCommit, "HEAD"],
-        { cwd: projectRoot, timeoutMs: 5_000 },
-      );
-    } catch {
-      // A non-zero exit means "not an ancestor", which is the answer we
-      // want. It also means "that commit is not in this clone", which is
-      // the same answer for this purpose: the checkout cannot reach it.
-      aheadOfCheckout = true;
+    for (const commit of commits) {
+      try {
+        await execGit(["merge-base", "--is-ancestor", commit, "HEAD"], {
+          cwd: projectRoot,
+          timeoutMs: 5_000,
+        });
+      } catch {
+        // A non-zero exit means "not an ancestor", which is the answer we
+        // want. It also means "that commit is not in this clone", which is
+        // the same answer for this purpose: the checkout cannot reach it.
+        aheadOfCheckout = true;
+        break;
+      }
     }
   }
   return {
     steeringVersion: platform.steeringVersion,
     headCommit: platform.headCommit,
+    ...(platform.headCommits === undefined
+      ? {}
+      : { headCommits: platform.headCommits }),
     aheadOfCheckout,
   };
 }

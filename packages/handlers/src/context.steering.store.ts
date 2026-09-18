@@ -20,6 +20,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  max,
   or,
   sql,
 } from "drizzle-orm";
@@ -197,9 +198,18 @@ export interface SteeringStore {
    * Context PR has merged (a record published through
    * `publish_context_record` carries no commit).
    */
-  latestPublication(
-    scope: SteeringScope,
-  ): Promise<{ commitSha: string; publishedAt: Date } | null>;
+  latestPublication(scope: SteeringScope): Promise<{
+    commitSha: string;
+    /**
+     * Every distinct commit published at the newest instant, `commitSha`
+     * among them. GitHub reports a merge to the second, so two merges can
+     * share one, and no column here says which landed later on the branch.
+     * The store does not guess. It hands back all of them, and a checkout is
+     * current only when it can reach each one: git knows the ancestry.
+     */
+    commitShas: string[];
+    publishedAt: Date;
+  } | null>;
 
   /** Idempotent on (workspace, record_hash): `appended` is false on a repeat. */
   insertAppend(
@@ -560,41 +570,59 @@ export const postgresSteeringStore: SteeringStore = {
   },
 
   async latestPublication(scope) {
-    const [row] = await withTenantDb((tx) =>
-      tx
-        .select({
-          commitSha: schema.contextRecords.commitSha,
-          publishedAt: schema.contextRecords.publishedAt,
-        })
-        .from(schema.contextRecords)
-        .where(
-          and(
-            eq(schema.contextRecords.orgId, scope.orgId),
-            eq(schema.contextRecords.workspaceId, scope.workspaceId),
-            isNotNull(schema.contextRecords.commitSha),
-            isNotNull(schema.contextRecords.publishedAt),
-            isNull(schema.contextRecords.deletedAt),
-          ),
-        )
-        // Newest publication wins. A checkout that can reach it can reach
-        // every earlier one too, because they are all on one branch.
-        // `published_at` is GitHub's merge instant (see `merge_context_pr`),
-        // so a publication retried after a later merge still sorts earlier.
-        //
-        // GitHub reports that instant to the second, and two PRs can merge
-        // inside one. Ordering on it alone then picked either row, and
-        // picking the earlier merge let a checkout at that commit read as
-        // current while it lacked the later record. `id` is a UUIDv7, so it
-        // rises with insert order, and among same-second merges the row
-        // inserted later is the one merged later.
-        .orderBy(
-          desc(schema.contextRecords.publishedAt),
-          desc(schema.contextRecords.id),
-        )
-        .limit(1),
+    const published = and(
+      eq(schema.contextRecords.orgId, scope.orgId),
+      eq(schema.contextRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.contextRecords.commitSha),
+      isNotNull(schema.contextRecords.publishedAt),
+      isNull(schema.contextRecords.deletedAt),
     );
-    if (!row?.commitSha || !row.publishedAt) return null;
-    return { commitSha: row.commitSha, publishedAt: row.publishedAt };
+    const rows = await withTenantDb((tx) => {
+      const newestInstant = tx
+        .select({ at: max(schema.contextRecords.publishedAt) })
+        .from(schema.contextRecords)
+        .where(published);
+      return (
+        tx
+          .select({
+            commitSha: schema.contextRecords.commitSha,
+            publishedAt: schema.contextRecords.publishedAt,
+          })
+          .from(schema.contextRecords)
+          // Every publication at the newest instant, in one round trip.
+          // `published_at` is GitHub's merge instant (see `merge_context_pr`),
+          // so a publication retried after a later merge still sorts earlier.
+          //
+          // GitHub reports that instant to the second, and two PRs can merge
+          // inside one. An earlier version broke the tie on `id`, reading it
+          // as insert order. It is not publication order: a retried earlier
+          // merge inserts last, and a new version of an existing lineage
+          // keeps that lineage's old row and its old id. Either way the
+          // earlier commit could win, and a checkout at that commit read as
+          // current while it lacked the later record. Nothing stored here
+          // orders two commits on the branch, so the tie is returned whole.
+          .where(
+            and(
+              published,
+              eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+            ),
+          )
+          // Stable, so `commitSha` does not flip between two reads.
+          .orderBy(desc(schema.contextRecords.id))
+      );
+    });
+    const newest = rows[0];
+    if (!newest?.commitSha || !newest.publishedAt) return null;
+    const commitShas = [
+      ...new Set(
+        rows.flatMap((row) => (row.commitSha === null ? [] : [row.commitSha])),
+      ),
+    ];
+    return {
+      commitSha: newest.commitSha,
+      commitShas,
+      publishedAt: newest.publishedAt,
+    };
   },
 
   async ledgerLength(scope) {

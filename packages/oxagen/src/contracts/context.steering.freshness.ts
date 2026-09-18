@@ -118,6 +118,16 @@ export const contextSteeringFreshness = registerCapability({
      * it is behind, whatever its own remote-tracking refs say.
      */
     headCommit: z.string().nullable(),
+    /**
+     * Every commit published at the newest instant, `headCommit` among them.
+     * Empty when no Context PR has merged. It holds more than one only when
+     * two merges share a second, which is as fine as GitHub reports a merge.
+     * The platform stores nothing that orders two commits on the branch, so
+     * it does not pick: a checkout is current when it can reach each of
+     * these, and the developer's git is what knows the ancestry. A client
+     * that reads only `headCommit` still works and is exposed to the tie.
+     */
+    headCommits: z.array(z.string()),
     /** When that record was published, for a banner that wants to say how long. */
     publishedAt: z.string().datetime({ offset: true }).nullable(),
     /**

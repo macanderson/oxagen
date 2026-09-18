@@ -988,10 +988,12 @@ describe("merge_context_pr", () => {
   });
 
   // GitHub reports `merged_at` to the second, so two PRs can merge inside
-  // one. Ordering on that alone picked either record, and picking the
-  // earlier merge let a checkout at that commit read as current while it
-  // lacked the later record.
-  it("picks the later of two publications that share a merge instant", async () => {
+  // one. Nothing stored orders them on the branch. Write order does not: a
+  // retried earlier merge is written last, and a new version of an existing
+  // lineage reuses that lineage's row. Naming one commit let a checkout at
+  // the earlier one read as current while it lacked the later record, so the
+  // store names both and the checkout has to reach each.
+  it("names every commit published at the newest instant, not one of them", async () => {
     const store = new MemoryStore();
     const at = new Date("2026-09-18T12:00:00.000Z");
     const row = (slug: string, commitSha: string) => ({
@@ -1025,11 +1027,22 @@ describe("merge_context_pr", () => {
     store.records.push(
       row("earlier", "commit-earlier") as never,
       row("later", "commit-later") as never,
+      // A second lineage published by the same merge: one commit, named once.
+      row("later-sibling", "commit-later") as never,
     );
-    expect(await store.latestPublication({ workspaceId: "ws" })).toEqual({
-      commitSha: "commit-later",
-      publishedAt: at,
-    });
+    const earlierInstant = new Date(at.getTime() - 1000);
+    store.records.push({
+      ...row("before", "commit-before"),
+      publishedAt: earlierInstant,
+    } as never);
+    const latest = await store.latestPublication({ workspaceId: "ws" });
+    expect(latest?.publishedAt).toEqual(at);
+    expect(latest?.commitShas.sort()).toEqual([
+      "commit-earlier",
+      "commit-later",
+    ]);
+    // The single commit older clients read is one of the tied ones.
+    expect(latest?.commitShas).toContain(latest?.commitSha);
   });
 
   it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {

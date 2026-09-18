@@ -97,6 +97,7 @@ export function createGetSteeringFreshnessHandler(
     return {
       steeringVersion,
       headCommit: publication?.commitSha ?? null,
+      headCommits: publication?.commitShas ?? [],
       publishedAt: publication?.publishedAt.toISOString() ?? null,
       repository: binding?.fullName ?? null,
       defaultBranch: binding?.defaultRef ?? null,

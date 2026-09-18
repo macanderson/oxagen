@@ -296,6 +296,43 @@ describe("resolveContext", () => {
     expect(ctx.policy.blockStaleRuns).toBe(true);
   });
 
+  // Two Context PRs merged inside one second, so the platform names both
+  // commits without ordering them. HEAD holds the first and lacks the second.
+  it("reads the checkout as behind the platform when HEAD lacks one of the tied commits", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    execGit.mockImplementation(async (args: readonly string[]) => {
+      if (args.length === 1 && args[0] === "remote") return "origin";
+      if (args[0] === "remote" && args[1] === "get-url")
+        return "https://github.com/acme/this-one.git";
+      if (args[0] === "merge-base" && args[2] === "held") return "";
+      if (args[0] === "merge-base") throw new Error("exit 1");
+      return "";
+    });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 8,
+      headCommit: "held",
+      headCommits: ["held", "missing"],
+      repository: "acme/this-one",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform?.aheadOfCheckout).toBe(true);
+    expect(ctx.platform?.headCommits).toEqual(["held", "missing"]);
+
+    // One commit named, and HEAD holds it: not behind.
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 8,
+      headCommit: "held",
+      headCommits: ["held"],
+      repository: "acme/this-one",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    expect((await resolveContext(tmp)).platform?.aheadOfCheckout).toBe(false);
+  });
+
   // The workspace approved `release`; the remote's own default is still
   // `main`. Comparing against `main` left an enforced checkout reported as
   // `current` while Context PRs merged into `release`.

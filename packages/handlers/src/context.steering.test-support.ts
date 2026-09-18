@@ -261,29 +261,28 @@ export class MemoryStore implements SteeringStore {
   }
   /** The newest record in this workspace that a Context PR actually merged. */
   async latestPublication(scope: { workspaceId: string }) {
-    // Newest publication wins, and among publications that share an instant
-    // (GitHub reports `merged_at` to the second) the one written later. The
-    // array is insert-ordered, which is what `id` gives the real store.
-    const published = this.records
-      .map((r, index) => ({ r, index }))
-      .filter(
-        ({ r }) =>
-          r.workspaceId === scope.workspaceId &&
-          r.deletedAt === null &&
-          r.commitSha !== null &&
-          r.publishedAt !== null,
-      )
-      .sort(
-        (a, b) =>
-          (b.r.publishedAt as Date).getTime() -
-            (a.r.publishedAt as Date).getTime() || b.index - a.index,
-      )
-      .map(({ r }) => r);
-    const newest = published[0];
-    if (!newest) return null;
+    // Newest publication wins. Publications that share an instant (GitHub
+    // reports `merged_at` to the second) are all returned: the store cannot
+    // say which landed later on the branch, and the real one does not either.
+    const published = this.records.filter(
+      (r) =>
+        r.workspaceId === scope.workspaceId &&
+        r.deletedAt === null &&
+        r.commitSha !== null &&
+        r.publishedAt !== null,
+    );
+    if (published.length === 0) return null;
+    const newestInstant = Math.max(
+      ...published.map((r) => (r.publishedAt as Date).getTime()),
+    );
+    // Last written first, the order `id desc` gives the real store.
+    const tied = published
+      .filter((r) => (r.publishedAt as Date).getTime() === newestInstant)
+      .reverse();
     return {
-      commitSha: newest.commitSha as string,
-      publishedAt: newest.publishedAt as Date,
+      commitSha: tied[0]!.commitSha as string,
+      commitShas: [...new Set(tied.map((r) => r.commitSha as string))],
+      publishedAt: tied[0]!.publishedAt as Date,
     };
   }
   async insertAppend(values: Parameters<SteeringStore["insertAppend"]>[0]) {

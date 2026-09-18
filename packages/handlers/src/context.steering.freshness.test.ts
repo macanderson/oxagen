@@ -104,6 +104,7 @@ describe("get_steering_freshness handler", () => {
     ledgerLength: vi.fn(async () => 12),
     latestPublication: vi.fn(async () => ({
       commitSha: "abc1234",
+      commitShas: ["abc1234", "def5678"],
       publishedAt: new Date("2026-09-01T10:00:00.000Z"),
     })),
   };
@@ -126,6 +127,8 @@ describe("get_steering_freshness handler", () => {
     expect(out).toEqual({
       steeringVersion: 12,
       headCommit: "abc1234",
+      // Two merges in one second: both, because the platform cannot order them.
+      headCommits: ["abc1234", "def5678"],
       publishedAt: "2026-09-01T10:00:00.000Z",
       repository: "acme/platform",
       defaultBranch: "main",
@@ -168,6 +171,7 @@ describe("get_steering_freshness handler", () => {
     expect(out.repository).toBeNull();
     expect(out.defaultBranch).toBeNull();
     expect(out.headCommit).toBeNull();
+    expect(out.headCommits).toEqual([]);
     expect(out.publishedAt).toBeNull();
     expect(out.steeringVersion).toBe(0);
   });

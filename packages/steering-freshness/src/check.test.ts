@@ -6,6 +6,7 @@ import {
   checkSteeringFreshness,
   isStale,
   isSyncSafe,
+  publishedCommits,
   steeringPathspec,
 } from "./check";
 import { resolveSteeringPolicy, type SteeringPolicy } from "./policy";
@@ -456,6 +457,75 @@ describe("checkSteeringFreshness, the platform signal", () => {
     );
     expect(v.status).toBe("behind");
     expect(v.notes[0]).toContain("steering version 42");
+  });
+
+  // Two Context PRs merged inside one second. GitHub reports a merge to the
+  // second, so the platform cannot say which commit is later and names both.
+  // A ref holding only the earlier one is missing the later record.
+  it("reports behind when the ref reaches one tied commit and not the other", async () => {
+    const LATER = "c".repeat(40);
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: "",
+        [`cat-file -e ${LATER}^{commit}`]: "",
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: "",
+        [`merge-base --is-ancestor ${LATER} ${REMOTE}`]: new GitCommandError(
+          ["merge-base", "--is-ancestor", LATER, REMOTE],
+          1,
+          "",
+        ),
+      },
+      {
+        platform: {
+          steeringVersion: 43,
+          headCommit: PROMOTION,
+          headCommits: [PROMOTION, LATER],
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("behind");
+    expect(v.notes[0]).toContain("steering version 43");
+  });
+
+  it("clears platform staleness only once the ref holds every tied commit", async () => {
+    const LATER = "c".repeat(40);
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: "",
+        [`cat-file -e ${LATER}^{commit}`]: "",
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: "",
+        [`merge-base --is-ancestor ${LATER} ${REMOTE}`]: "",
+      },
+      {
+        platform: {
+          steeringVersion: 43,
+          headCommit: PROMOTION,
+          headCommits: [PROMOTION, LATER],
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("current");
+  });
+});
+
+describe("publishedCommits", () => {
+  it("is the tied commits when the platform sends them", () => {
+    expect(
+      publishedCommits({ headCommit: "a", headCommits: ["a", "b"] }),
+    ).toEqual(["a", "b"]);
+  });
+
+  // A platform that predates `headCommits`, or a workspace with no merge yet.
+  it("falls back to the single commit, and to none", () => {
+    expect(publishedCommits({ headCommit: "a" })).toEqual(["a"]);
+    expect(publishedCommits({ headCommit: "a", headCommits: [] })).toEqual([
+      "a",
+    ]);
+    expect(publishedCommits({ headCommit: null })).toEqual([]);
   });
 });
 

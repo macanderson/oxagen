@@ -17,6 +17,7 @@ export {
   checkSteeringFreshness,
   isStale,
   isSyncSafe,
+  publishedCommits,
   steeringPathspec,
   type CheckOptions,
   type FreshnessStatus,

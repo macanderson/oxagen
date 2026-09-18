@@ -94,8 +94,24 @@ export interface PlatformSignal {
   steeringVersion: number;
   /** The commit the newest promotion published at, when the platform knows it. */
   headCommit: string | null;
-  /** True when that commit is not reachable from this checkout's HEAD. */
+  /**
+   * Every commit published at the newest instant, when the platform sends
+   * them. Two merges can share a second and the platform cannot order them,
+   * so a checkout is current only when it can reach each one. Absent from a
+   * platform that predates the field; `headCommit` then stands alone.
+   */
+  headCommits?: readonly string[];
+  /** True when any of those commits is not reachable from this checkout's HEAD. */
   aheadOfCheckout: boolean;
+}
+
+/** The commits a checkout must reach: `headCommits`, or `headCommit` alone. */
+export function publishedCommits(
+  platform: Pick<PlatformSignal, "headCommit" | "headCommits">,
+): readonly string[] {
+  if (platform.headCommits && platform.headCommits.length > 0)
+    return platform.headCommits;
+  return platform.headCommit === null ? [] : [platform.headCommit];
 }
 
 export interface FreshnessVerdict {
@@ -627,9 +643,19 @@ export async function checkSteeringFreshness(
     // the git comparison is complete and the platform adds nothing. If it
     // cannot — or the commit is not in this clone at all — the ref really is
     // too old and the platform is the only signal that knows.
-    const refHasPromotion = platform.headCommit
-      ? await isAncestor(repoCtx, platform.headCommit, remoteHead)
-      : false;
+    // Every commit published at the newest instant has to be in the ref. One
+    // that git cannot answer for makes the whole question unanswered, and one
+    // that is missing makes the ref too old, whatever the others say.
+    const commits = publishedCommits(platform);
+    let refHasPromotion: boolean | null = commits.length > 0;
+    for (const commit of commits) {
+      const reachable = await isAncestor(repoCtx, commit, remoteHead);
+      if (reachable === null) {
+        refHasPromotion = null;
+        break;
+      }
+      if (!reachable) refHasPromotion = false;
+    }
     // Git could not answer. Blocking here would stop a prompt over a plumbing
     // failure, not over staleness, so the verdict is `unknown`: the gate
     // fails open and the banner says the check did not run.
