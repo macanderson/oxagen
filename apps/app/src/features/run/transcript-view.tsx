@@ -14,9 +14,21 @@
 // Everything: the turns and their steps), not a different read, so a change
 // of level keeps the position and rewrites only the query value.
 //
-// A live run re-reads itself every few seconds while the viewer follows its
-// head and the tab is visible. Scrubbing back stops following, and "go live"
-// resumes it; a sealed or halted run is never re-read.
+// A live run follows its own head over the SSE route
+// (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
+// `/api/v1/*` rewrite). The stream carries frames, and the transcript carries
+// entries the contract derives from them, so a frame landing is the signal to
+// read the tail rather than something to render: deriving an entry here would
+// put a second, weaker copy of the contract's derivation on the page.
+// Scrubbing back stops following, and "go live" resumes it; a sealed or halted
+// run is never followed.
+//
+// A run longer than one read is paged rather than truncated. The read answers
+// a cursor, "Read more" asks for the next page, and playback reads ahead of
+// the playhead so it does not stall at a page boundary. Entries are appended,
+// never replaced, so the scroll position and the playhead stay where they are.
+// A cursor this capability did not write is refused, and the view says so
+// instead of starting the transcript again.
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -32,14 +44,19 @@ import {
   TRANSCRIPT_ZOOMS,
   type TranscriptDecision,
   type TranscriptEntry,
+  type TranscriptKind,
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
+import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import { readTranscriptPage } from "./actions";
+import { kindsParam } from "./transcript";
+import { useRunStream } from "./use-run-stream";
 import {
   buildTranscript,
   type Frames,
@@ -60,7 +77,8 @@ type Place = { org: string; ws: string; runId: string };
 
 const SPEEDS = [1, 1.5, 2, 4] as const;
 /** How often a followed live run re-reads itself. */
-const LIVE_REFRESH_MS = 5000;
+/** How close to the end the playhead gets before the next page is read ahead of it. */
+const PREFETCH_WITHIN = 5;
 
 const DOT: Record<StepNode, string> = {
   model: "border-info",
@@ -454,7 +472,8 @@ function Readout({ entries, pos }: { entries: Frames; pos: number }) {
 
 export function TranscriptView({
   transcript,
-  entries,
+  entries: first,
+  kinds,
   zoom: initialZoom,
   status,
   replayGrade,
@@ -462,9 +481,12 @@ export function TranscriptView({
   ws,
   runId,
 }: {
+  /** `cursor` is set when entries lie past this read: more can be paged in. */
   transcript: Pick<RunTranscript, "complete" | "cursor">;
-  /** The transcript's frames, at least one. */
+  /** The first page of the transcript's frames, at least one. */
   entries: Frames;
+  /** The chips the URL pressed; a later page is read through the same filter. */
+  kinds: readonly TranscriptKind[];
   /** The level the URL asked for: which disclosures start open. */
   zoom: TranscriptZoom;
   status: RunStatus;
@@ -474,6 +496,18 @@ export function TranscriptView({
   const locale = useLocale();
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
+
+  // The entries and the cursor as the last read left them. A ref as well as
+  // state, because an append needs the new length before React has committed
+  // the state that carries it, and this is the only place that appends.
+  const heldRef = useRef<Frames>(first);
+  const cursorRef = useRef<string | null>(transcript.cursor);
+  const readingRef = useRef(false);
+  const [entries, setEntries] = useState<Frames>(first);
+  const [cursor, setCursor] = useState<string | null>(transcript.cursor);
+  const [complete, setComplete] = useState(transcript.complete);
+  const [reading, setReading] = useState(false);
+  const [pageFailure, setPageFailure] = useState<Read<unknown> | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
   const live = status === "live";
@@ -514,16 +548,73 @@ export function TranscriptView({
     [turns],
   );
 
-  // A followed live run re-reads itself while the tab is visible.
+  /**
+   * Read the page past the cursor and append it. Nothing already on screen is
+   * replaced, so the scroll position and the playhead survive the read.
+   */
+  const loadMore = useCallback(async (): Promise<void> => {
+    if (readingRef.current || cursorRef.current === null) return;
+    readingRef.current = true;
+    setReading(true);
+    try {
+      const read = await readTranscriptPage(
+        org,
+        ws,
+        runId,
+        "everything",
+        kinds,
+        cursorRef.current,
+      );
+      if (!read.ok) {
+        setPageFailure(read);
+        return;
+      }
+      setPageFailure(null);
+      const [firstNew, ...rest] = read.value.entries;
+      cursorRef.current = read.value.cursor;
+      setCursor(read.value.cursor);
+      setComplete(read.value.complete);
+      if (firstNew !== undefined) {
+        const next: Frames = [...heldRef.current, firstNew, ...rest];
+        heldRef.current = next;
+        setEntries(next);
+      }
+    } catch {
+      setPageFailure({
+        ok: false,
+        reason: "error",
+        code: "unanswered",
+        status: 0,
+      });
+    } finally {
+      readingRef.current = false;
+      setReading(false);
+    }
+  }, [kinds, org, runId, ws]);
+
+  // A followed live run reads its tail when the stream says a frame landed.
+  const stream = useRunStream({
+    url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
+      ws,
+    )}/runs/${encodeURIComponent(runId)}/stream`,
+    enabled: live && following,
+    onFrames: () => {
+      void loadMore();
+    },
+  });
+
+  // The seal changes the header, the badges and the record actions, none of
+  // which this component owns, so the page is re-read once when it happens.
   useEffect(() => {
-    if (!live || !following) return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") navigate.refresh();
-    }, LIVE_REFRESH_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [live, following, navigate]);
+    if (stream === "sealed") navigate.refresh();
+  }, [stream, navigate]);
+
+  // Read ahead of the playhead, so playback does not stall at a page boundary.
+  useEffect(() => {
+    if (!isPlaying || cursor === null || reading) return;
+    if (pos < head - PREFETCH_WITHIN) return;
+    void loadMore();
+  }, [isPlaying, pos, head, cursor, reading, loadMore]);
 
   // Playback walks the frames at their recorded pace.
   useEffect(() => {
@@ -575,7 +666,11 @@ export function TranscriptView({
     window.history.replaceState(
       null,
       "",
-      routes.run(org, ws, runId, { tab: "transcript", zoom: level }),
+      routes.run(org, ws, runId, {
+        tab: "transcript",
+        zoom: level,
+        kinds: kindsParam(kinds),
+      }),
     );
   };
 
@@ -767,11 +862,43 @@ export function TranscriptView({
           aria-hidden="true"
           className={`size-1.5 rounded-full ${live ? "animate-pulse bg-success" : "bg-muted-foreground"}`}
         />
-        {live
-          ? t("recording")
-          : transcript.complete && transcript.cursor === null
-            ? t("complete", { count: formatCount(entries.length, locale) })
-            : t("cut", { count: formatCount(entries.length, locale) })}
+        <span data-testid="transcript-count">
+          {live
+            ? stream === "lost"
+              ? t("followLost")
+              : t("recording")
+            : stream === "sealed"
+              ? t("followSealed")
+              : cursor !== null
+                ? t("loadedMore", {
+                    count: formatCount(entries.length, locale),
+                  })
+                : complete
+                  ? t("complete", { count: formatCount(entries.length, locale) })
+                  : t("cut", { count: formatCount(entries.length, locale) })}
+        </span>
+        {cursor === null ? null : (
+          <button
+            type="button"
+            data-testid="transcript-more"
+            disabled={reading}
+            onClick={() => {
+              void loadMore();
+            }}
+            className={segButton}
+          >
+            {reading ? t("readingMore") : t("more")}
+          </button>
+        )}
+        {pageFailure === null ? null : (
+          <span data-testid="transcript-page-failed" className="basis-full">
+            {!pageFailure.ok &&
+            pageFailure.reason === "error" &&
+            pageFailure.code === "invalid_input"
+              ? t("badCursor")
+              : t("pageFailed")}
+          </span>
+        )}
       </div>
     </section>
   );

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatClock,
   formatCount,
+  formatDuration,
   formatMoney,
   formatRatio,
   formatWholeUnits,
@@ -159,5 +160,26 @@ describe("formatClock", () => {
 
   it("reads a negative duration as 0:00 (negative)", () => {
     expect(formatClock(-30, "en-US")).toBe("0:00");
+  });
+});
+
+describe("formatDuration", () => {
+  it("reads milliseconds under a second, so a 41 ms step does not read as zero", () => {
+    expect(formatDuration(41, "en")).toBe("41 ms");
+    expect(formatDuration(999, "en")).toBe("999 ms");
+  });
+
+  it("reads seconds with one decimal under ten, and whole seconds above it", () => {
+    expect(formatDuration(4200, "en")).toBe("4.2 s");
+    expect(formatDuration(41_000, "en")).toBe("41 s");
+  });
+
+  it("reads a minute and beyond on the clock", () => {
+    expect(formatDuration(60_000, "en")).toBe("1:00");
+    expect(formatDuration(127_000, "en")).toBe("2:07");
+  });
+
+  it("reads a negative duration as zero rather than as a negative one (negative)", () => {
+    expect(formatDuration(-5, "en")).toBe("0 ms");
   });
 });

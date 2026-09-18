@@ -39,6 +39,9 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
       model: "z-ai/glm-flash-latest",
     },
     replayGrade: "fork",
+    enforcementTier: "harness",
+    completenessGaps: [],
+    canSummarize: false,
     startedAt: at(-3600),
     sealedAt: null,
     ...overrides,
@@ -98,6 +101,7 @@ export function fleetSource(reads: FleetReads) {
       get: refuse,
       frameBody: refuse,
       cost: refuse,
+      chain: refuse,
       transcript: refuse,
     },
     approvals: {

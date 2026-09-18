@@ -83,6 +83,7 @@ const source: DataSource = {
     frameBody: vi.fn(),
     cost: vi.fn(),
     transcript: vi.fn(),
+    chain: vi.fn(),
   },
   approvals: { pending: vi.fn() },
   agents: {

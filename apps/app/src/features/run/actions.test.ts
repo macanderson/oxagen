@@ -31,9 +31,15 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { exportRun, haltRun, steerRun, summarizeRun } = await import(
-  "./actions"
-);
+const {
+  bisectRuns,
+  exportRun,
+  forkRun,
+  haltRun,
+  readTranscriptPage,
+  steerRun,
+  summarizeRun,
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -55,6 +61,22 @@ const TENANT = {
 };
 const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
+
+/**
+ * What a handler throws when it refuses: `code: "conflict"` with the refusal
+ * named in `reason`. The seam carries that word through as the action's
+ * `code`, and the dialog picks its sentence on it, so a test that threw a
+ * CapabilityError instead would prove the wrong path.
+ */
+class HandlerRefusal extends Error {
+  readonly code = "conflict";
+
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "HandlerRefusal";
+  }
+}
+const refused = (reason: string) => new HandlerRefusal(reason);
 
 beforeEach(() => {
   invoke.mockReset();
@@ -188,5 +210,161 @@ describe("exportRun", () => {
       ok: false,
       reason: "denied",
     });
+  });
+});
+
+describe("forkRun", () => {
+  it("mints the attempt at the frame it was given and answers which attempt it is", async () => {
+    invoke.mockResolvedValue({ attemptId: "arat_2", attemptNumber: 2 });
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toEqual({
+      ok: true,
+      value: { attemptId: "arat_2", attemptNumber: 2 },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "fork_run",
+      { runId: RUN, fromSeq: "412" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a branch point that is not a frame before the kernel sees it (negative)", async () => {
+    for (const seq of ["", "  ", "0", "-1", "4.5", "twelve", "9".repeat(20)]) {
+      expect(await forkRun("acme", "core-platform", RUN, seq)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "from_seq",
+        field: "fromSeq",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's conflict as a conflict, so the dialog can name it (negative)", async () => {
+    invoke.mockRejectedValue(refused("replay_grade_below_fork"));
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toMatchObject({
+      ok: false,
+      reason: "conflict",
+      code: "replay_grade_below_fork",
+    });
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("fork_run"));
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
+describe("bisectRuns", () => {
+  it("compares this run against the other and answers where they part", async () => {
+    invoke.mockResolvedValue({
+      divergentSeq: "88",
+      keyA: "tool:create_release:ok",
+      keyB: "tool:create_release:error",
+      aligned: 87,
+    });
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "  arun_9f2a  "),
+    ).toEqual({
+      ok: true,
+      value: {
+        divergentSeq: "88",
+        keyA: "tool:create_release:ok",
+        keyB: "tool:create_release:error",
+        aligned: 87,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "bisect_runs",
+      { runA: RUN, runB: "arun_9f2a" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries a null divergence through as recorded, not as an error (negative)", async () => {
+    invoke.mockResolvedValue({
+      divergentSeq: null,
+      keyA: null,
+      keyB: null,
+      aligned: 431,
+    });
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "arun_9f2a"),
+    ).toEqual({
+      ok: true,
+      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
+    });
+  });
+
+  it("refuses an empty second run, and this run compared with itself, before the kernel (negative)", async () => {
+    for (const other of ["", "   ", RUN]) {
+      expect(
+        await bisectRuns("acme", "core-platform", RUN, other),
+      ).toEqual({ ok: false, reason: "invalid", code: "run_b", field: "runB" });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("readTranscriptPage", () => {
+  it("reads the page past the cursor at the zoom and chips it was given", async () => {
+    invoke.mockResolvedValue({
+      zoom: "steps",
+      kinds: ["tools"],
+      entries: [],
+      cursor: null,
+      complete: true,
+    });
+    const read = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      ["tools"],
+      "ZjoxMQ",
+    );
+    expect(read).toEqual({
+      ok: true,
+      value: {
+        zoom: "steps",
+        kinds: ["tools"],
+        entries: [],
+        cursor: null,
+        complete: true,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "get_run_transcript",
+      {
+        runId: RUN,
+        zoom: "steps",
+        kinds: ["tools"],
+        limit: 200,
+        after: "ZjoxMQ",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("answers a cursor the capability did not write as a read error, not as a throw (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError(
+        "get_run_transcript",
+        "invalid_input",
+        "invalid_cursor",
+      ),
+    );
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "not-a-cursor",
+      ),
+    ).toEqual({ ok: false, reason: "error", code: "invalid_input", status: 400 });
   });
 });

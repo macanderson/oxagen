@@ -37,6 +37,7 @@ import type {
   WorkspaceList,
 } from "./contracts/org";
 import type {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrameBody,
@@ -124,7 +125,9 @@ export interface DataSource {
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
    * its own tab, so a tab nobody opened makes no read. `frameBody` is
    * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
-   * the Frames tab has a frame open, caller features/run/run.tsx.
+   * the Frames tab has a frame open, caller features/run/run.tsx. `chain` is
+   * `get_run_chain`, read only when the Chain and seal tab is open, because it
+   * walks the recording to find its gaps.
    */
   runs: {
     list(ctx: WsCtx, q: { cursor: string | null }): Promise<Read<RunPage>>;
@@ -150,6 +153,7 @@ export interface DataSource {
       zoom: TranscriptZoom,
       q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
+    chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
   approvals: {

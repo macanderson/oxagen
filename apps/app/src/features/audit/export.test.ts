@@ -41,6 +41,7 @@ const source: DataSource = {
     frameBody: refuse,
     cost: refuse,
     transcript: refuse,
+    chain: refuse,
   },
   approvals: { pending: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },

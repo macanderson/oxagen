@@ -1658,6 +1658,8 @@ type Messages = {
       transcript: string;
       frames: string;
       cost: string;
+      chain: string;
+      approvals: string;
     };
     transcript: {
       title: string;
@@ -1674,9 +1676,6 @@ type Messages = {
       empty: string;
       complete: string;
       cut: string;
-      request: string;
-      response: string;
-      decision: string;
       runStart: string;
       turn: string;
       turnDone: string;
@@ -1711,6 +1710,28 @@ type Messages = {
       };
       envelope: string;
       recording: string;
+      chipsLabel: string;
+      chip: {
+        prompt: string;
+        responses: string;
+        tools: string;
+        policy: string;
+        recall: string;
+        usage: string;
+        errors: string;
+      };
+      chipsClear: string;
+      emptyFiltered: string;
+      more: string;
+      readingMore: string;
+      loadedMore: string;
+      badCursor: string;
+      pageFailed: string;
+      followLost: string;
+      followSealed: string;
+      request: string;
+      response: string;
+      decision: string;
     };
     frames: {
       title: string;
@@ -1837,7 +1858,14 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        forkRequiresLedger: string;
+        gradeBelowFork: string;
+        seqPastSeal: string;
+        gapBeforeSeq: string;
+        fromSeq: string;
+        runB: string;
       };
+      observeReason: string;
     };
     record: {
       reread: string;
@@ -1849,6 +1877,7 @@ type Messages = {
         pending: string;
         queued: string;
         needsRole: string;
+        needsBodies: string;
       };
       resummarize: {
         open: string;
@@ -1861,6 +1890,124 @@ type Messages = {
         pending: string;
         queued: string;
         needsRole: string;
+      };
+    };
+    gaps: string;
+    gap: {
+      digest_only: string;
+      body_missing: string;
+      tool_bodies: string;
+      model_calls: string;
+      hooks_partial: string;
+      unobserved_tail: string;
+      chain_break: string;
+      telemetry_gap: string;
+    };
+    tier: {
+      gateway: string;
+      harness: string;
+      observe: string;
+    };
+    chain: {
+      title: string;
+      hashRule: string;
+      frameCount: string;
+      range: string;
+      merkleRoot: string;
+      tierLabel: string;
+      gradeLabel: string;
+      gapsTitle: string;
+      prefix: string;
+      noGaps: string;
+      missingFrames: string;
+      missingBodies: string;
+      missingSequences: string;
+      recordedGaps: string;
+      sealTitle: string;
+      sealedAt: string;
+      terminalStatus: string;
+      sealedFrames: string;
+      finalSeq: string;
+      finalDigest: string;
+      streamDigest: string;
+      archive: string;
+      unsealed: string;
+      checkpointsTitle: string;
+      noCheckpoints: string;
+      ladderTitle: string;
+      ladderWhy: string;
+      ladderNoGrade: string;
+      rungMet: string;
+      rungUnmet: string;
+      columns: {
+        seq: string;
+        head: string;
+        frames: string;
+        signed: string;
+        countersigned: string;
+        anchor: string;
+      };
+      tier: {
+        gateway: string;
+        harness: string;
+        observe: string;
+      };
+      grade: {
+        inspect: string;
+        view: string;
+        fork: string;
+        retry: string;
+      };
+      gap: {
+        digest_only: string;
+        body_missing: string;
+        tool_bodies: string;
+        model_calls: string;
+        hooks_partial: string;
+        unobserved_tail: string;
+        chain_break: string;
+        telemetry_gap: string;
+      };
+    };
+    waterfall: {
+      title: string;
+      total: string;
+      basisNotRecorded: string;
+      running: string;
+      steps: string;
+      step: string;
+      noCost: string;
+      empty: string;
+      unpriced: string;
+      cut: string;
+    };
+    replay: {
+      forkNeedsLedger: string;
+      forkNoGrade: string;
+      forkNeedsGrade: string;
+      fork: {
+        open: string;
+        title: string;
+        body: string;
+        seqLabel: string;
+        seqHelp: string;
+        confirm: string;
+        pending: string;
+        minted: string;
+      };
+      bisect: {
+        open: string;
+        title: string;
+        body: string;
+        otherLabel: string;
+        otherHelp: string;
+        confirm: string;
+        pending: string;
+        same: string;
+        diverged: string;
+        keyA: string;
+        keyB: string;
+        noFrame: string;
       };
     };
   };

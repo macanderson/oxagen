@@ -1,6 +1,7 @@
 // The runs port: one list_runs page through the kernel seam at the asked
 // cursor, mapped into the Fleet view, with a refusal passed through and an
 // unmappable record reported once.
+import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { runGet } from "@oxagen/oxagen/contracts/run.get";
@@ -48,6 +49,9 @@ const run = {
   name: null,
   summary: null,
   replayGrade: null,
+  enforcementTier: "observe",
+  completenessGaps: ["digest_only"],
+  canSummarize: false,
   startedAt: "2026-09-15T08:55:00.000Z",
   sealedAt: null,
 };
@@ -78,6 +82,9 @@ describe("runs.list", () => {
             name: null,
             summary: null,
             replayGrade: null,
+            enforcementTier: "observe",
+            completenessGaps: ["digest_only"],
+            canSummarize: false,
             startedAt: "2026-09-15T08:55:00.000Z",
             sealedAt: null,
           },
@@ -468,5 +475,126 @@ describe("runs.transcript", () => {
       input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
     });
     expect(kernelRead.mock.calls[0]?.[1]).not.toHaveProperty("input.after");
+  });
+});
+
+describe("runs.transcript", () => {
+  it("carries the chips and the resume point the caller asked for", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: ["tools", "errors"],
+        entries: [],
+        cursor: "e:41",
+        complete: false,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      kinds: ["tools", "errors"],
+      after: "e:20",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: ["tools", "errors"],
+        limit: 200,
+        after: "e:20",
+      },
+      page: "run",
+    });
+  });
+
+  it("omits `after` entirely when the caller has no resume point (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: [],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", { kinds: [], after: null });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+      page: "run",
+    });
+  });
+});
+
+describe("runs.chain", () => {
+  it("reads get_run_chain for the run and maps the ladder, the gaps and the seal", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: 9,
+        firstSeq: "1",
+        lastSeq: "9",
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [{ from: "4", to: "5" }],
+          missingFrameCount: 2,
+          missingBodies: 9,
+          recorded: ["digest_only"],
+        },
+        seal: null,
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [
+          { grade: "inspect", met: true, reason: "frames_recorded" },
+          { grade: "view", met: false, reason: "no_retained_bodies" },
+        ],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    expect(read.ok && read.value.gaps.missingSequences).toEqual([
+      { from: "4", to: "5" },
+    ]);
+    expect(read.ok && read.value.recordedGrade).toBeNull();
+    expect(read.ok && read.value.ladder).toHaveLength(2);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runChainGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+  });
+
+  it("reports a record the view refuses rather than passing it on (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: -1,
+        firstSeq: null,
+        lastSeq: null,
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seal: null,
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    expect(read).toEqual({
+      ok: false,
+      reason: "error",
+      code: "record_unmappable",
+      status: 502,
+    });
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 });
