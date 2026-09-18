@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { withSystemDb, schema } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
@@ -49,7 +49,19 @@ export const privacyDataExportHandler: CapabilityHandler<
     // compare would deny a legitimately promoted admin.
     const role = membership[0]?.role?.toLowerCase();
     if (role !== "owner" && role !== "admin") {
-      throw new Error("Forbidden: org export requires Owner or Admin role");
+      // A typed refusal, not a bare Error. Since the contract admits every org
+      // role -- it must, or a member could not export their own data -- this
+      // branch is now the ONLY thing that refuses a member's org export, and a
+      // surface classifies a refusal by `code` alone. An uncoded throw reads as
+      // `unclassified`, so the app showed its generic failure instead of "an
+      // organization export needs an owner or admin" and recorded a runtime
+      // error rather than a policy denial; the API answered 500 rather than
+      // 403.
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_export_requires_admin",
+        message: "An organization export requires the Owner or Admin role",
+      });
     }
   }
 

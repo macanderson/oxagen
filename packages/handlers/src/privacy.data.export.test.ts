@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { isHandlerError } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     queueSelects([]);
     await expect(
       privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX),
-    ).rejects.toThrow("Forbidden: org export requires Owner or Admin role");
+    ).rejects.toThrow("An organization export requires the Owner or Admin role");
     expect(mocks.insertReturning).not.toHaveBeenCalled();
     expect(mocks.eventSend).not.toHaveBeenCalled();
   });
@@ -91,8 +92,27 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     queueSelects([{ role: "member" }]);
     await expect(
       privacyDataExportHandler({ scope: "org", orgId: "org_B" }, CTX),
-    ).rejects.toThrow("Forbidden: org export requires Owner or Admin role");
+    ).rejects.toThrow("An organization export requires the Owner or Admin role");
     expect(mocks.insertReturning).not.toHaveBeenCalled();
+  });
+
+  // The contract admits every org role -- it must, or a member could not
+  // export their own data -- so this branch is the only thing refusing a
+  // member's org export, and a surface classifies a refusal by `code` alone.
+  // Uncoded, the app shows its generic failure instead of "an organization
+  // export needs an owner or admin" and records a runtime error rather than a
+  // policy denial, and the API answers 500 rather than 403.
+  it("refuses with a coded forbidden, so the surfaces read it as a denial", async () => {
+    queueSelects([{ role: "member" }]);
+    const err = await privacyDataExportHandler(
+      { scope: "org", orgId: "org_B" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(isHandlerError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: "forbidden",
+      reason: "org_export_requires_admin",
+    });
   });
 
   it("allows org-scope export for an Owner of the target org", async () => {
