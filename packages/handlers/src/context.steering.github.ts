@@ -3,9 +3,11 @@
 // repository**: the repository binding `bind_main_repository` wrote
 // (`ingestion.repository_binding_heads` → `ingestion.repository_bindings`),
 // which is the system of record for repository identity per MC spec §10.1.
-// Its production branch is the repository's default branch. Every operation
-// runs with the workspace's own token (ADR-020: installation token, then the
-// connecting user's OAuth token, then the local-only PAT).
+// Its production branch is the default ref that binding recorded — the one an
+// org owner approved — not whatever GitHub reports as the default branch
+// today. Every operation runs with the workspace's own token (ADR-020:
+// installation token, then the connecting user's OAuth token, then the
+// local-only PAT).
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { createGitHubClient, type GitHubClient } from "@oxagen/github";
@@ -16,6 +18,17 @@ export interface SteeringRepository {
   owner: string;
   repo: string;
   fullName: string;
+  /**
+   * The production branch: the only ref a Context PR is opened against,
+   * compared against, checked on and merged into.
+   *
+   * For a BOUND repository this is the binding's `configured_default_ref` —
+   * the ref approved when `bind_main_repository` recorded that binding version
+   * — and NOT whatever GitHub currently reports as the repository's default
+   * branch. Changing the default branch on GitHub must not move steering onto
+   * a branch nobody approved; only a new binding version does that. See
+   * `readGitHubConnection`, which is the one source of this fact.
+   */
   defaultBranch: string;
 }
 
@@ -107,6 +120,39 @@ interface DeliveryConfig {
 const RETIRED_CONNECTION_STATUSES = ["deleting", "deleted"] as const;
 
 /**
+ * Where the workspace's main repository came from, and therefore whether it
+ * carries an approved production ref. `readGitHubConnection` answers one of
+ * these; the two cases are a union rather than one shape with an optional ref
+ * because they are not the same fact, and only the type can stop a reader
+ * treating them as one.
+ */
+export type SteeringConnection =
+  | {
+      /**
+       * A binding answered. `approvedDefaultRef` is that binding's
+       * `configured_default_ref` and moves only when a new binding version is
+       * written — never because GitHub's default branch changed.
+       */
+      source: "binding";
+      owner: string;
+      repo: string;
+      approvedDefaultRef: string;
+    }
+  | {
+      /**
+       * The legacy sources wizard's `delivery_config`, which predates bindings
+       * and records no ref. The absence is its own case rather than a nullable
+       * `approvedDefaultRef` so that reading the ref forces a reader to narrow
+       * on `source` and see both arms: an optional field would let the bound
+       * case fall through to live GitHub with a `??` that looks like a default
+       * and is in fact the defect this shape exists to prevent.
+       */
+      source: "legacy_delivery_config";
+      owner: string;
+      repo: string;
+    };
+
+/**
  * The workspace's main repository.
  *
  * Read from the repository binding first. `repository_bindings` exists
@@ -139,16 +185,27 @@ const RETIRED_CONNECTION_STATUSES = ["deleting", "deleted"] as const;
  * is worse than steering being off, so a workspace whose main repository is
  * bound but unreachable answers null and its callers refuse; the repair is
  * `bind_main_repository` on the live connection, which moves the head.
+ *
+ * The binding also carries the ref, not only the identity. A binding records
+ * `configured_default_ref` — the production branch as it stood when an org
+ * owner approved that binding version — and the binding is immutable, so a
+ * later change to the repository's default branch on GitHub does not touch it.
+ * Returning identity here while leaving the ref to resolve from a live
+ * `getRepoInfo` would make the binding authoritative for half of one fact:
+ * steering would keep the approved owner/name and silently follow GitHub onto
+ * a branch nobody approved. So the ref is returned with the identity that
+ * carries it, and it is the caller's only source for the bound case.
  */
 export async function readGitHubConnection(scope: {
   orgId: string;
   workspaceId: string;
-}): Promise<{ owner: string; repo: string } | null> {
+}): Promise<SteeringConnection | null> {
   return withTenantDb(async (tx) => {
     const [bound] = await tx
       .select({
         owner: schema.repositoryBindings.providerOwner,
         repo: schema.repositoryBindings.providerName,
+        approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -177,7 +234,13 @@ export async function readGitHubConnection(scope: {
         ),
       )
       .limit(1);
-    if (bound) return { owner: bound.owner, repo: bound.repo };
+    if (bound)
+      return {
+        source: "binding",
+        owner: bound.owner,
+        repo: bound.repo,
+        approvedDefaultRef: bound.approvedDefaultRef,
+      };
 
     // Why the join missed. A head is the workspace's declaration that it HAS a
     // main repository; its presence survives the connection being retired,
@@ -211,7 +274,9 @@ export async function readGitHubConnection(scope: {
     const config = (connection?.deliveryConfig as DeliveryConfig | null) ?? {};
     const owner = typeof config.owner === "string" ? config.owner : null;
     const repo = typeof config.repo === "string" ? config.repo : null;
-    return connection && owner && repo ? { owner, repo } : null;
+    return connection && owner && repo
+      ? { source: "legacy_delivery_config", owner, repo }
+      : null;
   });
 }
 
@@ -282,12 +347,38 @@ export function createSteeringGitHub(
         });
       }
       const gh = deps.client(await deps.resolveToken(scope));
-      const info = await gh.getRepoInfo(connection);
+      const info = await gh.getRepoInfo({
+        owner: connection.owner,
+        repo: connection.repo,
+      });
+      // Where the production branch comes from, stated as two arms rather than
+      // as a fallback, because they are two different facts.
+      //
+      // A BOUND repository has an approved ref and that ref is the answer. The
+      // live `info.defaultBranch` is deliberately not consulted here: if an
+      // admin changes the repository's default branch on GitHub after the
+      // bind, the immutable binding and the settings page still name the
+      // approved branch, and steering must agree with them. Following GitHub
+      // instead would open, check and merge Context PRs into a branch no one
+      // approved, while `assertProductionBase` below — which compares a PR's
+      // base against this very field — would wave it through. Approving a new
+      // branch is a new binding version (`bind_main_repository`), which is the
+      // only thing that moves this.
+      //
+      // A LEGACY connection has no binding, so there is no approved ref to
+      // honour and live GitHub is the only source there is. That is
+      // legitimate precisely because nothing was ever approved to disagree
+      // with — it is not the bound case taking a fallback, which the union's
+      // shape makes unreachable.
+      const defaultBranch =
+        connection.source === "binding"
+          ? connection.approvedDefaultRef
+          : info.defaultBranch;
       const repo: SteeringRepository = {
         owner: connection.owner,
         repo: connection.repo,
         fullName: info.fullName,
-        defaultBranch: info.defaultBranch,
+        defaultBranch,
       };
       clients.set(repo, gh);
       return repo;
