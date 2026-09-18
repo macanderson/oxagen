@@ -431,4 +431,45 @@ describe("runs.transcript", () => {
       page: "run",
     });
   });
+
+  it("passes the chips pressed and the cursor, and omits a cursor it was not given", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: ["tools"],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      kinds: ["tools"],
+      after: "cur_7",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: ["tools"],
+        limit: 200,
+        after: "cur_7",
+      },
+      page: "run",
+    });
+
+    kernelRead.mockClear();
+    await runs.transcript(ctx, "tse_4f0a", "steps", { after: null });
+    // The contract refuses a cursor it did not write, so "read from the start"
+    // omits the key rather than sending a null it would reject.
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+    });
+    expect(
+      Object.hasOwn(
+        (kernelRead.mock.calls[0]?.[1] as { input: object }).input,
+        "after",
+      ),
+    ).toBe(false);
+  });
 });

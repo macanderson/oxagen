@@ -41,6 +41,7 @@ import type {
   RunDetail,
   RunFrameBody,
   RunTranscript,
+  TranscriptKind,
   TranscriptZoom,
 } from "./contracts/run";
 import type { RunPage } from "./contracts/runs";
@@ -138,10 +139,16 @@ export interface DataSource {
       seq: string,
     ): Promise<Read<RunFrameBody>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
+    /**
+     * `get_run_transcript` at one zoom level, narrowed to the chips pressed
+     * and paged on the cursor the last page carried. An empty `kinds` keeps
+     * every frame: no chip pressed is not the same as every chip pressed off.
+     */
     transcript(
       ctx: WsCtx,
       runId: string,
       zoom: TranscriptZoom,
+      q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
