@@ -264,6 +264,25 @@ describe("AssistantFlyout", () => {
     });
   });
 
+  // Register an agent is the route where the path segment is the *step* and the
+  // record is in the query: `routes.register` mints `/register/wrap?agent=…`.
+  // Without its row, "why has this agent not enrolled?" sent `entityId: "wrap"`.
+  it.each(["wrap", "run"])(
+    "carries the agent being registered, not the %s step it is on",
+    async (step) => {
+      pathname.mockReturnValue(
+        `/acme/core-platform/register/${step}?agent=agt_31`,
+      );
+      const { user } = await openFlyout();
+      await ask(user, "why has this not enrolled?");
+
+      expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+        route: "register",
+        entityId: "agt_31",
+      });
+    },
+  );
+
   // A query value on a route that keeps its record in the path is not the
   // record: the table decides which half of the URL is read.
   it("reads the path on a route that keeps its record there, whatever the query says", async () => {
@@ -735,6 +754,82 @@ describe("AssistantFlyout", () => {
       "false",
     );
     expect(launcher).not.toHaveAttribute("inert");
+  });
+
+  // Above `md` the page behind stays interactive on purpose, so focus can be
+  // sitting on a page control when a resize or a rotation crosses below the
+  // breakpoint. Inerting the application under a focused control without moving
+  // focus leaves a keyboard user on something they cannot see or reach — and
+  // once focus is outside the panel, Escape never reaches its handler either.
+  it("takes focus into the panel when a resize makes it modal under a focused page control", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    const launcher = screen.getByRole("button", { name: "open assistant" });
+    await user.click(launcher);
+
+    // Focus back out onto the page, which a wide screen allows on purpose.
+    act(() => {
+      launcher.focus();
+    });
+    expect(document.activeElement).toBe(launcher);
+
+    setViewport(true);
+
+    expect(launcher).toHaveAttribute("inert");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Close the assistant" }),
+    );
+    // And Escape is heard again, because focus is inside the panel.
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+  });
+
+  // Focus that is already inside the panel when the breakpoint is crossed is
+  // left where it is: becoming modal must not yank a person off the composer
+  // they are typing in.
+  it("leaves focus alone when it is already inside the panel as it becomes modal (negative)", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    await user.click(screen.getByRole("button", { name: "open assistant" }));
+    const composer = screen.getByTestId("assistant-composer");
+    act(() => {
+      composer.focus();
+    });
+
+    setViewport(true);
+
+    expect(document.activeElement).toBe(composer);
+  });
+
+  // The launcher saved at the open is still *connected* after a resize below
+  // `md` — the sidebar that holds it is `hidden`, not unmounted — so `focus()`
+  // is a no-op. Checking only `isConnected` returned as though the restore had
+  // worked, leaving focus on a panel that had just gone `inert`. The fix checks
+  // that focus actually moved, so it does not care *why* it did not.
+  //
+  // The stand-in is `disabled`, not a hidden ancestor: jsdom does no layout, so
+  // `hidden`, `display: none` and an `inert` ancestor all still take focus
+  // there, and `disabled` is the one connected-but-unfocusable state it models.
+  // It reaches the same branch — `focus()` returns with `activeElement`
+  // unchanged — which is the whole of what this asserts.
+  it("drops focus rather than trusting a restore to a launcher that has become unfocusable (negative)", async () => {
+    const user = userEvent.setup();
+    render(tree());
+    const launcher = screen.getByRole<HTMLButtonElement>("button", {
+      name: "open assistant",
+    });
+    await user.click(launcher);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Close the assistant" }),
+    );
+
+    launcher.disabled = true;
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByTestId("assistant-flyout")).toHaveAttribute("inert");
+    expect(document.activeElement).not.toBe(launcher);
+    expect(document.activeElement).toBe(document.body);
   });
 
   // A reply arrives asynchronously while focus is still on the composer or the
