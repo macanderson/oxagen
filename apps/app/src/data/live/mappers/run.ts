@@ -4,6 +4,7 @@
 //
 // The header maps through `toRunRow`, the same function the Fleet table's rows
 // go through, so the two surfaces cannot disagree about one run.
+import type { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import type { runGet } from "@oxagen/oxagen/contracts/run.get";
@@ -11,6 +12,7 @@ import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.g
 import type { z } from "zod";
 import { Cost, moneyFromMicros } from "@/data/contracts/money";
 import type {
+  RunChain,
   RunCost,
   RunDetail,
   RunFrameBody,
@@ -23,6 +25,7 @@ type RunGetOutput = ContractOutput<typeof runGet>;
 type RunCostOutput = ContractOutput<typeof runCostGet>;
 type RunTranscriptOutput = ContractOutput<typeof runTranscriptGet>;
 type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
+type RunChainOutput = ContractOutput<typeof runChainGet>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -200,6 +203,62 @@ export function toRunTranscript(
       cumulativeCost: toCost(entry.cumulativeCost),
     })),
     cursor: out.cursor,
+    complete: out.complete,
+  };
+}
+
+/**
+ * `get_run_chain` to the Chain and seal tab. The gap runs, the checkpoints and
+ * the ladder are carried across as recorded: the tab's job is to state what
+ * the read found, not to reconcile it.
+ */
+export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
+  return {
+    hashRule: out.hashRule,
+    frameCount: out.frameCount,
+    firstSeq: out.firstSeq,
+    lastSeq: out.lastSeq,
+    merkleRoot: out.merkleRoot,
+    checkpoints: out.checkpoints.map((checkpoint) => ({
+      seq: checkpoint.seq,
+      chainHead: checkpoint.chainHead,
+      eventCount: checkpoint.eventCount,
+      signedAt: checkpoint.signedAt,
+      deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
+      platformKeyId: checkpoint.platformKeyId,
+      countersignedAt: checkpoint.countersignedAt,
+      anchorRoot: checkpoint.anchorRoot,
+      anchoredAt: checkpoint.anchoredAt,
+    })),
+    gaps: {
+      missingSequences: out.gaps.missingSequences.map((gap) => ({
+        from: gap.from,
+        to: gap.to,
+      })),
+      missingFrameCount: out.gaps.missingFrameCount,
+      missingBodies: out.gaps.missingBodies,
+      recorded: out.gaps.recorded,
+    },
+    seal:
+      out.seal === null
+        ? null
+        : {
+            sealedAt: out.seal.sealedAt,
+            terminalStatus: out.seal.terminalStatus,
+            eventCount: out.seal.eventCount,
+            finalRunSeq: out.seal.finalRunSeq,
+            finalEventDigest: out.seal.finalEventDigest,
+            eventStreamDigest: out.seal.eventStreamDigest,
+            merkleRoot: out.seal.merkleRoot,
+            archiveSegmentRef: out.seal.archiveSegmentRef,
+          },
+    enforcementTier: out.enforcementTier,
+    recordedGrade: out.recordedGrade,
+    ladder: out.ladder.map((rung) => ({
+      grade: rung.grade,
+      met: rung.met,
+      reason: rung.reason,
+    })),
     complete: out.complete,
   };
 }

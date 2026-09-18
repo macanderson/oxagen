@@ -30,6 +30,28 @@ export const RunSummary = z.object({
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 
+/**
+ * Where the run's actions were observed from (spec §8.4). `observe` records
+ * what an agent did and gives Oxagen no connection point, so every direct
+ * command is refused: a page draws the controls disabled rather than offering
+ * four that always fail.
+ */
+export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
+export type EnforcementTier = z.infer<typeof EnforcementTier>;
+
+/** The gaps a seal recorded, from the closed vocabulary (spec §13.1). */
+export const CompletenessGap = z.enum([
+  "digest_only",
+  "body_missing",
+  "tool_bodies",
+  "model_calls",
+  "hooks_partial",
+  "unobserved_tail",
+  "chain_break",
+  "telemetry_gap",
+]);
+export type CompletenessGap = z.infer<typeof CompletenessGap>;
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
@@ -49,6 +71,15 @@ export const RunRow = z.object({
   name: z.string().min(1).nullable(),
   summary: RunSummary.nullable(),
   replayGrade: ReplayGrade.nullable(),
+  enforcementTier: EnforcementTier,
+  /** Empty while the run is live, or where the seal recorded none. */
+  completenessGaps: z.array(CompletenessGap),
+  /**
+   * Would `summarize_run` accept this run? The contract answers it from the
+   * same rule the handler gates on, so a page that offers the action and a
+   * handler that refuses it cannot drift (#3285).
+   */
+  canSummarize: z.boolean(),
   startedAt: z.iso.datetime({ offset: true }),
   sealedAt: z.iso.datetime({ offset: true }).nullable(),
 });

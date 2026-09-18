@@ -13,7 +13,7 @@
 // spec §8.5), which #2955 owns.
 import { z } from "zod";
 import { Cost } from "./money";
-import { RunRow } from "./runs";
+import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -253,3 +253,98 @@ export const RunTranscript = z.object({
   complete: z.boolean(),
 });
 export type RunTranscript = z.infer<typeof RunTranscript>;
+
+/**
+ * `get_run_chain`: what makes the recording tamper-evident, and what it is
+ * missing (spec §8.3, §8.4). Read once, when the Chain and seal tab opens.
+ *
+ * `recordedGrade` is the grade the seal wrote, and it is the only grade a
+ * surface renders. The ladder below it says why each rung is or is not
+ * reached, computed from what the read could see, so a rung may read stronger
+ * than the recorded word. Nothing here raises the grade (§8.4).
+ */
+const ChainCheckpoint = z.object({
+  seq: z.string().regex(/^\d+$/),
+  /** The chain head the checkpoint committed to. */
+  chainHead: z.string(),
+  eventCount: Count,
+  signedAt: z.iso.datetime({ offset: true }),
+  deviceKeyFingerprint: z.string(),
+  /** Null until the platform has countersigned. */
+  platformKeyId: z.string().nullable(),
+  countersignedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** The external anchor it was published into; null when none. */
+  anchorRoot: z.string().nullable(),
+  anchoredAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type ChainCheckpoint = z.infer<typeof ChainCheckpoint>;
+
+export const COMPLETENESS_GAPS = [
+  "digest_only",
+  "body_missing",
+  "tool_bodies",
+  "model_calls",
+  "hooks_partial",
+  "unobserved_tail",
+  "chain_break",
+  "telemetry_gap",
+] as const;
+
+const ChainGaps = z.object({
+  /** Runs of sequence numbers the recording does not hold, inclusive. */
+  missingSequences: z.array(
+    z.object({
+      from: z.string().regex(/^\d+$/),
+      to: z.string().regex(/^\d+$/),
+    }),
+  ),
+  missingFrameCount: Count,
+  /** Frames that carried content whose bytes were not retained. */
+  missingBodies: Count,
+  /** The gaps the seal itself recorded. */
+  recorded: z.array(z.enum(COMPLETENESS_GAPS)),
+});
+
+const ChainSeal = z.object({
+  sealedAt: z.iso.datetime({ offset: true }),
+  terminalStatus: z.string(),
+  eventCount: Count,
+  finalRunSeq: z.string().regex(/^\d+$/).nullable(),
+  finalEventDigest: z.string().nullable(),
+  eventStreamDigest: z.string().nullable(),
+  /** Null on a seal that predates the Merkle root. */
+  merkleRoot: z.string().nullable(),
+  archiveSegmentRef: z.string().nullable(),
+});
+
+/** One rung of the replay ladder, and the machine-readable reason it stands where it does. */
+const ReplayLadderRung = z.object({
+  grade: ReplayGrade,
+  met: z.boolean(),
+  reason: z.string().min(1),
+});
+export type ReplayLadderRung = z.infer<typeof ReplayLadderRung>;
+
+export const RunChain = z.object({
+  /** How each frame is chained to the one before it; a verifier needs this and nothing else. */
+  hashRule: z.enum([
+    "tacho.sha256_prev_hash_v1",
+    "ledger.event_stream_digest_v1",
+  ]),
+  /** Frames the walk read. */
+  frameCount: Count,
+  firstSeq: z.string().regex(/^\d+$/).nullable(),
+  lastSeq: z.string().regex(/^\d+$/).nullable(),
+  /** Null while the run is unsealed. */
+  merkleRoot: z.string().nullable(),
+  /** A ledger run keeps none: it seals rather than checkpointing. */
+  checkpoints: z.array(ChainCheckpoint),
+  gaps: ChainGaps,
+  seal: ChainSeal.nullable(),
+  enforcementTier: EnforcementTier,
+  recordedGrade: ReplayGrade.nullable(),
+  ladder: z.array(ReplayLadderRung),
+  /** False when the run has more frames than the walk read, so these are a prefix's gaps. */
+  complete: z.boolean(),
+});
+export type RunChain = z.infer<typeof RunChain>;
