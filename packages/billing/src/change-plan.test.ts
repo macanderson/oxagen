@@ -1648,3 +1648,152 @@ describe("the origin of an unpriceable swap (r4042603495)", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// A submit priced as a CHECKOUT must not land as an in-place swap
+// (#3157, PR #3171 review, r4042742296).
+//
+// `previewPlanChange` answers `requiresCheckout: true` when the org has no
+// active subscription, and the caller acts on that: it shows no dialog, quotes
+// no proration and approves no figure, because on that path the customer
+// approves the price on Stripe's own page. That is correct as far as it goes.
+//
+// What it cannot do is notice the state moving underneath it. If a Checkout
+// completes in another tab, or a webhook sync lands, between the preview and
+// the submit, `changeOrgPlan` finds an active subscription and takes the
+// IN-PLACE path instead — and the approval gate is keyed on
+// `approvedMaxCents !== undefined`, which on this path is absent by design. So
+// the gate never runs and an `always_invoice` proration is charged that no
+// person was ever shown.
+//
+// THE DISCRIMINATOR IS NOT "WAS AN AMOUNT APPROVED". Absent must keep meaning
+// "no approval was recorded" — 61 of this package's 67 `changeOrgPlan` call
+// sites omit it, and turning absence into a refusal would refuse every caller
+// with no human behind it. The question that actually separates the safe case
+// from the unsafe one is what this submit BELIEVED: a submit made on the
+// strength of a `requiresCheckout: true` preview is asserting a piece of
+// provider state, and provider state moves. So the caller says so explicitly,
+// and the server refuses when the assertion no longer holds — the same shape
+// as `expectedCurrentPriceId` on the swap itself.
+// ---------------------------------------------------------------------------
+
+describe("a checkout submit that became an in-place change (r4042742296)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_scale");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("refuses when the preview said checkout but a subscription now exists", async () => {
+    // The whole finding, in one fixture. The submit carries no approved
+    // figure — it never had one — so the approval gate is silent, and without
+    // this guard the change swaps and invoices.
+    previewingProration(60_000);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+        previewRequiredCheckout: true,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_CHECKOUT_STATE_MOVED" });
+  });
+
+  it("refuses before anything durable is written or mutated", async () => {
+    previewingProration(60_000);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+        previewRequiredCheckout: true,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_CHECKOUT_STATE_MOVED" });
+
+    // A refusal after the intent write would leave an intent for a swap that
+    // never happened; one after the swap would be no refusal at all. The
+    // preview must not even be taken — this submit is not entitled to price
+    // anything against a subscription it did not know about.
+    expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
+    expect(subscriptionUpdates).toHaveLength(0);
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
+    expect(previewPlanChangeMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses even when the subscription is already on the target price", async () => {
+    // The stale tab's own plan completed in the other tab. Nothing would be
+    // charged here — the already-applied guard returns null — but the guard
+    // sits in FRONT of it deliberately: a submit that believed there was no
+    // subscription has no business driving the grant-recovery branch behind
+    // that early return, which does write. Pins the guard's position, not just
+    // its existence.
+    previewingProration(0);
+    stubPlanLookups(ENTERPRISE_PLAN, ENTERPRISE_PLAN);
+    onPrice("price_enterprise_m", { planId: "plan-enterprise-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+        previewRequiredCheckout: true,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_CHECKOUT_STATE_MOVED" });
+  });
+
+  it("still creates the checkout session when the state did NOT move", async () => {
+    // The path the signal was made for. Asserting "the preview told me
+    // checkout" must not break the case where the preview was right.
+    dbQueryMocks.subscriptions.findFirst.mockResolvedValue(null);
+    dbQueryMocks.organizations.findFirst.mockResolvedValue({
+      id: "org-abc",
+      name: "Acme",
+      slug: "acme",
+    });
+    createSubscriptionCheckoutMock.mockResolvedValue({
+      sessionId: "sess_moved",
+      url: "https://checkout.test/moved",
+    });
+
+    const result = await changeOrgPlan("org-abc", BUILD_PLAN.slug, "month", {
+      previewRequiredCheckout: true,
+    });
+
+    expect(result).toEqual({ checkoutUrl: "https://checkout.test/moved" });
+  });
+
+  it("swaps in place when the submit made no checkout claim at all", async () => {
+    // The over-correction guard. A caller with no dialog and no preview —
+    // which is every non-UI caller and 61 of this package's own call sites —
+    // passes neither field, and must be unaffected. A guard keyed on the
+    // ABSENCE of an approval rather than on the PRESENCE of a checkout claim
+    // fails here, which is the point of asserting it.
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("swaps in place when the submit explicitly claimed no checkout", async () => {
+    // The second half of the same negative: `false` is a claim, and the claim
+    // it makes is the one the in-place path is for. Only `true` refuses.
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+      previewRequiredCheckout: false,
+      approvedMaxCents: 49_900,
+    });
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalled();
+  });
+});

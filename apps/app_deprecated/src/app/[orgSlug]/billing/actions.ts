@@ -191,6 +191,19 @@ const ChangePlanSchema = z.object({
    * meaningless.
    */
   approvedMaxCents: z.number().int().optional(),
+  /**
+   * True when the preview this submit came from answered
+   * `requiresCheckout: true`, so the client expects a Stripe Checkout URL and
+   * showed no confirmation dialog.
+   *
+   * Carried because that preview asserted provider state — "this org has no
+   * active subscription" — and a Checkout completing in another tab or a
+   * webhook sync landing in between makes it false. Without it, such a submit
+   * quietly becomes an in-place swap, and the approval gate cannot catch it
+   * because this path legitimately has no approved figure to gate on
+   * (#3157, r4042742296).
+   */
+  previewRequiredCheckout: z.boolean().optional(),
 });
 
 /**
@@ -204,7 +217,13 @@ export async function changePlanAction(
   const parsed = ChangePlanSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const { orgSlug, targetPlanSlug, interval, approvedMaxCents } = parsed.data;
+  const {
+    orgSlug,
+    targetPlanSlug,
+    interval,
+    approvedMaxCents,
+    previewRequiredCheckout,
+  } = parsed.data;
   const managed = await resolveManagedOrg(orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
 
@@ -224,6 +243,7 @@ export async function changePlanAction(
           successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
           cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
           approvedMaxCents,
+          previewRequiredCheckout,
         }),
     );
 

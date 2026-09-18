@@ -107,6 +107,52 @@ export class PlanChangeExceedsApprovedAmountError extends Error {
   }
 }
 
+/**
+ * Raised when a plan change that was priced as a NEW subscription arrives to
+ * find an active one, so the in-place path would run instead of Checkout.
+ *
+ * WHAT THIS BINDS, AND WHY THE MISSING APPROVAL CANNOT BIND IT.
+ *
+ * `previewPlanChange` answers `requiresCheckout: true` when the org has no
+ * active subscription. A caller acting on that shows no confirmation dialog
+ * and approves no figure — correctly, because on that path the customer
+ * approves the price on Stripe's own hosted page, and inventing a number for
+ * it would make {@link PlanChangeExceedsApprovedAmountError} meaningless.
+ *
+ * But the preview and the submit are separated by an HTTP round trip, and the
+ * fact the preview read is provider state. A Checkout completed in another
+ * tab, or a webhook sync landing in between, gives the org an active
+ * subscription — and `changeOrgPlan` then takes the in-place path, where the
+ * approval gate is keyed on `approvedMaxCents !== undefined` and so does not
+ * run at all. The result is an immediate `always_invoice` proration nobody was
+ * shown (#3157, PR #3171 review, r4042742296).
+ *
+ * THE DISCRIMINATOR IS THE CLAIM, NOT THE MISSING AMOUNT. "No approved figure"
+ * cannot mean "refuse the in-place path": absence has one settled meaning here
+ * — no approval was recorded — and every caller with no human behind it relies
+ * on it. Making absence a refusal would refuse them all.
+ *
+ * What separates the unsafe case from the safe one is what the submit
+ * BELIEVED. A submit made on the strength of a `requiresCheckout: true`
+ * preview is asserting a piece of provider state, and provider state moves. So
+ * the caller states the assertion explicitly and the server refuses when it no
+ * longer holds — the same shape as `expectedCurrentPriceId` on the swap
+ * itself, one step earlier in the same request.
+ *
+ * The remedy is a fresh preview: with a subscription now in place it returns
+ * `requiresCheckout: false` and a proration figure, the caller shows it, and
+ * the change becomes one a person has approved.
+ */
+export class PlanChangeCheckoutStateMovedError extends Error {
+  readonly code = "PLAN_CHANGE_CHECKOUT_STATE_MOVED" as const;
+  constructor(readonly stripeSubscriptionId: string) {
+    super(
+      "This change was priced as a new subscription, but an active subscription now exists, so it would have been billed as an immediate change instead; it was not applied. Preview the change again to see what it will cost.",
+    );
+    this.name = "PlanChangeCheckoutStateMovedError";
+  }
+}
+
 /** Which way the money moves across a plan change, and what the swap owes now. */
 export interface PlanChangeDirection {
   prorationBehavior: "always_invoice" | "none";
@@ -805,6 +851,21 @@ export async function changeOrgPlan(
      * optional rather than required, and why absent does not mean unlimited.
      */
     approvedMaxCents?: number;
+    /**
+     * True when the preview this submit was made from answered
+     * `requiresCheckout: true` — that is, when the caller believes this org
+     * has no active subscription and is expecting a Stripe Checkout URL back.
+     *
+     * A claim about provider state, not a preference, and the state can move
+     * between the preview and this call. If an active subscription is found,
+     * the claim is false and the change is refused with
+     * {@link PlanChangeCheckoutStateMovedError} rather than silently becoming
+     * an in-place swap that charges a proration nobody approved.
+     *
+     * Absent and `false` both behave exactly as before. Only `true` refuses —
+     * see the error for why absence is not, and cannot be, the discriminator.
+     */
+    previewRequiredCheckout?: boolean;
   },
 ): Promise<{ checkoutUrl: string } | null> {
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
@@ -881,6 +942,37 @@ export async function changeOrgPlan(
       "billing: changeOrgPlan — no active subscription, created checkout session",
     );
     return { checkoutUrl: result.url };
+  }
+
+  // ── The checkout this submit was priced as is no longer the change it is ──
+  //
+  // Everything below this line is the in-place path: it prorates, it invoices,
+  // and it does so immediately. A submit that arrived asserting
+  // `requiresCheckout` was priced against an org with no subscription, showed
+  // no dialog and carries no approved figure, so nothing further down can
+  // notice that it is now about to bill somebody — the approval gate is keyed
+  // on an amount this path never had.
+  //
+  // So the refusal is here, in front of all of it, including the
+  // already-applied early return below. That placement is deliberate rather
+  // than convenient: the already-applied branch writes — it can resume a
+  // credit grant and retire an intent — and a submit that did not know this
+  // subscription existed is not the request that should be driving a repair of
+  // it. The caller previews again and gets a change a person can approve
+  // (#3157, PR #3171 review, r4042742296).
+  if (opts?.previewRequiredCheckout === true) {
+    logger.warn(
+      {
+        orgId,
+        targetPlanSlug,
+        interval,
+        stripeSubId: activeSubRow.stripeSubscriptionId,
+      },
+      "billing: refusing a plan change priced as a checkout that would now be an in-place swap",
+    );
+    throw new PlanChangeCheckoutStateMovedError(
+      activeSubRow.stripeSubscriptionId,
+    );
   }
 
   // Resolve the plan the org is on now — for the log line and the audit

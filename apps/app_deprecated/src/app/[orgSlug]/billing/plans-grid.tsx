@@ -110,11 +110,20 @@ export function PlansGrid({
         // This path shows no confirm dialog and charges nothing in place; the
         // customer approves the price on Stripe's own page. Passing a figure
         // here would be inventing an approval that did not happen.
+        //
+        // What IS sent is the claim that preview made — that this org has no
+        // active subscription. It can stop being true before the submit lands
+        // (a Checkout finished in another tab, a webhook synced), and then the
+        // server would take its in-place path and invoice a proration this
+        // screen never showed, with no approved figure for the gate to catch
+        // it on. Saying what was assumed is what lets the server refuse
+        // (#3157, r4042742296).
         startConfirmTransition(async () => {
           const res = await changePlanAction({
             orgSlug,
             targetPlanSlug: slug,
             interval: chosenInterval,
+            previewRequiredCheckout: true,
           });
           if (!res.ok) {
             addToast({

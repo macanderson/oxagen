@@ -658,6 +658,51 @@ describe("env validation scope + resilience (regression: page-wipe 812344190)", 
     );
   });
 
+  it("changePlanAction forwards the checkout claim the preview made", async () => {
+    // The claim is the only thing that lets the billing layer notice that a
+    // submit priced as a Checkout has become an in-place swap — the approval
+    // gate cannot, because this path legitimately has no approved figure.
+    // Dropping it here would leave that guard wired to nothing
+    // (#3157, r4042742296).
+    vi.mocked(changeOrgPlan).mockResolvedValue({
+      checkoutUrl: "https://checkout.test/x",
+    } as never);
+
+    await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+      previewRequiredCheckout: true,
+    });
+
+    expect(changeOrgPlan).toHaveBeenCalledWith(
+      expect.any(String),
+      "scale-v2",
+      "month",
+      expect.objectContaining({ previewRequiredCheckout: true }),
+    );
+  });
+
+  it("changePlanAction makes NO checkout claim when the caller made none", async () => {
+    // The paired negative. Absent must survive as absent: coercing it to true
+    // would refuse every in-place change the confirm dialog makes.
+    vi.mocked(changeOrgPlan).mockResolvedValue(null as never);
+
+    await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+      approvedMaxCents: 4200,
+    });
+
+    expect(changeOrgPlan).toHaveBeenCalledWith(
+      expect.any(String),
+      "scale-v2",
+      "month",
+      expect.objectContaining({ previewRequiredCheckout: undefined }),
+    );
+  });
+
   it("changePlanAction returns {ok:false} (no throw) when env validation fails", async () => {
     vi.mocked(requireEnv).mockImplementationOnce(() => {
       throw new Error("Invalid environment");
