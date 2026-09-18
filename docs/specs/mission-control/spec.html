@@ -230,7 +230,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <li>teaches every future run from one knowledge graph, a linked map of the customer's data, built from the customer's data sources.</li>
 </ol>
 <p>Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.</p>
-<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is <strong>skill resolution</strong>: which skills a workspace's config lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is a packaged instruction set an agent loads at run time. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
+<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
 <hr />
 <h2 id="2-scope">2. Scope</h2>
 <h3 id="2-1-in-scope-for-v1">2.1 In scope for v1</h3>
@@ -2495,7 +2495,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="19-demo-wow-scenarios">19. Demo Wow! Scenarios</h2>
-<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 was ported to the master on 2026-09-14 and is the scenario the Skills page, the skills-off gate and the run interjection are built from; it is listed below rather than left out of a table marked complete.</p>
+<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 is listed below because it is mocked and was previously missing from a table marked complete; its release status is set by <code>apps/app/ARCHITECTURE.md</code>, which wins over this document where the two differ, and which places W13 out of rev1.</p>
 <p>Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in <code>2026-09-11-oxagen-demo-mockup-prompts.md</code>, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.</p>
 <div class="tw"><table>
 <thead>
@@ -2594,10 +2594,10 @@ sandbox = &quot;read-only&quot;
 </tr>
 <tr>
 <td>W13</td>
-<td>In the loop: skills ship off, the search is the config not the model, and Oxagen stops a run before the first model call to put a question to a person through the agent</td>
-<td>Skills (Catalog, Search, In the loop, Reflection, Versions), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
-<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a>, <a href="https://github.com/macanderson/tmp-oxagen-mockups/tree/main/mockups/pages">W13 page specs</a></td>
-<td>mocked</td>
+<td>In the loop: the skills scenario — skills off by default, resolution as config, and a run interjected before the first model call</td>
+<td>Skills (mocked tabs), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
+<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a></td>
+<td>mocked; <strong>out of rev1</strong> — <code>apps/app/ARCHITECTURE.md</code> (2026-09-15) ships only the observed-inventory Skills read and keeps resolution, <code>search_skills</code>, interjection and reflection out</td>
 </tr>
 </tbody>
 </table></div>
