@@ -23,7 +23,7 @@ import type { Cost } from "@/data/contracts/money";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runTranscript, transcriptEntry } from "./run.builders";
-import { formatElapsed } from "./entry";
+import { formatDuration } from "@/ui/money-format";
 
 const { readTranscriptPage } = vi.hoisted(() => ({
   readTranscriptPage: vi.fn(),
@@ -268,8 +268,8 @@ describe("playback", () => {
       first: runTranscript({ entries, cursor: null, complete: true }),
     });
     const idle = screen.getByTestId("player-idle");
-    expect(idle).toHaveTextContent(formatElapsed(40_000, "en"));
-    expect(idle).toHaveTextContent(formatElapsed(2000, "en"));
+    expect(idle).toHaveTextContent(formatDuration(40_000, "en"));
+    expect(idle).toHaveTextContent(formatDuration(2000, "en"));
     fireEvent.click(screen.getByTestId("player-play"));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1999);

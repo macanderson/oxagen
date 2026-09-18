@@ -62,6 +62,22 @@ const TENANT = {
 const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
 
+/**
+ * What a handler throws when it refuses: `code: "conflict"` with the refusal
+ * named in `reason`. The seam carries that word through as the action's
+ * `code`, and the dialog picks its sentence on it, so a test that threw a
+ * CapabilityError instead would prove the wrong path.
+ */
+class HandlerRefusal extends Error {
+  readonly code = "conflict";
+
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "HandlerRefusal";
+  }
+}
+const refused = (reason: string) => new HandlerRefusal(reason);
+
 beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
@@ -224,15 +240,7 @@ describe("forkRun", () => {
   });
 
   it("returns the handler's conflict as a conflict, so the dialog can name it (negative)", async () => {
-    // A HandlerError names the refusal in `reason`, and the seam carries that
-    // word through as the action's `code`. The dialog's sentence is chosen on
-    // it, so the test throws the shape the handler really throws.
-    invoke.mockRejectedValue(
-      Object.assign(new Error("fork refused"), {
-        code: "conflict",
-        reason: "replay_grade_below_fork",
-      }),
-    );
+    invoke.mockRejectedValue(refused("replay_grade_below_fork"));
     expect(await forkRun("acme", "core-platform", RUN, "412")).toMatchObject({
       ok: false,
       reason: "conflict",

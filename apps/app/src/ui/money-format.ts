@@ -86,6 +86,26 @@ export function formatClock(seconds: number, locale: string): string {
 }
 
 /**
+ * A duration as a reader reads it: `41 ms` under a second, `4.2 s` under a
+ * minute, `2:07` beyond one. The Run page's transport and its transcript both
+ * print elapsed time, and a run's own scale spans four orders of magnitude, so
+ * one unit for all of it would read as either noise or nothing.
+ */
+export function formatDuration(ms: number, locale: string): string {
+  const total = Math.max(0, ms);
+  if (total < 1000) {
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(total)} ms`;
+  }
+  if (total < 60_000) {
+    const seconds = new Intl.NumberFormat(locale, {
+      maximumFractionDigits: total < 10_000 ? 1 : 0,
+    }).format(total / 1000);
+    return `${seconds} s`;
+  }
+  return formatClock(total / 1000, locale);
+}
+
+/**
  * A 0…1 ratio as a CSS length ("42.3%") for a meter's width. A style value is
  * not prose, so it is built without a locale: a decimal comma or a narrow
  * no-break space would not be a length any browser reads.

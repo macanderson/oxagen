@@ -21,10 +21,12 @@ import { ratioOfIntegers } from "@/data/contracts/money";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
-import { formatElapsed } from "./entry";
 import { NoValue } from "./parts";
+
+/** The narrowest a priced turn's bar is drawn, as a share of the run total. */
+const MIN_BAR = 0.005;
 
 /** A turn, the steps recorded inside its sequence range, and where its bar sits. */
 type Bar = {
@@ -50,9 +52,16 @@ export function buildBars(
 ): { bars: Bar[]; total: TranscriptEntry["cumulativeCost"] } {
   const last = turns.at(-1);
   const total = last === undefined ? null : last.cumulativeCost;
+  // A sequence is a decimal digit string of no fixed width, so it is compared
+  // by padding both sides to one length and reading them as text. Parsing it
+  // into a number would lose a run past 2^53, and arithmetic on the digits
+  // belongs to one module (INV-09).
+  const before = (a: string, b: string): boolean => {
+    const width = Math.max(a.length, b.length);
+    return a.padStart(width, "0") <= b.padStart(width, "0");
+  };
   const inRange = (step: TranscriptEntry, turn: TranscriptEntry): boolean =>
-    BigInt(step.seq) >= BigInt(turn.seq) &&
-    BigInt(step.seq) <= BigInt(turn.endSeq);
+    before(turn.seq, step.seq) && before(step.seq, turn.endSeq);
   const bars = turns.map((turn) => {
     const before = turn.cumulativeCost;
     const width =
@@ -77,28 +86,40 @@ export function buildBars(
   return { bars, total };
 }
 
+/** The run's total up to and including one turn, or nothing where none was recorded. */
+function RunningTotal({ cost }: { cost: TranscriptEntry["cumulativeCost"] }) {
+  const t = useTranslations("run.waterfall");
+  if (cost === null) return null;
+  return (
+    <span className="text-muted-foreground">
+      {t.rich("running", {
+        cost: () => <Money value={cost} precision="exact" />,
+      })}
+    </span>
+  );
+}
+
 function StepSegments({ bar }: { bar: Bar }) {
   const t = useTranslations("run.waterfall");
   if (bar.steps.length === 0) return null;
   // Inside one turn the steps are split by their share of the turn's own cost,
   // so a segment says how much of this turn that step was.
-  const priced = bar.steps.filter(
-    (step) =>
-      step.cost !== null &&
-      bar.turn.cost !== null &&
-      step.cost.currency === bar.turn.cost.currency,
+  const whole = bar.turn.cost;
+  if (whole === null) return null;
+  const priced = bar.steps.flatMap((step) =>
+    step.cost === null || step.cost.currency !== whole.currency
+      ? []
+      : [{ step, share: ratioOfIntegers(step.cost.micros, whole.micros) }],
   );
-  if (priced.length === 0 || bar.turn.cost === null) return null;
+  if (priced.length === 0) return null;
   return (
     <span className="absolute inset-0 flex" aria-hidden="true">
-      {priced.map((step) => (
+      {priced.map(({ step, share }) => (
         <span
           key={`${step.seq}-${step.endSeq}`}
           data-testid="waterfall-step"
           title={t("step", { label: step.label })}
-          style={{
-            width: `${ratioOfIntegers(step.cost!.micros, bar.turn.cost!.micros) * 100}%`,
-          }}
+          style={{ width: ratioWidth(share) }}
           className="border-r border-background/60 last:border-r-0"
         />
       ))}
@@ -170,8 +191,10 @@ export function Waterfall({
                 <span
                   data-testid="waterfall-fill"
                   style={{
-                    marginInlineStart: `${bar.offset * 100}%`,
-                    width: `${Math.max(bar.width * 100, 0.5)}%`,
+                    marginInlineStart: ratioWidth(bar.offset),
+                    // A priced turn always draws something: a bar too thin to
+                    // see would read as a turn the waterfall left out.
+                    width: ratioWidth(Math.max(bar.width, MIN_BAR)),
                   }}
                   className="relative block h-full rounded bg-foreground/70"
                 >
@@ -180,24 +203,13 @@ export function Waterfall({
               )}
             </span>
             <span className="flex flex-wrap gap-x-3 tabular-nums">
-              <span>{formatElapsed(bar.turn.elapsedMs, locale)}</span>
+              <span>{formatDuration(bar.turn.elapsedMs, locale)}</span>
               {bar.turn.cost === null ? (
                 <NoValue />
               ) : (
                 <Money value={bar.turn.cost} precision="exact" />
               )}
-              {bar.turn.cumulativeCost === null ? null : (
-                <span className="text-muted-foreground">
-                  {t.rich("running", {
-                    cost: () => (
-                      <Money
-                        value={bar.turn.cumulativeCost!}
-                        precision="exact"
-                      />
-                    ),
-                  })}
-                </span>
-              )}
+              <RunningTotal cost={bar.turn.cumulativeCost} />
             </span>
           </li>
         ))}

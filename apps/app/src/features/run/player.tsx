@@ -31,9 +31,9 @@ import type {
 import type { Read } from "@/data/read";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatDuration } from "@/ui/money-format";
 import { readTranscriptPage } from "./actions";
-import { Entry, formatElapsed, type Place } from "./entry";
+import { Entry, type Place } from "./entry";
 import { useRunStream } from "./use-run-stream";
 
 /** The longest a gap between two entries plays for, however long the run waited. */
@@ -74,6 +74,8 @@ function Transport({
 }) {
   const t = useTranslations("run.player");
   const locale = useLocale();
+  // Held in a local so the renderer closes over a value already narrowed.
+  const running = entry.cumulativeCost;
   return (
     <div
       data-testid="run-transport"
@@ -150,7 +152,7 @@ function Transport({
             <button
               key={rate}
               type="button"
-              data-testid={`player-speed-${rate}`}
+              data-testid={`player-speed-${String(rate)}`}
               aria-pressed={rate === speed}
               className={`${buttonSecondary} aria-pressed:border-foreground aria-pressed:text-foreground`}
               onClick={() => {
@@ -190,16 +192,14 @@ function Transport({
           })}
         </span>
         <span>
-          {t("into", { elapsed: formatElapsed(entry.elapsedMs, locale) })}
+          {t("into", { elapsed: formatDuration(entry.elapsedMs, locale) })}
         </span>
-        {entry.cumulativeCost === null ? (
+        {running === null ? (
           <span className="text-muted-foreground">{t("noCostYet")}</span>
         ) : (
           <span data-testid="player-cost">
             {t.rich("spentSoFar", {
-              cost: () => (
-                <Money value={entry.cumulativeCost!} precision="exact" />
-              ),
+              cost: () => <Money value={running} precision="exact" />,
             })}
           </span>
         )}
@@ -207,8 +207,8 @@ function Transport({
       {idleGapMs === null ? null : (
         <p data-testid="player-idle" className="text-xs text-muted-foreground">
           {t("idle", {
-            played: formatElapsed(IDLE_CAP_MS, locale),
-            real: formatElapsed(idleGapMs, locale),
+            played: formatDuration(IDLE_CAP_MS, locale),
+            real: formatDuration(idleGapMs, locale),
           })}
         </p>
       )}
@@ -245,13 +245,13 @@ export function RunPlayer({
   // Only meaningful on a live run: false once the person has scrubbed back off
   // the head, so new entries stop dragging the playhead with them.
   const [attached, setAttached] = useState(live);
-  const list = useRef<HTMLOListElement>(null);
+  const listRef = useRef<HTMLOListElement>(null);
   // A read in flight is not started again: the stream can signal several times
   // before one page comes back.
-  const reading = useRef(false);
+  const readingRef = useRef(false);
   // The entries and the cursor as the last read left them, so an append knows
   // the new length before React has committed the state it set.
-  const held = useRef<TranscriptEntry[]>(first.entries);
+  const heldRef = useRef<TranscriptEntry[]>(first.entries);
   const cursorRef = useRef<string | null>(first.cursor);
 
   const total = entries.length;
@@ -268,8 +268,8 @@ export function RunPlayer({
    */
   const loadMore = useCallback(
     async (options: { follow?: boolean } = {}): Promise<void> => {
-      if (reading.current || cursorRef.current === null) return;
-      reading.current = true;
+      if (readingRef.current || cursorRef.current === null) return;
+      readingRef.current = true;
       setLoading("reading");
       try {
         const read = await readTranscriptPage(
@@ -287,8 +287,8 @@ export function RunPlayer({
         }
         setFailure(null);
         setLoading("idle");
-        const next = [...held.current, ...read.value.entries];
-        held.current = next;
+        const next = [...heldRef.current, ...read.value.entries];
+        heldRef.current = next;
         cursorRef.current = read.value.cursor;
         setEntries(next);
         setCursor(read.value.cursor);
@@ -305,7 +305,7 @@ export function RunPlayer({
         });
         setLoading("failed");
       } finally {
-        reading.current = false;
+        readingRef.current = false;
       }
     },
     [kinds, org, runId, ws, zoom],
@@ -339,15 +339,17 @@ export function RunPlayer({
     [entries.length, live],
   );
 
+  // The transport is at the end of the recording when the playhead is on the
+  // last entry and nothing lies behind the cursor. `running` is derived rather
+  // than stored, so reaching the end stops playback without an effect writing
+  // state back into the render that scheduled it.
+  const atEnd = index >= entries.length - 1 && cursor === null;
+  const running = playing && !atEnd;
+
   // Playback. Each tick waits the recorded gap, capped, divided by the speed.
   useEffect(() => {
-    if (!playing) return;
-    if (index >= entries.length - 1) {
-      // Nothing left on this page. A run with more behind the cursor keeps
-      // playing once the next page lands; a complete one stops.
-      if (cursor === null) setPlaying(false);
-      return;
-    }
+    if (!running) return;
+    if (index >= entries.length - 1) return;
     const here = entries[index];
     const next = entries[index + 1];
     if (here === undefined || next === undefined) return;
@@ -359,22 +361,22 @@ export function RunPlayer({
     return () => {
       clearTimeout(timer);
     };
-  }, [playing, index, entries, speed, cursor]);
+  }, [running, index, entries, speed]);
 
   // Read ahead of the playhead, so playback does not stall at a page boundary.
   // Only while playing: reading a second page the moment a short transcript
   // renders would double the cost of opening the tab for a person who has not
   // asked for anything yet, and "Read more" is what asking looks like.
   useEffect(() => {
-    if (!playing || cursor === null || loading !== "idle") return;
+    if (!running || cursor === null || loading !== "idle") return;
     if (index < entries.length - PREFETCH_WITHIN) return;
     void loadMore();
-  }, [playing, index, entries.length, cursor, loading, loadMore]);
+  }, [running, index, entries.length, cursor, loading, loadMore]);
 
   // Keep the entry under the playhead on screen. A person who asked for less
   // motion gets none.
   useEffect(() => {
-    const node = list.current?.querySelector("[data-current='true']");
+    const node = listRef.current?.querySelector("[data-current='true']");
     // `scrollIntoView` is not implemented everywhere a component test runs, and
     // scrolling is never what the page is for, so a runtime without it renders
     // the same page and simply does not scroll.
@@ -409,10 +411,10 @@ export function RunPlayer({
         entry={entry}
         index={Math.min(index, total - 1)}
         total={total}
-        playing={playing}
+        playing={running}
         speed={speed}
         idleGapMs={idleGapMs}
-        atEnd={index >= total - 1 && cursor === null}
+        atEnd={atEnd}
         onSeek={seek}
         onPlay={setPlaying}
         onSpeed={setSpeed}
@@ -440,7 +442,7 @@ export function RunPlayer({
           )}
         </p>
       ) : null}
-      <ol ref={list} data-testid="transcript-entries" className="flex flex-col">
+      <ol ref={listRef} data-testid="transcript-entries" className="flex flex-col">
         {entries.map((row, position) => (
           <Entry
             key={`${row.seq}-${row.endSeq}`}

@@ -19,24 +19,10 @@ import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatDuration } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 
 export type Place = { org: string; ws: string; runId: string };
-
-/** Milliseconds as a reader reads them: `4.2 s`, `1 m 14 s`, `41 ms`. */
-export function formatElapsed(ms: number, locale: string): string {
-  const number = (value: number, digits = 0) =>
-    new Intl.NumberFormat(locale, {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(value);
-  if (ms < 1000) return `${number(ms)} ms`;
-  if (ms < 60_000) return `${number(ms / 1000, ms < 10_000 ? 1 : 0)} s`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1000);
-  return `${number(minutes)} m ${number(seconds)} s`;
-}
 
 function Redactions({ half }: { half: TranscriptBody }) {
   const t = useTranslations("run.transcript");
@@ -140,6 +126,9 @@ export function Entry({
   // A tool call was called with its input and returned its output; every other
   // kind sent and received. The words differ because the actions differ.
   const sent = entry.kind === "tool_call" ? t("calledWith") : t("request");
+  // Held in a local so the renderer closes over a value the compiler has
+  // already narrowed, rather than re-reading a nullable field inside it.
+  const running = entry.cumulativeCost;
   return (
     <li
       data-testid="transcript-entry"
@@ -161,19 +150,17 @@ export function Entry({
           {format.dateTime(new Date(entry.at), { timeStyle: "medium" })}
         </time>
         <span data-testid="entry-elapsed">
-          {t("elapsed", { elapsed: formatElapsed(entry.elapsedMs, locale) })}
+          {t("elapsed", { elapsed: formatDuration(entry.elapsedMs, locale) })}
         </span>
         {entry.cost === null ? null : (
           <span>
             <Money value={entry.cost} precision="exact" />
           </span>
         )}
-        {entry.cumulativeCost === null ? null : (
+        {running === null ? null : (
           <span data-testid="entry-cumulative">
             {t.rich("cumulative", {
-              cost: () => (
-                <Money value={entry.cumulativeCost!} precision="exact" />
-              ),
+              cost: () => <Money value={running} precision="exact" />,
             })}
           </span>
         )}

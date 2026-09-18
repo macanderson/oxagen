@@ -104,7 +104,7 @@ export async function Run({
   kinds,
   frames,
   body,
-  now = Date.now(),
+  now,
 }: {
   ctx: WsCtx;
   source: DataSource;
@@ -120,8 +120,12 @@ export async function Run({
   frames: string | null;
   /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
   body: string | null;
-  /** The instant the approvals strip counts down from; injected so a test can fix it. */
-  now?: number;
+  /**
+   * The instant the approvals strip counts down from. The route reads the
+   * clock and hands it in, because reading it here would make the render
+   * impure and a test could not fix it.
+   */
+  now: number;
 }) {
   const selected = TABS.find((name) => name === tab) ?? "transcript";
   const level = TranscriptZoom.safeParse(zoom);

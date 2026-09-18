@@ -488,7 +488,11 @@ describe("runs.transcript", () => {
       kinds: [],
       after: null,
     });
-    expect(kernelRead.mock.calls[0]?.[1].input).not.toHaveProperty("after");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+      page: "run",
+    });
   });
 });
 

@@ -50,7 +50,7 @@ describe("ChainSection", () => {
     expect(container.querySelector('[data-grade="fork"]')).toBeNull();
     const forkRung = screen
       .getAllByTestId("chain-rung")
-      .find((rung) => rung.textContent?.includes("Fork"));
+      .find((rung) => rung.textContent.includes("Fork"));
     expect(forkRung).toHaveAttribute("data-met", "true");
   });
 
@@ -134,20 +134,19 @@ describe("ChainSection", () => {
 
   it("renders the seal's terminal status, event stream digest and Merkle root, with a null seal Merkle root reading 'not recorded' rather than blank", () => {
     const base = runChain();
-    const chain = runChain({
-      seal: { ...base.seal!, merkleRoot: null },
-    });
+    if (base.seal === null) throw new Error("the fixture carries a seal");
+    const chain = runChain({ seal: { ...base.seal, merkleRoot: null } });
     renderChain(readOk(chain));
     const sealHeading = screen.getByText("Seal");
     const sealSection = sealHeading.closest("div");
-    expect(sealSection).not.toBeNull();
-    const scoped = within(sealSection as HTMLElement);
+    if (sealSection === null) throw new Error("the seal has a section");
+    const scoped = within(sealSection);
     expect(scoped.getByText("Terminal status").nextElementSibling).toHaveTextContent(
       "completed",
     );
-    expect(scoped.getByText("Event stream digest").nextElementSibling).toHaveTextContent(
-      chain.seal!.eventStreamDigest!,
-    );
+    expect(
+      scoped.getByText("Event stream digest").nextElementSibling,
+    ).toHaveTextContent(base.seal.eventStreamDigest ?? "");
     expect(scoped.getByText("Merkle root").nextElementSibling).toHaveTextContent(
       "not recorded",
     );

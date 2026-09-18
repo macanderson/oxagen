@@ -38,6 +38,7 @@ export default async function RunPage({
         kinds={firstParam(kinds) ?? null}
         frames={firstParam(frames) ?? null}
         body={firstParam(body) ?? null}
+        now={Date.now()}
       />
     </main>
   );

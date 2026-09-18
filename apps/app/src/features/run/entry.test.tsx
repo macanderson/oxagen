@@ -60,10 +60,10 @@ describe("Entry", () => {
         }),
       }),
     );
-    const halves = screen.getAllByTestId("transcript-half");
-    expect(halves).toHaveLength(2);
-    const sent = halves[0];
-    const returned = halves[1];
+    const [sent, returned] = screen.getAllByTestId("transcript-half");
+    if (sent === undefined || returned === undefined) {
+      throw new Error("a tool call draws both halves");
+    }
     expect(within(sent).getByText("Called with")).toBeInTheDocument();
     expect(within(returned).getByText("Returned")).toBeInTheDocument();
     await user.click(within(sent).getByText("Called with"));
@@ -85,8 +85,9 @@ describe("Entry", () => {
         response: transcriptBody({ seq: "10", text: "cutting it now" }),
       }),
     );
-    const halves = screen.getAllByTestId("transcript-half");
-    expect(within(halves[0]).getByText("Sent")).toBeInTheDocument();
+    const [outgoing] = screen.getAllByTestId("transcript-half");
+    if (outgoing === undefined) throw new Error("a model call draws a half");
+    expect(within(outgoing).getByText("Sent")).toBeInTheDocument();
     expect(screen.queryByText("Called with")).toBeNull();
   });
 

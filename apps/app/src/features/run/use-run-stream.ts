@@ -88,15 +88,15 @@ export function useRunStream({
         if (!stopped) setState("open");
       };
       es.onmessage = signal;
-      es.addEventListener("done", (event) => {
+      es.addEventListener("done", (event: MessageEvent<string>) => {
         es.close();
         if (stopped) return;
         let reason = "idle";
         let cursor: string | null = null;
         try {
-          const payload: unknown = JSON.parse((event as MessageEvent).data);
+          const payload: unknown = JSON.parse(event.data);
           if (payload !== null && typeof payload === "object") {
-            const done = payload as { reason?: unknown; cursor?: unknown };
+            const done: Record<string, unknown> = { ...payload };
             if (typeof done.reason === "string") reason = done.reason;
             if (typeof done.cursor === "string") cursor = done.cursor;
           }

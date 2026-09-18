@@ -51,8 +51,8 @@ describe("buildBars", () => {
       [stepInA1, stepInA2, stepInB, stepOutside],
     );
     expect(bars).toHaveLength(2);
-    expect(bars[0].steps.map((s) => s.label)).toEqual(["a1", "a2"]);
-    expect(bars[1].steps.map((s) => s.label)).toEqual(["b1"]);
+    expect(barAt(bars, 0).steps.map((s) => s.label)).toEqual(["a1", "a2"]);
+    expect(barAt(bars, 1).steps.map((s) => s.label)).toEqual(["b1"]);
     // The step outside every range lands in no bar at all.
     const assigned = bars.flatMap((bar) => bar.steps.map((s) => s.label));
     expect(assigned).not.toContain("orphan");
@@ -73,11 +73,13 @@ describe("buildBars", () => {
     });
     const { bars, total } = buildBars([turnA, turnB], []);
     expect(total).toEqual(usd("4000000"));
-    expect(bars[0].offset).toBe(0);
-    expect(bars[0].width).toBeCloseTo(0.25);
-    expect(bars[1].width).toBeCloseTo(0.75);
+    expect(barAt(bars, 0).offset).toBe(0);
+    expect(barAt(bars, 0).width).toBeCloseTo(0.25);
+    expect(barAt(bars, 1).width).toBeCloseTo(0.75);
     // The second bar starts exactly where the first bar's own share ends.
-    expect(bars[1].offset).toBeCloseTo(bars[0].offset + bars[0].width!);
+    expect(barAt(bars, 1).offset).toBeCloseTo(
+      barAt(bars, 0).offset + (barAt(bars, 0).width ?? 0),
+    );
   });
 
   it("gives a turn with a null cost a null width (negative)", () => {
@@ -94,8 +96,8 @@ describe("buildBars", () => {
       cumulativeCost: usd("2000000"),
     });
     const { bars } = buildBars([turnA, turnB], []);
-    expect(bars[0].width).toBeNull();
-    expect(bars[1].width).toBeCloseTo(1);
+    expect(barAt(bars, 0).width).toBeNull();
+    expect(barAt(bars, 1).width).toBeCloseTo(1);
   });
 });
 
@@ -108,6 +110,13 @@ function renderWaterfall(
       <Waterfall turns={turns} steps={steps} />
     </IntlProvider>,
   );
+}
+
+/** One bar by position, refusing rather than reading past the end. */
+function barAt(bars: ReturnType<typeof buildBars>["bars"], index: number) {
+  const bar = bars[index];
+  if (bar === undefined) throw new Error(`no bar at ${String(index)}`);
+  return bar;
 }
 
 describe("Waterfall", () => {
@@ -169,6 +178,7 @@ describe("Waterfall", () => {
     );
     const bars = screen.getAllByTestId("waterfall-bar");
     const unpricedBar = bars[0];
+    if (unpricedBar === undefined) throw new Error("the first bar is drawn");
     expect(
       within(unpricedBar).getByText("this turn's cost was not recorded"),
     ).toBeInTheDocument();
@@ -176,6 +186,7 @@ describe("Waterfall", () => {
       within(unpricedBar).queryByTestId("waterfall-fill"),
     ).toBeNull();
     const pricedBar = bars[1];
+    if (pricedBar === undefined) throw new Error("the second bar is drawn");
     expect(within(pricedBar).getByTestId("waterfall-fill")).toBeInTheDocument();
   });
 

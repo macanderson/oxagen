@@ -305,13 +305,12 @@ export function runSource(reads: RunReads) {
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost),
-      transcript: (...args: unknown[]) => {
-        calls.transcript.push(args);
+      transcript: (ctx, runId, q) => {
+        calls.transcript.push([ctx, runId, q]);
         const asked = reads.transcript;
         if (asked === undefined) {
           return Promise.reject(new Error("transcript was not expected"));
         }
-        const q = args[2] as { zoom: TranscriptZoom };
         return Promise.resolve(
           typeof asked === "function" ? asked(q.zoom) : asked,
         );
