@@ -39,6 +39,20 @@
  * call. A bare program name is left alone: that is a PATH lookup, which does
  * not depend on the working directory.
  *
+ * **No MCP entry is written.** Cursor reads `~/.cursor/mcp.json` and accepts a
+ * remote entry (`{"url": "http://localhost:3000/mcp"}` is Cursor's own
+ * example), so unlike Claude Desktop no stdio shim would be needed and
+ * pointing Cursor at the collector's loopback gateway would cost one member.
+ * It is still the wrong thing to add. The gateway exists for the connected
+ * tier (ADR-078), where no hook surface exists and the only calls Oxagen can
+ * see are the ones routed through it. Cursor has a hook surface, and that
+ * hook sees the MCP call too: `preToolUse` fires for `MCP:<tool_name>` like
+ * any other tool. An MCP entry here would record the same call twice, once
+ * through the hook and once through the gateway, and put one harness on two
+ * tiers at the same time, which is the thing ADR-078 §2 says no surface may
+ * do. The toolbelt is a separate offer, made on its own terms, not a
+ * side-effect of enrolling a harness.
+ *
  * Enterprise, team and project `hooks.json` files sit above the user one, and
  * Cursor runs all matching hooks from every source and merges the answers:
  * "any `deny` wins over `ask`, and `ask` wins over `allow`, regardless of
