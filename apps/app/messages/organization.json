@@ -32,6 +32,8 @@
         "scope": "Scope",
         "slug": "Slug",
         "slugHint": "Lowercase letters, digits, and hyphens. It is the second segment of every URL in this workspace.",
+        "mainRepo": "Main repository",
+        "mainRepoHint": "owner/name on GitHub. This is where the workspace keeps .oxagen/, and it cannot change here later. The Oxagen GitHub App has to be installed on that owner and reachable from a GitHub account this organization has connected. Oxagen finds the installation from the owner.",
         "permissions": "Permissions",
         "roleNameHint": "Lowercase letters and digits, separated by a dot, a hyphen, or an underscore. It cannot change later."
       },
@@ -107,7 +109,13 @@
         "lastOwner": "This is the last owner of the organization. Make someone else an owner first.",
         "targetNotMember": "This person is no longer a member of this organization.",
         "roleNotGrantable": "That role is not one this organization grants. Nothing was changed.",
-        "insufficientRole": "Your organization role does not allow this change. Nothing was changed."
+        "insufficientRole": "Your organization role does not allow this change. Nothing was changed.",
+        "githubNotAuthorized": "This organization has not connected GitHub, so the repository cannot be reached. Connect GitHub from a workspace’s settings, then try again.",
+        "installationUnreachable": "The Oxagen GitHub App is not installed on that owner, or the connected GitHub account cannot reach it. Install the App on the owner, then try again.",
+        "repositoryNotInstalled": "The App’s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
+        "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
+        "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
+        "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name."
       }
     },
     "invitations": {

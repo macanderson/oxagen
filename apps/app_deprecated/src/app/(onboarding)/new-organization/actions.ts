@@ -122,10 +122,19 @@ export async function createOrgAction(
   }
   const org = orgInput.data;
 
-  const workspaceInput = workspaceCreate.input.safeParse({
-    name: "Default",
-    slug: "default",
-  });
+  // The first workspace is born without a main repository, on purpose: the
+  // org does not exist until the transaction below commits, so it holds no
+  // GitHub authorization and no repository is reachable to bind. The spec
+  // sanctions exactly this (Mission Control spec §7; ADR-099): onboarding
+  // binds the main repo one step later and the workspace stays provisional
+  // until it does. `create_workspace` requires `mainRepo`, so this validates
+  // the name and slug rules alone rather than the full contract.
+  const workspaceInput = workspaceCreate.input
+    .omit({ mainRepo: true })
+    .safeParse({
+      name: "Default",
+      slug: "default",
+    });
   if (!workspaceInput.success) return { ok: false, error: "Invalid workspace" };
 
   // Resolve the logo BEFORE the transaction — copying an OAuth avatar into our

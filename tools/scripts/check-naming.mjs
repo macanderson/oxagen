@@ -171,6 +171,10 @@ const ACTIONS = new Set([
   // associative verbs — bind/unbind an agent to an environment (Spec §5.6).
   "bind",
   "unbind",
+  // link/unlink a repository to a workspace (MC spec §10.1, App. E
+  // `link_repository` / `unlink_repository`).
+  "link",
+  "unlink",
   // steering (MC spec App. E, ADR-061): the protocol's append, a proposal,
   // and the merge that publishes a Context PR.
   "append",

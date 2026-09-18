@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { makeCTX } from "./test-utils/fixtures";
 
@@ -180,6 +182,44 @@ describe("get_main_repository", () => {
       github: { connected: false, ...URLS },
     });
     expect(() => repositoryMainGet.output.parse(out)).not.toThrow();
+  });
+
+  // §10.1 / ADR-099: a workspace may hold `linked` heads beside its one
+  // `main`. This read answers THE main repository, so the head it selects is
+  // pinned by role — without that predicate a linked head could be reported
+  // as the repository steering resolves through. repository.pg.test.ts proves
+  // the same against Postgres with both heads present; this pins the SQL.
+  it("selects only the head whose role is main", async () => {
+    let captured: SQL | undefined;
+    mocks.withTenantDb
+      .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: () => ({
+              innerJoin: () => ({
+                leftJoin: () => ({
+                  where: (cond: SQL) => {
+                    captured = cond;
+                    return { limit: async () => [] };
+                  },
+                }),
+              }),
+            }),
+          }),
+        }),
+      )
+      .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: () => ({ where: () => ({ orderBy: async () => [] }) }),
+          }),
+        }),
+      );
+    await handler()({}, makeCTX());
+    if (!captured) throw new Error("the head read issued no WHERE");
+    const query = new PgDialect().sqlToQuery(captured);
+    expect(query.sql).toMatch(/"role" = \$\d+/);
+    expect(query.params).toContain("main");
   });
 
   it("reports not-connected when the only GitHub connection carries no installation", async () => {

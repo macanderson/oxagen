@@ -107,6 +107,9 @@ import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
 import { onboardingFirstFrameGet } from "@oxagen/oxagen/contracts/onboarding.first_frame.get";
 import { onboardingStateGet } from "@oxagen/oxagen/contracts/onboarding.state.get";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
+import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
+import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
 import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
@@ -245,6 +248,9 @@ import { onboardingAdvanceRoute } from "./onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./onboarding.first_frame.get";
 import { onboardingStateGetRoute } from "./onboarding.state.get";
 import { repositoryMainBindRoute } from "./repository.main.bind";
+import { repositoryLinkRoute } from "./repository.link";
+import { repositoryUnlinkRoute } from "./repository.unlink";
+import { repositoryListRoute } from "./repository.list";
 import { tachoEnrollmentTokenCreateRoute } from "./tacho.enrollment_token.create";
 import { tachoHostEnrollRoute } from "./tacho.host.enroll";
 import { toolDeclarationPublishRoute } from "./tool.declaration.publish";
@@ -1183,6 +1189,35 @@ const ROUTES: ThinRoute[] = [
     body: { owner: "acme", name: "widgets" },
     invalidBody: { owner: "acme", name: "wid gets" },
     status: 201,
+  },
+  {
+    file: "repository.link",
+    route: repositoryLinkRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryLink.name,
+    body: { owner: "acme", name: "shared-lib" },
+    expectedInput: { provider: "github", owner: "acme", name: "shared-lib" },
+    invalidBody: { owner: "acme", name: "shared lib" },
+    jsonGuard: true,
+    status: 201,
+  },
+  {
+    file: "repository.unlink",
+    route: repositoryUnlinkRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: repositoryUnlink.name,
+    body: { bindingId: "rpb_0a1b2c" },
+    invalidBody: { bindingId: "not-a-binding" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "repository.list",
+    route: repositoryListRoute as unknown as Hono<never>,
+    method: "GET",
+    capability: repositoryList.name,
+    expectedInput: repositoryList.input.parse({}),
+    status: 200,
   },
   {
     file: "tacho.enrollment_token.create",

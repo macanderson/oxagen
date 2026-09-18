@@ -39,7 +39,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **privacy** (2): erase_data, export_data
 - **reference** (2): cite_reference, search_references
 - **repo** (9): configure_repo, get_ci_status, get_pr, get_pr_diff, get_repo_metrics, list_branches, pause_repo, resume_repo, sync_repo
-- **repository** (5): attach_github_installation, bind_main_repository, get_main_repository, list_github_installations, list_installation_repositories
+- **repository** (8): attach_github_installation, bind_main_repository, get_main_repository, link_repository, list_github_installations, list_installation_repositories, list_repositories, unlink_repository
 - **router** (4): get_routing_policy, list_routing_stats, preview_routing_decision, set_routing_policy
 - **run** (11): bisect_runs, export_run, fork_run, get_run, get_run_cost, get_run_frame_body, get_run_proof, get_run_transcript, list_recent_runs, list_runs, summarize_run
 - **schema** (23): create_schema_version, delete_schema, delete_schema_label, delete_schema_property, delete_schema_relationship, diff_schema_versions, dispatch_schema_reconcile, export_schema, get_reconcile_status, get_registry_config, get_schema_registry, list_schema_versions, list_schemas, pin_schema_version, recommend_schema, run_schema_chat, setup_schema, toggle_schema, upsert_schema_label, upsert_schema_property, upsert_schema_relationship, validate_schema_node, validate_schema_relationship

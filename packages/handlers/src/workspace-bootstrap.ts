@@ -3,6 +3,25 @@
 // calls it inside the system transaction that creates the org, so the first
 // workspace, its owner membership, the built-in agent, the default MCP registry
 // and the default environment commit with the org or not at all.
+//
+// This writes NO repository binding, and that is a division of labour, not a
+// gap in the §10.1 rule that a workspace has exactly one main repository
+// (ADR-099). Its two callers stand on opposite sides of that rule:
+//
+//   - `create_workspace` REQUIRES a main repo — the contract's `mainRepo` is
+//     not optional — and writes the `role = 'main'` head itself, on the same
+//     transaction, right after this returns (`writeRepositoryHead`). A
+//     creation that cannot bind writes nothing.
+//   - `create_org` cannot: the org does not exist until its transaction
+//     commits, so it holds no GitHub authorization and no repository is
+//     reachable. The spec sanctions exactly this (Mission Control spec §7,
+//     line ~222): onboarding binds the main repo in a later step through the
+//     installer, and a workspace that skips it is provisional for 14 days with
+//     steering off until `bind_main_repository` closes the window.
+//
+// So a caller of this function has to answer for the main repo one way or the
+// other. Anything new that calls it must either bind one on the same
+// transaction or be the onboarding path — there is no third kind.
 import {
   schema,
   deriveNamespace,
