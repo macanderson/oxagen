@@ -508,6 +508,16 @@ const terminalAttemptTerminatedSchema = z
 
 // ── The registry ────────────────────────────────────────────────────────────
 
+/**
+ * The step an event COMPLETES, for the readers that count steps or fold a
+ * transcript into them: one model call, or one tool call. Only the completed
+ * events carry it. A write-ahead intention (`*_call_started`) shares the stage
+ * and the content class of the call it precedes but is deliberately not a
+ * step, because counting it would report every call twice — the same reason
+ * `Recorder` keeps intentions off its `receipts` array.
+ */
+export type RunStepKind = "model_call" | "tool_call";
+
 export interface EventTypeDefinition {
   /** Which of the nine evidence stages this event proves progress through. */
   readonly stage: EvidenceStage;
@@ -515,6 +525,8 @@ export interface EventTypeDefinition {
   readonly contentClass: RetentionContentClass;
   /** Strict schema for an INLINE payload of this type. */
   readonly schema: z.ZodType<unknown>;
+  /** Set when this event completes a step; see `RunStepKind`. */
+  readonly step?: RunStepKind;
 }
 
 /**
@@ -546,21 +558,25 @@ export const EVENT_TYPE_REGISTRY = {
     stage: "model",
     contentClass: "model_call",
     schema: modelCallCompletedSchema,
+    step: "model_call",
   },
   "tool.call_completed": {
     stage: "tool",
     contentClass: "tool_call",
     schema: toolCallCompletedSchema,
+    step: "tool_call",
   },
   "model.engine_call_completed": {
     stage: "model",
     contentClass: "model_call",
     schema: modelEngineCallCompletedSchema,
+    step: "model_call",
   },
   "tool.engine_call_completed": {
     stage: "tool",
     contentClass: "tool_call",
     schema: toolEngineCallCompletedSchema,
+    step: "tool_call",
   },
   "model.engine_call_started": {
     stage: "model",
@@ -651,6 +667,40 @@ export function isContentClassRetained(
 ): boolean {
   return retainedContentClasses.includes(retentionContentClassOf(eventType));
 }
+
+/**
+ * The step a registered event completes, or null when it completes none.
+ *
+ * Every reader that counts a run's steps, folds its transcript, or asks
+ * whether a frame is content-bearing derives the answer here, from the one
+ * registry. They used to each hold their own literal list naming
+ * `model.call_completed` and `tool.call_completed`, and the only producer in
+ * the tree — the in-app assistant's `Recorder` — writes
+ * `model.engine_call_completed` and `tool.engine_call_completed`. So a real
+ * run's model calls counted zero, its transcript folded to a single entry,
+ * and its seal derived no `body_missing` gap because it saw no
+ * content-bearing frame. Five copies of a list is five chances to add the
+ * sixth event type to four of them.
+ */
+export function stepKindOfEventType(eventType: string): RunStepKind | null {
+  if (!isRunEventType(eventType)) return null;
+  // Through the widened `EventTypeDefinition` and not the `as const` registry
+  // literal: the literal's type has a `step` property only on the entries
+  // that declare one, so reading it off the union does not compile.
+  return requireEventTypeDefinition(eventType).step ?? null;
+}
+
+function eventTypesWithStep(step: RunStepKind): readonly RunEventType[] {
+  return RUN_EVENT_TYPES.filter(
+    (type) => requireEventTypeDefinition(type).step === step,
+  );
+}
+
+/** Every registered event type that completes one model call. */
+export const MODEL_CALL_EVENT_TYPES = eventTypesWithStep("model_call");
+
+/** Every registered event type that completes one tool call. */
+export const TOOL_CALL_EVENT_TYPES = eventTypesWithStep("tool_call");
 
 /** A terminal-stage event closes an attempt and precedes its seal. */
 export function isTerminalEventType(eventType: string): boolean {

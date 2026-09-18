@@ -16,6 +16,8 @@ import {
   toolCountOf,
   tooManyToolsMessage,
 } from "./mcp-gateway";
+import { digestJcs, jcs, jsonByteLength } from "../digest";
+import { jsonContent } from "../evidence/frame-body";
 import { policyBundleSchema, type PolicyBundle } from "../wire";
 import { unsignedBundle } from "../host/test-support";
 
@@ -360,8 +362,94 @@ describe("evidence", () => {
         toolName: "query_ontology",
         status: "ok",
         durationMs: 0,
+        inputDigest: digestJcs({ q: "x" }),
+        inputBytes: 9,
+        outputDigest: digestJcs({ content: [] }),
+        outputBytes: 14,
+        content: jsonContent(
+          jcs({ input: { q: "x" }, output: { content: [] } }),
+        ),
       },
     ]);
+  });
+
+  it("records the arguments and the result, so the call replays", async () => {
+    const result = { content: [{ type: "text", text: "42 nodes" }] };
+    const { fetch } = remote(result);
+    const { gw, records } = gateway({ fetch });
+    const args = { q: "MATCH (n) RETURN count(n)", limit: 10 };
+    await gw.handle(
+      { ...CALL, params: { ...CALL.params, arguments: args } },
+      CTX,
+    );
+
+    const [record] = records;
+    // The digests are the ones the `tool_input_digest` and
+    // `tool_output_digest` columns carry, computed the way a hook computes
+    // them, so a reader cannot tell which seam produced the frame.
+    expect(record?.inputDigest).toBe(digestJcs(args));
+    expect(record?.outputDigest).toBe(digestJcs(result));
+    expect(record?.inputBytes).toBe(jsonByteLength(args));
+    expect(record?.outputBytes).toBe(jsonByteLength(result));
+
+    // One body carries both halves, because a frame carries at most one body.
+    expect(record?.content?.content_type).toBe("application/json");
+    const body = Buffer.from(record!.content!.bytes).toString("utf8");
+    expect(JSON.parse(body)).toEqual({ input: args, output: result });
+    // The bytes are the JCS text the digest of the whole body will name.
+    expect(body).toBe(jcs({ input: args, output: result }));
+  });
+
+  it("records what a rejected call was asked, and the refusal it got back", async () => {
+    const error = { code: -32002, message: "Tool blocked by workspace policy" };
+    const fetch: GatewayFetch = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ jsonrpc: "2.0", id: 7, error }),
+    });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+
+    const [record] = records;
+    expect(record?.status).toBe("rejected");
+    // The arguments are the whole evidence of what was attempted, so a call
+    // the control plane turned down is not a blank row.
+    expect(record?.inputDigest).toBe(digestJcs({ q: "x" }));
+    // A JSON-RPC answer is a result or an error. The refusal is the outcome.
+    expect(record?.outputDigest).toBe(digestJcs(error));
+    expect(
+      JSON.parse(Buffer.from(record!.content!.bytes).toString("utf8")),
+    ).toEqual({ input: { q: "x" }, output: error });
+  });
+
+  it("records a call whose arguments have no JCS form, minus the arguments", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw, records, logs } = gateway({ fetch });
+    // A BigInt has no JSON form and so no JCS form. Nothing that arrives over
+    // HTTP can carry one, so this is the guard rather than a case: a value
+    // `jcs` throws on must leave the frame poorer, never take the call down
+    // with it.
+    await gw.handle(
+      { ...CALL, params: { name: "t", arguments: { size: 1n } } },
+      CTX,
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]?.inputDigest).toBeUndefined();
+    expect(logs.join(" ")).toContain("without its arguments");
+  });
+
+  it("records a call that carried no arguments without an empty body", async () => {
+    const { fetch } = remote({ content: [] });
+    const { gw, records } = gateway({ fetch });
+    await gw.handle(
+      { jsonrpc: "2.0", id: 9, method: "tools/call", params: { name: "ping" } },
+      CTX,
+    );
+    expect(records[0]?.inputDigest).toBeUndefined();
+    expect(records[0]?.inputBytes).toBeUndefined();
+    expect(
+      JSON.parse(Buffer.from(records[0]!.content!.bytes).toString("utf8")),
+    ).toEqual({ output: { content: [] } });
   });
 
   it("does not file protocol traffic as a step somebody took", async () => {

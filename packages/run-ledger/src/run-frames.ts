@@ -15,6 +15,11 @@
  * transcript entry shows is fetched by the caller for the frames the fold
  * names, and folded in with `withText`.
  */
+import {
+  MODEL_CALL_EVENT_TYPES,
+  stepKindOfEventType,
+  TOOL_CALL_EVENT_TYPES,
+} from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import type { Redaction } from "@oxagen/tacho";
@@ -91,40 +96,53 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const frames = field(p, "frame_count");
       return frames ? `frames=${frames}` : event.eventType;
     }
-    case "model.call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return provider && model ? `${provider}/${model}` : event.eventType;
-    }
-    case "tool.call_completed": {
-      const capability = field(p, "capability_name");
-      const outcome = field(p, "outcome");
-      return capability && outcome
-        ? `${capability} ${outcome}`
-        : event.eventType;
-    }
     default:
-      return event.eventType;
+      // Both spellings of each call, and both spellings of the tool's name:
+      // the ledger's own event calls it `capability_name`, the assistant's
+      // engine event calls it `tool_name`. Read through the registry rather
+      // than another literal case, because a summary that falls through to
+      // the raw event type is what the transcript showed for every run the
+      // assistant recorded.
+      switch (stepKindOfEventType(event.eventType)) {
+        case "model_call": {
+          const provider = field(p, "provider");
+          const model = field(p, "model");
+          return provider && model ? `${provider}/${model}` : event.eventType;
+        }
+        case "tool_call": {
+          const tool = toolNameOf(p);
+          const outcome = field(p, "outcome");
+          return tool && outcome ? `${tool} ${outcome}` : event.eventType;
+        }
+        default:
+          return event.eventType;
+      }
   }
+}
+
+/** The called tool, under either payload's name for it. */
+function toolNameOf(payload: unknown): string | null {
+  return field(payload, "capability_name") ?? field(payload, "tool_name");
 }
 
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
+  const step = stepKindOfEventType(event.eventType);
+  if (step === "tool_call")
+    return {
+      ...NO_IDENTITY,
+      tool: toolNameOf(p),
+      toolStatus: field(p, "outcome"),
+    };
+  if (step === "model_call") {
+    const provider = field(p, "provider");
+    const model = field(p, "model");
+    return {
+      ...NO_IDENTITY,
+      model: provider && model ? `${provider}/${model}` : model,
+    };
+  }
   switch (event.eventType) {
-    case "tool.call_completed":
-      return {
-        ...NO_IDENTITY,
-        tool: field(p, "capability_name"),
-        toolStatus: field(p, "outcome"),
-      };
-    case "model.call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return {
-        ...NO_IDENTITY,
-        model: provider && model ? `${provider}/${model}` : model,
-      };
-    }
     case "tool.approval_recorded":
       return { ...NO_IDENTITY, policy: field(p, "decision") };
     case "verification.completed":
@@ -147,8 +165,11 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
     summary: ledgerFrameSummary(event),
     body: event.body,
     costMicros: null,
+    // A turn index only travels on the ledger's own model event; the
+    // assistant's engine event has no such field, so an assistant run's
+    // `turns` zoom falls back to the boundaries rather than to an index.
     turnIndex:
-      event.eventType === "model.call_completed"
+      stepKindOfEventType(event.eventType) === "model_call"
         ? numberField(event.payload, "turn_index")
         : null,
     identity: ledgerIdentity(event),
@@ -372,14 +393,23 @@ export interface TranscriptFold {
   costMicros: number | null;
 }
 
+/**
+ * The frame types that open a step, in the `steps` zoom. The ledger's own
+ * names come from the registry, so both spellings of each call event are
+ * covered — the in-app assistant writes `model.engine_call_completed` and
+ * `tool.engine_call_completed`, which this list named neither of, so every
+ * ledger-recorded run folded into one `frame` entry however many calls it
+ * made. The wrapped-session names are added beside them: a tacho recording
+ * is not in the ledger's registry and never will be.
+ */
 const MODEL_TYPES: ReadonlySet<string> = new Set([
-  "model.call_completed",
+  ...MODEL_CALL_EVENT_TYPES,
   "llm_call",
   "model.request",
   "model.response",
 ]);
 const TOOL_TYPES: ReadonlySet<string> = new Set([
-  "tool.call_completed",
+  ...TOOL_CALL_EVENT_TYPES,
   "tool_call",
   "tool_requested",
 ]);

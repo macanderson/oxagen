@@ -70,6 +70,12 @@ export class MemoryStore implements SteeringStore {
     isLatest: boolean;
     publishedAt: Date | null;
     body: string;
+    // The classification the body carries, as the Postgres store writes it
+    // on the version row (#3312).
+    kind: string | null;
+    force: string | null;
+    constraintEffect: string | null;
+    statement: string | null;
   }[] = [];
   ledger: {
     id: string;
@@ -339,6 +345,10 @@ export class MemoryStore implements SteeringStore {
       isLatest: true,
       publishedAt: input.mergedAt,
       body: input.body,
+      kind: proposal.kind,
+      force: proposal.force,
+      constraintEffect: proposal.constraintEffect,
+      statement: proposal.statement,
     };
     const ledgerBefore = await this.ledgerLength(scope);
     const head = this.ledger
