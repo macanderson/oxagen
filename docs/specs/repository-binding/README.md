@@ -45,9 +45,11 @@ write a file into `.oxagen/` but cannot account for the directory it writes into
 5. **`.oxagen/workspace.toml` is specified and unbuilt.** MC spec §10.1 says it declares
    linked repos, tool servers and budgets, and that Oxagen reconciles it against Postgres
    and reports drift. Nothing reads or writes it, and nothing reconciles.
-6. **There is no UI for any of it.** The only repo-facing surface in `apps/app` is the
-   onboarding bind-main-repo step. `capability-ui-map.json` binds six steering
-   capabilities and `bind_main_repository`, and nothing else in this area.
+6. **There is almost no UI for any of it.** `capability-ui-map.json` binds six steering
+   capabilities and `bind_main_repository`, and nothing else in this area; the only
+   repo-facing surface in `apps/app` is the onboarding bind-main-repo step. #3233 is
+   landing the Workspace settings dialog that binds a **main** repo, which is the first
+   half of one of the four tabs here (§6).
 
 There is also a **file-name collision** waiting in the tree. MC spec §10.1 says the
 committed configuration file is `.oxagen/workspace.toml`;
@@ -174,8 +176,8 @@ nothing to check.
 
 | name | surfaces | mutates | roles | notes |
 |---|---|---|---|---|
-| `list_repository_bindings` | api, mcp, agent | no | ws Viewer+ | main, linked, and reachable-unbound in one list |
-| `get_repository_binding` | api, mcp | no | ws Viewer+ | includes `.oxagen/` presence, file count and commit |
+| `list_repository_bindings` | api, mcp, agent | no | ws Viewer+ | main, linked, and reachable-unbound in one list; composed from #3233's `get_main_repository` and `list_installation_repositories`, not a second read of GitHub |
+| `get_repository_binding` | api, mcp | no | ws Viewer+ | `.oxagen/` presence, file count and commit; resolves **through the head**, never by joining the binding table (§6) |
 | `link_repository` | api | yes | org Owner/Admin | role `linked`; confirms the production branch |
 | `set_main_repository` | api | yes | org Owner | `requiresApproval`, writes a security event |
 | `init_oxagen_directory` | api | yes | org Owner/Admin | opens the init pull request |
@@ -213,8 +215,20 @@ second implementation.
 
 ## 4. Data
 
-- **Postgres** (`ingestion` / a new `oxagen` schema): `repository_bindings` gains
-  `role`, `production_branch`, `oxagen_state`, `oxagen_commit`; new `working_copies`
+- **Postgres.** `ingestion.repository_bindings` is **immutable, append-only and versioned**
+  with a supersession chain, and `repository_binding_heads` is the explicitly mutable
+  pointer at the current version (see the schema comments on both). So nothing this spec
+  adds goes on the binding: `production_branch` is already `configured_default_ref` there,
+  and `.oxagen/` presence and its commit change on every push, which on an append-only
+  evidence table would mint a binding version per push and make "a version means a rename
+  or a default-ref reconfiguration" false. A first draft of this section proposed adding
+  `role`, `production_branch`, `oxagen_state` and `oxagen_commit` to the binding; that was
+  wrong, and the mistake is the one the table's own comment exists to prevent.
+  Instead: `role` (`main` | `linked`) joins the **head**, which is already keyed per
+  workspace and is where a per-workspace fact belongs; `.oxagen/` presence, file count and
+  commit go in a separate `oxagen_tree_observations` row per (workspace, repository),
+  overwritten on each read, because it is a cache of what a branch looked like and not
+  evidence any run was admitted against. New `working_copies`
   (org, ws, enrollment, machine, path, remote, branch, head, oxagen_state, symlinks_ok,
   bundle_version, last_seen_at); new `oxagen_pull_requests` (org, ws, repo, kind, branch,
   number, state, head_sha, opened_by_user_id, opened_by_kind) with the same
@@ -241,9 +255,13 @@ Each phase is shippable and leaves the gate green.
    publication step and their own checks, and nothing else new. With records and agent
    definitions already on it from phase 1, opening and closing a pull request works for
    all four kinds here rather than at the end (ADR-072; decided on #3242).
-3. **Bindings and the page shell.** `list_repository_bindings`, `get_repository_binding`,
-   `link_repository`, `set_main_repository`; the page with the Repositories tab; the
-   `.oxagen/` presence read.
+3. **Bindings and the page shell**, on top of #3233 rather than beside it (§8).
+   `link_repository` (role `linked`, which #3233 does not cover) and
+   `set_main_repository` (the org-owner rebind #3233 names and deliberately leaves);
+   `list_repository_bindings` composed from #3233's `get_main_repository` and
+   `list_installation_repositories` rather than re-reading GitHub; the `.oxagen/` presence
+   read and its observation row; the page with the Repositories tab. Reads from
+   `features/**` follow ADR-087.
 4. **The init wizard.** `init_oxagen_directory` and its five checks. Closes the
    `governance.toml` gap.
 5. **Changes.** `list_oxagen_prs` / `get_oxagen_pr`; the Changes tab over every kind,
@@ -259,7 +277,34 @@ descriptor). The `oxagen config` interview from
 is the gitignored local file, and §2.1 fixes which is which, but its resolver and interview
 agent are their own body of work.
 
-## 6. Open questions
+## 6. What #3233 already builds, and what is left
+
+[#3233](https://github.com/macanderson/oxagen/pull/3233) ("a Workspace settings dialog that
+binds a main repository") is in flight and lands the first half of §2.2's Repositories tab.
+This spec builds on it and must not duplicate it.
+
+| | #3233 | this spec |
+|---|---|---|
+| `get_main_repository` | the bound main repo, whether an installation is attached, whether the connection is live, the three URLs | consumed, not replaced |
+| `list_installation_repositories` | the repositories the installation can reach | the source of the Repositories tab's "not linked" rows |
+| `list_github_installations` / `attach_github_installation` | the install leg | unchanged |
+| binding a **main** repo | the settings dialog | unchanged |
+| binding a **linked** repo | not covered | `link_repository` |
+| changing which repo is main | deliberately absent; the dialog says so and the contract refuses `main_repo_bound` | `set_main_repository`, org Owner, `requiresApproval`, security event |
+| `.oxagen/` presence per repository | not read | the observation row in §4 |
+
+Two things #3233 surfaces that this spec inherits rather than re-discovers. Its round-2 P1
+shows that a replaced connection orphans a binding unless the successor moves the head, so
+anything here reading a binding reads it **through the head**, never by joining the
+binding table directly. And its own post-mortem names the structural cause of four of its
+eight P1s: `apps/api/src/routes/v1/github-oauth.ts` bypasses the kernel, so every gate the
+kernel would apply is hand-rolled there. No capability in §3 may take that route; each one
+goes through `invoke()`.
+[#3253](https://github.com/macanderson/oxagen/issues/3253) carries the open invariant that
+the bound repository and the credential acting on it are resolved by independent reads —
+`open_oxagen_pr` must not add a third such read.
+
+## 7. Open questions
 
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
@@ -267,7 +312,7 @@ agent are their own body of work.
 | Q3 | Do the two overlapping record generations (`publish_context_record` / `promote_context_record` vs `merge_context_pr` / `list_records`) get reconciled here? | none | No — name it in the ADR and leave it. It is a real problem and it is not this one. |
 | Q4 | Does `set_main_repository` reuse the existing approval machinery or get its own? | 2 | Reuse. `requiresApproval: true` on the contract, as `open_context_pr` and `merge_context_pr` already do. |
 
-## 7. Decisions that need an ADR
+## 8. Decisions that need an ADR
 
 - **ADR: `.oxagen/workspace.toml` is committed; `.oxagen/workspace.json` is local.** §2.1.
   Two specs currently imply different things about the same directory, and one of them is
