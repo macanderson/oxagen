@@ -93,15 +93,15 @@
      *   dark   bg=ink         fg=paper      surface=panel        border=border
      * ════════════════════════════════════════════════════════════════════════ */
 
-    /* Brand anchors — the kit's white, its warm near-black (which is both
-       the light-mode ink and the dark-mode page), and the paper again as the
-       dark-mode ink. The kit uses ONE off-white for both jobs on purpose. */
-    --_paper: var(--ox-paper); /* #FFFFFF — the warm light canvas */
+    /* Brand anchors — the kit's white, its obsidian (which is both the
+       light-mode ink and the dark-mode page), and the white again as the
+       dark-mode ink. The kit uses ONE white for both jobs on purpose. */
+    --_paper: var(--ox-paper); /* #FFFFFF — the light canvas */
     --_ink: var(--ox-ink); /* #09090B — the dark canvas, and light-mode ink */
     --_ink-white: var(--ox-text); /* #FFFFFF — primary text on ink */
 
-    /* Named brand swatches. --ox-ember is THE accent knob: it drives --primary,
-       --ring, links, tabs and chart-1. The `ember` spelling predates the house
+    /* Named brand swatches. --ox-ember is THE accent knob: it drives --brand,
+       --ring, links and chart-1. The `ember` spelling predates the house
        system and is kept rather than renamed to `gold` because ~25 files across
        apps/ and packages/ bind to these identifiers; a skin owns the values,
        not the names. All three stops are the kit's gold, unaltered. */
@@ -119,14 +119,14 @@
 
        The retired "o + cursor" logomark took a red-orange (--ox-cursor) that
        belonged to no palette. That mark and its colour were retired with the
-       house system (September 2026); the Oxagen mark is now the one-colour `Ox`
-       lettermark and the gold lives on the `x` of the word. */
+       house system (September 2026); the Oxagen mark is now the hive, and the
+       gold lives on its two lit cells and the `x` of the word. */
 
     /* Neutral ramp — the kit's elevation ladder. The DARK steps are its canvas
        values (ink page → panel → lifted row → border) and the LIGHT steps its
        paper values (paper-panel → paper → paper-border); 400–700 carry TEXT and
-       take the kit's four ink shades. Both ends sit on the SAME warm axis, which
-       is what makes one gold read as metal in both themes. */
+       take the kit's ink shades. Every step is neutral, so the gold is the only
+       warm value in either theme. */
     --_stone-50: var(--ox-paper); /* #FFFFFF — the popover on white */
     --_stone-100: oklch(0.985 0 0); /* #FAFAFA — muted / card-header */
     --_stone-150: var(--ox-paper-hl); /* #F4F4F5 — surface-alt, nav hover */
@@ -305,7 +305,7 @@
     --app-panel-bg: var(--surface);
     --app-panel-fg: var(--surface-foreground);
     /* Topbar = the page background (off-white in light, near-black in dark), so
-       the header reads as part of the canvas rather than a separate warm bar. */
+       the header reads as part of the canvas rather than a separate bar. */
     --app-topbar-bg: var(--background);
     --app-topbar-fg: var(--foreground);
     --app-topbar-border: var(--border);
@@ -431,7 +431,7 @@
   }
 
   /* ════════════════════════════════════════════════════════════════════════
-   * DARK — the kit's warm canvas. #09090B page, stepped #18181B/#27272A panels,
+   * DARK — the kit's obsidian canvas. #09090B page, stepped #18181B/#27272A panels,
    * #27272A hairlines, one gold accent. Re-declares core tokens + the two header
    * bgs (which point at fixed primitives); the rest of the component-token
    * surface inherits the flip.
@@ -935,11 +935,10 @@
   }
 
   /*
-   * TYPE RULE: Space Grotesk is the face for everything a person reads —
-   * headings, UI, body, the wordmark. Weight carries the hierarchy (400 body ·
-   * 500 UI · 600 headings and the wordmark · 700 the Ox lettermark), because
-   * the house system has no second family to carry it. The system monospace
-   * stack (--font-mono) is for code and identifiers ONLY.
+   * TYPE RULE: three faces, each with one job. Space Grotesk (--font-display)
+   * sets h1 to h3 and the wordmark, never below 20px. Geist (--font-sans) sets
+   * h4 to h6 at 600 and everything read. Monaspace Neon (--font-mono) sets code
+   * and identifiers, with texture healing on.
    */
   h4,
   h5,
@@ -1182,7 +1181,7 @@
     );
   }
 
-  /* Vibrant code/terminal surface — a warm charcoal fill with the ember brand
+  /* Vibrant code/terminal surface — a charcoal fill with the ember brand
      gradient painted into a 1px border (padding-box fill + border-box gradient),
      identical in light and dark so a code block reads as a high-contrast, bold
      terminal on the light page. A real transparent `border` keeps a system line
