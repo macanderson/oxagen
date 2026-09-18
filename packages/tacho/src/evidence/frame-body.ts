@@ -125,7 +125,12 @@ export type PreparedContent =
       body?: undefined;
       omitted: "too_large";
     }
-  | { digest?: undefined; body?: undefined; omitted: "too_many_redactions" };
+  | {
+      digest?: undefined;
+      redactions?: undefined;
+      body?: undefined;
+      omitted: "too_many_redactions";
+    };
 
 /** Redact, size-check and digest a draft's content. */
 export function prepareContent(content: DraftContent): PreparedContent {

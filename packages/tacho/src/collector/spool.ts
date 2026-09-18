@@ -82,6 +82,16 @@ function serverRequestedWaitMs(error: ControlError): number | undefined {
   return Math.min(Math.max(wait, 1_000), MAX_SERVER_REQUESTED_WAIT_MS);
 }
 
+/**
+ * The decoded size of a base64 string, without decoding it: four characters
+ * per three bytes, less the padding. The budget names raw bytes because that
+ * is what the control plane stores.
+ */
+function base64ByteLength(encoded: string): number {
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  return (encoded.length / 4) * 3 - padding;
+}
+
 export class Shipper {
   private readonly options: ShipperOptions;
   private backoffMs: number;
@@ -236,9 +246,7 @@ export class Shipper {
     for (let index = 0; index < batch.length; index += 1) {
       const body = bodies.get((batch[index] as TachoEvent).event_id_idem);
       if (body === undefined) continue;
-      // base64 is 4 characters per 3 bytes; the raw size is what the budget
-      // names, since that is what the control plane stores.
-      total += Math.floor((body.bytes_base64.length * 3) / 4);
+      total += base64ByteLength(body.bytes_base64);
       if (total > TACHO_MAX_BATCH_BODY_BYTES && index > 0)
         return batch.slice(0, index);
     }
