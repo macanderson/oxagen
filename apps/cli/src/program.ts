@@ -892,7 +892,7 @@ export function buildProgram(): Command {
     .requiredOption("--name <name>", "Display name")
     .requiredOption(
       "--harness <harness>",
-      "stella | claude-code | claude-agent-sdk | custom",
+      "stella | claude-code | codex | cursor | claude-agent-sdk | custom",
     )
     .option("--description <text>", "What the agent is for")
     .option("--validity-days <n>", "Credential lifetime in days (1–365)")
