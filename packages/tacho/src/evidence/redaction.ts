@@ -29,6 +29,7 @@ interface RedactionResult {
   redactions: Redaction[];
 }
 
+
 export type RedactionReason =
   | "private_key"
   | "aws_access_key"
@@ -148,4 +149,29 @@ export function redactBytes(bytes: Uint8Array): RedactionResult {
   }
   out += text.slice(last);
   return { bytes: encoder.encode(out), redactions };
+}
+
+/** A frame's content after redaction: what is chained, and what was cut. */
+export interface ContentFrame {
+  /** The digest that goes on the chain, over the redacted bytes. */
+  digest: Sha256Digest;
+  /** The bytes a body ships, if the workspace retains this class. */
+  bytes: Uint8Array;
+  redactions: Redaction[];
+}
+
+/**
+ * Prepare a frame's content: redact first, then digest what is left.
+ *
+ * The order is not a preference. The control plane refuses a shipped body
+ * whose bytes still carry a credential, and it verifies the bytes against the
+ * frame's chained digest, so a digest taken before redaction can never be
+ * satisfied by bytes that pass the credential check. Digesting the redacted
+ * bytes in every retention mode also keeps one meaning for the digest: a host
+ * that ships no body and a host that ships one chain the same value for the
+ * same content.
+ */
+export function contentFrameOf(text: string): ContentFrame {
+  const { bytes, redactions } = redactBytes(encoder.encode(text));
+  return { digest: digestBytes(bytes), bytes, redactions };
 }

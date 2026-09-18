@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 import { digestJcs, jsonByteLength, type JsonValue } from "../digest";
+import { contentFrameOf, type Redaction } from "../evidence/redaction";
 import { effectId } from "../ids";
 import type { BodyOf, TachoKind } from "../envelope";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
@@ -53,6 +54,8 @@ export interface HookDraft {
   context: Record<string, unknown>;
   host: Record<string, unknown>;
   content_digest?: `sha256:${string}`;
+  /** What redaction cut from the content the digest covers. */
+  content_redactions?: Redaction[];
   raw_source_digest: `sha256:${string}`;
 }
 
@@ -114,6 +117,29 @@ const PROMOTED = new Set([
   "teammate_name",
   "subagent_result",
 ]);
+
+/**
+ * The content fields of a draft for a frame whose content is `text`.
+ *
+ * `content.digest` is over the redacted bytes, because the control plane
+ * verifies a shipped body against it and refuses bytes that still carry a
+ * credential. `prompt_digest` and the other body members keep digesting the
+ * text as the harness reported it: they correlate frames, they are never
+ * verified against bytes, and changing them would break correlation with
+ * every row already recorded.
+ */
+function contentDraft(text: string): {
+  content_digest: `sha256:${string}`;
+  content_redactions?: Redaction[];
+} {
+  const frame = contentFrameOf(text);
+  return {
+    content_digest: frame.digest,
+    ...(frame.redactions.length > 0
+      ? { content_redactions: frame.redactions }
+      : {}),
+  };
+}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -301,7 +327,7 @@ export function normalizeHook(
         draft(
           kind,
           body,
-          prompt !== undefined ? { content_digest: digestText(prompt) } : {},
+          prompt !== undefined ? contentDraft(prompt) : {},
         ),
       ];
     }
@@ -424,7 +450,7 @@ export function normalizeHook(
           draft(
             "turn_end",
             common,
-            last !== undefined ? { content_digest: digestText(last) } : {},
+            last !== undefined ? contentDraft(last) : {},
           ),
         ];
       }

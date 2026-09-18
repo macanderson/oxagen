@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { digestBytes } from "../digest";
+import { redactionMarker } from "../evidence/redaction";
 import { normalizeHook } from "./hooks";
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
@@ -311,5 +313,33 @@ describe("hook normalization", () => {
     expect(() =>
       normalizeHook({ hook_event_name: "Stop" }, {}, { sessionUuid: "x" }),
     ).toThrow();
+  });
+});
+
+describe("content on a prompt frame", () => {
+  const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+
+  it("chains a digest of the redacted prompt and names what was cut", () => {
+    const draft = hook("UserPromptSubmit", {
+      prompt: `ship it with ${secret}`,
+    })[0];
+
+    // What a body would carry, and what the control plane verifies it
+    // against. The two have to agree or no body can ever be accepted.
+    expect(draft?.content_digest).toBe(
+      digestBytes(`ship it with ${redactionMarker("github_token")}`),
+    );
+    expect(draft?.content_redactions?.map((r) => r.reason)).toEqual([
+      "github_token",
+    ]);
+    // The body member keeps digesting the prompt as the harness reported it:
+    // it correlates frames and is never verified against bytes.
+    expect(draft?.body["prompt_digest"]).not.toBe(draft?.content_digest);
+  });
+
+  it("records no redaction for a clean prompt", () => {
+    const draft = hook("UserPromptSubmit", { prompt: "ship it" })[0];
+    expect(draft?.content_digest).toBe(digestBytes("ship it"));
+    expect(draft?.content_redactions).toBeUndefined();
   });
 });

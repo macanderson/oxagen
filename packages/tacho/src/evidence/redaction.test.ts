@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
-import { redactBytes, redactionMarker } from "./redaction";
+import { contentFrameOf, redactBytes, redactionMarker } from "./redaction";
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -82,5 +82,29 @@ describe("redactBytes", () => {
     const out = redactBytes(input);
     expect(out.bytes).toBe(input);
     expect(out.redactions).toEqual([]);
+  });
+});
+
+describe("contentFrameOf", () => {
+  it("digests what is left after redaction, not what arrived", () => {
+    const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+    const frame = contentFrameOf(`deploy with ${secret} please`);
+
+    // The bytes a body would ship carry no credential, and the chained
+    // digest is over exactly those bytes. The control plane checks both,
+    // so a digest taken before redaction could never be satisfied.
+    expect(text(frame.bytes)).toBe(
+      `deploy with ${redactionMarker("github_token")} please`,
+    );
+    expect(frame.digest).toBe(digestBytes(frame.bytes));
+    expect(redactBytes(frame.bytes).redactions).toEqual([]);
+    expect(frame.redactions.map((r) => r.reason)).toEqual(["github_token"]);
+  });
+
+  it("leaves clean content byte for byte, and records no redaction", () => {
+    const frame = contentFrameOf("summarise the release notes");
+    expect(text(frame.bytes)).toBe("summarise the release notes");
+    expect(frame.digest).toBe(digestBytes("summarise the release notes"));
+    expect(frame.redactions).toEqual([]);
   });
 });

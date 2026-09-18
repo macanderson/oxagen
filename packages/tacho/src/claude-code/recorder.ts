@@ -15,6 +15,7 @@ import type {
   TachoKind,
   UnsealedTachoEvent,
 } from "../envelope";
+import type { Redaction } from "../evidence/redaction";
 import { withoutAddressMembers } from "../envelope";
 import { newEventId, sessionUuid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -397,6 +398,7 @@ export class SessionRecorder {
       fidelity?: TachoEvent["fidelity"];
       span?: TachoEvent["span"];
       content_digest?: `sha256:${string}`;
+      content_redactions?: Redaction[];
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
@@ -447,7 +449,10 @@ export class SessionRecorder {
       attrs: fields.attrs ?? {},
       content:
         fields.content_digest !== undefined
-          ? { digest: fields.content_digest, redactions: [] }
+          ? {
+              digest: fields.content_digest,
+              redactions: fields.content_redactions ?? [],
+            }
           : undefined,
       raw_source_digest: fields.raw_source_digest,
       kind,
@@ -607,6 +612,9 @@ export class SessionRecorder {
       attrs: draft.attrs,
       ...(draft.content_digest !== undefined
         ? { content_digest: draft.content_digest }
+        : {}),
+      ...(draft.content_redactions !== undefined
+        ? { content_redactions: draft.content_redactions }
         : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
