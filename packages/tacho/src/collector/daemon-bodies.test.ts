@@ -7,7 +7,7 @@
  */
 import { request } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { digestBytes } from "../digest";
+import { digestBytes, digestJcs } from "../digest";
 import type { TachoEvent } from "../envelope";
 import type { FetchLike } from "../host/control-client";
 import { writeSensitiveFileAtomic } from "../host/fs";
@@ -27,6 +27,10 @@ interface Batch {
   events: TachoEvent[];
   bodies: TachoBody[] | undefined;
 }
+
+/** What the control plane answers a proxied `tools/call` with. */
+const MCP_RESULT = { content: [{ type: "text", text: "42 nodes" }] };
+const MCP_ARGUMENTS = { q: "MATCH (n) RETURN count(n)", limit: 10 };
 
 /** A control plane that records every batch and refuses the bodies it is told to. */
 function plane(
@@ -70,6 +74,18 @@ function plane(
         status: 200,
         text: async () =>
           JSON.stringify({ not_modified: true, etag: "etag-3", bundle: null }),
+      };
+    }
+    if (url.endsWith("/mcp")) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: (body as { id?: unknown }).id ?? null,
+            result: MCP_RESULT,
+          }),
       };
     }
     return {
@@ -250,6 +266,45 @@ describe("tachod and frame bodies", () => {
       .flatMap((x) => x.bodies ?? [])
       .map((body) => events.get(body.event_id_idem)?.kind);
     expect(kinds).toEqual(["tool_requested"]);
+  });
+
+  it("files a gateway tool call's arguments and result as the frame's body", async () => {
+    const { fetch, batches } = plane();
+    const { handle } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const answer = await handle.api.mcp?.(
+      {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "query_ontology", arguments: MCP_ARGUMENTS },
+      },
+      { sessionId: "mcp-sess-1" },
+    );
+    expect(answer?.status).toBe(200);
+    await handle.tick();
+
+    const events = batches.flatMap((b) => b.events);
+    const frame = events.find((event) => event.kind === "tool_call");
+    expect(frame?.body).toMatchObject({
+      tool_name: "query_ontology",
+      tool_input_digest: digestJcs(MCP_ARGUMENTS),
+      tool_output_digest: digestJcs(MCP_RESULT),
+    });
+
+    const body = batches
+      .flatMap((b) => b.bodies ?? [])
+      .find((b) => b.event_id_idem === frame?.event_id_idem);
+    const bytes = Buffer.from(body?.bytes_base64 ?? "", "base64");
+    // One body holds both halves, so the step replays without reaching back to
+    // another frame for what was asked.
+    expect(JSON.parse(bytes.toString("utf8"))).toEqual({
+      input: MCP_ARGUMENTS,
+      output: MCP_RESULT,
+    });
+    expect(frame?.content?.digest).toBe(digestBytes(new Uint8Array(bytes)));
   });
 
   it("logs a body the control plane refused, the way it logs a chain break", async () => {

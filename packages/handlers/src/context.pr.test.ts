@@ -745,6 +745,13 @@ describe("merge_context_pr", () => {
     expect(h.store.versions[0]!.body).toBe(
       await h.github.readFile(REPO, PATH, "main"),
     );
+    // The version carries its own classification, so a later promote of it
+    // can restore what it says onto the record row (#3312).
+    expect(h.store.versions[0]).toMatchObject({
+      kind: "rule",
+      force: "should",
+      constraintEffect: null,
+    });
     expect(h.store.ledger).toHaveLength(1);
     expect(h.store.ledger[0]).toMatchObject({
       seq: 1,

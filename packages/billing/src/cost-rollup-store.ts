@@ -20,7 +20,11 @@ import {
   type FrameRunRef,
   type ModelCallFrameRow,
 } from "@oxagen/telemetry";
-import { and, asc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import {
+  MODEL_CALL_EVENT_TYPES,
+  TOOL_CALL_EVENT_TYPES,
+} from "@oxagen/run-ledger";
+import { and, asc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import {
   dailyTotalsFromRuns,
   rollupRun,
@@ -33,6 +37,17 @@ import {
   type ToolCallFrame,
 } from "./cost-rollup";
 import { loadPriceBook, type PriceBook } from "./price-book";
+
+/**
+ * Both spellings of each call event. The in-app assistant writes
+ * `model.engine_call_completed` / `tool.engine_call_completed`, and these
+ * rollups matched only the ledger's `model.call_completed` /
+ * `tool.call_completed`, so a run's turn count and its tool-name list came
+ * back empty for the one producer in the tree. The registry in
+ * `@oxagen/run-ledger` is the single list; see `stepKindOfEventType`.
+ */
+const MODEL_CALL_TYPES = [...MODEL_CALL_EVENT_TYPES];
+const TOOL_CALL_TYPES = [...TOOL_CALL_EVENT_TYPES];
 
 const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
@@ -86,11 +101,11 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
           startedAt: runs.startedAt,
           sealedAt: sql<Date | null>`(select max(${seals.sealedAt}) from ${seals} where ${seals.runId} = ${runs.id})`,
           turnIndexes:
-            sql<number>`(select count(distinct ${events.payloadInline}->>'turn_index') from ${events} where ${events.runId} = ${runs.id} and ${events.eventType} = 'model.call_completed')::int`.mapWith(
+            sql<number>`(select count(distinct ${events.payloadInline}->>'turn_index') from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)})::int`.mapWith(
               Number,
             ),
           opaqueModelCalls:
-            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${events.eventType} = 'model.call_completed' and ${events.payloadInline} is null)::int`.mapWith(
+            sql<number>`(select count(*) from ${events} where ${events.runId} = ${runs.id} and ${inArray(events.eventType, MODEL_CALL_TYPES)} and ${events.payloadInline} is null)::int`.mapWith(
               Number,
             ),
         })
@@ -223,7 +238,7 @@ async function readLedgerToolCalls(args: {
           eq(events.workspaceId, args.workspaceId),
           eq(events.runId, args.runUuid),
           eq(events.eventRecordVersion, 2),
-          eq(events.eventType, "tool.call_completed"),
+          inArray(events.eventType, TOOL_CALL_TYPES),
         ),
       ),
   );
