@@ -158,7 +158,7 @@ export function Meters({
         />
       </Table>
       {b === null ? null : <Mode bucket={b} />}
-      {exhaustedNoCard && b !== null ? (
+      {exhaustedNoCard ? (
         <p data-exhausted="" className="text-sm font-medium text-foreground">
           {t.rich("meters.exhaustedNoCard", {
             date: date(b.period.end),

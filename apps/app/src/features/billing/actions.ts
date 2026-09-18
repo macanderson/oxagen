@@ -203,7 +203,10 @@ export async function startPlanChange(
 ): Promise<ActionResult<never>> {
   const ctx = await requireViewer(org);
   const planSlug = form.get("planSlug");
-  if (!UPGRADE_PLANS.some((plan) => plan.slug === planSlug)) {
+  if (
+    typeof planSlug !== "string" ||
+    !UPGRADE_PLANS.some((plan) => plan.slug === planSlug)
+  ) {
     return {
       ok: false,
       reason: "invalid",
@@ -231,7 +234,7 @@ export async function startPlanChange(
     return { ok: false, reason: "unavailable", code: "app_url_missing" };
   }
   const result = await kernelWrite(ctx, billingSubscriptionUpgradeStart, {
-    planSlug: String(planSlug),
+    planSlug,
     interval,
     successUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "plan" })}`,
     cancelUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "cancel" })}`,

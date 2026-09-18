@@ -18,13 +18,7 @@ import {
 
 const { startPlanChange } = vi.hoisted(() => ({
   startPlanChange:
-    vi.fn<
-      (
-        org: string,
-        prev: unknown,
-        form: FormData,
-      ) => Promise<unknown>
-    >(),
+    vi.fn<(org: string, prev: unknown, form: FormData) => Promise<unknown>>(),
 }));
 vi.mock("./actions", () => ({ startPlanChange }));
 
@@ -60,9 +54,9 @@ async function openDialog(blocked: PlanChangeBlock | null = null) {
 }
 
 const planLabel = (tier: "build" | "scale") => {
-  const found = document.querySelector(`[data-plan="${tier}"]`);
+  const found = document.querySelector<HTMLElement>(`[data-plan="${tier}"]`);
   if (found === null) throw new Error(`no ${tier} label`);
-  return found as HTMLElement;
+  return found;
 };
 
 beforeEach(() => {
@@ -81,9 +75,7 @@ describe("the Change plan button", () => {
   it("is closed until clicked, then opens the dialog", async () => {
     renderChangePlan();
     expect(screen.queryByRole("dialog")).toBeNull();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Change plan" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
     expect(screen.getByRole("dialog", { name: "Change plan" })).toBeVisible();
   });
 });
@@ -97,9 +89,7 @@ describe("an allowed viewer", () => {
     expect(planLabel("scale")).toHaveTextContent(
       "Scale300,000 GAU a month$999.00 a month",
     );
-    expect(
-      screen.getByRole("radio", { name: /Build/ }),
-    ).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Build/ })).toBeChecked();
   });
 
   it("shows the annual price once billed yearly is chosen", async () => {
@@ -111,7 +101,9 @@ describe("an allowed viewer", () => {
 
   it("names Enterprise as negotiated, off the form", async () => {
     await openDialog();
-    expect(screen.getByText(/Enterprise is negotiated per contract/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Enterprise is negotiated per contract/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Enterprise")).toBeNull();
   });
 
@@ -134,7 +126,12 @@ describe("an allowed viewer", () => {
   it.each([
     [
       "invalid",
-      { ok: false, reason: "invalid", code: "invalid_input", field: "planSlug" },
+      {
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "planSlug",
+      },
       "Choose a plan and how it is billed.",
     ],
     [
@@ -152,14 +149,17 @@ describe("an allowed viewer", () => {
       { ok: false, reason: "unavailable", code: "checkout_url_refused" },
       "Checkout could not be opened. Nothing was charged.",
     ],
-  ])("says why a plan change was refused: %s (negative)", async (_case, result, copy) => {
-    startPlanChange.mockResolvedValue(result);
-    await openDialog();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Continue to Checkout" }),
-    );
-    expect(await screen.findByTestId("plan-error")).toHaveTextContent(copy);
-  });
+  ])(
+    "says why a plan change was refused: %s (negative)",
+    async (_case, result, copy) => {
+      startPlanChange.mockResolvedValue(result);
+      await openDialog();
+      await userEvent.click(
+        screen.getByRole("button", { name: "Continue to Checkout" }),
+      );
+      expect(await screen.findByTestId("plan-error")).toHaveTextContent(copy);
+    },
+  );
 });
 
 describe("a viewer the page blocks", () => {

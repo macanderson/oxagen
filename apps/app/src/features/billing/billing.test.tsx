@@ -69,7 +69,9 @@ const DENIED = {
 const DOWN = readError("stripe_unreachable", 502);
 
 async function renderBilling(
-  reads: Partial<BillingReads> & { newestInvoices?: BillingReads["invoices"] } = {},
+  reads: Partial<BillingReads> & {
+    newestInvoices?: BillingReads["invoices"];
+  } = {},
   options: {
     role?: OrgRole;
     checkout?: string | null;
@@ -92,9 +94,9 @@ async function renderBilling(
 const section = (name: string) => screen.getByRole("region", { name });
 /** A summary tile by its stable `data-tile` name (Tile, summary.tsx). */
 const tile = (name: string): HTMLElement => {
-  const found = document.querySelector(`[data-tile="${name}"]`);
+  const found = document.querySelector<HTMLElement>(`[data-tile="${name}"]`);
   if (found === null) throw new Error(`no ${name} tile`);
-  return found as HTMLElement;
+  return found;
 };
 
 afterEach(async () => {
@@ -184,9 +186,9 @@ describe("header", () => {
   it("opens the plan dialog to the subscribed sentence for an owner whose organization already has a plan", async () => {
     await renderBilling();
     await userEvent.click(screen.getByRole("button", { name: "Change plan" }));
-    expect(screen.getByRole("dialog", { name: "Change plan" })).toHaveTextContent(
-      "This organization already has a build subscription.",
-    );
+    expect(
+      screen.getByRole("dialog", { name: "Change plan" }),
+    ).toHaveTextContent("This organization already has a build subscription.");
   });
 
   it("opens the plan dialog to the role-denied sentence for a member (negative)", async () => {
@@ -276,9 +278,9 @@ describe("Plan tile", () => {
 
   it("shows the read's denial in place of the figure (negative)", async () => {
     await renderBilling({ plan: DENIED });
-    expect(tile("plan").querySelector("[data-reason=denied]")).toHaveTextContent(
-      "You cannot see Plan for this organization.",
-    );
+    expect(
+      tile("plan").querySelector("[data-reason=denied]"),
+    ).toHaveTextContent("You cannot see Plan for this organization.");
   });
 });
 
@@ -407,7 +409,9 @@ describe("Due tile", () => {
 
   it("shows the read's denial in place of the figure (negative)", async () => {
     await renderBilling({ invoices: DENIED });
-    expect(tile("due").querySelector("[data-reason=denied]")).toBeInTheDocument();
+    expect(
+      tile("due").querySelector("[data-reason=denied]"),
+    ).toBeInTheDocument();
   });
 });
 
@@ -505,9 +509,7 @@ describe("This month", () => {
         invoiceRow({ kind: "gau_purchase", amountDue: money("10") }),
       ]),
     });
-    expect(section("This month")).not.toHaveTextContent(
-      "This month continues",
-    );
+    expect(section("This month")).not.toHaveTextContent("This month continues");
   });
 
   it("shows the read's error in place of the table when the bucket could not be read (negative)", async () => {
@@ -554,7 +556,9 @@ describe("Meters", () => {
     const other = within(meters).getByRole("row", {
       name: /Other governed actions/,
     });
-    expect(other).toHaveTextContent("Other governed actionsnot recordedreported, never priced");
+    expect(other).toHaveTextContent(
+      "Other governed actionsnot recordedreported, never priced",
+    );
     const held = within(meters).getByRole("row", { name: /Held runs/ });
     expect(held).toHaveTextContent(
       "Held runsnot recordedreported, never priced (dod.held)",
@@ -658,25 +662,19 @@ describe("Meters", () => {
       await renderBilling({
         bucket: readOk(freeNoCardBucket({ usedGau: 4000, remainingGau: 1000 })),
       });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
 
     it("is absent once a card is saved, even at zero (negative)", async () => {
       await renderBilling({
         bucket: readOk(prepaidBucket({ usedGau: 56200, remainingGau: 0 })),
       });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
 
     it("is absent in invoice mode (negative)", async () => {
       await renderBilling({ bucket: readOk(invoiceBucket()) });
-      expect(
-        section("Meters").querySelector("[data-exhausted]"),
-      ).toBeNull();
+      expect(section("Meters").querySelector("[data-exhausted]")).toBeNull();
     });
   });
 });
@@ -860,9 +858,7 @@ describe("Usage credits", () => {
 
   it("shows the read's error in place of the balance (negative)", async () => {
     await renderBilling({ usageCredits: DOWN });
-    expect(
-      credits().querySelector("[data-reason=error]"),
-    ).toBeInTheDocument();
+    expect(credits().querySelector("[data-reason=error]")).toBeInTheDocument();
   });
 });
 
@@ -941,9 +937,7 @@ describe("Auto top-up", () => {
 
   it("leaves the per-top-up count out when the rate could not be read (negative)", async () => {
     await renderBilling({ rate: DOWN });
-    expect(
-      section("Auto top-up").querySelector("[data-per-topup]"),
-    ).toBeNull();
+    expect(section("Auto top-up").querySelector("[data-per-topup]")).toBeNull();
   });
 
   it("is not drawn when the bucket could not be read (negative)", async () => {
