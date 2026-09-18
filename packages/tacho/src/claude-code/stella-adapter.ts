@@ -277,16 +277,19 @@ export function stellaAnswer(
 
 /**
  * Parse a daemon answer body, or undefined when the body is not a JSON
- * object. The two cases must stay apart: an empty object is a real answer
- * that carries no decision, while a truncated or non-object body is no
- * answer at all, and a harness that reads an allow out of it would let a
- * tool call through on a serialization fault.
+ * object. The three cases must stay apart: an empty object (`"{}"`) is a
+ * real answer that carries no decision; a blank or whitespace-only body
+ * is no answer at all (the daemon sent nothing); a truncated or
+ * non-object body is also no answer. A harness that reads an allow out of
+ * either fault would let a tool call through on a serialization miss.
  */
 export function tryParseAnswerBody(
   body: string,
 ): Record<string, unknown> | undefined {
+  const trimmed = body.trim();
+  if (trimmed.length === 0) return undefined;
   try {
-    const parsed = JSON.parse(body.trim() || "{}") as unknown;
+    const parsed = JSON.parse(trimmed) as unknown;
     return isRecord(parsed) ? parsed : undefined;
   } catch {
     return undefined;
