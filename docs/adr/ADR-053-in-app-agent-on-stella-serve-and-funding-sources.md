@@ -263,3 +263,12 @@ reason (`meter_carry_micro_credits_by_reason`, migration
 debitable only under the reason that accrued it. Existing pooled residue
 migrated to `consume_embedding`: it was accrued under the old single markup,
 so it is marked-up money and belongs on a marked-up line.
+
+The switch is an expand-and-contract rollout, because production applies
+migrations by hand and deploys code separately, so old and new code overlap.
+That migration is the expand half: it adds the map, moves the residue across
+and zeroes the old column, and keeps `meter_carry_micro_credits` and its
+CHECK for the code that still writes it. It is applied before the deploy.
+The contract half folds whatever the old code accrued in the gap into the
+`consume_embedding` bucket and drops the column; it is a separate migration,
+applied once no node runs the old code.
