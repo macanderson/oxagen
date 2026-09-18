@@ -35,7 +35,7 @@ Verdicts and statuses are carried by border shape, not colour, so they survive g
 | pending, approval | dashed border |
 | broken, denied, failed | single border |
 
-The semantic colours (`--st-allowed`, `--st-approval`, `--st-denied`, `--st-proven`, `--st-failed`, `--st-critical`) exist for badges and dots inside tables where shape alone is too small to read. They are never the only signal. The destructive red (`#D5584D` on obsidian, `#992F28` on white) is the one state colour that is also text and a button fill, and it clears 4.5:1 both ways.
+The semantic colours (`--state-allowed`, `--state-approval`, `--state-denied`, `--state-proven`, `--state-failed`, `--state-critical`) exist for badges and dots inside tables where shape alone is too small to read. They are never the only signal. The destructive red (`#D5584D` on obsidian, `#992F28` on white) is the one state colour that is also text and a button fill, and it clears 4.5:1 both ways.
 
 ## Type
 
