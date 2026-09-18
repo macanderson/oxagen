@@ -484,12 +484,20 @@ describe("the Run page", () => {
   });
 });
 
-describe("Organization › People", () => {
-  // People renders for real, so this page pulls the whole organization
-  // feature graph. Loaded cold inside a test, under coverage instrumentation,
-  // that import alone outran the 5 s test budget, and the render that timed
-  // out went on to call Workspaces during the next test. Load it once here,
-  // under a hook budget sized for the import, and clear the stub per test.
+// People renders for real, so this page pulls the whole organization feature
+// graph and is the slowest in this file. Two separate things outran the
+// default 5 s budget, and both are handled here.
+//
+// The cold import, under coverage instrumentation, outran it on its own, and
+// the render that timed out went on to call Workspaces during the next test
+// and counted a second call there. So the import is hoisted and awaited once,
+// under a hook budget of its own.
+//
+// The first real render of the roster then outran 5 s as well on a loaded
+// runner (three failed main runs on 2026-09-18), which the hook budget does
+// not cover because it happens inside the tests. So the describe carries a
+// budget too.
+describe("Organization › People", { timeout: 30_000 }, () => {
   const people = import("./page");
   beforeAll(async () => {
     await people;

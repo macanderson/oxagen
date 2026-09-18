@@ -51,6 +51,9 @@ export interface DetectorDeps {
   maxDirsPerTick?: number;
 }
 
+/** Writes sealed frames to the WAL; see `Detector.tick`. */
+export type RecordSink = (events: readonly TachoEvent[]) => void;
+
 interface TranscriptSighting {
   path: string;
   firstSeenAt: number;
@@ -347,7 +350,7 @@ export class Detector {
     return events;
   }
 
-  private async checkTranscripts(): Promise<TachoEvent[]> {
+  private async checkTranscripts(record: RecordSink): Promise<TachoEvent[]> {
     const watched = new Set(
       [...this.sightings.values()].map((sighting) => sighting.path),
     );
@@ -397,11 +400,26 @@ export class Detector {
           }),
       );
     }
+    record(events);
     return events;
   }
 
-  /** One detector pass; returns the incidents it chained. */
-  async tick(): Promise<TachoEvent[]> {
-    return [...this.checkHooks(), ...(await this.checkTranscripts())];
+  /**
+   * One detector pass; returns the incidents it chained.
+   *
+   * `record` must write the frames to the WAL, and it is called in the same
+   * synchronous stretch as each seal. The WAL is appended in call order and
+   * read back in that order, so a frame sealed here but appended after the
+   * caller's `await` resolved would land behind any model or gateway call
+   * sealed on the host chain in between: the chain reads out of order, and a
+   * busy scan could ship past the held frame and mark it skipped. The hook
+   * check seals before the scan yields, so its frames are recorded before
+   * it; the transcript seals come after the scan and are recorded before the
+   * pass returns, not after the promise settles.
+   */
+  async tick(record: RecordSink = () => {}): Promise<TachoEvent[]> {
+    const hooks = this.checkHooks();
+    record(hooks);
+    return [...hooks, ...(await this.checkTranscripts(record))];
   }
 }

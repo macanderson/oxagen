@@ -65,6 +65,7 @@ vi.mock("./event-client", () => ({
 
 import { digestBytes } from "@oxagen/tacho";
 import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
+import { clearSteeringCacheForTests } from "./lib/tacho-steering";
 import {
   enforcementTierOf,
   foldDelta,
@@ -568,12 +569,16 @@ function wire(db: FakeDb): void {
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
           },
-          contextRecords: { findMany: async () => [] },
         },
-        // The one grouped read `gatewayInvocationsFor` makes: this host's
-        // invocations for the chains the batch names, newest per chain.
+        // Two reads share `select`, told apart by the table. The steering
+        // read (`readWorkspaceSteering`) counts `context_promotions` for the
+        // bundle cache key and joins `context_records` to their pinned
+        // versions; this fixture holds no steering, so both answer empty.
+        // The other is the one grouped read `gatewayInvocationsFor` makes:
+        // this host's invocations for the chains the batch names, newest per
+        // chain.
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             // Every row this fixture holds. The real statement narrows by
             // host id and by the chains the batch names; neither narrowing is
             // modelled, because `inArray` does not bind its list as a `Param`
@@ -582,11 +587,14 @@ function wire(db: FakeDb): void {
             // each chain up by name — so a chain nobody served is still a
             // miss, which is the property these tests are about.
             where: async () =>
-              db.gatewayChains.map((row) => ({
-                chain: row.chainSessionUuid,
-                at: row.lastSeenAt,
-                genesisHash: row.chainGenesisHash,
-              })),
+              tableName(table) === "context_promotions"
+                ? [{ ledger: 0, steering: 0 }]
+                : db.gatewayChains.map((row) => ({
+                    chain: row.chainSessionUuid,
+                    at: row.lastSeenAt,
+                    genesisHash: row.chainGenesisHash,
+                  })),
+            leftJoin: () => ({ where: async () => [] }),
           }),
         }),
         insert: (table: unknown) => ({
@@ -740,6 +748,7 @@ function wire(db: FakeDb): void {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearSteeringCacheForTests();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
   mocks.selectTachoEvents.mockResolvedValue([]);
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
