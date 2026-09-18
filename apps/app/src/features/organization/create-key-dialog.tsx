@@ -340,6 +340,7 @@ export function KeyRowActions({
   rotatable,
   listedIds,
   after,
+  afterRotate,
 }: {
   org: string;
   /** The workspace the key belongs to; a key names one (ADR-073). */
@@ -353,7 +354,14 @@ export function KeyRowActions({
    */
   rotatable: boolean;
   listedIds: readonly string[];
+  /** Where a revocation returns: the view the person was reading. */
   after: SafePath;
+  /**
+   * Where a rotation returns: the first page of that view. The replacement key
+   * is the newest, the roster is newest first, so that is the one page certain
+   * to hold it — and the secret panel's close path navigates there.
+   */
+  afterRotate: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys.actions");
   return (
@@ -367,7 +375,7 @@ export function KeyRowActions({
           testId="rotate-api-key"
           write={() => rotateApiKey(org, ws, keyId)}
           listedIds={listedIds}
-          after={after}
+          after={afterRotate}
         >
           <p className="text-sm text-muted-foreground">{t("rotate.body")}</p>
         </KeyWriteDialog>

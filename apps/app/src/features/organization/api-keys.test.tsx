@@ -40,6 +40,17 @@ const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { ApiKeys, chooseWorkspace } = await import("./api-keys");
+const { API_KEYS_PAGE, pageOfKeys, parseApiKeysView } = await import(
+  "./api-keys-view"
+);
+/** `API_KEYS_PAGE` and the figures around it, as the pager prints them. */
+const PAGE = String(API_KEYS_PAGE);
+const nth = (n: number) => String(API_KEYS_PAGE + n);
+
+/** The view a request with no query asks for: the unrevoked keys, first page. */
+const ACTIVE = parseApiKeysView({});
+/** The same page with the revoked keys on it. */
+const ALL = parseApiKeysView({ show: "all" });
 
 afterEach(() => {
   cleanup();
@@ -88,12 +99,23 @@ function wsCtx(orgRole: OrgRole = "owner") {
   });
 }
 
-async function renderApiKeys(read: Read<ApiKey[]>, orgRole: OrgRole = "owner") {
+async function renderApiKeys(
+  read: Read<ApiKey[]>,
+  orgRole: OrgRole = "owner",
+  asked = ACTIVE,
+) {
   const ctx = wsCtx(orgRole);
   const { source, calls } = orgSource({ apiKeys: read });
   const view = render(
     <IntlProvider>
-      {await ApiKeys({ ctx, source, workspaces: readOk(CHOICES) })}
+      {
+        await ApiKeys({
+          ctx,
+          source,
+          workspaces: readOk(CHOICES),
+          view: asked,
+        })
+      }
     </IntlProvider>,
   );
   expect(calls.apiKeys).toEqual([[ctx]]);
@@ -188,7 +210,8 @@ describe("ok", () => {
   });
 
   it("marks a key live, expired or revoked, as a dot and a word", async () => {
-    await renderApiKeys(readOk([live, expired, revoked]));
+    // Shown under the All filter, the only place a revoked row appears.
+    await renderApiKeys(readOk([live, expired, revoked]), "owner", ALL);
     expect(
       within(rowFor(live)).getByText("live").closest("[data-status]"),
     ).toHaveAttribute("data-status", "live");
@@ -202,7 +225,7 @@ describe("ok", () => {
   });
 
   it("says what a key can do, and lists no secret and no hash (negative)", async () => {
-    await renderApiKeys(readOk([live, revoked]));
+    await renderApiKeys(readOk([live, revoked]), "owner", ALL);
     expect(
       screen.getByText(
         "A key acts as the person who created it, in this workspace: on the API, MCP and the CLI it can do what that person can do here, and no more.",
@@ -212,7 +235,7 @@ describe("ok", () => {
   });
 
   it("carries rotate and revoke on a live key, revoke alone on an expired one and neither on a revoked one", async () => {
-    await renderApiKeys(readOk([live, expired, revoked]));
+    await renderApiKeys(readOk([live, expired, revoked]), "owner", ALL);
     const labels = (key: ApiKey) =>
       within(rowFor(key))
         .getAllByRole("button")
@@ -247,6 +270,119 @@ describe("ok", () => {
   });
 });
 
+/** `n` live keys, newest first, each with an id and a prefix of its own. */
+function manyKeys(n: number): ApiKey[] {
+  return Array.from({ length: n }, (_, i) =>
+    apiKey({
+      id: `aky_page${String(i).padStart(18, "0")}`,
+      name: `Runner ${String(i)}`,
+      prefix: `ox_p${String(i).padStart(9, "0")}`,
+    }),
+  );
+}
+
+/** `n` revoked keys, so the default filter has something to hide. */
+function manyRevoked(n: number): ApiKey[] {
+  return Array.from({ length: n }, (_, i) =>
+    apiKey({
+      id: `aky_gone${String(i).padStart(18, "0")}`,
+      name: `Gone ${String(i)}`,
+      prefix: `ox_g${String(i).padStart(9, "0")}`,
+      revokedAt: "2026-09-10T08:00:00.000Z",
+    }),
+  );
+}
+
+const filterNav = () => screen.getByRole("navigation", { name: "Which keys" });
+const pagerNav = () =>
+  screen.getByRole("navigation", { name: "Pages of API keys" });
+const rowIds = () =>
+  Array.from(keysTable().querySelectorAll("[data-api-key]")).map((row) =>
+    row.getAttribute("data-api-key"),
+  );
+
+describe("the revoked keys the page hides", () => {
+  it("opens on the unrevoked keys, with no revoked row on the table", async () => {
+    // A revoked key authenticates nothing — resolveApiKey never sees the row
+    // again — so it is a record of a key, not a key, and it does not push the
+    // unrevoked ones below it. An expired key is not revoked and stays.
+    await renderApiKeys(readOk([live, expired, revoked]));
+    expect(rowIds()).toEqual([live.id, expired.id]);
+    expect(keysTable()).not.toHaveTextContent("Laptop");
+  });
+
+  it("keeps an expired key on the default roster, because its state is a clock away and not a record", async () => {
+    // Expiry is crossed by the row's own running clock (`key-row.tsx`). A
+    // filter on it would move a row out from under a reader as a second ticked
+    // over; revocation is recorded and cannot un-happen.
+    await renderApiKeys(readOk([expired]));
+    expect(rowIds()).toEqual([expired.id]);
+  });
+
+  it("marks Active as the current filter and offers All, counting what it holds back", async () => {
+    const view = await renderApiKeys(readOk([live, revoked]));
+    const active = within(filterNav()).getByRole("link", {
+      name: "Not revoked",
+    });
+    const all = within(filterNav()).getByRole("link", {
+      name: "All (1 revoked)",
+    });
+    expect(active).toHaveAttribute("aria-current", "page");
+    expect(active).toHaveAttribute(
+      "href",
+      "/acme/api-keys?workspace=core-platform",
+    );
+    expect(all).not.toHaveAttribute("aria-current");
+    expect(all).toHaveAttribute(
+      "href",
+      "/acme/api-keys?workspace=core-platform&show=all",
+    );
+    await expectNoAxe(view.container);
+  });
+
+  it("names All plainly when there is nothing revoked to count", async () => {
+    await renderApiKeys(readOk([live]));
+    expect(
+      within(filterNav()).getByRole("link", { name: "All" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the revoked keys, with their revocation dates, once All is asked for", async () => {
+    await renderApiKeys(readOk([live, revoked]), "owner", ALL);
+    expect(rowIds()).toEqual([live.id, revoked.id]);
+    expect(
+      within(filterNav()).getByRole("link", { name: "All (1 revoked)" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(rowFor(revoked)).getByText("revoked").closest("[data-status]"),
+    ).toHaveAttribute("data-status", "revoked");
+  });
+
+  it("names the filter for the predicate it has, not for a state it cannot see (negative)", async () => {
+    // `filterKeys` keeps a row on `revokedAt` alone, so an expired key stays.
+    // A filter called "Active" over a row whose own status chip reads
+    // "expired" is the page contradicting itself in two places at once.
+    await renderApiKeys(readOk([live, expired, revoked]));
+    expect(
+      within(filterNav()).queryByRole("link", { name: "Active" }),
+    ).toBeNull();
+    expect(
+      within(filterNav()).getByRole("link", { name: "Not revoked" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(rowFor(expired)).getByText("expired").closest("[data-status]"),
+    ).toHaveAttribute("data-status", "expired");
+  });
+
+  it("falls back to the active keys for a filter it does not understand (negative)", () => {
+    // A query value the page cannot read falls back rather than failing the
+    // page, and the fallback is the one that hides revoked keys.
+    expect(parseApiKeysView({ show: "everything" }).show).toBe("active");
+    expect(parseApiKeysView({ show: ["all", "active"] }).show).toBe("all");
+    expect(parseApiKeysView({}).show).toBe("active");
+  });
+});
+
 describe("empty", () => {
   it("says the organization holds no keys, and still offers the first one", async () => {
     await renderApiKeys(readOk([]));
@@ -258,6 +394,150 @@ describe("empty", () => {
       screen.getByRole("button", { name: "Create a key" }),
     ).toBeInTheDocument();
   });
+
+  it("distinguishes a workspace with no keys from one whose keys are all revoked", async () => {
+    // "This workspace has no API keys" over a workspace holding three revoked
+    // ones is a lie the filter would be telling on the page's behalf.
+    const view = await renderApiKeys(readOk(manyRevoked(3)));
+    const line = screen.getByText(
+      /Every key in this workspace has been revoked/,
+    );
+    expect(line).toHaveAttribute("data-state", "empty-filtered");
+    expect(line).toHaveTextContent("Choose All to see them");
+    expect(screen.queryByRole("table")).toBeNull();
+    await expectNoAxe(view.container);
+  });
+
+  it("asks for the one hidden key in the singular", async () => {
+    await renderApiKeys(readOk([revoked]));
+    expect(screen.getByText(/Choose All to see it\./)).toBeInTheDocument();
+  });
+
+  it("says the workspace has no keys when All is asked for and there are none", async () => {
+    await renderApiKeys(readOk([]), "owner", ALL);
+    expect(
+      screen.getByText("This workspace has no API keys."),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("paging a roster larger than a page", () => {
+  it("shows no pager while one page holds the whole roster (negative)", async () => {
+    await renderApiKeys(readOk(manyKeys(API_KEYS_PAGE)));
+    expect(rowIds()).toHaveLength(API_KEYS_PAGE);
+    expect(
+      screen.queryByRole("navigation", { name: "Pages of API keys" }),
+    ).toBeNull();
+  });
+
+  it("cuts the roster at API_KEYS_PAGE rows and offers the next page", async () => {
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    const view = await renderApiKeys(readOk(keys));
+    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
+    expect(pagerNav()).toHaveTextContent(`1–${PAGE} of ${nth(5)}`);
+    const next = within(pagerNav()).getByRole("link", { name: "Next" });
+    expect(next).toHaveAttribute(
+      "href",
+      `/acme/api-keys?workspace=core-platform&offset=${PAGE}`,
+    );
+    expect(
+      within(pagerNav()).queryByRole("link", { name: "Previous" }),
+    ).toBeNull();
+    await expectNoAxe(view.container);
+  });
+
+  it("shows the last page's rows and the way back, with no Next beyond the end", async () => {
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    await renderApiKeys(readOk(keys), "owner", {
+      ...ACTIVE,
+      offset: API_KEYS_PAGE,
+    });
+    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
+    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
+    expect(
+      within(pagerNav()).getByRole("link", { name: "Previous" }),
+    ).toHaveAttribute("href", "/acme/api-keys?workspace=core-platform");
+    expect(within(pagerNav()).queryByRole("link", { name: "Next" })).toBeNull();
+  });
+
+  it("carries the filter through the pager, so a page of All stays All", async () => {
+    const keys = [...manyKeys(API_KEYS_PAGE), ...manyRevoked(5)];
+    await renderApiKeys(readOk(keys), "owner", ALL);
+    expect(
+      within(pagerNav()).getByRole("link", { name: "Next" }),
+    ).toHaveAttribute(
+      "href",
+      `/acme/api-keys?workspace=core-platform&show=all&offset=${PAGE}`,
+    );
+  });
+
+  it("pages the filtered roster, not the read: hidden keys take up no page", async () => {
+    // 5 live keys buried under 20 revoked ones is one page of Active, not two.
+    const keys = [...manyRevoked(API_KEYS_PAGE), ...manyKeys(5)];
+    await renderApiKeys(readOk(keys));
+    expect(rowIds()).toHaveLength(5);
+    expect(
+      screen.queryByRole("navigation", { name: "Pages of API keys" }),
+    ).toBeNull();
+  });
+
+  it("clamps an offset past the end onto the last page that exists (negative)", async () => {
+    // Revoking the last key on the last page, or narrowing the filter from a
+    // deep page, otherwise answers with an empty table and no way back except
+    // editing the URL.
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    await renderApiKeys(readOk(keys), "owner", {
+      ...ACTIVE,
+      offset: API_KEYS_PAGE * 9,
+    });
+    expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
+    expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
+  });
+
+  it("starts a page on a page boundary, so no two pages repeat a row (negative)", async () => {
+    // The query string is shareable and hand-editable. `?offset=1` would show
+    // rows 2 to 21 while Previous, at offset 0, shows rows 1 to 20 -- the two
+    // pages repeating 19 rows, with no sequence of clicks ever reaching a
+    // boundary again.
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, offset: 1 });
+    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
+    expect(pagerNav()).toHaveTextContent(`1\u2013${PAGE} of ${nth(5)}`);
+    expect(
+      within(pagerNav()).queryByRole("link", { name: "Previous" }),
+    ).toBeNull();
+  });
+
+  it("aligns an unaligned offset down, never up, so no row is skipped", () => {
+    const keys = manyKeys(API_KEYS_PAGE * 3);
+    expect(pageOfKeys(keys, 1).offset).toBe(0);
+    expect(pageOfKeys(keys, API_KEYS_PAGE - 1).offset).toBe(0);
+    expect(pageOfKeys(keys, API_KEYS_PAGE).offset).toBe(API_KEYS_PAGE);
+    expect(pageOfKeys(keys, API_KEYS_PAGE + 1).offset).toBe(API_KEYS_PAGE);
+  });
+
+  it("falls back to the first page for an offset it does not understand (negative)", () => {
+    expect(parseApiKeysView({ offset: "20" }).offset).toBe(20);
+    expect(parseApiKeysView({ offset: "-1" }).offset).toBe(0);
+    expect(parseApiKeysView({ offset: "020" }).offset).toBe(0);
+    expect(parseApiKeysView({ offset: "1e3" }).offset).toBe(0);
+    expect(parseApiKeysView({}).offset).toBe(0);
+  });
+
+  it("reads an offset far past any real roster rather than resetting it to the first page (negative)", () => {
+    // The bound is what a double holds exactly, not a guess at how many keys a
+    // workspace may have. A ceiling of the latter kind fails the wrong way: an
+    // offset above it falls back to 0, so Next on the last page of a roster
+    // past the ceiling would jump to the first page instead. `pageOfKeys`
+    // clamps a too-large offset onto the last page that exists, which is where
+    // an offset beyond the roster is supposed to land.
+    expect(parseApiKeysView({ offset: "9999999999" }).offset).toBe(9999999999);
+    expect(pageOfKeys(manyKeys(3), 9999999999).offset).toBe(0);
+    // Past what a double holds exactly, the parse would round — and a rounded
+    // offset is a silently different page — so it falls back instead.
+    expect(parseApiKeysView({ offset: "9007199254740993" }).offset).toBe(0);
+    expect(parseApiKeysView({ offset: "99999999999999999999" }).offset).toBe(0);
+  });
 });
 
 describe("the workspace a key names", () => {
@@ -266,7 +546,14 @@ describe("the workspace a key names", () => {
     const { source, calls } = orgSource({ apiKeys: readOk([live]) });
     render(
       <IntlProvider>
-        {await ApiKeys({ ctx, source, workspaces: readOk(CHOICES) })}
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk(CHOICES),
+            view: ACTIVE,
+          })
+        }
       </IntlProvider>,
     );
     expect(calls.apiKeys).toEqual([[ctx]]);
@@ -287,6 +574,19 @@ describe("the workspace a key names", () => {
     expect(other).not.toHaveAttribute("aria-current");
   });
 
+  it("carries the filter to the next workspace and drops the page", async () => {
+    // A person who asked to see revoked keys asked about keys. The page is the
+    // other way round: page four of this roster says nothing about the next.
+    await renderApiKeys(readOk([live]), "owner", {
+      ...ALL,
+      offset: API_KEYS_PAGE,
+    });
+    const picker = screen.getByRole("navigation", { name: "Workspace" });
+    expect(
+      within(picker).getByRole("link", { name: "Growth" }),
+    ).toHaveAttribute("href", "/acme/api-keys?workspace=growth&show=all");
+  });
+
   it("keeps an archived workspace in the picker, named as archived, so its live keys stay revocable", async () => {
     // archive_workspace records archived_at and nothing else, and resolveApiKey
     // never consults it: a key in an archived workspace keeps authenticating.
@@ -300,6 +600,7 @@ describe("the workspace a key names", () => {
             ctx,
             source,
             workspaces: readOk(list(core, growth, sunset)),
+            view: ACTIVE,
           })
         }
       </IntlProvider>,
@@ -325,6 +626,7 @@ describe("the workspace a key names", () => {
             ctx,
             source,
             workspaces: readOk(list(core, foreign)),
+            view: ACTIVE,
           })
         }
       </IntlProvider>,
@@ -354,6 +656,7 @@ describe("the workspace a key names", () => {
             ctx,
             source,
             workspaces: readOk(list(sunset)),
+            view: ACTIVE,
           })
         }
       </IntlProvider>,
@@ -379,7 +682,14 @@ describe("the workspace a key names", () => {
     const { source } = orgSource({ apiKeys: readOk([live]) });
     const view = render(
       <IntlProvider>
-        {await ApiKeys({ ctx, source, workspaces: readOk(list(sunset)) })}
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk(list(sunset)),
+            view: ACTIVE,
+          })
+        }
       </IntlProvider>,
     );
     expect(screen.queryByRole("button", { name: "Create a key" })).toBeNull();
@@ -410,7 +720,14 @@ describe("the workspace a key names", () => {
     const { source, calls } = orgSource({});
     const view = render(
       <IntlProvider>
-        {await ApiKeys({ ctx, source, workspaces: readOk(list()) })}
+        {
+          await ApiKeys({
+            ctx,
+            source,
+            workspaces: readOk(list()),
+            view: ACTIVE,
+          })
+        }
       </IntlProvider>,
     );
     expect(calls.apiKeys).toEqual([]);
@@ -432,6 +749,7 @@ describe("the workspace a key names", () => {
             ctx,
             source,
             workspaces: readError("control_plane_unavailable", 503),
+            view: ACTIVE,
           })
         }
       </IntlProvider>,

@@ -51,6 +51,7 @@ export function KeyRow({
   now,
   listedIds,
   here,
+  afterMint,
 }: {
   apiKey: ApiKey;
   org: string;
@@ -67,7 +68,15 @@ export function KeyRow({
   /** The instant the keys were read; this row's clock starts there. */
   now: number;
   listedIds: readonly string[];
+  /** This view — the same filter, the same page — where a revocation returns. */
   here: SafePath;
+  /**
+   * The first page of this filter, where a rotation returns. A rotation mints
+   * a key and the roster is newest first, so the replacement is at the top of
+   * the roster and nowhere else; returning to a later page would answer a
+   * rotation with a screen that does not contain its result.
+   */
+  afterMint: SafePath;
 }) {
   const t = useTranslations("organization.apiKeys");
   const current = useExpiryClock(apiKey.expiresAt, now);
@@ -110,6 +119,7 @@ export function KeyRow({
             rotatable={mayRotate}
             listedIds={listedIds}
             after={here}
+            afterRotate={afterMint}
           />
         )}
       </td>

@@ -82,7 +82,7 @@
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   type SyntheticEvent,
@@ -94,6 +94,7 @@ import {
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
+import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
 import { useNavigate } from "@/ui/navigation";
 
@@ -175,62 +176,35 @@ function inertOutside(node: HTMLElement): () => void {
 }
 
 /**
- * The record on screen for a route that keeps it in the query string rather
- * than in a path segment (`shared/safe-path.ts`: Spend's finding and key drill,
- * Steering's proposal are query values on one route, ARCHITECTURE.md §1.2), in
- * the order the page selects them.
- *
- * An allow-list, not a pass-through. A query string is whatever the address bar
- * says, so the page context carries a value one of these routes asked for or it
- * carries nothing; a tab, a cursor or an offset names a view, not a record, and
- * is not on this table.
- */
-const QUERY_RECORD: Readonly<Record<string, readonly string[]>> = {
-  spend: ["finding", "drill"],
-  steering: ["proposal"],
-  // Register an agent keeps the identity it minted on the name step in the
-  // query, so the path segment after the route is the step (`wrap`, `run`) and
-  // the record on screen is the agent (`shared/safe-path.ts`, `routes.register`).
-  // Without this row "why has this agent not enrolled?" sends `entityId: "wrap"`.
-  register: ["agent"],
-};
-
-/**
  * `entityId`'s cap in `assistantPageContextSchema`. A longer value is not an
  * id; sending it would refuse the whole turn as invalid rather than answer the
  * question without the record.
  */
 const ENTITY_ID_MAX = 256;
 
-/** The first of `keys` the address bar selects something with; a key present but empty is a cleared selection, not a record. */
-function selectedBy(
-  keys: readonly string[],
-  query: Pick<URLSearchParams, "get">,
-): string | undefined {
-  for (const key of keys) {
-    const value = query.get(key);
-    if (value !== null && value !== "") return value;
-  }
-  return undefined;
-}
-
 /**
- * The record the page is showing. A route keeps it in the path segment after
- * the route — a run id, an agent key — or, where §1.2 makes a selection a query
- * value rather than a route of its own, in one of the values `QUERY_RECORD`
- * names for it. A route does one or the other, so there is no precedence to
- * settle: the table decides which half of the URL is read.
+ * The record the page is showing.
+ *
+ * A page that keeps its selection in the query string declares it, with
+ * `<PageRecord>`, from the parse it already did in order to render. The shell
+ * does not re-derive it: a `finding` outside the Findings tab, a `proposal` off
+ * the Context PRs tab, and the `agent` on `/register/wrap` are all cases where
+ * the URL and the page disagree, and the page is right.
+ *
+ * A route whose record is the path segment after it (`runs/[run]`,
+ * `agents/[agent]`) needs no declaration, because there the URL cannot
+ * disagree. `declared` wins where it exists, so a page that declares `null` --
+ * "I am showing no particular record" -- is believed over the path.
  */
 function recordOnPage(
-  route: string,
+  declared: { id: string | null } | null,
   fromPath: string | undefined,
-  query: Pick<URLSearchParams, "get">,
 ): string | null {
-  const keys = QUERY_RECORD[route];
-  const found = keys === undefined ? fromPath : selectedBy(keys, query);
+  const found = declared === null ? fromPath : declared.id;
   // Past the cap `assistantPageContextSchema` puts on `entityId` it is not an
   // id, and asking without the record beats refusing the turn as invalid.
-  if (found === undefined || found.length > ENTITY_ID_MAX) return null;
+  if (found === undefined || found === null || found.length > ENTITY_ID_MAX)
+    return null;
   return found;
 }
 
@@ -269,8 +243,11 @@ export function AssistantFlyout() {
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen } = useShellState();
   const pathname = usePathname();
-  const query = useSearchParams();
   const { org, ws, rest } = parseShellPath(pathname);
+  // The route the person is standing on, and what that page says it is showing.
+  // Read here rather than in the submit handler because it is a subscription.
+  const route = rest[0] ?? "fleet";
+  const declaredRecord = usePageRecord(route);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -420,12 +397,11 @@ export function AssistantFlyout() {
      */
     const stillOurs = () => generationRef.current === asked;
     try {
-      const route = rest[0] ?? "fleet";
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
         route,
-        entityId: recordOnPage(route, rest[1], query),
+        entityId: recordOnPage(declaredRecord, rest[1]),
       });
       if (!stillOurs()) return;
       if (result.ok) {
