@@ -1,6 +1,6 @@
 # ADR-078: Wrapped and connected are two enforcement tiers, and neither dominates the other
 
-- **Status:** Accepted
+- **Status:** Accepted; §1 amended 2026-09-18 by ADR-095 (the ladder has four words and `gateway` is computed from what was routed)
 - **Date:** 2026-09-16
 - **Owners:** platform
 - **Related:** `docs/specs/tacho/spec.md` §2 item 2 and §6.3 (the `enforcement_tier`
@@ -237,3 +237,19 @@ for a file they own, and claiming it as a control would be the exact dishonesty
 repo does not control, and the connected tier is worth shipping on its own —
 server-enforced refusal on every Oxagen tool call is a real control, whatever
 else the app does.
+
+## Amendment 2026-09-18: the ladder has four words
+
+Maintainer decision of 2026-09-18, recorded in ADR-095.
+
+Two sentences in §1 change. **"No fourth value is minted."** `contained` is the
+fourth, added in Phase 5 (ADR-096). **"Connected | `gateway`"**: `gateway` is no
+longer only the connected tier. From Phase 4 (ADR-094) it is any run whose model
+or MCP traffic was routed through `tachod`, and the tier is computed from what
+was routed, not assigned from the harness name.
+
+§2 stands. Breadth and certainty are different things, no surface renders a tier
+as a score or as "fully governed", and every surface states what the tier
+records and what it does not. §3 to §6 stand unchanged. At `main` the MCP
+gateway is still registered only into Claude Desktop
+(`CONNECTED_HARNESSES = ["claude-desktop"]`).
