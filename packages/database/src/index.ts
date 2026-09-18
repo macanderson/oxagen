@@ -50,6 +50,7 @@ export {
 } from "./namespace";
 export {
   hasColumn,
+  hasColumnFresh,
   ambientPlaneKey,
   runOnPlane,
   resetColumnProbesForTests,

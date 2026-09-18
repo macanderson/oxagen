@@ -3,7 +3,7 @@ import { contextRecordPromote } from "@oxagen/oxagen/contracts/context.record.pr
 import {
   ambientPlaneKey,
   CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-  hasColumn,
+  hasColumnFresh,
   schema,
   withTenantDb,
 } from "@oxagen/database";
@@ -91,7 +91,10 @@ export const contextRecordPromoteHandler: CapabilityHandler<
     // code that already handles a legacy version.
     const absent = sql<string | null>`null`;
     const [version] = (await withTenantDb(async (tx) => {
-      const versionClassificationReady = await hasColumn(
+      // Fresh, like the merge: a cached miss here copies nothing onto the
+      // record row, so the row keeps a classification the pin no longer
+      // matches -- #3312's symptom -- until something promotes again.
+      const versionClassificationReady = await hasColumnFresh(
         tx,
         CONTEXT_VERSION_CLASSIFICATION_COLUMN,
         await ambientPlaneKey(),

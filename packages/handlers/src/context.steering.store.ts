@@ -7,7 +7,7 @@
 import {
   ambientPlaneKey,
   CONTEXT_VERSION_CLASSIFICATION_COLUMN,
-  hasColumn,
+  hasColumnFresh,
   isUniqueViolation,
   schema,
   withTenantDb,
@@ -636,7 +636,15 @@ export const postgresSteeringStore: SteeringStore = {
   async publishMerge(input) {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
-      const versionClassificationReady = await hasColumn(
+      // `hasColumnFresh`, not `hasColumn`: a cached MISS must not reach a
+      // write. The read path can spend the negative TTL compiling from the
+      // record row and be right again on the next call, but a merge that omits
+      // the four writes a version that carries NULL for good -- the migration's
+      // one-time backfill has already run, and nothing afterwards fills it in.
+      // A later merge would then update the record row, and promoting the
+      // unclassified version would fall back to that newer row: #3312 again,
+      // permanently, for that version (discussion_r4050451667).
+      const versionClassificationReady = await hasColumnFresh(
         tx,
         CONTEXT_VERSION_CLASSIFICATION_COLUMN,
         await ambientPlaneKey(),
