@@ -135,6 +135,21 @@ const ANCHOR_MAP_KEY = `(?<![${ID_PART}.])orgId\\s*:\\s*\\$orgId(?![${ID_PART}])
 const SCOPE_GUARD = new RegExp(`${ANCHOR_PROPERTY}|${ANCHOR_MAP_KEY}`, "u");
 
 /**
+ * Throw unless `cypher` binds the tenant to the seam's own `$orgId` in a
+ * FILTERING position.
+ *
+ * Exported for the seam's own tests, which need to drive the assertion with a
+ * string the clamps cannot currently produce — see the re-check in `run()`
+ * below, which is an enforced invariant rather than a reachable failure today.
+ */
+export function assertAnchorsTenant(cypher: string): void {
+  if (SCOPE_GUARD.test(keepFilteringPositions(cypher))) return;
+  throw new TenantScopeError(
+    `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
+  );
+}
+
+/**
  * Return a Neo4j session bound to the active tenant scope. Throws
  * TenantScopeError immediately if there is no active tenant scope (checked at
  * scopedSession() call time, not lazily inside run()). The returned session's
@@ -206,11 +221,7 @@ export function scopedSession(scope?: GraphScope): {
       // in a comment, a string literal, a SET target or a RETURN projection
       // cannot satisfy the tenancy guard. The error quotes the ORIGINAL text,
       // which is what the author wrote and has to fix.
-      if (!SCOPE_GUARD.test(keepFilteringPositions(cypher))) {
-        throw new TenantScopeError(
-          `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
-        );
-      }
+      assertAnchorsTenant(cypher);
       const sess = await ensureSession();
 
       // No agent scope → behaviorally unchanged pass-through (humans and
@@ -230,6 +241,33 @@ export function scopedSession(scope?: GraphScope): {
       // rejection, unenforceable budget shape) is, like TenantScopeError,
       // OUTSIDE the breaker — a policy violation must not trip it.
       const applied = applyGraphScope(cypher, params, scope);
+      // THE STRING THAT EXECUTES IS THE STRING THAT WAS CHECKED.
+      //
+      // `applyGraphScope` REWRITES the query — `clampVarLengthHops` rebounds a
+      // `*1..5` quantifier, `clampLimits` clamps a literal `LIMIT` or appends
+      // one — and `sess.run` below is handed the rewritten form. The tenancy
+      // guard at the top of `run()` read the AUTHORED text, so the seam
+      // validated one string and executed another: a decision about an artifact
+      // that is not the artifact the decision governs, which is the shape of
+      // every defect this seam has been corrected for.
+      //
+      // No clamp can break an anchor today, and the reason is bounded rather
+      // than hopeful — their whole output alphabet is digits, `*` and `..`
+      // substituted strictly between an existing `[` and `]`, plus a trailing
+      // "\nLIMIT <digits>", none of which can delete an anchor or introduce a
+      // bracket, brace, clause or write keyword. But that is a property of the
+      // clamp BODIES, which whoever edits them next would have to re-derive.
+      //
+      // It is asserted UNCONDITIONALLY rather than only when the text changed.
+      // An identity gate would be cheaper and behaves identically, which is the
+      // problem with it: no test can tell it from its absence, and an
+      // unfalsifiable line in this seam is how several of these rounds started.
+      // The cost is one lexer pass on the agent-scoped path only.
+      //
+      // The first guard stays where it is. It reads what the author wrote and
+      // quotes it in the error, which is the text they have to fix;
+      // `tenant.executed-cypher.test.ts` pins that the two are different checks.
+      assertAnchorsTenant(applied.cypher);
       const finalParams = { ...applied.params, orgId, workspaceId };
       return neo4jBreaker().exec(() =>
         applied.txConfig

@@ -31,11 +31,12 @@ const close = vi.fn(async () => undefined);
 vi.mock("./client", () => ({ session: () => ({ run, close }) }));
 
 import { runInTenantScope } from "@oxagen/tenancy";
-import { scopedSession } from "./tenant";
+import { assertAnchorsTenant, scopedSession } from "./tenant";
 import {
   keepFilteringPositions,
   stripLiteralsAndComments,
 } from "./graph-scope";
+import type { GraphScope } from "./graph-scope";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -1166,6 +1167,119 @@ describe("tenancy guard — a subquery's clause baseline is its own", () => {
         "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } SET n.orgId = $orgId",
       ),
     ).resolves.toBe(false);
+  });
+});
+
+// ── The string that executes is the string that was checked ────────────────
+//
+// `applyGraphScope` REWRITES the query after every guard has read it:
+// `clampVarLengthHops` rebounds a `*1..5` quantifier and `clampLimits` clamps or
+// appends a `LIMIT`. `session.run` is handed the rewritten form. So the seam was
+// validating one string and executing another — the same class as everything
+// else in this file, a decision about an artifact that is not the artifact the
+// decision governs.
+//
+// No clamp can break an anchor today, and the argument is bounded: their whole
+// output alphabet is digits, `*` and `..` substituted strictly between an
+// existing `[` and `]`, plus a trailing newline + `LIMIT <digits>`. The tests
+// below assert that property directly over every clamp branch, so a future clamp
+// that violates it fails here rather than in production. `applyGraphScope` now
+// runs the clamps BEFORE its guards, and `run()` re-asserts the tenancy anchor
+// on `applied.cypher`, so the invariant is structural rather than re-derived by
+// whoever edits the clamps next. `tenant.executed-cypher.test.ts` pins the
+// wiring by substituting a rewrite step that does break the anchor.
+describe("tenancy guard — the executed Cypher is re-checked", () => {
+  const scope: GraphScope = { budget: { maxHops: 2, maxNodes: 10 } };
+
+  /** Run through the seam and report the Cypher Neo4j was actually handed. */
+  async function executed(cypher: string): Promise<string> {
+    run.mockClear();
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
+      const s = scopedSession(scope);
+      await s.run(cypher);
+    });
+    return run.mock.calls[0]?.[0] as string;
+  }
+
+  const clampBranches: Array<[name: string, cypher: string]> = [
+    [
+      "an unbounded hop quantifier",
+      "MATCH (a {orgId: $orgId})-[r*]->(b) RETURN b LIMIT 5",
+    ],
+    [
+      "an open upper bound",
+      "MATCH (a {orgId: $orgId})-[r*2..]->(b) RETURN b LIMIT 5",
+    ],
+    [
+      "an explicit range above the cap",
+      "MATCH (a {orgId: $orgId})-[r*1..9]->(b) RETURN b LIMIT 5",
+    ],
+    [
+      "an exact hop count above the cap",
+      "MATCH (a {orgId: $orgId})-[r*7]->(b) RETURN b LIMIT 5",
+    ],
+    [
+      "a typed quantifier, where the anchor shares the bracket",
+      "MATCH (a)-[r:T*1..9 {orgId: $orgId}]->(b) RETURN b LIMIT 5",
+    ],
+    [
+      "a LIMIT clamped down",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n LIMIT 500",
+    ],
+    [
+      "a LIMIT appended because there was none",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a LIMIT appended after a trailing line comment",
+      "MATCH (n) WHERE n.orgId = $orgId RETURN n // done",
+    ],
+    [
+      "both clamps on one query",
+      "MATCH (a {orgId: $orgId})-[r*1..9]->(b) RETURN b LIMIT 500",
+    ],
+  ];
+
+  for (const [name, cypher] of clampBranches) {
+    it(`still anchors after the clamps: ${name}`, async () => {
+      const sent = await executed(cypher);
+      expect(sent).toBeTypeOf("string");
+      // The executed text, not the authored text, satisfies the guard.
+      expect(() => assertAnchorsTenant(sent)).not.toThrow();
+      expect(keepFilteringPositions(sent)).toContain("$orgId");
+    });
+  }
+
+  it("is discriminating: the clamps really did rewrite the query", async () => {
+    // Without this the block above would pass on a seam that clamped nothing.
+    const rewritten = await Promise.all(
+      clampBranches.map(async ([, c]) => (await executed(c)) !== c),
+    );
+    expect(rewritten.every(Boolean)).toBe(true);
+  });
+
+  it("the clamps introduce no bracket, brace, clause or write keyword", async () => {
+    // The bounded argument for why the re-check cannot fire today, asserted
+    // rather than reasoned: whatever a clamp adds is drawn from this alphabet.
+    for (const [, cypher] of clampBranches) {
+      const sent = await executed(cypher);
+      const strip = (t: string) => t.replace(/[\s\d*.]|LIMIT/gi, "");
+      // Every character of the ORIGINAL survives in order, once the clamped
+      // numerics and the appended LIMIT are removed from both sides.
+      expect(strip(sent)).toBe(strip(cypher));
+    }
+  });
+
+  it("re-checks the executed string, not only the authored one", () => {
+    // The re-check itself, driven directly: the clamps cannot currently produce
+    // an unanchored rewrite, so the assertion is exercised here rather than
+    // through a contrived clamp.
+    expect(() =>
+      assertAnchorsTenant("MATCH (n {orgId: $orgId}) RETURN n LIMIT 10"),
+    ).not.toThrow();
+    expect(() => assertAnchorsTenant("MATCH (n) RETURN n LIMIT 10")).toThrow(
+      /must bind the tenant/,
+    );
   });
 });
 

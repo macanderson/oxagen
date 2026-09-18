@@ -1258,9 +1258,29 @@ export function applyGraphScope(
   scope: GraphScope,
 ): AppliedGraphScope {
   assertNoReservedParamCollision(params);
-  assertScopeMarkers(cypher, scope);
-  if (scope.mode === "read") assertReadOnly(cypher);
 
+  // THE CLAMPS RUN FIRST, AND THE GUARDS READ WHAT THEY PRODUCED.
+  //
+  // The clamps REWRITE the query — `clampVarLengthHops` rebounds a `*1..5`
+  // quantifier, `clampLimits` clamps a literal `LIMIT` or appends one — and it
+  // is `finalCypher`, not `cypher`, that `tenant.ts` hands to `session.run`.
+  // The guards used to read `cypher`, so the seam validated one string and
+  // executed a different one: a decision about an artifact that is not the
+  // artifact the decision governs, which is the shape of every defect this
+  // module has been corrected for.
+  //
+  // No clamp can currently break a marker or introduce a write, and the reason
+  // is bounded rather than hopeful — their whole output alphabet is digits, `*`
+  // and `..` substituted strictly between an existing `[` and `]`, plus a
+  // trailing "\nLIMIT <digits>". But that is a property of the clamp BODIES,
+  // which whoever edits them next would have to re-derive, and this file's
+  // history is of exactly that kind of reasoning holding until it did not.
+  //
+  // Ordering the clamps first is what makes the invariant STRUCTURAL rather than
+  // a second defensive call: there is one check, it reads the executed text, and
+  // no branch decides whether it happens. A `LIMIT $x` or an unlimited `UNION`
+  // is refused by the clamp itself before either guard speaks, which is the same
+  // fail-closed answer in a different message.
   let finalCypher = cypher;
   const budget = scope.budget;
   if (budget?.maxHops !== undefined) {
@@ -1269,6 +1289,9 @@ export function applyGraphScope(
   if (budget?.maxNodes !== undefined) {
     finalCypher = clampLimits(finalCypher, budget.maxNodes);
   }
+
+  assertScopeMarkers(finalCypher, scope);
+  if (scope.mode === "read") assertReadOnly(finalCypher);
 
   const txConfig =
     budget?.maxTraversalMs !== undefined
