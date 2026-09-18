@@ -459,6 +459,55 @@
               "maxLength": 256
             }
           },
+          "model_prices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "anthropic",
+                    "openai"
+                  ]
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "input": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "output": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_read": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cache_write_1h": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "provider",
+                "model",
+                "input",
+                "output",
+                "cache_read",
+                "cache_write"
+              ],
+              "additionalProperties": false
+            }
+          },
           "signature": {
             "type": "object",
             "properties": {
