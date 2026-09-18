@@ -31,7 +31,7 @@ This table lists every decision that shapes the rest of the document, in one pla
 | 12 | Oxagen governs the toolbelt. An agent sees only the tools it is granted, and it can search them when the belt is large. The agent holds no credentials at all. Every call passes one pipeline: validate, taint-check, decide (allow, approve, or deny, deterministically), broker a per-call credential, dispatch idempotently, validate output, sign a receipt. A taint-check looks for data marked as untrusted or sensitive. Deterministic means the same input always gives the same decision. Idempotent dispatch means a repeated call has the same effect as a single call. A tool's safety classification describes the tool. The customer's approval rules decide, with auto-approval conditions Oxagen can apply to skip the human. Any consequence the customer marks (money, data destruction, production changes, external communication, access changes) requires a human-granted mandate. The mandate sets limits over the tool's declared measures and keeps a ledger. Kill switches exist at every level. Policy is versioned and simulated against real history before activation. An adversarial suite proves the guarantees per release. | §6.5–6.13 |
 | 13 | Oxagen accounts customer spend per model call by normalized token class, including cache reads and writes. It attributes spend up the chain operator → agent → run → turn → step. It reports proven versus unproven spend with a productive ratio and ranked optimization findings. It reconciles spend to the cent against provider statements. Oxagen bills per run on a plan allowance and never marks up tokens. It reports governed actions and retained storage as secondary meters. **Amendment 2026-09-13 (ADR-055):** Oxagen bills governed action units (GAUs) from a monthly bucket on the subscription, sells more in unit quantities at the customer's contracted rate, and never marks up tokens; see §12.1. | §12 |
 | 14 | Audit fidelity: **full bodies, seven years, write-once at seal time**. Seal time is the moment a record is closed and locked against change. Each organization has its own keys. Redaction happens before write. Erasure uses crypto-shredding: destroying the key so the encrypted data can never be read again. Frame nodes stay in the graph for a hot window. The run ledger stays forever. | §13 |
-| 15 | Mission Control is ten pages: seven in a workspace and three for the organization, down from 70. Everything else is deleted. Appendix F says where each old route went. | §14, App. F |
+| 15 | Mission Control is eleven pages: eight in a workspace and three for the organization, down from 70 (Skills joined with ADR-090). Everything else is deleted. Appendix F says where each old route went. | §14, App. F |
 | 16 | A run is proven only by a **witness** Oxagen wrote. A witness is a test built with one of several deterministic oracles, checkers whose result is fixed for a given input. The witness fails on the PR's target branch and passes on the PR. It runs in a witness runner the worker can never see or reach. The runner reports only pass or fail back to the worker. The flip from fail to pass stamps the run. Stamped runs are the training asset. | §8.5 |
 
 ---
@@ -1250,7 +1250,7 @@ GDPR (the EU privacy law) erasure works by **crypto-shredding**, which destroys 
 
 ## 14. Mission Control
 
-Mission Control has eleven pages: eight at workspace scope and three at organization scope, Skills having joined them with ADR-090. `apps/app/ARCHITECTURE.md` sets the shipping page set and wins where it and this section differ — it records that this count and Appendix F have drifted in other directions too (Ontology cut, Audit rescoped), and reconciling those is not ADR-090's job. Appendix F maps every current route onto these ten. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.
+Mission Control has eleven pages: eight at workspace scope and three at organization scope, Skills having joined them with ADR-090. `apps/app/ARCHITECTURE.md` sets the shipping page set and wins where it and this section differ — it records that this count and Appendix F have drifted in other directions too (Ontology cut, Audit rescoped), and reconciling those is not ADR-090's job. Appendix F maps current routes onto the ten that predate ADR-090 and does **not** cover Skills; it is therefore no longer a complete route map, and a cutover must take the page set from `apps/app/ARCHITECTURE.md` rather than from Appendix F. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.
 
 | Screen | Job | Primary actions |
 |---|---|---|
@@ -2027,8 +2027,12 @@ The quarantine is not §5.2, which supplies tenant isolation only and would let 
 these rows. It is four mechanisms the #3098 lane must build, named here because a fence nobody implements is not a
 fence: (1) a dedicated read capability — an ordinary workspace read must not return these rows; (2) an
 **org-scoped `research.read` IAM permission**, which does **not** exist in the catalogue today and is created by
-that lane; (3) an RLS predicate on this table that denies unless that permission is held, rather than the
-`org`/`workspace` predicate every other table uses; and (4) a job that **deletes** rows past `retain_until`, since
+that lane; (3) an RLS predicate on this table, which needs a signal Postgres can actually see: §5.2 exposes only
+`app.current_org_id` and `app.current_workspace_id`, and an IAM permission is application state the database
+cannot read. So `withTenantDb` sets a **third transaction-local setting** — `app.research_read`, written only
+after the IAM check has passed and never from request input — and the predicate on this table requires it true
+instead of the `org`/`workspace` predicate every other table uses. Without that bridge the fence either denies
+every read or silently falls back to tenant scope and exposes the rows; and (4) a job that **deletes** rows past `retain_until`, since
 an expiry nothing enforces is a comment. A reflection never enters a context frame, is never promoted to steering,
 does not price the work, and is not evidence about a person.
 
@@ -2381,11 +2385,11 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 
 Two notes on that list. `read_file` has no registered contract on `main` — the only match is a test fixture in `packages/oxagen/src/contracts/tool.declaration.publish.test.ts` — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (`set_plugin_secret`, `revoke_plugin_credential`, `reauth_plugin_credential`) are absorbed into `set_connection` and `delete_connection` rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.
 
-Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = **96** for the full product. The wedge ships 78: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
+Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96, plus `list_skills` (2026-09-15) and `search_skills` (ADR-090) = **98** for the full product. The wedge ships 79: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
 
 ## Appendix F. The pages that survive
 
-"Survive" here means *stays routed*. The ten pages below are what a user can reach in rev1. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its `page.tsx`, its components and its `actions.ts` stay in the tree. `DEREGISTERED.md` §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.
+"Survive" here means *stays routed*. The ten pages below predate ADR-090, which added Skills at `/{org}/{ws}/skills`; that page is reachable in rev1 and is **not** in this table. `apps/app/ARCHITECTURE.md` carries the current set. The other sixty page files are de-registered, not deleted: each keeps its route only as a redirect, and its `page.tsx`, its components and its `actions.ts` stay in the tree. `DEREGISTERED.md` §3 and §5 name the ones whose capability also came off the surfaces (marketplace, workbench environments); the rest are pages whose capability lives on inside the page that absorbed it.
 
 The current web app has 70 page files. Ten remain: seven at workspace scope, three at organization scope. Sign-in flows (login, signup, password reset, two-factor, verify, accept an invite, create the first organization) are not screens and are not counted; there are seven of them and they stay as they are. Onboarding is not a page: it is the in-app agent's first run inside the workspace.
 

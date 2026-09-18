@@ -92,8 +92,11 @@ Oxagen holds no credential and runs no tool, and still decides every call.
    `skills.resolutions`, and `skills.reflections` behind the quarantine. Its fence is **not**
    §5.2, which is tenant isolation and would let an ordinary workspace read reach the rows.
    It is four things the #3098 lane builds: a dedicated read capability, a new org-scoped
-   `research.read` IAM permission (absent from the catalogue today), an RLS predicate that
-   denies without it rather than the usual `org`/`workspace` one, and a job that deletes rows
+   `research.read` IAM permission (absent from the catalogue today), an RLS predicate that denies
+   without it — which needs a signal the database can see, because §5.2 exposes only
+   `app.current_org_id` and `app.current_workspace_id` and an IAM permission is application
+   state Postgres cannot read, so `withTenantDb` sets a third transaction-local setting
+   `app.research_read` after the IAM check passes and the predicate requires it — and a job that deletes rows
    past `retain_until` — an expiry nothing enforces is a comment. Config history is git history, not a table; a config version
    carries the `commit_sha` it was read at as its provenance.
 
