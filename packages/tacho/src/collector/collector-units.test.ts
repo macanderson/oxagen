@@ -16,8 +16,15 @@ import {
 import { mergeTachoSettings } from "../host/settings-writer";
 import { scratchPaths, TEST_ENROLLMENT } from "../host/test-support";
 import { Wal } from "../host/wal";
+import type { TachoEvent } from "../envelope";
+import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
-import { TACHO_MAX_BATCH, type DeliveredCommand } from "../wire";
+import {
+  TACHO_MAX_BATCH,
+  TACHO_MAX_BATCH_BODY_BYTES,
+  type DeliveredCommand,
+  type TachoBody,
+} from "../wire";
 import { Detector, listTranscripts } from "./detector";
 import {
   exportOtlpJson,
@@ -339,7 +346,7 @@ describe("registry", () => {
 });
 
 describe("detector", () => {
-  it("chains hooks_removed and hook_health on transitions, and unobserved transcripts after the grace", () => {
+  it("chains hooks_removed and hook_health on transitions, and unobserved transcripts after the grace", async () => {
     const paths = scratchPaths();
     let clock = Date.parse("2026-09-10T10:00:00.000Z");
     const now = () => clock;
@@ -364,16 +371,16 @@ describe("detector", () => {
       now,
       graceMs: 10_000,
     });
-    expect(detector.tick()).toEqual([]);
+    expect(await detector.tick()).toEqual([]);
     expect(detector.hooksHealthy).toBe(true);
     settings = { hooks: {} };
-    const removed = detector.tick();
+    const removed = await detector.tick();
     expect(removed.map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
     expect(
       (removed[0]?.body as { incident_evidence: { missing: string[] } })
         .incident_evidence.missing.length,
     ).toBeGreaterThan(30);
-    expect(detector.tick()).toEqual([]);
+    expect(await detector.tick()).toEqual([]);
     settings = mergeTachoSettings(
       {},
       {
@@ -383,7 +390,9 @@ describe("detector", () => {
         localToken: "t",
       },
     ).settings;
-    expect(detector.tick().map((e) => e.kind)).toEqual(["oxagen:hook_health"]);
+    expect((await detector.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hook_health",
+    ]);
     const unreadable = new Detector({
       registry,
       hostRecorder: () => host.recorder,
@@ -395,10 +404,10 @@ describe("detector", () => {
       enrollmentId: TEST_ENROLLMENT,
       now,
     });
-    expect(unreadable.tick().map((e) => e.kind)).toEqual([
+    expect((await unreadable.tick()).map((e) => e.kind)).toEqual([
       "oxagen:hooks_removed",
     ]);
-    expect(unreadable.tick()).toEqual([]);
+    expect(await unreadable.tick()).toEqual([]);
     // Transcripts: a known session is ignored; an unknown one is reported once after the grace.
     const project = join(paths.claudeProjects, "-repo");
     mkdirSync(project, { recursive: true });
@@ -413,20 +422,20 @@ describe("detector", () => {
     stamp(known, clock);
     stamp(unknown, clock);
     expect(
-      listTranscripts([paths.claudeProjects])
+      (await listTranscripts([paths.claudeProjects]))
         .map((t) => t.sessionId)
         .sort(),
     ).toEqual([
       "11111111-1111-4111-8111-111111111111",
       "22222222-2222-4222-8222-222222222222",
     ]);
-    expect(detector.tick()).toEqual([]); // first sighting
+    expect(await detector.tick()).toEqual([]); // first sighting
     clock += 5_000;
     stamp(unknown, clock);
-    expect(detector.tick()).toEqual([]); // advanced, but inside the grace
+    expect(await detector.tick()).toEqual([]); // advanced, but inside the grace
     clock += 6_000;
     stamp(unknown, clock);
-    const incidents = detector.tick();
+    const incidents = await detector.tick();
     expect(incidents.map((e) => e.kind)).toEqual(["oxagen:unobserved_session"]);
     expect(
       (
@@ -443,13 +452,13 @@ describe("detector", () => {
     ]);
     clock += 1_000;
     stamp(unknown, clock);
-    expect(detector.tick()).toEqual([]); // reported once
+    expect(await detector.tick()).toEqual([]); // reported once
     // An old idle transcript from before boot is not an incident.
     const stale = join(project, "33333333-3333-4333-8333-333333333333.jsonl");
     writeFileSync(stale, "{}\n");
     stamp(stale, clock - 60_000);
     processes = [];
-    expect(detector.tick()).toEqual([]);
+    expect(await detector.tick()).toEqual([]);
     expect(
       verifyChain(host.recorder.sealedEvents, { expectGenesis: true })
         .violations,
@@ -792,6 +801,171 @@ describe("shipper", () => {
     expect(s.reachable).toBe(true);
     expect(s.lastError).toBeUndefined();
     expect(await s.shipOnce()).toMatchObject({ shipped: 0, quarantined: 0 });
+  });
+
+  // ── Frame bodies ───────────────────────────────────────────────────────────
+  //
+  // A body must ship in the same request as its event: the control plane
+  // refuses one naming an event it did not receive in that batch
+  // (`unknown_event`). So the shipper reads the batch's bodies from the WAL,
+  // sends them as `bodies`, keeps a bisected half's bodies with its events,
+  // and cuts a batch where its bodies would pass the byte budget.
+
+  function bodyFor(
+    event: TachoEvent,
+    text: string,
+    contentClass: FrameBody["content_class"] = "model_call",
+  ): FrameBody {
+    return {
+      event_id_idem: event.event_id_idem,
+      session_uuid: event.session_uuid,
+      seq: event.seq,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode(text),
+      content_class: contentClass,
+    };
+  }
+
+  it("ships each body in the batch that carries its event", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const sent: Array<{
+      events: TachoEvent[];
+      bodies: TachoBody[] | undefined;
+    }> = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          sent.push({ events: batch as TachoEvent[], bodies });
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    await s.drain();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.bodies).toEqual([
+      {
+        event_id_idem: prompt.event_id_idem,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("the prompt").toString("base64"),
+      },
+    ]);
+    expect(
+      sent[0]?.events.some((e) => e.event_id_idem === prompt.event_id_idem),
+    ).toBe(true);
+  });
+
+  it("keeps a bisected half's bodies with its events", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    const last = events[events.length - 1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "p"), bodyFor(last, "l")]);
+    const bad = events[2]?.seq;
+    const sent: Array<{
+      events: TachoEvent[];
+      bodies: TachoBody[] | undefined;
+    }> = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          if (batch.some((e) => e.seq === bad))
+            throw new ControlError(400, "seq 2 is malformed");
+          sent.push({ events: batch as TachoEvent[], bodies });
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    await s.drain();
+    expect(sent.length).toBeGreaterThan(1);
+    for (const request of sent) {
+      const idems = new Set(request.events.map((e) => e.event_id_idem));
+      for (const body of request.bodies ?? [])
+        expect(idems.has(body.event_id_idem)).toBe(true);
+    }
+    const shippedBodies = sent.flatMap((r) => r.bodies ?? []);
+    expect(shippedBodies.map((b) => b.event_id_idem).sort()).toEqual(
+      [prompt.event_id_idem, last.event_id_idem].sort(),
+    );
+  });
+
+  it("cuts a batch where its bodies would pass the byte budget", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    // Three bodies of 2 MiB against a 4 MiB budget: the third must wait for
+    // the next batch, and the event it belongs to waits with it.
+    const half = "x".repeat(TACHO_MAX_BATCH_BODY_BYTES / 2);
+    wal.append(events, [
+      bodyFor(events[0] as TachoEvent, half),
+      bodyFor(events[1] as TachoEvent, half),
+      bodyFor(events[2] as TachoEvent, half),
+    ]);
+    const sent: Array<{
+      events: TachoEvent[];
+      bodies: TachoBody[] | undefined;
+    }> = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          sent.push({ events: batch as TachoEvent[], bodies });
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.shipped).toBe(events.length);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]?.events.map((e) => e.seq)).toEqual([0, 1]);
+    expect(sent[0]?.bodies).toHaveLength(2);
+    expect(sent[1]?.events[0]?.seq).toBe(2);
+    expect(sent[1]?.bodies).toHaveLength(1);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("surfaces the bodies the control plane refused", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const refused: unknown[] = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (batch: TachoEvent[]) => ({
+          ...okResponse(batch),
+          body_rejections: [
+            { event_id_idem: prompt.event_id_idem, reason: "digest_mismatch" },
+          ],
+        }),
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      onBodyRejection: (rejections) => refused.push(...rejections),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    expect(refused).toEqual([
+      { event_id_idem: prompt.event_id_idem, reason: "digest_mismatch" },
+    ]);
+    // The events were accepted: the WAL moved on.
+    expect(wal.stats().unshipped).toBe(0);
   });
 });
 

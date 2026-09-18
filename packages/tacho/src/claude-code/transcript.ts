@@ -6,6 +6,7 @@
  */
 import { digestJcs, type JsonValue } from "../digest";
 import type { TachoKind } from "../envelope";
+import { type DraftContent, textContent } from "../evidence/frame-body";
 import { digestText } from "./context";
 
 export interface TranscriptDraft {
@@ -17,6 +18,12 @@ export interface TranscriptDraft {
   turn?: { prompt_id?: string };
   is_sidechain?: boolean;
   raw_source_digest: `sha256:${string}`;
+  /**
+   * The bytes the frame's `content.digest` will name: the assistant's text
+   * (with each tool use as a JSON line) or the person's prompt. The recorder
+   * redacts and digests them; see `evidence/frame-body.ts`.
+   */
+  content?: DraftContent;
 }
 
 export interface TranscriptTotals {
@@ -55,6 +62,39 @@ function n(value: unknown): number | undefined {
 }
 function b(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+/**
+ * An assistant message as text: its `text` blocks in order, and each
+ * `tool_use` block as one JSON line naming the tool and its input, so a
+ * replay reads what the model said and what it asked for in one body.
+ * Thinking blocks are left out: they are the model's scratch, sized by
+ * `thinking_tokens` on the frame, and not part of the message.
+ */
+export function assistantMessageText(content: unknown): string | undefined {
+  if (typeof content === "string")
+    return content.length > 0 ? content : undefined;
+  if (!Array.isArray(content)) return undefined;
+  const parts: string[] = [];
+  for (const block of content) {
+    const item = rec(block);
+    const type = s(item?.["type"]);
+    if (type === "text") {
+      const text = s(item?.["text"]);
+      if (text !== undefined) parts.push(text);
+    } else if (type === "tool_use") {
+      parts.push(
+        JSON.stringify({
+          tool_use: {
+            ...(s(item?.["id"]) !== undefined ? { id: s(item?.["id"]) } : {}),
+            name: s(item?.["name"]) ?? "",
+            input: item?.["input"] ?? null,
+          },
+        }),
+      );
+    }
+  }
+  return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
 function contextOf(record: Rec): Record<string, unknown> {
@@ -182,13 +222,17 @@ export function normalizeTranscriptLine(
         if (toolUses.length > 0)
           attrs["transcript.tool_use_ids"] = JSON.stringify(toolUses);
       }
+      const text = assistantMessageText(content);
       return {
         drafts: [
-          draft(
-            b(record["isApiErrorMessage"]) === true ? "error" : "llm_call",
-            body,
-            attrs,
-          ),
+          {
+            ...draft(
+              b(record["isApiErrorMessage"]) === true ? "error" : "llm_call",
+              body,
+              attrs,
+            ),
+            ...(text !== undefined ? { content: textContent(text) } : {}),
+          },
         ],
         totals: {},
       };
@@ -198,8 +242,8 @@ export function normalizeTranscriptLine(
       const content = message?.["content"];
       const drafts: TranscriptDraft[] = [];
       if (typeof content === "string") {
-        drafts.push(
-          draft("oxagen:message", {
+        drafts.push({
+          ...draft("oxagen:message", {
             prompt_digest: digestText(content),
             prompt_length: content.length,
             ...(s(record["promptSource"]) !== undefined
@@ -219,7 +263,8 @@ export function normalizeTranscriptLine(
               : {}),
             message_uuid: s(record["uuid"]),
           }),
-        );
+          ...(content.length > 0 ? { content: textContent(content) } : {}),
+        });
       } else if (Array.isArray(content)) {
         for (const block of content) {
           const item = rec(block);

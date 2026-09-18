@@ -5,8 +5,21 @@
  * chained as `oxagen:unobserved_session` on the daemon's own chain. Re-reads
  * the settings file on every tick and chains `oxagen:hooks_removed` when
  * Tacho's entries disappear, `oxagen:hook_health` when they come back.
+ *
+ * The transcript scan is asynchronous and bounded. It used to `readdirSync`
+ * every project directory and `statSync` every transcript on every tick, on
+ * the main thread: on a laptop with 252 projects and 5,618 transcripts a
+ * 3 s sample of the running daemon put 2360 of 2609 samples inside
+ * `node::fs::ReadDir`, `GET /health` never answered, and hooks blew their
+ * 50 ms connect budget and fell back to spool files. Now each tick reads the
+ * root, stats the project directories, and scans the files of at most
+ * `MAX_DIRS_PER_TICK` of them: the ones whose directory mtime moved (a
+ * transcript was created or removed), then a rotating share of the rest so
+ * a transcript appended in place is still noticed within a few minutes, and
+ * always the files already under watch. Everything goes through
+ * `fs.promises`, so the event loop keeps answering between the calls.
  */
-import { readdirSync, statSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import { basename, join } from "node:path";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
@@ -34,6 +47,8 @@ export interface DetectorDeps {
   now: () => number;
   /** How long a transcript may advance unhooked before it is an incident. */
   graceMs?: number;
+  /** Project directories whose files one tick may scan; see `MAX_DIRS_PER_TICK`. */
+  maxDirsPerTick?: number;
 }
 
 interface TranscriptSighting {
@@ -43,55 +58,215 @@ interface TranscriptSighting {
   reported: boolean;
 }
 
+export interface TranscriptEntry {
+  sessionId: string;
+  path: string;
+  mtimeMs: number;
+}
+
+/** What the scanner remembers of one project directory between ticks. */
+interface ProjectState {
+  /** The directory's mtime at the last file scan. */
+  scannedMtimeMs: number;
+  files: TranscriptEntry[];
+}
+
 const SESSION_FILE =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/;
 
-export function listTranscripts(
+/**
+ * Project directories one tick may scan. The rotating share is a quarter of
+ * this, so a directory whose transcript only grows in place is rescanned
+ * within `projects / (MAX / 4)` ticks: about eight minutes for 252 projects
+ * at the fifteen-second detector interval.
+ */
+export const MAX_DIRS_PER_TICK = 32;
+
+/** `fs.promises` calls in flight at once during a scan. */
+const SCAN_CONCURRENCY = 8;
+
+/** Run `task` over `items` with at most `limit` in flight. */
+async function eachLimited<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next] as T;
+        next += 1;
+        await task(item);
+      }
+    },
+  );
+  await Promise.all(workers);
+}
+
+/** The transcripts of one project directory, with their mtimes. */
+async function scanProject(dir: string): Promise<TranscriptEntry[]> {
+  let names: string[];
+  try {
+    names = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+  const out: TranscriptEntry[] = [];
+  await eachLimited(names, SCAN_CONCURRENCY, async (name) => {
+    const match = SESSION_FILE.exec(name);
+    if (match === null) return;
+    const path = join(dir, name);
+    try {
+      const st = await fs.stat(path);
+      out.push({ sessionId: match[1] as string, path, mtimeMs: st.mtimeMs });
+    } catch {
+      // Deleted between readdir and stat.
+    }
+  });
+  return out;
+}
+
+/**
+ * Every transcript under the roots, scanned whole. The detector does not
+ * call this on its tick; it is the one-shot form for tools and tests.
+ */
+export async function listTranscripts(
   roots: readonly string[],
-): Array<{ sessionId: string; path: string; mtimeMs: number }> {
-  const out: Array<{ sessionId: string; path: string; mtimeMs: number }> = [];
+): Promise<TranscriptEntry[]> {
+  const out: TranscriptEntry[] = [];
   for (const root of roots) {
     let projects: string[];
     try {
-      projects = readdirSync(root);
+      projects = await fs.readdir(root);
     } catch {
       continue;
     }
-    for (const project of projects) {
-      const dir = join(root, project);
-      let files: string[];
+    await eachLimited(projects, SCAN_CONCURRENCY, async (project) => {
+      out.push(...(await scanProject(join(root, project))));
+    });
+  }
+  return out;
+}
+
+/**
+ * The incremental scanner: keeps the last scan of every project directory
+ * and, each tick, rescans the ones that changed, a rotating share of the
+ * rest, and the files already under watch.
+ */
+export class TranscriptScanner {
+  private readonly projects = new Map<string, ProjectState>();
+  private readonly roots: readonly string[];
+  private readonly maxDirsPerTick: number;
+  /** Where the rotating share picks up next tick. */
+  private rotation = 0;
+
+  constructor(roots: readonly string[], maxDirsPerTick = MAX_DIRS_PER_TICK) {
+    this.roots = roots;
+    this.maxDirsPerTick = Math.max(1, maxDirsPerTick);
+  }
+
+  /**
+   * One bounded pass. `watched` are transcript paths whose mtime the caller
+   * needs fresh every tick whatever directory they are in.
+   */
+  async tick(
+    watched: ReadonlySet<string> = new Set(),
+  ): Promise<TranscriptEntry[]> {
+    const dirs: Array<{ dir: string; mtimeMs: number }> = [];
+    for (const root of this.roots) {
+      let names: string[];
       try {
-        files = readdirSync(dir);
+        names = await fs.readdir(root);
       } catch {
         continue;
       }
-      for (const file of files) {
-        const match = SESSION_FILE.exec(file);
-        if (match === null) continue;
-        const path = join(dir, file);
+      await eachLimited(names, SCAN_CONCURRENCY, async (name) => {
+        const dir = join(root, name);
         try {
-          out.push({
-            sessionId: match[1] as string,
-            path,
-            mtimeMs: statSync(path).mtimeMs,
-          });
+          const st = await fs.stat(dir);
+          if (st.isDirectory()) dirs.push({ dir, mtimeMs: st.mtimeMs });
         } catch {
-          // Deleted between readdir and stat.
+          // Removed between readdir and stat.
         }
+      });
+    }
+    dirs.sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
+    const present = new Set(dirs.map((d) => d.dir));
+    for (const known of [...this.projects.keys()]) {
+      if (!present.has(known)) this.projects.delete(known);
+    }
+
+    // Changed or never-scanned directories first, then the rotating share.
+    const changed = dirs.filter((d) => {
+      const state = this.projects.get(d.dir);
+      return state === undefined || state.scannedMtimeMs !== d.mtimeMs;
+    });
+    const toScan = new Map<string, number>();
+    for (const d of changed.slice(0, this.maxDirsPerTick))
+      toScan.set(d.dir, d.mtimeMs);
+    const rotating = Math.max(1, Math.floor(this.maxDirsPerTick / 4));
+    if (dirs.length > 0) {
+      for (
+        let i = 0;
+        i < rotating && toScan.size < this.maxDirsPerTick;
+        i += 1
+      ) {
+        const d = dirs[this.rotation % dirs.length] as {
+          dir: string;
+          mtimeMs: number;
+        };
+        this.rotation = (this.rotation + 1) % dirs.length;
+        toScan.set(d.dir, d.mtimeMs);
       }
     }
+    await eachLimited(
+      [...toScan.entries()],
+      SCAN_CONCURRENCY,
+      async ([dir, mtimeMs]) => {
+        this.projects.set(dir, {
+          scannedMtimeMs: mtimeMs,
+          files: await scanProject(dir),
+        });
+      },
+    );
+
+    // Files under watch are re-statted every tick, in whatever directory.
+    const out: TranscriptEntry[] = [];
+    const seen = new Set<string>();
+    for (const state of this.projects.values()) {
+      for (const entry of state.files) {
+        if (seen.has(entry.path)) continue;
+        seen.add(entry.path);
+        out.push(entry);
+      }
+    }
+    await eachLimited([...out], SCAN_CONCURRENCY, async (entry) => {
+      if (!watched.has(entry.path)) return;
+      try {
+        entry.mtimeMs = (await fs.stat(entry.path)).mtimeMs;
+      } catch {
+        // Gone; the stale entry is dropped at the next scan of its directory.
+      }
+    });
+    return out;
   }
-  return out;
 }
 
 export class Detector {
   private readonly deps: DetectorDeps;
   private readonly sightings = new Map<string, TranscriptSighting>();
+  private readonly scanner: TranscriptScanner;
   private lastPresence: HookPresence | undefined;
   private hooksOk: boolean | undefined;
 
   constructor(deps: DetectorDeps) {
     this.deps = deps;
+    this.scanner = new TranscriptScanner(
+      deps.transcriptRoots,
+      deps.maxDirsPerTick,
+    );
   }
 
   get hooksHealthy(): boolean | undefined {
@@ -172,12 +347,18 @@ export class Detector {
     return events;
   }
 
-  private checkTranscripts(): TachoEvent[] {
+  private async checkTranscripts(): Promise<TachoEvent[]> {
+    const watched = new Set(
+      [...this.sightings.values()].map((sighting) => sighting.path),
+    );
+    const transcripts = await this.scanner.tick(watched);
+    // Everything from here is synchronous: the seals below must not
+    // interleave with a hook sealing on another chain mid-decision.
     const now = this.deps.now();
     const grace = this.deps.graceMs ?? 30_000;
     const processes = this.deps.listProcesses();
     const events: TachoEvent[] = [];
-    for (const transcript of listTranscripts(this.deps.transcriptRoots)) {
+    for (const transcript of transcripts) {
       if (this.deps.registry.get(transcript.sessionId) !== undefined) {
         this.sightings.delete(transcript.sessionId);
         continue;
@@ -220,7 +401,7 @@ export class Detector {
   }
 
   /** One detector pass; returns the incidents it chained. */
-  tick(): TachoEvent[] {
-    return [...this.checkHooks(), ...this.checkTranscripts()];
+  async tick(): Promise<TachoEvent[]> {
+    return [...this.checkHooks(), ...(await this.checkTranscripts())];
   }
 }

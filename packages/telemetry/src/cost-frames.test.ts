@@ -3,10 +3,6 @@
 // and the shape the rows come back in (docs/specs/tacho/data-model.md §2.7).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The group key the predicate uses; a null turn falls into its minute. */
-const TURN_GROUP =
-  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
-
 interface QueryCall {
   query: string;
   query_params: Record<string, unknown>;
@@ -98,23 +94,25 @@ describe("readModelCallFrames", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       rootSessionUuid: RUN,
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
-    // One token-bearing source per session, or a call the harness reports
-    // through the OTel log and a collector or hook event is priced twice.
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
-    // A row the harness reported with no turn falls into the minute it
-    // happened in, not into one bucket for the whole session: an OTel stream
-    // that stops mid-session must not take the collector's later calls with
-    // it, and a call one source numbered while another did not must not be
-    // counted twice under two group keys.
-    expect(query).not.toContain("ifNull(toInt64(turn_seq), -1)");
-    expect(query).toContain("toStartOfMinute(ts)");
+    // A call seen twice (OTel and transcript, or OTel and collector) is
+    // priced once: the host correlates the sightings per call as it seals
+    // them and stamps every one after the first, and the rollup skips a
+    // stamped row.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
+    // Retargeted from the per-turn source pick this read used to carry. The
+    // property that rule existed for — an OTel stream that stops mid-session
+    // must not take the collector's later calls with it — is now held by the
+    // stamp being written per call: a call only the collector saw is a first
+    // sighting, carries no stamp, and counts. So the read must admit a row on
+    // the absence of its OWN stamp and nothing else. Any per-turn or
+    // per-source authority pick here would drop those collector-only calls
+    // again and bill the run short.
+    expect(query).not.toContain("argMin(source");
+    expect(query).not.toContain("turn_seq");
+    expect(query).not.toContain("toStartOfMinute(ts)");
 
     expect(frames).toEqual([
       {
@@ -316,22 +314,19 @@ describe("readObservedModels", () => {
     expect(query).toContain("UNION ALL");
     expect(query).toContain("kind = 'llm_call'");
     expect(query).toContain("source IN {sources:Array(String)}");
-    // One token-bearing source per session: a session that reports a call
-    // through the OTel log AND a collector or hook event holds two rows for
-    // it under different `seq`s, which FINAL does not collapse, so a plain
-    // count over the admitted sources would bill the call twice and rank the
-    // model above ones that need pricing more.
-    expect(query).toContain(
-      `(session_uuid, ${TURN_GROUP}, source) IN (`,
-    );
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    // Per turn, not per session: a stream that drops mid-session must not
-    // discard the calls a lower source alone recorded afterwards.
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
+    // A session that reports one call through the OTel log AND a collector or
+    // hook event holds two rows for it under different `seq`s, which FINAL
+    // does not collapse, so a plain count over the admitted sources would
+    // bill the call twice and rank the model above ones that need pricing
+    // more. The host stamps every sighting after the first, and this read
+    // drops a stamped row — the same rule `readModelCallFrames` uses, so the
+    // two never disagree about what one call is.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
+    // Retargeted from the per-turn source pick, for the reason above: the
+    // stamp is per call, so a call only the collector saw after the OTel
+    // stream dropped counts here too, and an authority pick would discard it.
+    expect(query).not.toContain("argMin(source");
+    expect(query).not.toContain("turn_seq");
     expect(query).toContain("GROUP BY model");
     expect(query).toContain("ORDER BY tokens DESC, model");
     expect(query).toContain("LIMIT {limit:UInt32}");
@@ -343,7 +338,8 @@ describe("readObservedModels", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       since: "2026-08-15 00:00:00.000",
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
       limit: 500,
     });
 
@@ -386,8 +382,9 @@ describe("readObservedModels", () => {
     expect(
       bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
     ).toHaveLength(
-      // The tacho branch, and the per-session source pick under the same filter.
-      2,
+      // The tacho branch, once: the per-call duplicate stamp replaced the
+      // source pick that used to repeat this filter in a subquery.
+      1,
     );
     expect(bounded.query_params).toMatchObject({
       until: "2026-09-10 00:00:00.000",
@@ -404,10 +401,9 @@ describe("readObservedModels", () => {
     answer([]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
     const { query, query_params } = lastQuery();
-    // Once per store, plus once in the tacho branch's per-session source
-    // pick: a fence on only one of them would leak the other, and a pick made
-    // over every workspace could name a source the fenced rows never used.
-    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(3);
+    // Once per store, and no longer a third time in a source-pick subquery:
+    // a fence on only one store would leak the other.
+    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
     expect(query_params).toMatchObject({ workspaceId: WS });
   });
 
