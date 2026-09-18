@@ -16,7 +16,6 @@ import type { TachoEvent } from "../envelope";
 import { verifyBundle } from "../host/bundle";
 import {
   createControlClient,
-  ControlError,
   type ControlClient,
   type FetchLike,
   type RateLimitHint,
@@ -265,20 +264,9 @@ export async function startDaemon(
   let commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
   let commandPollNextAttemptAt = 0;
   let commandPollFailures = 0;
-  // A 400 or 422 from the commands endpoint is not an outage, and doubling
-  // toward 60 s treats it as one. It means the daemon and the control plane
-  // disagree on the wire: on 2026-09-18 a daemon still sending
-  // `tacho.commands.v1` polled a control plane that requires v2 and collected
-  // 3,683 HTTP 400s in two and a half hours, which tripped the per-host
-  // limiter and throttled `/v1/tacho/events` with it. No retry fixes a
-  // schema, only an upgrade does, so the poll parks at a 15 minute floor,
-  // says so once with the server's own words, and leaves ingest (a separate
-  // path with its own budget) shipping.
-  const COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS = 15 * 60_000;
 
   // The client is built before the Shipper but must deliver rate-limit hints
   // to it, so the callback is indirected through a sink that the Shipper fills
-  let commandPollProtocolMismatchLogged = false;
   // in below. A hint arriving before the Shipper exists is simply dropped —
   // there is no backlog to pace before the first tick.
   const rateLimitSink: { notify?: (hint: RateLimitHint) => void } = {};
@@ -547,29 +535,9 @@ export async function startDaemon(
 
   /** Replay what `tacho-hook` spooled while the daemon was down, in order. */
   async function drainSpool(): Promise<number> {
-    commandPollProtocolMismatchLogged = false;
     const files = readdirSync(paths.spool)
       .filter((name) => name.endsWith(".json"))
       .sort();
-    if (
-      error instanceof ControlError &&
-      (error.status === 400 || error.status === 422)
-    ) {
-      commandPollBackoffMs = COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
-      commandPollNextAttemptAt =
-        now() + COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
-      // Once, not every 15 minutes: the line is the same until someone
-      // upgrades, and repeating it is the log growth this guards against.
-      // The health report the host row shows cannot carry it yet, so the
-      // log is where the fact lives.
-      if (!commandPollProtocolMismatchLogged) {
-        commandPollProtocolMismatchLogged = true;
-        log(
-          `command poll refused with ${error.status}: this tachod (${host.wrapper_version}) and the control plane disagree on the wire, so the poll waits 15 minutes between attempts until tachod is upgraded; the server said: ${error.body.slice(0, 256)}`,
-        );
-      }
-      return;
-    }
     if (files.length === 0) return 0;
     const gapped = new Map<string, string>();
     for (const name of files) {

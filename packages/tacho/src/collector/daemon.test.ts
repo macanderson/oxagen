@@ -103,8 +103,6 @@ function fakeControlPlane(bundleEtag: string) {
   let denyGeneration = { org: 1, workspace: 1 };
   let bundle: unknown = null;
   let refuseNext: number | undefined;
-  /** While set, every command poll is refused with this status and body. */
-  let refuseCommands: { status: number; body: string } | undefined;
   let down = false;
   const calls: string[] = [];
   /** Every daemon health report the plane received, newest last. */
@@ -157,13 +155,6 @@ function fakeControlPlane(bundleEtag: string) {
       };
     }
     if (url.endsWith("/commands")) {
-      if (refuseCommands !== undefined) {
-        return {
-          ok: false,
-          status: refuseCommands.status,
-          text: async () => refuseCommands?.body ?? "",
-        };
-      }
       if (body["daemon"] !== undefined) reported.push(body["daemon"]);
       acks.push(...(body["acknowledgements"] as unknown[]));
       return {
@@ -209,11 +200,6 @@ function fakeControlPlane(bundleEtag: string) {
     },
     refuseNextIngest: (status: number) => {
       refuseNext = status;
-    },
-    refuseCommandsWith: (
-      refusal: { status: number; body: string } | undefined,
-    ) => {
-      refuseCommands = refusal;
     },
     setDown: (value: boolean) => {
       down = value;
@@ -870,86 +856,6 @@ describe("tachod", () => {
     const afterRecovery = log.filter((l) => l.includes("command poll failed"));
     expect(afterRecovery[afterRecovery.length - 1]).toMatch(
       /1 in a row, retrying in 2s/,
-    );
-  });
-
-  it("parks the command poll for 15 minutes on a wire mismatch and keeps shipping events", async () => {
-    // The regression this guards: on 2026-09-18 a daemon sending
-    // `tacho.commands.v1` polled a control plane that requires v2. Every poll
-    // was a 400, the backoff treated it as an outage and settled at one
-    // attempt a minute, and 3,683 refusals in 2.5 h tripped the per-host
-    // limiter so that event ingest was throttled with it. A refused schema
-    // is not an outage: nothing but an upgrade changes the answer.
-    const plane = fakeControlPlane("etag-mismatch");
-    let clock = 2_000_000;
-    const { handle, log, host } = await boot(plane, scratchPaths(), {
-      now: () => clock,
-    });
-    const pollCount = () =>
-      plane.calls.filter((u) => u.endsWith("/commands")).length;
-    const ingestCount = () =>
-      plane.calls.filter((u) => u.endsWith("/events")).length;
-
-    plane.refuseCommandsWith({
-      status: 400,
-      body: '{"error":"schema: expected tacho.commands.v2"}',
-    });
-    await handle.tick();
-    const afterRefusal = pollCount();
-    expect(afterRefusal).toBeGreaterThan(0);
-
-    // Inside the 15 minute floor nothing polls, not even past the 60 s the
-    // ordinary backoff would have allowed.
-    clock += 60_000 * 14;
-    await handle.tick();
-    expect(pollCount()).toBe(afterRefusal);
-    clock += 60_000 * 1 + 1_000;
-    await handle.tick();
-    expect(pollCount()).toBe(afterRefusal + 1);
-
-    // The one line says which status, which tachod, what the server said,
-    // and what fixes it. Two refusals produced one line.
-    const refused = log.filter((l) => l.includes("command poll refused"));
-    expect(refused).toHaveLength(1);
-    expect(refused[0]).toContain("400");
-    expect(refused[0]).toContain(host.wrapper_version);
-    expect(refused[0]).toContain("expected tacho.commands.v2");
-    expect(refused[0]).toContain("upgraded");
-    expect(log.filter((l) => l.includes("command poll failed"))).toHaveLength(
-      0,
-    );
-
-    // Ingest is a separate path with its own budget: a hook that lands while
-    // the poll is parked still ships on the next tick.
-    const port = handle.port as number;
-    const fixture = fixtures().find(
-      (f) => f.stdin["hook_event_name"] === "PostToolUse",
-    );
-    expect(fixture).toBeDefined();
-    const before = ingestCount();
-    const res = await postHttp(
-      port,
-      host.local_token,
-      `/hook/${TEST_ENROLLMENT}`,
-      fixture?.stdin,
-    );
-    expect(res.status).toBe(200);
-    clock += 1_000;
-    await handle.tick();
-    expect(ingestCount()).toBeGreaterThan(before);
-    expect(plane.ingested.length).toBeGreaterThan(0);
-
-    // A control plane that accepts the poll again clears the floor and the
-    // once-only line, so a later mismatch is reported afresh.
-    plane.refuseCommandsWith(undefined);
-    clock += 60_000 * 15 + 1_000;
-    await handle.tick();
-    expect(log.some((l) => l.includes("command poll recovered"))).toBe(true);
-    plane.refuseCommandsWith({ status: 422, body: "unprocessable" });
-    clock += 1_000;
-    await handle.tick();
-    expect(log.filter((l) => l.includes("command poll refused"))).toHaveLength(
-      2,
     );
   });
 });
