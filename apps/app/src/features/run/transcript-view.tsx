@@ -111,7 +111,12 @@ function Chip({
   );
 }
 
-function FrameDetail({ frame, org, ws, runId }: { frame: TranscriptEntry } & Place) {
+function FrameDetail({
+  frame,
+  org,
+  ws,
+  runId,
+}: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
   return (
@@ -153,7 +158,10 @@ function FrameDetail({ frame, org, ws, runId }: { frame: TranscriptEntry } & Pla
           >
             {t("truncated")}{" "}
             <SafeLink
-              to={routes.run(org, ws, runId, { tab: "frames", body: frame.seq })}
+              to={routes.run(org, ws, runId, {
+                tab: "frames",
+                body: frame.seq,
+              })}
               className={linkText}
             >
               {t("openFrame", { seq: frame.seq })}
@@ -252,9 +260,7 @@ function StepRow({
                 </Chip>
               )}
               {step.frames.length > 1 ? (
-                <Chip>
-                  {t("frameCount", { count: step.frames.length })}
-                </Chip>
+                <Chip>{t("frameCount", { count: step.frames.length })}</Chip>
               ) : null}
               {digest.cost === null ? null : (
                 <Chip tone="cost">
@@ -354,9 +360,7 @@ function TurnBlock({
             </span>
           )}
           <span className="ml-auto flex flex-wrap gap-1.5">
-            <Chip>
-              {t("stepCount", { count: turn.steps.length })}
-            </Chip>
+            <Chip>{t("stepCount", { count: turn.steps.length })}</Chip>
             <Chip>{t("seqSpan", { from: first.seq, to: last.seq })}</Chip>
             <Chip>{formatClock(seconds, locale)}</Chip>
             {cost === null ? null : (
@@ -384,13 +388,7 @@ function TurnBlock({
   );
 }
 
-function Readout({
-  entries,
-  pos,
-}: {
-  entries: Frames;
-  pos: number;
-}) {
+function Readout({ entries, pos }: { entries: Frames; pos: number }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const head = entries.length - 1;
@@ -496,11 +494,14 @@ export function TranscriptView({
   // Playback walks the frames at their recorded pace.
   useEffect(() => {
     if (!isPlaying || pos >= head) return;
-    const timer = setTimeout(() => {
-      const next = pos + 1;
-      setPinned(next >= head ? null : next);
-      reveal(next);
-    }, playDelay(entries, pos, speed));
+    const timer = setTimeout(
+      () => {
+        const next = pos + 1;
+        setPinned(next >= head ? null : next);
+        reveal(next);
+      },
+      playDelay(entries, pos, speed),
+    );
     return () => {
       clearTimeout(timer);
     };
@@ -573,7 +574,7 @@ export function TranscriptView({
           </button>
         ) : (
           <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-            {t(`recorded.${status}`)}
+            {t(status === "halted" ? "recorded.halted" : "recorded.sealed")}
           </span>
         )}
         <button
@@ -587,7 +588,13 @@ export function TranscriptView({
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
-            <rect x="3.2" y="3.2" width="1.6" height="9.6" fill="currentColor" />
+            <rect
+              x="3.2"
+              y="3.2"
+              width="1.6"
+              height="9.6"
+              fill="currentColor"
+            />
           </svg>
         </button>
         <button
@@ -605,8 +612,20 @@ export function TranscriptView({
         >
           {isPlaying ? (
             <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
-              <rect x="4.6" y="3.4" width="2.4" height="9.2" fill="currentColor" />
-              <rect x="9" y="3.4" width="2.4" height="9.2" fill="currentColor" />
+              <rect
+                x="4.6"
+                y="3.4"
+                width="2.4"
+                height="9.2"
+                fill="currentColor"
+              />
+              <rect
+                x="9"
+                y="3.4"
+                width="2.4"
+                height="9.2"
+                fill="currentColor"
+              />
             </svg>
           ) : (
             <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
@@ -625,7 +644,13 @@ export function TranscriptView({
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
-            <rect x="11.2" y="3.2" width="1.6" height="9.6" fill="currentColor" />
+            <rect
+              x="11.2"
+              y="3.2"
+              width="1.6"
+              height="9.6"
+              fill="currentColor"
+            />
           </svg>
         </button>
         <span className="flex min-w-[130px] flex-[1_1_190px] items-center">

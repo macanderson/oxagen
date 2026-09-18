@@ -46,12 +46,11 @@
       "agent": "AGENT",
       "stepCount": "{count, plural, one {# step} other {# steps}}",
       "frameCount": "{count, plural, one {# frame} other {# frames}}",
-      "seqSpan": "seq {from}–{to}",
+      "seqSpan": "seq {from} to {to}",
       "ms": "{ms} ms",
       "live": "live",
       "goLive": "go live",
       "recorded": {
-        "live": "live",
         "sealed": "sealed",
         "halted": "halted"
       },

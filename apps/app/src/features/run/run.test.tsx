@@ -344,14 +344,16 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     const turns = screen.getAllByTestId("transcript-turn");
-    expect(turns.map((turn) => turn.querySelector("summary")?.textContent)).toEqual([
+    expect(
+      turns.map((turn) => turn.querySelector("summary")?.textContent),
+    ).toEqual([
       expect.stringContaining("Run start"),
       expect.stringContaining("turn 1"),
       expect.stringContaining("turn 2"),
     ]);
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("4 steps");
-    expect(turns[1]).toHaveTextContent("seq 2–8");
+    expect(turns[1]).toHaveTextContent("seq 2 to 8");
     expect(turns[1]).toContainElement(screen.getByTestId("transcript-you"));
     expect(screen.getByTestId("transcript-you")).toHaveTextContent(
       "Cut the 2026.9.2 release candidate.",
@@ -393,7 +395,9 @@ describe("transcript", () => {
     expect(now).toHaveLength(1);
     expect(now[0]).toHaveTextContent("create_tag");
     expect(screen.getByRole("button", { name: "Step forward" })).toBeDisabled();
-    expect(within(screen.getByTestId("transcript")).getByText("sealed")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("transcript")).getByText("sealed"),
+    ).toBeTruthy();
     expect(screen.getByText(/Replay grade fork/)).toBeTruthy();
   });
 
@@ -441,7 +445,9 @@ describe("transcript", () => {
     fireEvent.click(screen.getByRole("button", { name: "Turns" }));
     expect(screen.queryAllByTestId("transcript-frame")).toHaveLength(0);
     expect(
-      screen.getAllByTestId("transcript-turn").every((turn) => !turn.hasAttribute("open")),
+      screen
+        .getAllByTestId("transcript-turn")
+        .every((turn) => !turn.hasAttribute("open")),
     ).toBe(true);
     expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
     expect(replaceState).toHaveBeenCalledWith(
@@ -492,7 +498,9 @@ describe("transcript", () => {
       expect(screen.getAllByTestId("transcript-turn")[2]).toHaveTextContent(
         "running",
       );
-      expect(screen.getByText(/re-reads the run every few seconds/)).toBeTruthy();
+      expect(
+        screen.getByText(/re-reads the run every few seconds/),
+      ).toBeTruthy();
       refresh.mockClear();
       vi.advanceTimersByTime(5000);
       expect(refresh).toHaveBeenCalledTimes(1);
@@ -502,7 +510,9 @@ describe("transcript", () => {
       vi.advanceTimersByTime(10_000);
       expect(refresh).toHaveBeenCalledTimes(1);
       fireEvent.click(screen.getByRole("button", { name: "go live" }));
-      expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
+      expect(screen.getByTestId("transport-readout")).toHaveTextContent(
+        "seq 12",
+      );
     } finally {
       vi.useRealTimers();
     }

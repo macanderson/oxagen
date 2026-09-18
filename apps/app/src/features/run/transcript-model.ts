@@ -218,8 +218,10 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     };
   }
   if (step.kind === "tool") {
+    // The request and the result are both `tool_call` entries; the status word
+    // is on the last of them, so a step that recorded a result is named by it.
     const named =
-      step.frames.find((frame) => frame.kind === "tool_call") ?? first;
+      step.frames.findLast((frame) => frame.kind === "tool_call") ?? first;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
     const status = toolStatus(named.label);
     const denied =

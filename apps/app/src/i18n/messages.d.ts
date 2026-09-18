@@ -1679,7 +1679,6 @@ type Messages = {
       live: string;
       goLive: string;
       recorded: {
-        live: string;
         sealed: string;
         halted: string;
       };
