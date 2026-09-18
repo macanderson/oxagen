@@ -60,7 +60,7 @@ export const billingSubscriptionUpgradeStart = registerCapability({
     "Start a Stripe Checkout session for a plan change; returns a URL the user opens to complete the upgrade",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "e2e", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
