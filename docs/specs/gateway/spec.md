@@ -19,7 +19,7 @@
 | G2 | The harness can be pointed away from the proxy and nothing says so | Honest tiers, and a loud drift signal where prevention is not available | §3.2 |
 | G3 | No producer ships frame bodies, so a workspace set to `content_exact` still gets digests | Prompts and tool bodies you can read, under a policy you set | §3.3 |
 | G4 | The product does not show the computed tier | A claim that carries its scope, per ADR-095 | §3.4 |
-| G5 | A run that routes nothing through the gateway looks the same as one that does | Detection where prevention is impossible | §3.5 |
+| G5 | A session that ran turns and routed no model call looks the same as one that routed every call | Detection where prevention is impossible | §3.5 |
 
 Nothing in this document proposes a new architecture. ADR-094, ADR-095, and
 ADR-096 decided the architecture on 2026-09-18. This is the delta between those
@@ -164,11 +164,30 @@ the wrong thing.
 
 ### 3.5 G5: detection where prevention is not available
 
-A session with hook events and no gateway-observed model calls is a session
-that went around the proxy. That comparison is available from the record today
-and nothing makes it. It belongs next to the drift signal of §3.2: one honest
+A session that ran turns and routed no model call through the gateway went
+around the proxy. That comparison is available from the record today and
+nothing makes it. It belongs next to the drift signal of §3.2: one honest
 answer to "is this machine actually reporting", rather than a green dot that
 means "a daemon is running".
+
+The rule has to name the evidence precisely or it becomes noise. A session
+where someone opened the harness and closed it without submitting anything
+records `SessionStart` and `SessionEnd` and nothing else, and it made no model
+call because there was nothing to ask. Reporting that as a bypass would teach
+the operator to ignore the signal.
+
+So the comparison is between a session's turns and its routed calls, not
+between its existence and its routed calls:
+
+| What the record shows | Reading |
+|---|---|
+| Turn frames, and `llm_call` frames at `fidelity: proxy` | Routed. The tier is computed from these. |
+| Turn frames, and no `llm_call` frame at proxy fidelity | Went around the proxy. Raise it. |
+| No turn frames | The session asked nothing. Not a bypass, and not a tier claim either. |
+
+A turn that ended in an error before any request left is the edge worth a test:
+it carries a turn frame and legitimately has no model call, so the rule reads
+the turn's outcome before it raises anything.
 
 ## 4. What is not here
 
@@ -191,7 +210,7 @@ means "a daemon is running".
 | Order | Gap | Done when |
 |---|---|---|
 | 1 | G2 drift detection and the managed-settings path | A machine whose base URL or hook entries were changed reports the mismatch within one control poll, and the Fleet page shows it. Enrollment writes to managed settings where the platform has them. |
-| 2 | G5 unrouted-session detection | A session with hook events and no gateway model calls is identified in the record and surfaced with the drift signal. |
+| 2 | G5 unrouted-session detection | A session carrying turn frames and no `llm_call` at proxy fidelity is identified in the record and surfaced with the drift signal. A session with no turn frames, and a turn that failed before any request left, raise nothing, and both are covered by tests. |
 | 3 | G4 computed tier on every surface | Every surface that names a tier reads the computed value, shows the two unavailable tiers as unavailable, and carries the scope phrase. |
 | 4 | G3 the body producer | With `retention.mode: content_exact`, the collector ships redacted bodies for the retained classes, the control plane verifies and stores them, and `body_rejections` is handled on the host. With `digest_only`, nothing is shipped. Both are covered by tests. |
 | 5 | G1 the launcher | `oxagen run -- <agent>` confines a run on a Linux CI runner with all three controls, attests to each, and the run computes as `contained`. A run missing any control computes as `gateway` at most. |
