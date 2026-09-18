@@ -3,7 +3,7 @@
 // recorded"; nothing prints a zero it was not given (ARCHITECTURE.md INV-09,
 // INV-10). Money goes through <Money>, counts and ratios through
 // src/ui/money-format.ts.
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
 import type { DayRange, SpendFigure } from "@/data/contracts/spend";
@@ -11,6 +11,16 @@ import { panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
 import { formatCount, formatRatio } from "@/ui/money-format";
+
+/** An instant a contract carried, as a date in the viewer's locale. */
+export function Instant({ iso }: { iso: string }) {
+  const format = useFormatter();
+  return (
+    <time dateTime={iso}>
+      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
+    </time>
+  );
+}
 
 export function NotRecordedValue() {
   const t = useTranslations("spend");

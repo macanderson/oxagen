@@ -1,7 +1,8 @@
 // The Spend page body (#2962, #2963; ARCHITECTURE.md §1.2): the open costed
 // findings the page leads with and one finding's evidence, the cost rollup for
 // the current month by operator, agent (with the models beside it) and tool,
-// wasted spend by cause, the configured ceilings, and one key's drill. Every
+// wasted spend by cause, the configured ceilings, one key's drill, and the
+// price book with the models it cannot price. Every
 // read is a noBillingGate kernel read through the spend port; the first read
 // that does not answer replaces the body with its state. Beside the tabs, Export
 // report and Set a budget open their dialogs on every view.
@@ -15,6 +16,7 @@ import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { SpendStrip } from "./figures";
 import { FindingEvidenceSection, FindingsSection } from "./findings";
+import { PricingSection } from "./pricing";
 import { ReadFailure, SpendEmpty } from "./states";
 import { BudgetsTable, GroupTable } from "./tables";
 import { SpendTabs } from "./tabs";
@@ -157,6 +159,18 @@ async function body(
           <BudgetsTable budgets={budgets.value} />
         </>
       );
+    }
+    // The one tab whose reads are handed to the section unresolved: the book
+    // and the models it cannot price are two independent questions, and a
+    // person whose price book answers is still owed it when the unpriced read
+    // is down (and the other way round). Each half renders its own refusal
+    // rather than one of them blanking the tab.
+    case "pricing": {
+      const [book, unpriced] = await Promise.all([
+        source.spend.priceBook(ctx),
+        source.spend.unpricedModels(ctx),
+      ]);
+      return <PricingSection book={book} unpriced={unpriced} at={at} />;
     }
   }
 }

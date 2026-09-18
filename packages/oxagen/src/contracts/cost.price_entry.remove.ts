@@ -43,7 +43,7 @@ export const costPriceEntryRemove = registerCapability({
   // has no candidate path for one, so declaring it would report a permanent
   // gap. The CLI command is declared on `surfaces` instead, as set_spend_budget
   // does.
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   // Returning to list pricing must never be refused for being over budget, and
   // it consumes no AI credits.

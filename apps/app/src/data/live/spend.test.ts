@@ -2,6 +2,8 @@
 // page's failure row, mapped into the view model, with a refusal passed
 // through and an unmappable record reported once.
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
@@ -242,6 +244,85 @@ describe("the findings the Spend page leads with", () => {
       input: { findingId: "fnd_01k5rtgh" },
       page: "spend",
     });
+  });
+
+  it("priceBook reads list_price_entries at the read instant, as money in the row's currency", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        at: "2026-09-15T12:00:00.000Z",
+        entries: [
+          {
+            id: "9f1b7a2c-0000-4000-8000-000000000001",
+            orgId: null,
+            provider: "anthropic",
+            model: "claude-sonnet-5",
+            modelAliases: [],
+            region: null,
+            tokenClass: "output",
+            unit: "token",
+            currency: "USD",
+            microsPerMillion: "15000000",
+            effectiveFrom: "2026-01-01T00:00:00.000Z",
+            effectiveTo: null,
+            source: "list",
+          },
+        ],
+      }),
+    );
+    const read = await spend.priceBook(ctx);
+    expect(read.ok && read.value.entries[0]).toEqual(
+      expect.objectContaining({
+        ratePerMillion: { micros: "15000000", currency: "USD" },
+        negotiated: false,
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: costPriceEntryList,
+      input: {},
+      page: "spend",
+    });
+  });
+
+  it("unpricedModels reads list_unpriced_models over the window the contract chose", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        since: "2026-08-16T00:00:00.000Z",
+        at: "2026-09-15T12:00:00.000Z",
+        models: [
+          {
+            model: "acme-internal-7b",
+            provider: "acme",
+            calls: 1240,
+            tokens: 9400000,
+            firstSeen: "2026-08-20T00:00:00.000Z",
+            lastSeen: "2026-09-15T00:00:00.000Z",
+            missingClasses: ["input_uncached", "output"],
+            fullyUnpriced: true,
+          },
+        ],
+      }),
+    );
+    const read = await spend.unpricedModels(ctx);
+    expect(read.ok && read.value.models[0]?.fullyUnpriced).toBe(true);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: costUnpricedModelList,
+      input: {},
+      page: "spend",
+    });
+  });
+
+  it("passes a refused price-book read through as the kernel classified it (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      permission: "spend.read",
+    });
+    expect(await spend.priceBook(ctx)).toEqual({
+      ok: false,
+      reason: "denied",
+      permission: "spend.read",
+    });
+    expect(captureError).not.toHaveBeenCalled();
   });
 
   it("answers record_unmappable for a finding the view model refuses (negative)", async () => {

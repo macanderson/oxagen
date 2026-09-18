@@ -1,0 +1,291 @@
+// @vitest-environment jsdom
+// The Pricing tab's two dialogs with their actions faked.
+//
+// Set a negotiated rate reads a whole rate card and sends it as one
+// set_price_entry call per token class, so the case that matters is the one
+// that stops halfway: the dialog must never report a half-written card as a
+// success, and must say which classes are in effect and which are not. Remove
+// must say what ending a rate actually does — fall back to the list price —
+// and must not call it a delete. Axe checks the state each test ends in,
+// the open dialog's portal included (INV-26).
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { expectNoAxe } from "@/test/expect-no-axe";
+import spend from "../../../messages/spend.json";
+import ui from "../../../messages/ui.json";
+
+const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
+const setPriceEntryAction = vi.fn();
+const removePriceEntryAction = vi.fn();
+vi.mock("./actions", () => ({
+  setBudgetAction: vi.fn(),
+  exportStatementAction: vi.fn(),
+  recordFindingFixAction: vi.fn(),
+  dismissFindingAction: vi.fn(),
+  setPriceEntryAction,
+  removePriceEntryAction,
+}));
+
+const { PriceDialog } = await import("./price-dialog");
+const { RemoveRateDialog } = await import("./remove-rate-dialog");
+
+const at = { org: "acme", ws: "core-platform" };
+
+function renderWithIntl(node: ReactNode) {
+  return render(
+    <NextIntlClientProvider
+      locale="en"
+      messages={{ ...spend, ...ui }}
+      timeZone="UTC"
+    >
+      {node}
+    </NextIntlClientProvider>,
+  );
+}
+
+beforeEach(() => {
+  router.replace.mockReset();
+  router.refresh.mockReset();
+  setPriceEntryAction.mockReset();
+  removePriceEntryAction.mockReset();
+});
+
+afterEach(async () => {
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
+});
+
+describe("Set a negotiated rate", () => {
+  async function openDialog() {
+    renderWithIntl(<PriceDialog at={at} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Set a negotiated rate" }),
+    );
+    return screen.getByRole("dialog", { name: "Set a negotiated rate" });
+  }
+
+  async function fill(card: Record<string, string>) {
+    for (const [label, value] of Object.entries(card)) {
+      await userEvent.type(screen.getByLabelText(label), value);
+    }
+  }
+
+  const submit = async () =>
+    userEvent.click(screen.getByRole("button", { name: "Set these rates" }));
+
+  it("refuses a card with no rate on it before calling the capability (negative)", async () => {
+    await openDialog();
+    await fill({ Vendor: "anthropic", Model: "claude-sonnet-5" });
+    await submit();
+    expect(
+      screen.getByText("Fill in at least one class. Nothing was written."),
+    ).toBeInTheDocument();
+    expect(setPriceEntryAction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a rate that is not an amount, writing none of the card (negative)", async () => {
+    await openDialog();
+    await fill({
+      Vendor: "anthropic",
+      Model: "claude-sonnet-5",
+      Input: "3.00",
+      Output: "15,00",
+    });
+    await submit();
+    expect(
+      screen.getByText(
+        "Enter US dollars per one million units, with at most six decimal places.",
+      ),
+    ).toBeInTheDocument();
+    expect(setPriceEntryAction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a model nobody named, so no class is written (negative)", async () => {
+    await openDialog();
+    await fill({ Vendor: "anthropic", Output: "15" });
+    await submit();
+    expect(
+      screen.getByText("Enter the model id, up to 256 characters."),
+    ).toBeInTheDocument();
+    expect(setPriceEntryAction).not.toHaveBeenCalled();
+  });
+
+  it("sends one call per class, in class order, under the one date typed", async () => {
+    setPriceEntryAction.mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    await fill({
+      Vendor: "anthropic",
+      Model: "claude-sonnet-5",
+      Output: "15",
+      Input: "3",
+    });
+    await submit();
+
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=pricing",
+      );
+    });
+    expect(setPriceEntryAction).toHaveBeenCalledTimes(2);
+    expect(setPriceEntryAction.mock.calls.map(([, values]) => values)).toEqual([
+      expect.objectContaining({
+        tokenClass: "input_uncached",
+        usdPerMillion: "3",
+        model: "claude-sonnet-5",
+      }),
+      expect.objectContaining({ tokenClass: "output", usdPerMillion: "15" }),
+    ]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("names the classes written and the classes not written when a call is refused halfway (negative)", async () => {
+    setPriceEntryAction
+      .mockResolvedValueOnce({ ok: true, value: null })
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "denied",
+        code: "org_role_required",
+      });
+    await openDialog();
+    await fill({
+      Vendor: "anthropic",
+      Model: "claude-sonnet-5",
+      Input: "3",
+      Output: "15",
+    });
+    // Reasoning is not one of the four classes a card usually names, so it is
+    // reached through the disclosure.
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show every token class" }),
+    );
+    await fill({ Reasoning: "15" });
+    await submit();
+
+    const written = await screen.findByTestId("spend-price-written");
+    expect(written).toHaveTextContent("In effect now: Input.");
+    expect(screen.getByTestId("spend-price-not-written")).toHaveTextContent(
+      "Not written: Output and Reasoning.",
+    );
+    expect(screen.getByTestId("spend-price-failure")).toHaveTextContent(
+      "An organization owner, admin or billing member sets a negotiated rate.",
+    );
+    // A half-written card is not a success: the dialog stays open and nothing
+    // navigates away from it.
+    expect(
+      screen.getByRole("dialog", { name: "Set a negotiated rate" }),
+    ).toBeInTheDocument();
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(setPriceEntryAction).toHaveBeenCalledTimes(2);
+  });
+
+  it("says the book is unchanged when the very first call is refused (negative)", async () => {
+    setPriceEntryAction.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "kernel_failure",
+    });
+    await openDialog();
+    await fill({
+      Vendor: "anthropic",
+      Model: "claude-sonnet-5",
+      Input: "3",
+      Output: "15",
+    });
+    await submit();
+
+    expect(await screen.findByTestId("spend-price-written")).toHaveTextContent(
+      "Nothing was written. The price book is unchanged.",
+    );
+    expect(screen.getByTestId("spend-price-not-written")).toHaveTextContent(
+      "Not written: Input and Output.",
+    );
+    expect(setPriceEntryAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a filled class on screen, so a collapsed card never sends a figure nobody can see", async () => {
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Show every token class" }),
+    );
+    await userEvent.type(screen.getByLabelText("Rerank"), "1");
+    expect(screen.getByLabelText("Rerank")).toHaveValue("1");
+  });
+});
+
+describe("Remove a negotiated rate", () => {
+  const entry = {
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    tokenClass: "output" as const,
+    region: null,
+  };
+
+  async function openDialog() {
+    renderWithIntl(<RemoveRateDialog at={at} entry={entry} />);
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "Remove the negotiated rate for claude-sonnet-5, Output",
+      }),
+    );
+    return screen.getByRole("dialog", { name: "Fall back to the list price" });
+  }
+
+  it("says the model falls back to the provider's list price, and that nothing is deleted", async () => {
+    const dialog = await openDialog();
+    expect(dialog).toHaveTextContent(
+      "every call from now on is priced at the provider’s list price instead",
+    );
+    expect(dialog).toHaveTextContent("Nothing is deleted.");
+    expect(dialog).toHaveTextContent(
+      "a run priced before now still names the rate it was priced with",
+    );
+    expect(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    ).toBeInTheDocument();
+    expect(dialog.textContent ?? "").not.toMatch(/\bdelete this\b/i);
+  });
+
+  it("ends the rate by its key and returns to the Pricing tab", async () => {
+    removePriceEntryAction.mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=pricing",
+      );
+    });
+    expect(removePriceEntryAction).toHaveBeenCalledWith(at, {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output",
+      region: "",
+    });
+  });
+
+  it("shows the refusal and changes nothing when the role cannot end a rate (negative)", async () => {
+    removePriceEntryAction.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    expect(
+      await screen.findByTestId("spend-remove-rate-failure"),
+    ).toHaveTextContent(
+      "Your organization role cannot change what this organization is billed at.",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+});

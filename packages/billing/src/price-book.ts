@@ -22,6 +22,7 @@
  * the only reader (ADR-060 §1).
  */
 import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
+import { HandlerError } from "@oxagen/oxagen";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import {
@@ -591,9 +592,15 @@ export async function setNegotiatedPriceEntry(
     );
     const earliestLater = later[later.length - 1];
     if (earliestLater)
-      throw new RangeError(
-        `a negotiated price for ${key} is already effective from ${earliestLater.effectiveFrom.toISOString()}; a correction must not start earlier`,
-      );
+      // A refusal the caller can act on (pick a later instant), not a server
+      // fault: a bare RangeError reaches the API and MCP surfaces as an
+      // unclassified 500 and the app as `kernel_failure`, because every seam
+      // classifies on `code` and a bare Error carries none.
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_superseded",
+        message: `a negotiated price for ${key} is already effective from ${earliestLater.effectiveFrom.toISOString()}; a correction must not start earlier`,
+      });
 
     // The upsert clears `effective_to`, so a row at exactly this instant that
     // has already been closed would be reopened and the window between its
@@ -602,9 +609,11 @@ export async function setNegotiatedPriceEntry(
       (r) => r.effectiveFrom.getTime() === from.getTime(),
     );
     if (atInstant && atInstant.effectiveTo !== null)
-      throw new RangeError(
-        `the negotiated price for ${key} effective from ${from.toISOString()} was ended at ${atInstant.effectiveTo.toISOString()}; re-establish it as a new row with a later effectiveFrom`,
-      );
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_already_ended",
+        message: `the negotiated price for ${key} effective from ${from.toISOString()} was ended at ${atInstant.effectiveTo.toISOString()}; re-establish it as a new row with a later effectiveFrom`,
+      });
 
     const open = rows.find((r) => r.effectiveTo === null) ?? null;
     let closed: Row | null = null;
@@ -694,19 +703,26 @@ export async function closeNegotiatedPriceEntry(args: {
       (r) => r.orgId === args.orgId && r.source !== "list",
     );
     if (own.length === 0)
-      throw new RangeError(
-        `${key} has no negotiated price for this organization to end` +
+      // The normal path for a bad key on the API and MCP surfaces, where the
+      // caller names the entry rather than clicking a row that exists.
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_not_negotiated",
+        message:
+          `${key} has no negotiated price for this organization to end` +
           (rows.length > 0
             ? `; it is priced by the platform list, which is not an organization's to change`
             : ``),
-      );
+      });
 
     const open = own.find((r) => r.effectiveTo === null);
     if (!open) return null;
     if (open.effectiveFrom.getTime() >= args.at.getTime())
-      throw new RangeError(
-        `the negotiated price for ${key} is effective from ${open.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
-      );
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_ends_before_it_starts",
+        message: `the negotiated price for ${key} is effective from ${open.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
+      });
 
     await tx
       .update(schema.priceEntries)

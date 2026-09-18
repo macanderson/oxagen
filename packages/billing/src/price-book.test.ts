@@ -360,7 +360,10 @@ describe("the negotiated write path", () => {
         microsPerMillion: 1_000_000n,
         effectiveFrom: T1,
       }),
-    ).rejects.toThrow(RangeError);
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_superseded",
+    });
     await expect(
       setNegotiatedPriceEntry({
         ...SET,
@@ -513,5 +516,66 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
 
     expect(result.superseded).toBe(0);
     expect(openRows()).toHaveLength(2);
+  });
+});
+
+describe("the negotiated write path refuses in a shape every surface can classify", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    store.tx = makeFakePriceTx(fake);
+  });
+
+  // A bare Error reaches the API and MCP surfaces as an unclassified 500 and
+  // the app as `kernel_failure`, because all three classify on `code`. These
+  // are caller-actionable refusals, so each must carry one.
+  it("refuses to end a rate the organization never negotiated, as a conflict", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+
+    await expect(
+      closeNegotiatedPriceEntry({ ...SET, at: T1 }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_not_negotiated",
+    });
+  });
+
+  it("refuses to end a rate at or before it starts, as a conflict", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: usdPerMillionToMicros(2.4),
+      effectiveFrom: T2,
+    });
+
+    await expect(
+      closeNegotiatedPriceEntry({ ...SET, at: T1 }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_ends_before_it_starts",
+    });
+  });
+
+  it("refuses to reopen a window the organization already ended, as a conflict", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: usdPerMillionToMicros(2.4),
+      effectiveFrom: T1,
+    });
+    await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: usdPerMillionToMicros(1),
+        effectiveFrom: T1,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_already_ended",
+    });
   });
 });

@@ -400,6 +400,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_price_entries": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › The price book — the table of list and negotiated rows the tab is built on (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/pricing.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "list_proposals": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -439,6 +447,14 @@
       "proof": "apps/app/src/features/tools/tools.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_unpriced_models": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › Models the price book cannot price — the table that explains a run with no cost (features/spend/pricing.tsx, data/live/spend.ts, data/live/mappers/spend.ts)",
+      "proof": "apps/app/src/features/spend/pricing.test.tsx",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
     },
     "list_waste": {
       "route": "/[org]/[ws]/spend",
@@ -520,6 +536,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "remove_price_entry": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › “Remove” on a negotiated row — ends the rate so the model falls back to the list price (features/spend/remove-rate-dialog.tsx, features/spend/actions.ts)",
+      "testid": "spend-remove-rate-open",
+      "proof": "apps/app/src/features/spend/price-actions.test.ts",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
+    },
     "request_mandate": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
@@ -575,6 +600,15 @@
       "proof": "apps/app/src/features/tools/write-controls.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_price_entry": {
+      "route": "/[org]/[ws]/spend?tab=pricing",
+      "page": "apps/app/src/app/[org]/[ws]/spend/page.tsx",
+      "entry": "Spend › Pricing › “Set a negotiated rate” — the rate-card dialog, one set_price_entry call per token class (features/spend/price-dialog.tsx, features/spend/actions.ts)",
+      "testid": "spend-price-open",
+      "proof": "apps/app/src/features/spend/price-actions.test.ts",
+      "verifiedAt": "2026-09-17",
+      "verifiedBy": "session-cost-price-book-autoseed"
     },
     "set_role_grants": {
       "route": "/[org]/roles",

@@ -115,6 +115,8 @@ export function onboardingSource(reads: Reads): {
       budgets: refuse("spend.budgets"),
       findings: refuse("spend.findings"),
       findingEvidence: refuse("spend.findingEvidence"),
+      priceBook: refuse("spend.priceBook"),
+      unpricedModels: refuse("spend.unpricedModels"),
     },
     audit: {
       events: refuse("audit.events"),

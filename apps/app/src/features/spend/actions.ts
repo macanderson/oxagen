@@ -4,10 +4,13 @@
 // member, or a workspace Owner or Admin for that workspace's own), build one
 // month's statement (export_statement, answered as CSV text in the call), and
 // decide a finding — record its fix as applied or dismiss it (#2963, ADR-062
-// §2; org Owner or Admin in the handler). Each runs through kernelWrite, the
-// seam's one path for a call a person starts from a page; each is
-// noBillingGate (INV-28).
+// §2; org Owner or Admin in the handler), state one negotiated rate
+// (set_price_entry) and end one (remove_price_entry), both org Owner, Admin or
+// Billing in their handlers. Each runs through kernelWrite, the seam's one path
+// for a call a person starts from a page; each is noBillingGate (INV-28).
 import { billingBudgetSet } from "@oxagen/oxagen/contracts/billing.budget.set";
+import { costPriceEntryRemove } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
+import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set";
 import { findingDismiss } from "@oxagen/oxagen/contracts/finding.dismiss";
 import { findingFixRecord } from "@oxagen/oxagen/contracts/finding.fix.record";
 import { spendStatementExport } from "@oxagen/oxagen/contracts/spend.statement.export";
@@ -19,6 +22,10 @@ import {
   type BudgetFormValues,
   isFindingId,
   isStatementMonth,
+  PriceEntryForm,
+  type PriceEntryFormValues,
+  RemovePriceEntryForm,
+  type RemovePriceEntryFormValues,
 } from "./forms";
 import type { SpendAt } from "./view";
 
@@ -109,4 +116,59 @@ export async function exportStatementAction(
         },
       }
     : result;
+}
+
+/**
+ * State this organization's negotiated rate for ONE model and token class.
+ *
+ * One class per call, because that is what the capability takes and why: the
+ * store holds one effective-dated row per (provider, model, class, region), so
+ * a four-class rate card is four statements and a failure after the second
+ * would otherwise leave the organization priced at a blend nobody agreed to.
+ * The sequence, and the record of which classes it wrote before it stopped,
+ * belongs to the caller — here the price dialog, which shows both lists rather
+ * than reporting a partial write as a success.
+ */
+export async function setPriceEntryAction(
+  at: SpendAt,
+  values: PriceEntryFormValues,
+): Promise<ActionResult<null>> {
+  const ctx = await requireViewer(at.org, at.ws);
+  const parsed = PriceEntryForm.safeParse(values);
+  if (!parsed.success) {
+    const [issue] = parsed.error.issues;
+    return {
+      ok: false,
+      reason: "invalid",
+      code: issue?.message ?? "invalid_input",
+      field: issue?.path.map(String).join(".") ?? "",
+    };
+  }
+  const result = await kernelWrite(ctx, costPriceEntrySet, parsed.data);
+  return result.ok ? { ok: true, value: null } : result;
+}
+
+/**
+ * End this organization's negotiated rate for one model and token class, so
+ * every frame from now on is priced at the provider's list price again. The
+ * row is closed and kept, never deleted: a run priced before this instant
+ * still names the entry it was priced with.
+ */
+export async function removePriceEntryAction(
+  at: SpendAt,
+  values: RemovePriceEntryFormValues,
+): Promise<ActionResult<null>> {
+  const ctx = await requireViewer(at.org, at.ws);
+  const parsed = RemovePriceEntryForm.safeParse(values);
+  if (!parsed.success) {
+    const [issue] = parsed.error.issues;
+    return {
+      ok: false,
+      reason: "invalid",
+      code: issue?.message ?? "invalid_input",
+      field: issue?.path.map(String).join(".") ?? "",
+    };
+  }
+  const result = await kernelWrite(ctx, costPriceEntryRemove, parsed.data);
+  return result.ok ? { ok: true, value: null } : result;
 }

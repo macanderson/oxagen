@@ -5,6 +5,8 @@
 // rounds or fills a figure the contract did not carry. The one derived figure
 // is Fleet's cache hit rate, a ratio of the token counts the rows carry.
 import type { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import type { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import type { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import type { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
@@ -13,6 +15,7 @@ import type { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import type { z } from "zod";
 import type {
   FleetSpend,
+  PriceBook,
   SpendBudgets,
   SpendDrill,
   SpendFinding,
@@ -20,6 +23,7 @@ import type {
   SpendFindings,
   SpendReport,
   SpendWaste,
+  UnpricedModels,
 } from "@/data/contracts/spend";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -190,4 +194,55 @@ export function toSpendBudgets(
     ratio: budget.ratio,
     state: budget.state,
   }));
+}
+
+/**
+ * The price book as the page reads it. The rate is the micros the contract
+ * carried, wrapped in the row's own currency so the page prints it through
+ * <Money> like every other figure; `negotiated` is the one derived field, and
+ * it is `orgId !== null` — the same test the resolver makes when it picks this
+ * row over the list one. The entry id is dropped: nothing on the page
+ * addresses a row by it (INV-11).
+ */
+export function toPriceBook(
+  out: ContractOutput<typeof costPriceEntryList>,
+): z.input<typeof PriceBook> {
+  return {
+    at: out.at,
+    entries: out.entries.map((entry) => ({
+      provider: entry.provider,
+      model: entry.model,
+      modelAliases: entry.modelAliases,
+      region: entry.region,
+      tokenClass: entry.tokenClass,
+      unit: entry.unit,
+      ratePerMillion: {
+        micros: entry.microsPerMillion,
+        currency: entry.currency,
+      },
+      effectiveFrom: entry.effectiveFrom,
+      effectiveTo: entry.effectiveTo,
+      source: entry.source,
+      negotiated: entry.orgId !== null,
+    })),
+  };
+}
+
+export function toUnpricedModels(
+  out: ContractOutput<typeof costUnpricedModelList>,
+): z.input<typeof UnpricedModels> {
+  return {
+    since: out.since,
+    at: out.at,
+    models: out.models.map((model) => ({
+      model: model.model,
+      provider: model.provider,
+      calls: model.calls,
+      tokens: model.tokens,
+      firstSeen: model.firstSeen,
+      lastSeen: model.lastSeen,
+      missingClasses: model.missingClasses,
+      fullyUnpriced: model.fullyUnpriced,
+    })),
+  };
 }

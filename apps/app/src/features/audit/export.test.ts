@@ -53,6 +53,8 @@ const source: DataSource = {
     budgets: refuse,
     findings: refuse,
     findingEvidence: refuse,
+    priceBook: refuse,
+    unpricedModels: refuse,
   },
   org: { members: refuse, roles: refuse, workspaces: refuse, apiKeys: refuse },
   audit: { events: refuse, exportEvents },
