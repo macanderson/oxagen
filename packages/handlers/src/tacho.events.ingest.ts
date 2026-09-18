@@ -56,6 +56,11 @@ import {
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import {
+  languageOf,
+  repoRelativePathOf,
+  worktreeRootOf,
+} from "./lib/file-facts";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
@@ -1733,6 +1738,9 @@ async function rollupFiles(
   events: TachoEvent[],
   now: Date,
 ): Promise<void> {
+  // The worktree the batch agrees on, used to turn every absolute path into
+  // the repo-relative form that is stable across hosts.
+  const root = worktreeRootOf(events.map((event) => event.context));
   const byPath = new Map<
     string,
     {
@@ -1780,6 +1788,8 @@ async function rollupFiles(
         workspaceId: ctx.workspaceId,
         sessionId,
         path,
+        repoRelativePath: repoRelativePathOf(path, root),
+        language: languageOf(path),
         reads: entry.reads,
         writes: entry.writes,
         edits: entry.edits,
@@ -1801,6 +1811,12 @@ async function rollupFiles(
           edits: sql`${schema.tachoSessionFiles.edits} + ${entry.edits}`,
           deletes: sql`${schema.tachoSessionFiles.deletes} + ${entry.deletes}`,
           bytesWritten: sql`${schema.tachoSessionFiles.bytesWritten} + ${entry.bytes}`,
+          // COALESCE and not an overwrite: a later batch may carry no
+          // worktree context, and a path that was once placed in its
+          // repository does not stop being there because the next frame
+          // arrived without the fact.
+          repoRelativePath: sql`COALESCE(${schema.tachoSessionFiles.repoRelativePath}, ${repoRelativePathOf(path, root) ?? null})`,
+          language: sql`COALESCE(${schema.tachoSessionFiles.language}, ${languageOf(path) ?? null})`,
           lastSeq: sql`GREATEST(${schema.tachoSessionFiles.lastSeq}, ${entry.last})`,
           updatedAt: now,
         },
