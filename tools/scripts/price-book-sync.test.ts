@@ -20,6 +20,13 @@ describe("parseFlags", () => {
     expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T18:00:00.000Z");
   });
 
+  // A boundary only seconds ahead cannot hold through the refresh, so a run
+  // in the last minutes of an hour takes the hour after.
+  it("skips a boundary too close to hold through the refresh", () => {
+    const flags = parseFlags([], new Date("2026-09-14T17:58:00.000Z"));
+    expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T19:00:00.000Z");
+  });
+
   it("takes --apply and an explicit --effective-from", () => {
     const flags = parseFlags(
       ["--apply", "--effective-from=2026-10-01T00:00:00Z"],

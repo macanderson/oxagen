@@ -77,11 +77,26 @@ export const COLD_START_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
  * same instant and the row-key upsert stays idempotent.
  */
 export function nextPriceBookBoundary(now: Date): Date {
-  const next = new Date(now.getTime());
+  // A boundary only milliseconds ahead is no boundary: the catalog reads can
+  // take fifteen seconds and the transaction more, and if the top of the hour
+  // passes before the commit, frames rolled up in that gap were priced
+  // against a row the commit then closes behind them, which is the defect the
+  // boundary exists to prevent. So the boundary has to be at least
+  // BOUNDARY_MARGIN_MS ahead of `now`, and a run that starts inside the last
+  // margin of an hour takes the hour after.
+  const next = new Date(now.getTime() + BOUNDARY_MARGIN_MS);
   next.setUTCMinutes(0, 0, 0);
   next.setUTCHours(next.getUTCHours() + 1);
   return next;
 }
+
+/**
+ * How far ahead of the run a boundary must be to hold through the run. Well
+ * past the slowest refresh observed (catalog reads bounded at fifteen
+ * seconds, plus the transaction), and short next to the hour it may push the
+ * boundary by.
+ */
+export const BOUNDARY_MARGIN_MS = 5 * 60 * 1000;
 
 /**
  * How far before the write instant a negotiated rate may start and still be
@@ -921,10 +936,29 @@ export async function setNegotiatedPriceEntry(
   const from = args.effectiveFrom;
   const now = args.now ?? new Date();
   const key = entryKey({ ...args, region });
-  const names = new Set([args.model, ...(modelAliases ?? [])]);
-
   return withTenantDb(async (tx) => {
-    await lockNegotiatedKey(tx, args, [...names]);
+    // The names this write will end up carrying, resolved BEFORE the locks
+    // and the overlap check, because both are about names. With the list
+    // omitted, the write inherits the aliases of the key's latest row (open
+    // or ended); resolving that only at insert time let the overlap check run
+    // on the bare model name, so a rate re-established after a gap could
+    // restore an alias another live row had legitimately taken up in the
+    // meantime, and two live rows then answered for one resolver identity.
+    //
+    // The key's own chain is read under its model-name lock first, which is
+    // enough to make the inherited list stable; then every name is locked.
+    await lockNegotiatedKey(tx, args);
+    const ownChain = await readKeyRows(tx, args, { includeList: false });
+    const effectiveAliases = modelAliases ?? ownChain[0]?.modelAliases ?? [];
+    const names = new Set([args.model, ...effectiveAliases]);
+    // The model's own lock is already held; the advisory lock is re-entrant
+    // within the transaction anyway, but not re-taking it keeps the statement
+    // log readable.
+    await lockNegotiatedKey(
+      tx,
+      args,
+      [...names].filter((name) => name !== args.model),
+    );
     const everyModel = await readKeyRows(tx, args, {
       includeList: false,
       anyProvider: true,
@@ -1057,19 +1091,8 @@ export async function setNegotiatedPriceEntry(
     // as strings under an explicit cast. The ON CONFLICT target restates
     // `price_entries_key_idx`'s own expressions, or Postgres finds no index
     // to arbitrate on.
-    // An omitted list means "keep the names the rate already has", on both
-    // paths a correction can take. On conflict (same instant) the assignment
-    // below leaves the row's own aliases alone. A LATER correction inserts a
-    // successor instead and never reaches that clause, so the successor
-    // inherits the aliases of the row it replaces. Starting it with an empty
-    // list dropped every stored alias from that instant on, and calls under
-    // those names fell back to list pricing or went unpriced.
-    //
-    // The same holds when the rate was ENDED and is now being re-established:
-    // there is no open row, but the most recent row in the chain still carries
-    // the names. `rows` is newest first, so `rows[0]` is that row.
-    const inherited =
-      modelAliases ?? open?.modelAliases ?? rows[0]?.modelAliases ?? [];
+    // Resolved above, before the locks and the overlap check.
+    const inherited = effectiveAliases;
     const aliases = sql.join(
       inherited.map((a) => sql`${a}`),
       sql`, `,

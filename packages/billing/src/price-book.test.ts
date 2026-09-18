@@ -27,6 +27,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 
 import {
   closeNegotiatedPriceEntry,
+  BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
   nextPriceBookBoundary,
   priceEntriesFromRateCards,
@@ -399,6 +400,40 @@ describe("the negotiated write path", () => {
       (r) => (r.effectiveFrom as Date).getTime() === T3.getTime(),
     );
     expect(reestablished?.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
+  });
+
+  // The inherited names take part in the overlap check. Resolving them only
+  // at insert time let a rate re-established after a gap restore an alias
+  // another live row had taken up meanwhile, so two live rows answered for
+  // one resolver identity.
+  it("refuses to re-establish a rate whose inherited alias another live row now holds", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "foo",
+      modelAliases: ["vendor/foo"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await closeNegotiatedPriceEntry({ ...SET, model: "foo", at: T2 });
+    // During the gap, `vendor/foo` is legitimately priced on its own.
+    const T3 = new Date(T2.getTime() + 86_400_000);
+    await setNegotiatedPriceEntry({
+      ...SET,
+      model: "vendor/foo",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T3,
+    });
+    // Re-establishing `foo` without retyping its aliases would inherit
+    // `vendor/foo` and collide with that row.
+    const T4 = new Date(T3.getTime() + 86_400_000);
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        model: "foo",
+        microsPerMillion: 2_200_000n,
+        effectiveFrom: T4,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
   });
 
   it("replaces the stored aliases when a correction names an empty list", async () => {
@@ -1608,11 +1643,35 @@ describe("nextPriceBookBoundary", () => {
     );
   });
 
-  // Stable within the hour, so a retry of the same tick writes the same
-  // instant and the row-key upsert stays idempotent.
-  it("answers the same instant for every moment in one hour", () => {
+  // A boundary only seconds ahead cannot hold through catalog reads and the
+  // transaction. Inside the last margin of an hour the run takes the hour
+  // after, so the boundary is still ahead when the commit lands.
+  it("skips a boundary too close to hold through the refresh", () => {
+    const now = new Date("2026-09-18T15:57:30.000Z");
+    expect(nextPriceBookBoundary(now)).toEqual(
+      new Date("2026-09-18T17:00:00.000Z"),
+    );
+  });
+
+  it("always answers at least the margin ahead", () => {
+    for (const iso of [
+      "2026-09-18T15:00:00.000Z",
+      "2026-09-18T15:54:59.999Z",
+      "2026-09-18T15:55:00.000Z",
+      "2026-09-18T15:59:59.999Z",
+    ]) {
+      const now = new Date(iso);
+      expect(
+        nextPriceBookBoundary(now).getTime() - now.getTime(),
+      ).toBeGreaterThanOrEqual(BOUNDARY_MARGIN_MS);
+    }
+  });
+
+  // Stable across a retry: a run and its retry a few seconds later write
+  // the same instant, so the row-key upsert stays idempotent.
+  it("answers the same instant for a retry moments later", () => {
     expect(nextPriceBookBoundary(new Date("2026-09-18T15:00:01Z"))).toEqual(
-      nextPriceBookBoundary(new Date("2026-09-18T15:59:59Z")),
+      nextPriceBookBoundary(new Date("2026-09-18T15:04:00Z")),
     );
   });
 
