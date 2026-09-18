@@ -50,6 +50,7 @@ import {
   isShallow,
   mergeBase,
   parseNameStatus,
+  pathsInTree,
   repoRoot,
   revParse,
   skipWorktreePaths,
@@ -67,6 +68,8 @@ import {
 } from "./cache";
 import { PROJECT_DIR_NAME } from "./settings";
 import type { SteeringPolicy } from "./policy";
+import { access } from "node:fs/promises";
+import { join } from "node:path";
 
 /**
  * - `current`  — nothing merged here that this checkout lacks.
@@ -221,7 +224,10 @@ export async function checkSteeringFreshness(
   const networkDeadline = now() + networkBudgetMs;
   const networkCtx = (base: GitContext): GitContext => ({
     ...base,
-    timeoutMs: Math.max(1_000, Math.min(base.timeoutMs, networkDeadline - now())),
+    timeoutMs: Math.max(
+      1_000,
+      Math.min(base.timeoutMs, networkDeadline - now()),
+    ),
   });
 
   const base: Omit<FreshnessVerdict, "status"> = {
@@ -406,8 +412,7 @@ export async function checkSteeringFreshness(
     // budget does.
     for (const by of [64, 256, 1024]) {
       if (now() >= networkDeadline) break;
-      if (!(await deepen(networkCtx(repoCtx), policy.remote, by)))
-        break;
+      if (!(await deepen(networkCtx(repoCtx), policy.remote, by))) break;
       mergeBaseCommit = await mergeBase(repoCtx, head, remoteHead);
       if (mergeBaseCommit) {
         base.notes.push(
@@ -558,17 +563,67 @@ export async function checkSteeringFreshness(
     // `current` while the agent ran with none of its records. The files have
     // to be on disk to steer anything, so this is `behind`, with the paths
     // named, and a sync is what puts them there.
-    const absent = await skipWorktreePaths(repoCtx, pathspecs);
-    if (absent.length > 0) {
-      base.missing = absent.map((path) => ({ status: "added", path }));
-      base.notes.push(
-        `${absent.length} governed file(s) are excluded from this checkout's working tree (a sparse checkout, or skip-worktree), so the agent cannot read them`,
-      );
-      return { ...base, status: authored.length > 0 ? "diverged" : "behind" };
+    //
+    // But the `S` bit says only that git is not LOOKING at the file, not that
+    // the file is gone. A developer can materialise a skip-worktree record
+    // by hand and edit it, and every diff and `status` above ignored that
+    // edit. Calling such a file missing sent it to the auto-sync as safe to
+    // restore, and `restore --ignore-skip-worktree-bits` overwrote the edit
+    // without `force`. So a skipped entry counts as missing only when the
+    // file is really absent from disk, and only when production has it to
+    // give: an entry that exists in this index alone would make the restore
+    // fail on a pathspec its source lacks.
+    const skipped = await skipWorktreePaths(repoCtx, pathspecs);
+    if (skipped.length > 0) {
+      const absent = await absentFromDisk(root, skipped);
+      let restorable: string[];
+      try {
+        restorable = await pathsInTree(repoCtx, remoteHead, absent);
+      } catch (error) {
+        return unknown(
+          base,
+          `could not read ${target}'s tree: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+      if (restorable.length > 0) {
+        base.missing = restorable.map((path) => ({ status: "added", path }));
+        base.notes.push(
+          `${restorable.length} governed file(s) are excluded from this checkout's working tree (a sparse checkout, or skip-worktree), so the agent cannot read them`,
+        );
+        return {
+          ...base,
+          status: authored.length > 0 ? "diverged" : "behind",
+        };
+      }
     }
     return { ...base, status: authored.length > 0 ? "ahead" : "current" };
   }
   return { ...base, status: authored.length > 0 ? "diverged" : "behind" };
+}
+
+/**
+ * The subset of `paths` (repository-relative) that do not exist on disk under
+ * `root`. Existence is the question, not readability: a file that is there
+ * but unreadable is a permissions problem for the agent, not a missing
+ * record for the sync to write over.
+ */
+async function absentFromDisk(
+  root: string,
+  paths: readonly string[],
+): Promise<string[]> {
+  const flags = await Promise.all(
+    paths.map(async (path) => {
+      try {
+        await access(join(root, path));
+        return false;
+      } catch {
+        return true;
+      }
+    }),
+  );
+  return paths.filter((_, i) => flags[i]);
 }
 
 /**
@@ -620,11 +675,12 @@ async function differingFromRemote(
     .map((c) => c.path);
   for (let i = 0; i < removed.length; i += 200) {
     const batch = removed.slice(i, i + 200);
-    const raw = await ctx.run(
-      ["ls-files", "--others", "-z", "--", ...batch],
-      { cwd: ctx.cwd, timeoutMs: ctx.timeoutMs },
-    );
-    for (const path of raw.split("\0")) if (path.length > 0) differing.add(path);
+    const raw = await ctx.run(["ls-files", "--others", "-z", "--", ...batch], {
+      cwd: ctx.cwd,
+      timeoutMs: ctx.timeoutMs,
+    });
+    for (const path of raw.split("\0"))
+      if (path.length > 0) differing.add(path);
   }
   return candidates.filter((c) => differing.has(c.path));
 }

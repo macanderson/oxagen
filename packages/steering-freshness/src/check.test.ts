@@ -1,3 +1,6 @@
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   checkSteeringFreshness,
@@ -69,6 +72,13 @@ function runner(t: Record<string, string | Error>): GitRunner {
     if (key.startsWith("ls-files --others -z --")) return "";
     // Index entries excluded from the working tree. None, unless a test says so.
     if (key.startsWith("ls-files -t -z --")) return "";
+    // Which of the paths production holds. All of them, unless a test says so.
+    if (key.startsWith(`ls-tree -r --name-only -z ${REMOTE} --`)) {
+      return args
+        .slice(args.indexOf("--") + 1)
+        .map((path) => `${path}\0`)
+        .join("");
+    }
     throw new Error(`unexpected git ${key}`);
   };
 }
@@ -528,9 +538,7 @@ describe("checkSteeringFreshness, remote and branch names from settings", () => 
     });
     expect(v.status).toBe("unknown");
     expect(v.notes.join(" ")).toContain('no remote named "evil"');
-    expect(
-      run.mock.calls.some(([args]) => args[0] === "fetch"),
-    ).toBe(false);
+    expect(run.mock.calls.some(([args]) => args[0] === "fetch")).toBe(false);
   });
 });
 
@@ -644,5 +652,72 @@ describe("checkSteeringFreshness, governed files excluded from the working tree"
     expect(v.status).toBe("behind");
     expect(v.missing.map((c) => c.path)).toEqual([".oxagen/rules/ctx.a.toml"]);
     expect(v.notes.join(" ")).toContain("excluded from this checkout");
+  });
+
+  // The `S` bit says git is not looking at the file, not that the file is
+  // gone. A record materialised by hand and edited is on disk, and every
+  // diff ignored the edit; calling it missing sent it to the auto-sync as
+  // safe to restore, and the restore overwrote the edit without `force`.
+  it("leaves a skip-worktree record alone when it is on disk", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steering-check-"));
+    await mkdir(join(root, ".oxagen/rules"), { recursive: true });
+    await writeFile(join(root, ".oxagen/rules/ctx.a.toml"), "edited by hand\n");
+    const v = await check(
+      {
+        ...table(),
+        "rev-parse --show-toplevel": root,
+        "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+          "S .oxagen/rules/ctx.a.toml\0S .oxagen/rules/ctx.b.toml\0",
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("behind");
+    // Only the record that is really absent is missing; the edited one is not
+    // handed to the sync.
+    expect(v.missing.map((c) => c.path)).toEqual([".oxagen/rules/ctx.b.toml"]);
+  });
+
+  it("is current when every skip-worktree record is on disk", async () => {
+    const root = await mkdtemp(join(tmpdir(), "steering-check-"));
+    await mkdir(join(root, ".oxagen/rules"), { recursive: true });
+    await writeFile(join(root, ".oxagen/rules/ctx.a.toml"), "edited by hand\n");
+    const v = await check(
+      {
+        ...table(),
+        "rev-parse --show-toplevel": root,
+        "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+          "S .oxagen/rules/ctx.a.toml\0",
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("current");
+    expect(v.missing).toEqual([]);
+  });
+
+  // An entry that exists in this index alone, under skip-worktree, has
+  // nothing in production to restore from; naming it missing would make the
+  // sync's `restore --source` fail on a pathspec its source lacks.
+  it("does not name a skipped record production does not hold", async () => {
+    const v = await check({
+      ...table(),
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+        "S .oxagen/rules/ctx.only-here.toml\0",
+      [`ls-tree -r --name-only -z ${REMOTE} -- .oxagen/rules/ctx.only-here.toml`]:
+        "",
+    });
+    expect(v.status).toBe("current");
+    expect(v.missing).toEqual([]);
+  });
+
+  it("is unknown when production's tree cannot be read", async () => {
+    const v = await check({
+      ...table(),
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+        "S .oxagen/rules/ctx.a.toml\0",
+      [`ls-tree -r --name-only -z ${REMOTE} -- .oxagen/rules/ctx.a.toml`]:
+        new Error("bad object"),
+    });
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("could not read");
   });
 });

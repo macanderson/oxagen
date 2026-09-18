@@ -270,7 +270,9 @@ export async function configuredRemotes(ctx: GitContext): Promise<string[]> {
 
 /** Is this a shallow clone? (`--show-toplevel` answered, so `--is-shallow-repository` will too.) */
 export async function isShallow(ctx: GitContext): Promise<boolean> {
-  return (await gitOrNull(ctx, "rev-parse", "--is-shallow-repository")) === "true";
+  return (
+    (await gitOrNull(ctx, "rev-parse", "--is-shallow-repository")) === "true"
+  );
 }
 
 /**
@@ -315,6 +317,36 @@ export async function skipWorktreePaths(
     if (entry.startsWith("S ")) out.push(entry.slice(2));
   }
   return out;
+}
+
+/**
+ * Which of `paths` exist as blobs in the tree of `rev`. A skip-worktree
+ * entry is only worth restoring from production if production has it; one
+ * that exists only in this index (a staged addition under skip-worktree)
+ * would make `restore --source=<rev>` fail on a pathspec the source lacks.
+ * Batched so a very large rules directory cannot overrun the argv limit.
+ */
+export async function pathsInTree(
+  ctx: GitContext,
+  rev: string,
+  paths: readonly string[],
+): Promise<string[]> {
+  const present = new Set<string>();
+  for (let i = 0; i < paths.length; i += 200) {
+    const batch = paths.slice(i, i + 200);
+    const raw = await git(
+      ctx,
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "-z",
+      rev,
+      "--",
+      ...batch,
+    );
+    for (const path of raw.split("\0")) if (path.length > 0) present.add(path);
+  }
+  return paths.filter((path) => present.has(path));
 }
 
 /** Does this ref resolve? */

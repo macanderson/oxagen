@@ -7,6 +7,7 @@ import {
   gitOrNull,
   parseNameStatus,
   parsePorcelain,
+  pathsInTree,
   type GitContext,
   type GitRunner,
 } from "./git";
@@ -92,6 +93,39 @@ describe("parsePorcelain", () => {
 
   it("is empty for a clean tree", () => {
     expect(parsePorcelain("")).toEqual([]);
+  });
+});
+
+describe("pathsInTree", () => {
+  it("keeps only the paths the tree holds, in the order asked", async () => {
+    const run = runner({
+      "ls-tree -r --name-only -z deadbeef -- .oxagen/rules/a.toml .oxagen/rules/b.toml .oxagen/rules/c.toml":
+        ".oxagen/rules/c.toml\0.oxagen/rules/a.toml\0",
+    });
+    await expect(
+      pathsInTree(ctx(run), "deadbeef", [
+        ".oxagen/rules/a.toml",
+        ".oxagen/rules/b.toml",
+        ".oxagen/rules/c.toml",
+      ]),
+    ).resolves.toEqual([".oxagen/rules/a.toml", ".oxagen/rules/c.toml"]);
+  });
+
+  it("asks nothing for an empty list", async () => {
+    const run = vi.fn<GitRunner>();
+    await expect(pathsInTree(ctx(run), "deadbeef", [])).resolves.toEqual([]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("lets a failing ls-tree reject, so the caller can report unknown", async () => {
+    const run = runner({
+      "ls-tree -r --name-only -z deadbeef -- .oxagen/rules/a.toml": new Error(
+        "bad object",
+      ),
+    });
+    await expect(
+      pathsInTree(ctx(run), "deadbeef", [".oxagen/rules/a.toml"]),
+    ).rejects.toThrow("bad object");
   });
 });
 
