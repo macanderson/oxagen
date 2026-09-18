@@ -295,6 +295,7 @@ describe("the GitHub seam", () => {
         headSha: "head2",
         merged: true,
         mergeCommitSha: "m2",
+        mergedAt: "2026-09-15T09:16:40.000Z",
       })
       .mockRejectedValueOnce(new Error("GitHub API error 404: Not Found"));
     const { gh } = seam(fakeClient({ getPullRequest }));
@@ -304,6 +305,7 @@ describe("the GitHub seam", () => {
       headSha: "head2",
       merged: true,
       mergeCommitSha: "m2",
+      mergedAt: new Date("2026-09-15T09:16:40.000Z"),
     });
     expect(getPullRequest).toHaveBeenCalledWith({
       owner: "a-intel",

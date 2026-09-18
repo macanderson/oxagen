@@ -451,6 +451,8 @@ export const REPO: SteeringRepository = {
  * deleted.
  */
 export class FakeGitHub implements SteeringGitHub {
+  /** GitHub's clock: what a merge is stamped `mergedAt` with. */
+  now: () => Date = () => new Date();
   /** `${sha}:${path}` → content. */
   files = new Map<string, string>();
   /** branch → head sha. */
@@ -468,6 +470,7 @@ export class FakeGitHub implements SteeringGitHub {
     state: "open" | "closed";
     merged: boolean;
     mergeCommitSha: string | null;
+    mergedAt: Date | null;
     /** The head sha at close or merge; the branch may be gone after. */
     headSha: string;
   }[] = [];
@@ -585,6 +588,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "open",
       merged: false,
       mergeCommitSha: null,
+      mergedAt: null,
       headSha: this.shaOf(args.head),
     });
     return { number: this.prNumber, htmlUrl: pullUrl(this.prNumber) };
@@ -621,6 +625,7 @@ export class FakeGitHub implements SteeringGitHub {
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
+      mergedAt: pr.mergedAt,
     };
   }
   async reportCheckRun(
@@ -667,6 +672,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "closed",
       merged: true,
       mergeCommitSha: mergeSha,
+      mergedAt: this.now(),
       headSha: head,
     });
     return { sha: mergeSha };
@@ -697,15 +703,20 @@ export function harness(files: Record<string, string> = {}): Harness {
   roleOf.set(REVIEWER, { org: "Admin", workspace: null });
   const events: SecurityEventInput[] = [];
   let tick = Date.parse("2026-09-15T09:16:40.000Z");
+  const now = () => new Date((tick += 1000));
+  const github = new FakeGitHub(files);
+  // One clock for GitHub and the platform, so a test can tell a merge's
+  // time apart from the time of the call that published it.
+  github.now = now;
   return {
     store: new MemoryStore(),
-    github: new FakeGitHub(files),
+    github,
     roles: {
       orgRole: async (_org, userId) => roleOf.get(userId)?.org ?? null,
       workspaceRole: async (_org, _ws, userId) =>
         roleOf.get(userId)?.workspace ?? null,
     },
-    now: () => new Date((tick += 1000)),
+    now,
     emit: (e) => {
       events.push(e);
     },
