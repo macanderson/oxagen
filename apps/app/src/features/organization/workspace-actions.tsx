@@ -4,6 +4,15 @@
 // this lane adds to rev1: between the organization's first workspace, which
 // `create_org` makes, and this form, a second one was made through the API,
 // MCP or CLI. Each write reloads the page it changed.
+//
+// A workspace is created with its main repository (MC spec §10.1, §17 M0: a
+// workspace cannot be created without one), so the create form asks for it as
+// one `owner/name` field beside the name and the slug. The person names only
+// the repository, never an installation: `create_workspace` finds the GitHub
+// App installation from the owner through the org's GitHub authorization, and
+// refuses with a reason `action-failure.ts` has a sentence for when it cannot.
+// The edit form keeps its two fields, because which repository is main does
+// not change from here (spec §10.1 makes that an org owner's decision).
 import { useTranslations } from "next-intl";
 import type { Workspace } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
@@ -12,6 +21,7 @@ import { useNavigate } from "@/ui/navigation";
 import {
   archiveWorkspace,
   createWorkspace,
+  type NewWorkspaceDraft,
   renameWorkspace,
   type WorkspaceDraft,
 } from "./actions";
@@ -21,18 +31,27 @@ function draftOf(form: FormData): WorkspaceDraft {
   return { name: textValue(form, "name"), slug: textValue(form, "slug") };
 }
 
+/** The create form's draft: the two fields above and the main repository as typed. */
+function newDraftOf(form: FormData): NewWorkspaceDraft {
+  return { ...draftOf(form), mainRepo: textValue(form, "mainRepo") };
+}
+
 /**
- * The name and slug a workspace write takes. Each field is a `Field`, so the
- * slug's hint reaches assistive technology through `aria-describedby` rather
- * than folding into the input's accessible name, and `idPrefix` keeps the two
- * dialogs' ids apart when both are mounted.
+ * The name and slug a workspace write takes, and for a create the main
+ * repository too. Each field is a `Field`, so a hint reaches assistive
+ * technology through `aria-describedby` rather than folding into the input's
+ * accessible name, and `idPrefix` keeps the two dialogs' ids apart when both
+ * are mounted.
  */
 function Fields({
   idPrefix,
   workspace,
+  mainRepo = false,
 }: {
   idPrefix: string;
   workspace?: Workspace;
+  /** Ask for the main repository: the create form only. */
+  mainRepo?: boolean;
 }) {
   const t = useTranslations("organization.actions.fields");
   return (
@@ -52,6 +71,19 @@ function Fields({
         required
         defaultValue={workspace?.slug}
       />
+      {mainRepo ? (
+        <Field
+          id={`${idPrefix}-main-repo`}
+          name="mainRepo"
+          label={t("mainRepo")}
+          hint={t("mainRepoHint")}
+          required
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          className="font-mono"
+        />
+      ) : null}
     </>
   );
 }
@@ -68,7 +100,7 @@ export function CreateWorkspace({ org }: { org: string }) {
         pending: t("createWorkspace.pending"),
       }}
       testId="create-workspace"
-      submit={(form) => createWorkspace(org, draftOf(form))}
+      submit={(form) => createWorkspace(org, newDraftOf(form))}
       onDone={(created) => {
         // WL-62: the workspace that was just made is where the operator wants to
         // be, so the write's slug is what the navigation uses — the org page
@@ -76,7 +108,7 @@ export function CreateWorkspace({ org }: { org: string }) {
         navigate.replace(routes.fleet(org, created.slug));
       }}
     >
-      <Fields idPrefix="create-workspace" />
+      <Fields idPrefix="create-workspace" mainRepo />
     </WriteDialog>
   );
 }

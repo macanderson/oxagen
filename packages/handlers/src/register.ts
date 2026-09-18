@@ -1596,6 +1596,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .repositoryMainBindHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "link_repository",
+    async () =>
+      (await import("./repository.link"))
+        .repositoryLinkHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "unlink_repository",
+    async () =>
+      (await import("./repository.unlink"))
+        .repositoryUnlinkHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_repositories",
+    async () =>
+      (await import("./repository.list"))
+        .repositoryListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_main_repository",
     async () =>
       (await import("./repository.main.get"))

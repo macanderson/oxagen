@@ -18,8 +18,16 @@ export interface ClaudeCodeContext {
   now?: () => number;
 }
 
+/**
+ * Names that carry a credential, by themselves or by convention. `HEADERS`
+ * and `AUTH` are here because a header block is where a bearer token travels
+ * without the word "token" in the variable name: the daemon's own
+ * `OTEL_EXPORTER_OTLP_HEADERS` is `Authorization=Bearer <local token>`, and
+ * before this entry it rode every `agent_start` snapshot into the control
+ * plane.
+ */
 export const DEFAULT_SECRET_ENV_PATTERN =
-  /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE/i;
+  /KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE|HEADERS|AUTH/i;
 
 export function digestText(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;

@@ -3,3 +3,4 @@ export * from "./merkle";
 export * from "./redaction";
 export * from "./replay-grade";
 export * from "./attestation";
+export * from "./frame-body";

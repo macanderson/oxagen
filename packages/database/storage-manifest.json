@@ -1,102 +1,6 @@
 {
   "capabilities": [
     {
-      "domain": "org",
-      "name": "accept_member_invite",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "add_conversation_attachment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "add_org_member",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "add_plugin_registry",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "onboarding",
-      "name": "advance_onboarding",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "append_record",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "archive_conversation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "archive_workspace",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "assistant",
-      "name": "ask_assistant",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "assign_agent_role",
       "reads": [],
@@ -104,15 +8,6 @@
         "agent",
         "api",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repository",
-      "name": "attach_github_installation",
-      "reads": [],
-      "surfaces": [
-        "api"
       ],
       "writes": []
     },
@@ -128,56 +23,8 @@
       "writes": []
     },
     {
-      "domain": "auth",
-      "name": "authorize_cli",
-      "reads": [],
-      "surfaces": [],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "bind_agent_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repository",
-      "name": "bind_main_repository",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "bisect_runs",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "browse_plugin_catalog",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "change_member_role",
       "reads": [],
       "surfaces": [
         "agent",
@@ -194,15 +41,6 @@
         "agent",
         "api",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "reference",
-      "name": "cite_reference",
-      "reads": [],
-      "surfaces": [
-        "agent"
       ],
       "writes": []
     },
@@ -227,137 +65,8 @@
       "writes": []
     },
     {
-      "domain": "integration",
-      "name": "configure_integration",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "configure_repo",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "create_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "api_key",
-      "name": "create_api_key",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "create_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "create_enrollment_token",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "create_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "create_org",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "iam",
-      "name": "create_role",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "create_schema_version",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "telemetry",
-      "name": "create_stella_enrollment",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "create_tacho_enrollment",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "create_workspace",
       "reads": [],
       "surfaces": [
         "agent",
@@ -378,79 +87,12 @@
       "writes": []
     },
     {
-      "domain": "org",
-      "name": "decline_member_invite",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "delete_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
         "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "approval_rule",
-      "name": "delete_approval_rule",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "delete_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "delete_conversation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "delete_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "delete_integration",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
         "mcp"
       ],
       "writes": []
@@ -468,80 +110,6 @@
     {
       "domain": "agent",
       "name": "delete_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "delete_model_credential",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "iam",
-      "name": "delete_role",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "delete_schema",
-      "reads": [],
-      "surfaces": [
-        "agent"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "delete_schema_label",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "delete_schema_property",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "delete_schema_relationship",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "delete_secret_key",
       "reads": [],
       "surfaces": [
         "agent",
@@ -573,27 +141,6 @@
       "writes": []
     },
     {
-      "domain": "schema",
-      "name": "diff_schema_versions",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "dismiss_finding",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "dismiss_memory_promotion",
       "reads": [],
@@ -601,147 +148,6 @@
         "agent",
         "api",
         "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "dismiss_proposal",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "control",
-      "name": "dispatch_command",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "dispatch_schema_reconcile",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "enroll_host",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "privacy",
-      "name": "erase_data",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "audit",
-      "name": "export_audit_events",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "export_conversation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "privacy",
-      "name": "export_data",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "export_run",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "export_schema",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "export_secrets",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "export_statement",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "control",
-      "name": "fetch_commands",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "fork_run",
-      "reads": [],
-      "surfaces": [
-        "api"
       ],
       "writes": []
     },
@@ -789,158 +195,8 @@
       "writes": []
     },
     {
-      "domain": "assistant",
-      "name": "get_assistant_engine",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "get_auth_alerts",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "approval_rule",
-      "name": "get_auto_eligibility",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "get_budget_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "capability",
-      "name": "get_capability_registry",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "get_catalog_plugin",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "get_ci_status",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "get_citation_stats",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "get_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "get_connection_mappings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "get_context_pr",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_contract_rate",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "get_data_plane",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "get_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_evidence_retention",
       "reads": [],
       "surfaces": [
         "agent",
@@ -961,580 +217,8 @@
       "writes": []
     },
     {
-      "domain": "spend",
-      "name": "get_finding_evidence",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "onboarding",
-      "name": "get_first_frame",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_gau_bucket",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "get_graph_stats",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "system",
-      "name": "get_install_instructions",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "get_integration",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "get_integration_metrics",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repository",
-      "name": "get_main_repository",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "get_mandate",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "get_memory_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "chat",
-      "name": "get_message_execution",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "get_model_credential",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "get_model_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "shell",
-      "name": "get_nav_counts",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "get_node",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "get_node_labels",
-      "reads": [],
-      "surfaces": [
-        "agent"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "onboarding",
-      "name": "get_onboarding_state",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "ontology",
-      "name": "get_ontology_neighbors",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "get_org_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "get_plugin_schema",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "get_pr",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "get_pr_diff",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "get_prompt_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_rate_card",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "get_reconcile_status",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "get_record",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "get_registry_config",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "get_repo_metrics",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "router",
-      "name": "get_routing_policy",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "get_run",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "get_run_cost",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "get_run_frame_body",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "get_run_proof",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "get_run_transcript",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "schema",
-      "name": "get_schema_registry",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "get_spend",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_spend_budget",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "get_spend_drill",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "get_steering_freshness",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_subscription",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "get_tacho_bundle",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "get_tacho_session",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "get_usage_breakdown",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "get_user_budget",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "get_user_preferences",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "get_workspace_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "get_workspace_user_preferences",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "grant_mandate",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "import_env_secrets",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tool",
-      "name": "import_tools",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "telemetry",
-      "name": "ingest_stella_operational_telemetry",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "ingest_tacho_events",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "install_integration",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "install_plugin",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "install_plugins_bulk",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1598,26 +282,6 @@
       "writes": []
     },
     {
-      "domain": "api_key",
-      "name": "list_api_keys",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "approval_rule",
-      "name": "list_approval_rules",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "list_approvals",
       "reads": [],
@@ -1628,210 +292,8 @@
       "writes": []
     },
     {
-      "domain": "repo",
-      "name": "list_branches",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "capability",
-      "name": "list_capability_registry",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "control",
-      "name": "list_commands",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "list_connections",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "list_context_records",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "list_conversation_files",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "list_conversations",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "credential",
-      "name": "list_credential_grants",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "list_environments",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "telemetry",
-      "name": "list_error_clusters",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "agent",
       "name": "list_executions",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "list_findings",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repository",
-      "name": "list_github_installations",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "iam",
-      "name": "list_iam_roles",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "list_incidents",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repository",
-      "name": "list_installation_repositories",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "list_integrations",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "list_invoices",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "kill_switch",
-      "name": "list_kill_switches",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "list_mandates",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1857,16 +319,6 @@
       "reads": [],
       "surfaces": [
         "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "list_members",
-      "reads": [],
-      "surfaces": [
         "api",
         "mcp"
       ],
@@ -1906,8 +358,1112 @@
       "writes": []
     },
     {
-      "domain": "model",
-      "name": "list_model_capabilities",
+      "domain": "agent",
+      "name": "parse_memory_import",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "promote_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "publish_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "recall_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "record_execution",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "register_agent",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "register_mcp_server",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "resolve_approval",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "resolve_mcp_consent",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "resolve_mcp_servers",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "retire_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "revise_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "revoke_agent_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "rotate_agent_credential",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "save_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "set_mcp_enabled",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suggest_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suggest_promotion_rationales",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "summarize_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "suspend_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "unbind_agent_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "update_agent_def",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "update_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "update_memory_policy",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "write_memory",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "api_key",
+      "name": "create_api_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "api_key",
+      "name": "list_api_keys",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "api_key",
+      "name": "revoke_api_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "api_key",
+      "name": "rotate_api_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "delete_approval_rule",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "get_auto_eligibility",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "list_approval_rules",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "set_approval_rule_enabled",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "approval_rule",
+      "name": "set_approval_rules",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "asset",
+      "name": "upload_asset",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "assistant",
+      "name": "ask_assistant",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "assistant",
+      "name": "get_assistant_engine",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "audit",
+      "name": "export_audit_events",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "audit",
+      "name": "query_audit_log",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "auth",
+      "name": "authorize_cli",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_contract_rate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_evidence_retention",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_gau_bucket",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_rate_card",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_subscription",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "get_usage_breakdown",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "list_invoices",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "preview_action_cost",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "purchase_credits",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "purchase_gau_bucket",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "set_auto_topup",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "set_org_billing_terms",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "set_spend_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "billing",
+      "name": "start_subscription_upgrade",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "capability",
+      "name": "get_capability_registry",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "capability",
+      "name": "list_capability_registry",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "chat",
+      "name": "get_message_execution",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "chat",
+      "name": "send_message",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "command",
+      "name": "search_command_menu",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "command",
+      "name": "suggest_commands",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "create_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "delete_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "get_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "get_connection_mappings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "list_connections",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "pause_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "preview_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "set_connection_mappings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "suggest_connection_mappings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "connection",
+      "name": "update_connection",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "append_record",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "dismiss_proposal",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_context_pr",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_record",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "get_steering_freshness",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "list_context_records",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "list_proposals",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "list_records",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "merge_context_pr",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "open_context_pr",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "promote_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "propose_record",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "context",
+      "name": "publish_context_record",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "dispatch_command",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "fetch_commands",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "control",
+      "name": "list_commands",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "add_conversation_attachment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "archive_conversation",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "delete_conversation",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "export_conversation",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "list_conversation_files",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "list_conversations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "post_conversation_message",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "purge_conversations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "conversation",
+      "name": "rename_conversation",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "list_price_entries",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "credential",
+      "name": "list_credential_grants",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "create_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "delete_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "get_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "list_environments",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "set_default_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "environment",
+      "name": "update_environment",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "evidence",
+      "name": "set_disclosure_grain",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "graph",
+      "name": "get_graph_stats",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1918,7 +1474,277 @@
     },
     {
       "domain": "graph",
+      "name": "get_node",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "graph",
+      "name": "get_node_labels",
+      "reads": [],
+      "surfaces": [
+        "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "graph",
       "name": "list_nodes",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "graph",
+      "name": "search_graph",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "graph",
+      "name": "search_nodes",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "create_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "delete_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "list_iam_roles",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "iam",
+      "name": "set_role_grants",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "configure_integration",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "delete_integration",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "get_integration",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "get_integration_metrics",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "install_integration",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "list_integrations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "integration",
+      "name": "sync_integration",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "kill_switch",
+      "name": "list_kill_switches",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "kill_switch",
+      "name": "set_kill_switch",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "get_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "grant_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "list_mandates",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "request_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "revoke_mandate",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "mandate",
+      "name": "update_mandate_limits",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "model",
+      "name": "list_model_capabilities",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1939,8 +1765,307 @@
       "writes": []
     },
     {
+      "domain": "notification",
+      "name": "mark_notification",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "onboarding",
+      "name": "advance_onboarding",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "onboarding",
+      "name": "get_first_frame",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "onboarding",
+      "name": "get_onboarding_state",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "ontology",
+      "name": "get_ontology_neighbors",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "ontology",
+      "name": "query_ontology",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "accept_member_invite",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "add_org_member",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "change_member_role",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "create_org",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "decline_member_invite",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "delete_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "get_data_plane",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "get_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "get_org_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "list_members",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "list_orgs",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "remove_org_member",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "set_data_plane",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "set_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "update_org_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "org",
+      "name": "verify_model_credential",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "add_plugin_registry",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "browse_plugin_catalog",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "get_auth_alerts",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "get_catalog_plugin",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "get_plugin_schema",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "install_plugin",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "install_plugins_bulk",
       "reads": [],
       "surfaces": [
         "agent",
@@ -1983,8 +2108,74 @@
       "writes": []
     },
     {
-      "domain": "cost",
-      "name": "list_price_entries",
+      "domain": "plugin",
+      "name": "reauth_plugin_credential",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "remove_plugin_registry",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "revoke_plugin_credential",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "set_auth_alerts",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "set_plugin_enabled",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "set_plugin_secret",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "sync_plugin_catalog",
       "reads": [],
       "surfaces": [
         "api",
@@ -1993,8 +2184,367 @@
       "writes": []
     },
     {
-      "domain": "context",
-      "name": "list_proposals",
+      "domain": "plugin",
+      "name": "uninstall_plugin",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "plugin",
+      "name": "validate_plugin_schema",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "privacy",
+      "name": "erase_data",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "privacy",
+      "name": "export_data",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "reference",
+      "name": "cite_reference",
+      "reads": [],
+      "surfaces": [
+        "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "reference",
+      "name": "search_references",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "configure_repo",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "get_ci_status",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "get_pr",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "get_pr_diff",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "get_repo_metrics",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "list_branches",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "pause_repo",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "resume_repo",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repo",
+      "name": "sync_repo",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "attach_github_installation",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "bind_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "get_main_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "link_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_github_installations",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_installation_repositories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_repositories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "unlink_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "router",
+      "name": "get_routing_policy",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "router",
+      "name": "list_routing_stats",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "router",
+      "name": "preview_routing_decision",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "router",
+      "name": "set_routing_policy",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "bisect_runs",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "export_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "fork_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_cost",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_frame_body",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_proof",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_transcript",
       "reads": [],
       "surfaces": [
         "api",
@@ -2013,19 +2563,27 @@
       "writes": []
     },
     {
-      "domain": "context",
-      "name": "list_records",
+      "domain": "run",
+      "name": "list_runs",
       "reads": [],
       "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
       "writes": []
     },
     {
-      "domain": "router",
-      "name": "list_routing_stats",
+      "domain": "run",
+      "name": "summarize_run",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "create_schema_version",
       "reads": [],
       "surfaces": [
         "api",
@@ -2035,11 +2593,109 @@
       "writes": []
     },
     {
-      "domain": "run",
-      "name": "list_runs",
+      "domain": "schema",
+      "name": "delete_schema",
+      "reads": [],
+      "surfaces": [
+        "agent"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "delete_schema_label",
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "delete_schema_property",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "delete_schema_relationship",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "diff_schema_versions",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "dispatch_schema_reconcile",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "export_schema",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "get_reconcile_status",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "get_registry_config",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "schema",
+      "name": "get_schema_registry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2068,350 +2724,12 @@
       "writes": []
     },
     {
-      "domain": "secret",
-      "name": "list_secret_keys",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "skill",
-      "name": "list_skills",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "list_tacho_hosts",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "list_tacho_sessions",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tool",
-      "name": "list_tool_declarations",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tool",
-      "name": "list_tool_versions",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "list_waste",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "list_workspaces",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tools",
-      "name": "load_tools",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "notification",
-      "name": "mark_notification",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "merge_context_pr",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "open_context_pr",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "parse_memory_import",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "pause_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "pause_repo",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "pin_schema_version",
       "reads": [],
       "surfaces": [
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "post_conversation_message",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "preview_action_cost",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "preview_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "router",
-      "name": "preview_routing_decision",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "promote_context_record",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "promote_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "propose_record",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "publish_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "context",
-      "name": "publish_context_record",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tool",
-      "name": "publish_tool_declaration",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "purchase_credits",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "purchase_gau_bucket",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "purge_conversations",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "audit",
-      "name": "query_audit_log",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "ontology",
-      "name": "query_ontology",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "reauth_plugin_credential",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "recall_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -2429,539 +2747,12 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "record_execution",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "spend",
-      "name": "record_finding_fix",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "register_agent",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "register_mcp_server",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "remove_org_member",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "remove_plugin_registry",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "conversation",
-      "name": "rename_conversation",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "request_mandate",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "resolve_approval",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "resolve_mcp_consent",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "resolve_mcp_servers",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "resume_repo",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "retire_agent",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "reveal_secret",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "revise_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "revoke_agent_role",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "api_key",
-      "name": "revoke_api_key",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "revoke_mandate",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "revoke_plugin_credential",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tacho",
-      "name": "revoke_tacho_enrollment",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "rotate_agent_credential",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "api_key",
-      "name": "rotate_api_key",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "run_schema_chat",
       "reads": [],
       "surfaces": [
         "agent",
         "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "save_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "command",
-      "name": "search_command_menu",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "search_graph",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "graph",
-      "name": "search_nodes",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "reference",
-      "name": "search_references",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tools",
-      "name": "search_tools",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "chat",
-      "name": "send_message",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "send_workspace_invite",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "approval_rule",
-      "name": "set_approval_rule_enabled",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "approval_rule",
-      "name": "set_approval_rules",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "set_auth_alerts",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "set_auto_topup",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "set_connection_mappings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "set_data_plane",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "set_default_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "evidence",
-      "name": "set_disclosure_grain",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "kill_switch",
-      "name": "set_kill_switch",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "set_mcp_enabled",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "set_model_credential",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "set_org_billing_terms",
-      "reads": [],
-      "surfaces": [],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "set_plugin_enabled",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "set_plugin_secret",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "set_preferences",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "iam",
-      "name": "set_role_grants",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "router",
-      "name": "set_routing_policy",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "set_secret_value",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "billing",
-      "name": "set_spend_budget",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "tool",
-      "name": "set_tool_classification",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
       ],
       "writes": []
     },
@@ -2978,323 +2769,12 @@
       "writes": []
     },
     {
-      "domain": "billing",
-      "name": "start_subscription_upgrade",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "suggest_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "command",
-      "name": "suggest_commands",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "suggest_connection_mappings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "suggest_promotion_rationales",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "summarize_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "run",
-      "name": "summarize_run",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "suspend_agent",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "integration",
-      "name": "sync_integration",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "sync_plugin_catalog",
-      "reads": [],
-      "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "repo",
-      "name": "sync_repo",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "toggle_schema",
       "reads": [],
       "surfaces": [
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "unbind_agent_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "uninstall_plugin",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "secret",
-      "name": "unset_secret_value",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "update_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "update_budget_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "connection",
-      "name": "update_connection",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "environment",
-      "name": "update_environment",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "mandate",
-      "name": "update_mandate_limits",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "update_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "update_memory_policy",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "update_model_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "org",
-      "name": "update_org_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "update_profile",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "update_prompt_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "update_user_budget",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "workspace",
-      "name": "update_workspace_settings",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "user",
-      "name": "update_workspace_user_preferences",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "asset",
-      "name": "upload_asset",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -3336,28 +2816,6 @@
       "writes": []
     },
     {
-      "domain": "secret",
-      "name": "upsert_secret_key",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "plugin",
-      "name": "validate_plugin_schema",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "schema",
       "name": "validate_schema_node",
       "reads": [],
@@ -3382,8 +2840,19 @@
       "writes": []
     },
     {
-      "domain": "org",
-      "name": "verify_model_credential",
+      "domain": "secret",
+      "name": "delete_secret_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "export_secrets",
       "reads": [],
       "surfaces": [
         "api",
@@ -3392,8 +2861,572 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "write_memory",
+      "domain": "secret",
+      "name": "import_env_secrets",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "list_secret_keys",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "reveal_secret",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "set_secret_value",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "unset_secret_value",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "secret",
+      "name": "upsert_secret_key",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "shell",
+      "name": "get_nav_counts",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "skill",
+      "name": "list_skills",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "dismiss_finding",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "export_statement",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_finding_evidence",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_spend",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "get_spend_drill",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "list_findings",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "list_waste",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "spend",
+      "name": "record_finding_fix",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "system",
+      "name": "get_install_instructions",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "create_enrollment_token",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "create_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "enroll_host",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "get_tacho_bundle",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "get_tacho_session",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "ingest_tacho_events",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_incidents",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_hosts",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "list_tacho_sessions",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "revoke_tacho_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "telemetry",
+      "name": "create_stella_enrollment",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "telemetry",
+      "name": "ingest_stella_operational_telemetry",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "telemetry",
+      "name": "list_error_clusters",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "import_tools",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "list_tool_declarations",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "list_tool_versions",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "publish_tool_declaration",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tool",
+      "name": "set_tool_classification",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tools",
+      "name": "load_tools",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "tools",
+      "name": "search_tools",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "get_user_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "get_user_preferences",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "get_workspace_user_preferences",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "set_preferences",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "update_profile",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "update_user_budget",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "user",
+      "name": "update_workspace_user_preferences",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "archive_workspace",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "create_workspace",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "get_budget_policy",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "get_model_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "get_prompt_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "get_workspace_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "list_workspaces",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "send_workspace_invite",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "update_budget_policy",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "update_model_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "update_prompt_settings",
+      "reads": [],
+      "surfaces": [
+        "agent",
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "workspace",
+      "name": "update_workspace_settings",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3403,7 +3436,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0cbd75b4ca688240b6487ab9acae35fef457fad850ddebadce95d460a4a027af",
+  "contentHash": "09cd9fd1bd5529412e77384d5aa917e8656239afd14303626fcd16f2b7f6906e",
   "domains": [
     {
       "name": "agent",
@@ -3801,62 +3834,6 @@
   "stores": [
     {
       "domains": [
-        "agent",
-        "ai",
-        "auth",
-        "billing",
-        "chat",
-        "content",
-        "cost",
-        "environments",
-        "evidence",
-        "iam",
-        "ingestion",
-        "mcp",
-        "notification",
-        "org",
-        "plugin",
-        "privacy",
-        "ratelimit",
-        "schema_registry",
-        "security",
-        "tacho",
-        "tools",
-        "workspace"
-      ],
-      "kind": "postgres",
-      "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 131
-    },
-    {
-      "domains": [
-        "agent",
-        "billing",
-        "eval",
-        "telemetry"
-      ],
-      "kind": "clickhouse",
-      "purpose": "Append-only runtime events — execution events, logs, metrics, traces, token analytics, telemetry.",
-      "tableCount": 11
-    },
-    {
-      "domains": [
-        "agent",
-        "auth",
-        "chat",
-        "content",
-        "graph",
-        "ingestion",
-        "org",
-        "workflow",
-        "workspace"
-      ],
-      "kind": "neo4j",
-      "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 28
-    },
-    {
-      "domains": [
         "content"
       ],
       "kind": "blob",
@@ -3865,1232 +3842,6 @@
     }
   ],
   "tables": [
-    {
-      "columns": [],
-      "domain": "content",
-      "id": "blob:avatar",
-      "meta": {
-        "access": "public",
-        "assetKinds": "avatar",
-        "description": "Public profile/logo images; the blob URL is stored on the owning entity's avatar_url column (no generated_assets row).",
-        "driver": "vercel-blob",
-        "referencedBy": "postgres:agent.agents,postgres:auth.users,postgres:org.organizations,postgres:workspace.workspaces"
-      },
-      "name": "avatar",
-      "store": "blob",
-      "tenantScoped": true
-    },
-    {
-      "columns": [],
-      "domain": "content",
-      "id": "blob:evidence_body",
-      "meta": {
-        "access": "private",
-        "assetKinds": "evidence_body",
-        "description": "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<key id>/<sha256>; agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the reference (ADR-058).",
-        "driver": "vercel-blob",
-        "referencedBy": "postgres:agent.agent_run_events,postgres:tacho.sessions"
-      },
-      "name": "evidence_body",
-      "store": "blob",
-      "tenantScoped": true
-    },
-    {
-      "columns": [],
-      "domain": "content",
-      "id": "blob:evidence_segment",
-      "meta": {
-        "access": "private",
-        "assetKinds": "evidence_export,evidence_segment",
-        "description": "Per-seal archive segments (frame envelopes as zstd NDJSON, written once at seal) and export bundles; the seal's archive_segment_ref and run_exports.bundle_ref hold the reference (ADR-058).",
-        "driver": "vercel-blob",
-        "referencedBy": "postgres:agent.agent_run_attempt_seals,postgres:evidence.run_exports"
-      },
-      "name": "evidence_segment",
-      "store": "blob",
-      "tenantScoped": true
-    },
-    {
-      "columns": [],
-      "domain": "content",
-      "id": "blob:generated_asset",
-      "meta": {
-        "access": "private",
-        "assetKinds": "archive,document,image,pdf,presentation,spreadsheet,video",
-        "description": "Generated + uploaded media (chat attachments, exports, agent output); content.generated_assets is the source-of-truth reference row.",
-        "driver": "vercel-blob",
-        "referencedBy": "postgres:content.generated_assets"
-      },
-      "name": "generated_asset",
-      "store": "blob",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "ts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        },
-        {
-          "name": "dev_session",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "service",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "stream",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "level",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "message",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "host",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        }
-      ],
-      "domain": "telemetry",
-      "id": "clickhouse:dev_logs",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(dev_session, service, ts)",
-        "partitionBy": "toYYYYMMDD(ts)",
-        "ttl": "toDateTime(ts) + INTERVAL 14 DAY"
-      },
-      "name": "dev_logs",
-      "store": "clickhouse",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "dataset_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "item_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "target_kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "judge_model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "score",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float64"
-        },
-        {
-          "name": "correctness",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float64"
-        },
-        {
-          "name": "faithfulness",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float64"
-        },
-        {
-          "name": "passed",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "latency_ms",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "input_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "output_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "cost_usd_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Int64"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "error_class",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "output",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "rationale",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime"
-        }
-      ],
-      "domain": "eval",
-      "id": "clickhouse:eval_item_results",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, workspace_id, run_id, item_id, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
-      },
-      "name": "eval_item_results",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "task_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "task_group",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "repeat_idx",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt16"
-        },
-        {
-          "name": "harness",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "suite",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "agent_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "agent_version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "graph_code",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "graph_exec",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "graph_mem",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "warm",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "history_depth",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "passed",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "reward",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float64"
-        },
-        {
-          "name": "metrics",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Map(LowCardinality(String), Float64)"
-        },
-        {
-          "name": "labels",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Map(LowCardinality(String), String)"
-        },
-        {
-          "name": "started_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime"
-        }
-      ],
-      "domain": "eval",
-      "id": "clickhouse:eval_results",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(harness, suite, task_id, agent_version, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
-      },
-      "name": "eval_results",
-      "store": "clickhouse",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "run_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "run_group",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "schema_version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt16"
-        },
-        {
-          "name": "agent_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "agent_version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "harness",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "suite",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "suite_version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "git_sha",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "git_branch",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "environment",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "config_hash",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "graph_code",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "graph_exec",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "graph_mem",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "warm",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "history_depth",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "seed",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Int64"
-        },
-        {
-          "name": "n_tasks",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "n_passed",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "resolved_rate",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float64"
-        },
-        {
-          "name": "metrics",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Map(LowCardinality(String), Float64)"
-        },
-        {
-          "name": "labels",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Map(LowCardinality(String), String)"
-        },
-        {
-          "name": "notes",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "started_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        },
-        {
-          "name": "finished_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        },
-        {
-          "name": "updated_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "eval",
-      "id": "clickhouse:eval_runs",
-      "meta": {
-        "engine": "ReplacingMergeTree(updated_at)",
-        "orderBy": "(harness, suite, agent_name, agent_version, run_id)",
-        "partitionBy": "toYYYYMM(started_at)"
-      },
-      "name": "eval_runs",
-      "store": "clickhouse",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "event_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "event_type",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "source_system",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "stream_offset",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(String)"
-        },
-        {
-          "name": "payload",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "emitted_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "telemetry",
-      "id": "clickhouse:events",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, event_type, emitted_at)",
-        "partitionBy": "toYYYYMM(emitted_at)",
-        "ttl": "toDateTime(emitted_at) + INTERVAL 90 DAY"
-      },
-      "name": "events",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "execution_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "step_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UUID)"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "log_level",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "message",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "metadata",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "telemetry",
-      "id": "clickhouse:execution_logs",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, execution_id, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 90 DAY"
-      },
-      "name": "execution_logs",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "execution_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "task_class",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "signature_hash",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "tier",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "verified",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "verification_source",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "score",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "Float32"
-        },
-        {
-          "name": "cost_usd_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "latency_ms",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "surface",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "routing_mode",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "billing",
-      "id": "clickhouse:router_outcomes",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, task_class, model, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
-      },
-      "name": "router_outcomes",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "ts",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "session_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "stream",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "level",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "command",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "seq",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "line",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "exit_code",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(Int32)"
-        },
-        {
-          "name": "duration_ms",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UInt32)"
-        }
-      ],
-      "domain": "agent",
-      "id": "clickhouse:sandbox_log_events",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, workspace_id, session_id, ts)",
-        "partitionBy": "toYYYYMMDD(ts)",
-        "ttl": "toDateTime(ts) + INTERVAL 14 DAY"
-      },
-      "name": "sandbox_log_events",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "skill_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "skill_slug",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "skill_version",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "execution_step_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(String)"
-        },
-        {
-          "name": "surface",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "load_latency_ms",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UInt32)"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime"
-        }
-      ],
-      "domain": "agent",
-      "id": "clickhouse:skill_loads",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, workspace_id, skill_id, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "created_at + INTERVAL 365 DAY"
-      },
-      "name": "skill_loads",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "execution_step_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "model",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "input_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "output_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "cached_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "cache_write_tokens",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "cost_usd_micros",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt64"
-        },
-        {
-          "name": "duration_ms",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "surface",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "prompt_hash",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "String"
-        },
-        {
-          "name": "principal_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "principal_kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "user_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "capability_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "billing",
-      "id": "clickhouse:token_usage",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, created_at, execution_step_id)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
-      },
-      "name": "token_usage",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "invocation_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "org_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "workspace_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "capability_name",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "message_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "parent_message_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UUID)"
-        },
-        {
-          "name": "execution_step_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UUID)"
-        },
-        {
-          "name": "status",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "input_size_bytes",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "output_size_bytes",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "latency_ms",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt32"
-        },
-        {
-          "name": "error_class",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(String)"
-        },
-        {
-          "name": "external_provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "external_server_id",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "Nullable(UUID)"
-        },
-        {
-          "name": "risk_level",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "required_approval",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UInt8"
-        },
-        {
-          "name": "surface",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "provider",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "principal_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "principal_kind",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "LowCardinality(String)"
-        },
-        {
-          "name": "user_id",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "UUID"
-        },
-        {
-          "name": "created_at",
-          "nullable": false,
-          "primaryKey": false,
-          "type": "DateTime64(3)"
-        }
-      ],
-      "domain": "telemetry",
-      "id": "clickhouse:tool_invocations",
-      "meta": {
-        "engine": "MergeTree()",
-        "orderBy": "(org_id, capability_name, created_at)",
-        "partitionBy": "toYYYYMM(created_at)",
-        "ttl": "toDateTime(created_at) + INTERVAL 180 DAY"
-      },
-      "name": "tool_invocations",
-      "store": "clickhouse",
-      "tenantScoped": true
-    },
     {
       "columns": [
         {
@@ -5242,124 +3993,6 @@
     {
       "columns": [
         {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "chat",
-      "id": "neo4j:Conversation",
-      "meta": {
-        "constraints": "conversation_public_id"
-      },
-      "name": "Conversation",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "id",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "graph",
-      "id": "neo4j:Demotion",
-      "meta": {
-        "constraints": "demotion_id",
-        "indexes": "demotion_org"
-      },
-      "name": "Demotion",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "content",
-      "id": "neo4j:Document",
-      "meta": {
-        "constraints": "document_public_id",
-        "indexes": "document_org",
-        "vectorIndexes": "document_embedding_index"
-      },
-      "name": "Document",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "connectionId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "entityType",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "naturalKey",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "workspaceId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:EntityNode",
-      "meta": {
-        "indexes": "entity_node_connection,entity_node_natural_key,entity_node_workspace",
-        "vectorIndexes": "entity_node_embedding_index"
-      },
-      "name": "EntityNode",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
           "name": "id",
           "nullable": true,
           "primaryKey": true,
@@ -5435,82 +4068,6 @@
     {
       "columns": [
         {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "label",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        },
-        {
-          "name": "workspaceId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "graph",
-      "id": "neo4j:GraphNode",
-      "meta": {
-        "constraints": "graph_node_public_id",
-        "indexes": "graph_node_label,graph_node_scope",
-        "vectorIndexes": "graph_node_embedding_index"
-      },
-      "name": "GraphNode",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "conversationId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "embedding",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "chat",
-      "id": "neo4j:Message",
-      "meta": {
-        "constraints": "message_public_id",
-        "indexes": "message_conversation",
-        "vectorIndexes": "message_embedding_index"
-      },
-      "name": "Message",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
           "name": "publicId",
           "nullable": true,
           "primaryKey": true,
@@ -5523,42 +4080,6 @@
         "constraints": "plan_public_id"
       },
       "name": "Plan",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "workflow",
-      "id": "neo4j:Playbook",
-      "meta": {
-        "constraints": "playbook_public_id"
-      },
-      "name": "Playbook",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "workflow",
-      "id": "neo4j:PlaybookVersion",
-      "meta": {
-        "constraints": "playbook_version_public_id"
-      },
-      "name": "PlaybookVersion",
       "store": "neo4j",
       "tenantScoped": false
     },
@@ -5626,99 +4147,6 @@
     {
       "columns": [
         {
-          "name": "id",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        },
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        }
-      ],
-      "domain": "ingestion",
-      "id": "neo4j:SourceConnection",
-      "meta": {
-        "constraints": "source_connection_id",
-        "indexes": "ingestion_org_source"
-      },
-      "name": "SourceConnection",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "graph",
-      "id": "neo4j:SubagentFanout",
-      "meta": {
-        "constraints": "subagent_fanout_public_id",
-        "indexes": "subagent_fanout_org"
-      },
-      "name": "SubagentFanout",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "orgId",
-          "nullable": true,
-          "primaryKey": false,
-          "type": "property"
-        },
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "graph",
-      "id": "neo4j:SubagentRun",
-      "meta": {
-        "constraints": "subagent_run_public_id",
-        "indexes": "subagent_run_org"
-      },
-      "name": "SubagentRun",
-      "store": "neo4j",
-      "tenantScoped": true
-    },
-    {
-      "columns": [
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "org",
-      "id": "neo4j:Tenant",
-      "meta": {
-        "constraints": "tenant_public_id"
-      },
-      "name": "Tenant",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
           "name": "orgId",
           "nullable": true,
           "primaryKey": false,
@@ -5756,42 +4184,6 @@
         "constraints": "tool_version_public_id"
       },
       "name": "ToolVersion",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "auth",
-      "id": "neo4j:User",
-      "meta": {
-        "constraints": "user_public_id"
-      },
-      "name": "User",
-      "store": "neo4j",
-      "tenantScoped": false
-    },
-    {
-      "columns": [
-        {
-          "name": "publicId",
-          "nullable": true,
-          "primaryKey": true,
-          "type": "property"
-        }
-      ],
-      "domain": "workspace",
-      "id": "neo4j:Workspace",
-      "meta": {
-        "constraints": "workspace_public_id"
-      },
-      "name": "Workspace",
       "store": "neo4j",
       "tenantScoped": false
     },
@@ -8163,6 +6555,156 @@
     {
       "columns": [
         {
+          "name": "ts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "stream",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "command",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "seq",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "line",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "exit_code",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(Int32)"
+        },
+        {
+          "name": "duration_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UInt32)"
+        }
+      ],
+      "domain": "agent",
+      "id": "clickhouse:sandbox_log_events",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, workspace_id, session_id, ts)",
+        "partitionBy": "toYYYYMMDD(ts)",
+        "ttl": "toDateTime(ts) + INTERVAL 14 DAY"
+      },
+      "name": "sandbox_log_events",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "skill_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "skill_slug",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "skill_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "execution_step_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(String)"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "load_latency_ms",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UInt32)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime"
+        }
+      ],
+      "domain": "agent",
+      "id": "clickhouse:skill_loads",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, workspace_id, skill_id, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "created_at + INTERVAL 365 DAY"
+      },
+      "name": "skill_loads",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -8598,6 +7140,24 @@
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "auth",
+      "id": "neo4j:User",
+      "meta": {
+        "constraints": "user_public_id"
+      },
+      "name": "User",
+      "store": "neo4j",
+      "tenantScoped": false
     },
     {
       "columns": [
@@ -10609,6 +9169,111 @@
     {
       "columns": [
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "execution_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "task_class",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "signature_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "tier",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "verified",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "verification_source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "score",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float32"
+        },
+        {
+          "name": "cost_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "latency_ms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "routing_mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "billing",
+      "id": "clickhouse:router_outcomes",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, task_class, model, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
+      },
+      "name": "router_outcomes",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -10962,6 +9627,179 @@
     {
       "columns": [
         {
+          "name": "execution_step_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "input_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "output_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "cached_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "cache_write_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "cost_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt64"
+        },
+        {
+          "name": "duration_ms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "prompt_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "principal_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "principal_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "capability_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "billing",
+      "id": "clickhouse:token_usage",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, created_at, execution_step_id)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
+      },
+      "name": "token_usage",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "chat",
+      "id": "neo4j:Conversation",
+      "meta": {
+        "constraints": "conversation_public_id"
+      },
+      "name": "Conversation",
+      "store": "neo4j",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "conversationId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "embedding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "chat",
+      "id": "neo4j:Message",
+      "meta": {
+        "constraints": "message_public_id",
+        "indexes": "message_conversation",
+        "vectorIndexes": "message_embedding_index"
+      },
+      "name": "Message",
+      "store": "neo4j",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -11169,6 +10007,98 @@
       "name": "messages",
       "rls": "standard",
       "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "embedding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "content",
+      "id": "neo4j:Document",
+      "meta": {
+        "constraints": "document_public_id",
+        "indexes": "document_org",
+        "vectorIndexes": "document_embedding_index"
+      },
+      "name": "Document",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:avatar",
+      "meta": {
+        "access": "public",
+        "assetKinds": "avatar",
+        "description": "Public profile/logo images; the blob URL is stored on the owning entity's avatar_url column (no generated_assets row).",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:agent.agents,postgres:auth.users,postgres:org.organizations,postgres:workspace.workspaces"
+      },
+      "name": "avatar",
+      "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:evidence_body",
+      "meta": {
+        "access": "private",
+        "assetKinds": "evidence_body",
+        "description": "Frame bodies (Mission Control spec §8.2): redacted, content-addressed, envelope-encrypted bytes under evidence/<org>/<workspace>/bodies/<key id>/<sha256>; agent_run_events.body_ref and ClickHouse tacho_events.bytes_ref hold the reference (ADR-058).",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:agent.agent_run_events,postgres:tacho.sessions"
+      },
+      "name": "evidence_body",
+      "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:evidence_segment",
+      "meta": {
+        "access": "private",
+        "assetKinds": "evidence_export,evidence_segment",
+        "description": "Per-seal archive segments (frame envelopes as zstd NDJSON, written once at seal) and export bundles; the seal's archive_segment_ref and run_exports.bundle_ref hold the reference (ADR-058).",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:agent.agent_run_attempt_seals,postgres:evidence.run_exports"
+      },
+      "name": "evidence_segment",
+      "store": "blob",
+      "tenantScoped": true
+    },
+    {
+      "columns": [],
+      "domain": "content",
+      "id": "blob:generated_asset",
+      "meta": {
+        "access": "private",
+        "assetKinds": "archive,document,image,pdf,presentation,spreadsheet,video",
+        "description": "Generated + uploaded media (chat attachments, exports, agent output); content.generated_assets is the source-of-truth reference row.",
+        "driver": "vercel-blob",
+        "referencedBy": "postgres:content.generated_assets"
+      },
+      "name": "generated_asset",
+      "store": "blob",
       "tenantScoped": true
     },
     {
@@ -12355,6 +11285,464 @@
     {
       "columns": [
         {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "dataset_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "target_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "judge_model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "score",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float64"
+        },
+        {
+          "name": "correctness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float64"
+        },
+        {
+          "name": "faithfulness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float64"
+        },
+        {
+          "name": "passed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "latency_ms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "input_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "output_tokens",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "cost_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Int64"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "error_class",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "output",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "rationale",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime"
+        }
+      ],
+      "domain": "eval",
+      "id": "clickhouse:eval_item_results",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, workspace_id, run_id, item_id, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
+      },
+      "name": "eval_item_results",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "task_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "task_group",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "repeat_idx",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt16"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "suite",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "agent_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "agent_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "graph_code",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "graph_exec",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "graph_mem",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "warm",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "history_depth",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "passed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "reward",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float64"
+        },
+        {
+          "name": "metrics",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Map(LowCardinality(String), Float64)"
+        },
+        {
+          "name": "labels",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Map(LowCardinality(String), String)"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime"
+        }
+      ],
+      "domain": "eval",
+      "id": "clickhouse:eval_results",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(harness, suite, task_id, agent_version, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 365 DAY"
+      },
+      "name": "eval_results",
+      "store": "clickhouse",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "run_group",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "schema_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt16"
+        },
+        {
+          "name": "agent_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "agent_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "model",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "harness",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "suite",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "suite_version",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "git_sha",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "git_branch",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "environment",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "config_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "graph_code",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "graph_exec",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "graph_mem",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "warm",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "history_depth",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "seed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Int64"
+        },
+        {
+          "name": "n_tasks",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "n_passed",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "resolved_rate",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Float64"
+        },
+        {
+          "name": "metrics",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Map(LowCardinality(String), Float64)"
+        },
+        {
+          "name": "labels",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "Map(LowCardinality(String), String)"
+        },
+        {
+          "name": "notes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        },
+        {
+          "name": "finished_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "eval",
+      "id": "clickhouse:eval_runs",
+      "meta": {
+        "engine": "ReplacingMergeTree(updated_at)",
+        "orderBy": "(harness, suite, agent_name, agent_version, run_id)",
+        "partitionBy": "toYYYYMM(started_at)"
+      },
+      "name": "eval_runs",
+      "store": "clickhouse",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -12829,6 +12217,125 @@
       "name": "witnesses",
       "rls": "standard",
       "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:Demotion",
+      "meta": {
+        "constraints": "demotion_id",
+        "indexes": "demotion_org"
+      },
+      "name": "Demotion",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "embedding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "label",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        },
+        {
+          "name": "workspaceId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:GraphNode",
+      "meta": {
+        "constraints": "graph_node_public_id",
+        "indexes": "graph_node_label,graph_node_scope",
+        "vectorIndexes": "graph_node_embedding_index"
+      },
+      "name": "GraphNode",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:SubagentFanout",
+      "meta": {
+        "constraints": "subagent_fanout_public_id",
+        "indexes": "subagent_fanout_org"
+      },
+      "name": "SubagentFanout",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "graph",
+      "id": "neo4j:SubagentRun",
+      "meta": {
+        "constraints": "subagent_run_public_id",
+        "indexes": "subagent_run_org"
+      },
+      "name": "SubagentRun",
+      "store": "neo4j",
       "tenantScoped": true
     },
     {
@@ -13735,6 +13242,74 @@
       "name": "roles",
       "rls": "org_only",
       "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "connectionId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "embedding",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "entityType",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "naturalKey",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "workspaceId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "neo4j:EntityNode",
+      "meta": {
+        "indexes": "entity_node_connection,entity_node_natural_key,entity_node_workspace",
+        "vectorIndexes": "entity_node_embedding_index"
+      },
+      "name": "EntityNode",
+      "store": "neo4j",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        },
+        {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        }
+      ],
+      "domain": "ingestion",
+      "id": "neo4j:SourceConnection",
+      "meta": {
+        "constraints": "source_connection_id",
+        "indexes": "ingestion_org_source"
+      },
+      "name": "SourceConnection",
+      "store": "neo4j",
       "tenantScoped": true
     },
     {
@@ -15706,6 +15281,24 @@
       "rls": "workspace_nullable",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "org",
+      "id": "neo4j:Tenant",
+      "meta": {
+        "constraints": "tenant_public_id"
+      },
+      "name": "Tenant",
+      "store": "neo4j",
+      "tenantScoped": false
     },
     {
       "columns": [
@@ -20034,6 +19627,336 @@
     {
       "columns": [
         {
+          "name": "ts",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        },
+        {
+          "name": "dev_session",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "service",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "stream",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "message",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "host",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        }
+      ],
+      "domain": "telemetry",
+      "id": "clickhouse:dev_logs",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(dev_session, service, ts)",
+        "partitionBy": "toYYYYMMDD(ts)",
+        "ttl": "toDateTime(ts) + INTERVAL 14 DAY"
+      },
+      "name": "dev_logs",
+      "store": "clickhouse",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "event_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "event_type",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "source_system",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "stream_offset",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(String)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "emitted_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "telemetry",
+      "id": "clickhouse:events",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, event_type, emitted_at)",
+        "partitionBy": "toYYYYMM(emitted_at)",
+        "ttl": "toDateTime(emitted_at) + INTERVAL 90 DAY"
+      },
+      "name": "events",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "execution_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "step_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UUID)"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "log_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "message",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "metadata",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "String"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "telemetry",
+      "id": "clickhouse:execution_logs",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, execution_id, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 90 DAY"
+      },
+      "name": "execution_logs",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "invocation_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "capability_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "message_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "parent_message_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UUID)"
+        },
+        {
+          "name": "execution_step_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UUID)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "input_size_bytes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "output_size_bytes",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "latency_ms",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt32"
+        },
+        {
+          "name": "error_class",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(String)"
+        },
+        {
+          "name": "external_provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "external_server_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "Nullable(UUID)"
+        },
+        {
+          "name": "risk_level",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "required_approval",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UInt8"
+        },
+        {
+          "name": "surface",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "principal_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "principal_kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "LowCardinality(String)"
+        },
+        {
+          "name": "user_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "UUID"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "DateTime64(3)"
+        }
+      ],
+      "domain": "telemetry",
+      "id": "clickhouse:tool_invocations",
+      "meta": {
+        "engine": "MergeTree()",
+        "orderBy": "(org_id, capability_name, created_at)",
+        "partitionBy": "toYYYYMM(created_at)",
+        "ttl": "toDateTime(created_at) + INTERVAL 180 DAY"
+      },
+      "name": "tool_invocations",
+      "store": "clickhouse",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -20279,6 +20202,60 @@
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "workflow",
+      "id": "neo4j:Playbook",
+      "meta": {
+        "constraints": "playbook_public_id"
+      },
+      "name": "Playbook",
+      "store": "neo4j",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "workflow",
+      "id": "neo4j:PlaybookVersion",
+      "meta": {
+        "constraints": "playbook_version_public_id"
+      },
+      "name": "PlaybookVersion",
+      "store": "neo4j",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "workspace",
+      "id": "neo4j:Workspace",
+      "meta": {
+        "constraints": "workspace_public_id"
+      },
+      "name": "Workspace",
+      "store": "neo4j",
+      "tenantScoped": false
     },
     {
       "columns": [

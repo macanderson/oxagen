@@ -260,6 +260,9 @@ import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
 import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
+import { repositoryLinkRoute } from "./routes/v1/repository.link";
+import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
+import { repositoryListRoute } from "./routes/v1/repository.list";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
@@ -376,10 +379,32 @@ app.use(
 // otherwise share with every caller that sends no Authorization header.
 app.route("/v1/tacho/enroll", tachoHostEnrollRoute);
 
+// Post-auth ceilings for an enrolled Tacho host, in requests/minute. Constants
+// for the same reason as STELLA_TELEMETRY_PER_MIN below: ADR-043 retired
+// RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to borrow, and a
+// drain rate belongs to the ingress rather than to a per-deployment knob.
+//
+// Two buckets, not one. Until 2026-09-18 events, bundle and commands shared a
+// single 30/min counter per host, and two things went wrong with that on the
+// same day. A daemon on an old wire (`tacho.commands.v1`) got 3,683 HTTP 400s
+// on its command poll in 2.5 h; every one of them counted, so the host's
+// event ingest was throttled by a poll that could never succeed. And a host
+// running hundreds of parallel Claude sessions spooled 35,380 frames, which at
+// 30 batches of 200 a minute is a ceiling of 6,000 frames/min before the
+// backlog can even hold steady. Ingest is the evidence path and gets its own
+// budget; the control paths (bundle refresh, command poll) keep the old one,
+// so a retry storm on either can no longer starve the other.
+const TACHO_HOST_PER_MIN = 30;
+const TACHO_INGEST_PER_MIN = 120;
+
 // Tacho hosts speak to Oxagen with their enrolled API key, whose scope pins
 // org and workspace, so the machine routes sit on a static path outside the
 // slug group. Same pre-auth ceilings as the Stella intake: a per-IP bucket
-// for shared NATs and a per-credential bucket for one abused key.
+// for shared NATs and a per-credential bucket for one abused key. The
+// credential bucket is the sum of the post-auth budgets: it sees every
+// request the enrolled key makes across all three paths, so anything lower
+// would be the operative ceiling for a healthy host and would put the two
+// buckets below back into one.
 //
 // Registered HERE, above `app.route("/v1", userScoped)`, and not beside the
 // `/v1/tacho` mount further down. `userScoped` applies `authMiddleware` on
@@ -403,7 +428,7 @@ app.use(
   "/v1/tacho/*",
   distributedRateLimiter({
     keyPrefix: "tacho-preauth-credential",
-    max: 120,
+    max: TACHO_INGEST_PER_MIN + TACHO_HOST_PER_MIN,
     bucketKey: authorizationFingerprintBucketKey,
     methods: "all",
     storeErrorPolicy: "degrade-to-local",
@@ -461,26 +486,31 @@ stellaTelemetryScoped.use(
 stellaTelemetryScoped.route("/", telemetryStellaIngestRoute);
 app.route("/v1/telemetry/stella", stellaTelemetryScoped);
 
-// Post-auth ceiling for an enrolled Tacho host, in requests/minute. A constant
-// for the same reason as STELLA_TELEMETRY_PER_MIN above: ADR-043 retired
-// RATE_LIMIT_AGENT_EXEC_PER_MIN, whose value this limiter used to borrow, and a
-// drain rate belongs to the ingress rather than to a per-deployment knob. The
-// value matches the retired budget's default so the effective limit is unchanged.
-const TACHO_HOST_PER_MIN = 30;
-
+// The post-auth ceilings (TACHO_INGEST_PER_MIN, TACHO_HOST_PER_MIN) are
+// declared above the pre-auth mounts, which derive their credential ceiling
+// from them.
 const tachoScoped = new Hono<AppEnv>();
 tachoScoped.use("*", authMiddleware);
 tachoScoped.use(
-  "*",
+  "/events",
   distributedRateLimiter({
-    keyPrefix: "tacho-host",
-    max: TACHO_HOST_PER_MIN,
+    keyPrefix: "tacho-ingest",
+    max: TACHO_INGEST_PER_MIN,
     // Per HOST, which is what "per enrolled Tacho host" above means. The
     // default derivation keys on workspaceId, so every host enrolled into one
-    // workspace would share a single 30/min counter.
+    // workspace would share a single counter.
     bucketKey: enrolledMachineBucketKey,
   }),
 );
+// One limiter for both control paths: they share the `tacho-host` counter on
+// purpose, because together they are one host's control-plane chatter.
+const tachoControlLimiter = distributedRateLimiter({
+  keyPrefix: "tacho-host",
+  max: TACHO_HOST_PER_MIN,
+  bucketKey: enrolledMachineBucketKey,
+});
+tachoScoped.use("/bundle", tachoControlLimiter);
+tachoScoped.use("/commands", tachoControlLimiter);
 tachoScoped.route("/", tachoEventsIngestRoute);
 tachoScoped.route("/", tachoBundleGetRoute);
 tachoScoped.route("/", tachoCommandFetchRoute);
@@ -524,6 +554,11 @@ orgScoped.route("/repository/main", repositoryMainBindRoute);
 // install state and the signed GitHub doors; the picker it feeds sits one level
 // down, under the installation the workspace acts through.
 orgScoped.route("/repository/main", repositoryMainGetRoute);
+// The workspace's repositories beyond the main one (MC spec §10.1): the list
+// of all of them, and the link and unlink writes for linked repositories.
+orgScoped.route("/repositories", repositoryListRoute);
+orgScoped.route("/repository/link", repositoryLinkRoute);
+orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,

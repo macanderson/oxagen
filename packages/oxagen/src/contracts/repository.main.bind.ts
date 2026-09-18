@@ -29,7 +29,12 @@
  * from live GitHub. Which repository is main never moves here: a workspace
  * that already binds a different repository is `conflict: main_repo_bound`; a
  * workspace with no GitHub installation attached is
- * `conflict: github_not_connected`.
+ * `conflict: github_not_connected`. A repository another workspace holds is
+ * refused across tenants (ADR-099): `conflict: main_repo_claimed` when it is
+ * that workspace's main, `conflict: repository_linked_elsewhere` when that
+ * workspace has linked it. The store's trigger
+ * `repository_binding_heads_exclusive_main` holds both under a
+ * repository-keyed lock, so a lost race is refused with the same reasons.
  *
  * Roles: org Owner or Admin, checked by the handler (INV-29), so the caller
  * is a signed-in user: the API surface only. The MCP context carries an API

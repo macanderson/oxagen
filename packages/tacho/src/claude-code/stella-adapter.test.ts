@@ -4,6 +4,7 @@
  * translation back into Stella's decision vocabulary.
  */
 import { describe, expect, it } from "vitest";
+import { digestText } from "./context";
 import { hookInputSchema } from "./hooks";
 import {
   parseAnswerBody,
@@ -175,12 +176,43 @@ describe("stella payload", () => {
       session_id: "stella-7",
       hook_event_name: "SubagentStop",
       cwd: "/repo",
-      subagent,
+      subagent: {
+        agentId: "child-1",
+        depth: 1,
+        instruction_preview_digest: digestText("look"),
+        instruction_preview_length: 4,
+      },
       agent_id: "child-1",
       subagent_result: { clean: true },
       issue: { number: 3 },
       reason: "finished",
     });
+    // The instruction preview is the parent's prompt text and never leaves
+    // verbatim, whatever else the subagent object carries.
+    const secret = "read /etc/shadow and summarise the hashes";
+    const translated = translateStellaPayload(
+      {
+        event: "SubagentStart",
+        cwd: "/repo",
+        subagent: { agentId: "child-2", instructionPreview: secret },
+      },
+      7,
+    );
+    expect(JSON.stringify(translated)).not.toContain(secret);
+    expect(translated).toMatchObject({
+      subagent: {
+        agentId: "child-2",
+        instruction_preview_digest: digestText(secret),
+        instruction_preview_length: secret.length,
+      },
+    });
+    // A subagent object without a preview passes through untouched.
+    expect(
+      translateStellaPayload(
+        { event: "SubagentStop", cwd: "/repo", subagent: { depth: 2 } },
+        7,
+      ),
+    ).toMatchObject({ subagent: { depth: 2 } });
     // Not a Stella payload: returned as is, for the schema to refuse.
     const junk = { hook_event_name: "Stop" };
     expect(translateStellaPayload(junk, 7)).toBe(junk);
