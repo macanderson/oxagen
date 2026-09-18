@@ -730,33 +730,55 @@ export async function startDaemon(
     if (call.status === "rejected") seen.refused += 1;
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
-    record([
-      hostRecorder.sealCollectorEvent(
-        call.status === "rejected" ? "policy_decision" : "tool_call",
-        {
-          tool_name: call.toolName,
-          tool_source: "mcp",
-          mcp_server_name: "oxagen",
-          mcp_tool_name: call.toolName,
-          tool_status: call.status,
-          tool_duration_ms: call.durationMs,
-          ...(call.status === "rejected"
-            ? {
-                policy_decision: "deny",
-                policy_source: "kernel",
-                policy_reason: call.refusedReason ?? "refused",
-              }
-            : {}),
-        },
-        {
-          attrs: {
-            "oxagen.connected_app": call.client,
-            "oxagen.mcp_session": call.sessionId,
-            [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+    record(
+      [
+        hostRecorder.sealCollectorEvent(
+          call.status === "rejected" ? "policy_decision" : "tool_call",
+          {
+            tool_name: call.toolName,
+            tool_source: "mcp",
+            mcp_server_name: "oxagen",
+            mcp_tool_name: call.toolName,
+            tool_status: call.status,
+            tool_duration_ms: call.durationMs,
+            ...(call.inputDigest === undefined
+              ? {}
+              : {
+                  tool_input_digest: call.inputDigest,
+                  tool_input_bytes: call.inputBytes,
+                }),
+            ...(call.outputDigest === undefined
+              ? {}
+              : {
+                  tool_output_digest: call.outputDigest,
+                  tool_output_bytes: call.outputBytes,
+                }),
+            ...(call.status === "rejected"
+              ? {
+                  policy_decision: "deny",
+                  policy_source: "kernel",
+                  policy_reason: call.refusedReason ?? "refused",
+                }
+              : {}),
           },
-        },
-      ),
-    ]);
+          {
+            attrs: {
+              "oxagen.connected_app": call.client,
+              "oxagen.mcp_session": call.sessionId,
+              [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+            },
+            // The gateway hands over the arguments and the result; the
+            // recorder redacts them, digests what is left and buffers the
+            // body for the WAL. A rejected call chains the digest the same
+            // way, but `contentClassOf` gives `policy_decision` no retention
+            // class, so its bytes are never kept: the record says what was
+            // attempted, not what it would have said.
+            ...(call.content === undefined ? {} : { content: call.content }),
+          },
+        ),
+      ],
+      hostRecorder.takeBodies(),
+    );
   }
 
   const gateway = createMcpGateway({

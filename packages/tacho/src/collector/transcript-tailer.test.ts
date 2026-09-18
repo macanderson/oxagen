@@ -34,9 +34,7 @@ function fakeSession(id: string, transcriptPath?: string) {
     lines,
     recorder: {
       ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
-        lines.push(
-          subagentId !== undefined ? { line, subagentId } : { line },
-        );
+        lines.push(subagentId !== undefined ? { line, subagentId } : { line });
         return [{ kind: "line" } as unknown as TachoEvent];
       },
       takeBodies(): FrameBody[] {
@@ -187,13 +185,17 @@ describe("TranscriptTailer", () => {
     const session = fakeSession("s1", path);
     writeFileSync(agentPath, "sub-1\nsub-2\n");
     const { instance } = tailer([session]);
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(2);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      2,
+    );
     expect(session.lines).toEqual([
       { line: "sub-1", subagentId: "a1" },
       { line: "sub-2", subagentId: "a1" },
     ]);
     // A replayed SubagentStop for the same agent feeds nothing.
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(0);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
     expect(session.lines).toHaveLength(2);
     // A path that is not there is reported, not thrown.
     expect(
@@ -227,10 +229,10 @@ describe("TranscriptTailer", () => {
     // A session that left the registry loses its cursor too.
     const other = fakeSession("s2", path);
     const second = tailer([other]);
-    second.await instance.tick();
+    await second.instance.tick();
     expect(second.instance.state().cursors["s2"]).toBeDefined();
     other.sealed = false;
-    second.await instance.tick();
+    await second.instance.tick();
   });
 
   it("persists cursors so a restart does not re-read the transcript", async () => {
@@ -240,7 +242,7 @@ describe("TranscriptTailer", () => {
     const session = fakeSession("s1", path);
     writeFileSync(path, "one\ntwo\n");
     const first = tailer([session], { statePath });
-    first.await instance.tick();
+    await first.instance.tick();
     expect(session.lines).toHaveLength(2);
     const persisted = JSON.parse(readFileSync(statePath, "utf8")) as {
       schema: string;
@@ -252,7 +254,7 @@ describe("TranscriptTailer", () => {
     const again = fakeSession("s1", path);
     appendFileSync(path, "three\n");
     const restarted = tailer([again], { statePath });
-    restarted.await instance.tick();
+    await restarted.instance.tick();
     expect(again.lines.map((l) => l.line)).toEqual(["three"]);
   });
 
