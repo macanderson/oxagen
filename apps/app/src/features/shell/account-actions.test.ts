@@ -57,7 +57,8 @@ vi.mock("@/server/tenancy-lookups", () => ({
 
 const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
 
-const { updateProfile } = await import("./account-actions");
+const { updateProfile, readPreferences, savePreferences, requestExport } =
+  await import("./account-actions");
 
 beforeEach(() => {
   invoke.mockReset();
@@ -133,5 +134,114 @@ describe("updateProfile", () => {
       "avatarUrl",
       "displayName",
     ]);
+  });
+});
+
+describe("readPreferences", () => {
+  it("sends a signed-out visitor to log in, reading nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(readPreferences("acme")).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reads get_user_preferences and answers with the three fields the tab sets", async () => {
+    invoke.mockResolvedValue({
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+      timezone: "America/Los_Angeles",
+      language: "en",
+      theme: "dark",
+    });
+    const result = await readPreferences("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      "get_user_preferences",
+      {},
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { locale: "en", timezone: "America/Los_Angeles", theme: "dark" },
+    });
+  });
+});
+
+describe("savePreferences", () => {
+  it("writes set_preferences as a partial of the three fields, nothing else", async () => {
+    invoke.mockResolvedValue({
+      locale: "en",
+      theme: "dark",
+      timezone: "UTC",
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+    });
+    const result = await savePreferences("acme", {
+      locale: "en",
+      timezone: "UTC",
+      theme: "dark",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_preferences",
+      { locale: "en", timezone: "UTC", theme: "dark" },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "dark" },
+    });
+  });
+
+  it("refuses a time zone the contract does not recognise before the kernel runs (negative)", async () => {
+    const result = await savePreferences("acme", {
+      locale: "en",
+      timezone: "not a zone!",
+      theme: "dark",
+    });
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestExport", () => {
+  it("queues the person's own export with no organization id", async () => {
+    invoke.mockResolvedValue({
+      exportId: "7a000000-0000-4000-8000-0000000000e1",
+      status: "queued",
+    });
+    const result = await requestExport("acme", "user");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_data",
+      { scope: "user" },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        exportId: "7a000000-0000-4000-8000-0000000000e1",
+        status: "queued",
+      },
+    });
+  });
+
+  it("names the viewer's organization, never one from the form, for an org export", async () => {
+    invoke.mockResolvedValue({
+      exportId: "7a000000-0000-4000-8000-0000000000e2",
+      status: "queued",
+    });
+    await requestExport("acme", "org");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_data",
+      { scope: "org", orgId: ORG_ID },
+      expect.anything(),
+    );
   });
 });

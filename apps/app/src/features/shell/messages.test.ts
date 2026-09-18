@@ -50,6 +50,7 @@ describe("messages/shell.json", () => {
     expect(Object.keys(messages).sort()).toEqual([
       "account",
       "assistant",
+      "avatar",
       "commands",
       "drawer",
       "loading",
@@ -68,8 +69,14 @@ describe("messages/shell.json", () => {
       "title",
     ]);
     expect(Object.keys(messages.sidebar)).not.toContain("countLabel");
+    // The mockup's user menu: the four Account tabs, the theme switch and
+    // sign out. Its onboarding demo item is not a product item.
     expect(Object.keys(messages.userMenu).sort()).toEqual([
-      "account",
+      "preferences",
+      "privacy",
+      "profile",
+      "security",
+      "signOut",
       "switchTheme",
       "themeNow",
     ]);

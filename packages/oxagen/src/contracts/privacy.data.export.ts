@@ -8,7 +8,7 @@ export const privacyDataExport = registerCapability({
     "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20 — right to data portability). Returns immediately with status 'queued'; poll via GET /v1/privacy/export/:exportId for the download URL.",
   mode: "async",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   agent: { requiresApproval: false, riskLevel: "low", category: "privacy" },
   sensitivity: "high",

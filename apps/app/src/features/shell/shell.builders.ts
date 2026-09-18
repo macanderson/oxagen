@@ -9,6 +9,10 @@ const SHELL_VIEWER = {
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
   avatarUrl: null,
+  id: "usr_01K3F8QB7R",
+  orgRole: "member",
+  emailVerified: true,
+  twoFactorEnabled: true,
 } as const;
 
 const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;

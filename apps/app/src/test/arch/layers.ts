@@ -228,6 +228,11 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   ],
   "src/server/session.ts": ["@oxagen/auth", "@oxagen/auth/*"],
   "src/features/auth/auth-client.ts": ["@oxagen/auth/client"],
+  // The shell's user menu and Account dialog make Better Auth calls of their
+  // own (sign out, the session list and its revoke, fresh recovery codes). The
+  // auth barrel is server-only and a feature's internals are not importable
+  // across lanes, so the shell keeps its own browser seam to the same client.
+  "src/features/shell/session-client.ts": ["@oxagen/auth/client"],
   // The emitted security event types the Audit filter offers (#2528, #3097):
   // a pure leaf package with no store and no kernel.
   "src/features/audit/filters.ts": ["@oxagen/compliance"],

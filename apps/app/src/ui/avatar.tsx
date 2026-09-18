@@ -1,18 +1,14 @@
 "use client";
-// The one avatar renderer in the app. A stored avatar value is not just an
-// image URL: `avatarUrlSchema` (packages/oxagen/src/avatar.ts), the schema
-// every avatar-carrying contract shares, accepts EITHER an `https://` URL OR
-// the designed-avatar spec string `avatar:v1:{"emoji":"🦊","bg":"#f59e0b",
-// "mode":"full"}`. A surface that tests for `https://` alone shows initials to
-// a person whose profile holds a perfectly valid designed avatar, and does it
-// silently — which is what the Account dialog did before this file existed.
+// The one avatar renderer in the app (mockup `avatarHtml`). A stored avatar
+// value is EITHER an `https://` URL OR a designed-avatar spec string
+// `avatar:v1:{...}` (src/ui/avatar-spec.ts), the two forms `avatarUrlSchema`
+// (packages/oxagen/src/avatar.ts) accepts everywhere an avatar is written. A
+// surface that tests for `https://` alone shows initials to a person whose
+// profile holds a perfectly valid designed avatar, and does it silently.
 //
-// Parsing is total: every malformed value degrades to `none` (the initials
-// tile) rather than throwing, because a bad row in the database must never
-// take a render down. The prefix is asserted against the contract's own
-// `AVATAR_SPEC_PREFIX` in avatar.test.tsx, so the two cannot drift; it is
-// re-declared here rather than imported so a client bundle does not pull zod
-// in for a 52px ornament.
+// Parsing is total: every malformed value degrades to the initials tile
+// rather than throwing, because a bad row in the database must never take a
+// render down.
 //
 // A value being well formed is not the same as an image existing. The contract
 // checks the `https://` prefix and nothing else — it cannot, at write time,
@@ -22,117 +18,128 @@
 // falls back to the initials tile on `error`. It remembers WHICH url failed
 // rather than a boolean, so editing the field to a different URL tries again
 // with no effect and no stale flag to reset.
+//
+// People are round; agents are squircles. The tone lives on the record and is
+// one of three relations to the theme — solid, soft, line — from the house
+// scale, each fixing its own glyph colour, so there is no combination that
+// fails on ink or on paper.
+import {
+  Bird,
+  Bot,
+  Brain,
+  BrickWall,
+  Bug,
+  Cog,
+  Compass,
+  FlaskConical,
+  FolderTree,
+  KeyRound,
+  type LucideIcon,
+  Microscope,
+  Package,
+  PencilLine,
+  RadioTower,
+  Receipt,
+  Rocket,
+  Satellite,
+  Search,
+  ShieldCheck,
+  Sprout,
+  Stethoscope,
+  Target,
+  WandSparkles,
+  Wrench,
+} from "lucide-react";
 import { useState } from "react";
+import {
+  type AvatarFont,
+  type AvatarIcon,
+  type AvatarTone,
+  parseAvatarValue,
+} from "./avatar-spec";
 
-/** Designed-avatar colour mode: the glyph in its own colours, or a silhouette. */
-type AvatarMode = "full" | "mono-light" | "mono-dark";
+export const AVATAR_GLYPHS: Record<AvatarIcon, LucideIcon> = {
+  rocket: Rocket,
+  compass: Compass,
+  microscope: Microscope,
+  stethoscope: Stethoscope,
+  "pencil-line": PencilLine,
+  receipt: Receipt,
+  wrench: Wrench,
+  "flask-conical": FlaskConical,
+  "key-round": KeyRound,
+  package: Package,
+  satellite: Satellite,
+  bot: Bot,
+  bird: Bird,
+  bug: Bug,
+  sprout: Sprout,
+  cog: Cog,
+  brain: Brain,
+  search: Search,
+  "radio-tower": RadioTower,
+  "wand-sparkles": WandSparkles,
+  "brick-wall": BrickWall,
+  target: Target,
+  "folder-tree": FolderTree,
+  "shield-check": ShieldCheck,
+};
 
-type AvatarValue =
-  | { kind: "image"; url: string }
-  | { kind: "designed"; emoji: string; bg: string; mode: AvatarMode }
-  | { kind: "none" };
+const TONE_CLASS: Record<AvatarTone, string> = {
+  solid: "bg-foreground text-background border-foreground",
+  soft: "bg-secondary text-foreground border-border",
+  line: "bg-transparent text-foreground border-input-border",
+};
 
-/** Mirrors `AVATAR_SPEC_PREFIX` in packages/oxagen/src/avatar.ts (asserted in the test). */
-const DESIGNED_PREFIX = "avatar:v1:";
-/** Mirrors `AVATAR_MAX_LEN`: the column's cap, so an oversized value is not parsed at all. */
-const MAX_LEN = 512;
-
-const HEX = /^#[0-9a-f]{6}$/;
-const MODES: readonly string[] = ["full", "mono-light", "mono-dark"];
-
-/**
- * A "single emoji" is capped by length rather than grapheme-parsed: a ZWJ
- * sequence or a skin-tone modifier runs to several UTF-16 code units, and
- * there is no dependency-free way to count graphemes correctly everywhere.
- */
-function isEmoji(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value.length <= 16;
-}
-
-function isHex(value: unknown): value is string {
-  return typeof value === "string" && HEX.test(value);
-}
-
-function isMode(value: unknown): value is AvatarMode {
-  return typeof value === "string" && MODES.includes(value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function designedFrom(json: string): AvatarValue | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    return null;
-  }
-  if (!isRecord(parsed)) return null;
-  const { emoji, bg, mode } = parsed;
-  if (!isEmoji(emoji) || !isHex(bg) || !isMode(mode)) return null;
-  return { kind: "designed", emoji, bg, mode };
-}
-
-/** Reads a stored avatar value. Never throws: anything malformed is `none`. */
-function parseAvatarValue(value: string | null | undefined): AvatarValue {
-  if (!value || value.length > MAX_LEN) return { kind: "none" };
-  if (value.startsWith(DESIGNED_PREFIX))
-    return (
-      designedFrom(value.slice(DESIGNED_PREFIX.length)) ?? { kind: "none" }
-    );
-  if (value.startsWith("https://")) return { kind: "image", url: value };
-  return { kind: "none" };
-}
-
-/** `full` keeps the emoji's own colours; the mono modes render it as a silhouette. */
-const MODE_FILTER: Record<AvatarMode, string | undefined> = {
-  full: undefined,
-  "mono-light": "brightness(0) invert(1)",
-  "mono-dark": "brightness(0)",
+const FONT_CLASS: Record<AvatarFont, string> = {
+  sans: "font-sans font-semibold",
+  serif: "font-serif font-medium",
+  mono: "font-mono font-semibold",
 };
 
 /**
- * The sizes an avatar is drawn at, each a tile size with its two glyph scales.
- * They are a table rather than a free-form className because an emoji does not
- * scale with the tile on its own: a 32px trigger and a 52px editor preview
- * sharing one font-size leaves the emoji either lost in the circle or spilling
- * out of it. Initials and emoji get separate steps because two initial letters
- * need less room than one emoji at the same tile size.
+ * The type size for a monogram, as a fraction of the tile: one letter fills
+ * half of it, six sit at a fifth, so the longest monogram still clears the
+ * edge at 18px.
  */
-const SIZE = {
-  /** The user-menu trigger in the top bar: a small ornament beside nothing. */
-  trigger: { box: "size-8", initials: "text-xs", glyph: "text-base" },
-  /** The Account dialog's preview, beside the name and email it belongs to. */
-  preview: { box: "size-13", initials: "text-base", glyph: "text-2xl" },
-} as const;
+function initialsScale(letters: number): number {
+  if (letters <= 1) return 0.5;
+  if (letters === 2) return 0.42;
+  if (letters === 3) return 0.36;
+  if (letters === 4) return 0.28;
+  if (letters === 5) return 0.23;
+  return 0.19;
+}
 
-export type AvatarSize = keyof typeof SIZE;
+export type AvatarShape = "person" | "agent";
 
 /**
- * The avatar for a person. Decorative in every state — the name it belongs to
- * is rendered as text beside it, or carried by the trigger's `aria-label` — so
- * the image has an empty alt and the two tiles are hidden from the
- * accessibility tree.
+ * The avatar for a person or an agent. Decorative in every state — the name it
+ * belongs to is rendered as text beside it, or carried by the trigger's
+ * `aria-label` — so the image has an empty alt and the tiles are hidden from
+ * the accessibility tree.
  */
 export function Avatar({
   value,
   initials,
-  size = "preview",
+  size = 28,
+  shape = "person",
   testId,
 }: {
   /** The stored value: an https URL, a designed-avatar string, or nothing. */
   value: string | null | undefined;
   /** What the initials tile shows when the value names no avatar. */
   initials: string;
-  /** Which row of SIZE to draw at; the shape and layout are fixed. */
-  size?: AvatarSize;
+  /** The tile's side in CSS pixels; the glyph scales with it. */
+  size?: number;
+  shape?: AvatarShape;
   testId?: string;
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const spec = parseAvatarValue(value);
-  const step = SIZE[size];
-  const box = `flex-none overflow-hidden rounded-full ${step.box}`;
+  const radius = shape === "person" ? "rounded-full" : "rounded-[27%]";
+  const box = `inline-grid flex-none place-items-center overflow-hidden border box-border align-middle leading-none ${radius}`;
+  const side = { width: size, height: size };
 
   if (spec.kind === "image" && spec.url !== failedUrl)
     return (
@@ -144,39 +151,53 @@ export function Avatar({
         alt=""
         data-testid={testId}
         data-avatar="image"
-        className={`${box} object-cover`}
+        style={side}
+        className={`${box} border-transparent object-cover`}
         onError={() => {
           setFailedUrl(spec.url);
         }}
       />
     );
 
-  if (spec.kind === "designed")
+  if (spec.kind === "icon") {
+    const Glyph = AVATAR_GLYPHS[spec.icon];
     return (
       <span
         aria-hidden="true"
         data-testid={testId}
-        data-avatar="designed"
-        style={{ backgroundColor: spec.bg }}
-        className={`grid place-items-center ${box} ${step.glyph}`}
+        data-avatar="icon"
+        data-icon={spec.icon}
+        data-tone={spec.tone}
+        style={side}
+        className={`${box} ${TONE_CLASS[spec.tone]}`}
       >
-        <span
-          className="leading-none"
-          style={{ filter: MODE_FILTER[spec.mode] }}
-        >
-          {spec.emoji}
-        </span>
+        <Glyph
+          strokeWidth={1.8}
+          style={{ width: "56%", height: "56%" }}
+          aria-hidden
+        />
       </span>
     );
+  }
 
+  const text = spec.kind === "initials" ? spec.text : initials;
+  const tone: AvatarTone = spec.kind === "initials" ? spec.tone : "soft";
+  const font: AvatarFont = spec.kind === "initials" ? spec.font : "sans";
   return (
     <span
       aria-hidden="true"
       data-testid={testId}
       data-avatar="initials"
-      className={`grid place-items-center bg-secondary font-semibold text-secondary-foreground ${box} ${step.initials}`}
+      data-tone={tone}
+      data-font={font}
+      style={{
+        ...side,
+        fontSize: Math.round(size * initialsScale(text.length)),
+        letterSpacing: "0.02em",
+      }}
+      className={`${box} ${TONE_CLASS[tone]} ${FONT_CLASS[font]}`}
     >
-      {initials}
+      {text}
     </span>
   );
 }

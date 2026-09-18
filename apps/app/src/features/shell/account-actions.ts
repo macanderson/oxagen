@@ -15,9 +15,13 @@
 // The contract carries no user id and neither does this action: the handler
 // acts on the authenticated principal. A profile write that took a target id
 // would be a privilege-escalation surface reachable from a form field.
+import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
+import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
+import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
+import type { Read } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type ProfileDraft = {
@@ -53,4 +57,88 @@ export async function updateProfile(
     displayName: draft.displayName,
     avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl,
   });
+}
+
+/**
+ * The Preferences tab's three fields. `get_user_preferences` answers with the
+ * whole set; the tab shows the ones it can set, and a partial `set_preferences`
+ * leaves the rest as they are.
+ */
+export type PreferencesDraft = {
+  /** A BCP 47 tag from the app's own catalog (`language` on the read). */
+  locale: string;
+  /** An IANA zone name. */
+  timezone: string;
+  theme: "system" | "light" | "dark";
+};
+
+/** INV-19: a `"use server"` module answers with an ActionResult, so a read's refusal takes a write's shape. */
+function asActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    default:
+      return { ok: false, reason: "unavailable", code: read.code };
+  }
+}
+
+export async function readPreferences(
+  org: string,
+): Promise<ActionResult<PreferencesDraft>> {
+  const ctx = await requireViewer(org);
+  const read = await kernelRead(ctx, {
+    contract: userPreferencesRead,
+    input: {},
+    page: "shell",
+  });
+  if (!read.ok) return asActionResult(read);
+  const { language, timezone, theme } = read.value;
+  return { ok: true, value: { locale: language, timezone, theme } };
+}
+
+export async function savePreferences(
+  org: string,
+  draft: PreferencesDraft,
+): Promise<ActionResult<PreferencesDraft>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, userPreferencesSet, {
+    locale: draft.locale,
+    timezone: draft.timezone,
+    theme: draft.theme,
+  });
+  if (!result.ok) return result;
+  const { locale, timezone, theme } = result.value;
+  return { ok: true, value: { locale, timezone, theme } };
+}
+
+export type ExportQueued = { exportId: string; status: string };
+
+/**
+ * `export_data`: a bundle of the person's own activity, or of the whole
+ * organization for an Owner or Admin. It queues and answers at once with the
+ * export id; the bundle is fetched from the API by that id once it is ready
+ * (packages/inngest-functions/src/functions/privacy.export.process.ts).
+ */
+export async function requestExport(
+  org: string,
+  scope: "user" | "org",
+): Promise<ActionResult<ExportQueued>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, privacyDataExport, {
+    scope,
+    ...(scope === "org" ? { orgId: ctx.orgId } : {}),
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: { exportId: result.value.exportId, status: result.value.status },
+      }
+    : result;
 }

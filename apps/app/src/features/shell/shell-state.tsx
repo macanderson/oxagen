@@ -6,12 +6,22 @@ import {
   createContext,
   type ReactNode,
   use,
+  useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import type { Theme } from "./theme";
 import { useTheme } from "./use-theme";
+
+/** The Account dialog's tabs (mockup `accountTabs`); the onboarding demo tab is not a product tab. */
+export const ACCOUNT_TABS = [
+  "profile",
+  "preferences",
+  "security",
+  "privacy",
+] as const;
+export type AccountTab = (typeof ACCOUNT_TABS)[number];
 
 type ShellState = {
   commandOpen: boolean;
@@ -20,6 +30,17 @@ type ShellState = {
   setDrawerOpen: (open: boolean) => void;
   accountOpen: boolean;
   setAccountOpen: (open: boolean) => void;
+  accountTab: AccountTab;
+  setAccountTab: (tab: AccountTab) => void;
+  /** Open the Account dialog on one of its tabs — the user menu's deep links. */
+  openAccount: (tab: AccountTab) => void;
+  /**
+   * The avatar editor is its own dialog (mockup `avatarDlg`), opened from the
+   * Profile tab in place of the Account dialog and returning to it on save or
+   * cancel, so the two are never stacked.
+   */
+  avatarOpen: boolean;
+  setAvatarOpen: (open: boolean) => void;
   workspaceSettingsOpen: boolean;
   setWorkspaceSettingsOpen: (open: boolean) => void;
   assistantOpen: boolean;
@@ -53,7 +74,21 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountTab, setAccountTab] = useState<AccountTab>("profile");
+  const [avatarOpenRaw, setAvatarOpenRaw] = useState(false);
   const [workspaceSettingsOpen, setWorkspaceSettingsOpen] = useState(false);
+
+  const openAccount = useCallback((tab: AccountTab) => {
+    setAccountTab(tab);
+    setAvatarOpenRaw(false);
+    setAccountOpen(true);
+  }, []);
+
+  const setAvatarOpen = useCallback((open: boolean) => {
+    setAvatarOpenRaw(open);
+    setAccountOpen(!open);
+    if (!open) setAccountTab("profile");
+  }, []);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const { theme, setTheme } = useTheme();
 
@@ -78,6 +113,11 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setDrawerOpen,
       accountOpen,
       setAccountOpen,
+      accountTab,
+      setAccountTab,
+      openAccount,
+      avatarOpen: avatarOpenRaw,
+      setAvatarOpen,
       workspaceSettingsOpen,
       setWorkspaceSettingsOpen,
       assistantOpen,
@@ -89,6 +129,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       commandOpen,
       drawerOpen,
       accountOpen,
+      accountTab,
+      openAccount,
+      avatarOpenRaw,
+      setAvatarOpen,
       workspaceSettingsOpen,
       assistantOpen,
       theme,

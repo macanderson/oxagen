@@ -54,6 +54,26 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+// The Account dialog's tabs read on open; the shell test only needs them to
+// answer, not what they answer with (account-dialog.test.tsx covers that).
+const liveSignOut = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("./session-client", () => ({
+  liveSignOut,
+  liveListSessions: () => Promise.resolve({ ok: true, sessions: [] }),
+  liveRevokeSession: () => Promise.resolve(true),
+  liveRegenerateBackupCodes: () => Promise.resolve({ ok: false }),
+}));
+vi.mock("./account-actions", () => ({
+  updateProfile: vi.fn(),
+  readPreferences: () =>
+    Promise.resolve({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "system" },
+    }),
+  savePreferences: vi.fn(),
+  requestExport: vi.fn(),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,
@@ -166,13 +186,7 @@ describe("the shell on /{org}/{ws}", () => {
 // because the value arrived and was dropped at the last step.
 describe("the user-menu trigger", () => {
   function withAvatar(avatarUrl: string | null) {
-    return shellData({
-      viewer: {
-        name: "Marcus Bell",
-        email: "marcus.bell@acme.example",
-        avatarUrl,
-      },
-    });
+    return shellData({ viewer: { ...shellData().viewer, avatarUrl } });
   }
 
   it("draws the persisted image avatar, not the initials", () => {
@@ -185,20 +199,19 @@ describe("the user-menu trigger", () => {
 
   it("draws a persisted designed avatar, not the initials", () => {
     renderShell(
-      withAvatar('avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}'),
+      withAvatar('avatar:v1:{"kind":"icon","icon":"rocket","tone":"solid"}'),
     );
     const avatar = screen.getByTestId("user-menu-avatar");
-    expect(avatar.dataset.avatar).toBe("designed");
-    expect(avatar.textContent).toBe("🦊");
+    expect(avatar.dataset.avatar).toBe("icon");
+    expect(avatar.dataset.icon).toBe("rocket");
+    expect(avatar.textContent).toBe("");
   });
 
-  it("draws it at the trigger's size, not the editor preview's", () => {
+  it("draws it at the trigger's 30px, not the editor preview's", () => {
     renderShell(
-      withAvatar('avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}'),
+      withAvatar('avatar:v1:{"kind":"icon","icon":"rocket","tone":"solid"}'),
     );
-    const avatar = screen.getByTestId("user-menu-avatar");
-    expect(avatar.className).toContain("size-8");
-    expect(avatar.className).not.toContain("size-13");
+    expect(screen.getByTestId("user-menu-avatar").style.width).toBe("30px");
   });
 
   it("falls back to initials when no avatar is set, or the stored value is malformed (negative)", () => {
@@ -389,18 +402,74 @@ describe("command menu", () => {
 });
 
 describe("user menu", () => {
-  it("names the viewer, opens Account and switches theme: light, dark, system; nothing else is offered (negative)", async () => {
+  it("names the viewer and offers the mockup's items, and no onboarding demo (negative)", async () => {
     const user = userEvent.setup();
     renderShell(shellData());
     await user.click(
       screen.getByRole("button", { name: "User menu for Marcus Bell" }),
     );
     const menu = await screen.findByRole("menu");
+    expect(menu).toHaveTextContent("Marcus Bell");
     expect(menu).toHaveTextContent("marcus.bell@acme.example");
-    // Account and Switch theme, and nothing else: the dialog spec App. F folds
-    // the account pages into is reached from here.
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(2);
-    expect(within(menu).getByTestId("open-account")).toBeTruthy();
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent.replace(/now .*$/, "").trim()),
+    ).toEqual([
+      "Account",
+      "Preferences",
+      "Security and sessions",
+      "Privacy and data",
+      "Switch theme",
+      "Sign out",
+    ]);
+    expect(within(menu).queryByText(/onboarding/i)).toBeNull();
+  });
+
+  it("opens the Account dialog on the tab each link names", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    for (const [testId, tab] of [
+      ["open-security", "security"],
+      ["open-privacy", "privacy"],
+      ["open-preferences", "preferences"],
+      ["open-account", "profile"],
+    ] as const) {
+      await user.click(
+        screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+      );
+      await user.click(
+        within(await screen.findByRole("menu")).getByTestId(testId),
+      );
+      const dialog = await screen.findByTestId("account-dialog");
+      expect(within(dialog).getByTestId(`account-tab-${tab}`)).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await user.keyboard("{Escape}");
+    }
+  });
+
+  it("signs out through Better Auth and lands on the sign-in page", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+    expect(liveSignOut).toHaveBeenCalledTimes(1);
+    expect(nav.replace).toHaveBeenCalledWith("/login");
+  });
+
+  it("switches theme: light, dark, system", async () => {
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    const menu = await screen.findByRole("menu");
     await user.click(within(menu).getByTestId("switch-theme"));
     expect(document.documentElement.dataset.theme).toBe("light");
     await user.click(screen.getByTestId("switch-theme"));
@@ -412,7 +481,12 @@ describe("user menu", () => {
   it("names a viewer with no recorded name by their email", () => {
     renderShell(
       shellData({
-        viewer: { name: null, email: "dana@acme.example", avatarUrl: null },
+        viewer: {
+          ...shellData().viewer,
+          name: null,
+          email: "dana@acme.example",
+          avatarUrl: null,
+        },
       }),
     );
     expect(
