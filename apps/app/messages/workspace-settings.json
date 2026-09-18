@@ -35,6 +35,9 @@
         "defaultRef": "Default branch",
         "boundAt": "Bound {date}",
         "open": "Open on GitHub",
+        "retired": "The GitHub connection this repository was bound through has been removed, so Oxagen can no longer read .oxagen/ from it: steering and Context PRs are off until it is bound again. The repository itself has not changed, and neither has anything else about this workspace — it has to be bound again through a live GitHub connection.",
+        "reconnect": "Reconnect this repository",
+        "reconnecting": "Reconnecting…",
         "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an org owner's decision and is recorded as a security event, so it is done with the people accountable for this workspace rather than from a settings panel."
       },
       "manage": "Change which repositories the App reaches",

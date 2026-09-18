@@ -2426,6 +2426,9 @@ type Messages = {
         defaultRef: string;
         boundAt: string;
         open: string;
+        retired: string;
+        reconnect: string;
+        reconnecting: string;
         fixed: string;
       };
       manage: string;

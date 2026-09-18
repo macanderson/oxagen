@@ -9,7 +9,13 @@
 // `github_not_connected` unless an installation was already attached, which
 // nothing in the app could produce. Here a person installs the App and then
 // picks out of what the installation actually reaches.
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { MouseEvent, ReactNode } from "react";
 import {
@@ -135,17 +141,30 @@ const connected: WorkspaceRepository = {
   github: { connected: true, installUrl: null, manageUrl: MANAGE_URL },
 };
 
+const BOUND_REPOSITORY = {
+  bindingId: "rpb_0a1b2c",
+  owner: "acme",
+  name: "platform",
+  fullName: "acme/platform",
+  defaultRef: "main",
+  htmlUrl: "https://github.com/acme/platform",
+  boundAt: "2026-09-16T10:00:00.000Z",
+  connectionLive: true,
+};
+
 const bound: WorkspaceRepository = {
-  repository: {
-    bindingId: "rpb_0a1b2c",
-    owner: "acme",
-    name: "platform",
-    fullName: "acme/platform",
-    defaultRef: "main",
-    htmlUrl: "https://github.com/acme/platform",
-    boundAt: "2026-09-16T10:00:00.000Z",
-  },
+  repository: BOUND_REPOSITORY,
   github: { connected: true, installUrl: null, manageUrl: MANAGE_URL },
+};
+
+/**
+ * The same repository, bound through a connection that has since been deleted:
+ * steering is off and nothing on screen used to say so (#3233). A replacement
+ * connection is attached, which is what the reconnect binds through.
+ */
+const retired: WorkspaceRepository = {
+  repository: { ...BOUND_REPOSITORY, connectionLive: false },
+  github: { connected: true, installUrl: CONNECT_URL, manageUrl: MANAGE_URL },
 };
 
 const listing: InstallationRepositories = {
@@ -350,9 +369,7 @@ describe("no GitHub App installation", () => {
       },
     });
     await openSettings();
-    expect(
-      await screen.findByTestId("workspace-github-connect"),
-    ).toBeTruthy();
+    expect(await screen.findByTestId("workspace-github-connect")).toBeTruthy();
     expect(screen.queryByTestId("workspace-github-install")).toBeNull();
     expect(screen.queryByTestId("workspace-github-unconfigured")).toBeNull();
   });
@@ -890,6 +907,132 @@ describe("a bound main repository", () => {
     } finally {
       phone.restore();
     }
+  });
+});
+
+/**
+ * The connection behind the binding was retired (#3233).
+ *
+ * Delete the workspace's GitHub connection and reconnect and the head still
+ * names the deleted one, so `readGitHubConnection` resolves nothing and
+ * steering and Context PRs are off — while the panel went on drawing a bound
+ * repository and a note saying this is not the place to change it. The
+ * workspace looked fine, and no surface could fix it.
+ */
+describe("a binding whose connection was retired", () => {
+  beforeEach(() => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: retired });
+  });
+
+  it("says steering is off and still cites the repository that is bound", async () => {
+    await openSettings();
+    const panel = await screen.findByTestId("workspace-repository-bound");
+    expect(panel).toHaveTextContent("acme/platform");
+    expect(
+      await screen.findByTestId("workspace-repository-retired"),
+    ).toHaveTextContent(/steering and Context PRs are off/i);
+    // Not the "this cannot be changed here" note: that answers a different
+    // question, and here there IS something the person can do.
+    expect(screen.queryByText(/cannot be changed here/i)).toBeNull();
+  });
+
+  it("re-binds the SAME repository, by the owner and name already bound", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
+
+    await user.click(
+      screen.getByRole("button", { name: "Reconnect this repository" }),
+    );
+
+    // The repair, not a choice of repository: no picker was ever drawn, and
+    // the bind names what the binding already carried.
+    expect(bindWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { owner: "acme", name: "platform" },
+    );
+    expect(screen.queryByTestId("workspace-repository-picker")).toBeNull();
+    expect(listInstallationRepositories).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the panel after the repair, and the rest of the app with it", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
+
+    await user.click(
+      screen.getByRole("button", { name: "Reconnect this repository" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("workspace-repository-retired")).toBeNull();
+    });
+    expect(screen.getByText(/cannot be changed here/i)).toBeTruthy();
+    expect(nav.refresh).toHaveBeenCalled();
+  });
+
+  it("says why a refused repair was refused, and leaves the panel as it was (negative)", async () => {
+    bindWorkspaceRepository.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "github_not_connected",
+    });
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+
+    await user.click(
+      screen.getByRole("button", { name: "Reconnect this repository" }),
+    );
+
+    expect(
+      await screen.findByTestId("workspace-repository-reconnect-failure"),
+    ).toBeTruthy();
+    expect(screen.getByTestId("workspace-repository-retired")).toBeTruthy();
+  });
+
+  it("offers the doors instead of a repair when no live connection is attached (negative)", async () => {
+    // Deleted and not reconnected: the bind would refuse
+    // `github_not_connected`, so a Reconnect button here could only fail.
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: {
+        repository: retired.repository,
+        github: {
+          connected: false,
+          installUrl: CONNECT_URL,
+          manageUrl: INSTALL_URL,
+        },
+      },
+    });
+    await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+    expect(
+      screen.queryByRole("button", { name: "Reconnect this repository" }),
+    ).toBeNull();
+    // Still cites the repository it binds, and offers the way back.
+    expect(screen.getByTestId("workspace-repository-bound")).toHaveTextContent(
+      "acme/platform",
+    );
+    expect(
+      await screen.findByTestId("workspace-repository-install"),
+    ).toBeTruthy();
+  });
+
+  it("offers no rebind affordance at all while the connection is live (negative)", async () => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
+    await openSettings();
+    await screen.findByTestId("workspace-repository-bound");
+    expect(screen.queryByTestId("workspace-repository-retired")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Reconnect this repository" }),
+    ).toBeNull();
+  });
+
+  it("has no axe violations while steering is off", async () => {
+    const { dialog } = await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+    await expectNoAxe(dialog);
   });
 });
 

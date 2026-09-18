@@ -222,10 +222,18 @@ function MainRepositoryPanel({
         return;
       }
       setSettings({ kind: "ready", value: record.value });
-      // A bound workspace needs neither list: the panel shows what it binds.
-      if (record.value.repository !== null) return;
+      // A bound workspace whose connection is still live needs neither list:
+      // the panel shows what it binds. One whose connection was retired is a
+      // different state — steering is off and the repair binds the same
+      // repository again through a LIVE connection — so it falls through to
+      // the doors below when there is no live connection to repair through.
+      const repository = record.value.repository;
+      if (repository !== null && repository.connectionLive) return;
 
       if (record.value.github.connected) {
+        // A bound repository is repaired by re-binding the one it already
+        // names, so the picker's list is not what this state asks for.
+        if (repository !== null) return;
         // An installation is attached and nothing is bound: the repositories it
         // reaches are the set the bind accepts.
         setListing({ kind: "loading" });
@@ -304,10 +312,35 @@ function MainRepositoryPanel({
             {failureText(settings.failure)}
           </FormAlert>
         ) : settings.value.repository !== null ? (
-          <BoundRepositoryPanel
-            repository={settings.value.repository}
-            manageUrl={settings.value.github.manageUrl}
-          />
+          <>
+            <BoundRepositoryPanel
+              org={org}
+              ws={ws}
+              repository={settings.value.repository}
+              connected={settings.value.github.connected}
+              manageUrl={settings.value.github.manageUrl}
+              onRepaired={bound}
+            />
+            {/*
+              A retired connection with no live one to repair through: the
+              doors are the next click, and they are the same doors an
+              unconnected workspace gets. Drawn beside the bound panel rather
+              than inside it, so the repository it still binds stays legible.
+            */}
+            {settings.value.repository.connectionLive ||
+            settings.value.github.connected ? null : (
+              <div className="mt-4">
+                <ConnectPanel
+                  org={org}
+                  ws={ws}
+                  connectUrl={settings.value.github.installUrl}
+                  installUrl={settings.value.github.manageUrl}
+                  candidates={candidates}
+                  onAttached={bound}
+                />
+              </div>
+            )}
+          </>
         ) : settings.value.github.connected ? (
           <RepositoryPicker
             org={org}
@@ -612,13 +645,32 @@ function InstallationPicker({
   );
 }
 
-/** A repository is bound: what it is, where `.oxagen/` is read from, and why this is not the place to change it. */
+/**
+ * A repository is bound: what it is, where `.oxagen/` is read from, and either
+ * why this is not the place to change it or — when the connection behind it was
+ * retired — that steering is off and how to get it back.
+ *
+ * Those are the same panel on purpose. A person meeting the second state
+ * deleted a GitHub connection and reconnected, which is an ordinary thing to
+ * do; what they need told is that the repository is still the one on screen and
+ * that nothing else about the workspace moved. Drawing it as a separate
+ * "broken" surface would read as though the binding itself were lost.
+ */
 function BoundRepositoryPanel({
+  org,
+  ws,
   repository,
+  connected,
   manageUrl,
+  onRepaired,
 }: {
+  org: string;
+  ws: string;
   repository: NonNullable<WorkspaceRepository["repository"]>;
+  /** A live GitHub connection is attached, so the repair has something to bind through. */
+  connected: boolean;
   manageUrl: string | null;
+  onRepaired: () => void;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   const href = parseGitHubUrl(repository.htmlUrl);
@@ -643,8 +695,113 @@ function BoundRepositoryPanel({
           {t("bound.open")}
         </GitHubLink>
       )}
-      <p className={`mt-3 ${prose}`}>{t("bound.fixed")}</p>
-      <ManageLink manageUrl={manageUrl} />
+      {repository.connectionLive ? (
+        <>
+          {/*
+            Spec §10.1: moving a workspace to a DIFFERENT repository is an org
+            owner's decision recorded as a security event, and
+            `bind_main_repository` refuses it with `main_repo_bound`. A rebind
+            control here would be a control that lies.
+          */}
+          <p className={`mt-3 ${prose}`}>{t("bound.fixed")}</p>
+          <ManageLink manageUrl={manageUrl} />
+        </>
+      ) : (
+        <RetiredConnection
+          org={org}
+          ws={ws}
+          repository={repository}
+          connected={connected}
+          onRepaired={onRepaired}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The connection this binding hangs off is gone, so steering is off (#3233).
+ *
+ * Reached by deleting the workspace's GitHub connection and reconnecting:
+ * the delete leaves the old row mid-delete, the reconnect attaches a new
+ * connection, and the binding head goes on naming the retired one — so every
+ * reader that joins the two resolves nothing and no Context PR can be opened,
+ * while the repository still reads as bound. Until `get_main_repository`
+ * reported `connectionLive`, nothing on any surface said so, and re-binding the
+ * same repository took the bind's idempotent branch and moved nothing.
+ *
+ * The repair is that same bind, on the same owner and name. It supersedes the
+ * binding onto the live connection, which is why this is not the "change the
+ * main repository" control the panel refuses to offer above: nothing about
+ * which repository is main changes here.
+ */
+function RetiredConnection({
+  org,
+  ws,
+  repository,
+  connected,
+  onRepaired,
+}: {
+  org: string;
+  ws: string;
+  repository: NonNullable<WorkspaceRepository["repository"]>;
+  connected: boolean;
+  onRepaired: () => void;
+}) {
+  const t = useTranslations("workspaceSettings.mainRepository");
+  const failureText = useWorkspaceSettingsFailure();
+  const navigate = useNavigate();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function reconnect(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      // The SAME repository, by the owner and name the binding already
+      // carries: a repair, never a choice of a different repo.
+      const result = await bindWorkspaceRepository(org, ws, {
+        owner: repository.owner,
+        name: repository.name,
+      });
+      if (result.ok) {
+        onRepaired();
+        navigate.refresh();
+      } else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="mt-3" data-testid="workspace-repository-retired">
+      <FormAlert>{t("bound.retired")}</FormAlert>
+      {/*
+        No live connection to bind through: the bind would refuse with
+        `github_not_connected`, so the doors below this panel are the next
+        click and an action here would only be a button that fails.
+      */}
+      {!connected ? null : (
+        <form noValidate className="mt-3" onSubmit={(e) => void reconnect(e)}>
+          {failure === null ? null : (
+            <div className="mb-3">
+              <FormAlert testId="workspace-repository-reconnect-failure">
+                {failure}
+              </FormAlert>
+            </div>
+          )}
+          <SubmitButton
+            pending={pending}
+            fullWidth={false}
+            label={t("bound.reconnect")}
+            pendingLabel={t("bound.reconnecting")}
+          />
+        </form>
+      )}
     </div>
   );
 }

@@ -55,6 +55,9 @@
               },
               "boundAt": {
                 "type": "string"
+              },
+              "connectionLive": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -64,7 +67,8 @@
               "fullName",
               "defaultRef",
               "htmlUrl",
-              "boundAt"
+              "boundAt",
+              "connectionLive"
             ],
             "additionalProperties": false
           },
