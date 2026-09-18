@@ -6,6 +6,7 @@
 // text.tsx` is the only other caller, passing `streaming: true` while it is
 // still revealing characters so an unterminated fence or bold marker never
 // renders as broken HTML mid-reveal (`parseIncompleteMarkdown`).
+import type * as React from "react";
 import { Streamdown } from "streamdown";
 import { createCodePlugin } from "@streamdown/code";
 
@@ -33,7 +34,20 @@ export function AssistantMarkdown({
     <Streamdown
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
-      plugins={{ code: codePlugin }}
+      plugins={
+        // @streamdown/code resolves shiki@3.x while streamdown's own type
+        // expects shiki@1.29.2, so `getSupportedLanguages()` returns two
+        // structurally different `BundledLanguage` unions and the plugin
+        // object fails a structural check even though it is the plugin
+        // Streamdown's own docs say to pass (proven at runtime by
+        // `app_deprecated`'s identical config). Assert the whole object
+        // rather than a narrower per-field cast, so this stays correct
+        // however the shiki peer resolves.
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- shiki version skew between streamdown and @streamdown/code's types; see comment above
+        { code: codePlugin } as React.ComponentProps<
+          typeof Streamdown
+        >["plugins"]
+      }
       controls={{ code: { copy: true, download: false } }}
       className="max-w-none text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
     >
