@@ -17,6 +17,7 @@
       "!**/coverage/**",
       "!**/*.gen.ts",
       "!**/*.generated.ts",
+      "!packages/ui/src/styles/house-tokens.json",
       "!**/routeTree.gen.ts",
       "!pnpm-lock.yaml",
       "!**/storage-manifest.json",

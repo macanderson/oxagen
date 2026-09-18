@@ -213,3 +213,84 @@ describe("POST /v1/tacho/events", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("the /v1/tacho rate-limit buckets", () => {
+  // The regression this guards: one `tacho-host` counter used to cover
+  // events, bundle and commands, so a command poll refused 3,683 times in
+  // 2.5 h (2026-09-18) throttled the same host's event ingest, and a host
+  // spooling 35,380 frames could never ship more than 30 batches a minute.
+  // The counter store is a per-key fake, so each bucket's key and ceiling
+  // are visible from the upsert the limiter runs.
+  const counts = new Map<string, number>();
+
+  beforeEach(() => {
+    counts.clear();
+    // The limiter's upsert: the bucket key is the first raw parameter.
+    mocks.withSystemDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: vi.fn(async (query: { queryChunks: unknown[] }) => {
+            const key = query.queryChunks.find(
+              (chunk): chunk is string => typeof chunk === "string",
+            );
+            const count = (counts.get(key ?? "") ?? 0) + 1;
+            counts.set(key ?? "", count);
+            return [{ count }];
+          }),
+        }),
+    );
+  });
+
+  it("counts event ingest in its own per-host `tacho-ingest` bucket, 120 a minute", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 8, 18, 12, 7, 1));
+    const statuses: number[] = [];
+    for (let i = 0; i < 121; i++)
+      statuses.push((await post(VALID_BATCH)).status);
+    expect(statuses.slice(0, 120).every((s) => s === 200)).toBe(true);
+    expect(statuses[120]).toBe(429);
+    expect(counts.get("tacho-ingest:machine:key_tacho")).toBe(121);
+    expect([...counts.keys()].some((k) => k.startsWith("tacho-host:"))).toBe(
+      false,
+    );
+    // The pre-auth credential ceiling (150) sat above every one of these, so
+    // the 429 came from the ingest bucket and not from the shared one.
+    const credential = [...counts.entries()].find(([k]) =>
+      k.startsWith("tacho-preauth-credential:"),
+    );
+    expect(credential?.[1]).toBe(121);
+  });
+
+  it("keeps the command poll in the per-host `tacho-host` bucket, apart from ingest", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 8, 18, 12, 9, 1));
+    // The poll is refused by the route (an old wire) 30 times; the 31st is
+    // refused by the limiter. None of it touches the ingest counter.
+    mocks.invoke.mockRejectedValue(new Error("not reached"));
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      const response = await app.fetch(
+        new Request("http://localhost/v1/tacho/commands", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-vercel-forwarded-for": "203.0.113.9",
+            authorization: "Bearer ox_test_key",
+          },
+          body: JSON.stringify({
+            schema: "tacho.commands.v1",
+            host_enrollment_id: HOST,
+            acknowledgements: [],
+          }),
+        }),
+      );
+      statuses.push(response.status);
+    }
+    expect(statuses.slice(0, 30).every((s) => s === 400)).toBe(true);
+    expect(statuses[30]).toBe(429);
+    expect(counts.get("tacho-host:machine:key_tacho")).toBe(31);
+    expect(counts.has("tacho-ingest:machine:key_tacho")).toBe(false);
+    // Ingest still has its whole budget while the poll is throttled.
+    mocks.invoke.mockResolvedValue(OUTPUT);
+    expect((await post(VALID_BATCH)).status).toBe(200);
+    expect(counts.get("tacho-ingest:machine:key_tacho")).toBe(1);
+  });
+});

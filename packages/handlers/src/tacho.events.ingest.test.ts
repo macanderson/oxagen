@@ -2998,6 +2998,78 @@ describe("observed metering from the model proxy", () => {
     expect(usageCountedEvents(bypassed, false)).toEqual(bypassed);
   });
 
+  it("counts a call once whichever source saw it first, and prices a transcript-only call", () => {
+    const zero = () => {
+      const delta = {} as Parameters<typeof foldDelta>[0];
+      for (const key of [
+        "numModelCalls",
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheCreationTokens",
+        "cacheCreation5mTokens",
+        "cacheCreation1hTokens",
+        "thinkingTokens",
+        "webSearchRequests",
+        "webFetchRequests",
+        "totalCostMicros",
+      ] as const)
+        delta[key] = 0;
+      return delta;
+    };
+    const usage = {
+      model: "claude-opus-5",
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_read_tokens: 10,
+      cache_creation_tokens: 4,
+    };
+    const split = { ...usage, cache_creation_1h_tokens: 4, thinking_tokens: 6 };
+    const stamped = (first: string) => ({
+      attrs: { "oxagen.llm_call_duplicate_of": first },
+    });
+
+    // OTel first, transcript second (stamped): tokens once, split from the transcript.
+    const otelFirst = zero();
+    const [a, b] = chain([
+      unsealed("llm_call", usage, "otel_log"),
+      unsealed("llm_call", split, "transcript", CLAUDE_CODE, stamped("otel_log")),
+    ]) as [TachoEvent, TachoEvent];
+    foldDelta(otelFirst, a);
+    foldDelta(otelFirst, b);
+    expect(otelFirst).toMatchObject({
+      numModelCalls: 1,
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheCreation1hTokens: 4,
+      thinkingTokens: 6,
+    });
+
+    // Transcript first, OTel second (stamped): the same totals.
+    const transcriptFirst = zero();
+    const [c, d] = chain([
+      unsealed("llm_call", split, "transcript"),
+      unsealed("llm_call", usage, "otel_log", CLAUDE_CODE, stamped("transcript")),
+    ]) as [TachoEvent, TachoEvent];
+    foldDelta(transcriptFirst, c);
+    foldDelta(transcriptFirst, d);
+    expect(transcriptFirst).toMatchObject({
+      numModelCalls: 1,
+      inputTokens: 100,
+      outputTokens: 50,
+      cacheCreation1hTokens: 4,
+      thinkingTokens: 6,
+    });
+
+    // A transcript continuation block (usage stripped, stamped transcript) adds nothing.
+    const continuation = zero();
+    const [e] = chain([
+      unsealed("llm_call", { model: "claude-opus-5" }, "transcript", CLAUDE_CODE, stamped("transcript")),
+    ]) as [TachoEvent];
+    foldDelta(continuation, e);
+    expect(continuation).toMatchObject({ numModelCalls: 0, inputTokens: 0 });
+  });
+
   it("counts the observed frame's own classes, which the OTel view does not carry", () => {
     const delta = {} as Parameters<typeof foldDelta>[0];
     for (const key of [

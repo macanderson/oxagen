@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderPng } from "./raster.mjs";
 
 const svg = (w, h) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#10100F"/></svg>`;
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="#09090B"/></svg>`;
 
 /** width and height from a PNG's IHDR chunk */
 function size(png) {
