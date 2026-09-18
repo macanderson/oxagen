@@ -118,6 +118,19 @@ async function openDialog(
   return { user, dialog: await screen.findByTestId("account-dialog") };
 }
 
+// The zones Preferences offers. The engine's own list runs to about 400, and
+// axe walks a node per option, which made this file's accessibility checks the
+// slowest in the app — they expired first at 15s and then at 30s on a loaded
+// runner. The list is a seam the dialog reads, not the subject of any test
+// here, so it is stubbed down to four real zones; that the select renders
+// whatever the engine reports is proven directly below.
+const ENGINE_ZONES = [
+  "UTC",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Asia/Tokyo",
+];
+
 // The dialog renders under ShellStateProvider, which reads the theme from a
 // media query jsdom does not implement.
 beforeAll(() => {
@@ -127,6 +140,9 @@ beforeAll(() => {
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   }));
+  vi.spyOn(Intl, "supportedValuesOf").mockImplementation((key) =>
+    key === "timeZone" ? [...ENGINE_ZONES] : [],
+  );
 });
 
 beforeEach(() => {
@@ -363,6 +379,20 @@ describe("Preferences", () => {
     expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
   });
 
+  it("lists the zones the engine reports, and keeps a stored zone it does not", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "Mars/Olympus", theme: "system" },
+    });
+    await openDialog("preferences");
+    const zone = await screen.findByTestId("account-timezone");
+    const offered = within(zone)
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(offered).toEqual(["Mars/Olympus", ...ENGINE_ZONES]);
+    expect(zone).toHaveValue("Mars/Olympus");
+  });
+
   it("applies the theme to the page the moment it is chosen", async () => {
     const { user } = await openDialog("preferences");
     const theme = await screen.findByTestId("account-theme");
@@ -526,8 +556,4 @@ it.each(["profile", "preferences", "security", "privacy"] as const)(
     if (tab === "preferences") await screen.findByTestId("account-timezone");
     await expectNoAxe(dialog);
   },
-  // Preferences draws every zone `Intl.supportedValuesOf` knows — around 400
-  // options — and axe walks all of them. It is the slowest check in the file
-  // and it expired at 15s on a loaded runner.
-  30_000,
 );
