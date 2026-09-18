@@ -60,8 +60,36 @@
         "none": "Choose an installation first."
       }
     },
+    "repositories": {
+      "heading": "Repositories",
+      "about": "The main repository is where this workspace keeps .oxagen/. A linked repository is one its agents work on, and its default ref is the one approved here. A repository that is another workspace’s main repository cannot be linked.",
+      "loading": "Reading this workspace’s repositories…",
+      "listLabel": "Repositories this workspace binds",
+      "none": "This workspace binds no repository yet. Bind its main repository above first.",
+      "onlyMain": "Only the main repository. Link a second one below.",
+      "roleMain": "Main",
+      "roleLinked": "Linked",
+      "defaultRef": "default ref {ref}",
+      "boundAt": "Bound {date}",
+      "open": "Open on GitHub",
+      "retired": "Connection retired: the GitHub connection this repository was bound through has been removed, so Oxagen cannot read it. Link it again through a live connection.",
+      "unlink": "Unlink",
+      "unlinkConfirm": "Unlink {repository} from this workspace? Its binding history stays in the record, and runs that cited it keep citing it.",
+      "unlinkYes": "Unlink it",
+      "unlinkNo": "Keep it",
+      "unlinking": "Unlinking…",
+      "link": {
+        "heading": "Link a repository",
+        "label": "Repository",
+        "hint": "owner/name on GitHub. The workspace’s GitHub App installation has to reach it.",
+        "placeholder": "owner/name",
+        "unparsable": "Write it as owner/name.",
+        "submit": "Link",
+        "pending": "Linking…"
+      }
+    },
     "failure": {
-      "denied": "Only an organization Owner or Admin can read or change this workspace's main repository.",
+      "denied": "Only an organization Owner or Admin, or this workspace’s Owner, can read or change this workspace’s repositories.",
       "githubNotConnected": "No GitHub App installation is attached to this workspace, so there is nothing to bind. Install the App first.",
       "repositoryNotInstalled": "The installation cannot read that repository. Grant it access on GitHub, then try again.",
       "mainRepoBound": "This workspace already binds a different main repository. Changing it is an org owner's decision, recorded as a security event.",
@@ -70,7 +98,14 @@
       "refused": "This was refused: {code}.",
       "unavailable": "This could not be read from GitHub ({code}). Reopen this panel to try again.",
       "githubNotAuthorized": "GitHub is not authorized for this organization yet, so there is nothing to list. Connect GitHub first.",
-      "installationUnreachable": "The connected GitHub account cannot reach that installation. Pick one it can, or install the App on that account."
+      "installationUnreachable": "The connected GitHub account cannot reach that installation. Pick one it can, or install the App on that account.",
+      "mainRepo": "That is this workspace’s main repository. It is bound above, and a main repository is never also linked.",
+      "repositoryAlreadyLinked": "That repository is already linked to this workspace.",
+      "mainRepoClaimed": "Another workspace steers by that repository. A workspace’s main repository cannot be linked by another workspace, because Context PRs would open on its .oxagen/ tree.",
+      "mainRepoUnbound": "Bind this workspace’s main repository first. A linked repository is its second.",
+      "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be this workspace’s main. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
+      "mainRepoUnlinkRefused": "The main repository cannot be unlinked. A workspace without one cannot exist.",
+      "repositoryNotLinked": "That repository is no longer linked to this workspace. Reopen this panel to read the current list."
     }
   }
 }

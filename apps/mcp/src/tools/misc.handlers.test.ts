@@ -428,10 +428,20 @@ describe("workspace.create handler", () => {
       slug: "my-workspace",
       orgSlug: "acme-corp",
       createdAt: "2026-01-01T00:00:00.000Z",
+      mainRepo: {
+        bindingId: "rpb_0a1b",
+        connectionId: "con_0a1b",
+        fullName: "acme/widgets",
+        defaultRef: "main",
+      },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
-    const args = { name: "My Workspace", slug: "my-workspace" };
+    const args = {
+      name: "My Workspace",
+      slug: "my-workspace",
+      mainRepo: { provider: "github" as const, owner: "acme", name: "widgets" },
+    };
     await handler_workspaceCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(

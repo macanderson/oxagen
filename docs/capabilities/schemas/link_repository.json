@@ -1,0 +1,79 @@
+{
+  "name": "link_repository",
+  "domain": "repository",
+  "description": "Link a GitHub repository the workspace's GitHub App installation reaches as a linked (not main) repository of the workspace.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "provider": {
+        "const": "github",
+        "default": "github"
+      },
+      "owner": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 39
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100
+      }
+    },
+    "required": [
+      "owner",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "connectionId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "defaultRef": {
+        "type": "string",
+        "minLength": 1
+      },
+      "role": {
+        "const": "linked"
+      },
+      "linkedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "connectionId",
+      "fullName",
+      "defaultRef",
+      "role",
+      "linkedAt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -143,3 +143,55 @@ export type AttachedInstallation = {
   connectionId: string;
   accountLogin: string | null;
 };
+
+/**
+ * One repository the workspace binds, as `list_repositories` reports it (MC
+ * spec §10.1): its one main repository, where `.oxagen/` lives, and every
+ * linked one, the repositories its agents work on. The role is what the
+ * Repositories section keys on: a linked row offers an unlink, the main row
+ * never does, because a workspace without a main repo cannot exist and
+ * `unlink_repository` refuses it regardless.
+ */
+type BoundRepositoryRow = {
+  /** What `unlink_repository` takes. */
+  bindingId: string;
+  role: "main" | "linked";
+  owner: string;
+  name: string;
+  /** `owner/name` as GitHub reported it when the binding was written. */
+  fullName: string;
+  /** The approved default ref the binding records, never live GitHub's. */
+  defaultRef: string;
+  htmlUrl: string;
+  boundAt: string;
+  /**
+   * The GitHub connection behind this binding is still live. False is a
+   * repository that silently stopped resolving, and the row says so.
+   */
+  connectionLive: boolean;
+};
+
+/**
+ * Every repository the workspace binds, main first, linked ones after by full
+ * name. A local read: nothing here came from GitHub, so the list draws while
+ * GitHub is down. An empty list is a workspace that binds nothing yet, which
+ * the org's first workspace is until its provisional window is closed.
+ */
+export type WorkspaceRepositories = {
+  repositories: BoundRepositoryRow[];
+};
+
+/** What a link settled, so the section can name the repository it now binds. */
+export type LinkedRepository = {
+  bindingId: string;
+  fullName: string;
+  defaultRef: string;
+  linkedAt: string;
+};
+
+/** What an unlink settled: the repository that left the workspace's view. */
+export type UnlinkedRepository = {
+  bindingId: string;
+  fullName: string;
+  unlinkedAt: string;
+};
