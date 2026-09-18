@@ -87,8 +87,10 @@ neither that body nor the 315-capability body before it. The correct hash for
 what it committed is `d6f74054`. Git assembled the final body at a moment after
 the last `pnpm schema:manifest` run on that branch, and nothing recomputes the
 hash after git combines a file. #3233's own checks were green, because they ran
-before that assembly. `main` went red on the merge and stayed red until #3266
-re-recorded the hash. The merge was clean. It was not correct.
+before that assembly. `main` went red on the merge and stayed red until
+`b823d6b3d` re-recorded the hash, reaching `main` when #3265 merged. (#3266 was
+opened for the same repair in parallel and closed as a duplicate once that
+landed.) The merge was clean. It was not correct.
 
 **What changes:** set `strict_required_status_checks_policy: true`, or put a
 merge queue in front of `main`, so a branch is tested against the base it lands
