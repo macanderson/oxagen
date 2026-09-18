@@ -12,11 +12,9 @@ import { Avatar } from "./avatar";
 import {
   AVATAR_ICONS,
   INITIALS_MAX,
-  MAX_LEN,
   monogram,
   parseAvatarValue,
   serializeAvatar,
-  SPEC_PREFIX,
 } from "./avatar-spec";
 
 const ICON = 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"solid"}';
@@ -33,10 +31,18 @@ function drawn(value: string | null | undefined): HTMLElement {
 
 describe("the spec", () => {
   // The prefix and the cap are the contract's, re-declared in avatar-spec.ts so
-  // a client bundle does not pull zod in. This is what stops the two drifting.
+  // a client bundle does not pull zod in. This is what stops the two drifting,
+  // and it asserts the behaviour rather than the copy: a value written at the
+  // contract's prefix parses, and the contract's cap is exactly where the
+  // parser stops reading one.
   it("mirrors the contract's canonical prefix and length cap", () => {
-    expect(SPEC_PREFIX).toBe(AVATAR_SPEC_PREFIX);
-    expect(MAX_LEN).toBe(AVATAR_MAX_LEN);
+    const spec = `${AVATAR_SPEC_PREFIX}{"kind":"icon","icon":"rocket","tone":"solid"}`;
+    expect(parseAvatarValue(spec).kind).toBe("icon");
+
+    const url = (length: number) =>
+      `https://a.example/${"b".repeat(length - "https://a.example/".length)}`;
+    expect(parseAvatarValue(url(AVATAR_MAX_LEN)).kind).toBe("image");
+    expect(parseAvatarValue(url(AVATAR_MAX_LEN + 1)).kind).toBe("none");
   });
 
   it("round-trips an icon and a monogram through the stored string", () => {

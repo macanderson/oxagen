@@ -12,10 +12,6 @@ export const kv =
 export const kvTerm = "whitespace-nowrap text-muted-foreground";
 export const kvValue = "m-0 min-w-0 font-mono text-xs [overflow-wrap:anywhere]";
 
-/** The gold-ruled aside under a form, the mockup's `.note`. */
-export const note =
-  "mt-4 border-l-2 border-brand pl-3 text-xs leading-relaxed text-muted-foreground";
-
 /** A bordered stack of rows, the mockup's `.lst` / `.li`. */
 export const list =
   "flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border";

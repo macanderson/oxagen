@@ -15,14 +15,16 @@
 //
 // This module is dependency-free on purpose: the renderer and the editor both
 // import it into client bundles, and the contract's zod schema stays on the
-// server. `SPEC_PREFIX` and `MAX_LEN` mirror `AVATAR_SPEC_PREFIX` and
-// `AVATAR_MAX_LEN` in packages/oxagen/src/avatar.ts, asserted in avatar.test.tsx
-// so the two cannot drift.
+// server. `SPEC_PREFIX` and `MAX_LEN` therefore mirror `AVATAR_SPEC_PREFIX` and
+// `AVATAR_MAX_LEN` in packages/oxagen/src/avatar.ts rather than importing them.
+// They stay module-local, and avatar.test.tsx proves the mirror holds through
+// `parseAvatarValue` against the contract's own constants, so the two cannot
+// drift without a red test.
 
 /** Mirrors `AVATAR_SPEC_PREFIX` in packages/oxagen/src/avatar.ts. */
-export const SPEC_PREFIX = "avatar:v1:";
+const SPEC_PREFIX = "avatar:v1:";
 /** Mirrors `AVATAR_MAX_LEN`: the column's cap, so an oversized value is not parsed at all. */
-export const MAX_LEN = 512;
+const MAX_LEN = 512;
 
 export const AVATAR_ICONS = [
   "rocket",
@@ -74,13 +76,13 @@ const ICONS: readonly string[] = AVATAR_ICONS;
 const FONTS: readonly string[] = AVATAR_FONTS;
 const TONES: readonly string[] = AVATAR_TONES;
 
-export function isAvatarIcon(value: unknown): value is AvatarIcon {
+function isAvatarIcon(value: unknown): value is AvatarIcon {
   return typeof value === "string" && ICONS.includes(value);
 }
-export function isAvatarFont(value: unknown): value is AvatarFont {
+function isAvatarFont(value: unknown): value is AvatarFont {
   return typeof value === "string" && FONTS.includes(value);
 }
-export function isAvatarTone(value: unknown): value is AvatarTone {
+function isAvatarTone(value: unknown): value is AvatarTone {
   return typeof value === "string" && TONES.includes(value);
 }
 
