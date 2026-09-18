@@ -1759,7 +1759,7 @@ Money is `bigint` micro-USD unless a `currency` column says otherwise. Secrets a
 |---|---|---|
 | `target_kind` | text | `run`, `agent`, `host`, `tool_version`, `tool_server`, `connection`, `workspace`, `org`, `class` |
 | `target_id` | text | |
-| `command` | text | `pause`, `resume`, `steer`, `message`, `cancel`, `revoke`, `kill_switch_on`, `kill_switch_off`, `refresh_bundle` |
+| `command` | text | `pause`, `resume`, `steer`, `message`, `cancel`, `revoke`, `kill_switch_on`, `kill_switch_off`, `refresh_bundle`, `answer` (ADR-090: the reply to a `control.interject`; its payload carries the answer text, the frame it unblocks, and the responder — a timeout writes none and the run falls back to `deny`) |
 | `payload` | jsonb | steer or message text, delivery mode, addressing |
 | `issued_by` | uuid → `iam.principals` | |
 | `issued_at`, `expires_at` | timestamptz | |
@@ -1998,7 +1998,7 @@ version history is git history. These tables record what Oxagen decided against 
 | Column | Type | Notes |
 |---|---|---|
 | `version_label` | text | the label the product shows (`skl_v7`); unique per workspace |
-| `repository_binding_id` | uuid → `wrk.repository_bindings` | the binding the file was read through (#3241) |
+| `repository_id` | uuid → `wrk.repositories` | the bound repository the file was read through (#3241) |
 | `commit_sha` | text | the production-branch commit this version was read at; the provenance, in place of a column |
 | `pull_request_number` | int | the change that published it; nullable only for the initial import |
 | `enabled` | boolean | `.oxagen/skills.toml` absent or `enabled = false` means off; a workspace is created false |
@@ -2225,7 +2225,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **107 agent tools** (89 of them in the wedge; the eleven Skills tools, nine of them added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **108 agent tools** (89 of them in the wedge; eleven are the Skills tools, nine added by ADR-090), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2395,7 +2395,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 
 Two notes on that list. `read_file` has no registered contract on `main` — the only match is a test fixture in `packages/oxagen/src/contracts/tool.declaration.publish.test.ts` — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (`set_plugin_secret`, `revoke_plugin_credential`, `reauth_plugin_credential`) are absorbed into `set_connection` and `delete_connection` rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.
 
-Count: 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96, plus the eleven Skills tools (`list_skills`, 2026-09-15; `search_skills` and the nine controls ADR-090 adds) = **107** for the full product. The wedge ships **89**: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
+Count: **108** rows for the full product, counted from the table above, of which eleven are the Skills tools (`list_skills`, 2026-09-15; `search_skills` and the nine controls ADR-090 adds). The family line below it — 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96 — plus those eleven gives 107, one short of the rows actually present: a pre-existing miscount in one family that predates ADR-090 and is not chased here, recorded so the next editor reconciles the families rather than trusting the sum. The wedge ships **89**: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
 
 ## Appendix F. The pages that survive
 
