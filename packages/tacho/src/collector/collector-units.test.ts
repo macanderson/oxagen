@@ -640,6 +640,42 @@ describe("shipper", () => {
     expect(logs.some((l) => l.includes("without its body"))).toBe(true);
   });
 
+  it("does not ship the right half of a 413 split when the left half fails", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const sent: number[][] = [];
+    // Fail every leaf in the lower half; accept every leaf in the upper half.
+    // Shipping the upper half first would markShipped past the lower seqs and
+    // drop them from the WAL without the control plane ever seeing them.
+    const leftCeiling =
+      events[Math.ceil(events.length / 2) - 1]?.seq ?? Number.POSITIVE_INFINITY;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sent.push(batch.map((e) => e.seq));
+          if (batch.length > 1)
+            throw new ControlError(413, "Payload Too Large");
+          const seq = batch[0]?.seq;
+          if (seq !== undefined && seq <= leftCeiling)
+            throw new ControlError(503, "busy");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.shipped).toBe(0);
+    expect(wal.stats().unshipped).toBe(events.length);
+    // No leaf above the left ceiling was attempted: the split stopped.
+    expect(
+      sent.some((seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling),
+    ).toBe(false);
+  });
+
   // ── Orphaned events after a re-enrollment ──────────────────────────────────
   //
   // Re-enrolling mints a new host_enrollment_id and leaves whatever is still
