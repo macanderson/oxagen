@@ -715,6 +715,90 @@ describe("runTachoHook for Cursor", () => {
     expect(JSON.parse(unenrolled.stdout)).toEqual({ permission: "allow" });
   });
 
+  it("refuses a Cursor subagent start while the host is blocked and allows one otherwise", async () => {
+    const CURSOR_SUBAGENT = JSON.stringify({
+      conversation_id: "conv-9",
+      hook_event_name: "subagentStart",
+      workspace_roots: ["/repo"],
+      subagent_id: "sa-1",
+      subagent_type: "explore",
+    });
+    const pathsWithStatus = (
+      status: "active" | "paused" | "suspended" | "revoked",
+    ) => {
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      writeHostFile(
+        paths.hostFile,
+        testHostFile(signer, signer.sign(unsignedBundle()), {
+          host_status: status,
+        }),
+      );
+      return paths;
+    };
+    // Cursor reads subagentStart as a permission event, and an empty answer
+    // translates to an explicit allow. An operator who paused, suspended or
+    // revoked the host said the agent stops, so the local evaluator decides
+    // rather than falling through to that allow.
+    for (const status of ["paused", "suspended", "revoked"] as const) {
+      const blocked = await runTachoHook({
+        paths: pathsWithStatus(status),
+        env: {},
+        stdin: CURSOR_SUBAGENT,
+        harness: "cursor",
+        platform: "linux",
+        post: async () => {
+          throw new Error("daemon down");
+        },
+      });
+      expect(blocked.path).toBe("local");
+      expect(JSON.parse(blocked.stdout)).toMatchObject({
+        permission: "deny",
+        agent_message: expect.stringContaining(status),
+      });
+    }
+    // An active host still launches subagents, so the refusal is the operator
+    // state and not a blanket block.
+    const allowed = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => {
+        throw new Error("daemon down");
+      },
+    });
+    expect(allowed.path).toBe("local");
+    expect(JSON.parse(allowed.stdout)).toEqual({ permission: "allow" });
+    // The daemon's own deny, which is where a cancelled session lands, reaches
+    // Cursor in the same shape.
+    const fromDaemon = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "SubagentStart",
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "This session was cancelled by its Oxagen operator.",
+          },
+        }),
+      }),
+    });
+    expect(fromDaemon.path).toBe("daemon");
+    expect(JSON.parse(fromDaemon.stdout)).toEqual({
+      permission: "deny",
+      user_message: "This session was cancelled by its Oxagen operator.",
+      agent_message: "This session was cancelled by its Oxagen operator.",
+    });
+  });
+
   it("says the payload is not a Cursor hook when it is not one", async () => {
     const result = await runTachoHook({
       paths: enrolledPaths(),
