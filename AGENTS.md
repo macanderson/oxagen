@@ -289,10 +289,10 @@ Shell chrome components (`shell-frame`, `sidebar`, `sidebar-item`, `mobile-botto
 
 ## Harnesses
 
-Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-099). Whichever one you are, read both `AGENTS.md` and `CLAUDE.md` before you change anything. `CLAUDE.md` holds the prime directive, the git workflow, the no-local-verification rule, the test gate, and the issue rules, and they bind every agent in this repository, not only Claude Code.
+Four harnesses are first-class here: Claude Code, Codex, Cursor and Stella (ADR-101). Whichever one you are, read both `AGENTS.md` and `CLAUDE.md` before you change anything. `CLAUDE.md` holds the prime directive, the git workflow, the no-local-verification rule, the test gate, and the issue rules, and they bind every agent in this repository, not only Claude Code.
 
 - Skills live in `.claude/skills/`. `.agents/skills` is a symlink to it for Codex, and Cursor and Stella read or adopt `.claude/` directly.
-- Anything Oxagen exports for an agent (a skill, an agent definition, a rule, an MCP entry, a hook) must load in all four harnesses. ADR-099 has the table of where each harness reads each artifact.
+- Anything Oxagen exports for an agent (a skill, an agent definition, a rule, an MCP entry, a hook) must load in all four harnesses. ADR-101 has the table of where each harness reads each artifact.
 
 ## Standing decisions — apply without asking
 
