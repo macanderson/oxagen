@@ -6,12 +6,15 @@
  * and representative rows, then proves — using UNFILTERED queries — that the
  * RLS policies enforce the boundary.
  *
- * Five assertions (each its own it-block):
+ * Seven assertions (each its own it-block):
  *   G1  — unfiltered read returns only the active org's rows
  *   G2  — explicit WHERE on other org returns 0 rows
  *   G3  — WITH CHECK blocks cross-org insert
  *   G4  — no GUC + bypass off → 0 rows (fail-closed)
  *   G5  — workspace_only proof: workspace_users filtered by workspace GUC alone
+ *   G6  — ingestion.repository_bindings: unfiltered read returns only the
+ *         active org's rows, and an explicit WHERE on the other org returns 0
+ *   G7  — ingestion.repository_binding_heads: same proof as G6
  *
  * NOTE ON SUPERUSER AND RLS: PostgreSQL superusers bypass RLS unconditionally
  * even when FORCE ROW LEVEL SECURITY is set. In production, the application
@@ -43,6 +46,20 @@ const WS_B = "00000000-0000-0000-0002-000000000002";
 // Sentinel user UUID for chat.conversations.user_id NOT NULL.
 const USER_SENTINEL = "00000000-0000-0000-0099-000000000001";
 
+// ingestion.repository_bindings / repository_binding_heads fixtures. Neither
+// table carries an enforced FOREIGN KEY on connection_id, org_id or
+// workspace_id (verified against every atlas migration touching
+// ingestion.repository_bindings / repository_binding_heads — no
+// `FOREIGN KEY` / `REFERENCES` clause targets either table or column), so
+// these can be arbitrary deterministic UUIDs rather than rows seeded in
+// another table.
+const CONNECTION_A = "00000000-0000-0000-0005-000000000001";
+const CONNECTION_B = "00000000-0000-0000-0005-000000000002";
+const REPO_BINDING_A = "00000000-0000-0000-0003-000000000001";
+const REPO_BINDING_B = "00000000-0000-0000-0003-000000000002";
+const REPO_BINDING_HEAD_A = "00000000-0000-0000-0004-000000000001";
+const REPO_BINDING_HEAD_B = "00000000-0000-0000-0004-000000000002";
+
 // The non-superuser role used for isolation assertions. Must not be a
 // superuser or replication role. Created in beforeAll, dropped in afterAll.
 const APP_ROLE = "rls_test_app_role";
@@ -72,6 +89,13 @@ beforeAll(async () => {
   await sql.unsafe(`GRANT USAGE ON SCHEMA workspace TO "${APP_ROLE}"`);
   await sql.unsafe(
     `GRANT SELECT ON workspace.workspace_users TO "${APP_ROLE}"`,
+  );
+  await sql.unsafe(`GRANT USAGE ON SCHEMA ingestion TO "${APP_ROLE}"`);
+  await sql.unsafe(
+    `GRANT SELECT ON ingestion.repository_bindings TO "${APP_ROLE}"`,
+  );
+  await sql.unsafe(
+    `GRANT SELECT ON ingestion.repository_binding_heads TO "${APP_ROLE}"`,
   );
 
   // 2. Seed minimal fixture rows. All inserts run as superuser (bypass on).
@@ -123,6 +147,46 @@ beforeAll(async () => {
         (gen_random_uuid(), 'rls_test_wsu_b', ${WS_B}, ${USER_SENTINEL}, 'member', now())
       ON CONFLICT DO NOTHING
     `;
+
+    // ingestion.repository_bindings — NOT NULL: id, public_id, org_id,
+    // workspace_id, created_at (default), connection_id, provider,
+    // provider_repository_id, provider_owner, provider_name,
+    // provider_full_name, configured_default_ref, observed_at, version.
+    // version=1 requires supersedes_binding_id IS NULL
+    // (repository_bindings_supersedes_check); configured_default_ref must be
+    // non-empty (repository_bindings_default_ref_check).
+    await tx`
+      INSERT INTO ingestion.repository_bindings
+        (id, public_id, org_id, workspace_id, connection_id, provider,
+         provider_repository_id, provider_owner, provider_name,
+         provider_full_name, configured_default_ref, observed_at, version,
+         supersedes_binding_id)
+      VALUES
+        (${REPO_BINDING_A}, 'rls_test_rpb_a', ${ORG_A}, ${WS_A}, ${CONNECTION_A}, 'github',
+         'rls-test-repo-a', 'rls-test-owner-a', 'rls-test-repo-a',
+         'rls-test-owner-a/rls-test-repo-a', 'main', now(), 1, NULL),
+        (${REPO_BINDING_B}, 'rls_test_rpb_b', ${ORG_B}, ${WS_B}, ${CONNECTION_B}, 'github',
+         'rls-test-repo-b', 'rls-test-owner-b', 'rls-test-repo-b',
+         'rls-test-owner-b/rls-test-repo-b', 'main', now(), 1, NULL)
+      ON CONFLICT (id) DO NOTHING
+    `;
+
+    // ingestion.repository_binding_heads — NOT NULL: id, org_id,
+    // workspace_id, connection_id, provider, provider_repository_id,
+    // current_binding_id, created_at/updated_at (default). No public_id;
+    // pins to the binding just seeded above so current_binding_id is a real
+    // (if unenforced) reference.
+    await tx`
+      INSERT INTO ingestion.repository_binding_heads
+        (id, org_id, workspace_id, connection_id, provider,
+         provider_repository_id, current_binding_id)
+      VALUES
+        (${REPO_BINDING_HEAD_A}, ${ORG_A}, ${WS_A}, ${CONNECTION_A}, 'github',
+         'rls-test-repo-a', ${REPO_BINDING_A}),
+        (${REPO_BINDING_HEAD_B}, ${ORG_B}, ${WS_B}, ${CONNECTION_B}, 'github',
+         'rls-test-repo-b', ${REPO_BINDING_B})
+      ON CONFLICT (id) DO NOTHING
+    `;
   });
 });
 
@@ -130,6 +194,10 @@ afterAll(async () => {
   // Clean up seed rows as superuser (bypass on).
   await sql.begin(async (tx) => {
     await tx`SELECT set_config('app.rls_bypass', 'on', true)`;
+    // Children before parents: heads reference bindings (unenforced but
+    // logical), so delete heads first.
+    await tx`DELETE FROM ingestion.repository_binding_heads WHERE id IN (${REPO_BINDING_HEAD_A}, ${REPO_BINDING_HEAD_B})`;
+    await tx`DELETE FROM ingestion.repository_bindings WHERE id IN (${REPO_BINDING_A}, ${REPO_BINDING_B})`;
     await tx`DELETE FROM workspace.workspace_users WHERE public_id IN ('rls_test_wsu_a', 'rls_test_wsu_b')`;
     await tx`DELETE FROM chat.conversations WHERE public_id IN ('rls_test_cnv_a', 'rls_test_cnv_b')`;
     await tx`DELETE FROM workspace.workspaces WHERE id IN (${WS_A}, ${WS_B})`;
@@ -144,10 +212,21 @@ afterAll(async () => {
     .unsafe(`REVOKE ALL ON workspace.workspace_users FROM "${APP_ROLE}"`)
     .catch(() => undefined);
   await sql
+    .unsafe(`REVOKE ALL ON ingestion.repository_bindings FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(
+      `REVOKE ALL ON ingestion.repository_binding_heads FROM "${APP_ROLE}"`,
+    )
+    .catch(() => undefined);
+  await sql
     .unsafe(`REVOKE USAGE ON SCHEMA chat FROM "${APP_ROLE}"`)
     .catch(() => undefined);
   await sql
     .unsafe(`REVOKE USAGE ON SCHEMA workspace FROM "${APP_ROLE}"`)
+    .catch(() => undefined);
+  await sql
+    .unsafe(`REVOKE USAGE ON SCHEMA ingestion FROM "${APP_ROLE}"`)
     .catch(() => undefined);
   await sql.unsafe(`DROP ROLE IF EXISTS "${APP_ROLE}"`).catch(() => undefined);
 
@@ -281,5 +360,64 @@ describe("RLS tenant isolation (policies enforced, non-superuser via SET ROLE, b
       rows.every((r) => r.workspace_id === WS_A),
       `All rows must belong to WS_A; got: ${JSON.stringify(rows.map((r) => r.workspace_id))}`,
     ).toBe(true);
+  });
+
+  // G6 — ingestion.repository_bindings. Same headline + explicit-WHERE proof
+  // as G1/G2, over the immutable versioned repository-identity table used by
+  // governed-run admission.
+  it("G6: ingestion.repository_bindings is filtered by org/workspace GUC alone", async () => {
+    const unfiltered = await asTenant(
+      ORG_A,
+      WS_A,
+      (tx) =>
+        tx<
+          { org_id: string }[]
+        >`SELECT org_id FROM ingestion.repository_bindings`,
+    );
+    expect(
+      unfiltered.length,
+      "Expected at least one row for Org A",
+    ).toBeGreaterThan(0);
+    expect(
+      unfiltered.every((r) => r.org_id === ORG_A),
+      `All returned rows must belong to ORG_A; got: ${JSON.stringify(unfiltered.map((r) => r.org_id))}`,
+    ).toBe(true);
+
+    const crossTenant = await asTenant(
+      ORG_A,
+      WS_A,
+      (tx) =>
+        tx`SELECT 1 FROM ingestion.repository_bindings WHERE org_id = ${ORG_B}`,
+    );
+    expect(crossTenant.length).toBe(0);
+  });
+
+  // G7 — ingestion.repository_binding_heads. Same proof as G6, over the
+  // mutable head pointer table.
+  it("G7: ingestion.repository_binding_heads is filtered by org/workspace GUC alone", async () => {
+    const unfiltered = await asTenant(
+      ORG_A,
+      WS_A,
+      (tx) =>
+        tx<
+          { org_id: string }[]
+        >`SELECT org_id FROM ingestion.repository_binding_heads`,
+    );
+    expect(
+      unfiltered.length,
+      "Expected at least one row for Org A",
+    ).toBeGreaterThan(0);
+    expect(
+      unfiltered.every((r) => r.org_id === ORG_A),
+      `All returned rows must belong to ORG_A; got: ${JSON.stringify(unfiltered.map((r) => r.org_id))}`,
+    ).toBe(true);
+
+    const crossTenant = await asTenant(
+      ORG_A,
+      WS_A,
+      (tx) =>
+        tx`SELECT 1 FROM ingestion.repository_binding_heads WHERE org_id = ${ORG_B}`,
+    );
+    expect(crossTenant.length).toBe(0);
   });
 });

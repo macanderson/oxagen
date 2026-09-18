@@ -7,9 +7,13 @@ import {
   buildScopeParams,
   clampLimits,
   clampVarLengthHops,
+  expressionLocalBindings,
   GraphScopeError,
   keepFilteringPositions,
   keepPredicatePositions,
+  projectedNames,
+  rowSelectingParts,
+  rowSelectingScope,
   SCOPE_LABELS_PARAM,
   SCOPE_REL_TYPES_PARAM,
   scanLiteralsAndComments,
@@ -2287,6 +2291,382 @@ describe("the sanitizer agrees with Cypher about which text is live", () => {
     expect(scanLiteralsAndComments("MATCH (n) // x").unterminated).toBe(false);
     expect(stripLiteralsAndComments("MATCH (n) /* x")).toBe(
       scanLiteralsAndComments("MATCH (n) /* x").text,
+    );
+  });
+});
+
+describe("rowSelectingParts", () => {
+  const squash = (t: string) => t.replace(/\s+/g, " ").trim();
+  const parts = (cypher: string) =>
+    rowSelectingParts(cypher).map((p) => ({
+      pattern: squash(p.pattern),
+      anchors: squash(p.anchors),
+      where: squash(p.where),
+      branch: p.branch,
+    }));
+
+  it("splits a MATCH clause at its top-level commas and shares its WHERE", () => {
+    expect(
+      parts("MATCH (a {orgId: $orgId}), (b) WHERE b.x = 1 RETURN a, b"),
+    ).toEqual([
+      {
+        pattern: "MATCH (a {orgId: $orgId})",
+        anchors: "{orgId: $orgId",
+        where: "WHERE b.x = 1",
+        branch: 0,
+      },
+      { pattern: ", (b)", anchors: "", where: "WHERE b.x = 1", branch: 0 },
+    ]);
+  });
+
+  it("keeps a comma inside a pattern map in its part", () => {
+    expect(parts("MATCH (a {x: 1, orgId: $orgId}) RETURN a")).toHaveLength(1);
+  });
+
+  it("reads OPTIONAL MATCH as one clause and ON MATCH as none", () => {
+    expect(
+      parts(
+        "MERGE (n {orgId: $orgId}) ON MATCH SET n.x = 1 WITH n OPTIONAL MATCH (n)-->(m) RETURN m",
+      ),
+    ).toEqual([
+      {
+        pattern: "OPTIONAL MATCH (n)-->(m)",
+        anchors: "",
+        where: "",
+        branch: 0,
+      },
+    ]);
+  });
+
+  it("does not credit a USING hint to the pattern, and keeps the WHERE after it", () => {
+    const [part] = parts(
+      "MATCH (n:L) USING INDEX n:L(x) WHERE n.orgId = $orgId RETURN n",
+    );
+    expect(part?.pattern).toBe("MATCH (n:L)");
+    expect(part?.where).toBe("WHERE n.orgId = $orgId");
+  });
+
+  it("gives a subquery's MATCH its own part and keeps it out of the outer WHERE", () => {
+    expect(
+      parts(
+        "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } AND n.x = 1 RETURN n",
+      ),
+    ).toEqual([
+      {
+        pattern: "MATCH (n)",
+        anchors: "",
+        where: "WHERE EXISTS } AND n.x = 1",
+        branch: 0,
+      },
+      {
+        pattern: "MATCH (m)",
+        anchors: "",
+        where: "WHERE m.orgId = $orgId",
+        branch: 0,
+      },
+    ]);
+  });
+
+  it("numbers the top-level UNION branches", () => {
+    expect(
+      parts("MATCH (a) RETURN a UNION ALL MATCH (b) RETURN b").map(
+        (p) => p.branch,
+      ),
+    ).toEqual([0, 1]);
+  });
+
+  it("reports no parts for a query without MATCH, or one it cannot project", () => {
+    expect(parts("MERGE (n {orgId: $orgId}) RETURN n")).toEqual([]);
+    expect(parts("MATCH (n) /* unterminated")).toEqual([]);
+  });
+});
+
+describe("rowSelectingParts — a part's variables are its pattern elements'", () => {
+  const variables = (cypher: string) =>
+    rowSelectingParts(cypher).map((p) => [...p.variables]);
+
+  it("reads the name written first inside each node and relationship bracket", () => {
+    expect(variables("MATCH (a)-[r:R]->(b:L {x: 1}) RETURN a")).toEqual([
+      ["a", "r", "b"],
+    ]);
+  });
+
+  it("binds nothing for a label-only node, an anonymous relationship, or a bare map", () => {
+    expect(variables("MATCH (:L)-[:R]->({x: 1})-[*1..3]-() RETURN 1")).toEqual([
+      [],
+    ]);
+  });
+
+  it("does not read a call, a list or a grouping in a property value as an element", () => {
+    expect(
+      variables(
+        "MATCH (a) MATCH (b {x: toString(a.x), ys: [a.y], z: (a.z)}) RETURN b",
+      ),
+    ).toEqual([["a"], ["b"]]);
+  });
+
+  it("does not read a bracket inside an inline predicate as an element", () => {
+    expect(
+      variables(
+        "MATCH (a) MATCH (b WHERE (a.x) = b.x AND a.y IN [b.y]) RETURN b",
+      ),
+    ).toEqual([["a"], ["b"]]);
+  });
+
+  it("does not read a path variable as an element", () => {
+    expect(variables("MATCH p = (a)-->(b) RETURN p")).toEqual([["a", "b"]]);
+  });
+
+  it("gives each comma part its own elements", () => {
+    expect(variables("MATCH (a), (b)-->(c) RETURN a")).toEqual([
+      ["a"],
+      ["b", "c"],
+    ]);
+  });
+
+  it("keeps a variable written twice in one part", () => {
+    expect(variables("MATCH (a)-->(b)-->(a) RETURN a")).toEqual([
+      ["a", "b", "a"],
+    ]);
+  });
+});
+
+describe("rowSelectingScope", () => {
+  const squash = (t: string) => t.replace(/\s+/g, " ").trim();
+  const events = (cypher: string) =>
+    rowSelectingScope(cypher).map((e) => {
+      switch (e.kind) {
+        case "part":
+          return `part ${squash(e.part.pattern)}`;
+        case "with":
+        case "return":
+          return `${e.kind} ${squash(e.projection)}`;
+        case "open":
+          return `open ${e.subquery}${
+            e.imports === null
+              ? ""
+              : e.imports === "all"
+                ? " (*)"
+                : ` (${e.imports.join(",")})`
+          }`;
+        default:
+          return e.kind;
+      }
+    });
+
+  it("interleaves WITH and RETURN projections with the parts, in source order", () => {
+    expect(
+      events("MATCH (n) WITH count(n) AS c, n MATCH (n)-->(m) RETURN m"),
+    ).toEqual([
+      "part MATCH (n)",
+      "with count(n) AS c, n",
+      "part MATCH (n)-->(m)",
+      "return m",
+    ]);
+  });
+
+  it("ends a projection at WHERE, ORDER BY, SKIP and LIMIT", () => {
+    expect(
+      events(
+        "MATCH (n) WITH n WHERE n.x = 1 WITH n ORDER BY n.x SKIP 1 LIMIT 2 RETURN n",
+      ),
+    ).toEqual(["part MATCH (n)", "with n", "with n", "return n"]);
+  });
+
+  it("opens and closes a CALL body, with its own projections inside", () => {
+    expect(
+      events("MATCH (n) CALL { WITH n MATCH (n)-->(m) RETURN m } RETURN m"),
+    ).toEqual([
+      "part MATCH (n)",
+      "open call",
+      "with n",
+      "part MATCH (n)-->(m)",
+      "return m",
+      "close",
+      "return m",
+    ]);
+  });
+
+  it("reads a scope clause's imports, and (*)", () => {
+    expect(events("MATCH (n) CALL (n, m) { RETURN 1 } RETURN 1")).toEqual([
+      "part MATCH (n)",
+      "open call (n,m)",
+      "return 1",
+      "close",
+      "return 1",
+    ]);
+    expect(events("CALL (*) { RETURN 1 } RETURN 1")).toEqual([
+      "open call (*)",
+      "return 1",
+      "close",
+      "return 1",
+    ]);
+    expect(events("CALL () { RETURN 1 } RETURN 1")).toEqual([
+      "open call ()",
+      "return 1",
+      "close",
+      "return 1",
+    ]);
+  });
+
+  it("opens an expression subquery without imports", () => {
+    expect(
+      events("MATCH (n) WHERE EXISTS { MATCH (n)-->(m) } RETURN n"),
+    ).toEqual([
+      "part MATCH (n)",
+      "open expression",
+      "part MATCH (n)-->(m)",
+      "close",
+      "return n",
+    ]);
+  });
+
+  it("parks the enclosing projection while a subquery inside it is read", () => {
+    expect(
+      events(
+        "MATCH (n) WITH n, COUNT { MATCH (n)-->(m) RETURN m } AS c RETURN c",
+      ),
+    ).toEqual([
+      "part MATCH (n)",
+      "open expression",
+      "part MATCH (n)-->(m)",
+      "return m",
+      "close",
+      "with n, COUNT { MATCH (n)-->(m) RETURN m } AS c",
+      "return c",
+    ]);
+  });
+
+  it("records a UNION at any level", () => {
+    expect(
+      events(
+        "CALL { MATCH (a) RETURN a UNION MATCH (b) RETURN b AS a } RETURN a UNION ALL MATCH (c) RETURN c AS a",
+      ),
+    ).toEqual([
+      "open call",
+      "part MATCH (a)",
+      "return a",
+      "union",
+      "part MATCH (b)",
+      "return b AS a",
+      "close",
+      "return a",
+      "union",
+      "part MATCH (c)",
+      "return c AS a",
+    ]);
+  });
+
+  it("blanks a literal inside a projection", () => {
+    expect(events("MATCH (n) WITH n, 'x, y' AS s RETURN s")).toEqual([
+      "part MATCH (n)",
+      "with n, '' AS s",
+      "return s",
+    ]);
+  });
+
+  it("reports nothing for an input it cannot project", () => {
+    expect(events("MATCH (n) /* unterminated")).toEqual([]);
+  });
+});
+
+describe("projectedNames", () => {
+  const source = new Set(["n", "m"]);
+  const names = (projection: string) => [...projectedNames(projection, source)];
+
+  it("keeps a bare variable that is in scope", () => {
+    expect(names("n")).toEqual(["n"]);
+    expect(names(" n , m ")).toEqual(["n", "m"]);
+  });
+
+  it("keeps everything for *", () => {
+    expect(names("*")).toEqual(["n", "m"]);
+    expect(names("*, count(n) AS c")).toEqual(["n", "m"]);
+  });
+
+  it("keeps a bare variable after DISTINCT, and not a name that starts with it", () => {
+    expect(names("DISTINCT n")).toEqual(["n"]);
+    expect(names("distinct n, m")).toEqual(["n", "m"]);
+    expect(names("DISTINCTn")).toEqual([]);
+  });
+
+  it("keeps nothing for an expression, an alias, or a name not in scope", () => {
+    expect(names("count(n) AS c")).toEqual([]);
+    expect(names("n AS m")).toEqual([]);
+    expect(names("n.x")).toEqual([]);
+    expect(names("k")).toEqual([]);
+    expect(names("n {.x}")).toEqual([]);
+  });
+
+  it("splits at top-level commas only", () => {
+    expect(names("coalesce(n, m) AS c, m")).toEqual(["m"]);
+    expect(names("[n, m] AS l, n")).toEqual(["n"]);
+    expect(names("{a: n, b: m} AS o, m")).toEqual(["m"]);
+    expect(names("COUNT { MATCH (n)-->(k) RETURN k, n } AS c, n")).toEqual([
+      "n",
+    ]);
+  });
+
+  it("is delimited by Cypher's identifier classes", () => {
+    expect([...projectedNames("né", new Set(["n", "né"]))]).toEqual(["né"]);
+  });
+});
+
+describe("expressionLocalBindings", () => {
+  const spans = (text: string) =>
+    expressionLocalBindings(text).map((r) => ({
+      inside: text.slice(r.start, r.end + 1),
+      names: [...r.names],
+    }));
+
+  it("binds a list predicate's variable to its paren", () => {
+    expect(spans("WHERE any(x IN xs WHERE x > 0) AND n.y = 1")).toEqual([
+      { inside: "(x IN xs WHERE x > 0)", names: ["x"] },
+    ]);
+  });
+
+  it("binds a list comprehension's variable to its bracket", () => {
+    expect(spans("WHERE [x IN xs WHERE x > 0 | x] <> []")).toEqual([
+      { inside: "[x IN xs WHERE x > 0 | x]", names: ["x"] },
+    ]);
+  });
+
+  it("binds reduce's accumulator and element, and not a grouping's first name", () => {
+    expect(
+      spans("WHERE reduce(acc = 0, x IN xs | acc + x) > (n.x = 1)"),
+    ).toEqual([
+      { inside: "(acc = 0, x IN xs | acc + x)", names: ["acc", "x"] },
+    ]);
+  });
+
+  it("reads IN as a whole keyword, case-insensitively", () => {
+    expect(spans("WHERE any(x in xs WHERE x > 0)")).toEqual([
+      { inside: "(x in xs WHERE x > 0)", names: ["x"] },
+    ]);
+    expect(spans("WHERE f(x INx)")).toEqual([]);
+    expect(spans("WHERE f(x, INx)")).toEqual([]);
+  });
+
+  it("does not read a property membership test as a binding", () => {
+    expect(spans("WHERE n.x IN [1, 2] AND f(n.y IN xs)")).toEqual([]);
+  });
+
+  it("nests, keeping each bracket's own names", () => {
+    expect(spans("WHERE any(x IN xs WHERE all(y IN ys WHERE x = y))")).toEqual([
+      { inside: "(y IN ys WHERE x = y)", names: ["y"] },
+      { inside: "(x IN xs WHERE all(y IN ys WHERE x = y))", names: ["x"] },
+    ]);
+  });
+
+  it("reports an unclosed bracket to the end of the text", () => {
+    expect(expressionLocalBindings("WHERE any(x IN xs")).toEqual([
+      { start: 9, end: 17, names: ["x"] },
+    ]);
+  });
+
+  it("reports nothing for a text with no bindings", () => {
+    expect(spans("WHERE n.orgId = $orgId AND (n.x = 1 OR n.y = 2)")).toEqual(
+      [],
     );
   });
 });
