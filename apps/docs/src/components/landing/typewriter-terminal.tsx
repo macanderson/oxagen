@@ -55,7 +55,7 @@ function TranscriptLines({ lines }: { lines: Line[] }) {
   return lines.map((l) =>
     l.kind === "cmd" ? (
       <div key={l.id} className="lp-line flex items-start gap-2">
-        <span className="select-none text-[var(--_ember-b,#D6962C)]">$</span>
+        <span className="select-none text-[var(--_ember-b,#D4AF37)]">$</span>
         <span className="break-all">
           {l.text}
           {l.caret && <span className="lp-caret ml-0.5 align-baseline" />}

@@ -87,7 +87,26 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
+// `resolveMeterMarkup` alone, real pricing math kept: only the
+// "chargeUsageCredits: the default markup, by reason" describe block below
+// touches this, to prove the reason-based branch in chargeCostUsd rather than
+// exercising whatever the env-derived blended markup happens to be today.
+const meterMarkupState: { value: number | null } = { value: null };
+const resolveMeterMarkup = vi.fn(() => {
+  if (meterMarkupState.value === null) {
+    throw new Error(
+      "resolveMeterMarkup called with no test value set. Every case below passes markup explicitly except the reason-based-default block, which must set meterMarkupState.value first",
+    );
+  }
+  return meterMarkupState.value;
+});
+vi.mock("./pricing", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./pricing")>();
+  return { ...real, resolveMeterMarkup };
+});
+
 const {
+  ASSISTANT_TOKEN_MARKUP,
   AssistantSpendCapError,
   assertCanStartTurn,
   assertUnderAssistantSpendCap,
@@ -255,6 +274,94 @@ describe("chargeUsageCredits", () => {
     expect(consumeCredits).toHaveBeenCalledWith(
       expect.objectContaining({ reason: "consume_assistant_tokens" }),
     );
+  });
+});
+
+// ── 2026-09-18 amendment to ADR-053 §3: assistant tokens bill at cost ───────
+// The maintainer decided the platform-funded in-app agent should carry no
+// margin. Passing `markup` explicitly (as every test above does) always wins
+// by design: these are the only cases that exercise the DEFAULT, the one a
+// real call actually gets, since a real caller never passes `markup`.
+describe("chargeUsageCredits: the default markup, by reason", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    consumeState.chargedCents = 20n;
+    consumeState.shortfallCents = 0n;
+    // A 5x stand-in for whatever the solved blended markup happens to be. If
+    // these tests read the real env-derived value instead, they would
+    // silently start passing the day pricing.ts's target margin changed,
+    // which proves nothing about THIS branch (the reason-based selection in
+    // chargeCostUsd).
+    meterMarkupState.value = 5;
+  });
+  afterEach(() => {
+    meterMarkupState.value = null;
+  });
+
+  it("ASSISTANT_TOKEN_MARKUP is exactly 1: cost, no margin", () => {
+    expect(ASSISTANT_TOKEN_MARKUP).toBe(1);
+  });
+
+  it("bills consume_assistant_tokens at ASSISTANT_TOKEN_MARKUP (1), ignoring the solved blended markup", async () => {
+    await chargeUsageCredits({
+      orgId: "org-1",
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      ...sonnetCall,
+    });
+    // $0.06 cost × 1 (ASSISTANT_TOKEN_MARKUP) / $0.01 = 6.0 credits exactly,
+    // as micro-credits. At the 5x stand-in this would be 30_000_000n, the
+    // number that would come back if the branch were ever deleted.
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedMicroCents: 6_000_000n }),
+    );
+    expect(resolveMeterMarkup).not.toHaveBeenCalled();
+  });
+
+  it("still applies the solved blended markup to a reason the amendment did not touch", async () => {
+    await chargeUsageCredits({
+      orgId: "org-1",
+      reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+      ...sonnetCall,
+    });
+    // $0.06 × 5 / $0.01 = 30 credits exactly, as micro-credits.
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedMicroCents: 30_000_000n }),
+    );
+    expect(resolveMeterMarkup).toHaveBeenCalledOnce();
+  });
+
+  it("an explicit markup still overrides the reason-based default for assistant tokens", async () => {
+    await chargeUsageCredits({
+      orgId: "org-1",
+      reason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedMicroCents: 19_914_000n }),
+    );
+    expect(resolveMeterMarkup).not.toHaveBeenCalled();
+  });
+
+  it("an explicit markup is used without resolving the solved markup at all, so a caller that supplies one does not depend on meter configuration", async () => {
+    // The real resolveMeterMarkup reads OXAGEN_METER_MARKUP through requireEnv
+    // and otherwise runs the margin solve, either of which throws when meter
+    // configuration is absent or invalid. The mock stands in for that by
+    // throwing whenever no test value is set. A caller that passes its own
+    // markup must never reach it, which an eager default would break for
+    // every reason other than assistant tokens.
+    meterMarkupState.value = null;
+    // Throwing here IS the failure: the mock throws when no value is set.
+    await chargeUsageCredits({
+      orgId: "org-1",
+      reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedMicroCents: 19_914_000n }),
+    );
+    expect(resolveMeterMarkup).not.toHaveBeenCalled();
   });
 });
 

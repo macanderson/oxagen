@@ -200,7 +200,10 @@ enforce or record it:
   code in service of the refocus is advancing, not drift. One distinction (ADR-096,
   amending ADR-043): Oxagen does not run turns, but it may contain the process that
   does. A launcher that confines a process is not an agent runtime, and neither is a
-  loopback proxy that forwards a request a harness made (ADR-094).
+  loopback proxy that forwards a request a harness made (ADR-094). The
+  contained tier (`oxagen run -- <agent>`, an OS sandbox whose only egress is the
+  gateway) is that launcher, aimed at CI, headless runs, cloud runners and managed
+  devices, and it is not built yet.
 - New capabilities or tool surfaces that bypass typed contracts, IAM/entitlement
   gates, or metering ("just this once" untyped/unmetered paths).
 - Agent answers or UI surfaces that present ungrounded, citation-free output where

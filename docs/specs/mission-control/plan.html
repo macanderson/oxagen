@@ -120,10 +120,10 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
   <a class="wordmark" href="https://oxagen.sh">o<span class="x">x</span>agen</a>
   <p class="eyebrow">Oxagen · Plan</p>
   <h1>Oxagen Mission Control app: implementation plan</h1>
-  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd><dt>Deletes</dt><dd>nothing outside the new <code>apps/app</code>'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is <strong>de-registered, not deleted</strong>: <code>DEREGISTERED.md</code> at the repo root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if one of them disappears</dd></dl>
+  <dl class="facts"><dt>Status</dt><dd>Draft</dd><dt>Date</dt><dd>2026-09-12</dd><dt>Owner</dt><dd>Mac Anderson</dd><dt>Builds</dt><dd>a new <code>apps/app</code> (<code>@oxagen/app</code>) in <code>~/Projects/oxagen</code>; today's app moves to <code>apps/app_deprecated</code> (<code>@oxagen/app-deprecated</code>)</dd><dt>Source</dt><dd><code>2026-09-11-oxagen-mission-control-spec.md</code> (§3, §4, §14, §15, §19, App. A, B, F) · mockups <code>~/Documents/Oxagen/Mockups</code> (<code>mc.html</code> @ tag <code>mc-baseline-w3</code>, W1–W12) · <code>docs/feedback-mockups.md</code> · the repo at <code>origin/main</code></dd><dt>Amended 2026-09-18</dt><dd>By the steering, graph and gateway review, approved in full by the maintainer on 2026-09-18 (<code>docs/audits/2026-09-18-steering-graph-gateway-review.md</code>). §0.2 records the decisions. §8 is the six-phase refactor path (Phase 0 to Phase 5), with the freeze on new governance ceremony in Phase 0. §8.7 is the dated decision that closed the review's one open risk. The build order is Phase 0 merged (oxagen PR #3289, <code>c9db463e9</code>, ADR-091), Phase 4 in build, then Phases 1, 2, 3 and 5. The ADRs are ADR-091 and ADR-093 to ADR-097 (oxagen draft PR #3294), and the epic is oxagen issue #3295. §8.8 says where each phase sits against the batches, lanes and milestones, and which lanes it moves or retires.</dd><dt>Canonical copy</dt><dd>The canonical copy of this plan is <code>docs/implementation-plan.md</code> in https://github.com/macanderson/roadmap. This file is the copy carried in the oxagen monorepo. No build step joins the two, so a change is made in both by hand. §0.2 and §8 are identical in both copies. The rest of this copy predates the scope review of 2026-09-14 and the decisions of 2026-09-15 that the canonical copy carries. §0.1, the decisions of 2026-09-15, is in the canonical copy only.</dd><dt>Optimised for</dt><dd>parallel agents: every lane owns a disjoint set of paths, and every batch lists what it waits on</dd><dt>Deletes</dt><dd>nothing outside the new <code>apps/app</code>'s own scaffolding. Every feature spec §2.2 and App. E take off the surfaces is <strong>de-registered, not deleted</strong>: <code>DEREGISTERED.md</code> at the repo root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if one of them disappears</dd></dl>
 </header>
 <div class="grid">
-<nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-decisions-in-one-place">0. Decisions in one place</a></li><li><a href="#1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</a></li><li><a href="#2-evaluation-the-wireframes">2. Evaluation: the wireframes</a></li><li><a href="#3-evaluation-the-data-mapping">3. Evaluation: the data mapping</a></li><li><a href="#4-architecture-of-the-new-apps-app">4. Architecture of the new <code>apps/app</code></a></li><li><a href="#5-batches-parallel-lanes">5. Batches: parallel lanes</a></li><li><a href="#6-open-decisions-each-blocks-a-named-lane-and-each-has-a-recommendation">6. Open decisions (each blocks a named lane, and each has a recommendation)</a></li><li><a href="#7-lane-prompt-template">7. Lane prompt template</a></li></ol></nav>
+<nav class="toc" aria-label="Contents"><p>Contents</p><ol><li><a href="#0-decisions-in-one-place">0. Decisions in one place</a></li><li><a href="#1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</a></li><li><a href="#2-evaluation-the-wireframes">2. Evaluation: the wireframes</a></li><li><a href="#3-evaluation-the-data-mapping">3. Evaluation: the data mapping</a></li><li><a href="#4-architecture-of-the-new-apps-app">4. Architecture of the new <code>apps/app</code></a></li><li><a href="#5-batches-parallel-lanes">5. Batches: parallel lanes</a></li><li><a href="#6-open-decisions-each-blocks-a-named-lane-and-each-has-a-recommendation">6. Open decisions (each blocks a named lane, and each has a recommendation)</a></li><li><a href="#7-lane-prompt-template">7. Lane prompt template</a></li><li><a href="#8-the-steering-and-gateway-refactor-path-2026-09-18">8. The steering and gateway refactor path (2026-09-18)</a></li></ol></nav>
 <main>
 <h2 id="0-decisions-in-one-place">0. Decisions in one place</h2>
 <div class="tw"><table>
@@ -177,6 +177,105 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 </tr>
 </tbody>
 </table></div>
+<h3 id="0-2-maintainer-decisions-of-2026-09-18">0.2 Maintainer decisions of 2026-09-18</h3>
+<p>Approved in full by the maintainer on 2026-09-18, from the steering, graph and gateway review. None of these is open. The review's one open risk was closed by the maintainer the same day (decision 14, §8.7).</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Phase (§8)</th>
+<th>ADR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>One assembler, <code>assembleSteering(run, budget)</code>, returning a stable prefix, a volatile selection and a manifest recorded as a <code>steering.manifest</code> frame</td>
+<td>0, 1</td>
+<td>ADR-093 §1. ADR-091 for Phase 0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Storage stays plural, with one writer per fact: git for what is published, Postgres for what must be transactional or money-grade, the graph for lineage, evidence and entity links. Only the assembler and its index are single</td>
+<td>all</td>
+<td>ADR-097 §1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Steering and gating are two planes that never merge. One authoring surface, two compilations. Every gate emits a gate notice into steering</td>
+<td>1, 4</td>
+<td>ADR-097 §2 and §3</td>
+</tr>
+<tr>
+<td>4</td>
+<td>One item type, <code>SteeringItem</code></td>
+<td>1</td>
+<td>ADR-093 §2</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Precedence fixed in one place: a gate beats everything, a published <code>must</code> beats recalled memory, repository scope may narrow workspace scope and never widen it</td>
+<td>1</td>
+<td>ADR-097 §4</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Oxagen does not own the context window. Its injection points are exactly five</td>
+<td>0, 1, 4</td>
+<td>ADR-093 §4</td>
+</tr>
+<tr>
+<td>7</td>
+<td>The index sits behind a port: Postgres first, the graph in Phase 3 with Postgres as the fallback</td>
+<td>1, 3</td>
+<td>ADR-093 §5</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Skills are steering, and they are files: governed through a pull request, delivered by sync, living under Steering</td>
+<td>2</td>
+<td>ADR-093 §6, which amends ADR-008 and ADR-090</td>
+</tr>
+<tr>
+<td>9</td>
+<td>One screen: Steering is the hub, with tabs Records, Skills, Memory, Ontology, Policy, Proposals, Preview</td>
+<td>2</td>
+<td>ADR-097 §5</td>
+</tr>
+<tr>
+<td>10</td>
+<td>The gateway: <code>tachod</code> grows into a hook adapter, a loopback model proxy, an MCP aggregator and a control channel</td>
+<td>4</td>
+<td>ADR-094, which amends ADR-051, ADR-056 and ADR-078</td>
+</tr>
+<tr>
+<td>11</td>
+<td>The tier ladder is four words, computed from what was actually routed: observe, harness, gateway, contained</td>
+<td>4, 5</td>
+<td>ADR-095, which amends ADR-078 §1</td>
+</tr>
+<tr>
+<td>12</td>
+<td>The sandbox is the top tier, not the only tier, and hooks stay. <code>oxagen run -- &lt;agent&gt;</code>. ADR-043 is revised by one sentence</td>
+<td>5</td>
+<td>ADR-096, which amends ADR-043 and ADR-064</td>
+</tr>
+<tr>
+<td>13</td>
+<td>The refactor path is six phases, and new governance ceremony is frozen until Phase 0 is proven: a merged record seen in a real run, recorded on #2592. The phase names and numbers are fixed. The order of build is Phase 0 merged, Phase 4 in build, then Phases 1, 2, 3 and 5</td>
+<td>§8</td>
+<td>ADR-091 §6 for the freeze</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18. It was the review's one open risk. It is closed, and it does not gate Phase 4</td>
+<td>4</td>
+<td>ADR-094</td>
+</tr>
+</tbody>
+</table></div>
+<p>The ADR titles: ADR-091, Phase 0 (on <code>main</code>, oxagen PR #3289). ADR-097 &quot;Steering and gating are two planes, authored on one surface and compiled twice&quot;. ADR-093 &quot;One assembler decides what reaches the agent, and records what it cut&quot;. ADR-094 &quot;tachod grows into the gateway: a loopback model proxy and an MCP aggregator&quot;. ADR-095 &quot;The tier ladder is four words, computed from what was routed&quot;. ADR-096 &quot;Oxagen may contain the process that runs turns: the contained tier&quot;. ADR-093 to ADR-097 are in oxagen draft PR #3294 (branch <code>steering-gateway-adrs</code>), which also amends ADR-008, 043, 051, 056, 064, 078 and 090. ADR-092 belongs to an unrelated decision (oxagen PR #3292).</p>
 <hr />
 <h2 id="1-toolchain-latest-stable-verified-against-npm-on-2026-09-12">1. Toolchain: latest stable, verified against npm on 2026-09-12</h2>
 <div class="tw"><table>
@@ -2144,6 +2243,9 @@ test(&quot;fleet · phone&quot;, async ({ page }) =&gt; {
 </tr>
 </tbody>
 </table></div>
+<blockquote>
+<p><strong>2026-09-18.</strong> Nothing the maintainer approved on 2026-09-18 is open (§0.2). The review's one open risk, subscription logins through a base URL proxy, was closed by the maintainer the same day (§8.7).</p>
+</blockquote>
 <hr />
 <h2 id="7-lane-prompt-template">7. Lane prompt template</h2>
 <p>Paste one per lane. Fill the <code>&lt;&gt;</code> fields from §5.</p>
@@ -2171,8 +2273,382 @@ Enums and money follow src/data/contracts (spec vocabulary), never the mockup's 
 Done when: pnpm --filter @oxagen/app lint typecheck test:unit test:e2e -- &lt;page&gt; pass; axe clean;
 stories for new components; PR body lists each §3 row you touched with its status.
 </code></pre>
+<hr />
+<h2 id="8-the-steering-and-gateway-refactor-path-2026-09-18">8. The steering and gateway refactor path (2026-09-18)</h2>
+<p>The adversarial review of 2026-09-18 (steering, the graph, and the gateway) read oxagen <code>main</code> and found that the spec's design was right and the code had diverged from it: almost nothing reaches a wrapped agent. The maintainer approved the review in full on 2026-09-18. This section is its refactor path: six phases, Phase 0 to Phase 5, each of which ships alone and is useful alone. The spec carries the design (§4.2, §7, §10.4 to §10.7, §13.6, §17.2, §21). File paths below were checked against oxagen <code>main</code> at <code>02278c913</code>.</p>
+<p><strong>Build order (2026-09-18).</strong> The phase names and numbers do not change. Only the order of build does: Phase 0 merged first (2026-09-18), Phase 4 is in build now, then Phases 1, 2, 3 and 5. All issues are in macanderson/oxagen, and the epic is #3295.</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Order</th>
+<th>Phase</th>
+<th>Issue</th>
+<th>State at 2026-09-18</th>
+<th>ADR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Phase 0 (§8.1)</td>
+<td>#2592 (reopened, P0)</td>
+<td>Merged: PR #3289 (<code>c9db463e9</code>). #2592 closes when a merged record is seen in a real run</td>
+<td>ADR-091</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Phase 4 (§8.5)</td>
+<td>#3299 (P0), and the desktop review #3301</td>
+<td>In build: branches <code>gateway-model-proxy</code> and <code>desktop-install-hardening</code></td>
+<td>ADR-094, ADR-095</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Phase 1 (§8.2)</td>
+<td>#3296</td>
+<td>Next</td>
+<td>ADR-093, ADR-097</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Phase 2 (§8.3)</td>
+<td>#3297</td>
+<td>After Phase 1</td>
+<td>ADR-097 §5, ADR-093 §6</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Phase 3 (§8.4)</td>
+<td>#3298</td>
+<td>After Phase 1, and when the knowledge graph is on by default</td>
+<td>ADR-093 §5</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Phase 5 (§8.6)</td>
+<td>#3300</td>
+<td>After Phase 4</td>
+<td>ADR-096, ADR-095</td>
+</tr>
+</tbody>
+</table></div>
+<p>The review's defects are filed on their own and are fixed by the phase named: #3302 (the <code>publish_context_record</code> path leaves <code>kind</code> and <code>force</code> NULL, Phase 1), #3303 (<code>additionalInstructions</code> is unbudgeted and never checked against a rule, Phase 1), #3304 (Codex and Stella spend is absent, Phase 4) and #3305 (the public decks describe the removed runtime, no phase).</p>
+<p><strong>What is true on <code>main</code> today.</strong> Active <code>must</code> and <code>should</code> records reach a wrapped Claude Code run through the bundle's <code>context.system</code> at <code>SessionStart</code> (Phase 0, PR #3289, ADR-091). <code>may</code> and <code>info</code> records, bundle permissions and budget (always empty, <code>budget.mode = &quot;observed&quot;</code>) and skills (inventory only) do not steer any Claude Code or Codex run. Operator steer commands are the only live text channel from the server to a running wrapped agent. The wrapped tier is a recorder plus a kill switch that tells the agent what the workspace requires. No model proxy exists and no sandbox exists. The MCP gateway is real and server-enforced, and it is registered only into Claude Desktop. Spend for Claude Code is self-reported, and Codex and Stella report none. Memory reaches only the in-app agent, capped at 6. No application imports <code>packages/engram</code> or <code>packages/context-provider</code>, though <code>tools/scripts/package.json</code> and <code>apps/app/next.config.ts</code> still name <code>@oxagen/engram</code>. The graph holds no steering. This paragraph describes <code>main</code> with Phase 0 on it, and it stays true until the Phase 4 branches merge.</p>
+<h3 id="8-1-phase-0-make-one-record-steer-one-agent">8.1 Phase 0. Make one record steer one agent</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td>Compile the workspace's active records with <code>force</code> of <code>must</code> or <code>should</code> into <code>context.system</code> in <code>unsignedBundle</code>. Nothing else. Reopen issue #2592 against this seam, as ADR-051's supersession note asks.</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td><code>packages/handlers/src/lib/tacho-host.ts</code> (<code>unsignedBundle</code>, which took <code>context: { system: null }</code> before this phase and now takes <code>contextSystem</code> from <code>readWorkspaceSteering</code> in <code>packages/handlers/src/lib/tacho-steering.ts</code>). The records come from <code>agent.context_records</code> (<code>packages/database/src/schema/agent.ts:1303</code>) through <code>packages/handlers/src/context.steering.store.ts</code>. The wire already allows it (<code>packages/tacho/src/wire.ts:375</code>, 16 KiB), and the daemon already delivers it (<code>packages/tacho/src/collector/hook-handler.ts:322</code>). The bundle etag already covers content, and the steering version is already the promotion ledger length (<code>context.steering.store.ts:190</code>), so a merge bumps the bundle with no new plumbing.</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>A record merged through a Context PR changes what a wrapped Claude Code run is told at <code>SessionStart</code>. The run's <code>oxagen.context_digest</code> attribute shows the new digest. A workspace with no <code>must</code> or <code>should</code> records still sends <code>null</code>. A text over 16 KiB is cut from the end (<code>should</code> before <code>must</code>) and the cut is logged.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>Everything. It is the first time the governance flow has an effect on an agent.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Nothing. Days, not weeks.</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #2592 (reopened, P0). Merged as oxagen PR #3289 (<code>c9db463e9</code>, 2026-09-18), which added ADR-091. Its <code>compileSteering</code> is the first version of the stable prefix (ADR-093 §1). #2592 closes when a merged record is seen in a real run's <code>agent_start</code>.</td>
+</tr>
+<tr>
+<td><strong>The freeze</strong></td>
+<td><strong>New governance ceremony is frozen until Phase 0 is proven: a merged record seen in a real run's <code>agent_start</code>, recorded on #2592</strong> (ADR-091 §6). No new check type, governance mode, review role, ledger field, promotion threshold or proposal workflow is started. The ceremony was built before the delivery, and this phase is the delivery. Work in flight on existing flows finishes. Bug fixes are not ceremony.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-2-phase-1-one-type-one-assembler">8.2 Phase 1. One type, one assembler</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td><code>SteeringItem</code> and <code>assembleSteering(run, budget)</code> returning the stable prefix, the volatile selection and the manifest (spec §10.5 is the contract). Source adapters: the record registry, <code>:AgentMemory</code>, gate notices from rules and mandates, skill descriptions, and <code>promptConfig.additionalInstructions</code>. The index port with its Postgres implementation. The signed local index seam for wrapped runs (spec §10.5): the bundle gains <code>steering.items</code>, every active item in the host's scope with its id, hash, kind, force, scope, validity, body and scoring terms, compiled beside <code>context.system</code> and emitted only to a host that advertises <code>BUNDLE_FEATURE_STEERING_ITEMS</code> in <code>bundleFeatures</code>, the same gate <code>gateway_tools</code> uses today, because <code>policyBundleSchema</code> is strict and an older daemon would reject the whole bundle. A host without the feature keeps <code>context.system</code> and Phase 0's behaviour; the field becomes required once the fleet is upgraded. The assembler's pure core lives in <code>@oxagen/tacho</code>, the leaf, so <code>tacho-hook</code> builds the prefix per session at <code>SessionStart</code> from the items in scope of the session's repository binding, and ranks the volatile selection at <code>UserPromptSubmit</code> with the prompt on the machine, under a tight timeout, failing open. <code>@oxagen/context-provider</code> imports the same core and adds the adapters and the Postgres index. Precedence fixed in one place. The two publish paths collapse so every row carries <code>kind</code> and <code>force</code>. The in-app agent uses the same assembler. The <code>steering.manifest</code> frame.</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td><code>packages/context-provider</code> becomes the assembler's home and reuses <code>packWithinBudget</code> (<code>packages/context-provider/src/budget.ts:37</code>). <code>packages/engram</code> is deleted or folded in. Deleting it needs an ADR that names the files (the de-registered rule in <code>CLAUDE.md</code>), so folding is the default. No application imports it, and <code>tools/scripts/package.json</code> and <code>apps/app/next.config.ts</code> still name it, so either path edits both. <code>packages/tacho/src/collector/hook-handler.ts:383</code> (<code>UserPromptSubmit</code>). <code>packages/tacho/src/wire.ts</code> (the bundle schema gains <code>steering.items</code>) and <code>packages/handlers/src/lib/tacho-host.ts</code> (compiles them). A new <code>packages/tacho/src/steering/</code> for the pure core, which keeps the leaf constraint because it imports nothing from <code>@oxagen/*</code>. <code>packages/handlers/src/context.record.publish.ts</code> and <code>packages/handlers/src/context.pr.merge.ts</code> (the two publish paths). <code>packages/agent/src/runtime/assistant-turn.ts</code> and <code>assistant-recall.ts:23</code> (<code>RECALL_LIMIT = 6</code>), and <code>packages/ai/src/prompts/registry.ts:82</code> (the unconditional append of additional instructions). Phase 0's compile step moves behind the assembler's prefix.</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>Every run that reached an injection point carries a <code>steering.manifest</code> frame listing what was rendered and what was cut, with a reason each. One function produces what the wrapped agent and the in-app agent are told. Two sessions on one host in two repositories each receive their own repository-scoped <code>must</code>. A <code>UserPromptSubmit</code> on a wrapped run ranks with the prompt on the machine, no request from <code>tacho-hook</code> to Oxagen's servers carries the prompt, and a rig proves it. A daemon built before <code>steering.items</code> still parses every bundle the control plane signs for it, and an enrollment test with a host that advertises only <code>gateway_tools</code> proves it. A slow or failing assembler never holds a prompt: the hook answers <code>{}</code> and the manifest says <code>fail_open</code>. A recalled memory is never rendered as a rule. No <code>agent.context_records</code> row has a null <code>kind</code> or <code>force</code>.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>Phase 2's Preview, which is this function with no run. Effect measurement, retirement and promotion, which need the manifest. Phase 4's gate compilation.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Phase 0.</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #3296. ADR-093 and ADR-097. Closes defects #3302 and #3303. An override cannot replace the governance prompt (<code>chat.system</code> is append-only, and only <code>conversation.title</code> is overridable), so #3303 is about the appended text being unranked and unbudgeted, not about replacement.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-3-phase-2-one-screen">8.3 Phase 2. One screen</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td>Steering becomes the hub. Tabs, in this order: Records, Skills, Memory, Ontology, Policy, Proposals, Preview. Preview: pick an agent and a prompt, and see exactly what would be injected, what was cut, and why. Skills move under Steering and become governed files delivered by sync, authored through the same pull request flow. Ontology gets a small home there for ontology notes that steer. Skills and Ontology lose their top-level navigation entries.</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td><code>apps/app/src/app/[org]/[ws]/steering/</code> (already an optional catch-all for tabs, §4.10) and <code>apps/app/src/app/[org]/[ws]/skills/</code>, which becomes a redirect to <code>steering/skills</code> in <code>apps/app/src/proxy.ts</code> (§4.11). <code>apps/app/src/features/skills/</code>. <code>apps/app/src/data/contracts/steering.ts</code> and <code>apps/app/src/data/live/steering.ts</code> gain the Preview read over <code>assembleSteering</code>. Skill sync materializes files in the checkout and rides enrollment's writers under <code>packages/tacho/src/host/</code>.</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>The seven tabs route at <code>/{org}/{ws}/steering/{tab}</code>. Preview's output for an agent and a prompt is byte-identical to what the assembler delivers for the same inputs. A skill published through a pull request appears in a wrapped harness's skills directory after sync, and an unpublished one is removed.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>An operator can see the competition for context, which is what makes the budget tunable.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Phase 1. While a steering checkout is behind the production branch, files in the checkout are stale, so sync reports the commit it materialized.</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #3297. ADR-097 §5 and ADR-093 §6.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-4-phase-3-the-graph-becomes-the-index">8.4 Phase 3. The graph becomes the index</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td>Project every item as a <code>:Record</code> node with <code>ABOUT</code> edges to files, repositories and entities (spec §9). One direction only, registry to graph, verified by hash. Switch the assembler's relevance stage to the graph. Keep the Postgres path as the fallback behind the same port.</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td>A projector beside <code>packages/ontology</code> and <code>packages/ingestion</code>, neither of which writes a <code>:Record</code> node today. The <code>SteeringIndex</code> port from Phase 1 gains a graph implementation. Tenancy goes through the Neo4j seam of ADR-087.</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>With the knowledge graph on, the volatile selection prefers items about the files and entities the run touches. With <code>NEO4J_URI</code> unset, or on a hash mismatch, the assembler reads Postgres and the manifest says which index answered. Turning Neo4j off changes ranking only, never delivery, and never a gate.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>Relevance by what a run touches, which a flat list cannot do.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Phase 1, and the knowledge graph being on by default. <strong>Do not start before that.</strong> Delivery never waits for the graph.</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #3298. ADR-093 §5.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-5-phase-4-the-gateway">8.5 Phase 4. The gateway</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td><code>tachod</code> grows into the gateway. Add the loopback model proxy: Anthropic Messages and OpenAI Responses passthrough with streaming, and enrollment writes the base URL. Bind every proxied request to one run before it is forwarded, as spec §7.1 sets out: by the connecting process for every wrapped session (a hook cannot change a running process's base URL, and the run-scoped URL is for a launcher that sets it before the process starts), matched to a harness pid the session registry holds keyed by session id. Capture that pid at <code>SessionStart</code> for every process-bound harness: Claude Code exports <code>CLAUDE_PID</code> and Stella's is found by <code>tacho-hook</code> today, Codex passes none, and <code>claude_ppid</code> in the envelope is never assigned. The MCP aggregator binds by the same rule: the stdio shim sends its parent pid, the harness, with every message, and the aggregator selects the run from the session registry (spec §7.1). A request that binds to no run is forwarded, recorded as unattributed against the host, and drops the tier of every run open on that host to <code>harness</code> for that window. With the control channel down, the proxy admits calls only until the cached bundle expires, records <code>revocation_freshness</code> on each, and then refuses every proxied call until a fresh bundle arrives. Move metering to observed. Enforce <code>session_limit_usd</code> locally at the proxy, admitting a call by its ceiling and never by the balance before it (the ceiling prices every class of spec §12.6 the request can incur: input at the higher of the uncached and cache-write price, the output cap with reasoning inside it, and each enabled provider-hosted tool at its per-request price times a bounded use count; a request the proxy cannot bound is refused), and enforce shared hard budgets (organization, workspace, operator, agent) by an atomic reservation of that ceiling on the control plane before the call, settled to observed usage after it, with a per-host lease for the offline case (spec §12.5). A bundled copy of a shared counter is never the admission check. Re-land ADR-051's per-turn volatile injection at the proxy. Implement a real <code>interrupt</code>. Turn the MCP gateway into an aggregator for wrapped harnesses: enrollment re-serves the harness's existing MCP servers through loopback with displace-and-restore, and pins managed settings where a vendor offers them. Fill bundle permissions from the second compilation of Phase 1. The proxy forwards prompt bodies to the vendor only. No prompt body is sent to Oxagen's servers: only digests and usage go up. The vendor credential stays on the machine. Update the desktop installer to install and remove the gateway cleanly, with a line-by-line bug review of <code>apps/desktop</code> in the same effort.</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td><code>packages/tacho/src/collector/</code> (<code>daemon.ts</code>, <code>server.ts</code>, <code>loopback-guard.ts</code>, <code>mcp-gateway.ts</code>). <code>packages/tacho/src/cli/enroll.ts</code> and <code>unenroll.ts</code>. <code>packages/tacho/src/host/settings-writer.ts</code>, <code>codex-writer.ts</code>, <code>stella-writer.ts</code> and <code>mcp-config-writer.ts</code> (<code>mergeOxagenMcpServer</code> and <code>stripOxagenMcpServer</code> are the displace-and-restore it extends). <code>packages/tacho/src/wire.ts:370</code> (<code>session_limit_usd</code>, which nothing reads today). <code>packages/handlers/src/lib/tacho-host.ts:269</code> (the empty permissions and the <code>observed</code> budget). Oxagen Desktop installs it (<code>apps/desktop</code>, the desktop spec §14).</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>A wrapped run whose model and MCP traffic went through <code>tachod</code> reads <code>gateway</code>, and a run that did not still reads <code>harness</code>. Two wrapped sessions on one host, running at once, each get their own spend, steering and <code>session_limit_usd</code>, and every <code>model.request</code> frame names its binding (<code>token</code> or <code>process</code>). A request the proxy cannot bind is forwarded, recorded as unattributed against the host, and every run open on that host during it reads <code>harness</code>. Spend is observed for Claude Code, Codex and Stella alike, and every number carries its basis. A call whose ceiling passes the remaining <code>session_limit_usd</code> is refused before it is forwarded, a request with no output cap gets one the balance affords, and a rig proves that a completion admitted with a cent left cannot finish at ten dollars. A <code>tachod</code> restart mid-session restores the run's spent and every offline lease's remaining amount from the host WAL with every unsettled ceiling counted in full, and a rig that kills the daemon during a streaming call, online and with the control channel down, proves the run cannot spend <code>session_limit_usd</code> twice and a lease cannot be drawn twice. A request that enables a cache write or a provider-hosted tool is admitted by a ceiling that prices them, and a request the proxy cannot bound is refused. Two hosts spending at once against one workspace hard budget cannot together pass it by more than their outstanding leases plus the stated estimator error, and a rig with two proxies racing one counter proves it. Two Codex sessions on one host each get their own run, because the hook captured each one's pid, and two wrapped sessions calling the same MCP server through the aggregator each get their own agent's permissions and their own <code>tool.requested</code> frames. Two concurrent model calls from one run with a dollar of <code>session_limit_usd</code> left admit one ceiling, not two, and a same-proxy race rig proves it. A host revoked while its control channel is down stops proxying no later than its cached bundle's expiry, and a rig proves it. <code>interrupt</code> stops an in-flight response and the partial output is recorded and billed. Enrollment writes a base URL only after the daemon is confirmed listening. Unenroll and uninstall restore every file they touched before they stop the daemon, so no harness is left pointing at a dead base URL. Uninstall leaves the home directory byte-identical to its state before install, except for a documented allowlist, and a temp-HOME snapshot rig proves it. No prompt body appears in anything sent to Oxagen's servers.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>The words &quot;observed&quot; and &quot;enforced&quot; for routed traffic. Spend for every harness. Phase 5.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Nothing to start. It is in build now, in parallel with Phase 0. Two parts wait for Phase 1, which writes what they carry: per-turn volatile injection (the proxy ships the seam for it) and bundle permissions from the second compilation (ADR-097 §3). The subscription login question is closed and gates nothing (§8.7).</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #3299 (P0, in build), branch <code>gateway-model-proxy</code>: the loopback model proxy in <code>tachod</code>, the request-to-run binding, enrollment writes the base URLs, observed metering, the enforced <code>session_limit_usd</code>, real <code>interrupt</code>, and the seam for per-turn injection. Issue #3301, branch <code>desktop-install-hardening</code>: a line-by-line bug review of <code>apps/desktop</code>, install and uninstall fixed and proven against a temp-HOME snapshot rig, and the installer updated for the gateway. Closes defect #3304. ADR-094 and ADR-095.</td>
+</tr>
+<tr>
+<td><strong>Settled by ADR-094 and spec §13.6</strong></td>
+<td>No prompt body is sent to Oxagen's servers, so model-call frames from the gateway carry digests and usage only, never bodies. What hook-tier frames carry today is unchanged. The spec's audit rule of full frame bodies (§13.1) applies where Oxagen is itself in the path of the body. ADR-093 names where the volatile ranking runs for a wrapped run: on the machine, in <code>tacho-hook</code>, against the signed items the bundle carries (Phase 1, §8.2). ADR-094 does not speak to it.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-6-phase-5-the-contained-tier">8.6 Phase 5. The contained tier</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Scope</strong></td>
+<td><code>oxagen run -- &lt;agent&gt;</code>: a supervisor that launches the agent under an OS sandbox with the three controls ADR-096 requires, each attested by the launcher: gateway-only egress for every process in the sandbox; a filesystem policy whose writable set is the workspace the launcher was given, with the harness's settings file, its hook entries and the <code>tacho-hook</code> binary read-only; and hook integrity at launch, the launcher starting the binary it chose with the hook entries it wrote, recording a digest of that configuration, and the sandbox denying writes to it for the life of the run. The launcher also sets the run-scoped base URL before the process starts (spec §7.1). CI, headless runs, cloud runners and managed devices first. Never mandatory on a developer's own laptop. <code>contained</code> becomes the top word of the ladder. The witness runner of ADR-064 is built on the same launcher. ADR-043 is revised by one sentence: &quot;Oxagen does not run turns, but it may contain the process that does. A launcher that confines a process is not an agent runtime.&quot;</td>
+</tr>
+<tr>
+<td><strong>Seam</strong></td>
+<td>A new verb in <code>apps/cli/src/program.ts</code>, beside <code>oxagen tacho</code> (line 669) and <code>oxagen agent</code> (line 881). The tier enum <code>TACHO_ENFORCEMENT_TIERS</code> (<code>packages/database/src/schema/tacho.ts:74</code>) and <code>TACHO_HARNESS_TIERS</code> (<code>packages/tacho/src/wire.ts:175</code>) gain <code>contained</code> as a wire-compatible addition with no rename, as ADR-095 &quot;The tier ladder is four words, computed from what was routed&quot; sets out. <code>ENFORCEMENT_TIERS</code> (<code>packages/tacho/src/envelope.ts:63</code>) is the envelope's copy of the same three words.</td>
+</tr>
+<tr>
+<td><strong>Done when</strong></td>
+<td>A run under the launcher cannot reach a model or a tool server except through the gateway, a probe that tries is refused and recorded, a connection from inside the sandbox that binds to no run is refused rather than forwarded, a write to the settings file, a hook entry or the <code>tacho-hook</code> binary from inside the sandbox is refused and recorded, the launch attestation carries the configuration digest and all three controls, and the run's tier reads <code>contained</code>. A run whose attestation lacks any of the three controls reads <code>gateway</code> at most. A run outside the launcher never reads <code>contained</code>.</td>
+</tr>
+<tr>
+<td><strong>Unblocks</strong></td>
+<td>The word &quot;enforced&quot; against the machine's operator. The witness runner, and with it milestone M6.</td>
+</tr>
+<tr>
+<td><strong>Depends on</strong></td>
+<td>Phase 4.</td>
+</tr>
+<tr>
+<td><strong>Tracking</strong></td>
+<td>Issue #3300. ADR-096 and ADR-095.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-7-decision-record-2026-09-18-subscription-logins-pass-through-a-base-url-proxy">8.7 Decision record, 2026-09-18: subscription logins pass through a base URL proxy</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Question</strong></td>
+<td>Whether Claude Code and Codex subscription logins, as opposed to API keys, pass through a base URL proxy, and whether the vendors' terms allow it. The review listed it as its one unverified risk.</td>
+</tr>
+<tr>
+<td><strong>Decision</strong></td>
+<td>Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18. Recorded in ADR-094.</td>
+</tr>
+<tr>
+<td><strong>Effect</strong></td>
+<td>It gates nothing. Phase 4 is in build. The loopback proxy covers hosts on a subscription login as well as hosts on an API key.</td>
+</tr>
+<tr>
+<td><strong>What would reopen it</strong></td>
+<td>A vendor changing its terms or its login flow. A host whose harness cannot be pointed at the proxy stays at the <code>harness</code> tier and the record says so.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-8-where-each-phase-sits-against-the-batches-the-lanes-and-the-milestones">8.8 Where each phase sits against the batches, the lanes and the milestones</h3>
+<p>Batches B0 to B5 built the new <code>apps/app</code>, and the cutover has shipped (<code>app.oxagen.sh</code> serves the rebuild). The phases are backend work with one page change, so they do not reopen the batches. They do move or retire these items:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>What changes</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Milestone <strong>M1</strong> (model proxy, run tokens) and <strong>M2</strong> (budgets)</td>
+<td>Their gateway half is delivered by Phase 4</td>
+<td>The spec described the proxy, base URL enrollment, run tokens and proxy budgets as present. None exists</td>
+</tr>
+<tr>
+<td>Milestone <strong>M3</strong> (steering delivery)</td>
+<td>Phase 0 and Phase 1 deliver it. The rest of M3 (records endpoint, reflector, promoter, Context PRs) is unchanged</td>
+<td>M3's acceptance test ends &quot;merging it changes the next run's context&quot;. That half was never true</td>
+</tr>
+<tr>
+<td>Milestone <strong>M4</strong></td>
+<td>Phase 3 is its steering half and waits for the knowledge graph to be on by default</td>
+<td>Delivery never waits for the graph</td>
+</tr>
+<tr>
+<td>Milestone <strong>M6</strong> (witness runner)</td>
+<td>Follows Phase 5</td>
+<td>The witness runner is built on the Phase 5 launcher</td>
+</tr>
+<tr>
+<td>Lanes <strong>P5</strong> and <strong>A5</strong> (Steering page and adapter: records, proposals, Context PRs)</td>
+<td>They stand as built. Phase 2 extends the same route to seven tabs</td>
+<td>One screen</td>
+</tr>
+<tr>
+<td>The <strong>Skills</strong> page lane (ADR-090, <code>apps/app/ARCHITECTURE.md</code> §8)</td>
+<td>Moves under Phase 2 as the Skills tab of Steering. Its top-level navigation entry retires</td>
+<td>Skills are steering</td>
+</tr>
+<tr>
+<td>Gap <strong>G10</strong> (<code>USED_CONTEXT</code> edges from context assembly)</td>
+<td>Superseded. The <code>steering.manifest</code> frame of Phase 1 is the record of what a run was told. Edges in the graph arrive with Phase 3</td>
+<td>The manifest needs no graph</td>
+</tr>
+<tr>
+<td>Gap <strong>G17</strong> (a revocable run token on the ledger ingest contract, decided 2026-09-15)</td>
+<td>Stands, and is not on <code>main</code> yet. It is separate from the gateway's run tokens, which are Phase 4</td>
+<td>Two different tokens</td>
+</tr>
+<tr>
+<td>Gaps <strong>G3</strong>, <strong>G4</strong> and lanes <strong>P6</strong>, <strong>A6</strong> (Spend)</td>
+<td>They stand. Every spend number shows its basis, and until Phase 4 the basis for a wrapped agent is <code>self-reported</code>, with Codex and Stella absent (defect #3304)</td>
+<td>No proxy on <code>main</code>, no observed metering</td>
+</tr>
+<tr>
+<td>Any lane or gap that adds steering ceremony (a new check, governance mode, review role, ledger field or promotion threshold)</td>
+<td>Frozen until Phase 0 is proven on #2592</td>
+<td>§8.1</td>
+</tr>
+<tr>
+<td>Any lane that assumes the model proxy, run tokens, enforced budgets or a sandbox exist</td>
+<td>Waits for Phase 4 or Phase 5, and renders <code>NotBacked</code> until then (decision 3)</td>
+<td>The tier ladder cannot be over-stated</td>
+</tr>
+</tbody>
+</table></div>
 
-<footer class="colophon"><span>Oxagen · Plan</span><span>Source: <code>plan.md</code> · rendered 2026-09-16</span></footer>
+<footer class="colophon"><span>Oxagen · Plan</span><span>Source: <code>plan.md</code> · rendered 2026-09-18</span></footer>
 </main>
 </div>
 </div>
