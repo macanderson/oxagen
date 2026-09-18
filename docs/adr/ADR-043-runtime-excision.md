@@ -133,7 +133,8 @@ one sentence:
 Everything else above stands. Oxagen still runs no turn, embeds no engine and
 ships no sandbox for its own agent's code. What changes is that
 `oxagen run -- <agent>` (Phase 5) may launch a customer's agent under an OS
-sandbox whose only egress is the gateway (ADR-094), aimed at CI, headless runs,
+sandbox with gateway-only egress (ADR-094), a read-only hook configuration, and
+a filesystem policy (ADR-096), aimed at CI, headless runs,
 cloud runners and managed devices first, and never mandatory on a developer's
 own laptop. ADR-094's loopback proxy is also not a runtime: it forwards a
 request a harness made and assembles nothing.

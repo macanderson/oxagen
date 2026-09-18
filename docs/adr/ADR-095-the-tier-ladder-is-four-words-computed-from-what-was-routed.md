@@ -50,15 +50,17 @@ The tier ladder, four words, computed from what was actually routed:
 | `observe` | Recorded only | "recorded" | Anything about refusal or delivery |
 | `harness` | Hooks installed; steering is delivered and the four blocking hook events can refuse, client-attested and fail-open | "delivered", "recorded", "client-attested", "fail-open" | "enforced". Never |
 | `gateway` | Model and MCP traffic routed through `tachod`; metering observed, budgets enforced | "observed" metering, "enforced" budgets on routed traffic | "enforced" against the machine's operator; anything about traffic that was not routed |
-| `contained` | The agent runs under an OS sandbox whose only egress is the gateway | "enforced". This is the only tier that earns the word against the machine's operator | Anything about a run that was not launched by the launcher |
+| `contained` | The agent runs under an OS sandbox the launcher set: gateway-only egress, a read-only hook configuration, and a filesystem policy (ADR-096) | "enforced" for routed traffic and the filesystem boundary. This is the only tier that earns the word against the machine's operator | Anything about a run that was not launched by the launcher, or whose attestation lacks one of the three controls |
 
 A control claim always carries its scope: "for actions routed through Oxagen".
 
 **Computed, not assigned.** A run's tier is derived from the traffic the record
 shows: hook events give `harness`; model and MCP requests seen by the gateway
-for that run give `gateway`; a launcher attestation plus gateway-only egress
-gives `contained`. What was installed on the host is not evidence of what a run
-did.
+for that run give `gateway`; a launcher attestation naming the three controls
+of ADR-096, plus gateway-only egress in the record, gives `contained`. Egress
+alone does not: local tools run inside the sandbox, and without the hook
+configuration pinned they stay client-attested. What was installed on the host
+is not evidence of what a run did.
 
 **Today.** Agents sit on `observe` or `harness`, and Claude Desktop sits on
 `gateway` for its Oxagen MCP calls only. `gateway` for a wrapped harness arrives
