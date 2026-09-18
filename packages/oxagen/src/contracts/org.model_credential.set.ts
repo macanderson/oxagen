@@ -59,7 +59,7 @@ export const orgModelCredentialSet = registerCapability({
     "Store the organisation's own model-vendor API key — OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, or any OpenAI-compatible endpoint given by base URL. Direct-vendor keys also take a model id per tier. While a key is stored, the in-app agent's completions run on it and Oxagen bills nothing for those tokens. The key is envelope-encrypted at rest and never readable back. Replaces any key already stored. Returns the redacted credential view.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "high",
   defaultEffect: "deny",

@@ -9,12 +9,14 @@
 // view field.
 import type { apiKeyList } from "@oxagen/oxagen/contracts/api.key.list";
 import type { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
+import type { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import type { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import type { listMembers } from "@oxagen/oxagen/contracts/workspace.member.list";
 import type { z } from "zod";
 import type {
   ApiKeyList,
   MemberList,
+  ModelCredential,
   RoleCatalog,
   WorkspaceList,
 } from "@/data/contracts/org";
@@ -107,4 +109,23 @@ export function toApiKeys(
     revokedAt: key.revokedAt,
     rotatable: key.rotatable,
   }));
+}
+
+/**
+ * `get_model_credential` onto the page's view model. Field for field: the
+ * contract already returns the redacted shape the page shows, and no key.
+ */
+export function toModelCredential(
+  out: ContractOutput<typeof orgModelCredentialGet>,
+): z.input<typeof ModelCredential> {
+  return {
+    configured: out.configured,
+    provider: out.provider,
+    status: out.status,
+    keyHint: out.keyHint,
+    baseUrl: out.baseUrl,
+    modelMap: out.modelMap,
+    lastVerifiedAt: out.lastVerifiedAt,
+    rotatedAt: out.rotatedAt,
+  };
 }

@@ -107,6 +107,11 @@ export const routes = {
       show: q?.show,
       offset: q?.offset,
     }),
+  /**
+   * Organization › Model funding: whose key pays for the assistant's model
+   * calls (ADR-053 §2). Org-scoped — the key pays for every workspace.
+   */
+  modelFunding: (org: string): SafePath => pathOf(org, "model-funding"),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),

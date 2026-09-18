@@ -182,6 +182,7 @@ describe("org.model_credential.set capability", () => {
       "mcp",
       "unit",
       "docs",
+      "app",
     ]);
   });
 
