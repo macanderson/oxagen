@@ -146,6 +146,21 @@ The proxy has one frame per call, so its request and its response share one
 JSON body. `tool_call` in the hooks already put input and output in one body,
 so this follows a precedent rather than setting one.
 
+### 7. A store that retains bodies is constructed with a body store, and says so
+
+`resolveBodyColumns` raises when a frame's policy retains its body and the
+ledger has no body store. It does not quietly record a digest instead: a
+deployment that promised a workspace exact content and cannot store it is a
+misconfiguration, and a run that silently downgrades is one nobody notices
+until they need the bytes.
+
+The cost is that a producer which starts passing bodies must be constructed
+with the seam in the same change, or every turn it records fails at its first
+frame. `deferredEvidenceBodies` is that seam, the body half of the same lazy
+store `deferredEvidenceArchive` already resolves, and
+`assistantRunStore()` is exported so a test can assert both are present
+without opening a storage driver.
+
 ## Consequences
 
 A run recorded after this change reaches `view` when its policy keeps exact
