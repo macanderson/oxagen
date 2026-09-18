@@ -462,7 +462,7 @@ export function TranscriptView({
   ws,
   runId,
 }: {
-  transcript: Pick<RunTranscript, "complete">;
+  transcript: Pick<RunTranscript, "complete" | "cursor">;
   /** The transcript's frames, at least one. */
   entries: Frames;
   /** The level the URL asked for: which disclosures start open. */
@@ -769,7 +769,7 @@ export function TranscriptView({
         />
         {live
           ? t("recording")
-          : transcript.complete
+          : transcript.complete && transcript.cursor === null
             ? t("complete", { count: formatCount(entries.length, locale) })
             : t("cut", { count: formatCount(entries.length, locale) })}
       </div>

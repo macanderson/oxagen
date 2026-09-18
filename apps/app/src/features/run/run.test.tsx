@@ -591,6 +591,19 @@ describe("transcript", () => {
     expect(screen.getByText(/stops short of the end/)).toBeTruthy();
   });
 
+  it("says the transcript stopped short when entries lie past this read (negative)", async () => {
+    // The ledger read reached the run's end, but the page did not: the cursor
+    // is set, so drawing the page as the whole run would hide what is past it.
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ complete: true, cursor: "dDo0Mg" })),
+      },
+      { tab: "transcript" },
+    );
+    expect(screen.getByText(/stops short of the end/)).toBeTruthy();
+  });
+
   it("names its own failure when the transcript read is refused (negative)", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: DENIED },

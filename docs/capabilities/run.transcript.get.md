@@ -73,7 +73,7 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
 | `entries[].frames` | integer | frames folded, the opening frame included |
-| `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
+| `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |

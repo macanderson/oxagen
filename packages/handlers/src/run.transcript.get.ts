@@ -184,10 +184,8 @@ export function createRunTranscriptGetHandler(
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     const frames = filterFramesByKind(read.frames, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
-
-    // The turn an entry belongs to is counted over the whole run, not over the
-    // filtered frames, so pressing a chip never renumbers the turns a reader
-    // is looking at.
+    // Turns are counted over every frame of the run, so a chip filter never
+    // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
     const ordinals = turnOrdinals(read.frames);
     const turnOf = new Map(
       read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
