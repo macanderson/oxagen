@@ -20,7 +20,7 @@ write that answers an item.
 
 | Field    | Type      | Notes                                                        |
 | -------- | --------- | ------------------------------------------------------------ |
-| `runId`  | `string?` | Only approvals recorded on this run (a run public id).       |
+| `runId`  | `string?` | Only approvals parked in this run (`arun_…` or `tse_…`).     |
 | `limit`  | `int`     | 1–100, default 50.                                           |
 | `cursor` | `string?` | The `nextCursor` of the previous page. Unknown cursors start over. |
 
@@ -36,7 +36,7 @@ Each item:
 | Field            | Type             | Source                                                                                      |
 | ---------------- | ---------------- | ------------------------------------------------------------------------------------------- |
 | `id`             | `string`         | `agent.approval_requests.public_id` (`apr_…`), the id `resolve_approval` accepts.          |
-| `runId`          | `string \| null` | Null: no approval row names a run (`approval_requests` carries `message_id`, `execution_step_id`, `tool_call_id`; none references `agent_runs` or `tacho_sessions`). |
+| `runId`          | `string \| null` | The run the call was parked in (`approval_requests.run_public_id`, #3286). Null when no run was in scope, or when the writer records none yet. |
 | `tool`           | `string`         | `approval_requests.capability_name`.                                                        |
 | `requester`      | `string \| null` | `auth.users.public_id` (`usr_…`) of the person whose conversation turn parked the call, through `message_id` → `chat.messages` → `chat.conversations.user_id`. Null when that chain is not readable. |
 | `createdAt`      | RFC 3339         | `approval_requests.created_at`.                                                             |
@@ -52,9 +52,14 @@ Only public ids leave the handler.
 - **Pending only:** `resolution IS NULL AND expires_at > now()`. A resolved or
   expired approval is not listed.
 - **Workspace-bound:** rows are filtered on the context's org and workspace.
-- **`runId`:** because no approval row names a run, a run filter yields an
-  empty page. The field exists so the Run strip asks the question the record
-  answers; the answer changes when the store records the link.
+- **`runId`:** filters on `approval_requests.run_public_id`, which the chat
+  gate records by resolving the run it holds (`ctx.agentRun.runId`, an internal
+  id) to its public one at write time. It is a public id because both kinds of
+  run this product tracks have to be representable and no one table holds both.
+  The mandate gate and the MCP consent path do not thread a run through yet, so
+  a call parked by either records null — a run whose calls were all parked that
+  way answers an empty page, which is the truth about the record and not a
+  filter that was ignored.
 - **Paging:** the cursor is the last row's `(expires_at, public_id)`, so a
   page after the cursor has no duplicate and no gap even when several rows
   share an expiry.

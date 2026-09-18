@@ -541,6 +541,9 @@ export async function materializeTools(
                     orgId: ctx.orgId,
                     workspaceId: ctx.workspaceId,
                     messageId: ctx.messageId!,
+                    // The run the call was parked in (#3286), so the Run
+                    // page's Policy tab can list its own approvals.
+                    runId: agentRun?.runId ?? null,
                     capabilityName: cap.name,
                     inputPreview: input,
                     // Digest the VALIDATED input, because that is what the
@@ -1033,6 +1036,7 @@ export async function materializeTools(
                         orgId: ctx.orgId,
                         workspaceId: ctx.workspaceId,
                         messageId: ctx.messageId!,
+                        runId: callAgentRun?.runId ?? null,
                         capabilityName: capturedKey,
                         inputPreview: input,
                         riskLevel: "medium",
