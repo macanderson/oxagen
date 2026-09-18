@@ -58,6 +58,7 @@
           "enum": [
             "claude-code",
             "codex",
+            "cursor",
             "stella",
             "claude-desktop"
           ]
@@ -205,6 +206,7 @@
                   "enum": [
                     "claude-code",
                     "codex",
+                    "cursor",
                     "stella",
                     "claude-desktop"
                   ]
