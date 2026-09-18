@@ -9,8 +9,8 @@
   is out of this release")
 - **Related:** ADR-043 (Oxagen governs agents; it does not run them),
   ADR-072 (`.oxagen/tools/` paths), #3098 (the Skills lane), #3241 (the repository
-  binding this config is read through), Mission Control spec §2, §14, §19,
-  App. C, App. E, App. F,
+  binding this config is read through), Mission Control spec §2, §7.5, §14, §19,
+  App. E, App. F,
   `docs/w13-in-the-loop-scenario.md` and `mockups/pages/skills.md`,
   `skills-off.md`, `skill-source.md`, `run-interjection.md` in
   `macanderson/tmp-oxagen-mockups`
@@ -89,7 +89,9 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 8. **New stores** (App. A gains them): `skills.config_versions`, `skills.resolutions`,
    and `reflections` behind the quarantine. Config history is git history, not a table.
 
-9. **New frame kinds** (App. C gains them): `skills.searched`, `skills.loaded`,
+9. **New frame kinds** (added to the gateway-kind table in §7.5, beside `control.command`
+   and `control.steer`; Appendix C is a single envelope example and enumerates nothing):
+   `skills.searched`, `skills.loaded`,
    `skills.resolved`, `control.interject`, `control.answer`, `reflection.captured`,
    `repo.unknown`, `repo.bound`, `workspace.created`.
 
@@ -101,8 +103,10 @@ Oxagen holds no credential and runs no tool, and still decides every call.
 ## Consequences
 
 - Spec §2 gains the run-versus-resolve sentence and keeps "no skills engine". §14's
-  page count and screen table, App. E's `dispatch_command` entry and capability rows,
-  App. F's route map and §19's page-coverage table all gain Skills and W13.
+  page count and screen table, §7.5's gateway-kind table, App. E's `dispatch_command`
+  entry and §19's page-coverage table all gain Skills and W13. Appendix F's route map is
+  left alone: `ARCHITECTURE.md` records it as already drifted on other grounds (Ontology
+  cut, Audit rescoped) and wins over it, so reconciling it is not this ADR's job.
 - `apps/app/ARCHITECTURE.md` loses the narrowing in all five places and gains this
   decision in its log.
 - #3098 grows from one section to the mockup's five tabs and its backend, and gains a

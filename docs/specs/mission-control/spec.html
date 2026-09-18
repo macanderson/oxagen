@@ -230,7 +230,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <li>teaches every future run from one knowledge graph, a linked map of the customer's data, built from the customer's data sources.</li>
 </ol>
 <p>Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.</p>
-<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
+<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is <strong>skill resolution</strong>: which skills a workspace's <code>.oxagen/skills.toml</code> lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is procedure written down — a file, in a repository, with a version and a digest. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call (ADR-090). The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
 <hr />
 <h2 id="2-scope">2. Scope</h2>
 <h3 id="2-1-in-scope-for-v1">2.1 In scope for v1</h3>
@@ -1291,6 +1291,36 @@ sandbox = &quot;read-only&quot;
 <td>record id, lineage id, record hash, kind</td>
 </tr>
 <tr>
+<td><code>skills.searched</code></td>
+<td>gateway</td>
+<td>query digest, resolved config version, returned ids, withheld count by reason class (never the withheld names), load cost, replay grade</td>
+</tr>
+<tr>
+<td><code>skills.resolved</code></td>
+<td>gateway</td>
+<td>the config version a run pinned at start, sources on, belt mode, cut-off, load budget</td>
+</tr>
+<tr>
+<td><code>skills.loaded</code></td>
+<td>gateway</td>
+<td><code>id@version</code>, digest, token cost, the decision that admitted it</td>
+</tr>
+<tr>
+<td><code>control.interject</code></td>
+<td>control channel</td>
+<td>the question put to a person, why the loop stopped (e.g. <code>unbound_repo</code>), the timeout and what it falls back to (<code>deny</code>)</td>
+</tr>
+<tr>
+<td><code>control.answer</code></td>
+<td>control channel</td>
+<td>the answer, who gave it, and the frame it unblocked</td>
+</tr>
+<tr>
+<td><code>reflection.captured</code></td>
+<td>out of band, after the seal</td>
+<td>rubric axes, self-grade against the record, contradictions citing frames. <strong>Outside the sealed chain and never replayed on a fork</strong> (§quarantine, ADR-090)</td>
+</tr>
+<tr>
 <td><code>control.command</code></td>
 <td>control channel</td>
 <td>command, issuer, status (§7.4), the boundary it was applied at</td>
@@ -2132,7 +2162,7 @@ sandbox = &quot;read-only&quot;
 <p>GDPR (the EU privacy law) erasure works by <strong>crypto-shredding</strong>, which destroys the encryption key so the data can never be read again. Bodies attributable to a natural person are encrypted under a per-subject data key. Erasure destroys the key and writes a tombstone frame in the ledger with the digests that remain. The chain stays intact and verifiable. The content is unrecoverable. Redaction detectors run before write, so most personal data never enters a body in the first place. The erasure SOP carries over.</p>
 <hr />
 <h2 id="14-mission-control">14. Mission Control</h2>
-<p>Mission Control has ten pages: seven at workspace scope and three at organization scope. No other pages ship in v1. Appendix F maps every current route onto these ten. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.</p>
+<p>Mission Control has eleven pages: eight at workspace scope and three at organization scope, Skills having joined them with ADR-090. <code>apps/app/ARCHITECTURE.md</code> sets the shipping page set and wins where it and this section differ — it records that this count and Appendix F have drifted in other directions too (Ontology cut, Audit rescoped), and reconciling those is not ADR-090's job. Appendix F maps every current route onto these ten. Approvals are not a page of their own. They appear as a panel on Fleet and as a strip on Run, because an approval is always about a run.</p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -2171,6 +2201,11 @@ sandbox = &quot;read-only&quot;
 <td><strong>Ontology</strong></td>
 <td>The workspace's model of its own business, and the page the product is known for. Tabs in order: <strong>Model</strong> (the live map: every class with its entity count, freshness, sources, and relations drawn, plus the consequence on hover: most cited by agents, rules that reference it, proven runs per class, drift found), <strong>Graph</strong> (explore instances, typed expansion, ask in plain English and see the Cypher graph query and the citations behind the answer), <strong>Sources</strong> (connectors, sync health, entity provenance), <strong>Repositories</strong> (main repo and linked repos, production branch, last indexed commit, event health, issue import, code graph, data-layer drift), <strong>Versions</strong> (the git history of <code>.oxagen/ontology/</code>, open proposals as pull requests with diffs, an <code>as_of</code> picker). The page also lists embedding indexes with their recall and citation rate</td>
 <td>ask the graph, open an ontology proposal, link repo, set production branch, sync now, add source, resolve entity, upgrade an embedding index</td>
+</tr>
+<tr>
+<td><strong>Skills</strong></td>
+<td>Which skills the workspace's <code>.oxagen/skills.toml</code> lets an agent find, which it may load, what that cost, and what was held back and why. Tabs: <strong>Catalog</strong>, <strong>Search</strong> (the <code>search_skills</code> console), <strong>In the loop</strong> (the interjection seat), <strong>Reflection</strong> (research-only, quarantined) and <strong>Versions</strong> (the config's git history, each version a pull request). Oxagen resolves; the harness runs. (ADR-090)</td>
+<td>turn on, edit the config, approve a digest, add a skill — each a pull request</td>
 </tr>
 <tr>
 <td><strong>Steering</strong></td>
@@ -2495,7 +2530,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="19-demo-wow-scenarios">19. Demo Wow! Scenarios</h2>
-<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 is listed below because it is mocked and was previously missing from a table marked complete; its release status is set by <code>apps/app/ARCHITECTURE.md</code>, which wins over this document where the two differ, and which places W13 out of rev1.</p>
+<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 was adopted on 2026-09-18 by ADR-090, which puts skills resolution in scope; its page coverage is listed below with the rest.</p>
 <p>Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in <code>2026-09-11-oxagen-demo-mockup-prompts.md</code>, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.</p>
 <div class="tw"><table>
 <thead>
@@ -2594,10 +2629,10 @@ sandbox = &quot;read-only&quot;
 </tr>
 <tr>
 <td>W13</td>
-<td>In the loop: the skills scenario — skills off by default, resolution as config, and a run interjected before the first model call</td>
-<td>Skills (mocked tabs), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
+<td>In the loop: the skills scenario — skills off by default, resolution as config not model, and a run interjected before the first model call</td>
+<td>Skills (Catalog, Search, In the loop, Reflection, Versions), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
 <td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a></td>
-<td>mocked; <strong>out of rev1</strong> — <code>apps/app/ARCHITECTURE.md</code> (2026-09-15) ships only the observed-inventory Skills read and keeps resolution, <code>search_skills</code>, interjection and reflection out</td>
+<td>mocked; <strong>adopted</strong> — ADR-090 puts skills resolution in scope and the #3098 lane builds it</td>
 </tr>
 </tbody>
 </table></div>
@@ -2659,6 +2694,12 @@ sandbox = &quot;read-only&quot;
 <td><code>/{org}/{ws}/ontology</code></td>
 <td>loaded, empty, loading, error, denied, phone</td>
 <td><a href="https://claude.ai/code/artifact/8692f683-0eab-4a1f-ad66-20f4a1a2db5b">W7 mockup</a>, <a href="https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b">W11 mockup</a>, <a href="https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e">W12 mockup</a></td>
+</tr>
+<tr>
+<td>Skills (Catalog, Search, In the loop, Reflection, Versions)</td>
+<td><code>/{org}/{ws}/skills[/{tab}]</code></td>
+<td>loaded, empty, loading, error, denied, off (the gate), phone</td>
+<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a></td>
 </tr>
 <tr>
 <td>Steering (records, proposals, Context PR, retirement)</td>
@@ -5854,7 +5895,7 @@ sandbox = &quot;read-only&quot;
 <tr>
 <td><code>dispatch_command</code></td>
 <td>dispatch_tacho_command</td>
-<td>pause, resume, steer, cancel, revoke</td>
+<td>pause, resume, steer, cancel, revoke, answer (the reply to a <code>control.interject</code>, ADR-090)</td>
 </tr>
 <tr>
 <td><code>list_runs</code></td>
