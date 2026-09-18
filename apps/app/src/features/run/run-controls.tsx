@@ -169,7 +169,7 @@ function CommandDialog({
 }
 
 /** Whether `dispatch_command` admits this viewer: org Owner or Admin, or workspace Owner or Member. */
-export function canCommand(orgRole: OrgRole, wsRole: WsRole): boolean {
+function canCommand(orgRole: OrgRole, wsRole: WsRole): boolean {
   return (
     orgRole === "owner" ||
     orgRole === "admin" ||
