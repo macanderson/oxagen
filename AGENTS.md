@@ -232,6 +232,14 @@ is unambiguous.
      Add repo-specific conventions, gotchas, and workflow rules here.
      This section is preserved exactly as-is when re-running codebase-summary. -->
 
+### Writing: `clear-prose` is required
+
+Load the `clear-prose` skill (`.claude/skills/clear-prose/SKILL.md`) before you write or edit any prose a person will read, internal or external. That covers pages, docs, blog posts, emails, READMEs, changelogs, ADRs, specs, SCRs, issue and PR bodies, review comments, code comments, commit messages, UI strings, error messages, and CLI output. Stella reads this file directly, so the rule binds both agents.
+
+- **Internal text is not exempt.** An ADR, an issue handoff, or a PR description is read by a person who has to act on it, and the same rules make it faster to act on.
+- **It pairs with `oxagen-branding`.** Branding owns positioning, vocabulary, and the visual system. `clear-prose` owns the sentences. Customer-facing copy needs both.
+- **Check before you ship.** `pnpm check:prose` scans `apps/web` and `apps/docs` and fails on em dashes, exclamation points, and the avoid list. Text outside those two apps has no scanner, so read it once against the skill's "Before shipping" questions.
+
 ### UI Component Import Convention
 
 **Never import `@oxagen/ui/components/*` directly in app code.** Each app imports UI through its own local layer, and which layer that is differs per app. (`apps/admin` and `apps/website` do not exist in this monorepo — the 6 apps are `api`, `app`, `cli`, `docs`, `mcp`, `web`.)
