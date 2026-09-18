@@ -19,7 +19,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { schema, withOrgDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
@@ -223,10 +223,23 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
     // ── Last-owner guard ──────────────────────────────────────────────────────
     // Block demoting the last Owner to prevent org lockout.
     if (input.newRole !== OWNER_ROLE_NAME) {
-      // Same ordering as the resolve above, for the same reason: the guard has
-      // to count owners against the SAME 'Owner' row an assignment would be
-      // written against, or a duplicate makes the last owner look like none.
-      const [ownerRoleRow] = await tx
+      // EVERY org-scoped 'Owner' row, not the oldest one.
+      //
+      // `iam.roles` is not unique on (org, scope_kind, name) and this org
+      // carries two 'Owner' rows seeded in the same transaction. The resolve
+      // above deliberately takes the oldest, because that is the row an
+      // assignment is written against. The guard cannot borrow that choice:
+      // it is asking a different question — "who holds Owner?" — and an
+      // Owner granted against the newer duplicate answers it while matching
+      // no oldest-row predicate. Reading one row made the sole Owner look
+      // like a non-Owner (so the guard never ran and they were demoted) and
+      // made the owner count read 0 or 1 when it was 2.
+      //
+      // Both the membership test and the count therefore range over all of
+      // them. Over-counting is impossible: a principal holding Owner through
+      // two duplicate rows is genuinely two live assignments, and refusing to
+      // demote in that case is the safe direction.
+      const ownerRoleRows = await tx
         .select({ id: schema.roles.id })
         .from(schema.roles)
         .where(
@@ -235,11 +248,10 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
             eq(schema.roles.scopeKind, "org"),
             eq(schema.roles.name, OWNER_ROLE_NAME),
           ),
-        )
-        .orderBy(asc(schema.roles.createdAt), asc(schema.roles.id))
-        .limit(1);
+        );
+      const ownerRoleIds = ownerRoleRows.map((r) => r.id);
 
-      if (ownerRoleRow) {
+      if (ownerRoleIds.length > 0) {
         // Find target's principal.
         const [targetPrincipalRow] = await tx
           .select({ id: schema.principals.id })
@@ -271,7 +283,10 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
                   schema.principalRoleAssignments.principalId,
                   targetPrincipalRow.id,
                 ),
-                eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
+                inArray(
+                  schema.principalRoleAssignments.roleId,
+                  ownerRoleIds,
+                ),
                 isNull(schema.principalRoleAssignments.workspaceId),
                 isNull(schema.principalRoleAssignments.deletedAt),
               ),
@@ -290,7 +305,10 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
               .where(
                 and(
                   eq(schema.principalRoleAssignments.orgId, ctx.orgId),
-                  eq(schema.principalRoleAssignments.roleId, ownerRoleRow.id),
+                  inArray(
+                    schema.principalRoleAssignments.roleId,
+                    ownerRoleIds,
+                  ),
                   isNull(schema.principalRoleAssignments.workspaceId),
                   isNull(schema.principalRoleAssignments.deletedAt),
                 ),
@@ -364,7 +382,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
       // (b) Grant the new role.
       //
       // RESURRECT, never `onConflictDoNothing`. `pra_principal_role_org_null_
-      // workspace_uniq` is UNIQUE (principal_id, role_id, org_id) WHERE
+      // workspace_idx` is UNIQUE (principal_id, role_id, org_id) WHERE
       // workspace_id IS NULL, and `deleted_at` is in neither the key nor the
       // predicate — so the row (a) has just soft-deleted STILL OCCUPIES this
       // insert's unique slot. When the new role is one the principal already
@@ -401,6 +419,13 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           set: {
             deletedAt: null,
             deletedById: null,
+            // A resurrected grant must be the SAME grant the insert path
+            // would have made, and that one is permanent. An assignment that
+            // had expired keeps its old `expires_at` through the upsert
+            // otherwise, so IAM goes on ignoring the role while the
+            // post-condition below — which reads only `deleted_at` — accepts
+            // it, and the member is told they hold a role no gate honours.
+            expiresAt: null,
             assignedBy: actorId,
             assignedAt: new Date(),
             updatedAt: new Date(),
@@ -430,9 +455,26 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
         )
         .limit(1);
       if (!granted) {
-        throw new Error(
-          `org.member.role.change: refusing to commit — the role change would leave the member with no org role (org ${ctx.orgId}, role '${input.newRole}')`,
+        logger.error(
+          {
+            orgId: ctx.orgId,
+            targetUserId: input.targetUserId,
+            newRole: input.newRole,
+          },
+          "org.member.role.change: refusing to commit — the change would leave the member with no org role",
         );
+        // A typed refusal, not a bare Error. Every surface classifies on
+        // `code`, so an untyped throw reaches the API as an unclassified 500
+        // and the app as `kernel_failure` — an operator is told the platform
+        // broke when what actually happened is that the write did not take and
+        // nothing was changed. `conflict` is the honest classification: the
+        // grant lost a race with another writer on the same assignment, and
+        // retrying is the right next action.
+        throw new HandlerError({
+          code: "conflict",
+          reason: "role_change_left_no_role",
+          message: `The role change was rolled back: granting '${input.newRole}' did not take, and committing would have left the member with no organisation role. Nothing changed — try again.`,
+        });
       }
     }
 

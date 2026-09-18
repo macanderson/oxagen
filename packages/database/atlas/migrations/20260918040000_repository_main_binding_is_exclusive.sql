@@ -78,6 +78,64 @@ BEGIN
 END
 $$;
 
+-- ## Reconciling claims that already exist
+--
+-- The backfill above marks EVERY existing head 'main', because under the old
+-- schema every head was one. Nothing before this migration forbade two
+-- workspaces from binding the same repository, so rows the new index refuses
+-- may already be in the table — and `CREATE UNIQUE INDEX` on data that
+-- violates it aborts, taking the deploy with it. A constraint that cannot be
+-- built is not a guard; it is an outage.
+--
+-- The repair is deterministic and keeps the OLDEST head 'main'. That head is
+-- the claim every steering read resolved against up to now, so keeping it is
+-- the choice that changes nothing about which workspace is currently steered;
+-- picking any other would silently move one workspace's governance. Later
+-- claims become 'linked', which is a real state with real meaning — the
+-- workspace can still see the repository, it is simply no longer steered by
+-- it — rather than a deletion. No head is removed, no binding is dropped, and
+-- no connection is touched, so a workspace demoted here re-binds through
+-- `repository.main.bind` and receives the product's own refusal explaining
+-- that the repository is claimed elsewhere.
+--
+-- Each demotion is raised as a NOTICE so the deploy log names exactly which
+-- workspaces were affected, rather than leaving the change to be discovered.
+DO $$
+DECLARE
+  demoted record;
+  n integer := 0;
+BEGIN
+  FOR demoted IN
+    UPDATE "ingestion"."repository_binding_heads" AS h
+       SET "role" = 'linked',
+           "updated_at" = now()
+     WHERE h."role" = 'main'
+       AND EXISTS (
+         SELECT 1
+           FROM "ingestion"."repository_binding_heads" AS older
+          WHERE older."role" = 'main'
+            AND older."provider" = h."provider"
+            AND older."provider_repository_id" = h."provider_repository_id"
+            -- Strictly older wins; `id` breaks a tie on identical timestamps,
+            -- which uuidv7 makes ordered by creation anyway. Without the tie
+            -- break two rows written in the same instant would each find the
+            -- other "older" and both would be demoted, leaving the repository
+            -- main for nobody.
+            AND (older."created_at", older."id") < (h."created_at", h."id")
+       )
+    RETURNING h."org_id", h."workspace_id", h."provider", h."provider_repository_id"
+  LOOP
+    n := n + 1;
+    RAISE NOTICE
+      'repository_binding_heads: demoted main -> linked for org % workspace % on %:% (repository already claimed by an older head)',
+      demoted."org_id", demoted."workspace_id", demoted."provider", demoted."provider_repository_id";
+  END LOOP;
+  IF n > 0 THEN
+    RAISE NOTICE 'repository_binding_heads: % duplicate main claim(s) reconciled before building the uniqueness guard', n;
+  END IF;
+END
+$$;
+
 -- The guard itself. Partial on role='main' so linked repositories stay
 -- many-to-many, and deliberately carrying neither org_id nor workspace_id.
 CREATE UNIQUE INDEX IF NOT EXISTS "repository_binding_heads_main_repository_uq"

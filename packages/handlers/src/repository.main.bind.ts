@@ -95,6 +95,70 @@ function isMainRepositoryConflict(err: unknown): boolean {
   return false;
 }
 
+/**
+ * Refuse unless the global main-repository claim is actually knowable.
+ *
+ * `repository_binding_heads_main_repository_uq` is global only within ONE
+ * Postgres. ADR-042 lets an organisation carry a dedicated plane, and
+ * ingestion is tenant data such a plane holds, so the guard has two blind
+ * spots and BOTH of them admit exactly the second claim it exists to refuse:
+ *
+ *   1. THIS organisation is dedicated. Its heads live on its own plane, where
+ *      neither the shared index nor the shared read below can see them, and
+ *      the claim it writes is invisible to every other tenant.
+ *   2. ANY OTHER organisation is dedicated. Then a main head may already exist
+ *      on that plane for this repository, and a shared-plane read returns
+ *      nothing while the claim is real. Checking only the caller's own plane
+ *      (which is all this did) let a shared-plane bind take a repository a
+ *      dedicated tenant was already steered by.
+ *
+ * Both are refused rather than guessed, the way `billing.evidence_retention`
+ * refuses the same ADR-042 gap. The real repair is a plane-aware global claim
+ * check, which is a change to the store seam. No organisation is dedicated
+ * today (ADR-042 §1 — absence of a row means shared, and the dedicated mode
+ * has no customer), so nothing in service reaches either refusal.
+ *
+ * `org.data_planes` is itself always on the shared plane — a plane binding
+ * cannot be stored on the plane it describes — so one `withSystemDb` read
+ * answers (2) for every tenant at once.
+ */
+async function assertGlobalClaimIsKnowable(orgId: string): Promise<void> {
+  const plane = await resolveDataPlane(orgId, "postgres");
+  // Throws DataPlaneUnavailableError for any binding that is not active.
+  assertDataPlaneUsable(plane);
+  if (plane.mode !== "shared") throw planeUnsupported();
+
+  const dedicatedElsewhere = await withSystemDb((tx) =>
+    tx
+      .select({ id: schema.dataPlanes.id })
+      .from(schema.dataPlanes)
+      .where(
+        and(
+          eq(schema.dataPlanes.kind, "postgres"),
+          eq(schema.dataPlanes.mode, "dedicated"),
+          isNull(schema.dataPlanes.deletedAt),
+        ),
+      )
+      .limit(1),
+  );
+  if (dedicatedElsewhere.length > 0) {
+    logger.warn(
+      { orgId },
+      "repository.main.bind: refused — a dedicated Postgres plane exists, so the global main-repository claim cannot be checked",
+    );
+    throw planeUnsupported();
+  }
+}
+
+function planeUnsupported(): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "main_repo_plane_unsupported",
+    message:
+      "Oxagen cannot yet prove this repository is not already the main repository of another workspace: a dedicated data plane is in use, and the uniqueness guard holds only within one database. Binding is refused rather than admitting a claim it cannot check.",
+  });
+}
+
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
   repository(
@@ -187,23 +251,7 @@ export function createMainRepositoryBindHandler(
     // workspace and theirs differ. The index is the guarantee, this read is how
     // the ordinary case gets a sentence instead of a constraint name, and the
     // catch below is how the racing case gets the same sentence.
-    const plane = await resolveDataPlane(ctx.orgId, "postgres");
-    assertDataPlaneUsable(plane);
-    if (plane.mode !== "shared") {
-      // A unique index is global only within one Postgres. For an organisation
-      // on its own plane this read — and the index itself — cannot see a claim
-      // held on the shared plane or on another dedicated one, so binding here
-      // would silently admit the second claim the whole guard exists to refuse.
-      // Refuse instead of guessing, the way billing.evidence_retention does for
-      // the same ADR-042 gap. No organisation is dedicated today (ADR-042 §1),
-      // so nothing in service reaches this.
-      throw new HandlerError({
-        code: "conflict",
-        reason: "main_repo_plane_unsupported",
-        message:
-          "This organisation is on a dedicated data plane, where Oxagen cannot yet prove a repository is not already the main repository of another workspace. Binding is refused rather than admitting a claim it cannot check.",
-      });
-    }
+    await assertGlobalClaimIsKnowable(ctx.orgId);
     const claimedElsewhere = await withSystemDb((tx) =>
       tx
         .select({ workspaceId: schema.repositoryBindingHeads.workspaceId })
@@ -244,6 +292,34 @@ export function createMainRepositoryBindHandler(
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${scope.workspaceId}`}::text, 0))`,
         );
+
+        // Re-ask which plane this organisation is on, INSIDE the transaction
+        // that writes.
+        //
+        // The check above ran before `withTenantDb` opened, and `withTenantDb`
+        // resolves the plane again for itself. Between those two resolutions
+        // the organisation can be moved from shared to dedicated — that is an
+        // ordinary operator action, not a rare interleaving — and the write
+        // would then land on the dedicated plane despite a refusal that had
+        // already decided it must not. The claim written there is invisible to
+        // the shared global index, so another workspace binds the same
+        // repository and the guarantee is gone, silently, with no error on
+        // either path.
+        //
+        // Re-validating here puts the decision and the write in one
+        // transaction: a plane that moved raises, the transaction rolls back,
+        // and nothing is claimed. It is a read of `org.data_planes` on the
+        // shared plane, so it costs one round trip and cannot itself be
+        // affected by the move it is detecting.
+        const planeNow = await resolveDataPlane(scope.orgId, "postgres");
+        assertDataPlaneUsable(planeNow);
+        if (planeNow.mode !== "shared") {
+          logger.warn(
+            { orgId: scope.orgId, workspaceId: scope.workspaceId },
+            "repository.main.bind: refused mid-transaction — the organisation's Postgres plane moved after the pre-check",
+          );
+          throw planeUnsupported();
+        }
         const heads = await tx
           .select({
             id: schema.repositoryBindingHeads.id,

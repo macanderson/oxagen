@@ -95,8 +95,16 @@ function buildSelectMock(calls: unknown[][]) {
     // `.orderBy()` as well as `.limit()`, and `.orderBy()` has to land back on
     // the same `.limit()`. Without this the ordered reads resolve to undefined
     // and every role in the file reads as "does not exist in this org".
+    //
+    // `.where()` is ALSO awaited directly — the last-owner guard reads every
+    // duplicate 'Owner' row rather than one — so it is a thenable as well as a
+    // builder. Returning a plain object made such a read resolve to the
+    // builder itself, and `.length` on it is `undefined`, which silently
+    // skipped the guard it was meant to drive.
     const orderBy = vi.fn().mockReturnValue({ limit });
-    const where = vi.fn().mockReturnValue({ limit, orderBy });
+    const where = vi.fn().mockReturnValue(
+      Object.assign(Promise.resolve(result), { limit, orderBy }),
+    );
     const innerJoin = vi.fn().mockReturnValue({ where });
     const from = vi.fn().mockReturnValue({ where, innerJoin });
     return { from };
@@ -236,6 +244,42 @@ describe("orgMemberRoleChangeHandler", () => {
     expect(mockTx.update).not.toHaveBeenCalled();
     expect(mockTx.insert).not.toHaveBeenCalled();
     expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  // `iam.roles` is not unique on (org, scope_kind, name) and this org carries
+  // two 'Owner' rows seeded in the same transaction. The resolve above takes
+  // the OLDEST, deliberately — it is the row assignments were written against.
+  // The guard cannot borrow that choice: an Owner granted against the NEWER
+  // duplicate matches no oldest-row predicate, so reading one row made the sole
+  // Owner look like a non-Owner, the guard never ran, and they were demoted out
+  // of their own organisation.
+  it("sees an Owner granted through a duplicate role row, and refuses to demote them", async () => {
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser
+      [{ id: "admin-role-id", name: "Admin" }], // 4: new role 'Admin'
+      // 5: BOTH 'Owner' rows, read unordered and unlimited.
+      [{ id: "owner-role-old" }, { id: "owner-role-new" }],
+      [{ id: "target-principal-id" }], // 6: target principal
+      // 7: the target's Owner grant — written against the NEWER duplicate.
+      [{ id: "target-owner-pra", roleId: "owner-role-new" }],
+      // 8: every live Owner assignment across both rows — just this one.
+      [{ id: "target-owner-pra" }],
+    ]);
+    mockTx.update = vi.fn();
+    mockTx.insert = vi.fn();
+
+    await expectHandlerError(
+      orgMemberRoleChangeHandler(
+        { targetUserId: "target", newRole: "Admin" },
+        makeCtx(),
+      ),
+      "conflict",
+      "last_owner",
+    );
+    expect(mockTx.update).not.toHaveBeenCalled();
+    expect(mockTx.insert).not.toHaveBeenCalled();
   });
 
   it("happy path → changes role, emits org.role_changed, returns changed:true", async () => {
@@ -415,8 +459,15 @@ describe("orgMemberRoleChangeHandler", () => {
       (e: unknown) => e,
     );
 
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toContain("no org role");
+    // A bare `Error` would pass an `instanceof Error` assertion while reaching
+    // every surface as an unclassified 500, which is the opposite of what this
+    // refusal is for. The type and the code are what pin it.
+    expect(err).toBeInstanceOf(HandlerError);
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "role_change_left_no_role",
+    });
+    expect((err as Error).message).toContain("no organisation role");
     // Refused before the audit event, so nothing claims a change happened.
     expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
   });

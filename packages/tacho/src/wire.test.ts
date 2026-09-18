@@ -5,6 +5,7 @@ import {
   ingestResponseSchema,
   tachoBatchSchema,
 } from "./wire";
+import { minimalSession } from "./test-helpers";
 
 /**
  * Forward compatibility with a control plane newer than this host.
@@ -94,13 +95,19 @@ describe("responses from the control plane", () => {
 
 describe("what this host sends", () => {
   it("is still strict, so drift in our own batch is caught here and not by the server", () => {
+    // The batch is otherwise VALID — `events: []` alone violates `.min(1)`, so
+    // a batch that was empty as well as unexpected would throw even after
+    // `tachoBatchSchema` lost its `.strict()`, and the assertion would pass for
+    // the wrong reason while the strictness regression went unnoticed. The
+    // unknown key has to be the only thing wrong with it.
+    const batch = {
+      schema: "oxagen.tacho.batch.v1",
+      host_enrollment_id: "tch_0123456789abcdefghijkl",
+      events: minimalSession(),
+    };
+    expect(() => tachoBatchSchema.parse(batch)).not.toThrow();
     expect(() =>
-      tachoBatchSchema.parse({
-        schema: "oxagen.tacho.batch.v1",
-        host_enrollment_id: "tch_0123456789abcdefghijkl",
-        events: [],
-        unexpected: true,
-      }),
+      tachoBatchSchema.parse({ ...batch, unexpected: true }),
     ).toThrow();
   });
 });

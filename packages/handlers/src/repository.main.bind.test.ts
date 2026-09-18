@@ -182,18 +182,54 @@ beforeEach(() => {
   claimedElsewhere([]);
 });
 
+/** Rows the shared-plane reads return, keyed by the table each one names. */
+let sharedRows = new Map<unknown, unknown[]>();
+
 /**
- * What the cross-tenant exclusivity read finds. `[]` is "nobody else steers by
- * this repository"; a row is another workspace's claim on it.
+ * Arm the two reads the handler makes on the shared plane. They must be told
+ * apart by the table they select from: one asks whether ANY organisation is on
+ * a dedicated Postgres plane (if so the global claim is unknowable and the
+ * bind is refused), the other asks whether another workspace already steers by
+ * this repository. A mock that answered both with one value made a claim row
+ * look like a dedicated plane and produced the wrong refusal.
  */
-function claimedElsewhere(result: unknown[]): void {
+function sharedPlaneReads(rows: Map<unknown, unknown[]>): void {
+  sharedRows = rows;
   mocks.withSystemDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
-          from: () => ({ where: () => ({ limit: async () => result }) }),
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: async () => sharedRows.get(table) ?? [],
+            }),
+          }),
         }),
       }),
+  );
+}
+
+/**
+ * What the cross-tenant exclusivity read finds. `[]` is "nobody else steers by
+ * this repository"; a row is another workspace's claim on it. No organisation
+ * is on a dedicated plane unless a test says so.
+ */
+function claimedElsewhere(result: unknown[]): void {
+  sharedPlaneReads(
+    new Map<unknown, unknown[]>([
+      [schema.repositoryBindingHeads, result],
+      [schema.dataPlanes, []],
+    ]),
+  );
+}
+
+/** Some organisation — not necessarily this one — is on a dedicated plane. */
+function dedicatedPlaneExists(): void {
+  sharedPlaneReads(
+    new Map<unknown, unknown[]>([
+      [schema.repositoryBindingHeads, []],
+      [schema.dataPlanes, [{ id: "dpl_other" }]],
+    ]),
   );
 }
 
@@ -731,9 +767,38 @@ describe("bind_main_repository", () => {
           throw unrelated;
         });
 
-      await expect(handler().run(INPUT, makeCTX())).rejects.toThrow(
-        "insert failed",
-      );
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      // The SAME object, not merely one whose message matches. A future broad
+      // 23505 mapping would still throw something saying "insert failed", so
+      // identity is what pins the propagation, and the absence of the reason
+      // is what pins that it was not reclassified.
+      expect(err).toBe(unrelated);
+      expect(err).not.toMatchObject({ reason: "main_repo_claimed" });
+    });
+
+    // The pre-check that produces the ordinary refusal cannot see a head held
+    // on a plane it does not open, so a dedicated plane ANYWHERE — not only
+    // this organisation's — makes the global claim unknowable.
+    it("refuses while any organisation is on a dedicated Postgres plane", async () => {
+      dedicatedPlaneExists();
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_plane_unsupported",
+      });
+      expect(writes.inserts).toHaveLength(0);
     });
 
     it("marks the head it writes as the main repository, which is what the index constrains", async () => {
@@ -769,6 +834,45 @@ describe("bind_main_repository", () => {
         reason: "main_repo_plane_unsupported",
       });
       expect(writes.inserts).toHaveLength(0);
+    });
+
+    // The pre-check runs before the transaction opens, and `withTenantDb`
+    // resolves the plane again for itself. Between the two an operator can
+    // move the organisation, and the write would then land on a plane the
+    // shared global index cannot see — a claim nobody else can detect.
+    it("refuses inside the transaction when the plane moves after the pre-check", async () => {
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      mocks.resolveDataPlane
+        // The pre-check and the connection read see a shared plane...
+        .mockResolvedValueOnce({
+          orgId: "org-uuid",
+          kind: "postgres",
+          mode: "shared",
+          status: "active",
+        })
+        // ...and the re-validation inside the write transaction does not.
+        .mockResolvedValue({
+          orgId: "org-uuid",
+          kind: "postgres",
+          mode: "dedicated",
+          status: "active",
+        });
+
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_plane_unsupported",
+      });
+      expect(
+        writes.inserts.filter(
+          (w) => w.table === schema.repositoryBindingHeads,
+        ),
+      ).toHaveLength(0);
     });
   });
 });
