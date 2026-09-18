@@ -17,9 +17,19 @@
  * the run ledger pins and `commit_agent_definition` commits to), marks the
  * connection connected (the row `resolveGitHubToken` mints from), and closes
  * the onboarding gate's provisional window when the workspace is the gate's.
- * Binding the same repository again is idempotent; a workspace that already
- * binds a different repository is `conflict: main_repo_bound`; a workspace
- * with no GitHub installation attached is `conflict: github_not_connected`.
+ * Binding the same repository again is idempotent **while nothing it recorded
+ * has moved**: the existing binding's identity is answered and nothing is
+ * written. When any recorded fact differs from what GitHub now reports — the
+ * connection, the owner, the name, the full name, or the approved default ref
+ * — the call is a RE-APPROVAL and writes a successor binding (version + 1,
+ * naming the one it supersedes) with the head moved onto it. That is what a
+ * binding version means (`ingestion.repository_bindings`: "a rename or a
+ * reconfigured default ref"), and it is the only way the approved production
+ * ref ever changes, because steering reads the ref from the binding and never
+ * from live GitHub. Which repository is main never moves here: a workspace
+ * that already binds a different repository is `conflict: main_repo_bound`; a
+ * workspace with no GitHub installation attached is
+ * `conflict: github_not_connected`.
  *
  * Roles: org Owner or Admin, checked by the handler (INV-29), so the caller
  * is a signed-in user: the API surface only. The MCP context carries an API
