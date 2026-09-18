@@ -11,8 +11,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 });
 
 import {
+  assertProductionBase,
   createSteeringGitHub,
   readGitHubConnection,
+  type SteeringConnection,
 } from "./context.steering.github";
 
 const SCOPE = { orgId: "org", workspaceId: "ws" };
@@ -37,12 +39,17 @@ function fakeClient(over: Partial<GitHubClient> = {}): GitHubClient {
   } as unknown as GitHubClient;
 }
 
+/** A bound repository whose approved ref matches whatever the fake reports. */
+const BOUND: SteeringConnection = {
+  source: "binding",
+  owner: "a-intel",
+  repo: "platform",
+  approvedDefaultRef: "main",
+};
+
 function seam(
   client: GitHubClient,
-  connection: { owner: string; repo: string } | null = {
-    owner: "a-intel",
-    repo: "platform",
-  },
+  connection: SteeringConnection | null = BOUND,
 ) {
   const resolveToken = vi.fn(async () => "tok");
   const gh = createSteeringGitHub({
@@ -64,6 +71,70 @@ describe("the GitHub seam", () => {
       defaultBranch: "main",
     });
     expect(resolveToken).toHaveBeenCalledWith(SCOPE);
+  });
+
+  /**
+   * The production branch is the one the binding approved, not the one GitHub
+   * reports today (#3233 review, P1).
+   *
+   * An admin who renames or switches the repository's default branch on GitHub
+   * after the bind changes `getRepoInfo().defaultBranch` and nothing else: the
+   * binding is immutable and the settings page still names the approved ref.
+   * If steering followed GitHub, every Context PR would be opened against,
+   * compared against and merged into a branch no one approved — and
+   * `assertProductionBase`, which compares a PR's base against this same
+   * field, would agree with the wrong answer instead of catching it.
+   */
+  it("steers on the ref the binding approved, not the default branch GitHub reports now", async () => {
+    const { gh } = seam(fakeClient(), {
+      source: "binding",
+      owner: "a-intel",
+      repo: "platform",
+      approvedDefaultRef: "release",
+    });
+    // The fake client reports "main" as the live default branch.
+    const repo = await gh.resolveRepository(SCOPE);
+    expect(repo.defaultBranch).toBe("release");
+  });
+
+  it("refuses a Context PR retargeted at the branch GitHub now calls default", async () => {
+    const { gh } = seam(fakeClient(), {
+      source: "binding",
+      owner: "a-intel",
+      repo: "platform",
+      approvedDefaultRef: "release",
+    });
+    const repo = await gh.resolveRepository(SCOPE);
+    // GitHub reports the PR's base as "main" — the live default branch, and
+    // not the approved one. The merge gate refuses it.
+    expect(() =>
+      assertProductionBase(repo, "main", "https://github.com/x/pull/9"),
+    ).toThrow(/targets main; a Context PR merges only into release/);
+    // And still admits one on the approved ref.
+    expect(() =>
+      assertProductionBase(repo, "release", "https://github.com/x/pull/9"),
+    ).not.toThrow();
+  });
+
+  /**
+   * A workspace connected through the legacy sources wizard has no binding and
+   * therefore no approved ref, so live GitHub is the only source there is —
+   * legitimate precisely because nothing was ever approved to disagree with.
+   * Narrowing the bound case must not take this away.
+   */
+  it("uses the live default branch for a legacy connection, which has no approved ref", async () => {
+    const { gh } = seam(fakeClient(), {
+      source: "legacy_delivery_config",
+      owner: "a-intel",
+      repo: "platform",
+    });
+    const repo = await gh.resolveRepository(SCOPE);
+    expect(repo).toEqual({
+      owner: "a-intel",
+      repo: "platform",
+      fullName: "a-intel/platform",
+      defaultBranch: "main",
+    });
   });
 
   it("refuses a workspace with no connected repository before minting a token", async () => {
@@ -257,7 +328,7 @@ describe("the GitHub seam", () => {
       "tok-b": fakeClient({ putFile: putB }),
     };
     const gh = createSteeringGitHub({
-      readConnection: async () => ({ owner: "a-intel", repo: "platform" }),
+      readConnection: async () => BOUND,
       resolveToken: async (scope) => `tok-${scope.workspaceId}`,
       client: (token) => byToken[token]!,
     });
@@ -316,11 +387,13 @@ describe("the workspace's main repository", () => {
    * on the TABLE the code passed to `.from()`, which is the real Drizzle table
    * object.
    *
-   * What this rig can and cannot prove: it discards every predicate, so these
-   * tests pin the BRANCHING — which read the code makes, given what the read
-   * before it answered — and nothing about the SQL filters themselves. The
-   * status filter on the joined read is asserted nowhere here and cannot be;
-   * that would need a real Postgres.
+   * What this rig can and cannot prove: it discards every predicate and hands
+   * back whatever rows it was given, so these tests pin the BRANCHING — which
+   * read the code makes, given what the read before it answered — and what the
+   * code carries off a row into its answer. They pin nothing about the SQL
+   * filters or the column projection themselves. The status filter on the
+   * joined read is asserted nowhere here and cannot be; that would need a real
+   * Postgres.
    *
    * Returns a counter of the unjoined reads so a test can assert a read was
    * never reached at all, not merely that its rows went unused.
@@ -358,25 +431,33 @@ describe("the workspace's main repository", () => {
     return counts;
   }
 
-  it("resolves the repository the bind recorded, on a connection that names none", async () => {
+  it("resolves the repository and the approved ref the bind recorded, on a connection that names none", async () => {
     db({
-      bound: [{ owner: "Acme", repo: "Widgets" }],
+      bound: [
+        { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+      ],
       connections: [{ deliveryConfig: { installationId: "555" } }],
     });
     await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      source: "binding",
       owner: "Acme",
       repo: "Widgets",
+      approvedDefaultRef: "release",
     });
   });
 
   it("prefers the binding over a legacy connection's ingestion sync target", async () => {
     db({
-      bound: [{ owner: "Acme", repo: "Widgets" }],
+      bound: [
+        { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+      ],
       connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
     });
     await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      source: "binding",
       owner: "Acme",
       repo: "Widgets",
+      approvedDefaultRef: "release",
     });
   });
 
@@ -386,6 +467,7 @@ describe("the workspace's main repository", () => {
       connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
     });
     await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+      source: "legacy_delivery_config",
       owner: "a-intel",
       repo: "platform",
     });
@@ -458,6 +540,7 @@ describe("the workspace's main repository", () => {
       });
 
       await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        source: "legacy_delivery_config",
         owner: "a-intel",
         repo: "platform",
       });
@@ -468,7 +551,9 @@ describe("the workspace's main repository", () => {
     it("answers the bound repository without asking either follow-up question", async () => {
       // The joined read hit, so there is nothing to disambiguate.
       const counts = db({
-        bound: [{ owner: "Acme", repo: "Widgets" }],
+        bound: [
+          { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+        ],
         heads: [{ id: "head-1" }],
         connections: [
           { deliveryConfig: { owner: "a-intel", repo: "platform" } },
@@ -476,8 +561,10 @@ describe("the workspace's main repository", () => {
       });
 
       await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        source: "binding",
         owner: "Acme",
         repo: "Widgets",
+        approvedDefaultRef: "release",
       });
       expect(counts.headReads).toBe(0);
       expect(counts.connectionReads).toBe(0);
