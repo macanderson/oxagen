@@ -7,7 +7,7 @@
 //
 // The flyout WL-06 deleted had a `disabled` textarea, so the assertion that
 // earns this file is the first one: a composer that reaches ask_assistant.
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createRoot } from "react-dom/client";
 import {
@@ -105,6 +105,18 @@ async function ask(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.click(screen.getByTestId("assistant-send"));
 }
 
+/**
+ * A reply reveals a few characters at a time (assistant-streaming-text.tsx)
+ * rather than snapping in whole, so a check against the full text has to wait
+ * for the reveal to catch up instead of asserting the instant the answer
+ * lands in the DOM.
+ */
+async function findAnswerText(text: string) {
+  await waitFor(() => {
+    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(text);
+  });
+}
+
 const turn = (over: Record<string, unknown> = {}) => ({
   ok: true,
   value: {
@@ -164,9 +176,7 @@ describe("AssistantFlyout", () => {
       route: "fleet",
       entityId: null,
     });
-    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
-      "Three runs are live.",
-    );
+    await findAnswerText("Three runs are live.");
   });
 
   it("carries the conversation into the next turn rather than starting over", async () => {
@@ -554,9 +564,7 @@ describe("AssistantFlyout", () => {
     expect(screen.getByTestId("assistant-composer")).not.toBeDisabled();
 
     renavigate("/acme/core-platform");
-    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
-      "core-platform is live.",
-    );
+    await findAnswerText("core-platform is live.");
     // The conversation survived the trip, not only its last line: a turn that
     // resolves into a thread cleared on leaving would recreate it holding the
     // answer alone, with the question that prompted it gone.
@@ -577,9 +585,7 @@ describe("AssistantFlyout", () => {
     settle({ reply: "an answer from the first visit." });
     await flush();
 
-    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
-      "an answer from the first visit.",
-    );
+    await findAnswerText("an answer from the first visit.");
     expect(screen.getByText("what is live?")).toBeTruthy();
     askAssistant.mockResolvedValue(turn());
     await ask(user, "second");
@@ -623,9 +629,7 @@ describe("AssistantFlyout", () => {
     settle({ reply: "the first answer." });
     await flush();
     expect(screen.getAllByTestId("assistant-answer")).toHaveLength(1);
-    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
-      "the first answer.",
-    );
+    await findAnswerText("the first answer.");
   });
 
   // Two workspaces are two conversations. A turn running in one does not stop
@@ -649,9 +653,7 @@ describe("AssistantFlyout", () => {
         entityId: null,
       },
     ]);
-    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
-      "payments is quiet.",
-    );
+    await findAnswerText("payments is quiet.");
   });
 
   // A half-typed question belongs to the workspace it was typed in, the same
@@ -737,9 +739,7 @@ describe("AssistantFlyout", () => {
       pathname.mockReturnValue("/acme/core-platform");
       root.render(tree());
       await tick();
-      expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
-        "core-platform is live.",
-      );
+      await findAnswerText("core-platform is live.");
     } finally {
       IS_REACT_ACT_ENVIRONMENT = true;
       act(() => {

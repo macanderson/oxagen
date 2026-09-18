@@ -33,7 +33,7 @@ afterEach(cleanup);
  */
 describe("the metal", () => {
   it("is the house gold", () => {
-    expect(BRAND_GOLD).toBe("#D6962C");
+    expect(BRAND_GOLD).toBe("#D4AF37");
   });
 });
 
@@ -45,7 +45,9 @@ describe("OxagenWordmark — THE Oxagen logo", () => {
 
   it("keeps the kit's own viewBox rather than re-fitting the word", () => {
     const { getByRole } = render(<OxagenWordmark />);
-    expect(getByRole("img").getAttribute("viewBox")).toBe(OXAGEN.wordmark.viewBox);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(
+      OXAGEN.wordmark.viewBox,
+    );
   });
 
   it("draws exactly two paths: the letters, and the one gold glyph", () => {
@@ -87,16 +89,27 @@ describe("OxagenWordmark — THE Oxagen logo", () => {
   });
 });
 
-describe("OxagenIcon — the one-colour Ox lettermark", () => {
-  it("renders a single path that takes the colour of what it sits on", () => {
+describe("OxagenIcon — the hive, two colours", () => {
+  it("outlines four cells in the ink of what it sits on", () => {
     const { container } = render(<OxagenIcon />);
-    const paths = container.querySelectorAll("path");
-    expect(paths).toHaveLength(1);
-    expect(paths[0]?.getAttribute("fill")).toBe("currentColor");
+    const ink = [...container.querySelectorAll("path")].filter(
+      (p) => p.getAttribute("stroke") === "currentColor",
+    );
+    expect(ink).toHaveLength(4);
+    for (const p of ink) expect(p.getAttribute("fill")).toBe("none");
   });
 
-  it("never carries the metal — the gold belongs to the x of the word", () => {
+  it("fills two cells with the gold, one at half strength", () => {
     const { container } = render(<OxagenIcon />);
+    const lit = [...container.querySelectorAll("path")].filter(
+      (p) => p.getAttribute("fill") === BRAND_GOLD,
+    );
+    expect(lit).toHaveLength(2);
+    expect(lit.map((p) => p.getAttribute("opacity"))).toContain("0.55");
+  });
+
+  it("paints every cell one colour for a mono tone", () => {
+    const { container } = render(<OxagenIcon tone="mono" />);
     expect(container.innerHTML).not.toContain(BRAND_GOLD);
   });
 
@@ -120,14 +133,18 @@ describe("StellaWordmark — the mark is inside the word", () => {
 
   it("keeps the kit's viewBox", () => {
     const { getByRole } = render(<StellaWordmark />);
-    expect(getByRole("img").getAttribute("viewBox")).toBe(STELLA.wordmark.viewBox);
+    expect(getByRole("img").getAttribute("viewBox")).toBe(
+      STELLA.wordmark.viewBox,
+    );
   });
 });
 
 describe("StellaIcon — the asterisk IS the metal", () => {
-  it("ships gold, unlike the Ox lettermark", () => {
+  it("ships gold", () => {
     const { container } = render(<StellaIcon />);
-    expect(container.querySelector("path")?.getAttribute("fill")).toBe(BRAND_GOLD);
+    expect(container.querySelector("path")?.getAttribute("fill")).toBe(
+      BRAND_GOLD,
+    );
   });
 
   it("flattens for a mono tone", () => {
@@ -139,7 +156,7 @@ describe("StellaIcon — the asterisk IS the metal", () => {
 });
 
 describe("BrandMark — the icon at the app-chrome size", () => {
-  it("renders the Ox lettermark", () => {
+  it("renders the hive", () => {
     const { getByRole } = render(<BrandMark />);
     expect(getByRole("img", { name: "Oxagen" })).toBeInTheDocument();
   });
@@ -164,7 +181,7 @@ describe("no Oxagen lockup exists", () => {
     expect(brand).not.toHaveProperty("OxagenLogomark");
   });
 
-  it("renders no component that puts the Ox mark and the word together", () => {
+  it("renders no component that puts the hive and the word together", () => {
     const { container } = render(
       <>
         <OxagenWordmark />

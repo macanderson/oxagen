@@ -264,9 +264,10 @@ export interface ConsumeCreditsResult {
   /** Resulting effective balance. */
   balanceCents: bigint;
   /**
-   * Sub-credit remainder left banked against the org after this call, in
-   * micro-credits — always in [0, 1e6). Zero for a `requestedCents` caller,
-   * which does not carry.
+   * Sub-credit remainder left banked against the org FOR THIS CALL'S `reason`
+   * after this call, in micro-credits — always in [0, 1e6). Other reasons keep
+   * their own buckets and are neither read nor reported here. Zero for a
+   * `requestedCents` caller, which does not carry.
    *
    * Same caveat as `balanceCents`: a non-positive request short-circuits before
    * opening a transaction, so this reads 0 without the stored carry having been
@@ -284,7 +285,11 @@ export interface ConsumeCreditsResult {
  * A `requestedMicroCents` caller is debited only the whole credits its running
  * total has reached; the sub-credit remainder is banked on the org's settings
  * row inside this same transaction, so a crash cannot charge a fraction twice
- * or lose it.
+ * or lose it. The carry is banked PER `reason`, so a fraction accrued under one
+ * billing reason can never be debited under another — the reasons are priced
+ * differently (assistant tokens at exactly cost, everything else at the solved
+ * markup), so a pooled carry would bill one line's margin against another and
+ * count it against that line's cap.
  *
  * A zero or fully-clamped debit writes NO ledger row (the ledger CHECK forbids
  * a zero delta). credit_balances is decremented in the same transaction to keep
@@ -317,37 +322,55 @@ export async function consumeCredits(
     const now = new Date();
 
     // Resolve the sub-credit carry BEFORE touching the lots, so the whole-credit
-    // figure below is what the org actually owes across its call history rather
-    // than this call rounded up on its own. Ordering also fixes the lock order
-    // (settings, then lots) for the one path that takes both.
+    // figure below is what the org actually owes across its call history under
+    // THIS reason rather than this call rounded up on its own. Ordering also
+    // fixes the lock order (settings, then lots) for the one path that takes
+    // both.
     //
-    // The accumulate and the write-back are two statements in one transaction:
-    // the upsert takes the row lock, so a concurrent charge for the same org
-    // blocks here and reads the post-write remainder rather than racing it.
+    // The read and the write-back are two statements in one transaction, and the
+    // upsert is what makes that safe: ON CONFLICT DO UPDATE takes the row lock
+    // and its RETURNING sees the latest committed version, so a concurrent
+    // charge for the same org blocks here and reads the post-write map rather
+    // than racing it. The lock is then held for the rest of the transaction, so
+    // writing the whole map back cannot clobber another charge's bucket.
+    //
+    // Only this reason's bucket is touched. Pooling every reason in one counter
+    // was exact in total and wrong in attribution: a 0.9-credit marked-up
+    // embedding followed by a 0.1-credit assistant turn crossed the boundary on
+    // the assistant's call and wrote a whole credit as
+    // `consume_assistant_tokens`, putting embedding margin on a line that bills
+    // at exactly cost and counting it against the assistant spend cap.
     let requested = args.requestedCents ?? 0n;
     let carryMicroCents = 0n;
     if (micro !== undefined) {
-      const accumulated = await tx
+      const locked = await tx
         .insert(schema.orgBillingSettings)
-        .values({ orgId: args.orgId, meterCarryMicroCredits: micro })
+        .values({ orgId: args.orgId })
         .onConflictDoUpdate({
           target: schema.orgBillingSettings.orgId,
-          set: {
-            meterCarryMicroCredits: sql`${schema.orgBillingSettings.meterCarryMicroCredits} + ${micro}`,
-            updatedAt: now,
-          },
+          set: { updatedAt: now },
         })
         .returning({
-          total: schema.orgBillingSettings.meterCarryMicroCredits,
+          carryByReason:
+            schema.orgBillingSettings.meterCarryMicroCreditsByReason,
         });
 
-      const total = BigInt(accumulated[0]?.total ?? micro);
+      const carryByReason = locked[0]?.carryByReason ?? {};
+      const banked = BigInt(carryByReason[args.reason] ?? 0);
+      const total = banked + micro;
       requested = total / MICRO_CREDITS_PER_CREDIT;
       carryMicroCents = total % MICRO_CREDITS_PER_CREDIT;
 
       await tx
         .update(schema.orgBillingSettings)
-        .set({ meterCarryMicroCredits: carryMicroCents, updatedAt: now })
+        .set({
+          meterCarryMicroCreditsByReason: {
+            ...carryByReason,
+            // Always < 1e6 by construction, so exact as a JSON number.
+            [args.reason]: Number(carryMicroCents),
+          },
+          updatedAt: now,
+        })
         .where(eq(schema.orgBillingSettings.orgId, args.orgId));
 
       // Still under a whole credit even with everything banked before it —
