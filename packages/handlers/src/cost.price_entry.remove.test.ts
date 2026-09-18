@@ -13,6 +13,13 @@ const gate = vi.hoisted(() => ({
 }));
 const audit = vi.hoisted(() => ({ emitSecurityEvent: vi.fn() }));
 
+const plane = vi.hoisted(() => ({ resolveDataPlane: vi.fn() }));
+
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return { ...real, resolveDataPlane: plane.resolveDataPlane };
+});
+
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActingUserId: async (c: {
     userId: string | null;
@@ -81,6 +88,10 @@ const input = (over: Record<string, unknown> = {}) =>
   });
 
 beforeEach(() => {
+  plane.resolveDataPlane.mockResolvedValue({
+    mode: "shared",
+    status: "active",
+  });
   gate.refuse = false;
   gate.keyCreator = "u_key_creator";
   gate.actors = [];
@@ -109,6 +120,21 @@ describe("remove_price_entry", () => {
     gate.keyCreator = "u_key_creator";
     await h.handler(input(), { ...ctx(), userId: null, apiKeyId: "ak_1" });
     expect(gate.actors).toEqual([null, "u_key_creator"]);
+  });
+
+  // The inverse of the mismatch `set` refuses: the close would run on the
+  // organisation's plane while the rollup reads the shared one, so the call
+  // would report an end that never reached the rate in force.
+  it("refuses to end a rate on a plane the price book does not read", async () => {
+    const h = harness();
+    plane.resolveDataPlane.mockResolvedValue({
+      mode: "dedicated",
+      status: "active",
+    });
+    await expect(h.handler(input(), ctx())).rejects.toThrow(
+      /dedicated\s+Postgres plane/,
+    );
+    expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
   });
 
   it("ends the row at the write instant when none is given, and answers it as closed", async () => {

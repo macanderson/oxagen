@@ -64,9 +64,37 @@ const REQUIRED_CLASSES: readonly PriceTokenClass[] = [
 ];
 
 /**
- * Which of `observed` the book cannot price at `at`, worst first — fully
- * unpriced models before partly-priced ones, then by tokens run, so the
- * model costing the most invisible money is at the top of the list.
+ * The instants at which the book's answer for a model can change between
+ * `start` and `end`: the two ends, and every entry boundary strictly inside.
+ * Whether a class is priced is constant between consecutive boundaries, so
+ * probing these is probing the whole interval.
+ */
+function probeInstants(
+  boundaries: readonly number[],
+  start: Date,
+  end: Date,
+): Date[] {
+  const lo = start.getTime();
+  const hi = Math.max(lo, end.getTime());
+  const out = [lo];
+  for (const t of boundaries) if (t > lo && t < hi) out.push(t);
+  if (hi > lo) out.push(hi);
+  return out.map((t) => new Date(t));
+}
+
+/**
+ * Which of `observed` the book cannot price, worst first — fully unpriced
+ * models before partly-priced ones, then by tokens run, so the model costing
+ * the most invisible money is at the top of the list.
+ *
+ * A class is missing when any call in the observation went unpriced, or
+ * when it is unpriced at `at`. Judging the whole window by one snapshot at
+ * `at` (which this once did) hid the case the tab exists for: a customer
+ * states the first rate for a model AFTER it has produced unpriced calls,
+ * the new row prices it from now on, and the earlier runs stay blank while
+ * the tab reports no unpriced model to explain them. So each model is
+ * probed at every instant its price could have changed between its first
+ * and last call, and at `at`, and a class missing at any of them is named.
  */
 export function findUnpricedModels(args: {
   observed: readonly ObservedModel[];
@@ -74,16 +102,34 @@ export function findUnpricedModels(args: {
   orgId: string;
   at: Date;
 }): UnpricedModel[] {
+  const boundaries = [
+    ...new Set(
+      args.book.flatMap((e) => [
+        e.effectiveFrom.getTime(),
+        ...(e.effectiveTo === null ? [] : [e.effectiveTo.getTime()]),
+      ]),
+    ),
+  ].sort((a, b) => a - b);
   const out: UnpricedModel[] = [];
   for (const model of args.observed) {
-    const missingClasses = REQUIRED_CLASSES.filter(
-      (tokenClass) =>
-        resolvePriceEntry(args.book, {
-          orgId: args.orgId,
-          modelId: model.model,
-          tokenClass,
-          at: args.at,
-        }) === null,
+    // Calls after `at` are not in the observation (the store read is bounded
+    // by it), so the window ends at the earlier of the last call and `at`.
+    const end =
+      model.lastSeen.getTime() < args.at.getTime() ? model.lastSeen : args.at;
+    const instants = [
+      ...probeInstants(boundaries, model.firstSeen, end),
+      args.at,
+    ];
+    const missingClasses = REQUIRED_CLASSES.filter((tokenClass) =>
+      instants.some(
+        (at) =>
+          resolvePriceEntry(args.book, {
+            orgId: args.orgId,
+            modelId: model.model,
+            tokenClass,
+            at,
+          }) === null,
+      ),
     );
     if (missingClasses.length === 0) continue;
     out.push({
@@ -102,8 +148,8 @@ export function findUnpricedModels(args: {
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 /**
- * The models this organization has run since `since` that the book cannot
- * fully price at `at`, worst first.
+ * The models this organization has run since `since` that the book could
+ * not fully price when they ran, or cannot at `at`, worst first.
  *
  * Reads the book through the system connection with an explicit org
  * predicate, the same way {@link loadPriceBook}'s other callers do: this is a

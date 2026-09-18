@@ -26,6 +26,7 @@ import {
 } from "@oxagen/billing";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
 import { logger } from "./logger";
 import { toPriceEntryDto } from "./lib/price-entry-dto";
 
@@ -51,6 +52,30 @@ export function createPriceEntryRemoveHandler(
       { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin", "Billing"] },
     );
+
+    // ── The close and the read must land on the same Postgres ─────────────
+    //
+    // The inverse of the gap `cost.price_entry.set` refuses. The close runs
+    // on `withTenantDb` (the organisation's plane); `loadPriceBook` and the
+    // rollup read `withSystemDb` (shared). On a dedicated plane the close
+    // would find no row, or close a copy the rollup never reads, and answer
+    // as if the organisation had returned to list pricing while the shared
+    // negotiated rate stayed in force. Refused for the same reason and in the
+    // same words. Every organisation is shared today (ADR-042 §1).
+    const plane = await resolveDataPlane(ctx.orgId, "postgres");
+    if (plane.mode !== "shared") {
+      logger.error(
+        { orgId: ctx.orgId, planeMode: plane.mode },
+        "cost.price_entry.remove: refused — the price book is read from the shared plane only",
+      );
+      throw new Error(
+        "remove_price_entry cannot end a negotiated rate for an organisation on a dedicated " +
+          "Postgres plane: cost.price_entries is closed through withTenantDb but read by " +
+          "loadPriceBook through withSystemDb, so the shared rate would stay in force " +
+          "after the call reported it ended.",
+      );
+    }
+    assertDataPlaneUsable(plane);
 
     const now = deps.now();
     const at = input.at === undefined ? now : new Date(input.at);

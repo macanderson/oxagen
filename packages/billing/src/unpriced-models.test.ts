@@ -168,6 +168,56 @@ describe("findUnpricedModels", () => {
     expect(out[0]!.fullyUnpriced).toBe(true);
   });
 
+  // A customer states the first rate for a model after it has produced
+  // unpriced calls. The new row prices it from now on; the earlier runs stay
+  // blank, and a snapshot at `at` reported nothing left to explain them.
+  it("names a model whose price began after some of its calls ran", () => {
+    const book = fullyPriced("late-priced", {
+      effectiveFrom: new Date("2026-09-12T00:00:00.000Z"),
+    });
+    const out = findUnpricedModels({
+      observed: [observed({ model: "late-priced" })],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.fullyUnpriced).toBe(true);
+    // The same model, with every call after the price began, is priced.
+    const after = findUnpricedModels({
+      observed: [
+        observed({
+          model: "late-priced",
+          firstSeen: new Date("2026-09-12T00:00:00.000Z"),
+        }),
+      ],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(after).toEqual([]);
+  });
+
+  // A price that lapsed in the middle of the window, between two rows, is a
+  // gap no endpoint sees.
+  it("names a model whose price lapsed between two of its calls", () => {
+    const book = [
+      ...fullyPriced("gapped", {
+        effectiveTo: new Date("2026-09-11T00:00:00.000Z"),
+      }),
+      ...fullyPriced("gapped", {
+        effectiveFrom: new Date("2026-09-12T00:00:00.000Z"),
+      }),
+    ];
+    const out = findUnpricedModels({
+      observed: [observed({ model: "gapped" })],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out.map((m) => m.model)).toEqual(["gapped"]);
+  });
+
   it("orders fully unpriced first, then by tokens run, then by model id", () => {
     const partial = [
       entry({ model: "partial-huge", tokenClass: "input_uncached" }),
