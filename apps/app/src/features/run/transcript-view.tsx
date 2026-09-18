@@ -554,7 +554,11 @@ export function TranscriptView({
       className="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted px-3 py-2.5">
-        {live && following ? (
+        {status !== "live" ? (
+          <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+            {t(`recorded.${status}`)}
+          </span>
+        ) : following ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-success uppercase">
             <span
               aria-hidden="true"
@@ -562,7 +566,7 @@ export function TranscriptView({
             />
             {t("live")}
           </span>
-        ) : live ? (
+        ) : (
           <button
             type="button"
             onClick={() => {
@@ -572,10 +576,6 @@ export function TranscriptView({
           >
             {t("goLive")}
           </button>
-        ) : (
-          <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-            {t(status === "halted" ? "recorded.halted" : "recorded.sealed")}
-          </span>
         )}
         <button
           type="button"
