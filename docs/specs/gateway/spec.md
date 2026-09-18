@@ -17,7 +17,7 @@
 |---|---|---|---|
 | G1 | The launcher that confines the process does not exist | `contained`, the only tier that may say enforced against a machine's operator | §3.1 |
 | G2 | The harness can be pointed away from the proxy and nothing says so | Honest tiers, and a loud drift signal where prevention is not available | §3.2 |
-| G3 | No producer ships frame bodies, so a workspace set to `content_exact` still gets digests | Prompts and tool bodies you can read, under a policy you set | §3.3 |
+| G3 | The proxy path and tool result bodies still ship no content | Tool results and proxy bodies you can read, under a policy you set | §3.3 |
 | G4 | The product does not show the computed tier | A claim that carries its scope, per ADR-095 | §3.4 |
 | G5 | A session that ran turns and routed no model call looks the same as one that routed every call | Detection where prevention is impossible | §3.5 |
 

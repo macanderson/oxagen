@@ -108,3 +108,43 @@ describe("contentFrameOf", () => {
     expect(frame.redactions).toEqual([]);
   });
 });
+
+describe("redactBytes on credential-heavy content", () => {
+  it("keeps byte offsets right when the text is not all ASCII", () => {
+    // The offsets are UTF-8 byte spans in the ORIGINAL text, and they are
+    // now carried forward rather than recomputed. A multi-byte prefix is
+    // where an off-by-some would show.
+    const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+    const prefix = "naïve café ☕ ";
+    const out = redactBytes(enc.encode(`${prefix}${secret} and ${secret}`));
+    const prefixBytes = enc.encode(prefix).length;
+
+    expect(out.redactions.map((r) => r.path)).toEqual([
+      `bytes:${prefixBytes}-${prefixBytes + secret.length}`,
+      `bytes:${prefixBytes + secret.length + 5}-${
+        prefixBytes + secret.length + 5 + secret.length
+      }`,
+    ]);
+  });
+
+  it("stays linear in the number of matches", () => {
+    // Re-encoding the whole prefix for every match made this quadratic, and
+    // it runs on the blocking hook path for every turn. The loopback hook
+    // endpoint accepts 8 MiB, and hook handling is serialised, so a pasted
+    // token log would hold the daemon and every hook queued behind it. At
+    // this size the old shape took 5.7s and this one takes about 0.13s; the
+    // bound sits between, with room for a slow runner.
+    const parts: string[] = [];
+    for (let index = 0; index < 8_000; index += 1)
+      parts.push(`${"x".repeat(200)} ghp_${String(index).padStart(36, "a")}`);
+    const bytes = enc.encode(parts.join(" "));
+
+    const startedAt = Date.now();
+    const out = redactBytes(bytes);
+    const elapsed = Date.now() - startedAt;
+
+    expect(out.redactions).toHaveLength(8_000);
+    expect(text(out.bytes)).not.toContain("ghp_");
+    expect(elapsed).toBeLessThan(2_000);
+  });
+});

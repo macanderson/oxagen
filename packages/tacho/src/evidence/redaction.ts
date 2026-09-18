@@ -134,17 +134,26 @@ export function redactBytes(bytes: Uint8Array): RedactionResult {
 
   let out = "";
   let last = 0;
+  // Bytes of the ORIGINAL text before `last`, carried forward rather than
+  // recomputed. Re-encoding `text.slice(0, span.start)` for each span made
+  // this quadratic in the number of matches and their distance into the
+  // text, and this runs on the blocking hook path for every turn: a pasted
+  // token log would hold the daemon, and every hook queued behind it, for as
+  // long as it took.
+  let byteStart = 0;
   const redactions: Redaction[] = [];
   for (const span of spans) {
-    out += text.slice(last, span.start);
+    const kept = text.slice(last, span.start);
+    out += kept;
     out += redactionMarker(span.reason);
+    byteStart += encoder.encode(kept).length;
     const removed = encoder.encode(text.slice(span.start, span.end));
-    const byteStart = encoder.encode(text.slice(0, span.start)).length;
     redactions.push({
       path: `bytes:${byteStart}-${byteStart + removed.length}`,
       reason: span.reason,
       original_digest: digestBytes(removed),
     });
+    byteStart += removed.length;
     last = span.end;
   }
   out += text.slice(last);
