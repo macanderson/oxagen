@@ -71,6 +71,21 @@ written under, so an export queued before this shipped still downloads. The
 rows are not migrated — a backfill would have to reach every data plane
 (ADR-042), and the pathname is recoverable exactly.
 
+Bytes are served by two routes, one per kind of caller, because a storage key
+is no use to either on its own:
+
+- `GET /v1/privacy/export/{exportId}/download` for token-authenticated API and
+  CLI clients.
+- `GET /{org}/account/export/{exportId}` for the cookie-authenticated app.
+
+Both dispatch this capability first and stream `storage().get(storageKey)`
+only on a `ready` answer, so authorization is the capability's rather than each
+route's, and an export that is not the caller's never reaches storage. Both
+answer 409 while the bundle is still being written or after it failed, and both
+send `cache-control: private, no-store`.
+
+The app route is described below.
+
 The bytes are served by `GET /{org}/account/export/{exportId}`
 (`apps/app/src/features/shell/export-download.ts`), which resolves the viewer,
 invokes this capability to confirm the export is theirs and ready, and streams

@@ -115,6 +115,9 @@ importers:
       '@oxagen/run-ledger':
         specifier: workspace:*
         version: link:../../packages/run-ledger
+      '@oxagen/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@oxagen/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
