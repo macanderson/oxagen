@@ -33,6 +33,8 @@ import {
 
 const notFound = vi.fn();
 const refresh = vi.fn();
+// jsdom has no layout, so it has no scrollIntoView; playback calls it.
+Element.prototype.scrollIntoView = vi.fn();
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
@@ -350,10 +352,12 @@ describe("transcript", () => {
     expect(turns[1]).toHaveTextContent("done");
     expect(turns[1]).toHaveTextContent("4 steps");
     expect(turns[1]).toHaveTextContent("seq 2–8");
-    expect(within(turns[1] as HTMLElement).getByTestId("transcript-you")).toHaveTextContent(
+    expect(turns[1]).toContainElement(screen.getByTestId("transcript-you"));
+    expect(screen.getByTestId("transcript-you")).toHaveTextContent(
       "Cut the 2026.9.2 release candidate.",
     );
-    expect(within(turns[1] as HTMLElement).getByTestId("transcript-agent")).toHaveTextContent(
+    expect(turns[1]).toContainElement(screen.getByTestId("transcript-agent"));
+    expect(screen.getByTestId("transcript-agent")).toHaveTextContent(
       "Both failures predate the release scope.",
     );
     const nodes = screen
@@ -429,6 +433,7 @@ describe("transcript", () => {
   });
 
   it("closes everything at Turns and keeps the position", async () => {
+    const replaceState = vi.spyOn(window.history, "replaceState");
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript", zoom: "everything" },
@@ -439,7 +444,12 @@ describe("transcript", () => {
       screen.getAllByTestId("transcript-turn").every((turn) => !turn.hasAttribute("open")),
     ).toBe(true);
     expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
-    expect(window.location.search).toBe("?tab=transcript&zoom=turns");
+    expect(replaceState).toHaveBeenCalledWith(
+      null,
+      "",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    );
+    replaceState.mockRestore();
   });
 
   it("links a cut body to its frame's whole body on the Frames tab", async () => {
@@ -508,17 +518,17 @@ describe("transcript", () => {
       fireEvent.click(screen.getByRole("button", { name: "Play" }));
       const readout = screen.getByTestId("transport-readout");
       expect(readout).toHaveTextContent("seq 0");
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(2000);
       });
       expect(readout).toHaveTextContent("seq 1");
       fireEvent.click(screen.getByRole("button", { name: "×2" }));
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(1000);
       });
       expect(readout).toHaveTextContent("seq 2");
       fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
-      await act(async () => {
+      act(() => {
         vi.advanceTimersByTime(10_000);
       });
       expect(readout).toHaveTextContent("seq 2");

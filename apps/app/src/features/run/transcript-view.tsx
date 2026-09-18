@@ -43,6 +43,8 @@ import {
   buildTranscript,
   costAt,
   elapsedAt,
+  type Frames,
+  frameAt,
   frameCost,
   idsAt,
   openAtZoom,
@@ -187,7 +189,8 @@ function StepRow({
 }) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
-  const first = step.frames[0] as TranscriptEntry;
+  const locale = useLocale();
+  const { first } = step;
   const isNow = pos >= step.from && pos <= step.to;
   const isFuture = step.from > pos;
   return (
@@ -196,7 +199,9 @@ function StepRow({
       data-node={digest.node}
       data-now={isNow ? "true" : undefined}
       open={open}
-      onToggle={(e) => onToggle(step.id, e.currentTarget.open)}
+      onToggle={(e) => {
+        onToggle(step.id, e.currentTarget.open);
+      }}
       className={`group border-b border-border last:border-b-0 ${isFuture ? "opacity-35" : ""}`}
     >
       <summary
@@ -243,7 +248,7 @@ function StepRow({
               )}
               {digest.durationMs === null ? null : (
                 <Chip>
-                  {t("ms", { ms: format.number(digest.durationMs) })}
+                  {t("ms", { ms: formatCount(digest.durationMs, locale) })}
                 </Chip>
               )}
               {step.frames.length > 1 ? (
@@ -313,15 +318,16 @@ function TurnBlock({
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
-  const first = turn.frames[0] as TranscriptEntry;
-  const last = turn.frames[turn.frames.length - 1] as TranscriptEntry;
+  const { first, last } = turn;
   const cost = frameCost(turn.frames);
   const seconds = (Date.parse(last.at) - Date.parse(first.at)) / 1000;
   return (
     <details
       data-testid="transcript-turn"
       open={openIds.has(turn.id)}
-      onToggle={(e) => onToggle(turn.id, e.currentTarget.open)}
+      onToggle={(e) => {
+        onToggle(turn.id, e.currentTarget.open);
+      }}
       className="group/turn"
     >
       <summary className="cursor-pointer list-none border-b border-border bg-muted px-3 py-2.5 select-none hover:bg-card [&::-webkit-details-marker]:hidden">
@@ -382,13 +388,13 @@ function Readout({
   entries,
   pos,
 }: {
-  entries: TranscriptEntry[];
+  entries: Frames;
   pos: number;
 }) {
   const t = useTranslations("run.transcript");
   const locale = useLocale();
   const head = entries.length - 1;
-  const here = entries[pos] as TranscriptEntry;
+  const here = frameAt(entries, pos);
   const cost: MoneyValue | null = costAt(entries, pos);
   return (
     <span
@@ -398,7 +404,7 @@ function Readout({
       <b className="font-medium text-foreground">
         {t("position", { seq: here.seq })}
       </b>{" "}
-      {t("of", { seq: (entries[head] as TranscriptEntry).seq })}
+      {t("of", { seq: frameAt(entries, head).seq })}
       {" · "}
       {formatClock(elapsedAt(entries, pos) / 1000, locale)} /{" "}
       {formatClock(elapsedAt(entries, head) / 1000, locale)}
@@ -416,6 +422,7 @@ function Readout({
 
 export function TranscriptView({
   transcript,
+  entries,
   zoom: initialZoom,
   status,
   replayGrade,
@@ -423,7 +430,9 @@ export function TranscriptView({
   ws,
   runId,
 }: {
-  transcript: RunTranscript;
+  transcript: Pick<RunTranscript, "complete">;
+  /** The transcript's frames, at least one. */
+  entries: Frames;
   /** The level the URL asked for: which disclosures start open. */
   zoom: TranscriptZoom;
   status: RunStatus;
@@ -433,7 +442,6 @@ export function TranscriptView({
   const locale = useLocale();
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
-  const entries = transcript.entries;
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
   const live = status === "live";
@@ -444,32 +452,35 @@ export function TranscriptView({
     for (const id of idsAt(turns, head)) open.add(id);
     return open;
   });
-  const [pos, setPos] = useState(head);
-  const [following, setFollowing] = useState(true);
+  // The frame the viewer pinned; null follows the head as a live run grows.
+  const [pinned, setPinned] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
   const bodyRef = useRef<HTMLDivElement>(null);
 
+  const following = pinned === null;
+  const pos = pinned === null ? head : Math.min(pinned, head);
+  // A sealed run stops at its last frame; a live one waits there for more.
+  const isPlaying = playing && (live || pos < head);
+
+  // A viewer following a live run sees the newest step open, at any zoom but Turns.
+  const shown = useMemo(() => {
+    if (!following || zoom === "turns") return openIds;
+    const ids = idsAt(turns, head);
+    if (ids.every((id) => openIds.has(id))) return openIds;
+    return new Set([...openIds, ...ids]);
+  }, [following, zoom, openIds, turns, head]);
+
   const reveal = useCallback(
     (at: number) => {
       const ids = idsAt(turns, at);
-      if (ids.length === 0) return;
       setOpenIds((prev) => {
         if (ids.every((id) => prev.has(id))) return prev;
-        const next = new Set(prev);
-        for (const id of ids) next.add(id);
-        return next;
+        return new Set([...prev, ...ids]);
       });
     },
     [turns],
   );
-
-  // A re-read that brought new frames moves a following viewer to the head.
-  useEffect(() => {
-    if (!following || playing) return;
-    setPos(head);
-    reveal(head);
-  }, [head, following, playing, reveal]);
 
   // A followed live run re-reads itself while the tab is visible.
   useEffect(() => {
@@ -477,45 +488,37 @@ export function TranscriptView({
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") navigate.refresh();
     }, LIVE_REFRESH_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+    };
   }, [live, following, navigate]);
 
   // Playback walks the frames at their recorded pace.
   useEffect(() => {
-    if (!playing) return;
-    if (pos >= head) {
-      if (!live) setPlaying(false);
-      return;
-    }
+    if (!isPlaying || pos >= head) return;
     const timer = setTimeout(() => {
       const next = pos + 1;
-      setPos(next);
-      setFollowing(next >= head);
+      setPinned(next >= head ? null : next);
       reveal(next);
     }, playDelay(entries, pos, speed));
-    return () => clearTimeout(timer);
-  }, [playing, pos, head, live, entries, speed, reveal]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isPlaying, pos, head, entries, speed, reveal]);
 
-  // Keep the marked step in view while playing.
+  // Keep the marked step in view while playing; the container's scroll
+  // behaviour honours reduced motion.
   useEffect(() => {
-    if (!playing) return;
-    const now = bodyRef.current?.querySelector<HTMLElement>("[data-now]");
-    if (now && typeof now.scrollIntoView === "function") {
-      const reduced = window.matchMedia?.(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
-      now.scrollIntoView({
-        block: "nearest",
-        behavior: reduced ? "auto" : "smooth",
-      });
-    }
-  }, [playing, pos]);
+    if (!isPlaying) return;
+    bodyRef.current
+      ?.querySelector<HTMLElement>("[data-now]")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [isPlaying, pos]);
 
   const moveTo = (next: number) => {
     const clamped = Math.max(0, Math.min(head, next));
     setPlaying(false);
-    setPos(clamped);
-    setFollowing(clamped >= head);
+    setPinned(clamped >= head ? null : clamped);
     reveal(clamped);
   };
 
@@ -561,7 +564,9 @@ export function TranscriptView({
         ) : live ? (
           <button
             type="button"
-            onClick={() => moveTo(head)}
+            onClick={() => {
+              moveTo(head);
+            }}
             className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[10.5px] font-semibold tracking-[0.1em] text-muted-foreground uppercase hover:text-foreground"
           >
             {t("goLive")}
@@ -576,7 +581,9 @@ export function TranscriptView({
           className={tpButton}
           disabled={pos <= 0}
           aria-label={t("back")}
-          onClick={() => moveTo(pos - 1)}
+          onClick={() => {
+            moveTo(pos - 1);
+          }}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M11.4 3.2 4.6 8l6.8 4.8Z" fill="currentColor" />
@@ -586,18 +593,17 @@ export function TranscriptView({
         <button
           type="button"
           className={`${tpButton} size-[34px] border-foreground/30`}
-          aria-label={playing ? t("pause") : t("play")}
+          aria-label={isPlaying ? t("pause") : t("play")}
           onClick={() => {
-            if (playing) {
+            if (isPlaying) {
               setPlaying(false);
               return;
             }
-            if (pos >= head && !live) setPos(0);
-            setFollowing(false);
+            setPinned(pos >= head && !live ? 0 : pos);
             setPlaying(true);
           }}
         >
-          {playing ? (
+          {isPlaying ? (
             <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
               <rect x="4.6" y="3.4" width="2.4" height="9.2" fill="currentColor" />
               <rect x="9" y="3.4" width="2.4" height="9.2" fill="currentColor" />
@@ -613,7 +619,9 @@ export function TranscriptView({
           className={tpButton}
           disabled={pos >= head}
           aria-label={t("forward")}
-          onClick={() => moveTo(pos + 1)}
+          onClick={() => {
+            moveTo(pos + 1);
+          }}
         >
           <svg viewBox="0 0 16 16" aria-hidden="true" className="size-[13px]">
             <path d="M4.6 3.2 11.4 8l-6.8 4.8Z" fill="currentColor" />
@@ -627,8 +635,10 @@ export function TranscriptView({
             max={head}
             value={pos}
             aria-label={t("scrub")}
-            aria-valuetext={t("position", { seq: (entries[pos] as TranscriptEntry).seq })}
-            onChange={(e) => moveTo(Number(e.currentTarget.value))}
+            aria-valuetext={t("position", { seq: frameAt(entries, pos).seq })}
+            onChange={(e) => {
+              moveTo(Number(e.currentTarget.value));
+            }}
             className="h-1 w-full cursor-pointer accent-foreground"
           />
         </span>
@@ -643,10 +653,12 @@ export function TranscriptView({
               key={value}
               type="button"
               aria-pressed={speed === value}
-              onClick={() => setSpeed(value)}
+              onClick={() => {
+                setSpeed(value);
+              }}
               className={`${segButton} font-mono`}
             >
-              {t("speed", { speed: new Intl.NumberFormat(locale).format(value) })}
+              {t("speed", { speed: value })}
             </button>
           ))}
         </span>
@@ -660,7 +672,9 @@ export function TranscriptView({
               key={level}
               type="button"
               aria-pressed={zoom === level}
-              onClick={() => chooseZoom(level)}
+              onClick={() => {
+                chooseZoom(level);
+              }}
               className={segButton}
             >
               {t(`zoom.${level}`)}
@@ -673,14 +687,17 @@ export function TranscriptView({
             : t("transportNoteGraded", { grade: replayGrade })}
         </p>
       </div>
-      <div ref={bodyRef} className="max-h-[min(66vh,760px)] overflow-y-auto">
+      <div
+        ref={bodyRef}
+        className="max-h-[min(66vh,760px)] overflow-y-auto motion-safe:scroll-smooth"
+      >
         {turns.map((turn) => (
           <TurnBlock
             key={turn.id}
             turn={turn}
             pos={pos}
             running={live && turn.id === lastTurnId}
-            openIds={openIds}
+            openIds={shown}
             onToggle={toggle}
             place={place}
           />

@@ -16,6 +16,7 @@ import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { ReadFailure } from "@/ui/read-failure";
 import { Panel } from "./parts";
+import { isNonEmpty } from "./transcript-model";
 import { TranscriptView } from "./transcript-view";
 
 type Place = { org: string; ws: string; runId: string };
@@ -35,20 +36,25 @@ export function TranscriptSection({
   run: Pick<RunRow, "status" | "replayGrade">;
 } & Place) {
   const t = useTranslations("run.transcript");
-  if (!read.ok || read.value.entries.length === 0) {
+  if (!read.ok) {
     return (
       <Panel title={t("title")}>
-        {!read.ok ? (
-          <ReadFailure read={read} section={t("title")} />
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
-        )}
+        <ReadFailure read={read} section={t("title")} />
+      </Panel>
+    );
+  }
+  const { entries } = read.value;
+  if (!isNonEmpty(entries)) {
+    return (
+      <Panel title={t("title")}>
+        <p className="text-sm text-muted-foreground">{t("empty")}</p>
       </Panel>
     );
   }
   return (
     <TranscriptView
       transcript={read.value}
+      entries={entries}
       zoom={zoom}
       status={run.status}
       replayGrade={run.replayGrade}

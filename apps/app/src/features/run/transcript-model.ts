@@ -9,6 +9,21 @@
 import { type Money, sumMoney } from "@/data/contracts/money";
 import type { TranscriptEntry } from "@/data/contracts/run";
 
+/** A transcript with at least one frame: the only kind the view draws. */
+export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
+
+export function isNonEmpty(
+  entries: readonly TranscriptEntry[],
+): entries is Frames {
+  return entries.length > 0;
+}
+
+/** The frame at `pos`, held inside the transcript. */
+export function frameAt(entries: Frames, pos: number): TranscriptEntry {
+  const index = Math.min(Math.max(0, pos), entries.length - 1);
+  return entries[index] ?? entries[0];
+}
+
 /** The spine's dot: what kind of thing a step was. */
 export type StepNode = "model" | "tool" | "policy" | "control" | "deny";
 
@@ -16,9 +31,11 @@ export type TranscriptStep = {
   /** Stable across re-reads of a live run: the opening frame's seq. */
   id: string;
   kind: "model" | "tool" | "event";
-  /** Positions of the step's frames in the transcript's frame list. */
+  /** Positions of the step's first and last frames in the transcript. */
   from: number;
   to: number;
+  first: TranscriptEntry;
+  last: TranscriptEntry;
   frames: TranscriptEntry[];
 };
 
@@ -26,6 +43,8 @@ export type TranscriptTurn = {
   id: string;
   /** Null for the frames recorded before the run's first turn. */
   turn: number | null;
+  first: TranscriptEntry;
+  last: TranscriptEntry;
   frames: TranscriptEntry[];
   steps: TranscriptStep[];
   /** The prompt the turn opened with, when the recorder kept its body. */
@@ -57,50 +76,61 @@ const CONTROL: ReadonlySet<string> = new Set([
   "turn_end",
 ]);
 
-function stepsOf(frames: TranscriptEntry[], offset: number): TranscriptStep[] {
+/** Where the step opening at `i` ends (exclusive), and what kind it is. */
+function stepEnd(
+  frames: readonly TranscriptEntry[],
+  i: number,
+  frame: TranscriptEntry,
+): { end: number; kind: TranscriptStep["kind"] } {
+  if (frame.type === MODEL_REQUEST) {
+    const paired = frames[i + 1]?.type === MODEL_RESPONSE;
+    return { end: paired ? i + 2 : i + 1, kind: "model" };
+  }
+  if (frame.type === TOOL_REQUESTED) {
+    let end = i + 1;
+    for (let next = frames[end]; next !== undefined; next = frames[end]) {
+      if (next.type === TOOL_CALL) return { end: end + 1, kind: "tool" };
+      if (!TOOL_GATE.has(next.type)) break;
+      end += 1;
+    }
+    return { end, kind: "tool" };
+  }
+  if (frame.kind === "model_call") return { end: i + 1, kind: "model" };
+  if (frame.kind === "tool_call") return { end: i + 1, kind: "tool" };
+  return { end: i + 1, kind: "event" };
+}
+
+function stepsOf(
+  frames: readonly TranscriptEntry[],
+  offset: number,
+): TranscriptStep[] {
   const steps: TranscriptStep[] = [];
   let i = 0;
-  const push = (kind: TranscriptStep["kind"], end: number) => {
+  for (let first = frames[i]; first !== undefined; first = frames[i]) {
+    const { end, kind } = stepEnd(frames, i, first);
     const slice = frames.slice(i, end);
     steps.push({
-      id: `s${(slice[0] as TranscriptEntry).seq}`,
+      id: `s${first.seq}`,
       kind,
       from: offset + i,
       to: offset + end - 1,
+      first,
+      last: slice[slice.length - 1] ?? first,
       frames: slice,
     });
     i = end;
-  };
-  while (i < frames.length) {
-    const frame = frames[i] as TranscriptEntry;
-    if (frame.type === MODEL_REQUEST) {
-      push("model", frames[i + 1]?.type === MODEL_RESPONSE ? i + 2 : i + 1);
-      continue;
-    }
-    if (frame.type === TOOL_REQUESTED) {
-      let end = i + 1;
-      while (end < frames.length) {
-        const next = frames[end] as TranscriptEntry;
-        if (next.type === TOOL_CALL) {
-          end += 1;
-          break;
-        }
-        if (!TOOL_GATE.has(next.type)) break;
-        end += 1;
-      }
-      push("tool", end);
-      continue;
-    }
-    if (frame.kind === "model_call") push("model", i + 1);
-    else if (frame.kind === "tool_call") push("tool", i + 1);
-    else push("event", i + 1);
   }
   return steps;
 }
 
-/** The last frame of `type` in `frames` that carries text. */
-function textOf(frames: TranscriptEntry[], type: string, last: boolean) {
-  const found = (last ? [...frames].reverse() : frames).find(
+/** The first (or last) frame of `type` in `frames` that carries text. */
+function textOf(
+  frames: readonly TranscriptEntry[],
+  type: string,
+  last: boolean,
+): string | null {
+  const ordered = last ? [...frames].reverse() : frames;
+  const found = ordered.find(
     (frame) => frame.type === type && frame.text !== null,
   );
   return found?.text ?? null;
@@ -111,16 +141,21 @@ function textOf(frames: TranscriptEntry[], type: string, last: boolean) {
  * with the same value is one group, so a recording that reuses a turn number
  * after a gap still reads in the order it happened.
  */
-export function buildTranscript(entries: TranscriptEntry[]): TranscriptTurn[] {
+export function buildTranscript(
+  entries: readonly TranscriptEntry[],
+): TranscriptTurn[] {
   const turns: TranscriptTurn[] = [];
   let start = 0;
   entries.forEach((entry, index) => {
     const next = entries[index + 1];
     if (next !== undefined && next.turn === entry.turn) return;
     const frames = entries.slice(start, index + 1);
+    const first = frames[0] ?? entry;
     turns.push({
-      id: `t${(frames[0] as TranscriptEntry).seq}`,
+      id: `t${first.seq}`,
       turn: entry.turn,
+      first,
+      last: entry,
       frames,
       steps: stepsOf(frames, start),
       prompt: textOf(frames, "turn_start", false),
@@ -166,8 +201,7 @@ export type StepDigest = {
 };
 
 export function stepDigest(step: TranscriptStep): StepDigest {
-  const [first] = step.frames as [TranscriptEntry, ...TranscriptEntry[]];
-  const last = step.frames[step.frames.length - 1] as TranscriptEntry;
+  const { first, last } = step;
   const durationMs =
     step.frames.length > 1 ? Date.parse(last.at) - Date.parse(first.at) : null;
   const cost = frameCost(step.frames);
@@ -184,9 +218,9 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     };
   }
   if (step.kind === "tool") {
-    const call = step.frames.find((frame) => frame.kind === "tool_call");
+    const named =
+      step.frames.find((frame) => frame.kind === "tool_call") ?? first;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
-    const named = call ?? first;
     const status = toolStatus(named.label);
     const denied =
       (gate !== null && DENIED.test(gate)) ||
@@ -207,15 +241,12 @@ export function stepDigest(step: TranscriptStep): StepDigest {
     CONTROL.has(first.type) ||
     first.type.startsWith("oxagen:") ||
     first.type.startsWith("admission.");
+  let node: StepNode = "tool";
+  if (outcome !== null && DENIED.test(outcome)) node = "deny";
+  else if (TOOL_GATE.has(first.type)) node = "policy";
+  else if (control) node = "control";
   return {
-    node:
-      outcome !== null && DENIED.test(outcome)
-        ? "deny"
-        : TOOL_GATE.has(first.type)
-          ? "policy"
-          : control
-            ? "control"
-            : "tool",
+    node,
     name: first.type,
     arg: first.label === first.type ? null : first.label,
     outcome,
@@ -283,10 +314,7 @@ export function openAtZoom(
 }
 
 /** The turn and step holding position `pos`, so a reveal opens both. */
-export function idsAt(
-  turns: readonly TranscriptTurn[],
-  pos: number,
-): string[] {
+export function idsAt(turns: readonly TranscriptTurn[], pos: number): string[] {
   for (const turn of turns) {
     const step = turn.steps.find((s) => pos >= s.from && pos <= s.to);
     if (step !== undefined) return [turn.id, step.id];

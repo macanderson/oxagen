@@ -14,6 +14,13 @@ import {
 const { entries } = mockupTranscript();
 const turns = buildTranscript(entries);
 
+/** The step at `s` in turn `t`; a missing one fails the test that asked. */
+function step(t: number, s: number) {
+  const found = turns[t]?.steps[s];
+  if (found === undefined) throw new Error(`no step ${String(s)} in turn ${String(t)}`);
+  return found;
+}
+
 describe("buildTranscript", () => {
   it("groups the frames before the first turn into the run's start, then one group per turn", () => {
     expect(turns.map((t) => [t.id, t.turn, t.frames.length])).toEqual([
@@ -58,7 +65,7 @@ describe("buildTranscript", () => {
 
 describe("stepDigest", () => {
   it("names a model step by its model, with its wall time and cost", () => {
-    const d = stepDigest(turns[1]?.steps[1] as never);
+    const d = stepDigest(step(1, 1));
     expect(d).toMatchObject({
       node: "model",
       name: "claude-fable-5-1",
@@ -69,7 +76,7 @@ describe("stepDigest", () => {
   });
 
   it("names a tool step by its tool, with the policy's outcome and the call's status", () => {
-    expect(stepDigest(turns[1]?.steps[2] as never)).toMatchObject({
+    expect(stepDigest(step(1, 2))).toMatchObject({
       node: "tool",
       name: "list_pull_requests",
       arg: null,
@@ -81,7 +88,7 @@ describe("stepDigest", () => {
   });
 
   it("marks a tool step the policy denied (negative)", () => {
-    expect(stepDigest(turns[2]?.steps[2] as never)).toMatchObject({
+    expect(stepDigest(step(2, 2))).toMatchObject({
       node: "deny",
       name: "create_tag",
       outcome: "deny",
@@ -90,14 +97,14 @@ describe("stepDigest", () => {
   });
 
   it("draws the agent's start and a turn's boundaries as control, and any other frame as neutral", () => {
-    expect(stepDigest(turns[0]?.steps[0] as never).node).toBe("control");
-    expect(stepDigest(turns[0]?.steps[1] as never)).toMatchObject({
+    expect(stepDigest(step(0, 0)).node).toBe("control");
+    expect(stepDigest(step(0, 1))).toMatchObject({
       node: "tool",
       name: "context.assembled",
       arg: null,
       durationMs: null,
     });
-    expect(stepDigest(turns[1]?.steps[0] as never).node).toBe("control");
+    expect(stepDigest(step(1, 0)).node).toBe("control");
   });
 });
 
