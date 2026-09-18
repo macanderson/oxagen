@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
     vi.fn<
       (arg: { table: unknown; payload: Record<string, unknown> }) => void
     >(),
-  selectCalls: [] as Array<{ cols: unknown; table: unknown }>,
+  selectCalls: [] as Array<{ cols: unknown; table: unknown; where?: unknown }>,
   put: vi.fn(),
   zipSync: vi.fn(),
   inngestCreateFunction: vi.fn(),
@@ -71,7 +71,7 @@ function rowsFor(table: unknown): Promise<unknown[]> {
 function makeTx() {
   return {
     select(cols?: unknown) {
-      const call: { cols: unknown; table: unknown } = {
+      const call: { cols: unknown; table: unknown; where?: unknown } = {
         cols,
         table: undefined,
       };
@@ -79,7 +79,14 @@ function makeTx() {
       return {
         from(table: unknown) {
           call.table = table;
-          return { where: (_cond?: unknown) => rowsFor(table) };
+          return {
+            where: (cond?: unknown) => {
+              // Kept, not discarded: the org fence on a user-scope export is a
+              // predicate, so a test that never looks at one cannot see it go.
+              call.where = cond;
+              return rowsFor(table);
+            },
+          };
         },
       };
     },
@@ -110,6 +117,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
   const actual = await importOriginal<typeof import("drizzle-orm")>();
   return {
     ...actual,
+    and: (...conds: unknown[]) => ({ and: conds }),
     eq: (col: unknown, val: unknown) => ({ col, val }),
     inArray: (col: unknown, vals: unknown) => ({ col, vals }),
   };
@@ -396,6 +404,40 @@ describe("privacyExportProcess Inngest handler", () => {
       (c) => c.table === schema.conversations,
     );
     expect(convSelect).toBeDefined();
+  });
+
+  // A person can belong to several organisations, and `export_data` is decided
+  // per organisation. A user export filtered by `userId` alone would put org
+  // A's conversations in a ZIP assembled under a permission org B granted, with
+  // A's policy never consulted. Every user-scope read is fenced on the org the
+  // request was governed in.
+  it("fences a user-scope export on the org it was governed in", async () => {
+    seedUserScopeRows();
+    const handler = getHandler("privacy.export-process");
+
+    await handler({ event: { data: baseEvent }, step: makeStep() });
+
+    const fencedOnOrg = (table: unknown, subject: unknown) => {
+      const call = mocks.selectCalls.find((c) => c.table === table);
+      expect(call).toBeDefined();
+      // `{ and: [...] }` is the stubbed drizzle `and`; each leaf is `{col,val}`.
+      expect(call?.where).toEqual({
+        and: [subject, { col: (table as never)["orgId"], val: "org-1" }],
+      });
+    };
+
+    fencedOnOrg(schema.conversations, {
+      col: schema.conversations.userId,
+      val: "user-1",
+    });
+    fencedOnOrg(schema.apiKeys, {
+      col: schema.apiKeys.createdById,
+      val: "user-1",
+    });
+    fencedOnOrg(schema.securityEvents, {
+      col: schema.securityEvents.actorUserId,
+      val: "user-1",
+    });
   });
 
   it("on-failure handler marks the export failed with the error message", async () => {

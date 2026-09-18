@@ -1,7 +1,7 @@
 import { createFunction } from "../create-function";
 import { schema, withSystemDb } from "@oxagen/database";
 import { storage } from "@oxagen/storage";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { logger } from "../logger";
 
 /**
@@ -159,6 +159,14 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
 
           // conversations/<publicId>.json — one file per conversation with its
           // messages nested. Scope decides subject-only vs org-wide.
+          //
+          // Both branches are fenced on `orgId`, the org the request was
+          // governed in. A person can belong to several organisations, and
+          // `export_data` is decided per organisation: filtering a user export
+          // by `userId` alone would put an org's conversations in a ZIP that
+          // org never allowed, assembled under a permission granted somewhere
+          // else (discussion_r4050923268). The same fence applies to the two
+          // collectors below, for the same reason.
           await collectOptional(exportId, "conversations", async () => {
             const conversations = await tx
               .select()
@@ -166,7 +174,10 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
               .where(
                 scope === "org"
                   ? eq(schema.conversations.orgId, orgId)
-                  : eq(schema.conversations.userId, userId),
+                  : and(
+                      eq(schema.conversations.userId, userId),
+                      eq(schema.conversations.orgId, orgId),
+                    ),
               );
 
             const conversationIds = conversations.map((c) => c.id);
@@ -221,7 +232,10 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
               .where(
                 scope === "org"
                   ? eq(schema.apiKeys.orgId, orgId)
-                  : eq(schema.apiKeys.createdById, userId),
+                  : and(
+                      eq(schema.apiKeys.createdById, userId),
+                      eq(schema.apiKeys.orgId, orgId),
+                    ),
               );
             addJsonEntry(collected, "api-keys.json", apiKeyRows);
           });
@@ -235,7 +249,10 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
               .where(
                 scope === "org"
                   ? eq(schema.securityEvents.orgId, orgId)
-                  : eq(schema.securityEvents.actorUserId, userId),
+                  : and(
+                      eq(schema.securityEvents.actorUserId, userId),
+                      eq(schema.securityEvents.orgId, orgId),
+                    ),
               );
             addJsonEntry(collected, "audit-log.json", auditRows);
           });
