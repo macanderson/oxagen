@@ -10,11 +10,22 @@
  * retried by the next `unenroll` or `reassign`, and the handler answers
  * idempotently for one that already went through.
  */
-import { existsSync, rmSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
+import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
-import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
+import {
+  type HostFile,
+  readHostFileLenient,
+  writeHostFile,
+} from "../host/host-file";
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
@@ -30,6 +41,12 @@ export interface UnenrollOptions extends CredentialOptions {
 }
 
 export interface UnenrollResult {
+  /**
+   * False when something of Tacho's is still on the machine: a harness file
+   * that could not be cleaned, a service that would not unload. An offline
+   * revoke is not a failure (the host is retired here and host.json is kept
+   * so the revoke can be finished); `revoked` reports it.
+   */
   ok: boolean;
   settingsChanged: boolean;
   revoked: boolean;
@@ -137,16 +154,41 @@ export function stripEnrollmentHooks(
   stellaChanged: string[];
   /** Claude Desktop's config, when our MCP server entry was removed from it. */
   claudeDesktopChanged?: string;
+  /**
+   * Files that could not be cleaned, each with why. One unreadable file (JSON
+   * the user has since broken, a file locked read-only) used to throw out of
+   * here and take the whole unenroll with it, before the service was stopped
+   * or anything was revoked; now the others are still cleaned and this one is
+   * named. It is never rewritten: a file Tacho cannot parse is left exactly
+   * as it is.
+   */
+  failed: string[];
 } {
-  const stripped = stripTachoSettings(
-    deps.readSettings(),
-    host?.host_enrollment_id,
-    host?.displaced_env ?? {},
-  );
-  if (stripped.changed) deps.writeSettings(stripped.settings);
+  const failed: string[] = [];
+  const attempt = (path: string, run: () => void) => {
+    try {
+      run();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      failed.push(reason.includes(path) ? reason : `${path}: ${reason}`);
+    }
+  };
+  let settingsChanged = false;
+  attempt(deps.paths.claudeSettings, () => {
+    const stripped = stripTachoSettings(
+      deps.readSettings(),
+      host?.host_enrollment_id,
+      host?.displaced_env ?? {},
+    );
+    if (stripped.changed) {
+      deps.writeSettings(stripped.settings);
+      settingsChanged = true;
+    }
+  });
   let codexChanged = false;
-  const codexCurrent = deps.readCodexHooks();
-  if (codexCurrent !== undefined) {
+  attempt(deps.paths.codexHooks, () => {
+    const codexCurrent = deps.readCodexHooks();
+    if (codexCurrent === undefined) return;
     const codexStripped = stripCodexHooks(
       codexCurrent,
       host?.host_enrollment_id,
@@ -155,16 +197,21 @@ export function stripEnrollmentHooks(
       deps.writeCodexHooks(codexStripped.settings);
       codexChanged = true;
     }
-  }
+  });
   const stellaChanged: string[] = [];
   for (const format of ["toml", "json"] as const) {
-    const file = deps.readStellaHooks(format);
-    if (file.text === undefined) continue;
-    const stellaStripped = stripStellaHooks(file, host?.host_enrollment_id);
-    if (stellaStripped.changed) {
-      deps.writeStellaHooks(stellaStripped.file);
-      stellaChanged.push(file.path);
-    }
+    attempt(
+      format === "toml" ? deps.paths.stellaToml : deps.paths.stellaSettingsJson,
+      () => {
+        const file = deps.readStellaHooks(format);
+        if (file.text === undefined) return;
+        const stellaStripped = stripStellaHooks(file, host?.host_enrollment_id);
+        if (stellaStripped.changed) {
+          deps.writeStellaHooks(stellaStripped.file);
+          stellaChanged.push(file.path);
+        }
+      },
+    );
   }
   // The connected tier (ADR-078). Removes exactly the entry enroll wrote and
   // puts back whatever it displaced; every other MCP server the user has is
@@ -172,8 +219,9 @@ export function stripEnrollmentHooks(
   let claudeDesktopChanged: string | undefined;
   const desktopPath = deps.paths.claudeDesktopConfig;
   if (desktopPath !== undefined) {
-    const current = deps.readClaudeDesktopConfig();
-    if (current !== undefined) {
+    attempt(desktopPath, () => {
+      const current = deps.readClaudeDesktopConfig();
+      if (current === undefined) return;
       const desktopStripped = stripClaudeDesktopConfig(
         current,
         host?.host_enrollment_id,
@@ -186,25 +234,89 @@ export function stripEnrollmentHooks(
         deps.writeClaudeDesktopConfig(desktopStripped.config);
         claudeDesktopChanged = desktopPath;
       }
+    });
+  }
+  // The pure strips above leave a correct document; this gives the *file*
+  // back: the user's own bytes, mode and symlink, and nothing where enroll
+  // had to create something (`host/harness-file.ts`). Skipped while any file
+  // failed, so its receipt and its backup survive for the retry.
+  if (failed.length === 0) {
+    try {
+      deps.settleHarnessFiles?.();
+    } catch (error) {
+      failed.push(
+        `restoring the original files: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   return {
-    settingsChanged: stripped.changed,
+    settingsChanged,
     codexChanged,
     stellaChanged,
     claudeDesktopChanged,
+    failed,
   };
 }
 
+/**
+ * `unenroll` under the install lock (`host/install-lock.ts`): a second
+ * installer running at the same time is refused, not interleaved.
+ */
 export async function unenroll(
   options: UnenrollOptions,
   deps: CliDeps,
 ): Promise<UnenrollResult> {
+  const lock = acquireInstallLock(deps.paths.root, deps.now);
+  if ("heldBy" in lock) {
+    const warning = `another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again`;
+    deps.err(`warning: ${warning}`);
+    return {
+      ok: false,
+      settingsChanged: false,
+      revoked: false,
+      warnings: [warning],
+    };
+  }
+  try {
+    return await unenrollLocked(options, deps);
+  } finally {
+    lock.release();
+    // Nothing of ours left in it: the directory goes too, so a machine that
+    // was enrolled and purged looks like one that never was.
+    removeIfEmpty(deps.paths.root);
+  }
+}
+
+/** Remove a directory that holds nothing; leave one that does. */
+function removeIfEmpty(dir: string): void {
+  try {
+    if (readdirSync(dir).length === 0) rmdirSync(dir);
+  } catch {
+    // Not there, or not empty by the time we looked.
+  }
+}
+
+async function unenrollLocked(
+  options: UnenrollOptions,
+  deps: CliDeps,
+): Promise<UnenrollResult> {
   const warnings: string[] = [];
-  const host = readHostFile(deps.paths.hostFile);
+  let incomplete = false;
+  // Never a throw: a host.json that is truncated, hand-edited or written by
+  // another version must not be what stops a machine being uninstalled. What
+  // can be salvaged (the enrollment id, the displaced values) still steers
+  // the strip; the file itself is kept for a person to look at.
+  const read = readHostFileLenient(deps.paths.hostFile);
+  const host = read.host;
+  if (read.error !== undefined) {
+    warnings.push(
+      `${read.error}; removing the hooks and the service anyway. The enrollment cannot be revoked from here: revoke it from the fleet page.`,
+    );
+    incomplete = true;
+  }
 
   deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
-  const stripped = stripEnrollmentHooks(host, deps);
+  const stripped = stripEnrollmentHooks(host ?? read.salvaged, deps);
   if (stripped.settingsChanged) {
     deps.out("      removed; every non-Tacho entry kept");
   } else {
@@ -222,11 +334,18 @@ export async function unenroll(
       "      Quit Claude Desktop and open it again for the change to take effect",
     );
   }
+  for (const failure of stripped.failed) {
+    incomplete = true;
+    warnings.push(
+      `could not clean ${failure}. The file was left exactly as it is; fix it and run \`tacho unenroll\` again to finish`,
+    );
+  }
 
   deps.out(`[2/4] Stopping the ${deps.serviceManager.kind} service`);
   try {
     deps.serviceManager.uninstall();
   } catch (error) {
+    incomplete = true;
     warnings.push(
       `service removal failed: ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -260,15 +379,24 @@ export async function unenroll(
     deps.paths.socket,
     deps.paths.daemonState,
     deps.paths.pid,
+    deps.paths.daemonLauncher,
   ]) {
     if (existsSync(path)) unlinkSync(path);
   }
-  if (revoked || host === undefined) {
+  // A harness file that could not be cleaned still needs the enrollment id
+  // and the displaced values to be cleaned later, so host.json outlives it.
+  if (
+    (revoked || host === undefined) &&
+    read.error === undefined &&
+    stripped.failed.length === 0
+  ) {
     if (existsSync(deps.paths.hostFile)) unlinkSync(deps.paths.hostFile);
-  } else {
+  } else if (host !== undefined && !revoked) {
     deps.out(
       "      host.json kept (marked retired locally) so a later `tacho unenroll` can finish the server-side revoke",
     );
+  } else {
+    deps.out("      host.json kept so a later `tacho unenroll` can finish");
   }
   if (options.purge === true) {
     for (const dir of [
@@ -278,13 +406,16 @@ export async function unenroll(
     ]) {
       rmSync(dir, { recursive: true, force: true });
     }
-    deps.out("      WAL, spool, and quarantine purged");
+    // The log is part of the local record: a purge that kept it left the
+    // one file most likely to name a repository path or a prompt.
+    rmSync(deps.paths.log, { force: true });
+    deps.out("      WAL, spool, quarantine and the collector log purged");
   } else {
     deps.out(`      WAL kept at ${deps.paths.wal} (pass --purge to delete)`);
   }
   for (const warning of warnings) deps.err(`warning: ${warning}`);
   return {
-    ok: true,
+    ok: !incomplete,
     settingsChanged: stripped.settingsChanged,
     revoked,
     warnings,

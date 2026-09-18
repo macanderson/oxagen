@@ -18,7 +18,8 @@ import { createRequire } from "node:module";
 import { dirname, posix, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FetchLike } from "../host/control-client";
-import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
+import { readJsonFileIfExists } from "../host/fs";
+import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
 import {
   readStellaHooksFile,
@@ -58,10 +59,17 @@ function configPicker(
   envKey: string,
   configKey: string,
 ) => string | undefined {
-  const config = (readJsonFileIfExists(oxagenConfigPath(home)) ?? {}) as Record<
-    string,
-    unknown
-  >;
+  // A config.json that does not parse is "not logged in", not a crash: this
+  // runs inside `unenroll`'s revoke, after the hooks and the service are
+  // already gone, and a throw there stranded the credentials on disk.
+  let config: Record<string, unknown> = {};
+  try {
+    const parsed = readJsonFileIfExists(oxagenConfigPath(home));
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed))
+      config = parsed as Record<string, unknown>;
+  } catch {
+    config = {};
+  }
   return (flag, envKey, configKey) =>
     flag ??
     env[envKey] ??
@@ -296,6 +304,20 @@ export interface CliDeps {
    */
   readClaudeDesktopConfig: () => unknown;
   writeClaudeDesktopConfig: (document: unknown) => void;
+  /**
+   * Why a harness file could not be written (read-only, or in a read-only
+   * directory), or undefined when it can. `enroll` asks before it mints
+   * anything, so a file it cannot write is a refusal and not a half install.
+   */
+  harnessWriteProblem?: (path: string) => string | undefined;
+  /**
+   * Give every harness file back after the hooks are stripped: original
+   * bytes and mode where the document says what it said before, a file and
+   * directories enroll created removed when blank again. See
+   * `host/harness-file.ts`. Optional so a test's in-memory ports need not
+   * supply it.
+   */
+  settleHarnessFiles?: () => SettleOutcome[];
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   stella: () => HarnessFacts;
@@ -479,6 +501,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
   // real host, where the two agree; the same disagreement in `scratchPaths` is
   // what made the detect tests pass on macOS and fail on Linux CI.
   const paths = overrides.paths ?? tachoPaths(env, home, platform);
+  const harnessFiles = new HarnessFiles(paths.root);
   const daemonGet = async (path: string): Promise<unknown | undefined> => {
     const host = readHostFile(paths.hostFile);
     if (host === undefined) return undefined;
@@ -534,40 +557,40 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     // Every one of these four files carries TACHO_LOCAL_TOKEN — the bearer the
     // loopback listener requires, and the one thing on this machine that lets a
     // process reach the daemon and, through the gateway, the host's own Oxagen
-    // API key. So every one of them is written at the 0600 default rather than
-    // the 0644 they used to pass: on a shared machine, 0644 let any other OS
-    // account read the token out of a file it does not own and drive the host's
-    // credential. Nothing is lost by tightening it — each file is read by a tool
-    // running as the same user who was enrolled.
-    readSettings: () => readJsonFileIfExists(paths.claudeSettings),
+    // API key. So `HarnessFiles.write` holds each at 0600 while the machine is
+    // enrolled: on a shared machine, 0644 let any other OS account read the
+    // token out of a file it does not own. The user's own mode, bytes and
+    // symlink come back at unenroll (`settleHarnessFiles`).
+    readSettings: () => harnessFiles.readJson(paths.claudeSettings),
     writeSettings: (document) =>
-      writeSensitiveFileAtomic(
+      harnessFiles.write(
         paths.claudeSettings,
         `${JSON.stringify(document, null, 2)}\n`,
       ),
-    readCodexHooks: () => readJsonFileIfExists(paths.codexHooks),
+    readCodexHooks: () => harnessFiles.readJson(paths.codexHooks),
     writeCodexHooks: (document) =>
-      writeSensitiveFileAtomic(
+      harnessFiles.write(
         paths.codexHooks,
         `${JSON.stringify(document, null, 2)}\n`,
       ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
-    writeStellaHooks: (file) =>
-      writeSensitiveFileAtomic(file.path, file.text ?? ""),
+    writeStellaHooks: (file) => harnessFiles.write(file.path, file.text ?? ""),
     readClaudeDesktopConfig: () =>
       paths.claudeDesktopConfig === undefined
         ? undefined
-        : readJsonFileIfExists(paths.claudeDesktopConfig),
+        : harnessFiles.readJson(paths.claudeDesktopConfig),
     writeClaudeDesktopConfig: (document) => {
       if (paths.claudeDesktopConfig === undefined)
         throw new Error(
           "Claude Desktop has no config path on this platform; Anthropic ships no build for it",
         );
-      writeSensitiveFileAtomic(
+      harnessFiles.write(
         paths.claudeDesktopConfig,
         `${JSON.stringify(document, null, 2)}\n`,
       );
     },
+    harnessWriteProblem: (path) => harnessFiles.writeProblem(path),
+    settleHarnessFiles: () => harnessFiles.settle(),
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),

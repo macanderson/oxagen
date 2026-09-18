@@ -5,7 +5,7 @@
  */
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
-import { readHostFile } from "../host/host-file";
+import { readHostFileLenient } from "../host/host-file";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
@@ -17,6 +17,13 @@ export interface StatusOptions {
 
 export interface StatusReport {
   enrolled: boolean;
+  /**
+   * host.json is marked `revoked_at`: unenrolled on this machine, with the
+   * server-side revoke still to finish. `enrolled` is false.
+   */
+  retired?: boolean;
+  /** Files that could not be read, each with why. */
+  problems?: string[];
   host?: {
     host_enrollment_id: string;
     agent_key: string;
@@ -72,37 +79,69 @@ export async function status(
   options: StatusOptions,
   deps: CliDeps,
 ): Promise<StatusReport> {
-  const host = readHostFile(deps.paths.hostFile);
+  // Lenient: `status` is what a person runs when something is wrong, so a
+  // host.json that does not validate is a finding to print, not a throw.
+  const read = readHostFileLenient(deps.paths.hostFile);
+  const host = read.host;
   if (host === undefined) {
-    const report: StatusReport = { enrolled: false };
+    const report: StatusReport = {
+      enrolled: false,
+      ...(read.error !== undefined ? { problems: [read.error] } : {}),
+    };
     if (options.json === true) deps.out(JSON.stringify(report, null, 2));
     else
       deps.out(
-        `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
+        read.error !== undefined
+          ? `Not enrolled: ${read.error}. Run \`tacho unenroll\` to clear it, then \`tacho enroll\`.`
+          : `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
       );
     return report;
   }
+  // Each harness file is read on its own: one the user has broken is named
+  // under `problems`, and the rest of the report still comes out as JSON the
+  // desktop app can parse.
+  const problems: string[] = [];
+  const guarded = <T>(read: () => T): T | undefined => {
+    try {
+      return read();
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+      return undefined;
+    }
+  };
   const service = deps.serviceManager.status();
   const daemon =
     ((await deps.daemonGet("/status")) as
       | Record<string, unknown>
       | undefined) ?? null;
-  const hooks = tachoHookPresence(deps.readSettings(), host.host_enrollment_id);
+  const hooks = tachoHookPresence(
+    guarded(deps.readSettings),
+    host.host_enrollment_id,
+  );
   const codexHooks = host.harnesses.includes("codex")
-    ? codexHookPresence(deps.readCodexHooks(), host.host_enrollment_id)
+    ? codexHookPresence(guarded(deps.readCodexHooks), host.host_enrollment_id)
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
-    ? stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id)
+    ? guarded(() =>
+        stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id),
+      )
     : undefined;
   const claudeDesktop = host.harnesses.includes("claude-desktop")
     ? claudeDesktopPresence(
-        deps.readClaudeDesktopConfig(),
+        guarded(deps.readClaudeDesktopConfig),
         host.host_enrollment_id,
       )
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
+  // `revoked_at` means unenrolled on this machine: the hooks and the service
+  // are gone and only the server-side revoke is pending. Reporting that as
+  // enrolled (exit 0) disagreed with `tacho detect` about the same file and
+  // kept the desktop app on its "enrolled" screens for a host that was not.
+  const retired = host.revoked_at !== null;
   const report: StatusReport = {
-    enrolled: true,
+    enrolled: !retired,
+    ...(retired ? { retired: true } : {}),
+    ...(problems.length > 0 ? { problems } : {}),
     host: {
       host_enrollment_id: host.host_enrollment_id,
       agent_key: host.agent_key,
@@ -154,6 +193,11 @@ export async function status(
   }
   const h = report.host as NonNullable<StatusReport["host"]>;
   const b = report.bundle as NonNullable<StatusReport["bundle"]>;
+  if (retired)
+    deps.out(
+      `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`tacho unenroll\` again while signed in, or revoke it from the fleet page.`,
+    );
+  for (const problem of problems) deps.out(`Unreadable  ${problem}`);
   deps.out(
     `Enrollment  ${h.agent_key} (${h.host_enrollment_id}) in ${h.organization_id}/${h.workspace_id}`,
   );
@@ -184,11 +228,15 @@ export async function status(
       `Sessions    ${Array.isArray(d.sessions) ? d.sessions.length : 0} known this boot, ${d.unobserved_sessions?.length ?? 0} unobserved`,
     );
   }
-  deps.out(
-    `Hooks       ${hooks.complete ? "complete" : "INCOMPLETE"}: ${hooks.present.length} present, ${hooks.missing.length} missing${hooks.disabledByFlag ? ", disableAllHooks is set" : ""}${hooks.envOk ? "" : ", env block missing"}`,
-  );
-  if (hooks.missing.length > 0)
-    deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  // Only for a host that hooks Claude Code: a Codex-only host used to read
+  // "Hooks INCOMPLETE: 0 present, 33 missing" about a harness it never asked for.
+  if (host.harnesses.includes("claude-code")) {
+    deps.out(
+      `Hooks       ${hooks.complete ? "complete" : "INCOMPLETE"}: ${hooks.present.length} present, ${hooks.missing.length} missing${hooks.disabledByFlag ? ", disableAllHooks is set" : ""}${hooks.envOk ? "" : ", env block missing"}`,
+    );
+    if (hooks.missing.length > 0)
+      deps.out(`            missing: ${hooks.missing.join(", ")}`);
+  }
   if (claudeDesktop !== undefined) {
     deps.out(
       `Claude Desktop ${claudeDesktop.present ? "connected" : "NOT CONNECTED"}: serves the workspace toolbelt through the local gateway; records the Oxagen tools it calls, not what else the app does`,

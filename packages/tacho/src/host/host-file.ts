@@ -123,7 +123,13 @@ export const hostFileSchema = z
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),
   })
-  .strict();
+  // Not `.strict()`: host.json outlives the binary that wrote it. The desktop
+  // app updates its sidecar while an older `tacho` stays on PATH (Homebrew, a
+  // durable copy the hooks still name), and a strict schema made that older
+  // binary throw on the first key a newer one added — in `unenroll` too, so
+  // the machine could not be uninstalled. Unknown keys are carried, not
+  // dropped, so a round trip through an older binary loses nothing.
+  .passthrough();
 
 export type HostFile = z.output<typeof hostFileSchema>;
 
@@ -219,11 +225,81 @@ export function readHostFile(path: string): HostFile | undefined {
   return hostFileSchema.parse(raw);
 }
 
+export interface LenientHostRead {
+  /** The parsed host, when the file is there and valid. */
+  host?: HostFile;
+  /**
+   * What could be recovered from a file that did not validate: enough for
+   * `unenroll` to strip this enrollment's hooks and put back what it
+   * displaced. Undefined when the file is absent or is not a JSON object.
+   */
+  salvaged?: Pick<
+    HostFile,
+    "host_enrollment_id" | "displaced_env" | "displaced_mcp_servers"
+  >;
+  /** Why the file did not validate. */
+  error?: string;
+}
+
+/**
+ * Read host.json without throwing. The commands that take a machine apart or
+ * report on it (`unenroll`, `status`, `detect`) must work on a host file that
+ * is truncated, hand-edited or from another version: a throw there leaves a
+ * machine that cannot be uninstalled.
+ */
+export function readHostFileLenient(path: string): LenientHostRead {
+  let raw: unknown;
+  try {
+    raw = readJsonFileIfExists(path);
+  } catch (error) {
+    return {
+      error: `${path} is not valid JSON (${error instanceof Error ? error.message : String(error)})`,
+    };
+  }
+  if (raw === undefined) return {};
+  const parsed = hostFileSchema.safeParse(raw);
+  if (parsed.success) return { host: parsed.data };
+  const issue = parsed.error.issues[0];
+  const error = `${path} does not validate (${issue?.path.join(".") ?? ""}: ${issue?.message ?? "invalid"})`;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    return { error };
+  const record = raw as Record<string, unknown>;
+  const id = record["host_enrollment_id"];
+  if (typeof id !== "string" || id.length === 0) return { error };
+  const env = z
+    .record(z.string(), z.string())
+    .safeParse(record["displaced_env"]);
+  const servers = z
+    .record(z.string(), z.record(z.string(), z.unknown()))
+    .safeParse(record["displaced_mcp_servers"]);
+  return {
+    error,
+    salvaged: {
+      host_enrollment_id: id,
+      displaced_env: env.success ? env.data : {},
+      displaced_mcp_servers: servers.success ? servers.data : {},
+    },
+  };
+}
+
 export function writeHostFile(path: string, host: HostFile): void {
   writeSensitiveFileAtomic(path, `${JSON.stringify(host, null, 2)}\n`);
 }
 
-/** Apply a control response's facts and persist only when something moved. */
+/**
+ * Apply a control response's facts and persist only when something moved.
+ *
+ * The daemon holds host.json in memory for its whole life, and the CLI writes
+ * the same file while the daemon runs: `enroll` records `displaced_env` and
+ * `displaced_mcp_servers` after it has started the service, `unenroll` marks
+ * `revoked_at` and then deletes the file, `reassign` replaces the enrollment
+ * under a daemon that is still up. Writing the in-memory copy back whole
+ * dropped the displaced values (so unenroll could never restore the user's
+ * own env value or MCP server), put a deleted host.json and its API key back
+ * on disk, and laid the old enrollment over the new one. So the facts are
+ * laid over what is on disk now, and nothing is written when the file is gone
+ * or names another enrollment.
+ */
 export function applyControlFacts(
   path: string,
   host: HostFile,
@@ -266,6 +342,19 @@ export function applyControlFacts(
     next.host_status = facts.bundle.host_status;
     changed = true;
   }
-  if (changed) writeHostFile(path, next);
-  return changed ? next : host;
+  if (!changed) return host;
+  const disk = readHostFileLenient(path).host;
+  if (
+    disk !== undefined &&
+    disk.host_enrollment_id === host.host_enrollment_id
+  ) {
+    writeHostFile(path, {
+      ...disk,
+      host_status: next.host_status,
+      deny_generation: next.deny_generation,
+      bundle: next.bundle,
+      bundle_fetched_at: next.bundle_fetched_at,
+    });
+  }
+  return next;
 }

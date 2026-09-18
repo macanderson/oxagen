@@ -9,10 +9,16 @@ import {
   claudeDesktopPresence,
   mergeClaudeDesktopConfig,
 } from "../host/claude-desktop-writer";
-import { codexHookPresence, mergeCodexHooks } from "../host/codex-writer";
+import {
+  codexHookPresence,
+  hooksShapeProblem,
+  mergeCodexHooks,
+} from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
+import { acquireInstallLock } from "../host/install-lock";
+import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
@@ -25,6 +31,7 @@ import {
   type HookInstallConfig,
   mergeTachoSettings,
   renderManagedSettings,
+  settingsShapeProblem,
 } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -89,7 +96,15 @@ export function parseHarnesses(value: string | undefined): TachoHarness[] {
 }
 
 export interface EnrollResult {
+  /**
+   * False when the machine is not enrolled, and also when it is but a
+   * requested harness could not be hooked (`unhooked` names them): "enrolled"
+   * with no hooks in the harness the operator asked for is not the result
+   * they asked for, and exit 0 told the desktop app it was.
+   */
   ok: boolean;
+  /** Requested harnesses whose file could not be written. */
+  unhooked?: TachoHarness[];
   host?: HostFile;
   managedSettings?: unknown;
   warnings: string[];
@@ -224,7 +239,79 @@ function requestedMcpEndpoint(
   return request.pinned;
 }
 
+/**
+ * Everything that would stop a harness file being written, found before
+ * anything is minted: a file that is not valid JSON, valid JSON of the wrong
+ * shape, a file or directory the user has made read-only. Each of these used
+ * to surface at step 5 — after the enrollment existed on the control plane,
+ * host.json was written and the service was running — as an uncaught throw
+ * that left the machine half installed, and then threw again from `unenroll`
+ * step 1 so it could not be taken back out either.
+ */
+export function harnessFileProblems(
+  harnesses: readonly TachoHarness[],
+  deps: CliDeps,
+): string[] {
+  const problems: string[] = [];
+  const check = (
+    path: string,
+    read: () => unknown,
+    shape: (document: unknown) => string | undefined,
+  ) => {
+    try {
+      const problem = shape(read());
+      if (problem !== undefined) problems.push(`${path}: ${problem}`);
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    const unwritable = deps.harnessWriteProblem?.(path);
+    if (unwritable !== undefined) problems.push(`${path} ${unwritable}`);
+  };
+  if (harnesses.includes("claude-code"))
+    check(deps.paths.claudeSettings, deps.readSettings, settingsShapeProblem);
+  if (harnesses.includes("codex"))
+    check(deps.paths.codexHooks, deps.readCodexHooks, hooksShapeProblem);
+  if (harnesses.includes("stella")) {
+    try {
+      const file = deps.readStellaHooks();
+      const unwritable = deps.harnessWriteProblem?.(file.path);
+      if (unwritable !== undefined) problems.push(`${file.path} ${unwritable}`);
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  const desktop = deps.paths.claudeDesktopConfig;
+  if (harnesses.includes("claude-desktop") && desktop !== undefined)
+    check(desktop, deps.readClaudeDesktopConfig, mcpConfigShapeProblem);
+  return problems;
+}
+
+/**
+ * `enroll` under the install lock (`host/install-lock.ts`): a second
+ * installer running at the same time is refused, not interleaved.
+ */
 export async function enroll(
+  options: EnrollOptions,
+  deps: CliDeps,
+): Promise<EnrollResult> {
+  if (options.printManaged === true) return enrollLocked(options, deps);
+  const lock = acquireInstallLock(deps.paths.root, deps.now);
+  if ("heldBy" in lock) {
+    deps.err(
+      `Another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
+    );
+    return { ok: false, warnings: [] };
+  }
+  try {
+    return await enrollLocked(options, deps);
+  } finally {
+    lock.release();
+  }
+}
+
+/** `enroll`'s body, for a caller that already holds the install lock (`reassign`). */
+export async function enrollLocked(
   options: EnrollOptions,
   deps: CliDeps,
 ): Promise<EnrollResult> {
@@ -248,6 +335,18 @@ export async function enroll(
         (harness) => !existing.harnesses.includes(harness),
       )
     : [];
+  if (options.printManaged !== true) {
+    const wanted = live
+      ? [...(existing.harnesses as TachoHarness[]), ...added]
+      : harnesses;
+    const problems = harnessFileProblems(wanted, deps);
+    if (problems.length > 0) {
+      deps.err(
+        `Cannot write the hooks, so nothing was changed:\n${problems.map((problem) => `  ${problem}`).join("\n")}`,
+      );
+      return { ok: false, warnings };
+    }
+  }
   if (live && added.length === 0) {
     deps.out(
       `Already enrolled as ${existing.agent_key} (${existing.host_enrollment_id}); re-applying settings and service. Pass --force to enroll again.`,
@@ -554,17 +653,37 @@ export async function enroll(
       wrapper_version: deps.wrapperVersion,
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
-      // Carried across a re-enrollment, not reset. These are the operator's
-      // own values that a previous enroll moved aside; `unenroll` is what
-      // puts them back, and a `--force` re-enroll that blanked them would
-      // strand an env value and an MCP server nobody could restore.
-      displaced_env: existing?.displaced_env ?? {},
-      displaced_mcp_servers: existing?.displaced_mcp_servers ?? {},
+      // Empty, not carried: the previous enrollment's hooks are stripped
+      // just below, and that strip is what puts the displaced values back
+      // into the user's files. Carrying them as well recorded a value that
+      // was no longer displaced, and a later unenroll "restored" it over
+      // whatever the user had set since.
+      displaced_env: {},
+      displaced_mcp_servers: {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,
     };
+    // A new enrollment over an old host file (`--force`, a recovery after a
+    // revoke): the old enrollment's hook groups carry the old id, which the
+    // merge below treats as foreign, so they would stay and every hook would
+    // fire twice — once for an enrollment that no longer exists. Take them
+    // out, and put back what they displaced, while `existing` still says
+    // what that was. A no-op when `reassign` or the harness-addition path
+    // above already did it.
+    if (
+      existing !== undefined &&
+      existing.host_enrollment_id !== response.hostEnrollmentId
+    ) {
+      try {
+        stripEnrollmentHooks(existing, deps);
+      } catch (error) {
+        warnings.push(
+          `the previous enrollment's hooks could not be removed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
     writeHostFile(deps.paths.hostFile, host);
     deps.out(
       `      enrolled as ${host.agent_key} (${host.host_enrollment_id}); bundle v${host.bundle.version}, mode ${host.bundle.mode}`,
@@ -614,6 +733,7 @@ export async function enroll(
   }
 
   let managedSettings: unknown;
+  const unhooked: TachoHarness[] = [];
   if (options.printManaged === true) {
     step(
       5,
@@ -623,30 +743,48 @@ export async function enroll(
     deps.out(JSON.stringify(managedSettings, null, 2));
   } else {
     step(5, `Writing hooks for ${harnesses.join(", ")}`);
-    if (harnesses.includes("claude-code")) {
+    // One harness failing to write (a file locked since the preflight, a full
+    // disk) must not stop the others or skip the verification below: it is
+    // recorded, named, and makes the run report failure.
+    const hook = (harness: TachoHarness, write: () => void) => {
+      if (!harnesses.includes(harness)) return;
+      try {
+        write();
+      } catch (error) {
+        unhooked.push(harness);
+        warnings.push(
+          `${TACHO_HARNESS_LABELS[harness]} was not hooked: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        deps.out("      not written (see the warning below)");
+      }
+    };
+    hook("claude-code", () => {
       deps.out(`      Claude Code: ${deps.paths.claudeSettings}`);
       const current = deps.readSettings();
       const merged = mergeTachoSettings(current, hookConfig);
       if (merged.changed) {
-        deps.writeSettings(merged.settings);
+        // The displaced values go to host.json BEFORE the settings file is
+        // replaced: dying between the two used to leave the user's own env
+        // value overwritten with nothing on disk that remembered it.
         if (Object.keys(merged.displaced).length > 0) {
           host = {
             ...host,
-            displaced_env: { ...host.displaced_env, ...merged.displaced },
+            displaced_env: { ...merged.displaced, ...host.displaced_env },
           };
           writeHostFile(deps.paths.hostFile, host);
           warnings.push(
             `replaced existing env values (${Object.keys(merged.displaced).join(", ")}); unenroll restores them`,
           );
         }
+        deps.writeSettings(merged.settings);
         deps.out(
           `      hooks written for ${Object.keys(merged.settings.hooks ?? {}).length} events; env block set`,
         );
       } else {
         deps.out("      already present; nothing to change");
       }
-    }
-    if (harnesses.includes("codex")) {
+    });
+    hook("codex", () => {
       deps.out(`      Codex: ${deps.paths.codexHooks}`);
       const merged = mergeCodexHooks(deps.readCodexHooks(), hookConfig);
       if (merged.changed) {
@@ -657,17 +795,15 @@ export async function enroll(
       } else {
         deps.out("      already present; nothing to change");
       }
-    }
-    if (harnesses.includes("stella")) {
+    });
+    hook("stella", () => {
       const file = deps.readStellaHooks();
       deps.out(`      Stella: ${file.path}`);
       const merged = mergeStellaHooks(file, hookConfig);
-      if (!merged.ok) {
-        // Nothing is written: a stella.toml Stella cannot parse would stop
-        // every Stella session, which is worse than an unhooked one.
-        warnings.push(`Stella hooks not written: ${merged.error}`);
-        deps.out("      not written (see the warning below)");
-      } else if (merged.changed) {
+      // Nothing is written on a refusal: a stella.toml Stella cannot parse
+      // would stop every Stella session, which is worse than an unhooked one.
+      if (!merged.ok) throw new Error(merged.error);
+      if (merged.changed) {
         deps.writeStellaHooks(merged.file);
         deps.out(
           `      hooks written for ${stellaHookPresence(merged.file, host.host_enrollment_id).present.length} events (${file.format === "toml" ? "a managed block at the end of stella.toml; the rest of the file is untouched" : "command hooks in settings.json"}; Stella has no SessionEnd, so tachod seals a session when the stella process exits)`,
@@ -675,69 +811,68 @@ export async function enroll(
       } else {
         deps.out("      already present; nothing to change");
       }
-    }
-    if (harnesses.includes("claude-desktop")) {
+    });
+    hook("claude-desktop", () => {
       // The connected tier (ADR-078). No hooks: Claude Desktop has no hook
       // surface, so what is written is one MCP server entry pointing at the
       // collector's loopback gateway, and what Oxagen can govern is the
       // toolbelt it serves through it.
       const path = deps.paths.claudeDesktopConfig;
       if (path === undefined) {
-        warnings.push(
-          "Claude Desktop is not written on this platform: Anthropic ships no build for it, so there is no config for Oxagen to write",
-        );
         deps.out("      Claude Desktop: not available on this platform");
-      } else {
-        deps.out(`      Claude Desktop: ${path}`);
-        const merged = mergeClaudeDesktopConfig(
-          deps.readClaudeDesktopConfig(),
-          {
-            enrollmentId: host.host_enrollment_id,
-            port: host.port,
-            localToken: host.local_token,
-            shimCommand: deps.runtime.mcpStdioCommand[0] as string,
-            shimArgs: deps.runtime.mcpStdioCommand.slice(1, -1),
-            ...(deps.env["TACHO_HOME"] !== undefined
-              ? { tachoHome: deps.env["TACHO_HOME"] }
-              : {}),
-          },
+        throw new Error(
+          "Anthropic ships no Claude Desktop build for this platform, so there is no config for Oxagen to write",
         );
-        if (merged.changed) {
-          deps.writeClaudeDesktopConfig(merged.config);
-          if (Object.keys(merged.displaced).length > 0) {
-            host = {
-              ...host,
-              displaced_mcp_servers: {
-                ...host.displaced_mcp_servers,
-                "claude-desktop": merged.displaced as Record<
+      }
+      deps.out(`      Claude Desktop: ${path}`);
+      const merged = mergeClaudeDesktopConfig(deps.readClaudeDesktopConfig(), {
+        enrollmentId: host.host_enrollment_id,
+        port: host.port,
+        localToken: host.local_token,
+        shimCommand: deps.runtime.mcpStdioCommand[0] as string,
+        shimArgs: deps.runtime.mcpStdioCommand.slice(1, -1),
+        ...(deps.env["TACHO_HOME"] !== undefined
+          ? { tachoHome: deps.env["TACHO_HOME"] }
+          : {}),
+      });
+      if (merged.changed) {
+        if (Object.keys(merged.displaced).length > 0) {
+          host = {
+            ...host,
+            displaced_mcp_servers: {
+              ...host.displaced_mcp_servers,
+              "claude-desktop": {
+                ...(merged.displaced as Record<
                   string,
                   Record<string, unknown>
-                >,
+                >),
+                ...host.displaced_mcp_servers["claude-desktop"],
               },
-            };
-            writeHostFile(deps.paths.hostFile, host);
-            warnings.push(
-              "an MCP server already used the name `oxagen` in Claude Desktop; it was moved aside and unenroll restores it",
-            );
-          }
-          deps.out(`      ${CLAUDE_DESKTOP_RESTART_NOTE}`);
-        } else {
-          deps.out("      already present; nothing to change");
-        }
-        const presence = claudeDesktopPresence(
-          deps.readClaudeDesktopConfig(),
-          host.host_enrollment_id,
-        );
-        if (presence.otherServers > 0) {
-          // ADR-078 §3: the operator is entitled to the size of the gap. A
-          // tool served by another MCP server never reaches Oxagen, and no
-          // code here can change that.
-          deps.out(
-            `      ${presence.otherServers} other MCP server${presence.otherServers === 1 ? "" : "s"} in this app (${presence.otherServerNames.join(", ")}); Oxagen does not see what they serve`,
+            },
+          };
+          writeHostFile(deps.paths.hostFile, host);
+          warnings.push(
+            "an MCP server already used the name `oxagen` in Claude Desktop; it was moved aside and unenroll restores it",
           );
         }
+        deps.writeClaudeDesktopConfig(merged.config);
+        deps.out(`      ${CLAUDE_DESKTOP_RESTART_NOTE}`);
+      } else {
+        deps.out("      already present; nothing to change");
       }
-    }
+      const presence = claudeDesktopPresence(
+        deps.readClaudeDesktopConfig(),
+        host.host_enrollment_id,
+      );
+      if (presence.otherServers > 0) {
+        // ADR-078 §3: the operator is entitled to the size of the gap. A
+        // tool served by another MCP server never reaches Oxagen, and no
+        // code here can change that.
+        deps.out(
+          `      ${presence.otherServers} other MCP server${presence.otherServers === 1 ? "" : "s"} in this app (${presence.otherServerNames.join(", ")}); Oxagen does not see what they serve`,
+        );
+      }
+    });
     if (options.managed === true) {
       managedSettings = renderManagedSettings(hookConfig);
       deps.out(
@@ -806,11 +941,19 @@ export async function enroll(
   if (!existsSync(deps.paths.deviceKey))
     warnings.push("device key missing after enrollment");
   for (const warning of warnings) deps.err(`warning: ${warning}`);
-  deps.out(
-    `Done. This machine reports to Oxagen as ${host.agent_key}; every ${listLabels(harnesses)} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
-  );
+  const hooked = harnesses.filter((harness) => !unhooked.includes(harness));
+  if (unhooked.length > 0) {
+    deps.err(
+      `This machine is enrolled as ${host.agent_key}, but ${listLabels(unhooked)} ${unhooked.length === 1 ? "is" : "are"} not hooked (see the warnings above). Fix that and run \`tacho enroll\` again; nothing already written is repeated.`,
+    );
+  } else {
+    deps.out(
+      `Done. This machine reports to Oxagen as ${host.agent_key}; every ${listLabels(hooked)} session from now on is recorded${host.bundle.mode === "enforce" ? " and gated" : " (observe mode)"}.`,
+    );
+  }
   return {
-    ok: true,
+    ok: unhooked.length === 0,
+    ...(unhooked.length > 0 ? { unhooked } : {}),
     host,
     ...(managedSettings !== undefined ? { managedSettings } : {}),
     warnings,
