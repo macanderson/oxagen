@@ -94,6 +94,18 @@ describe("translateCursorPayload", () => {
     });
   });
 
+  it("drops a signed-in address so it never lands in event attributes", () => {
+    const out = translateCursorPayload({
+      ...COMMON,
+      hook_event_name: "preToolUse",
+      tool_name: "Read",
+      tool_input: { path: "a.ts" },
+      user_email: "mac@example.com",
+    }) as Record<string, unknown>;
+    expect(out["user_email"]).toBeUndefined();
+    expect(JSON.stringify(out)).not.toContain("mac@example.com");
+  });
+
   it("parses MCP arguments sent as a JSON string", () => {
     const out = translateCursorPayload({
       ...COMMON,

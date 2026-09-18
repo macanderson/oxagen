@@ -239,6 +239,24 @@ describe("runTachoHook", () => {
       decideLocally(paused, parse("PermissionRequest"), now).response,
     ).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
     expect(decideLocally(active, parse("Stop"), now).response).toEqual({});
+    // Cursor's subagentStart is a permission event: a paused host must deny,
+    // or an empty answer becomes allow and the subagent launches anyway.
+    expect(
+      decideLocally(
+        paused,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).response,
+    ).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(
+      decideLocally(
+        active,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).evaluation?.decision,
+    ).toBeDefined();
     const read = decideLocally(
       active,
       parse("PreToolUse", {

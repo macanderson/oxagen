@@ -560,6 +560,116 @@ async function routeHook(
       return { events, response, record, evaluation };
     }
 
+    case "SubagentStart": {
+      // Cursor answers subagentStart with permission allow|deny. An empty
+      // response becomes allow, so evaluate before answering: operator blocks
+      // and Task rules apply the way they do for PreToolUse.
+      const toolInput =
+        input.agent_type !== undefined || input.agent_id !== undefined
+          ? {
+              ...(input.agent_type !== undefined
+                ? { subagent_type: input.agent_type }
+                : {}),
+              ...(input.agent_id !== undefined
+                ? { subagent_id: input.agent_id }
+                : {}),
+            }
+          : undefined;
+      let currentView = view;
+      let evaluation =
+        replay?.evaluation ??
+        evaluatePreToolUse({
+          bundle: currentView.bundle,
+          bundleVerified: currentView.verified,
+          toolName: "Task",
+          ...(toolInput !== undefined ? { toolInput } : {}),
+          hostStatus: currentView.hostStatus,
+          session: record.control,
+          latestDenyGeneration: currentView.denyGeneration,
+          controlReachable: currentView.controlReachable,
+          now: deps.now(),
+          context: {
+            ...deps.match,
+            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+          },
+        });
+      if (evaluation.decision === "defer" && deps.refreshBundle) {
+        await deps.refreshBundle();
+        currentView = deps.policy();
+        evaluation = evaluatePreToolUse({
+          bundle: currentView.bundle,
+          bundleVerified: currentView.verified,
+          toolName: "Task",
+          ...(toolInput !== undefined ? { toolInput } : {}),
+          hostStatus: currentView.hostStatus,
+          session: record.control,
+          latestDenyGeneration: currentView.denyGeneration,
+          controlReachable: currentView.controlReachable,
+          now: deps.now(),
+          context: {
+            ...deps.match,
+            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+          },
+        });
+      }
+      if (evaluation.decision === "defer") {
+        evaluation = {
+          ...evaluation,
+          decision: currentView.bundle.mode === "observe" ? "allow" : "deny",
+          reason_code: "bundle_stale",
+        };
+      }
+      const facts = policyFacts(evaluation, currentView);
+      const attrs = policyAttrs(evaluation, replay);
+      events.push(
+        record.recorder.sealCollectorEvent(
+          "policy_decision",
+          {
+            tool_name: "Task",
+            ...facts,
+          },
+          { hook_event_name: "SubagentStart", attrs },
+        ),
+      );
+      events.push(
+        ...record.recorder.ingestHook(payload, env, at, (draft) =>
+          withReplay({
+            ...draft,
+            attrs: { ...draft.attrs, ...attrs },
+          }),
+        ),
+      );
+      const response =
+        evaluation.decision === "allow"
+          ? evaluation.evaluated === "allow" && evaluation.rule !== undefined
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: "SubagentStart",
+                  permissionDecision: "allow",
+                  permissionDecisionReason: evaluation.reason,
+                },
+              }
+            : {}
+          : evaluation.decision === "deny"
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: "SubagentStart",
+                  permissionDecision: "deny",
+                  permissionDecisionReason: evaluation.reason,
+                },
+              }
+            : evaluation.rule !== undefined
+              ? {
+                  hookSpecificOutput: {
+                    hookEventName: "SubagentStart",
+                    permissionDecision: "ask",
+                    permissionDecisionReason: evaluation.reason,
+                  },
+                }
+              : {};
+      return { events, response, record, evaluation };
+    }
+
     case "PermissionRequest": {
       const block = operatorBlock(view, record);
       events.push(

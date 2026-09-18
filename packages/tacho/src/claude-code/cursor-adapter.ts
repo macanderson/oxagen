@@ -69,6 +69,14 @@ const RENAMED_MEMBERS = [
   "duration",
 ] as const;
 
+/**
+ * Members dropped rather than passed through. Cursor may send a signed-in
+ * address as `user_email`; keeping it would land plaintext in every event's
+ * attributes and in `raw_source_digest`, which is the confirmation-oracle
+ * problem the Anthropic email scrub already prevents.
+ */
+const DROPPED_MEMBERS = ["user_email"] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -109,6 +117,7 @@ export function translateCursorPayload(raw: unknown): unknown {
     return raw;
   const rest: Record<string, unknown> = { ...raw };
   for (const key of RENAMED_MEMBERS) delete rest[key];
+  for (const key of DROPPED_MEMBERS) delete rest[key];
   const cursorSessionId = raw["session_id"];
   const toolName = raw["tool_name"];
   const toolOutput = raw["tool_output"];

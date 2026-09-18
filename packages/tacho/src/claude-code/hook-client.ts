@@ -292,6 +292,88 @@ export function decideLocally(
         note: `daemon down; decided ${decision} from cached bundle`,
       };
     }
+    case "SubagentStart": {
+      // Cursor treats subagentStart as a permission event. An empty answer
+      // becomes allow, so a paused or revoked host would launch model-backed
+      // subagents unless this path decides. Evaluate as Task: one rule covers
+      // Claude Code's Task tool and Cursor's subagent start.
+      const block = operatorBlockLocal(host);
+      if (block !== undefined) {
+        return {
+          response: {
+            hookSpecificOutput: {
+              hookEventName: "SubagentStart",
+              permissionDecision: "deny",
+              permissionDecisionReason: block,
+            },
+          },
+          note: "blocked by host status",
+        };
+      }
+      const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+      const toolInput =
+        input.agent_type !== undefined || input.agent_id !== undefined
+          ? {
+              ...(input.agent_type !== undefined
+                ? { subagent_type: input.agent_type }
+                : {}),
+              ...(input.agent_id !== undefined
+                ? { subagent_id: input.agent_id }
+                : {}),
+            }
+          : undefined;
+      const evaluation = evaluatePreToolUse({
+        bundle: host.bundle,
+        bundleVerified: verified,
+        toolName: "Task",
+        ...(toolInput !== undefined ? { toolInput } : {}),
+        hostStatus: host.host_status,
+        latestDenyGeneration: host.deny_generation,
+        controlReachable: false,
+        now,
+        ...(input.cwd !== undefined ? { context: { cwd: input.cwd } } : {}),
+      });
+      const decision =
+        evaluation.decision === "defer"
+          ? host.bundle.mode === "observe"
+            ? "allow"
+            : "deny"
+          : evaluation.decision;
+      const finalEvaluation: Evaluation = { ...evaluation, decision };
+      const response =
+        decision === "deny"
+          ? {
+              hookSpecificOutput: {
+                hookEventName: "SubagentStart",
+                permissionDecision: "deny",
+                permissionDecisionReason: evaluation.reason,
+              },
+            }
+          : decision === "ask" && evaluation.rule !== undefined
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: "SubagentStart",
+                  permissionDecision: "ask",
+                  permissionDecisionReason: evaluation.reason,
+                },
+              }
+            : decision === "allow" &&
+                evaluation.evaluated === "allow" &&
+                evaluation.rule !== undefined
+              ? {
+                  hookSpecificOutput: {
+                    hookEventName: "SubagentStart",
+                    permissionDecision: "allow",
+                    permissionDecisionReason: evaluation.reason,
+                  },
+                }
+              : {};
+      return {
+        response,
+        evaluation: finalEvaluation,
+        note: `daemon down; decided ${decision} from cached bundle`,
+      };
+    }
     default:
       return { response: {}, note: "daemon down; recorded for replay" };
   }

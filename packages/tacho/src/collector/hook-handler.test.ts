@@ -417,6 +417,24 @@ describe("handleHookEvent over the recorded session", () => {
     });
   });
 
+  it("refuses a Cursor subagent start on a paused host", async () => {
+    const { deps } = harness({}, { hostStatus: "paused" });
+    const sub = loadFixtures().find((f) => f.name === "13-SubagentStart.json");
+    expect(sub).toBeDefined();
+    const outcome = await handleHookEvent(
+      (sub as Fixture).stdin,
+      (sub as Fixture).env,
+      deps,
+    );
+    expect(outcome.response).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringMatching(/paused/),
+      },
+    });
+    expect(outcome.evaluation?.decision).toBe("deny");
+  });
+
   it("re-evaluates a stale bundle after a refresh, and fails closed without one", async () => {
     const { deps, view } = harness(
       {},
