@@ -230,7 +230,7 @@ footer.colophon{margin-top:72px;padding-top:20px;border-top:1px solid var(--line
 <li>teaches every future run from one knowledge graph, a linked map of the customer's data, built from the customer's data sources.</li>
 </ol>
 <p>Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.</p>
-<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
+<p><strong>What this product is not.</strong> It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is <strong>skill resolution</strong>: which skills a workspace's config lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is a packaged instruction set an agent loads at run time. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call. The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one <strong>in-app agent</strong>. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).</p>
 <hr />
 <h2 id="2-scope">2. Scope</h2>
 <h3 id="2-1-in-scope-for-v1">2.1 In scope for v1</h3>
@@ -2495,7 +2495,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <hr />
 <h2 id="19-demo-wow-scenarios">19. Demo Wow! Scenarios</h2>
-<p>Status: <code>complete</code> (2026-09-12, coverage audit, prompt W12).</p>
+<p>Status: <code>complete</code> through W12 (2026-09-12, coverage audit, prompt W12). W13 was ported to the master on 2026-09-14 and is the scenario the Skills page, the skills-off gate and the run interjection are built from; it is listed below rather than left out of a table marked complete.</p>
 <p>Each scenario is one moment an investor or a customer should remember. The mockups are the app, screen for screen, in the house brand. The prompts that produce them are in <code>2026-09-11-oxagen-demo-mockup-prompts.md</code>, beside this document; each prompt publishes its mockup and fills in its row and its page-coverage cells below.</p>
 <div class="tw"><table>
 <thead>
@@ -2590,6 +2590,13 @@ sandbox = &quot;read-only&quot;
 <td>Coverage audit: every page and state mocked</td>
 <td>all</td>
 <td><a href="https://claude.ai/code/artifact/45c5e3f9-82f0-404e-ad69-b3279d84c649">W12 audit</a>, <a href="https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e">The Ten Pages</a></td>
+<td>mocked</td>
+</tr>
+<tr>
+<td>W13</td>
+<td>In the loop: skills ship off, the search is the config not the model, and Oxagen stops a run before the first model call to put a question to a person through the agent</td>
+<td>Skills (Catalog, Search, In the loop, Reflection, Versions), skills-off gate, Run (interjected), Fleet (interjection banner)</td>
+<td><a href="https://github.com/macanderson/tmp-oxagen-mockups/blob/main/docs/w13-in-the-loop-scenario.md">W13 scenario</a>, <a href="https://github.com/macanderson/tmp-oxagen-mockups/tree/main/mockups/pages">W13 page specs</a></td>
 <td>mocked</td>
 </tr>
 </tbody>
@@ -2730,13 +2737,13 @@ sandbox = &quot;read-only&quot;
 <td></td>
 </tr>
 <tr>
-<td><code>created_by</code>, <code>updated_by</code></td>
+<td><code>created_by_id</code>, <code>updated_by_id</code></td>
 <td>uuid → <code>auth.users</code></td>
 <td>tables a person edits</td>
 <td></td>
 </tr>
 <tr>
-<td><code>deleted_at</code>, <code>deleted_by</code></td>
+<td><code>deleted_at</code>, <code>deleted_by_id</code></td>
 <td>timestamptz, uuid</td>
 <td>tables a person edits</td>
 <td>rows are never hard-deleted</td>
@@ -2755,6 +2762,9 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
+<blockquote>
+<p><strong>Amendment 2026-09-15 (ADR-077).</strong> Attribution columns end in <code>_id</code> like every other reference column: <code>created_by_id</code>, <code>updated_by_id</code>, <code>deleted_by_id</code>, and the per-table <code>&lt;verb&gt;_by</code> columns below (<code>invited_by</code>, <code>granted_by</code>, <code>issued_by</code>, <code>approved_by</code>, <code>revoked_by</code>, <code>placed_by</code>, <code>released_by</code>) are <code>&lt;verb&gt;_by_id</code> when they hold a user or principal id. <code>control.approvals.resolved_by</code> keeps its name: it is text that may hold <code>policy:&lt;rule id&gt;</code>, not a reference. <code>createdBy</code> without a suffix is reserved for a resolved display name in a contract output (<code>iam.role.list</code>), never a column.</p>
+</blockquote>
 <p>Money is <code>bigint</code> micro-USD unless a <code>currency</code> column says otherwise. Secrets are <code>bytea</code> ciphertext with <code>key_id</code> and <code>digest</code> beside them (the envelope pattern). Every <code>jsonb</code> column is validated against a schema in code before it is written. Enumerations are <code>text</code> with a check constraint; their values are listed in the Notes column.</p>
 <h3 id="a-1-auth-4-tables-platform-scope-better-auth-s-own-tables-unchanged">A.1 <code>auth</code> (4 tables, platform scope, Better Auth's own tables, unchanged)</h3>
 <p><strong><code>auth.users</code></strong></p>
@@ -5666,7 +5676,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <p>How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.</p>
 <h2 id="appendix-e-the-agent-tools-that-survive">Appendix E. The agent tools that survive</h2>
-<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>96 agent tools</strong> (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
+<p>The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: <strong>97 agent tools</strong> (78 of them in the wedge), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is <strong>de-registered</strong>, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses <code>app</code> from its <code>layers[]</code>, loses the <code>api</code> / <code>mcp</code> / <code>cli</code> entries in its <code>surfaces[]</code>, or loses its registration in <code>packages/handlers/src/register.ts</code>. It does <strong>not</strong> mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; <code>DEREGISTERED.md</code> at the repository root records each one with its file paths, and <code>pnpm check:deregistered</code> fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under <code>docs/adr/</code> that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.</p>
 <p><strong>Organization and workspace (11)</strong></p>
 <div class="tw"><table>
 <thead>
@@ -5801,7 +5811,7 @@ sandbox = &quot;read-only&quot;
 </tr>
 </tbody>
 </table></div>
-<p><strong>Wrapping and control (14)</strong></p>
+<p><strong>Wrapping and control (15)</strong></p>
 <div class="tw"><table>
 <thead>
 <tr>
@@ -5850,6 +5860,11 @@ sandbox = &quot;read-only&quot;
 <td><code>list_runs</code></td>
 <td>list_executions, list_tacho_sessions</td>
 <td>by operator, agent, task, tier, verdict</td>
+</tr>
+<tr>
+<td><code>list_skills</code></td>
+<td>(new; <code>tacho.sessions.skills_available</code> had no reader)</td>
+<td>read: the skill names the workspace's harness sessions reported at start, with sessions, harnesses and last seen over a window; Oxagen reports which skills the harness had and runs none (added 2026-09-15 for the Skills page, #3098)</td>
 </tr>
 <tr>
 <td><code>get_run</code></td>
@@ -6395,7 +6410,7 @@ sandbox = &quot;read-only&quot;
 </table></div>
 <p>Account pages (<code>account</code>, <code>account/profile</code>, <code>account/preferences</code>, <code>account/privacy</code>, <code>account/security</code>) collapse into one <strong>Account</strong> dialog reachable from the user menu; it is a dialog, not a page. <code>cli/authorize</code> and <code>github/setup</code> are callback endpoints, not pages, and stay. Every other route in today's list redirects to the page that absorbed it. After one release the <strong>redirect</strong> is removed, not the page file — an unrouted page costs a compile and a test run, and keeping it is what lets a later release put a capability back without rebuilding its screen. Deleting any of these page files takes an ADR that names them (§2.2, <code>DEREGISTERED.md</code> §12).</p>
 
-<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-16</span></footer>
+<footer class="colophon"><span>Oxagen · Specification</span><span>Source: <code>spec.md</code> · rendered 2026-09-18</span></footer>
 </main>
 </div>
 </div>
