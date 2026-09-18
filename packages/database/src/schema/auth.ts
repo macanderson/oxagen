@@ -311,7 +311,7 @@ export const userPreferences = authSchema.table(
     // surfaced by user.preferences.get / user.preferences.update.
     theme: text("theme").notNull().default("system"),
     language: text("language").notNull().default("en"),
-    // Pacific time (migration 20260918160000). `DEFAULT_TIME_ZONE` in
+    // Pacific time (migration 20260918161000). `DEFAULT_TIME_ZONE` in
     // @oxagen/oxagen/contracts/user.preferences.read carries the same value
     // for the handlers and the app; this package sits below the contracts.
     timezone: text("timezone").notNull().default("America/Los_Angeles"),

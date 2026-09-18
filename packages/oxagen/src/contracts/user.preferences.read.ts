@@ -4,7 +4,7 @@ import { registerCapability } from "../registry";
 /**
  * The clock a person reads until they pick one: Pacific time, as the IANA zone
  * so the PST/PDT switch follows the rule and not a fixed offset. The column
- * default (`auth.user_preferences.timezone`, migration 20260918160000) and
+ * default (`auth.user_preferences.timezone`, migration 20260918161000) and
  * both preference handlers carry the same value; the app falls back to it when
  * the preference read fails, so a store outage never blanks a date.
  */
