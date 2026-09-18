@@ -10874,6 +10874,19 @@
           "type": "text"
         },
         {
+          "name": "stripe_price_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pending_upgrade_from_plan_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:billing.plans",
+          "type": "uuid"
+        },
+        {
           "name": "status",
           "nullable": false,
           "primaryKey": false,

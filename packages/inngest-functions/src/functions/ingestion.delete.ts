@@ -1,46 +1,11 @@
 import { createFunction } from "../create-function";
+import { countOf } from "../lib/driver-count";
 import { withTenantDb } from "@oxagen/database";
 import { sql } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { scopedSession } from "@oxagen/ontology";
 import { insertEvents } from "@oxagen/telemetry";
 import { logger } from "../logger";
-
-/**
- * A Neo4j `count()` as a plain, JSON-safe JS number.
- *
- * The driver returns 64-bit integers as its own `Integer` ({low, high}) unless
- * the session opts into lossless integers, and that object is a trap in two
- * directions at once:
- *
- *   1. Arithmetic on it does NOT produce a number. `Integer + Integer` goes
- *      through `Symbol.toPrimitive` and yields a **BigInt**, which
- *      `JSON.stringify` refuses to serialize. A sum handed back from a
- *      `step.run` is therefore dropped from the memoized step output, and on
- *      replay the caller reads `undefined` — see the note on the finalizer
- *      below for what that then does to the SQL.
- *   2. Passed through unconverted it reaches Postgres as `{"low":n,"high":0}`,
- *      not as `n`, so an `integer` column gets garbage even when nothing throws.
- *
- * Every count read out of a Neo4j record goes through here, so neither shape
- * can escape this module. Anything unrecognisable counts as zero: a progress
- * roll-up is telemetry on a deletion that already happened, and must never be
- * the reason the job fails.
- */
-function countOf(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  if (typeof value === "bigint") return Number(value);
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toNumber" in value &&
-    typeof (value as { toNumber: unknown }).toNumber === "function"
-  ) {
-    const n = (value as { toNumber: () => number }).toNumber();
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
 
 /**
  * Async deletion job triggered by `ingestion/connection.delete`.
@@ -168,11 +133,64 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             // Find principal nodes (from this connection) that have incoming
             // ALIAS_OF edges from OTHER connections. Promote the highest-
             // confidence alias to become the new principal before deletion.
+            //
+            // WHAT THE WORKSPACE ANCHORS BELOW COST, stated rather than left to
+            // be discovered. The dedup resolver's candidate search
+            // (packages/ingestion/src/dedup/resolve.ts, `WHERE n.orgId =
+            // $orgId AND n.entityType = $entityType`) is org-scoped and not
+            // workspace-scoped, so an ALIAS_OF edge CAN today join two
+            // workspaces of one org. Such an alias is no longer promoted here.
+            // That is the deliberate direction: refusing to promote leaves a
+            // node in a workspace this job has no business writing to exactly
+            // as it found it, whereas promoting it overwrites that node's
+            // naturalKey, displayName and properties with another workspace's.
+            // A retained node is visible and recoverable; an overwritten one is
+            // neither. The cross-workspace EDGE is still removed, by the DETACH
+            // DELETE in Pass 2 -- an edge cannot outlive the node it is
+            // attached to -- and the foreign node survives untouched.
+            //
+            // That last sentence was written here before Pass 2 could carry it:
+            // Pass 2 refused to delete any node with an incoming ALIAS_OF, so
+            // the edge pinned the principal and neither was removed. The claim
+            // is true now because Pass 2 deletes unconditionally; see the note
+            // there. It is left standing as a reminder that a comment asserting
+            // what another pass does is a claim about code it cannot see.
+            //
+            // Passes 2-4 deliberately stay keyed on {connectionId, orgId} and
+            // are NOT narrowed by workspace. They DELETE rather than write, and
+            // a connection belongs to exactly one workspace, so the workspace
+            // predicate would be a no-op on correctly stamped data and, on
+            // mis-stamped data, would silently RETAIN a deleted connection's
+            // nodes. For a delete, over-scoping is the harmful direction.
             const aliasResult = await session.run(
               `
             MATCH (alias:EntityNode)-[r:ALIAS_OF]->(principal:EntityNode)
             WHERE principal.connectionId = $connectionId
               AND principal.orgId = $orgId
+              // The principal is the anchor every other row here is selected
+              // through, so it carries the full tenant, not half of it. An org
+              // check passes for every workspace in that org, and an id alone
+              // says WHICH node, never WHOSE.
+              AND principal.workspaceId = $workspaceId
+              // The alias is PROMOTED below -- its identity fields are
+              // overwritten -- so it has to be at least as scoped as the
+              // principal it is replacing. Anchoring one endpoint of a
+              // two-endpoint match leaves the other free, and a legacy or BYO
+              // graph can hold an ALIAS_OF from another organisation's node.
+              //
+              // BOTH halves are load-bearing and neither implies the other: a
+              // workspace id is not unique across organisations, so the org
+              // predicate is the only thing refusing a same-workspace-id row
+              // from another org; and the org predicate passes for every
+              // workspace inside it, so the workspace predicate is the only
+              // thing refusing a sibling workspace. This is the boundary the
+              // read surface already enforces -- graph.node.list, graph.stats,
+              // graph.search, ontology.neighbors, ontology.query and
+              // reference.search all filter :GraphNode on orgId AND
+              // workspaceId -- so a node another workspace cannot even READ
+              // must not be one this job silently OVERWRITES.
+              AND alias.orgId = $orgId
+              AND alias.workspaceId = $workspaceId
               AND alias.connectionId <> $connectionId
             WITH principal, alias, r
             ORDER BY r.confidence DESC
@@ -184,19 +202,70 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
                 promoted.displayName = principal.displayName,
                 promoted.properties  = principal.properties,
                 promoted.syncedAt    = datetime()
-            // Reroute any remaining ALIAS_OF edges that pointed to the principal
+            // Reroute any remaining ALIAS_OF edges that pointed to the principal.
+            //
+            // OPTIONAL, and that is a fix rather than a flourish. As a plain
+            // MATCH this clause dropped every row where the principal had only
+            // ONE alias -- the ordinary case -- so count(promoted) returned 0
+            // and alias_promotions on the deletion_jobs row under-reported a
+            // promotion that had already happened, the SET above having run for
+            // that row before the MATCH discarded it. A job that did work and
+            // recorded none of it is the same silence as a job that leaves data
+            // behind and reports success.
             WITH principal, promoted
-            MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)
+            OPTIONAL MATCH (other:EntityNode)-[old:ALIAS_OF]->(principal)
             WHERE other <> promoted
-            MERGE (other)-[newEdge:ALIAS_OF]->(promoted)
-              ON CREATE SET newEdge.confidence  = old.confidence,
-                            newEdge.matchReason = old.matchReason,
-                            newEdge.tentative   = old.tentative,
-                            newEdge.createdAt   = old.createdAt
-            DELETE old
-            RETURN count(promoted) AS promoted
+              // Same reason: this branch MERGEs a new edge off other and
+              // DELETEs its existing one, so other is written to and must
+              // carry the same tenant as the principal being dissolved -- the
+              // WHOLE tenant, for the reasons given on the alias anchor above.
+              AND other.orgId = $orgId
+              AND other.workspaceId = $workspaceId
+            // Guarded by FOREACH over a one-or-zero element list, which is
+            // Cypher's conditional-write idiom: MERGE on a null node is an
+            // error, and OPTIONAL MATCH can now bind one.
+            FOREACH (o IN CASE WHEN other IS NULL THEN [] ELSE [other] END |
+              MERGE (o)-[newEdge:ALIAS_OF]->(promoted)
+              // Rerouting an existing edge, so every property is COPIED rather
+              // than re-stamped: a reroute is not a new observation, and a
+              // fresh validFrom would rewrite the dedup ledger's history.
+              //
+              // Copied WHOLESALE, as a map, rather than key by key. An
+              // enumeration is only complete on the day it is written: this one
+              // listed nine properties and was described as complete, and it
+              // already omitted updatedAt, which createAliasEdge's ON MATCH
+              // branch stamps every time an alias is re-asserted -- so promoting
+              // an alias dropped the timestamp belonging to the confidence
+              // value it kept. properties(old) inverts the default: every
+              // property survives unless something below deliberately overrides
+              // it, which is the only shape that stays correct when a tenth
+              // property appears. Today that is the bi-temporal set, the dedup
+              // fields, and anything a historical schema-reconcile pass wrote
+              // through its SET r += props write-back before ALIAS_OF was
+              // excluded from reconciliation by type.
+              //
+              // is_system is the one override, and it is a LEGACY DEFAULT, not
+              // a re-stamp: it is the marker that keeps schema reconciliation's
+              // prune off platform-owned edges, and an edge written before any
+              // writer set it has it absent rather than false. Copying the map
+              // would carry that absence forward; coalescing repairs it.
+                ON CREATE SET newEdge = properties(old),
+                              newEdge.is_system = coalesce(old.is_system, true)
+              // A MERGE that MATCHED means other was already a direct alias
+              // of promoted. That edge is an assertion between the two surviving
+              // nodes and outranks a rerouted one, so it keeps its own properties
+              // and old is dropped -- deliberate, and stated because it is the
+              // one path where a property does not survive the reroute.
+              DELETE old
+            )
+            // DISTINCT because OPTIONAL MATCH yields one row per rerouted edge,
+            // and a principal with three local aliases is still one promotion.
+            RETURN count(DISTINCT promoted) AS promoted
             `,
-              { connectionId, orgId },
+              // orgId/workspaceId are injected (and overwritten) by the scoped
+              // session seam; passed here so the anchor and its value read
+              // together at the call site rather than only in tenant.ts.
+              { connectionId, orgId, workspaceId },
             );
 
             const promotedCount = countOf(
@@ -207,14 +276,54 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
               "ingestion-delete: alias promotion complete",
             );
 
-            // ── Pass 2: Delete non-aliased entity nodes ──────────────────────
-            // Only delete nodes that have no remaining incoming ALIAS_OF edges
-            // from other connections (they were either promoted above or were
-            // never aliased).
+            // ── Pass 2: Delete this connection's entity nodes ────────────────
+            //
+            // UNCONDITIONALLY, and the condition that used to be here is the
+            // defect. It read
+            //
+            //     WHERE NOT ((:EntityNode)-[:ALIAS_OF]->(n))
+            //
+            // and was described as deleting "only nodes that have no remaining
+            // incoming ALIAS_OF edges (they were either promoted above or were
+            // never aliased)". Promotion does not remove the edge it promoted
+            // along, and Pass 1 cannot touch an alias it is not allowed to
+            // write to, so "remaining" covered four populations rather than
+            // none, and Pass 3 excludes `:EntityNode` — so nothing deleted them:
+            //
+            //  1. a principal whose promoted alias still points at it. Pass 1
+            //     copies the identity across and reroutes the OTHER aliases,
+            //     but never deletes r itself, so every successful promotion
+            //     left its own principal behind. The ordinary case.
+            //  2. a principal aliased from another WORKSPACE or ORGANISATION.
+            //     Pass 1 rightly refuses to promote it — that would overwrite a
+            //     node this job has no business writing to — and the edge then
+            //     pinned the principal here. This is the reported case.
+            //  3. a principal aliased from THIS connection, which alias.connectionId
+            //     <> $connectionId excludes from promotion. Worse: the
+            //     alias itself has no incoming edge, so it WAS deleted, leaving
+            //     the principal behind with no edges at all.
+            //  4. a principal aliased from two workspaces, or at the end of an
+            //     alias chain — combinations of the above.
+            //
+            // In every one the job then deleted the Postgres connection and
+            // reported status = 'completed'.
+            //
+            // Deleting unconditionally is the reviewer's instruction and the
+            // rule the other passes already follow: DETACH DELETE drops the
+            // edges attached to the node, INCLUDING an incoming ALIAS_OF from a
+            // foreign node, and touches no property of the node at the other
+            // end. The edge is this connection's to remove; the foreign node is
+            // not this job's to modify, and is not modified — it simply stops
+            // being an alias of something that no longer exists, which is what
+            // deleting the thing it aliased means.
+            //
+            // The condition is removed rather than moved. Deleting the edges in
+            // an extra pass and leaving the condition behind would leave a
+            // predicate that can no longer be false — protection in the reading
+            // and nothing in the executing.
             const deleteResult = await session.run(
               `
             MATCH (n:EntityNode {connectionId: $connectionId, orgId: $orgId})
-            WHERE NOT ((:EntityNode)-[:ALIAS_OF]->(n))
             DETACH DELETE n
             RETURN count(n) AS deleted
             `,
@@ -254,6 +363,43 @@ export const [ingestionDeleteConnection, ingestionDeleteConnectionOnFailure] =
             `,
               { connectionId, orgId },
             );
+
+            // ── Pass 5: Verify, because "completed" is a claim ───────────────
+            //
+            // Passes 2-4 delete unconditionally, so on the rules as written
+            // nothing this connection stamped can be left. That is an argument
+            // about the queries, and the defect this pass exists to catch is
+            // precisely an argument about the queries that turned out to be
+            // wrong: Pass 2's alias condition was described as covering nodes
+            // that "were either promoted above or were never aliased", it
+            // covered neither of two further populations, and the job went on
+            // to delete the Postgres connection and report `completed` with
+            // the graph entity and its cross-workspace edge still present.
+            //
+            // A deletion that leaves data behind while returning success is
+            // worse than one that fails loudly, because nothing prompts anyone
+            // to look. So the job now ASKS rather than assumes, and a survivor
+            // throws: the onFailure companion marks the deletion_jobs row
+            // 'failed' with this message, which is the job saying what happened
+            // instead of claiming what it intended. The passes are idempotent,
+            // so Inngest's retry re-runs them — a node written by a sync still
+            // in flight is swept on the next attempt, and only a genuinely
+            // stuck deletion ends as failed.
+            const leftoverResult = await session.run(
+              `
+            MATCH (n {connectionId: $connectionId, orgId: $orgId})
+            RETURN count(n) AS leftover
+            `,
+              { connectionId, orgId },
+            );
+            const leftover = countOf(
+              leftoverResult.records[0]?.get("leftover"),
+            );
+            if (leftover > 0) {
+              throw new Error(
+                `ingestion-delete: ${leftover} graph node(s) for connection ${connectionId} survived deletion; refusing to report completion`,
+              );
+            }
 
             logger.info(
               {

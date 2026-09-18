@@ -1,0 +1,24 @@
+-- Drop billing.subscriptions.unit_amount_cents.
+--
+-- 20260917121000 added it so a plan change could compare what a grandfathered
+-- subscriber pays against the target plan, rather than reading the catalogue
+-- row a reprice had moved out from under them. That was a closer stand-in for
+-- the money than the plan row, and still a stand-in: the column held
+-- `price.unit_amount`, which is what the price LISTS, before any coupon or
+-- promotion code. `allow_promotion_codes` is set on both checkout paths, so a
+-- $200 price discounted to $100 moving to an undiscounted $150 read as a
+-- decrease and dropped the charge — the same inversion, one level down
+-- (#3157, PR #3171 review).
+--
+-- The direction is now measured by previewing the invoice the change would
+-- raise and reading its sign: the real money, discounts included, computed by
+-- the provider. No column can answer that question, so none should look as
+-- though it does. Leaving an unread amount here is an invitation to the next
+-- person to decide from it, which is how this recurred three times.
+--
+-- `stripe_price_id` stays. It is an identity rather than an amount — it says
+-- WHICH price a subscription sits on, which is what recognises a retry that
+-- has already been applied, and it cannot be wrong about a number it does not
+-- carry.
+ALTER TABLE billing.subscriptions
+  DROP COLUMN IF EXISTS unit_amount_cents;

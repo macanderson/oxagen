@@ -313,6 +313,54 @@ describe("StripeProvider", () => {
       );
     });
 
+    it("anchors the swap at the date the preview was priced from", async () => {
+      // `subscriptions.update` with no `proration_date` lets Stripe anchor at
+      // whatever moment it processes the request. The preview that produced
+      // `prorationBehavior` — and the figure `approvedMaxCents` was just
+      // checked against — was anchored at a different second, and the unused
+      // credit of the old price decays between them. On an interval change
+      // that decay makes the invoice LARGER, so the approved maximum can be
+      // passed and the customer still billed above it.
+      //
+      // It is also the only thing that makes the preview's own attribution
+      // guards mean anything: `previewWithOwnedAnchor` refuses when another
+      // proration already sits at this anchor, and an update that lands on a
+      // different anchor was never subject to that test
+      // (#3157, PR #3171 review, review 5243042193).
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      stripeMethods.subscriptions.update.mockResolvedValue({});
+      await provider.upgradeSubscription("sub_test_001", {
+        newPriceId: "price_new_001",
+        prorationBehavior: "always_invoice",
+        idempotencyKey: "idem_001",
+        prorationDate: 1_700_000_000,
+      });
+      expect(stripeMethods.subscriptions.update).toHaveBeenCalledWith(
+        "sub_test_001",
+        expect.objectContaining({ proration_date: 1_700_000_000 }),
+        { idempotencyKey: "idem_001" },
+      );
+    });
+
+    it("sends no anchor when there was no preview to take one from", async () => {
+      // The paired negative. An unpriceable change has no anchor to reuse, and
+      // inventing `Date.now()` here would be a second reading dressed as the
+      // preview's — the exact confusion the rest of this branch removes. Stripe
+      // anchoring at its own now is then the honest behaviour, and is what
+      // happens today.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      stripeMethods.subscriptions.update.mockResolvedValue({});
+      await provider.upgradeSubscription("sub_test_001", {
+        newPriceId: "price_new_001",
+        prorationBehavior: "always_invoice",
+      });
+      const params = stripeMethods.subscriptions.update.mock.calls[0]?.[1] as
+        | Record<string, unknown>
+        | undefined;
+      expect(params).toBeDefined();
+      expect("proration_date" in (params ?? {})).toBe(false);
+    });
+
     it("throws when subscription has no items", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(
         makeStripeSub({ items: { data: [] } }),
@@ -347,18 +395,68 @@ describe("StripeProvider", () => {
     });
   });
 
+  /**
+   * A previewed invoice whose proration lines carry the anchor the adapter
+   * asked for.
+   *
+   * Stripe stamps `period.start` of every proration it creates with the
+   * `proration_date` the preview was taken at, and that anchor is what tells
+   * this change's money apart from prorations already pending on the invoice.
+   * A fixture that omits it is not a simpler fixture — it is an invoice whose
+   * lines belong to nobody, which the adapter now refuses rather than sum.
+   */
+  function previewing(
+    lines: Array<{
+      proration: boolean;
+      description: string;
+      amount: number;
+      /** Omit to anchor at this preview; set to model an older, pending one. */
+      periodStart?: number;
+    }>,
+    total = 0,
+    /**
+     * What Stripe would COLLECT. Defaults to the total, which is the case with
+     * no customer balance; pass it to model an account credit.
+     */
+    amountDue = total,
+    /**
+     * The subscription the preview reports having been computed against.
+     *
+     * The adapter takes the billing interval from HERE rather than from the
+     * `subscriptions.retrieve` beside it, because those are two provider
+     * requests and a plan update can land between them (r4042380655). Pass
+     * `null` to model a preview that does not report what it priced.
+     */
+    previewedSubscription: unknown = makeStripeSub(),
+  ) {
+    stripeMethods.invoices.createPreview.mockImplementation(
+      async (args: { subscription_details?: { proration_date?: number } }) => {
+        const anchoredAt = args.subscription_details?.proration_date ?? 0;
+        return {
+          subscription: previewedSubscription ?? "sub_test_001",
+          currency: "usd",
+          total,
+          amount_due: amountDue,
+          lines: {
+            data: lines.map((l) => ({
+              proration: l.proration,
+              description: l.description,
+              amount: l.amount,
+              period: { start: l.periodStart ?? anchoredAt, end: anchoredAt },
+            })),
+          },
+        };
+      },
+    );
+  }
+
   describe("previewSeatChange", () => {
     it("returns proration preview with amountCents", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
-      stripeMethods.invoices.createPreview.mockResolvedValue({
-        currency: "usd",
-        lines: {
-          data: [
-            { proration: true, description: "Unused time", amount: -500 },
-            { proration: true, description: "Remaining time", amount: 800 },
-          ],
-        },
-      });
+      previewing([
+        { proration: true, description: "Unused time", amount: -500 },
+        { proration: true, description: "Remaining time", amount: 800 },
+      ]);
       const preview = await provider.previewSeatChange("sub_test_001", {
         seats: 5,
       });
@@ -381,14 +479,9 @@ describe("StripeProvider", () => {
   describe("previewPlanChange", () => {
     it("returns proration preview for plan change", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
-      stripeMethods.invoices.createPreview.mockResolvedValue({
-        currency: "usd",
-        lines: {
-          data: [
-            { proration: true, description: "Plan upgrade", amount: 1200 },
-          ],
-        },
-      });
+      previewing([
+        { proration: true, description: "Plan upgrade", amount: 1200 },
+      ]);
       const preview = await provider.previewPlanChange("sub_test_001", {
         newPriceId: "price_scale_monthly",
       });
@@ -396,21 +489,296 @@ describe("StripeProvider", () => {
       expect(preview.isCharge).toBe(true);
     });
 
+    it("a credit already pending on the invoice does not cancel this upgrade", async () => {
+      // The fifth inversion of the same direction, and the first one INSIDE
+      // the preview. `proration === true` selects every proration on the
+      // upcoming invoice, not the ones this simulation created — so a seat
+      // decrease recorded earlier under create_prorations leaves a credit
+      // sitting there. Summed together, a real +$12.00 upgrade reads as
+      // -$8.00, the caller ships `none`, and the upgrade charge is dropped.
+      //
+      // Keyed on the VALUE: the answer must be the upgrade's own +1200, not
+      // the account's pending -800. A test asserting only "it did not throw"
+      // would pass against the defect.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing([
+        {
+          proration: true,
+          description: "Unused seats (recorded last week)",
+          amount: -2000,
+          periodStart: 1_600_000_000,
+        },
+        { proration: true, description: "Plan upgrade", amount: 1200 },
+      ]);
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.amountCents).toBe(1200);
+      expect(preview.isCharge).toBe(true);
+      // And the pending line is not reported as part of this change either.
+      expect(preview.lines).toHaveLength(1);
+    });
+
+    it("an invoice whose prorations all belong to something else is refused, not summed to zero", async () => {
+      // Filtering could fail the other way: drop everything and report 0,
+      // which reads as "this change is free" and ships `none`. An
+      // unattributable preview is not a preview of nothing — the same lesson
+      // as the `?? 0` quote, one layer down.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing([
+        {
+          proration: true,
+          description: "Unused seats",
+          amount: -2000,
+          periodStart: 1_600_000_000,
+        },
+      ]);
+      await expect(
+        provider.previewPlanChange("sub_test_001", {
+          newPriceId: "price_scale_monthly",
+        }),
+      ).rejects.toMatchObject({ code: "PRORATION_ATTRIBUTION_FAILED" });
+    });
+
+    it("an invoice with no prorations at all is a true zero, not a refusal", async () => {
+      // The distinction the refusal above depends on: nothing to attribute is
+      // not the same as something that cannot be attributed.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing([
+        { proration: false, description: "Next month", amount: 99900 },
+      ]);
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.amountCents).toBe(0);
+      expect(preview.lines).toHaveLength(0);
+    });
+
     it("returns negative amountCents for a downgrade", async () => {
       stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
-      stripeMethods.invoices.createPreview.mockResolvedValue({
-        currency: "usd",
-        lines: {
-          data: [
-            { proration: true, description: "Downgrade credit", amount: -900 },
-          ],
-        },
-      });
+      previewing([
+        { proration: true, description: "Downgrade credit", amount: -900 },
+      ]);
       const preview = await provider.previewPlanChange("sub_test_001", {
         newPriceId: "price_build_monthly",
       });
       expect(preview.amountCents).toBe(-900);
       expect(preview.isCharge).toBe(false);
+    });
+
+    it("reports the invoice total and the collectible amount separately", async () => {
+      // A customer carrying a credit balance has Stripe apply it to
+      // `amount_due`, so the invoice and the collection are different numbers.
+      // Only the second is what happens to their card, and the interval-change
+      // quote reads it (#3157, PR #3171 review).
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: false, description: "One month", amount: 20_000 }],
+        20_000,
+        5_000,
+      );
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.totalCents).toBe(20_000);
+      expect(preview.amountDueCents).toBe(5_000);
+      // Guard the fixture: a case where the two agree proves nothing.
+      expect(preview.amountDueCents).not.toBe(preview.totalCents);
+    });
+
+    it("collects the total when the customer carries no balance", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: false, description: "One month", amount: 20_000 }],
+        20_000,
+      );
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+      expect(preview.amountDueCents).toBe(20_000);
+      expect(preview.totalCents).toBe(20_000);
+    });
+
+    // ── The interval comes off the preview, not the retrieval beside it ───
+    //
+    // `subscriptions.retrieve` and `invoices.createPreview` are two provider
+    // requests. The adapter used to retrieve the subscription (to find the
+    // item to reprice) and label the preview with it, which is not the same as
+    // deriving the interval from the state that was priced: a plan update
+    // landing between the two makes the label describe a different
+    // subscription (r4042380655).
+
+    it("takes the billing interval from the subscription the preview reports, not the one retrieved beside it", async () => {
+      // The two disagree, which is the only configuration that can tell a
+      // derivation from a label. Retrieval says monthly; the preview says it
+      // priced an annual subscription.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused time", amount: -80_000 }],
+        20_000,
+        20_000,
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  recurring: { interval: "year" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+
+      expect(preview.billingInterval).toBe("year");
+    });
+
+    it("requests the subscription on the preview call, which is what makes it one observation", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing([
+        { proration: true, description: "Unused time", amount: -100 },
+      ]);
+
+      await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_scale_monthly",
+      });
+
+      expect(stripeMethods.invoices.createPreview).toHaveBeenCalledWith(
+        expect.objectContaining({ expand: ["subscription"] }),
+      );
+    });
+
+    it("refuses when the preview does not report the subscription it priced", async () => {
+      // The adapter is holding a perfectly good subscription from its own
+      // retrieval. Using it is the fallback that was the defect, so there is
+      // no fallback — an unreported priced state is a refusal.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused time", amount: -100 }],
+        0,
+        0,
+        null,
+      );
+
+      await expect(
+        provider.previewPlanChange("sub_test_001", {
+          newPriceId: "price_scale_monthly",
+        }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" });
+    });
+
+    it("quotes a plan the subscription is ALREADY on, rather than refusing", async () => {
+      // Load-bearing for the simulation check below, and a real case in its
+      // own right: `previewPlanChange` in the domain has no already-applied
+      // guard (`changeOrgPlan` does), so a customer asking what their CURRENT
+      // plan would cost reaches this adapter with `newPriceId` equal to the
+      // price the subscription is on. The previewed subscription then reports
+      // the target price legitimately, and repricing an item to the price it
+      // already holds moves no money.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [
+          { proration: true, description: "Unused time", amount: -5_000 },
+          { proration: true, description: "Remaining time", amount: 5_000 },
+        ],
+        0,
+        0,
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  id: "price_same_monthly",
+                  recurring: { interval: "month" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      const preview = await provider.previewPlanChange("sub_test_001", {
+        newPriceId: "price_same_monthly",
+      });
+
+      expect(preview.amountCents).toBe(0);
+      expect(preview.billingInterval).toBe("month");
+    });
+
+    it("refuses when the preview reports the target price while pricing a real move to it", async () => {
+      // This models the failure mode the rest of this file CANNOT model: an
+      // expansion that reflects the simulated change rather than the stored
+      // subscription. Every other stub here is written to the assumption that
+      // it is stored, and a double cannot falsify the assumption it was built
+      // from — so the check is exercised directly instead.
+      //
+      // If Stripe behaved this way, `billingInterval` would be the interval
+      // being moved TO, every change would score same-interval, `none` would
+      // ship and an anchor reset would be quoted at $0. Refusing turns a
+      // silent wrong number into a loud stop.
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [
+          {
+            proration: true,
+            description: "Unused time on annual",
+            amount: -80_000,
+          },
+          {
+            proration: true,
+            description: "Remaining time on monthly",
+            amount: 20_000,
+          },
+        ],
+        20_000,
+        20_000,
+        // Already on the price being moved TO — the simulated signature.
+        makeStripeSub({
+          items: {
+            data: [
+              {
+                id: "si_001",
+                quantity: 3,
+                price: {
+                  id: "price_scale_monthly",
+                  recurring: { interval: "month" },
+                  product: "prod_test_001",
+                },
+              },
+            ],
+          },
+        }),
+      );
+
+      await expect(
+        provider.previewPlanChange("sub_test_001", {
+          newPriceId: "price_scale_monthly",
+        }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_SIMULATED" });
+    });
+
+    it("refuses on the seat path too, which shares the helper", async () => {
+      stripeMethods.subscriptions.retrieve.mockResolvedValue(makeStripeSub());
+      previewing(
+        [{ proration: true, description: "Unused seats", amount: -100 }],
+        0,
+        0,
+        null,
+      );
+
+      await expect(
+        provider.previewSeatChange("sub_test_001", { seats: 5 }),
+      ).rejects.toMatchObject({ code: "PREVIEWED_SUBSCRIPTION_UNAVAILABLE" });
     });
   });
 

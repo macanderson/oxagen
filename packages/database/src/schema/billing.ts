@@ -148,6 +148,45 @@ export const subscriptions = billingSchema.table(
       .references(() => plans.id),
     stripeSubscriptionId: text("stripe_subscription_id").notNull(),
     stripeCustomerId: text("stripe_customer_id").notNull(),
+    /**
+     * WHICH provider price this subscription is billed on. An identity, never
+     * an amount: it recognises a subscription already sitting on the price a
+     * caller is asking to move it to, which makes a retried plan change the
+     * no-op it should be.
+     *
+     * Deliberately not accompanied by a stored price. Every figure that stood
+     * in for "what this subscriber pays" has inverted — the tier rank, the
+     * catalogue row, and `price.unit_amount` against a discount — so the
+     * proration direction is measured by previewing the invoice instead
+     * (#3157). A column here would only look like an answer.
+     *
+     * Nullable: written by `syncSubscriptionFromStripe`, so a row predating
+     * that sync carries none.
+     */
+    stripePriceId: text("stripe_price_id"),
+    /**
+     * The plan a plan change is moving this subscription AWAY from, written
+     * before the provider is asked to swap the price and cleared once the
+     * prorated upgrade grant for that move has landed.
+     *
+     * Durable intent, and the only durable record of it. The grant's size is
+     * `toPlan.includedCreditCents - fromPlan.includedCreditCents`, so it needs
+     * the plan moved from — but `syncSubscriptionFromStripe` repoints
+     * `plan_id` at the target as part of the swap. A call that died between
+     * the swap and the grant therefore left a customer upgraded and
+     * uncredited, with nothing left in the row to recompute the grant from
+     * (#3157, PR #3171 review). This column is what the retry reads.
+     *
+     * Deliberately NOT in the `onConflictDoUpdate` set of
+     * `syncSubscriptionFromStripe`: a provider sync must not erase an intent
+     * the swap it is reporting has not finished acting on.
+     *
+     * Nullable, and null is the steady state — a subscription with no plan
+     * change in flight carries none.
+     */
+    pendingUpgradeFromPlanId: uuid("pending_upgrade_from_plan_id").references(
+      () => plans.id,
+    ),
     status: text("status").notNull(),
     // CHECK: billing_interval IN ('month','year') — Stripe only emits these two
     billingInterval: text("billing_interval").notNull(),

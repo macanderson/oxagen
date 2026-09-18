@@ -176,6 +176,34 @@ const ChangePlanSchema = z.object({
   orgSlug: z.string().min(1),
   targetPlanSlug: z.string().min(1),
   interval: z.enum(["month", "year"]),
+  /**
+   * The figure the confirm dialog showed and the customer agreed to, in cents.
+   *
+   * Carried so the charge cannot exceed the quote: `previewPlanChange` and
+   * `changeOrgPlan` compute two independent previews, and between them a
+   * discount can expire or a credit balance be consumed, turning a quoted $0
+   * downgrade into an invoiced increase. This is the only thing tying the
+   * number a person read to the money they are asked for (#3157, r4042477860).
+   *
+   * Optional because the checkout path legitimately has no approved figure:
+   * with no active subscription the customer approves the price on Stripe's
+   * own page, and inventing a number for it would make the parameter
+   * meaningless.
+   */
+  approvedMaxCents: z.number().int().optional(),
+  /**
+   * True when the preview this submit came from answered
+   * `requiresCheckout: true`, so the client expects a Stripe Checkout URL and
+   * showed no confirmation dialog.
+   *
+   * Carried because that preview asserted provider state — "this org has no
+   * active subscription" — and a Checkout completing in another tab or a
+   * webhook sync landing in between makes it false. Without it, such a submit
+   * quietly becomes an in-place swap, and the approval gate cannot catch it
+   * because this path legitimately has no approved figure to gate on
+   * (#3157, r4042742296).
+   */
+  previewRequiredCheckout: z.boolean().optional(),
 });
 
 /**
@@ -189,7 +217,13 @@ export async function changePlanAction(
   const parsed = ChangePlanSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const { orgSlug, targetPlanSlug, interval } = parsed.data;
+  const {
+    orgSlug,
+    targetPlanSlug,
+    interval,
+    approvedMaxCents,
+    previewRequiredCheckout,
+  } = parsed.data;
   const managed = await resolveManagedOrg(orgSlug);
   if (!managed) return { ok: false, error: NOT_AUTHORIZED };
 
@@ -208,6 +242,8 @@ export async function changePlanAction(
         changeOrgPlan(managed.orgId, targetPlanSlug, interval, {
           successUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=success`,
           cancelUrl: `${env.NEXT_PUBLIC_APP_URL}/${orgSlug}/billing/subscription?status=canceled`,
+          approvedMaxCents,
+          previewRequiredCheckout,
         }),
     );
 

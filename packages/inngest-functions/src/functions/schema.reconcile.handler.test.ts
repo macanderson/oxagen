@@ -200,9 +200,20 @@ function makeNodeRecord(nodeId: string, label: string, propertiesJson: string) {
   };
 }
 
-function makeCountRecord(count: number) {
+/**
+ * A count record.
+ *
+ * `unreconcilable` is projected ALONGSIDE `total` by the relationship count
+ * query, and the handler subtracts it, so this fixture answers per key rather
+ * than returning one number for every key. Answering `total` to
+ * `get("unreconcilable")` would make every relationship count fixture read as
+ * "all of these rows are unreconcilable" and silently zero `totalRelationships`
+ * in tests that never assert on it.
+ */
+function makeCountRecord(count: number, unreconcilable = 0) {
   return {
-    get: (_key: string): unknown => count,
+    get: (key: string): unknown =>
+      key === "unreconcilable" ? unreconcilable : count,
   };
 }
 
@@ -532,23 +543,31 @@ describe("schemaReconcile Inngest handler", () => {
       },
     ]);
 
+    // The batch read returns the endpoint publicIds the write-back
+    // re-identifies against — an element id is only unique within one
+    // transaction, and the read and the write are separate ones.
     const relRecord = {
       get: (key: string): unknown => {
         const map: Record<string, unknown> = {
           relElemId: "elem-1",
           relType: "RELATES_TO",
           props: { weight: 0.9, extra: "off-schema" }, // extra should be pruned
+          startId: "node-a",
+          endId: "node-b",
         };
         return map[key];
       },
     };
 
-    // count rels(1), batch 1 rel, SET r += (prune), batch 2 end
+    // count rels(1), batch 1 rel, SET r += (prune), batch 2 end.
+    // The write-back returns `count(r) AS written`, and the counters are only
+    // incremented for what it says it matched — so this response has to model
+    // the count, not an empty result.
     mocks.sessionRun.mockImplementation(
       makeSessionRunSequence([
         { records: [makeCountRecord(1)] }, // count rels (no labels → no node count)
         { records: [relRecord] }, // batch 1
-        { records: [] }, // SET r +=
+        { records: [makeCountRecord(1)] }, // SET r += … RETURN count(r) AS written
         { records: [] }, // batch 2 end
       ]),
     );
@@ -561,6 +580,213 @@ describe("schemaReconcile Inngest handler", () => {
     const r = result as Record<string, unknown>;
     expect(r.prunedRelationships).toBe(1);
     expect(r.updatedRelationships).toBe(1);
+
+    // And the write really did carry the re-identification parameters.
+    const writeCall = (
+      mocks.sessionRun.mock.calls as Array<[string, Record<string, unknown>]>
+    ).find(([cypher]) => cypher.includes("SET r += $props"));
+    expect(writeCall?.[1]).toMatchObject({
+      relElemId: "elem-1",
+      relType: "RELATES_TO",
+      startId: "node-a",
+      endId: "node-b",
+    });
+  });
+
+  it("processes every relationship across pages when derivation returns is_system", async () => {
+    // THE PAGINATION HALF, and it needs more than one page to fail on.
+    //
+    // The batch selection excludes edges with is_system = true. If a page's own
+    // writes set that on the rows they touch, the result set SHRINKS while
+    // `skip` advances, and rows slide past the offset unvisited — never
+    // processed, with no error, no counter and nothing in the log.
+    //
+    // So the session mock is a SIMULATED STORE rather than a fixed sequence: it
+    // holds rows, answers the batch query by applying the predicate and then
+    // SKIP/LIMIT, and applies each write to the row it names. A canned response
+    // sequence cannot fail on this, because the fixture, not the code, decides
+    // what page two contains.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    // `weight` is required WITH a description, which is what makes the handler
+    // call the model at all.
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+      {
+        id: "p-2",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "score",
+        dataType: "number",
+        required: true,
+        description: "a score",
+      },
+    ]);
+
+    // Two full pages and a bit: BATCH_SIZE is 50.
+    const TOTAL = 120;
+    interface Row {
+      id: string;
+      props: Record<string, unknown>;
+    }
+    const store: Row[] = Array.from({ length: TOTAL }, (_, i) => ({
+      id: `elem-${String(i).padStart(3, "0")}`,
+      props: { weight: 0.5 },
+    }));
+    const selectable = () =>
+      store.filter((row) => row.props.is_system !== true);
+
+    const recordFor = (row: Row) => ({
+      get: (key: string): unknown =>
+        ({
+          relElemId: row.id,
+          relType: "RELATES_TO",
+          props: { ...row.props },
+          startId: `a-${row.id}`,
+          endId: `b-${row.id}`,
+        })[key],
+    });
+
+    const processed: string[] = [];
+    mocks.sessionRun.mockImplementation(
+      async (cypher: string, params: Record<string, unknown>) => {
+        if (cypher.includes("RETURN count(r) AS total")) {
+          return { records: [makeCountRecord(selectable().length)] };
+        }
+        if (cypher.includes("SKIP $skip LIMIT $batchSize")) {
+          const skip = Number(params.skip ?? 0);
+          const size = Number(params.batchSize ?? 50);
+          return {
+            records: selectable()
+              .slice(skip, skip + size)
+              .map(recordFor),
+          };
+        }
+        if (cypher.includes("SET r += $props")) {
+          const row = store.find((r) => r.id === params.relElemId);
+          if (!row) return { records: [makeCountRecord(0)] };
+          processed.push(row.id);
+          Object.assign(row.props, params.props as Record<string, unknown>);
+          return { records: [makeCountRecord(1)] };
+        }
+        return { records: [] };
+      },
+    );
+
+    // The model answers with the key it was asked for AND one it was not.
+    // `derivedProps` is typed z.record(z.unknown()), so nothing stops it.
+    mocks.generateObjectFor.mockResolvedValue({
+      object: { derivedProps: { score: 1, is_system: true } },
+    });
+
+    const result = await capturedHandler!({
+      event: { data: { ...BASE_EVENT_DATA, prune: false } },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    // Every row is visited. Before the reserved-key strip, the first page's
+    // writes marked 50 rows is_system, the set shrank to 70, and `skip = 50`
+    // then landed past rows that had moved down — they were never read again.
+    expect(r.processedRelationships).toBe(TOTAL);
+    expect(new Set(processed).size).toBe(TOTAL);
+
+    // And the cause: not one row carries the key the model tried to set.
+    expect(store.filter((row) => row.props.is_system === true)).toEqual([]);
+    expect(store.every((row) => row.props.score === 1)).toBe(true);
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ stripped: ["is_system"] }),
+      expect.stringContaining("platform-reserved relationship keys"),
+    );
+  });
+
+  it("counts nothing when the write-back matches nothing", async () => {
+    // The relationship the batch read saw is gone, or its element id now names
+    // a different one, so the re-identified write matches zero rows. Before the
+    // counters were gated on that count they would both have read 1 — the job
+    // reporting a prune it did not perform, which is the whole failure this
+    // path guards against.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+    ]);
+
+    const relRecord = {
+      get: (key: string): unknown => {
+        const map: Record<string, unknown> = {
+          relElemId: "elem-1",
+          relType: "RELATES_TO",
+          props: { weight: 0.9, extra: "off-schema" },
+          startId: "node-a",
+          endId: "node-b",
+        };
+        return map[key];
+      },
+    };
+
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(1)] }, // count rels
+        { records: [relRecord] }, // batch 1
+        { records: [makeCountRecord(0)] }, // the write matched nothing
+        { records: [] }, // batch 2 end
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: { ...BASE_EVENT_DATA, prune: true } },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    expect(r.prunedRelationships).toBe(0);
+    expect(r.updatedRelationships).toBe(0);
+    // It is still PROCESSED — the row was read and considered — and the refusal
+    // is logged rather than swallowed.
+    expect(r.processedRelationships).toBe(1);
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ relElemId: "elem-1", relType: "RELATES_TO" }),
+      expect.stringContaining("no longer matches the row that was read"),
+    );
   });
 
   it("returns 0 processedNodes when labelNames is empty (no node reconcile)", async () => {
@@ -588,5 +814,96 @@ describe("schemaReconcile Inngest handler", () => {
     expect(r.totalNodes).toBe(0);
     expect(r.totalRelationships).toBe(0);
     expect(r.status).toBe("completed");
+  });
+
+  it("subtracts the edges no publicId puts out of reach, and says so", async () => {
+    // The count query matches every in-tenant, in-schema edge and projects, as
+    // a second column, how many of them an endpoint without a publicId makes
+    // impossible for the write-back to re-identify. Those rows are excluded
+    // from the batch READ, so if the total did not subtract them the job would
+    // finish with processedRelationships < totalRelationships forever, and if
+    // the count were narrowed instead they would vanish entirely — a graph with
+    // three unreachable edges would be indistinguishable from an empty one.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([
+      {
+        id: "p-1",
+        nodeLabelId: null,
+        relationshipTypeId: "rt-1",
+        key: "weight",
+        dataType: "number",
+        required: false,
+        description: null,
+      },
+    ]);
+
+    // 4 edges matched, 3 of them with an endpoint carrying no publicId.
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(4, 3)] }, // count rels: total 4, unreconcilable 3
+        { records: [] }, // batch 1 — the read excludes the 3
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
+
+    const r = result as Record<string, unknown>;
+    expect(r.totalRelationships).toBe(1);
+    expect(r.status).toBe("completed");
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ unreconcilable: 3, matched: 4 }),
+      expect.stringContaining("an endpoint carries no publicId"),
+    );
+  });
+
+  it("says nothing when every matched edge can be re-identified", async () => {
+    // The warning is a report of an exception, not a per-run line.
+    const { tx, m } = makeTx();
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => unknown) => fn(tx),
+    );
+
+    m.schemaVersionsFindFirst.mockResolvedValue({
+      id: "ver-1",
+      versionNumber: 1,
+    });
+    m.schemasFindMany.mockResolvedValue([{ id: "s-1", name: "mySchema" }]);
+    m.schemaActivationsFindMany.mockResolvedValue([]);
+    m.nodeLabelsFindMany.mockResolvedValue([]);
+    m.relTypesFindMany.mockResolvedValue([{ id: "rt-1", name: "RELATES_TO" }]);
+    m.propertiesFindMany.mockResolvedValue([]);
+
+    mocks.sessionRun.mockImplementation(
+      makeSessionRunSequence([
+        { records: [makeCountRecord(2, 0)] },
+        { records: [] },
+      ]),
+    );
+
+    const result = await capturedHandler!({
+      event: { data: BASE_EVENT_DATA },
+      step: makeStep(),
+    });
+
+    expect((result as Record<string, unknown>).totalRelationships).toBe(2);
+    expect(mocks.logger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("an endpoint carries no publicId"),
+    );
   });
 });

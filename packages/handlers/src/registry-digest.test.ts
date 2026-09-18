@@ -95,3 +95,16 @@ describe("registry-digest distinguishes values that differ", () => {
     ).toBe('{"a":{"c":3,"d":2},"b":1,"list":[1,"two",null]}');
   });
 });
+
+describe("registry-digest — a key named __proto__", () => {
+  it("is part of the canonical form rather than a prototype assignment", () => {
+    // A canonical form that silently drops a key is not canonical: on a plain
+    // `{}` accumulator these two digested identically.
+    const withKey: Record<string, unknown> = { ["__proto__"]: 1, a: 2 };
+    expect(canonicalJson(withKey)).toBe('{"__proto__":1,"a":2}');
+    expect(canonicalJson(withKey)).not.toBe(canonicalJson({ a: 2 }));
+    expect(sha256Hex(canonicalJson(withKey))).not.toBe(
+      sha256Hex(canonicalJson({ a: 2 })),
+    );
+  });
+});

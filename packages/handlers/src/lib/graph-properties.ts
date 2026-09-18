@@ -80,7 +80,16 @@ function normalizeDriverIntegers(
   }
   if (!needsCopy) return bag;
 
-  const out: Record<string, unknown> = {};
+  // Null prototype: these keys are a CUSTOMER's node/relationship property
+  // names, so one of them can be `__proto__`, and assigning through the
+  // inherited accessor on `{}` would invoke the prototype setter instead of
+  // creating an own key — the property would vanish from the copy, but only on
+  // the bags that happen to contain a driver Integer, which is the worst
+  // version of the bug to diagnose.
+  const out: Record<string, unknown> = Object.create(null) as Record<
+    string,
+    unknown
+  >;
   for (const [key, value] of Object.entries(bag)) {
     out[key] = isDriverInteger(value) ? driverIntegerToNumber(value) : value;
   }

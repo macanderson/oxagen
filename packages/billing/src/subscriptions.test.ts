@@ -22,10 +22,17 @@ import type { BillingSubscription } from "./provider";
 // ---------------------------------------------------------------------------
 
 const getSubscriptionMock = vi.fn();
+const previewPlanChangeMock = vi.fn().mockResolvedValue({
+  amountCents: 0,
+  isCharge: false,
+  currency: "usd",
+  prorationDate: 1_700_000_000,
+});
 
 vi.mock("./client", () => ({
   billingProvider: () => ({
     getSubscription: getSubscriptionMock,
+    previewPlanChange: previewPlanChangeMock,
     updateSubscription: vi.fn().mockResolvedValue(undefined),
     cancelSubscription: vi.fn().mockResolvedValue(undefined),
     upgradeSubscription: vi.fn().mockResolvedValue(undefined),
@@ -54,12 +61,26 @@ vi.mock("./logger", () => ({ logger: loggerMock }));
 // DB mock
 // ---------------------------------------------------------------------------
 
+/**
+ * Every `set(...)` payload written to billing.subscriptions, in order. The
+ * plan-upgrade intent (`pendingUpgradeFromPlanId`) is recorded as a write
+ * before the provider swap, so a mock without `update` makes `changeOrgPlan`
+ * throw rather than exercise the path under test.
+ */
+const subscriptionUpdates: Array<Record<string, unknown>> = [];
+
 const dbMocks = {
   query: {
     plans: { findFirst: vi.fn() },
     subscriptions: { findFirst: vi.fn() },
   },
   insert: vi.fn(),
+  update: vi.fn(() => ({
+    set: (values: Record<string, unknown>) => {
+      subscriptionUpdates.push(values);
+      return { where: vi.fn().mockResolvedValue(undefined) };
+    },
+  })),
 };
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -111,7 +132,9 @@ vi.mock("./customers", () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Seats + entitlements mocks — previewPlanChange / changeOrgPlan may call these.
+// Seats mock — previewPlanChange / changeOrgPlan may call this. `./entitlements`
+// is deliberately NOT mocked: since #3157 the proration decision is a price
+// comparison and this module no longer reads the entitlement tier ordering.
 // ---------------------------------------------------------------------------
 
 vi.mock("./seats", () => ({
@@ -129,10 +152,6 @@ vi.mock("./seats", () => ({
   isSeatLimitError: (e: unknown) =>
     e instanceof Error &&
     (e as { code?: string }).code === "seat_limit_reached",
-}));
-
-vi.mock("./entitlements", () => ({
-  meetsMinimumTier: vi.fn().mockReturnValue(false),
 }));
 
 // Import after mocks.
@@ -162,6 +181,8 @@ function makeSubscription(
     canceledAt: null,
     trialEnd: null,
     productId: "prod_test",
+    // WHICH price it sits on. An identity, not an amount (#3157).
+    priceId: "price_test",
     seatCount: 1,
     ...overrides,
   };
@@ -275,9 +296,14 @@ describe("changeOrgPlan audit emit", () => {
     // currentPlanRow (tier), and the inner syncSubscriptionFromStripe (product id).
     dbMocks.query.plans.findFirst.mockResolvedValue({
       id: "plan-free-1",
-      tier: "free", // target tier — lower than current "scale" → downgrade (skips grants)
+      slug: "free",
+      // Target price equals the current one here (the same row answers both
+      // lookups), so the bill does not move → proration 'none', grants skipped.
+      tier: "free",
       stripePriceIdMonthly: "price_free_month",
       stripePriceIdAnnual: "price_free_year",
+      monthlyCents: 0,
+      annualCents: 0,
     });
     // Shared subscriptions.findFirst: covers activeSubRow (changeOrgPlan) and the
     // prior-status read inside syncSubscriptionFromStripe.
@@ -285,6 +311,7 @@ describe("changeOrgPlan audit emit", () => {
       stripeSubscriptionId: "sub_test_001",
       seatCount: 1,
       planId: "plan-scale-1",
+      billingInterval: "month",
       status: "active",
     });
     // syncSubscriptionFromStripe pulls the canonical record (active, known org).
@@ -312,9 +339,12 @@ describe("changeOrgPlan audit emit", () => {
     // Target plan exists…
     dbMocks.query.plans.findFirst.mockResolvedValue({
       id: "plan-build-1",
+      slug: "build-v2",
       tier: "build",
       stripePriceIdMonthly: "price_build_month",
       stripePriceIdAnnual: "price_build_year",
+      monthlyCents: 19_900,
+      annualCents: 199_000,
     });
     // …but there is no active subscription → Checkout branch.
     dbMocks.query.subscriptions.findFirst.mockResolvedValue(undefined);
@@ -451,6 +481,178 @@ describe("previewPlanChange — annual price misconfiguration", () => {
     // No throw because interval !== "year".
     expect(result.requiresCheckout).toBe(true);
     expect(result.amountCents).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// previewPlanChange — proration direction on an ACTIVE subscription (#3157)
+//
+// The preview is the number the customer sees before confirming, so it has to
+// reach the same proration flag changeOrgPlan will apply. Both read the price.
+// ---------------------------------------------------------------------------
+
+describe("previewPlanChange — the quote and the change agree (#3157)", () => {
+  const TARGET = {
+    id: "plan-mid-1",
+    slug: "mid-v2",
+    tier: "scale",
+    stripePriceIdMonthly: "price_mid_150",
+    stripePriceIdAnnual: null,
+    monthlyCents: 15_000,
+    annualCents: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The interval this change moves FROM is read from the provider, not from
+    // the synced column (#3157, PR #3171 review), so each of these has to say
+    // what the provider reports. Monthly unless the test says otherwise.
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ billingInterval: "month" }),
+    );
+  });
+
+  it("quotes the previewed charge when the bill rises, under the flag the change will apply", async () => {
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: 5_000,
+      isCharge: true,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      totalCents: 0,
+      amountDueCents: 0,
+      billingInterval: "month",
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-legacy-1",
+      billingInterval: "month",
+      stripePriceId: "price_list_200",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(previewPlanChangeMock).toHaveBeenCalledWith(
+      "sub_test_001",
+      expect.objectContaining({ prorationBehavior: "create_prorations" }),
+    );
+    expect(result.amountCents).toBe(5_000);
+    expect(result.isCharge).toBe(true);
+  });
+
+  it("quotes zero when the bill falls, because the change writes no proration line", async () => {
+    // The previewed credit is real, and `none` means it is never raised. A
+    // quote of -$499 would promise the customer money the swap will not move.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: -49_900,
+      isCharge: false,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      totalCents: 0,
+      amountDueCents: 0,
+      billingInterval: "month",
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-scale-1",
+      billingInterval: "month",
+      stripePriceId: "price_scale_m",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(result.amountCents).toBe(0);
+    expect(result.isCharge).toBe(false);
+  });
+
+  it("an unavailable preview produces no quote at all, rather than a quote of zero", async () => {
+    // The discriminating case: NOT "the quote is zero when the preview fails",
+    // which is the defect written down as an expectation. A caller must be
+    // unable to read a number here, because `always_invoice` will go on to
+    // charge the true difference and a $0 confirmation promises otherwise.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-legacy-1",
+      billingInterval: "month",
+      stripePriceId: "price_list_200",
+    });
+
+    await expect(
+      previewPlanChange("org-abc-123", "mid-v2", "month"),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_PREVIEW_UNAVAILABLE" });
+  });
+
+  it("annual → monthly quotes the anchor-reset invoice, not zero", async () => {
+    // Changing the recurring interval resets the billing-cycle anchor and
+    // invoices the new period immediately. The proration nets NEGATIVE (credit
+    // for unused annual time), so treating it as a downgrade quoted $0 while a
+    // full month was charged. The money owed is the invoice total.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: -80_000, // credit for the unused year
+      isCharge: false,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      totalCents: 15_000, // the month the anchor reset raises
+      // No account balance here, so the collection equals the invoice. The
+      // case where they differ is `plan-change-provider-interval.test.ts`.
+      amountDueCents: 15_000,
+      // The subscription this preview priced is the ANNUAL one. It is the
+      // preview that says so, not a second read of the subscription — see
+      // BillingProrationPreview.billingInterval.
+      billingInterval: "year",
+      lines: [],
+    });
+    getSubscriptionMock.mockResolvedValue(
+      makeSubscription({ billingInterval: "year", priceId: "price_annual" }),
+    );
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-annual-1",
+      billingInterval: "year", // moving to a monthly price
+      stripePriceId: "price_annual",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(result.amountCents).toBe(15_000);
+    expect(result.isCharge).toBe(true);
+  });
+
+  it("a discounted subscriber is quoted the discounted proration", async () => {
+    // Same P1 case as the swap path: the list prices read as a decrease, the
+    // invoice is +$50, and the quote has to be the invoice.
+    previewPlanChangeMock.mockResolvedValue({
+      amountCents: 5_000,
+      isCharge: true,
+      currency: "usd",
+      prorationDate: 1_700_000_000,
+      totalCents: 0,
+      amountDueCents: 0,
+      billingInterval: "month",
+      lines: [],
+    });
+    dbMocks.query.plans.findFirst.mockResolvedValueOnce(TARGET);
+    dbMocks.query.subscriptions.findFirst.mockResolvedValue({
+      stripeSubscriptionId: "sub_test_001",
+      stripeCustomerId: "cus_test_001",
+      planId: "plan-list200-1",
+      billingInterval: "month",
+      stripePriceId: "price_list_200",
+    });
+
+    const result = await previewPlanChange("org-abc-123", "mid-v2", "month");
+
+    expect(result.amountCents).toBe(5_000);
   });
 });
 
