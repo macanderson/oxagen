@@ -63,6 +63,57 @@ export function withoutUsage(
   return out;
 }
 
+/**
+ * The sources whose `llm_call` rows carry a call's own usage. `otel_span`
+ * mirrors the log record and is never counted; `result` totals are session
+ * sums, not calls. The transcript joined this list when the daemon began to
+ * tail it (and the ledger began to stamp the rows that would double up).
+ */
+export const LLM_CALL_TOKEN_SOURCES = [
+  "otel_log",
+  "collector",
+  "hook",
+  "transcript",
+] as const;
+
+/**
+ * Whether one row's token columns count toward the session's usage. The
+ * rule the control plane and the rollup share: a token-bearing source, and
+ * no `oxagen.llm_call_duplicate_of` stamp (a later sighting of a call the
+ * chain already counted, or a continuation block of a transcript message).
+ * The split and thinking columns are read separately, from transcript rows,
+ * because they exist nowhere else; see `countsLlmCallSplit`.
+ */
+export function countsLlmCallUsage(event: {
+  kind: string;
+  source: string;
+  attrs: Record<string, string>;
+}): boolean {
+  return (
+    event.kind === "llm_call" &&
+    (LLM_CALL_TOKEN_SOURCES as readonly string[]).includes(event.source) &&
+    event.attrs[LLM_CALL_DUPLICATE_OF_ATTR] === undefined
+  );
+}
+
+/**
+ * Whether one row's cache split and thinking columns count. A transcript row
+ * carries them whether it was the first sighting or a duplicate of an OTel
+ * or proxy row; a transcript continuation block (stamped as a duplicate of
+ * `transcript`) had them removed and adds nothing.
+ */
+export function countsLlmCallSplit(event: {
+  kind: string;
+  source: string;
+  attrs: Record<string, string>;
+}): boolean {
+  return (
+    event.kind === "llm_call" &&
+    event.source === "transcript" &&
+    event.attrs[LLM_CALL_DUPLICATE_OF_ATTR] !== "transcript"
+  );
+}
+
 /** How many calls one recorder remembers; older ones are forgotten in order. */
 export const LLM_CALL_LEDGER_CAPACITY = 1024;
 

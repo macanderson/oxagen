@@ -74,7 +74,7 @@ describe("TranscriptTailer", () => {
     return { instance, recorded, log };
   }
 
-  it("splits a chunk at its last newline and keeps the partial tail on disk", () => {
+  it("splits a chunk at its last newline and keeps the partial tail on disk", async () => {
     expect(completeLines(Buffer.from("a\nb\nc"))).toEqual({
       lines: ["a", "b"],
       consumed: 4,
@@ -91,24 +91,24 @@ describe("TranscriptTailer", () => {
     });
   });
 
-  it("feeds complete lines, waits for a partial one, and continues from where it stopped", () => {
+  it("feeds complete lines, waits for a partial one, and continues from where it stopped", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     const { instance, recorded } = tailer([session]);
 
     // Nothing to read until the harness creates the file.
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toEqual([]);
 
     writeFileSync(path, '{"a":1}\n{"b":2}\n{"c":');
-    instance.tick();
+    await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual(['{"a":1}', '{"b":2}']);
     expect(recorded).toHaveLength(2);
 
     // The partial line completes and another follows it.
     appendFileSync(path, '3}\n{"d":4}\n');
-    instance.tick();
+    await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual([
       '{"a":1}',
       '{"b":2}',
@@ -117,24 +117,24 @@ describe("TranscriptTailer", () => {
     ]);
 
     // Nothing new: nothing fed.
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toHaveLength(4);
     expect(instance.state().cursors["s1"]?.offset).toBe(
       Buffer.byteLength('{"a":1}\n{"b":2}\n{"c":3}\n{"d":4}\n'),
     );
   });
 
-  it("reads a truncated or replaced file from the start again", () => {
+  it("reads a truncated or replaced file from the start again", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     const { instance } = tailer([session]);
     writeFileSync(path, "one\ntwo\nthree\n");
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toHaveLength(3);
 
     writeFileSync(path, "x\n");
-    instance.tick();
+    await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual([
       "one",
       "two",
@@ -145,102 +145,102 @@ describe("TranscriptTailer", () => {
     // A new inode at the same path, even one longer than the old cursor.
     unlinkSync(path);
     writeFileSync(path, "fresh-1\nfresh-2\n");
-    instance.tick();
+    await instance.tick();
     expect(session.lines.slice(-2).map((l) => l.line)).toEqual([
       "fresh-1",
       "fresh-2",
     ]);
   });
 
-  it("reads at most the budget per tick and finishes on later ticks", () => {
+  it("reads at most the budget per tick and finishes on later ticks", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     const line = `${"x".repeat(99)}\n`;
     writeFileSync(path, line.repeat(10));
     const { instance } = tailer([session], { budgetBytes: 250 });
-    instance.tick();
+    await instance.tick();
     // 250 bytes hold two whole 100-byte lines; the third waits.
     expect(session.lines).toHaveLength(2);
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toHaveLength(4);
-    for (let i = 0; i < 3; i += 1) instance.tick();
+    for (let i = 0; i < 3; i += 1) await instance.tick();
     expect(session.lines).toHaveLength(10);
   });
 
-  it("gets past a line longer than the budget without stalling", () => {
+  it("gets past a line longer than the budget without stalling", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     writeFileSync(path, `${"y".repeat(1000)}\nafter\n`);
     const { instance, log } = tailer([session], { budgetBytes: 100 });
-    instance.tick();
-    instance.tick();
+    await instance.tick();
+    await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual(["after"]);
     expect(log.some((l) => l.includes("skipped a 1001 byte line"))).toBe(true);
   });
 
-  it("feeds a subagent transcript once, with the subagent id, and never twice", () => {
+  it("feeds a subagent transcript once, with the subagent id, and never twice", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const agentPath = join(dir, "agent-a1.jsonl");
     const session = fakeSession("s1", path);
     writeFileSync(agentPath, "sub-1\nsub-2\n");
     const { instance } = tailer([session]);
-    expect(instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(2);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(2);
     expect(session.lines).toEqual([
       { line: "sub-1", subagentId: "a1" },
       { line: "sub-2", subagentId: "a1" },
     ]);
     // A replayed SubagentStop for the same agent feeds nothing.
-    expect(instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(0);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(0);
     expect(session.lines).toHaveLength(2);
     // A path that is not there is reported, not thrown.
     expect(
-      instance.ingestSubagentTranscript("s1", "a2", join(dir, "missing")),
+      await instance.ingestSubagentTranscript("s1", "a2", join(dir, "missing")),
     ).toBeUndefined();
     // An unknown session is ignored.
     expect(
-      instance.ingestSubagentTranscript("nope", "a1", agentPath),
+      await instance.ingestSubagentTranscript("nope", "a1", agentPath),
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then drops its cursor", () => {
+  it("drains a sealed session once more, then drops its cursor", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
     writeFileSync(path, "a\n");
     const { instance } = tailer([session]);
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toHaveLength(1);
     // SessionEnd: the hook path drains, the harness flushes one last line.
     appendFileSync(path, "b\n");
-    instance.drain("s1");
+    await instance.drain("s1");
     expect(session.lines).toHaveLength(2);
     session.sealed = true;
     appendFileSync(path, "cost-state\n");
-    instance.tick();
+    await instance.tick();
     expect(session.lines).toHaveLength(3);
     expect(instance.state().cursors["s1"]?.drained).toBe(true);
-    instance.tick();
+    await instance.tick();
     expect(instance.state().cursors["s1"]).toBeUndefined();
     // A session that left the registry loses its cursor too.
     const other = fakeSession("s2", path);
     const second = tailer([other]);
-    second.instance.tick();
+    second.await instance.tick();
     expect(second.instance.state().cursors["s2"]).toBeDefined();
     other.sealed = false;
-    second.instance.tick();
+    second.await instance.tick();
   });
 
-  it("persists cursors so a restart does not re-read the transcript", () => {
+  it("persists cursors so a restart does not re-read the transcript", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const statePath = join(dir, "state", "transcript-tail.json");
     const session = fakeSession("s1", path);
     writeFileSync(path, "one\ntwo\n");
     const first = tailer([session], { statePath });
-    first.instance.tick();
+    first.await instance.tick();
     expect(session.lines).toHaveLength(2);
     const persisted = JSON.parse(readFileSync(statePath, "utf8")) as {
       schema: string;
@@ -252,11 +252,11 @@ describe("TranscriptTailer", () => {
     const again = fakeSession("s1", path);
     appendFileSync(path, "three\n");
     const restarted = tailer([again], { statePath });
-    restarted.instance.tick();
+    restarted.await instance.tick();
     expect(again.lines.map((l) => l.line)).toEqual(["three"]);
   });
 
-  it("starts over on a new transcript path for the same session", () => {
+  it("starts over on a new transcript path for the same session", async () => {
     const dir = scratch();
     const first = join(dir, "a.jsonl");
     const second = join(dir, "b.jsonl");
@@ -264,9 +264,9 @@ describe("TranscriptTailer", () => {
     writeFileSync(second, "b1\nb2\n");
     const session = fakeSession("s1", first);
     const { instance } = tailer([session]);
-    instance.tick();
+    await instance.tick();
     session.transcriptPath = second;
-    instance.tick();
+    await instance.tick();
     expect(session.lines.map((l) => l.line)).toEqual(["a1", "b1", "b2"]);
   });
 });

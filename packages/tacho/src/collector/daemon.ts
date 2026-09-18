@@ -13,6 +13,7 @@ import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
+import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
 import {
   ControlError,
@@ -79,9 +80,9 @@ import {
   type HookEnvelope,
 } from "./server";
 import { Shipper } from "./spool";
+import { TranscriptTailer } from "./transcript-tailer";
 
 export const TACHO_WRAPPER_VERSION = "2.1.1";
-import { TranscriptTailer } from "./transcript-tailer";
 
 export interface DaemonTimers {
   shipMs: number;
@@ -141,9 +142,9 @@ export interface DaemonHandle {
   wal: Wal;
   shipper: Shipper;
   detector: Detector;
+  transcriptTailer: TranscriptTailer;
   hostRecorder: SessionRecorder;
   host: () => HostFile;
-  transcriptTailer: TranscriptTailer;
   port: number | undefined;
   /** The model proxy's bound port, or undefined when it is not listening. */
   modelProxyPort: number | undefined;
@@ -306,9 +307,23 @@ export async function startDaemon(
     stateDirty = false;
   }
 
-  function record(events: readonly TachoEvent[]): void {
+  /**
+   * Write sealed events, and the bodies of those the bundle lets this host
+   * retain, to the WAL. The retention clause is read from the bundle the
+   * host holds right now: enrollment writes one, so there is always a
+   * clause to read, and a body the workspace has since stopped retaining is
+   * dropped here rather than shipped for the control plane to refuse.
+   */
+  function record(
+    events: readonly TachoEvent[],
+    bodies: readonly FrameBody[] = [],
+  ): void {
     if (events.length === 0) return;
-    wal.append(events);
+    const retention = host.bundle.retention;
+    wal.append(
+      events,
+      bodies.filter((body) => retentionAllows(retention, body.content_class)),
+    );
     stateDirty = true;
   }
 
@@ -429,6 +444,16 @@ export async function startDaemon(
         );
       }
     },
+    // The event was accepted and the session carries a `body_missing` gap;
+    // the log line is the only trace on this host of why the bytes are not
+    // in the record.
+    onBodyRejection: (rejections) => {
+      for (const rejection of rejections) {
+        log(
+          `control plane refused body for ${rejection.event_id_idem}: ${rejection.reason}`,
+        );
+      }
+    },
     log,
     now,
   });
@@ -446,6 +471,57 @@ export async function startDaemon(
     enrollmentId: host.host_enrollment_id,
     now,
   });
+
+  // --- transcript tailer -------------------------------------------------
+  // The detector above only stats a transcript's mtime. The tailer reads it:
+  // every session that reported a `transcript_path` has its file tailed on
+  // the tick, and a subagent's finished transcript is fed once when its
+  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
+  const transcriptTailer = new TranscriptTailer({
+    sessions: () => registry.list(),
+    session: (id) => registry.get(id),
+    record,
+    statePath: paths.transcriptTailState,
+    log,
+  });
+
+  /**
+   * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
+   * drains the session's transcript so the turn's model calls sit on the
+   * chain before the frame that closes it, and a `SubagentStop` feeds the
+   * subagent's transcript to the child chain before that chain is finalized.
+   */
+  async function tailBeforeHook(payload: unknown): Promise<void> {
+    if (payload === null || typeof payload !== "object") return;
+    const input = payload as Record<string, unknown>;
+    const sessionId = input["session_id"];
+    const hookName = input["hook_event_name"];
+    if (typeof sessionId !== "string") return;
+    try {
+      if (hookName === "SubagentStop") {
+        const agentId = input["agent_id"];
+        const path = input["agent_transcript_path"];
+        if (typeof agentId === "string" && typeof path === "string") {
+          const fed = await transcriptTailer.ingestSubagentTranscript(
+            sessionId,
+            agentId,
+            path,
+          );
+          if (fed === undefined)
+            log(`subagent transcript ${path} was not there to read`);
+        }
+      }
+      if (hookName === "Stop" || hookName === "SessionEnd")
+        await transcriptTailer.drain(sessionId);
+    } catch (error) {
+      // The hook must still be answered; a transcript that cannot be read
+      // is a gap in the record, not a reason to stall the agent.
+      log(
+        `transcript tail before ${String(hookName)} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
     if (
@@ -504,57 +580,6 @@ export async function startDaemon(
       // watching this log needs to tell one failure from the eight hundredth,
       // and needs to know the daemon is holding off rather than wedged.
       log(
-  // --- transcript tailer -------------------------------------------------
-  // The detector above only stats a transcript's mtime. The tailer reads it:
-  // every session that reported a `transcript_path` has its file tailed on
-  // the tick, and a subagent's finished transcript is fed once when its
-  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
-  const transcriptTailer = new TranscriptTailer({
-    sessions: () => registry.list(),
-    session: (id) => registry.get(id),
-    record,
-    statePath: paths.transcriptTailState,
-    log,
-  });
-
-  /**
-   * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
-   * drains the session's transcript so the turn's model calls sit on the
-   * chain before the frame that closes it, and a `SubagentStop` feeds the
-   * subagent's transcript to the child chain before that chain is finalized.
-   */
-  function tailBeforeHook(payload: unknown): void {
-    if (payload === null || typeof payload !== "object") return;
-    const input = payload as Record<string, unknown>;
-    const sessionId = input["session_id"];
-    const hookName = input["hook_event_name"];
-    if (typeof sessionId !== "string") return;
-    try {
-      if (hookName === "SubagentStop") {
-        const agentId = input["agent_id"];
-        const path = input["agent_transcript_path"];
-        if (typeof agentId === "string" && typeof path === "string") {
-          const fed = transcriptTailer.ingestSubagentTranscript(
-            sessionId,
-            agentId,
-            path,
-          );
-          if (fed === undefined)
-            log(`subagent transcript ${path} was not there to read`);
-        }
-      }
-      if (hookName === "Stop" || hookName === "SessionEnd")
-        transcriptTailer.drain(sessionId);
-    } catch (error) {
-      // The hook must still be answered; a transcript that cannot be read
-      // is a gap in the record, not a reason to stall the agent.
-      log(
-        `transcript tail before ${String(hookName)} failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-  // --- end transcript tailer ---------------------------------------------
-
         `command poll failed (${commandPollFailures} in a row, retrying in ${Math.round(retryInMs / 1000)}s): ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -596,6 +621,7 @@ export async function startDaemon(
   async function handleHookInner(
     envelope: HookEnvelope,
   ): Promise<Record<string, unknown>> {
+    await tailBeforeHook(envelope.payload); // transcript tailer
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},
@@ -614,7 +640,7 @@ export async function startDaemon(
       envelope.harness,
       envelope.agent,
     );
-    record(outcome.events);
+    record(outcome.events, outcome.bodies);
     return outcome.response;
   }
 
@@ -653,7 +679,6 @@ export async function startDaemon(
           gap_duration_ms: Math.max(0, now() - Date.parse(firstAt)),
           incident_kind: "telemetry_gap",
           incident_severity: 1,
-    tailBeforeHook(envelope.payload); // transcript tailer
         }),
       );
     }
@@ -1114,13 +1139,19 @@ export async function startDaemon(
 
   async function tick(): Promise<void> {
     if (stopped) return;
+    // The detector runs off the serial queue: its scan is asynchronous file
+    // I/O over every project directory, and a hook that arrived while it
+    // ran would otherwise wait on it. Its seals are synchronous once the scan
+    // returns, the same property the gateway relies on to record off-queue.
+    if (now() - lastDetect >= timers.detectorMs) {
+      lastDetect = now();
+      record(await detector.tick());
+    }
     await serial.run(async () => {
       const t = now();
       await drainSpool();
-      if (t - lastDetect >= timers.detectorMs) {
-        lastDetect = t;
-        record(detector.tick());
-      }
+      // transcript tailer: bounded per file per tick, asynchronous reads
+      await transcriptTailer.tick();
       if (t - lastSweep >= timers.sweepMs) {
         lastSweep = t;
         record(registry.sweep(isProcessAlive, timers.idleSessionMs));
@@ -1174,11 +1205,11 @@ export async function startDaemon(
     wal,
     shipper,
     detector,
+    transcriptTailer,
     hostRecorder,
     host: () => host,
     port,
     get modelProxyPort() {
-      transcriptTailer.tick(); // transcript tailer: bounded per file per tick
       return modelProxyListener.listening()
         ? modelProxyListener.port()
         : undefined;
@@ -1202,4 +1233,3 @@ export async function startDaemon(
     },
   };
 }
-    transcriptTailer,

@@ -20,8 +20,13 @@
  * Cursors are persisted next to the daemon state. Without that a restart
  * would re-read every open transcript from byte 0 and seal every message a
  * second time onto a chain that already holds it.
+ *
+ * Every file call goes through `fs.promises`. The daemon's tick runs on the
+ * same thread that answers hooks and `GET /health`, and a synchronous read
+ * of 4 MiB holds both; the detector's synchronous scan already showed what
+ * that costs (see detector.ts).
  */
-import { closeSync, openSync, readSync, statSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
@@ -91,9 +96,9 @@ interface FileStat {
   ino: number;
 }
 
-function statIfExists(path: string): FileStat | undefined {
+async function statIfExists(path: string): Promise<FileStat | undefined> {
   try {
-    const st = statSync(path);
+    const st = await fs.stat(path);
     return { size: st.size, ino: st.ino };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
@@ -102,14 +107,18 @@ function statIfExists(path: string): FileStat | undefined {
 }
 
 /** Read `length` bytes at `offset`, or fewer at end of file. */
-function readAt(path: string, offset: number, length: number): Buffer {
-  const fd = openSync(path, "r");
+async function readAt(
+  path: string,
+  offset: number,
+  length: number,
+): Promise<Buffer> {
+  const handle = await fs.open(path, "r");
   try {
     const buffer = Buffer.allocUnsafe(length);
-    const read = readSync(fd, buffer, 0, length, offset);
-    return buffer.subarray(0, read);
+    const { bytesRead } = await handle.read(buffer, 0, length, offset);
+    return buffer.subarray(0, bytesRead);
   } finally {
-    closeSync(fd);
+    await handle.close();
   }
 }
 
@@ -180,7 +189,7 @@ export class TranscriptTailer {
    * Advance every live cursor by at most the budget, and drop the cursors of
    * sessions that sealed and drained or left the registry.
    */
-  tick(): void {
+  async tick(): Promise<void> {
     const live = new Set<string>();
     for (const session of this.options.sessions()) {
       live.add(session.harnessSessionId);
@@ -193,12 +202,12 @@ export class TranscriptTailer {
       }
       if (session.sealed) {
         // One unbounded pass after the chain closed, then the cursor goes.
-        this.advance(session, cursor, Number.POSITIVE_INFINITY);
+        await this.advance(session, cursor, Number.POSITIVE_INFINITY);
         cursor.drained = true;
         this.dirty = true;
         continue;
       }
-      this.advance(session, cursor, this.budget);
+      await this.advance(session, cursor, this.budget);
     }
     for (const id of [...this.cursors.keys()]) {
       if (!live.has(id)) {
@@ -214,12 +223,12 @@ export class TranscriptTailer {
    * a `Stop` or `SessionEnd` hook is sealed so the turn's model calls sit on
    * the chain before the frame that closes the turn.
    */
-  drain(harnessSessionId: string): void {
+  async drain(harnessSessionId: string): Promise<void> {
     const session = this.options.session(harnessSessionId);
     if (session?.transcriptPath === undefined) return;
     const cursor = this.cursorFor(session, session.transcriptPath);
     if (cursor.drained) return;
-    this.advance(session, cursor, Number.POSITIVE_INFINITY);
+    await this.advance(session, cursor, Number.POSITIVE_INFINITY);
     this.persist();
   }
 
@@ -227,11 +236,11 @@ export class TranscriptTailer {
    * Feed a finished subagent transcript to the child chain, once. Returns
    * the number of lines fed, or undefined when the file is not there.
    */
-  ingestSubagentTranscript(
+  async ingestSubagentTranscript(
     harnessSessionId: string,
     subagentId: string,
     path: string,
-  ): number | undefined {
+  ): Promise<number | undefined> {
     const session = this.options.session(harnessSessionId);
     if (session === undefined) return undefined;
     const cursor = this.cursorFor(
@@ -239,14 +248,14 @@ export class TranscriptTailer {
       session.transcriptPath ?? this.cursors.get(harnessSessionId)?.path ?? "",
     );
     if (cursor.subagents.includes(subagentId)) return 0;
-    const st = statIfExists(path);
+    const st = await statIfExists(path);
     if (st === undefined) return undefined;
     if (st.size > MAX_SUBAGENT_TRANSCRIPT_BYTES) {
       this.options.log?.(
         `subagent transcript ${path} is ${st.size} bytes; reading the first ${MAX_SUBAGENT_TRANSCRIPT_BYTES}`,
       );
     }
-    const chunk = readAt(
+    const chunk = await readAt(
       path,
       0,
       Math.min(st.size, MAX_SUBAGENT_TRANSCRIPT_BYTES),
@@ -275,10 +284,14 @@ export class TranscriptTailer {
     this.options.record(events, session.recorder.takeBodies());
   }
 
-  private advance(session: TailedSession, cursor: Cursor, budget: number): void {
+  private async advance(
+    session: TailedSession,
+    cursor: Cursor,
+    budget: number,
+  ): Promise<void> {
     let st: FileStat | undefined;
     try {
-      st = statIfExists(cursor.path);
+      st = await statIfExists(cursor.path);
     } catch (error) {
       this.options.log?.(
         `transcript ${cursor.path} unreadable: ${error instanceof Error ? error.message : String(error)}`,
@@ -302,7 +315,7 @@ export class TranscriptTailer {
       const want = Math.min(remaining, st.size - cursor.offset, this.budget);
       let chunk: Buffer;
       try {
-        chunk = readAt(cursor.path, cursor.offset, want);
+        chunk = await readAt(cursor.path, cursor.offset, want);
       } catch (error) {
         this.options.log?.(
           `transcript ${cursor.path} read failed at ${cursor.offset}: ${error instanceof Error ? error.message : String(error)}`,
@@ -319,7 +332,11 @@ export class TranscriptTailer {
         // in it is a line the budget cannot hold.
         if (chunk.length < this.budget) return;
         // Find the end of the line so the cursor can move past it.
-        const skipTo = this.findLineEnd(cursor.path, cursor.offset, st.size);
+        const skipTo = await this.findLineEnd(
+          cursor.path,
+          cursor.offset,
+          st.size,
+        );
         if (skipTo === undefined) return;
         this.options.log?.(
           `transcript ${cursor.path}: skipped a ${skipTo - cursor.offset} byte line at ${cursor.offset}`,
@@ -345,14 +362,14 @@ export class TranscriptTailer {
    * this long is rare, and a cursor that cannot get past it would otherwise
    * stall for the rest of the session.
    */
-  private findLineEnd(
+  private async findLineEnd(
     path: string,
     from: number,
     size: number,
-  ): number | undefined {
+  ): Promise<number | undefined> {
     let at = from;
     while (at < size) {
-      const chunk = readAt(path, at, Math.min(this.budget, size - at));
+      const chunk = await readAt(path, at, Math.min(this.budget, size - at));
       if (chunk.length === 0) return undefined;
       const nl = chunk.indexOf(0x0a);
       if (nl >= 0) return at + nl + 1;
