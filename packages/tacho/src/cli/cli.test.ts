@@ -35,6 +35,7 @@ import { minimalSession } from "../test-helpers";
 import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
+import { CURSOR_HOOK_EVENTS } from "../claude-code/cursor-adapter";
 import {
   readStellaHooksFile,
   renderStellaTomlBlock,
@@ -1396,8 +1397,9 @@ describe("harnesses and reassign", () => {
     // One line naming the choices, not a ZodError's JSON issues array: both
     // CLIs print the message verbatim.
     expect(parseHarnesses("stella,codex")).toEqual(["stella", "codex"]);
-    expect(() => parseHarnesses("cursor")).toThrow(
-      'unknown harness "cursor"; expected one of claude-code, codex, stella',
+    expect(parseHarnesses("cursor")).toEqual(["cursor"]);
+    expect(() => parseHarnesses("windsurf")).toThrow(
+      'unknown harness "windsurf"; expected one of claude-code, codex, cursor, stella, claude-desktop',
     );
     expect(() => parseHarnesses("claude_code")).toThrow(
       /unknown harness "claude_code"/,
@@ -2119,12 +2121,14 @@ describe("export and verify", () => {
     ).toEqual([
       ["claude-code", true, false],
       ["codex", true, false],
+      ["cursor", true, false],
       ["stella", true, false],
       // The connected tier (ADR-078): a GUI app, detected on disk rather
       // than on PATH, and reported with its tier so no surface has to guess.
       ["claude-desktop", true, false],
     ]);
     expect(fresh.harnesses.map((h) => h.tier)).toEqual([
+      "harness",
       "harness",
       "harness",
       "harness",
@@ -2153,6 +2157,14 @@ describe("export and verify", () => {
       harnesses: [
         { harness: "claude-code", installed: true, enrolled: true },
         { harness: "codex", installed: false, enrolled: false },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: true,
+          path: "/usr/local/bin/agent",
+          version: "2026.09.10",
+          enrolled: false,
+        },
         {
           harness: "stella",
           label: "Stella",
@@ -2482,7 +2494,7 @@ describe("stella", () => {
     expect(d.lines.join("\n")).toContain(
       "Stella      complete: 8 present, 0 missing",
     );
-    expect(detect({ json: true }, d).harnesses[2]).toEqual({
+    expect(detect({ json: true }, d).harnesses[3]).toEqual({
       harness: "stella",
       label: "Stella",
       installed: true,
@@ -2744,5 +2756,111 @@ describe("stella", () => {
     expect((await verify({ harness: "stella" }, noStella)).detail).toBe(
       "`stella` is not on PATH",
     );
+  });
+});
+
+/**
+ * Cursor end to end through the CLI. The shape of `hooks.json`, the fail-open
+ * default and the `~/.cursor` path were verified 2026-09-18 against
+ * https://cursor.com/docs/agent/hooks (fetched that day).
+ */
+describe("cursor", () => {
+  const WHERE = {
+    token: "tok",
+    org: "acme",
+    workspace: "core",
+    apiUrl: "https://api.test",
+  };
+
+  it("writes hooks, reports them, and unenroll takes them back out", async () => {
+    const d = deps({ claude: () => ({}) });
+    // scratchPaths sets CURSOR_CONFIG_DIR, so two files are written: nothing
+    // documents whether the hooks loader follows that variable, and betting
+    // on one would leave a machine reported as covered whose hooks nothing
+    // runs.
+    expect(d.paths.cursorHooks).toHaveLength(2);
+    const foreign = {
+      version: 1,
+      hooks: {
+        preToolUse: [{ type: "command", command: "/usr/local/bin/audit.sh" }],
+      },
+    };
+    const [primary, fallback] = d.paths.cursorHooks as [string, string];
+    writeSensitiveFileAtomic(primary, JSON.stringify(foreign), 0o644);
+
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).not.toContain("claude");
+    expect(result.warnings.join("\n")).toContain("written to both");
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      harnesses: ["cursor"],
+      cursor_version: "2026.09.10",
+      cursor_execpath: "/usr/local/bin/agent",
+    });
+
+    for (const path of [primary, fallback]) {
+      const document = JSON.parse(readFileSync(path, "utf8")) as {
+        version: number;
+        hooks: Record<string, Array<Record<string, unknown>>>;
+      };
+      expect(document.version).toBe(1);
+      expect(Object.keys(document.hooks).sort()).toEqual(
+        [...CURSOR_HOOK_EVENTS].sort(),
+      );
+      // The veto points fail closed: Cursor proceeds by default when a hook
+      // crashes or times out, so without this a dead collector means allow.
+      expect(document.hooks["preToolUse"]?.at(-1)).toMatchObject({
+        command: `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+        failClosed: true,
+      });
+      expect(document.hooks["beforeSubmitPrompt"]?.[0]).toMatchObject({
+        failClosed: true,
+      });
+      expect(document.hooks["postToolUse"]?.[0]).toMatchObject({
+        failClosed: false,
+      });
+    }
+    // The operator's own hook is still there, ahead of ours.
+    const merged = JSON.parse(readFileSync(primary, "utf8")) as {
+      hooks: Record<string, Array<Record<string, unknown>>>;
+    };
+    expect(merged.hooks["preToolUse"]?.[0]).toEqual({
+      type: "command",
+      command: "/usr/local/bin/audit.sh",
+    });
+    expect(d.lines.join("\n")).toContain(`Cursor: ${primary}`);
+    expect(d.lines.join("\n")).toContain("agent 2026.09.10 at /usr/local/bin/agent");
+
+    const report = await status({ json: true }, d);
+    expect(report.host?.cursor_version).toBe("2026.09.10");
+    expect(report.cursorHooks).toHaveLength(2);
+    expect(report.cursorHooks?.[0]).toMatchObject({
+      path: primary,
+      complete: true,
+      missing: [],
+      failOpenEnforcement: [],
+    });
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines.join("\n")).toContain("Cursor      complete: 10 present");
+
+    await unenroll({ token: "tok" }, d);
+    // Ours is gone; the operator's survives, and the file we created for the
+    // fallback path no longer carries an enrollment.
+    expect(JSON.parse(readFileSync(primary, "utf8"))).toEqual(foreign);
+    expect(readFileSync(fallback, "utf8")).not.toContain("--enrollment");
+    expect(d.lines.join("\n")).toContain(`removed from ${primary} too`);
+  });
+
+  it("refuses to enroll with a relative path in the hook command", async () => {
+    // Cursor runs a user hook from ~/.cursor/, so a relative command would
+    // never be found and every tool call would fail to spawn it.
+    const d = deps({ claude: () => ({}) });
+    d.runtime = { ...d.runtime, hookCommand: "node bin/tacho-hook.mjs" };
+    const result = await enroll({ ...WHERE, harnesses: ["cursor"] }, d);
+    expect(result.ok).toBe(false);
+    expect(d.errors.join("\n")).toContain("relative path");
+    // Nothing was written, so a refusal leaves the machine as it was.
+    expect(existsSync(d.paths.cursorHooks[0] as string)).toBe(false);
   });
 });

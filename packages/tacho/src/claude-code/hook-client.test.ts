@@ -130,7 +130,8 @@ describe("runTachoHook", () => {
       "codex",
     );
     expect(harnessFromArgv(["--harness", "claude-code"])).toBe("claude-code");
-    expect(harnessFromArgv(["--harness", "cursor"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness", "cursor"])).toBe("cursor");
+    expect(harnessFromArgv(["--harness", "not-a-harness"])).toBe("claude-code");
     expect(harnessFromArgv(["--harness"])).toBe("claude-code");
     expect(harnessFromArgv([])).toBe("claude-code");
   });
@@ -582,8 +583,102 @@ describe("runTachoHook for Stella and custom agents", () => {
         exitCode: 0,
       });
       expect(refused.stderr).toBe(
-        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, cursor, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
       );
     }
+  });
+});
+
+/**
+ * Cursor end to end through the hook process: Cursor's payload in, the
+ * daemon's Claude Code answer back, Cursor's flat permission object out.
+ * The shapes are Cursor's documented ones (verified 2026-09-18 against
+ * https://cursor.com/docs/agent/hooks, fetched that day).
+ */
+describe("runTachoHook for Cursor", () => {
+  const CURSOR_PRE = JSON.stringify({
+    conversation_id: "conv_01J8",
+    generation_id: "gen_04",
+    hook_event_name: "preToolUse",
+    cursor_version: "2026.9.10",
+    workspace_roots: ["/repo"],
+    user_email: "someone@example.com",
+    tool_name: "Shell",
+    tool_input: { command: "git push" },
+    tool_use_id: "toolu_77",
+    cwd: "/repo",
+  });
+
+  it("translates the payload for the daemon and the answer back for Cursor", async () => {
+    const paths = enrolledPaths();
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const denied = await runTachoHook({
+      paths,
+      env: { HOME: "/h" },
+      harness: "cursor",
+      platform: "linux",
+      stdin: CURSOR_PRE,
+      post: async (options) => {
+        seen.push(options);
+        return {
+          status: 200,
+          body: '{"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"no push"}}',
+        };
+      },
+    });
+    expect(denied).toMatchObject({ path: "daemon", exitCode: 0 });
+    expect(JSON.parse(denied.stdout)).toEqual({
+      permission: "deny",
+      user_message: "no push",
+      agent_message: "no push",
+    });
+    const body = JSON.parse(seen[0]?.body ?? "{}") as {
+      payload: Record<string, unknown>;
+      harness: string;
+    };
+    expect(body.harness).toBe("cursor");
+    expect(body.payload).toMatchObject({
+      // Cursor issues both ids, so nothing is synthesized from a pid or a
+      // digest of the call the way Stella's are.
+      session_id: "conv_01J8",
+      hook_event_name: "PreToolUse",
+      tool_use_id: "toolu_77",
+      tool_name: "Shell",
+    });
+    // The address Cursor sends on every hook never reaches the daemon.
+    expect(seen[0]?.body).not.toContain("someone@example.com");
+    expect(seen[0]?.responseTimeoutMs).toBe(10_000);
+  });
+
+  it("denies from the cached bundle when the daemon is down", async () => {
+    // Cursor fails open on its own, which is why the hook is registered
+    // failClosed. What it answers when the daemon cannot be reached still
+    // has to be a refusal, not an empty document.
+    const paths = enrolledPaths();
+    const local = await runTachoHook({
+      paths,
+      env: {},
+      harness: "cursor",
+      platform: "linux",
+      stdin: CURSOR_PRE,
+      post: async () => {
+        throw new Error("no daemon");
+      },
+    });
+    expect(local.path).toBe("local");
+    expect(JSON.parse(local.stdout)["permission"]).toBe("deny");
+  });
+
+  it("refuses a payload that is not a Cursor hook", async () => {
+    const result = await runTachoHook({
+      paths: enrolledPaths(),
+      env: {},
+      harness: "cursor",
+      platform: "linux",
+      stdin: '{"hook_event_name":"preToolUse"}',
+      post: async () => ({ status: 200, body: "{}" }),
+    });
+    expect(result.path).toBe("invalid");
+    expect(result.stderr).toBe("tacho-hook: payload is not a Cursor hook\n");
   });
 });

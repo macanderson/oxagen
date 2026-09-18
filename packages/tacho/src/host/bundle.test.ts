@@ -452,3 +452,68 @@ describe("PreToolUse evaluation", () => {
     ).toBe("deny");
   });
 });
+
+/**
+ * A mandate is written once and enforced on every harness. Cursor spells the
+ * shell tool `Shell` where Claude Code spells it `Bash` (verified 2026-09-18
+ * against https://cursor.com/docs/agent/hooks, fetched that day), and a rule
+ * that did not reach across the two spellings would not apply to Cursor at
+ * all while the record still said allow.
+ */
+describe("a rule written for Bash reaches Cursor's Shell", () => {
+  const signer = bundleSigner();
+  const bundle = signer.sign(unsignedBundle());
+  const base = {
+    bundle,
+    bundleVerified: true,
+    hostStatus: "active" as const,
+    latestDenyGeneration: { org: 1, workspace: 1 },
+    controlReachable: true,
+    now: NOW,
+    context: { cwd: "/repo" },
+  };
+
+  it("denies a Shell push under the bundle's Bash(git push*) rule", () => {
+    const denied = evaluatePreToolUse({
+      ...base,
+      toolName: "Shell",
+      toolInput: { command: "git push origin main" },
+    });
+    expect(denied.decision).toBe("deny");
+    expect(denied.rule).toBe("Bash(git push*)");
+    // And the same call under Claude Code's spelling, unchanged.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Bash",
+        toolInput: { command: "git push origin main" },
+      }).decision,
+    ).toBe("deny");
+  });
+
+  it("asks for a Shell rm under the bundle's Bash(rm *) rule", () => {
+    // Cursor does not enforce an ask at preToolUse, so the adapter degrades
+    // it to a deny. The evaluation still has to reach the rule, or there
+    // would be nothing to degrade.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Shell",
+        toolInput: { command: "rm -rf /repo" },
+      }).decision,
+    ).toBe("ask");
+  });
+
+  it("takes the declared tool facts from the Bash entry", () => {
+    // `bundle.tools` is keyed by Claude Code's names, so a Shell call would
+    // otherwise be graded from the classifier's default rather than from the
+    // grade the workspace set for its shell.
+    expect(
+      evaluatePreToolUse({
+        ...base,
+        toolName: "Shell",
+        toolInput: { command: "git status" },
+      }),
+    ).toMatchObject({ risk_grade: "high", read_only: false });
+  });
+});

@@ -115,6 +115,7 @@ describe("computeAgentRows: not wrapped", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
     ]);
@@ -122,6 +123,7 @@ describe("computeAgentRows: not wrapped", () => {
     // Every row carries its tier even when nothing is covered, so no surface
     // has to infer one (ADR-078).
     expect(rows.map((r) => r.tier)).toEqual([
+      "harness",
       "harness",
       "harness",
       "harness",
@@ -357,6 +359,7 @@ describe("computeAgentRows: custom agents", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
       "my-script",
@@ -420,6 +423,7 @@ describe("computeAgentRows: custom agents", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
       "custom:codex",

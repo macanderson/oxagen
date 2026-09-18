@@ -211,3 +211,69 @@ describe("git effect classification", () => {
     expect(classifyShellEffect("git")).toBeUndefined();
   });
 });
+
+/**
+ * Cursor's tool vocabulary (verified 2026-09-18 against
+ * https://cursor.com/docs/agent/hooks, fetched that day): `Shell`, `Read`,
+ * `Write`, `Grep`, `Delete`, `Task`, and `MCP:<tool_name>`. The adapter does
+ * not rewrite these, because a record that renamed the tool would no longer
+ * say what the harness reported, so the classification has to read them.
+ */
+describe("Cursor's tool names classify", () => {
+  it("reads Shell the way it reads Bash, down to the git effect", () => {
+    expect(classifyTool("Shell", { command: "git push origin main" })).toEqual({
+      tool_source: "builtin",
+      effect_kind: "git_push",
+      tool_is_mutating: true,
+      tool_target: "git push origin main",
+    });
+    expect(
+      classifyTool("Shell", { command: 'git commit -m "fix: a; b"' })
+        .effect_kind,
+    ).toBe("git_commit");
+    expect(classifyTool("Shell", { command: "ls -la" }).effect_kind).toBe(
+      "command",
+    );
+  });
+
+  it("classifies MCP:<tool> without inventing a server name", () => {
+    // Cursor names no server, so the record carries the tool alone rather
+    // than a server no harness reported.
+    expect(classifyTool("MCP:create_pull_request", {})).toEqual({
+      tool_source: "mcp",
+      mcp_tool_name: "create_pull_request",
+      effect_kind: "pr_open",
+      tool_is_mutating: true,
+    });
+    expect(classifyTool("MCP:list_issues", {}).tool_is_mutating).toBe(false);
+    // Claude Code's fully qualified form still carries its server.
+    expect(classifyTool("mcp__github__list_issues", {}).mcp_server_name).toBe(
+      "github",
+    );
+  });
+
+  it("names Delete as a delete, which Claude Code has no tool for", () => {
+    expect(classifyTool("Delete", { file_path: "/repo/gone.ts" })).toEqual({
+      tool_source: "builtin",
+      effect_kind: "file_delete",
+      tool_is_mutating: true,
+      tool_target: "/repo/gone.ts",
+    });
+  });
+
+  it("shares the rest of the vocabulary with Claude Code", () => {
+    expect(classifyTool("Read", { file_path: "/a.ts" }).effect_kind).toBe(
+      "file_read",
+    );
+    expect(classifyTool("Grep", { pattern: "todo" }).effect_kind).toBe(
+      "file_read",
+    );
+    // Cursor's Write covers both of Claude Code's Write and Edit.
+    expect(classifyTool("Write", { file_path: "/a.ts" }).effect_kind).toBe(
+      "file_write",
+    );
+    expect(classifyTool("Task", { description: "review" }).effect_kind).toBe(
+      "subagent",
+    );
+  });
+});

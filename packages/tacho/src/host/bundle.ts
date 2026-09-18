@@ -137,8 +137,29 @@ function pathMatches(
   );
 }
 
+/**
+ * Tool names that are the same tool under two harnesses' spellings. A
+ * mandate is written once and enforced on every harness, so a rule spelled
+ * `Bash(git push*)` has to reach Cursor's `Shell` (verified 2026-09-18
+ * against https://cursor.com/docs/agent/hooks, fetched that day); otherwise
+ * the rule quietly does not apply there and the record says allow.
+ *
+ * Only exact synonyms are listed. Cursor's `Write` covers both of Claude
+ * Code's `Write` and `Edit`, which is not a synonym: aliasing `Edit` to it
+ * would widen every `Edit(...)` allow rule over file creation too. A rule
+ * meant to reach Cursor's edits is written `Write(...)`, and `Glob` has no
+ * Cursor tool at all.
+ */
+const TOOL_SYNONYMS: Record<string, string> = { Bash: "Shell", Shell: "Bash" };
+
+/** True for a shell tool under either spelling. */
+function isShellTool(toolName: string): boolean {
+  return toolName === "Bash" || toolName === "Shell";
+}
+
 function toolNameMatches(ruleTool: string, toolName: string): boolean {
   if (ruleTool === toolName) return true;
+  if (TOOL_SYNONYMS[ruleTool] === toolName) return true;
   if (ruleTool.includes("*")) return globToRegex(ruleTool).test(toolName);
   // `mcp__server` matches every tool of that server.
   return (
@@ -165,7 +186,7 @@ export function ruleMatches(
   const input = toolInput ?? {};
   const text = (key: string): string | undefined =>
     typeof input[key] === "string" ? (input[key] as string) : undefined;
-  if (toolName === "Bash") {
+  if (isShellTool(toolName)) {
     const command = text("command");
     return command !== undefined && commandMatches(rule.spec, command);
   }
@@ -303,7 +324,11 @@ function firstMatch(
  */
 export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   const { bundle, toolName, toolInput } = input;
-  const declared = bundle.tools[toolName];
+  const declared =
+    bundle.tools[toolName] ??
+    (TOOL_SYNONYMS[toolName] !== undefined
+      ? bundle.tools[TOOL_SYNONYMS[toolName] as string]
+      : undefined);
   const classified = classifyTool(toolName, toolInput);
   const readOnly = declared?.read_only ?? !classified.tool_is_mutating;
   const riskGrade =

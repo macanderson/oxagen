@@ -34,8 +34,10 @@
  * relative path". Oxagen writes user-scope hooks, so the command must be an
  * absolute path: a relative one would resolve against Cursor's own config
  * directory. `runtimeCommands()` already produces absolute, shell-quoted
- * paths, and `absoluteHookCommandProblem` refuses anything else rather than
- * letting enroll write a file that would fail to spawn on every tool call.
+ * paths, and `absoluteHookCommandProblem` refuses a relative one rather
+ * than letting enroll write a file that would fail to spawn on every tool
+ * call. A bare program name is left alone: that is a PATH lookup, which does
+ * not depend on the working directory.
  *
  * Enterprise, team and project `hooks.json` files sit above the user one, and
  * Cursor runs all matching hooks from every source and merges the answers:
@@ -125,21 +127,33 @@ export function cursorHooksShapeProblem(
 }
 
 /**
- * A `command` that is not an absolute path (optionally shell-quoted, and for
- * the bundled layout followed by an interpreter argument that is itself an
- * absolute path) would resolve against `~/.cursor/`, where nothing of
- * Oxagen's lives. The message names the command so the operator can see what
- * was refused.
+ * Why this hook command would not resolve from Cursor's user-hook working
+ * directory, or undefined when it will.
+ *
+ * Cursor runs a user hook from `~/.cursor/`, so a token that is a relative
+ * path (`./hooks/tacho.sh`, `bin/tacho.mjs`) is looked for under Cursor's own
+ * config directory, where nothing of Oxagen's lives. An absolute path is
+ * fine, and so is a bare program name with no separator in it: that is a PATH
+ * lookup, and PATH does not depend on the working directory. So this refuses
+ * exactly the broken case and nothing else, and names the token so an
+ * operator can see what was refused.
  */
 export function absoluteHookCommandProblem(
   hookCommand: string,
 ): string | undefined {
-  const first = /^'([^']*)'|^"([^"]*)"|^(\S+)/.exec(hookCommand);
-  const program = first?.[1] ?? first?.[2] ?? first?.[3] ?? "";
-  const absolute = program.startsWith("/") || /^[A-Za-z]:[\\/]/.test(program);
-  return absolute
-    ? undefined
-    : `the hook command ${JSON.stringify(hookCommand)} is not an absolute path, and Cursor runs user hooks from ~/.cursor/, so a relative command would not be found`;
+  for (const raw of hookCommand.match(/'[^']*'|"[^"]*"|\S+/g) ?? []) {
+    const token = raw.replace(/^'(.*)'$/, "$1").replace(/^"(.*)"$/, "$1");
+    if (token.startsWith("-")) continue;
+    const separated = token.includes("/") || token.includes("\\");
+    if (!separated) continue;
+    const absolute =
+      token.startsWith("/") ||
+      token.startsWith("\\\\") ||
+      /^[A-Za-z]:[\\/]/.test(token);
+    if (!absolute)
+      return `the hook command ${JSON.stringify(hookCommand)} contains the relative path ${JSON.stringify(token)}, and Cursor runs user hooks from ~/.cursor/, so it would not be found`;
+  }
+  return undefined;
 }
 
 function timeoutFor(event: CursorHookEventName): number {

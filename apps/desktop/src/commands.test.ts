@@ -303,6 +303,7 @@ describe("wizard and de-register", () => {
     expect(HARNESSES).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
     ]);

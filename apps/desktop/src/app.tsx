@@ -79,10 +79,15 @@ import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
 const DESKTOP_GUIDE_URL = "https://docs.oxagen.sh/docs/cli/desktop";
 
-/** Claude Code and Codex are npm packages; Stella installs from a script. */
+/**
+ * Claude Code and Codex are npm packages; Stella and Cursor install from a
+ * script. Cursor's is verified 2026-09-18 against
+ * https://cursor.com/docs/cli/installation (fetched that day).
+ */
 const INSTALL_HINT: Record<Harness, string> = {
   "claude-code": "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
+  cursor: "curl https://cursor.com/install -fsS | bash",
   stella:
     "curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh",
   // A connected app is downloaded, not installed from a terminal. Sending a
