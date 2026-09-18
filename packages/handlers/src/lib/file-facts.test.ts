@@ -1,30 +1,39 @@
 import { describe, expect, it } from "vitest";
 import {
   languageOf,
+  observedChangesOf,
   repoRelativePathOf,
   worktreeRootOf,
 } from "./file-facts";
 
 describe("worktreeRootOf", () => {
-  it("prefers the worktree over the project directory", () => {
-    expect(
-      worktreeRootOf([
-        { project_dir: "/repo/packages/tacho", worktree_path: "/repo" },
-      ]),
-    ).toBe("/repo");
+  it("reads the worktree a batch names", () => {
+    expect(worktreeRootOf([{ worktree_path: "/repo" }])).toBe("/repo");
   });
 
-  it("takes a worktree from a later event over an earlier project dir", () => {
-    expect(
-      worktreeRootOf([
-        { project_dir: "/repo/packages/tacho" },
-        { worktree_path: "/repo" },
-      ]),
-    ).toBe("/repo");
+  it("takes the worktree from a later event when the first names none", () => {
+    expect(worktreeRootOf([{}, { worktree_path: "/repo" }])).toBe("/repo");
   });
 
-  it("falls back to the project directory when no worktree is reported", () => {
-    expect(worktreeRootOf([{ project_dir: "/repo" }, undefined])).toBe("/repo");
+  it("names no root from a project directory alone", () => {
+    // `project_dir` is where the agent was pointed, which in a monorepo is a
+    // package. Stripping it would leave every package's `src/x.ts` looking
+    // like the same file, so the field stays null instead.
+    const contexts = [{ project_dir: "/repo/packages/tacho" }, undefined];
+    expect(worktreeRootOf(contexts)).toBeUndefined();
+    expect(
+      repoRelativePathOf("/repo/packages/tacho/src/x.ts", undefined),
+    ).toBeUndefined();
+  });
+
+  it("keeps two same-named files in different packages distinct", () => {
+    const root = worktreeRootOf([{ worktree_path: "/repo" }]);
+    expect(repoRelativePathOf("/repo/packages/a/src/x.ts", root)).toBe(
+      "packages/a/src/x.ts",
+    );
+    expect(repoRelativePathOf("/repo/packages/b/src/x.ts", root)).toBe(
+      "packages/b/src/x.ts",
+    );
   });
 
   it("strips trailing separators", () => {
@@ -72,6 +81,46 @@ describe("repoRelativePathOf", () => {
   it("returns undefined for an empty path", () => {
     expect(repoRelativePathOf("", "/repo")).toBeUndefined();
   });
+
+  it("strips a Windows root off a Windows path", () => {
+    expect(
+      repoRelativePathOf("C:\\repo\\src\\a.ts", "C:\\repo"),
+    ).toBe("src/a.ts");
+  });
+
+  it("matches a Windows root whatever case the drive letter carries", () => {
+    expect(repoRelativePathOf("c:\\repo\\src\\a.ts", "C:/repo")).toBe(
+      "src/a.ts",
+    );
+  });
+
+  it("strips a UNC share root", () => {
+    expect(
+      repoRelativePathOf(
+        "\\\\server\\share\\src\\a.ts",
+        "\\\\server\\share",
+      ),
+    ).toBe("src/a.ts");
+  });
+
+  it("refuses a Windows path with no known root", () => {
+    // The whole point of the column is to read the same on every host, and a
+    // drive letter is the opposite of that.
+    expect(
+      repoRelativePathOf("C:\\repo\\src\\a.ts", undefined),
+    ).toBeUndefined();
+  });
+
+  it("refuses a Windows path outside the root", () => {
+    expect(
+      repoRelativePathOf("D:\\other\\src\\a.ts", "C:\\repo"),
+    ).toBeUndefined();
+  });
+
+  it("returns an already relative Windows path unchanged", () => {
+    // Nothing to strip, so it is returned as it arrived.
+    expect(repoRelativePathOf("src\\a.ts", undefined)).toBe("src\\a.ts");
+  });
 });
 
 describe("languageOf", () => {
@@ -104,5 +153,44 @@ describe("languageOf", () => {
 
   it("returns undefined for a path ending in a separator", () => {
     expect(languageOf("/repo/src/")).toBeUndefined();
+  });
+});
+
+describe("observedChangesOf", () => {
+  const change = {
+    path: "/repo/src/a.ts",
+    repo_relative_path: "src/a.ts",
+    status: "modified",
+    lines_added: 4,
+    lines_removed: 1,
+  };
+
+  it("reads the list a reconciliation frame carries", () => {
+    expect(observedChangesOf({ observed_changes: [change] })).toEqual([change]);
+  });
+
+  it("reads nothing from a body that carries no list", () => {
+    expect(observedChangesOf({})).toEqual([]);
+    expect(observedChangesOf(undefined)).toEqual([]);
+    expect(observedChangesOf({ observed_changes: "all of them" })).toEqual([]);
+  });
+
+  it("skips a row of the wrong shape rather than half-writing it", () => {
+    const rows = observedChangesOf({
+      observed_changes: [
+        { ...change, lines_added: "four" },
+        { ...change, path: "" },
+        change,
+      ],
+    });
+    expect(rows).toEqual([change]);
+  });
+
+  it("keeps a row whose repo-relative path is missing", () => {
+    const rows = observedChangesOf({
+      observed_changes: [{ ...change, repo_relative_path: undefined }],
+    });
+    expect(rows[0]?.repo_relative_path).toBe("");
+    expect(rows[0]?.path).toBe("/repo/src/a.ts");
   });
 });

@@ -60,7 +60,9 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import {
   languageOf,
+  observedChangesOf,
   repoRelativePathOf,
+  WORKTREE_RECONCILED_KIND,
   worktreeRootOf,
 } from "./lib/file-facts";
 import { unlockOnboardingGate } from "./lib/onboarding";
@@ -1786,8 +1788,25 @@ async function rollupFiles(
       first: number;
       last: number;
       bytes: number;
+      /** What the last reconciliation in this batch observed, if any. */
+      observed?: {
+        status: string;
+        linesAdded: number;
+        linesRemoved: number;
+        repoRelativePath?: string;
+      };
     }
   >();
+  const entryFor = (path: string, seq: number) =>
+    byPath.get(path) ?? {
+      reads: 0,
+      writes: 0,
+      edits: 0,
+      deletes: 0,
+      first: seq,
+      last: seq,
+      bytes: 0,
+    };
   for (const event of events) {
     if (event.kind !== "tool_call" && event.kind !== "file_io") continue;
     if (event.kind === "tool_call" && event.source !== "hook") continue;
@@ -1796,15 +1815,7 @@ async function rollupFiles(
     const target = str(body["tool_target"]);
     if (!target || !kind || !kind.startsWith("file_")) continue;
     if (event.kind === "tool_call" && kind !== "file_read") continue;
-    const entry = byPath.get(target) ?? {
-      reads: 0,
-      writes: 0,
-      edits: 0,
-      deletes: 0,
-      first: event.seq,
-      last: event.seq,
-      bytes: 0,
-    };
+    const entry = entryFor(target, event.seq);
     if (kind === "file_read") entry.reads += 1;
     else if (kind === "file_write") {
       entry.writes += 1;
@@ -1815,6 +1826,28 @@ async function rollupFiles(
     entry.last = Math.max(entry.last, event.seq);
     byPath.set(target, entry);
   }
+  // The observed pass, second so that a path both announced and seen lands
+  // on one row. A reconciliation frame reports the whole worktree as git
+  // holds it, so a path it names may have no attested frame at all: that is
+  // the point of reading it, since a `sed -i`, a formatter or a build
+  // changes files no tool announced.
+  for (const event of events) {
+    if (event.kind !== WORKTREE_RECONCILED_KIND) continue;
+    for (const change of observedChangesOf(event.body)) {
+      const entry = entryFor(change.path, event.seq);
+      entry.observed = {
+        status: change.status,
+        linesAdded: change.lines_added,
+        linesRemoved: change.lines_removed,
+        ...(change.repo_relative_path.length > 0
+          ? { repoRelativePath: change.repo_relative_path }
+          : {}),
+      };
+      entry.first = Math.min(entry.first, event.seq);
+      entry.last = Math.max(entry.last, event.seq);
+      byPath.set(change.path, entry);
+    }
+  }
   for (const [path, entry] of byPath) {
     await tx
       .insert(schema.tachoSessionFiles)
@@ -1823,13 +1856,22 @@ async function rollupFiles(
         workspaceId: ctx.workspaceId,
         sessionId,
         path,
-        repoRelativePath: repoRelativePathOf(path, root),
+        // The observed frame carries the repository it read the path in, so
+        // it is preferred over deriving one from the batch's worktree
+        // context: git answered the question the derivation guesses at.
+        repoRelativePath:
+          entry.observed?.repoRelativePath ?? repoRelativePathOf(path, root),
         language: languageOf(path),
         reads: entry.reads,
         writes: entry.writes,
         edits: entry.edits,
         deletes: entry.deletes,
         bytesWritten: entry.bytes,
+        // Zero for a row with no observation, which is the column's default
+        // and stays honest: nobody looked.
+        linesAdded: entry.observed?.linesAdded ?? 0,
+        linesRemoved: entry.observed?.linesRemoved ?? 0,
+        observedStatus: entry.observed?.status,
         firstSeq: entry.first,
         lastSeq: entry.last,
         createdAt: now,
@@ -1850,9 +1892,38 @@ async function rollupFiles(
           // worktree context, and a path that was once placed in its
           // repository does not stop being there because the next frame
           // arrived without the fact.
-          repoRelativePath: sql`COALESCE(${schema.tachoSessionFiles.repoRelativePath}, ${repoRelativePathOf(path, root) ?? null})`,
+          repoRelativePath: sql`COALESCE(${entry.observed?.repoRelativePath ?? null}, ${schema.tachoSessionFiles.repoRelativePath}, ${repoRelativePathOf(path, root) ?? null})`,
           language: sql`COALESCE(${schema.tachoSessionFiles.language}, ${languageOf(path) ?? null})`,
           lastSeq: sql`GREATEST(${schema.tachoSessionFiles.lastSeq}, ${entry.last})`,
+          // The two line counts do NOT accumulate, alone on this row among
+          // columns that all do. Every other column here counts events, and
+          // two batches carrying two tool calls are two tool calls. These
+          // two are a measurement, not a count: each reconciliation reports
+          // the whole difference between the worktree and HEAD, so the same
+          // unchanged file observed on three turns would add up to three
+          // times the lines it holds.
+          //
+          // GREATEST rather than a plain set, because the measure resets.
+          // A commit moves HEAD, and the lines the agent wrote are then in
+          // HEAD rather than in the diff, so the next observation of that
+          // path is honestly zero. Assigning it would erase work the record
+          // already watched happen. GREATEST keeps the largest single
+          // observation, which is a number one reconciliation actually
+          // made, and it never doubles a repeated one.
+          //
+          // Left alone when this batch carried no observation of the path,
+          // so an attested frame arriving later does not zero a count that
+          // git supplied.
+          ...(entry.observed === undefined
+            ? {}
+            : {
+                linesAdded: sql`GREATEST(${schema.tachoSessionFiles.linesAdded}, ${entry.observed.linesAdded})`,
+                linesRemoved: sql`GREATEST(${schema.tachoSessionFiles.linesRemoved}, ${entry.observed.linesRemoved})`,
+                // Assigned, not kept: the latest observation is the current
+                // condition of the path, and a file created and then deleted
+                // is deleted.
+                observedStatus: entry.observed.status,
+              }),
           updatedAt: now,
         },
       });
