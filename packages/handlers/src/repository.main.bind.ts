@@ -306,11 +306,21 @@ export function createMainRepositoryBindHandler(
         // repository and the guarantee is gone, silently, with no error on
         // either path.
         //
-        // Re-validating here puts the decision and the write in one
-        // transaction: a plane that moved raises, the transaction rolls back,
-        // and nothing is claimed. It is a read of `org.data_planes` on the
-        // shared plane, so it costs one round trip and cannot itself be
-        // affected by the move it is detecting.
+        // Re-validating here narrows the window: a plane that moved raises,
+        // the transaction rolls back, and nothing is claimed. It is a read of
+        // `org.data_planes` on the shared plane, so it costs one round trip
+        // and cannot itself be affected by the move it is detecting.
+        //
+        // It does NOT close the window, and the difference matters to anyone
+        // reasoning about this code. `loadDataPlaneBinding` opens its own
+        // `withSystemDb` transaction, so this read is not atomic with the
+        // surrounding tenant `tx`: a `set_data_plane` that commits after this
+        // returns `shared` but before the head insert still leaves the insert
+        // in the shared database while the organisation routes elsewhere —
+        // an orphaned global claim the organisation cannot read and that
+        // blocks other workspaces. Closing it needs a lock or other
+        // coordination spanning the plane decision and the claim write, which
+        // is #3288.
         //
         // `loadDataPlaneBinding`, NOT `resolveDataPlane`: the resolver caches
         // per process and `set_data_plane` invalidates only the process it
