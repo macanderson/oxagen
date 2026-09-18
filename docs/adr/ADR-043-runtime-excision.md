@@ -1,6 +1,6 @@
 # ADR-043: Excise the agent runtime — Oxagen governs agents, it does not run them
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the amendment at the end)
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** ADR-040 (governance-plane refocus — this ADR executes its
@@ -121,3 +121,19 @@ sells.
   now: it is the right transport for a hosted coding agent, which Oxagen
   no longer is. It can return behind `run-ledger` if a hosted Stella
   product is ever built.
+
+## Amendment 2026-09-18: Oxagen may contain the process that runs turns
+
+Maintainer decision of 2026-09-18, recorded in ADR-096. This ADR is revised by
+one sentence:
+
+> **"Oxagen does not run turns, but it may contain the process that does. A
+> launcher that confines a process is not an agent runtime."**
+
+Everything else above stands. Oxagen still runs no turn, embeds no engine and
+ships no sandbox for its own agent's code. What changes is that
+`oxagen run -- <agent>` (Phase 5) may launch a customer's agent under an OS
+sandbox whose only egress is the gateway (ADR-094), aimed at CI, headless runs,
+cloud runners and managed devices first, and never mandatory on a developer's
+own laptop. ADR-094's loopback proxy is also not a runtime: it forwards a
+request a harness made and assembles nothing.

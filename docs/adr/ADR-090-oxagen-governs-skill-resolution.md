@@ -1,6 +1,6 @@
 # ADR-090: Oxagen governs skill resolution, and the 2026-09-15 narrowing is reversed
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-18 by ADR-092 and ADR-093 (Skills is a tab under Steering; delivery is by sync)
 - **Date:** 2026-09-18
 - **Owners:** app, kernel, evidence
 - **Supersedes:** the 2026-09-15 narrowing recorded in `apps/app/ARCHITECTURE.md`
@@ -158,3 +158,35 @@ read a reflection into the record is a new ADR, not an extension of this one.
 - **Put the config in Postgres with a UI editor.** Rejected: a definition of record
   that a person can change without a reviewable commit is not a record. Git history is
   the version history, and the pull request is the control.
+
+## Amendment 2026-09-18: Skills is a tab under Steering, and delivery is by sync
+
+Maintainer decision of 2026-09-18, recorded in ADR-092 §5 and ADR-093 §6, made
+the same day as this ADR and after it. The two agree on everything this ADR
+decides about resolution. They differ in two places, and this amendment settles
+both.
+
+**Where the page lives.** This ADR builds "the mockup's Skills page" at
+`/{org}/{ws}/skills` with five tabs. The decision in force: **Skills and
+Ontology have no top-level nav entry of their own any more.** Steering is the
+hub, and its tabs are Records, Skills, Memory, Ontology, Policy, Proposals,
+Preview. The five views this ADR names (Catalog, Search, In the loop,
+Reflection, Versions) become sections of the Skills tab. The `/skills` route
+redirects there. `list_skills` keeps its job (decision 10).
+
+**How a skill reaches the agent.** This ADR decides what an agent may find and
+load through `search_skills`. It does not say how the skill's files arrive.
+The decision in force: **skills are steering, and they are files. Governed like
+a record through a pull request, delivered by sync (materializing files in the
+checkout), loaded by the harness's own progressive disclosure. The skill's
+description line competes in the assembler like any other item.**
+
+What stands unchanged: `.oxagen/skills.toml` as the config of record, skills
+off by default, withholding before ranking, the pinned config version, the
+unbound-repository stop, the reflection quarantine, the new stores and the eight
+frame kinds. A withheld skill is withheld from both paths: its files are not
+synced and its description line is not rendered.
+
+ADR-091 §6 freezes new governance ceremony until a merged record is seen in a
+real run. This ADR's lane (#3098) is build work on a decided surface, and any
+new check, mode or review step it would add waits for that freeze to lift.

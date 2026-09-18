@@ -1,6 +1,6 @@
 # ADR-051: A workspace's context records enter the turn as volatile policy, not as prefix
 
-- **Status:** Superseded by ADR-043
+- **Status:** Superseded by ADR-043; amended 2026-09-18 by ADR-093 and ADR-094 (where its injection path re-lands, see the amendment at the end)
 - **Date:** 2026-09-08
 - **Owners:** platform
 - **Related:** issue #2592 (records stored and never applied), issue #2580 (the
@@ -94,3 +94,25 @@ race.
   `chat.stream`, the A2A bridge — do not yet, so a turn through them is still
   unsteered. The port is optional, so that is a wiring gap rather than a
   behaviour change, and it is named here so it is not mistaken for a decision.
+
+## Amendment 2026-09-18: where this ADR's injection path re-lands
+
+Maintainer decision of 2026-09-18, recorded in ADR-091, ADR-093 and ADR-094.
+
+The supersession note says re-landing "belongs on the governed tool gateway
+seam". The changed sentence: **this ADR's injection path re-lands at the Phase 0
+seam, and later per turn at the proxy.**
+
+- **Phase 0 (ADR-091, in review as PR #3289).** Active `must` and `should`
+  records compile into the signed bundle's `context.system`, which the collector
+  hands the harness at `SessionStart`. That is a stable prefix, not the volatile
+  message this ADR chose, because a hook-tier host has no per-turn seam to carry
+  one.
+- **Phase 1 (ADR-093).** The volatile selection (`may` and `info` items, picked
+  per prompt under a token budget) rides `UserPromptSubmit`, which receives the
+  prompt.
+- **Phase 4 (ADR-094).** Per-turn volatile injection re-lands at the loopback
+  model proxy, which is the closest thing to the turn this ADR was written for.
+
+The scope and enforcement decisions in this ADR carry over as ADR-091 §5 states
+them, until ADR-092's enforcement grant lands in Phase 1.
