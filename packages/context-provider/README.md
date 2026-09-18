@@ -7,6 +7,15 @@ A host asks for context relevant to a goal. This answers with frames drawn
 from that workspace's engram records — budgeted, scored, and carrying the
 provenance that says where each one came from.
 
+> **Status (2026-09-18).** Nothing in production imports this package, and the
+> same is true of `@oxagen/engram`, the store it reads. It holds the only real
+> token budgeter in the repository, `packWithinBudget` (`src/budget.ts`). Under
+> the plan approved on 2026-09-18 this package becomes the home of the one
+> steering assembler, `assembleSteering(run, budget)`, which reuses that
+> budgeter, and `@oxagen/engram` is deleted or folded in so that two memory
+> systems become one (Phase 1: `docs/specs/mission-control/plan.md` §8.2, and
+> the contract in `docs/specs/mission-control/spec.md` §10.5).
+
 ## Running it
 
 It speaks the protocol's line-oriented JSON over stdio, which is the shape the

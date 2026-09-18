@@ -89,6 +89,39 @@ bypasses the hooks. That is why the detector exists and why the session record
 carries `enforcement_tier`. Managed settings (`enroll --print-managed`) lock the
 hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
+What the signed bundle carries today is nearly nothing. The server builds it with
+empty permissions, `budget.mode = "observed"` and `context.system = null`
+(`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can
+deny only on host status or a paused session, no published record steers a wrapped
+agent, and nothing reads `session_limit_usd`. Operator steer commands are the only
+live text channel from the server to a running agent. Token and cost numbers for
+Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
+none. There is no model proxy and no sandbox.
+
+## Where this package is going
+
+Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`;
+the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases in
+`docs/specs/mission-control/plan.md` §8):
+
+- **Phase 0.** The server compiles active `must` and `should` records into the
+  bundle's `context.system`, which `SessionStart` already delivers.
+- **Phase 1.** `UserPromptSubmit` calls `assembleSteering` with the prompt as the
+  query, under a tight timeout, and fails open. Every assembly seals a
+  `steering.manifest` frame.
+- **Phase 4.** `tachod` grows into the gateway: a loopback model proxy (Anthropic
+  Messages and OpenAI Responses passthrough with streaming, enrollment writes the
+  base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
+  with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. Prompt
+  bodies never leave the machine, and the vendor credential stays on it. Metering
+  becomes observed, `session_limit_usd` is enforced, and `interrupt` becomes real.
+- **Phase 5.** `oxagen run -- <agent>` launches an agent under an OS sandbox whose
+  only egress is the gateway. `contained` becomes the top word of the tier ladder:
+  observe, harness, gateway, contained.
+
+Until Phase 4 the words for this tier are "delivered", "recorded",
+"client-attested" and "fail-open". Never "enforced".
+
 ## Modules
 
 | Module | What it is |
