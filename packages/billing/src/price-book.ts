@@ -454,7 +454,6 @@ export async function syncPriceBook(args: {
   now?: Date;
 }): Promise<PriceBookSyncResult> {
   const requested = args.seeds ?? priceEntriesFromRateCards(args.effectiveFrom);
-  const now = args.now ?? new Date();
   return withSystemDb(async (tx) => {
     // One list-book writer at a time, whoever the caller is. The hourly job
     // serialises its own executions, but `pnpm billing:price-book-sync
@@ -466,6 +465,12 @@ export async function syncPriceBook(args: {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${"price_book:list"}::text, 0))`,
     );
+    // The write instant is read AFTER the lock. The lock wait is unbounded:
+    // another sync can hold it until the boundary passes, and a clock read
+    // before the wait would then pass the boundary check with a stale time
+    // and commit a retroactive change. A test injects `now` to pin the
+    // instant; a real run reads it here.
+    const now = args.now ?? new Date();
     const existing = await tx
       .select()
       .from(schema.priceEntries)

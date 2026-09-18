@@ -82,6 +82,8 @@ export interface FakePriceStore {
     op: "select" | "update" | "insert" | "upsert" | "lock" | "delete";
     sql?: string;
   }[];
+  /** Runs when a lock is taken, standing in for the wait on another holder. */
+  onLock?: () => void;
 }
 
 export function makeFakePriceStore(): FakePriceStore {
@@ -425,6 +427,10 @@ export function fakePriceExecutor(store: FakePriceStore) {
         // The key travels as a bound value; rendered into the log so a test can
         // assert WHICH lock was taken, not only that one was.
         store.log.push({ op: "lock", sql: `${text} ${String(params[0])}` });
+        // A test can make the lock "wait": whatever it runs here happens
+        // between taking the lock and the first read, as another holder's
+        // transaction would.
+        store.onLock?.();
         return Promise.resolve([]);
       }
       if (!/^INSERT INTO cost\.price_entries/i.test(text))

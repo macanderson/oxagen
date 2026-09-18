@@ -1684,6 +1684,38 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     ).toBeNull();
   });
 
+  // The lock wait is unbounded. A clock read before it passed the boundary
+  // check with a stale time, and a sync that waited past its own boundary
+  // committed a retroactive change.
+  it("reads the write instant after the lock, so a long wait cannot pass a stale boundary check", async () => {
+    // Drives the real clock path (no injected `now`): time moves while the
+    // lock is held.
+    const BOUNDARY = new Date("2026-09-18T16:00:00.000Z");
+    const before = new Date("2026-09-18T15:59:00.000Z");
+    const after = new Date("2026-09-18T16:00:30.000Z");
+    // A warm book: cold start is exempt from the boundary check by design.
+    fake.rows.push(
+      priceRow({
+        model: "gpt-9",
+        effectiveFrom: new Date("2026-09-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
+    vi.useFakeTimers();
+    vi.setSystemTime(before);
+    fake.onLock = () => vi.setSystemTime(after);
+    fakeClock.now = before;
+    try {
+      await expect(
+        syncPriceBookLive({ effectiveFrom: BOUNDARY, seeds: [seed()] }),
+      ).rejects.toMatchObject({ reason: "price_book_boundary_passed" });
+    } finally {
+      vi.useRealTimers();
+      fake.onLock = undefined;
+    }
+    expect(fake.rows).toHaveLength(1);
+  });
+
   // The overrides are this installation's own environment, read completely on
   // every run. An override the operator removed is a rate that ended whatever
   // the catalogs did, and holding it open until every catalog answered kept
