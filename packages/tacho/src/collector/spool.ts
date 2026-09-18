@@ -308,10 +308,22 @@ export class Shipper {
       }
       if (
         error instanceof ControlError &&
-        (error.status === 400 || error.status === 422)
+        (error.status === 400 || error.status === 422 || error.status === 413)
       ) {
-        // The control plane refused the batch as malformed. Bisect to the
-        // event it objects to; a single refused event is quarantined.
+        // The control plane refused the batch: malformed (400, 422), or too
+        // large for one request (413). Bisect to the event it objects to; a
+        // single refused event is quarantined.
+        //
+        // 413 belongs here and not with the retryable refusals below. The
+        // ingest route caps a request at 1 MiB, and a retry can never make a
+        // batch smaller, so keeping it means offering the same oversized
+        // request on every drain for ever. Because the WAL head never
+        // advances past it, every later event on that host queues behind it
+        // and the evidence pipeline stops permanently, while the host still
+        // reports itself healthy. Bisection halves the batch until the
+        // request fits, and an event that exceeds the limit on its own is
+        // quarantined rather than retried, which is the same answer this
+        // path already gives a malformed event.
         if (batch.length === 1) {
           this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
           this.succeed();
@@ -326,7 +338,7 @@ export class Shipper {
           reachable: left.reachable && right.reachable,
         };
       }
-      // 401/403 (revoked or denied key), 413, 429, 5xx: keep the batch, back off.
+      // 401/403 (revoked or denied key), 429, 5xx: keep the batch, back off.
       this.fail(error);
       this.options.log(`ingest failed: ${this.lastError ?? "unknown"}`);
       return {

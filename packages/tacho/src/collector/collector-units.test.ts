@@ -22,6 +22,7 @@ import { minimalSession } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
   TACHO_MAX_BATCH_BODY_BYTES,
+  TACHO_MAX_BODY_BYTES,
   type DeliveredCommand,
   type TachoBody,
 } from "../wire";
@@ -390,7 +391,9 @@ describe("detector", () => {
         localToken: "t",
       },
     ).settings;
-    expect((await detector.tick()).map((e) => e.kind)).toEqual(["oxagen:hook_health"]);
+    expect((await detector.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hook_health",
+    ]);
     const unreadable = new Detector({
       registry,
       hostRecorder: () => host.recorder,
@@ -564,6 +567,52 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  it("drains past a request the route refuses as too large, rather than wedging", async () => {
+    // The ingest route caps a request at 1 MiB and answers 413. A retry
+    // cannot make a batch smaller, so treating 413 as retryable meant
+    // offering the same oversized request on every drain for ever. The WAL
+    // head never advanced past it and every later event on the host queued
+    // behind it, so that host stopped recording while still reporting
+    // itself healthy. This is the test that says it drains instead.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    // One event the route will never accept, whatever it is batched with.
+    const oversized = events[2]?.seq;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.seq === oversized))
+            throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+
+    // The one event nobody can ship is set aside, and everything behind it
+    // reaches the control plane.
+    expect(result.quarantined).toBe(1);
+    expect(result.shipped).toBe(events.length - 1);
+    // The queue is empty, which is the property that was lost: a wedged host
+    // leaves every later event unshipped for ever.
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("keeps a body cap that a single request can actually carry", () => {
+    // These three numbers are only correct with respect to each other. A
+    // body cap above what the route accepts does not yield a rejected body,
+    // it yields a request nobody can ship.
+    const ROUTE_LIMIT = 1_048_576;
+    const base64 = (bytes: number) => Math.ceil(bytes / 3) * 4;
+    expect(base64(TACHO_MAX_BODY_BYTES)).toBeLessThan(ROUTE_LIMIT);
+    expect(base64(TACHO_MAX_BATCH_BODY_BYTES)).toBeLessThan(ROUTE_LIMIT);
   });
 
   // ── Orphaned events after a re-enrollment ──────────────────────────────────

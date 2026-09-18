@@ -176,11 +176,16 @@ export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
  * runs through the same `tacho-hook` with a `--harness codex` tag. Stella's
  * does not: its payload names no session and its answers are
  * `{"action": ...}` decisions, so `--harness stella` routes the hook through
- * `claude-code/stella-adapter.ts` in both directions.
+ * `claude-code/stella-adapter.ts` in both directions. Cursor's differs on
+ * all three of the things that would have let it share Claude Code's path
+ * (`conversation_id` not `session_id`, `preToolUse` not `PreToolUse`, a flat
+ * permission object not `hookSpecificOutput`), so `--harness cursor` routes
+ * through `claude-code/cursor-adapter.ts` for the same reason.
  */
 export const tachoHarnessSchema = z.enum([
   "claude-code",
   "codex",
+  "cursor",
   "stella",
   "claude-desktop",
 ]);
@@ -190,6 +195,7 @@ export type TachoHarness = z.infer<typeof tachoHarnessSchema>;
 export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   stella: "Stella",
   "claude-desktop": "Claude Desktop",
 };
@@ -216,6 +222,7 @@ export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
   {
     "claude-code": "harness",
     codex: "harness",
+    cursor: "harness",
     stella: "harness",
     "claude-desktop": "gateway",
   };
@@ -229,7 +236,12 @@ export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
  * lists partition the enum and agree with the tier map, so a harness added
  * without being classified fails the build rather than defaulting to wrapped.
  */
-export const WRAPPED_HARNESSES = ["claude-code", "codex", "stella"] as const;
+export const WRAPPED_HARNESSES = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "stella",
+] as const;
 export type WrappedHarness = (typeof WRAPPED_HARNESSES)[number];
 
 export const CONNECTED_HARNESSES = ["claude-desktop"] as const;
@@ -597,16 +609,37 @@ export type DaemonHealth = z.output<typeof daemonHealthSchema>;
 
 export const TACHO_MAX_BATCH = 200;
 
-/** The most bytes one frame body may carry, before base64. */
-export const TACHO_MAX_BODY_BYTES = 1_048_576;
+/**
+ * The most bytes one frame body may carry, before base64.
+ *
+ * Sized against the ingest route, which refuses a request over 1 MiB
+ * (`apps/api/src/routes/v1/tacho.events.ingest.ts`). Base64 costs a third
+ * on top, so a body at the old 1 MiB ceiling reached the wire at about
+ * 1.37 MB and could not fit a request even travelling alone. 600 KiB
+ * encodes to roughly 800 KB and still leaves room for its event and the
+ * batch envelope, so a body at the maximum is one the control plane can
+ * actually accept.
+ *
+ * These two numbers have to be read together with the route's. A cap above
+ * what the route accepts does not produce a rejected body, it produces a
+ * request nobody can ship, and until 413 became a refusal the shipper
+ * bisects, that wedged the host for ever.
+ */
+export const TACHO_MAX_BODY_BYTES = 600 * 1024;
 
 /**
  * The most body bytes one batch carries, before base64. A batch of 200
  * events could otherwise ship 200 MiB, and the shipper splits the batch at
  * the event whose body would cross this line so every body still travels
  * with its own event.
+ *
+ * Also bounded by the route's 1 MiB request limit rather than set well
+ * above it. At 700 KiB the base64 form is about 933 KB, so a full batch
+ * lands under the limit instead of relying on bisection to discover that it
+ * does not. Bisection is the floor that keeps a host draining, not the
+ * mechanism the common case should depend on.
  */
-export const TACHO_MAX_BATCH_BODY_BYTES = 4 * 1_048_576;
+export const TACHO_MAX_BATCH_BODY_BYTES = 700 * 1024;
 
 /**
  * A frame body shipped next to its event (Mission Control spec §8.2; tacho
