@@ -67,6 +67,8 @@ function runner(t: Record<string, string | Error>): GitRunner {
     }
     // Untracked files under the given paths. None, unless a test says so.
     if (key.startsWith("ls-files --others -z --")) return "";
+    // Index entries excluded from the working tree. None, unless a test says so.
+    if (key.startsWith("ls-files -t -z --")) return "";
     throw new Error(`unexpected git ${key}`);
   };
 }
@@ -623,5 +625,21 @@ describe("checkSteeringFreshness, a removed record still on disk", () => {
         "",
     });
     expect(v.status).toBe("current");
+  });
+});
+
+// A sparse checkout keeps governed records in the index while removing them
+// from disk. Every diff read them as present and `status` was clean, so the
+// verdict said `current` while the agent had none of its records.
+describe("checkSteeringFreshness, governed files excluded from the working tree", () => {
+  it("is behind, naming the excluded files, when the index matches but the disk does not", async () => {
+    const v = await check({
+      ...table(),
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json":
+        "S .oxagen/rules/ctx.a.toml\0H .oxagen/workspace.json\0",
+    });
+    expect(v.status).toBe("behind");
+    expect(v.missing.map((c) => c.path)).toEqual([".oxagen/rules/ctx.a.toml"]);
+    expect(v.notes.join(" ")).toContain("excluded from this checkout");
   });
 });

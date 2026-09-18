@@ -38,6 +38,7 @@
 import {
   commitsTouching,
   configuredRemotes,
+  deepen,
   defaultBranch,
   diffPaths,
   dirtyPaths,
@@ -46,10 +47,12 @@ import {
   gitOrNull,
   isAncestor,
   isSafeRefName,
+  isShallow,
   mergeBase,
   parseNameStatus,
   repoRoot,
   revParse,
+  skipWorktreePaths,
   treeOid,
   type GitContext,
   type GitRunner,
@@ -392,7 +395,28 @@ export async function checkSteeringFreshness(
     );
   }
 
-  const mergeBaseCommit = await mergeBase(repoCtx, head, remoteHead);
+  let mergeBaseCommit = await mergeBase(repoCtx, head, remoteHead);
+  if (!mergeBaseCommit && allowNetwork && (await isShallow(repoCtx))) {
+    // A depth-limited clone can hold both tips with their common ancestor
+    // below the shallow boundary, and `merge-base` then answers nothing.
+    // That read as `unknown`, and an enforced gate allowed the prompt: a
+    // shallow feature clone was a way past `blockStaleRuns`. The history is
+    // deepened in growing steps until the ancestor appears, under the same
+    // network budget as every other remote call, and gives up before the
+    // budget does.
+    for (const by of [64, 256, 1024]) {
+      if (now() >= networkDeadline) break;
+      if (!(await deepen(networkCtx(repoCtx), policy.remote, by)))
+        break;
+      mergeBaseCommit = await mergeBase(repoCtx, head, remoteHead);
+      if (mergeBaseCommit) {
+        base.notes.push(
+          `deepened this shallow clone by ${by} commits to find the common ancestor with ${target}`,
+        );
+        break;
+      }
+    }
+  }
   if (!mergeBaseCommit) {
     return unknown(
       base,
@@ -527,6 +551,21 @@ export async function checkSteeringFreshness(
   // Both are consulted by `isSyncSafe`, which is the question dirt actually
   // bears on.
   if (outstanding.length === 0) {
+    // Nothing differs from production BY GIT'S RECKONING. That reckoning is
+    // over the index, and a sparse checkout (or `skip-worktree`) keeps
+    // governed records in the index while removing them from disk: every
+    // diff read them as present, `status` was clean, and the verdict said
+    // `current` while the agent ran with none of its records. The files have
+    // to be on disk to steer anything, so this is `behind`, with the paths
+    // named, and a sync is what puts them there.
+    const absent = await skipWorktreePaths(repoCtx, pathspecs);
+    if (absent.length > 0) {
+      base.missing = absent.map((path) => ({ status: "added", path }));
+      base.notes.push(
+        `${absent.length} governed file(s) are excluded from this checkout's working tree (a sparse checkout, or skip-worktree), so the agent cannot read them`,
+      );
+      return { ...base, status: authored.length > 0 ? "diverged" : "behind" };
+    }
     return { ...base, status: authored.length > 0 ? "ahead" : "current" };
   }
   return { ...base, status: authored.length > 0 ? "diverged" : "behind" };

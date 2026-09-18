@@ -231,6 +231,16 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
         ...batch,
       );
     }
+    // `git rm` removes what the index knows. A copy the developer left on
+    // disk untracked or ignored, at a path production retired, is not in the
+    // index, and `--ignore-unmatch` reported success over it. The check
+    // counts such a copy as dirt, so this is reached only under `force`, and
+    // `force` is the caller's word that the working copy may be overwritten:
+    // the file goes too, or the sync says `applied` while the agent goes on
+    // reading the retired record.
+    if (force) {
+      await git(ctx, "clean", "--quiet", "--force", "-x", "--", ...removed);
+    }
   }
 
   let committed = false;

@@ -31,7 +31,27 @@ const {
   execGit: vi.fn<(args: readonly string[]) => Promise<string>>(),
 }));
 
-vi.mock("../lib/api.js", () => ({ apiPostOrThrow }));
+const { userApiPostOrThrow, MockApiError } = vi.hoisted(() => {
+  class MockApiError extends Error {
+    readonly status: number;
+    constructor(message: string, status = 0) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+    }
+  }
+  return {
+    userApiPostOrThrow:
+      vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+    MockApiError,
+  };
+});
+
+vi.mock("../lib/api.js", () => ({
+  apiPostOrThrow,
+  userApiPostOrThrow,
+  ApiError: MockApiError,
+}));
 
 vi.mock("@oxagen/steering-freshness", async () => {
   const actual = await vi.importActual<
@@ -59,7 +79,7 @@ import {
   steeringSync,
 } from "./steering";
 import { resolveSteeringPolicy } from "@oxagen/steering-freshness";
-import { mkdtemp, realpath, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -128,6 +148,8 @@ beforeEach(() => {
   syncSteering.mockReset();
   execGit.mockReset();
   execGit.mockResolvedValue("");
+  userApiPostOrThrow.mockReset();
+  userApiPostOrThrow.mockRejectedValue(new Error("no lists in tests"));
 });
 
 describe("findProjectRoot", () => {
@@ -290,6 +312,54 @@ describe("resolveContext", () => {
       { org: "acme", ws: "payments" },
       expect.anything(),
     );
+  });
+
+  // The link names the workspace by slug. An org or workspace renamed after
+  // `oxagen init` answered 404 for every linked checkout, and the workspace's
+  // gates were dropped until somebody relinked. The ids in the link do not
+  // change, so they resolve to today's slugs and the link is rewritten.
+  it("follows a renamed org or workspace through the ids in the link", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({
+        orgSlug: "acme-old",
+        orgId: "org_1",
+        workspaceSlug: "payments-old",
+        workspaceId: "ws_1",
+      }),
+      "utf8",
+    );
+    remotes({ origin: "git@github.com:acme/app.git" });
+    apiPostOrThrow.mockImplementation(async (_path, _body, scope) => {
+      const s = scope as { org: string; ws: string } | undefined;
+      if (s?.org === "acme" && s.ws === "payments")
+        return {
+          steeringVersion: 9,
+          headCommit: null,
+          repository: "acme/app",
+          defaultBranch: "main",
+          policy: { blockStaleRuns: true },
+        };
+      throw new MockApiError("not found", 404);
+    });
+    userApiPostOrThrow.mockImplementation(async (path) => {
+      if (path === "organizations")
+        return { organizations: [{ id: "org_1", slug: "acme" }] };
+      if (path === "workspaces")
+        return { workspaces: [{ id: "ws_1", slug: "payments" }] };
+      throw new Error(`unexpected ${path}`);
+    });
+
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform?.steeringVersion).toBe(9);
+    expect(ctx.policy.blockStaleRuns).toBe(true);
+    // The link now carries today's slugs, so the next prompt is direct.
+    const rewritten = JSON.parse(
+      await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
+    ) as { orgSlug: string; workspaceSlug: string };
+    expect(rewritten).toMatchObject({ orgSlug: "acme", workspaceSlug: "payments" });
   });
 
   it("falls back to the global selection when the checkout is not linked", async () => {

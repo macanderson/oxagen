@@ -268,6 +268,55 @@ export async function configuredRemotes(ctx: GitContext): Promise<string[]> {
     .filter((line) => line.length > 0);
 }
 
+/** Is this a shallow clone? (`--show-toplevel` answered, so `--is-shallow-repository` will too.) */
+export async function isShallow(ctx: GitContext): Promise<boolean> {
+  return (await gitOrNull(ctx, "rev-parse", "--is-shallow-repository")) === "true";
+}
+
+/**
+ * Deepen a shallow clone's history by `by` commits, on every ref `remote`
+ * has. HEAD's own history is the shallow side, and HEAD may be on any branch,
+ * so the fetch names no branch; git deepens what the clone already tracks.
+ * True if the fetch succeeded, whether or not it reached full depth.
+ */
+export async function deepen(
+  ctx: GitContext,
+  remote: string,
+  by: number,
+): Promise<boolean> {
+  return (
+    (await gitOrNull(
+      ctx,
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      `--deepen=${by}`,
+      "--",
+      remote,
+    )) !== null
+  );
+}
+
+/**
+ * Index entries under the pathspec that git has deliberately left OUT of the
+ * working tree: a sparse checkout, or `update-index --skip-worktree`. The
+ * entry is in the index, so every diff against a commit reads it as present
+ * and unchanged, and `status` says nothing, while the file is not on disk.
+ * `ls-files -t` marks such an entry `S`.
+ */
+export async function skipWorktreePaths(
+  ctx: GitContext,
+  pathspecs: readonly string[],
+): Promise<string[]> {
+  const raw = await gitOrNull(ctx, "ls-files", "-t", "-z", "--", ...pathspecs);
+  if (!raw) return [];
+  const out: string[] = [];
+  for (const entry of raw.split("\0")) {
+    if (entry.startsWith("S ")) out.push(entry.slice(2));
+  }
+  return out;
+}
+
 /** Does this ref resolve? */
 export async function revParse(
   ctx: GitContext,

@@ -58,8 +58,8 @@ import {
   type SteeringPolicy,
   type SteeringPolicyFile,
 } from "@oxagen/steering-freshness";
-import { apiPostOrThrow } from "../lib/api.js";
-import { readWorkspaceLink } from "./workspace-link.js";
+import { ApiError, apiPostOrThrow } from "../lib/api.js";
+import { readWorkspaceLink, writeWorkspaceLink } from "./workspace-link.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -175,17 +175,82 @@ interface PlatformFreshness {
 const PLATFORM_READ_TIMEOUT_MS = 3_000;
 
 async function readPlatform(
-  scope: { org: string; ws: string } | undefined,
+  projectRoot: string,
+  link: CheckoutLink | undefined,
 ): Promise<PlatformFreshness | null> {
-  try {
-    return await apiPostOrThrow<PlatformFreshness>(
+  const ask = (scope: { org: string; ws: string } | undefined) =>
+    apiPostOrThrow<PlatformFreshness>(
       "context/steering/freshness",
       {},
       scope,
       { timeoutMs: PLATFORM_READ_TIMEOUT_MS },
     );
+  try {
+    return await ask(link?.scope);
+  } catch (error) {
+    // The link names the workspace by SLUG, and the API resolves slugs. An
+    // org or a workspace renamed after `oxagen init` therefore answered 404
+    // for every linked checkout, and swallowing that here dropped the
+    // workspace's gates until somebody relinked. The link also carries the
+    // ids, which do not change. On a 404 they are resolved to today's slugs
+    // through the same lists `oxagen init` reads, the read is retried once,
+    // and the link is rewritten so the next prompt is direct.
+    if (!link || !(error instanceof ApiError) || error.status !== 404)
+      return null;
+    try {
+      const current = await currentSlugsFor(link);
+      if (!current) return null;
+      const answer = await ask(current);
+      rewriteLinkSlugs(projectRoot, current);
+      return answer;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** What `.oxagen/workspace.json` says, as the platform read needs it. */
+interface CheckoutLink {
+  scope: { org: string; ws: string };
+  orgId: string;
+  workspaceId: string;
+}
+
+/**
+ * Today's slugs for the ids a link was written with, or null when either is
+ * no longer reachable by this user.
+ */
+async function currentSlugsFor(
+  link: CheckoutLink,
+): Promise<{ org: string; ws: string } | null> {
+  const { userApiPostOrThrow } = await import("../lib/api.js");
+  const { organizations } = await userApiPostOrThrow<{
+    organizations: { id: string; slug: string }[];
+  }>("organizations", {});
+  const org = organizations.find((o) => o.id === link.orgId);
+  if (!org) return null;
+  const { workspaces } = await userApiPostOrThrow<{
+    workspaces: { id: string; slug: string }[];
+  }>("workspaces", { orgSlug: org.slug });
+  const ws = workspaces.find((w) => w.id === link.workspaceId);
+  if (!ws) return null;
+  return { org: org.slug, ws: ws.slug };
+}
+
+function rewriteLinkSlugs(
+  projectRoot: string,
+  current: { org: string; ws: string },
+): void {
+  const stored = readWorkspaceLink(projectRoot);
+  if (!stored) return;
+  try {
+    writeWorkspaceLink(projectRoot, {
+      ...stored,
+      orgSlug: current.org,
+      workspaceSlug: current.ws,
+    });
   } catch {
-    return null;
+    // A read-only checkout keeps working; it just resolves again next time.
   }
 }
 
@@ -199,12 +264,14 @@ async function readPlatform(
  * catch that when two workspaces bind the same repository: both answers name
  * it, and the wrong workspace's gates silently replaced the right one's.
  */
-function checkoutScope(
-  projectRoot: string,
-): { org: string; ws: string } | undefined {
+function checkoutLink(projectRoot: string): CheckoutLink | undefined {
   const link = readWorkspaceLink(projectRoot);
   if (!link?.orgSlug || !link.workspaceSlug) return undefined;
-  return { org: link.orgSlug, ws: link.workspaceSlug };
+  return {
+    scope: { org: link.orgSlug, ws: link.workspaceSlug },
+    orgId: link.orgId,
+    workspaceId: link.workspaceId,
+  };
 }
 
 /**
@@ -364,8 +431,9 @@ export async function resolveContext(
   { offline = false }: { offline?: boolean } = {},
 ): Promise<ResolvedContext> {
   const projectRoot = findProjectRoot(cwd);
-  const scope = checkoutScope(projectRoot);
-  const fromPlatform = offline ? null : await readPlatform(scope);
+  const link = checkoutLink(projectRoot);
+  const scope = link?.scope;
+  const fromPlatform = offline ? null : await readPlatform(projectRoot, link);
   const mismatch: string[] = [];
 
   // ── Is the platform answering about THIS checkout? ──────────────────────
@@ -373,7 +441,7 @@ export async function resolveContext(
   // Two checks, because each catches what the other cannot.
   //
   // 1. The request is scoped by the checkout's own `.oxagen/workspace.json`
-  //    when it has one (see `checkoutScope`), so a linked checkout asks its
+  //    when it has one (see `checkoutLink`), so a linked checkout asks its
   //    own workspace however the CLI is globally configured. That is the
   //    only thing that separates two workspaces binding the same repository.
   //

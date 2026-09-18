@@ -10,6 +10,7 @@
  * behaviour.
  */
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -442,5 +443,109 @@ describe("an ignored local file where production added a record", () => {
     expect(await readFile(join(work, path), "utf8")).toContain(
       "the developer's own",
     );
+  });
+});
+
+// A depth-limited clone holds both tips with their common ancestor below the
+// shallow boundary, and `merge-base` answers nothing. That read as `unknown`,
+// and an enforced gate allowed the prompt: a shallow feature clone was a way
+// past `blockStaleRuns`.
+describe("a shallow feature clone", () => {
+  it("deepens until the common ancestor appears, and still sees the merged record", async () => {
+    // A feature branch on origin, two commits past main's tip, so a depth-1
+    // clone of it cannot reach where it forked from main.
+    const author = join(tmp, "author-shallow");
+    await g(tmp, "clone", "--quiet", origin, author);
+    await g(author, "config", "user.name", "Test");
+    await g(author, "config", "user.email", "test@example.invalid");
+    await g(author, "checkout", "--quiet", "-b", "feature/shallow");
+    await write(author, "src/one.ts", "export const one = 1;\n");
+    await g(author, "add", "-A");
+    await g(author, "commit", "--quiet", "-m", "one");
+    await write(author, "src/two.ts", "export const two = 2;\n");
+    await g(author, "add", "-A");
+    await g(author, "commit", "--quiet", "-m", "two");
+    await g(author, "push", "--quiet", "origin", "feature/shallow");
+    // Then production gains a record the branch does not have.
+    await mergeContextPr("ctx.shallow.case", "Published after the branch");
+
+    const shallow = join(tmp, "shallow");
+    await g(
+      tmp,
+      "clone",
+      "--quiet",
+      "--depth=1",
+      "--branch=feature/shallow",
+      `file://${origin}`,
+      shallow,
+    );
+    expect(await g(shallow, "rev-parse", "--is-shallow-repository")).toBe(
+      "true",
+    );
+
+    const verdict = await checkSteeringFreshness({
+      cwd: shallow,
+      policy: policy(),
+    });
+    expect(verdict.status, verdict.notes.join(" | ")).toBe("behind");
+    expect(verdict.missing.map((c) => c.path)).toContain(
+      ".oxagen/rules/ctx.shallow.case.toml",
+    );
+    expect(verdict.notes.join(" ")).toContain("deepened this shallow clone");
+  });
+});
+
+// A cone-mode sparse checkout that leaves `.oxagen/` out keeps its entries in
+// the index and removes the files. Nothing git compares noticed.
+describe("a sparse checkout that excludes .oxagen", () => {
+  it("is behind, so an enforced gate does not let the agent run without its records", async () => {
+    const sparse = join(tmp, "sparse");
+    await g(tmp, "clone", "--quiet", "--no-checkout", origin, sparse);
+    await g(sparse, "sparse-checkout", "set", "src");
+    await g(sparse, "checkout", "--quiet", "main");
+    expect(existsSync(join(sparse, ".oxagen"))).toBe(false);
+
+    const verdict = await checkSteeringFreshness({
+      cwd: sparse,
+      policy: policy(),
+    });
+    expect(verdict.status, verdict.notes.join(" | ")).toBe("behind");
+    expect(verdict.missing.map((c) => c.path)).toContain(
+      ".oxagen/rules/ctx.base.always.toml",
+    );
+  });
+});
+
+// `git rm` removes what the index knows. An untracked copy at a path
+// production retired survived a forced sync, which then reported `applied`.
+describe("a forced sync over an untracked copy of a retired record", () => {
+  it("removes the copy too", async () => {
+    // Retire a record on production.
+    const author = join(tmp, "author-retire");
+    await g(tmp, "clone", "--quiet", origin, author);
+    await g(author, "config", "user.name", "Test");
+    await g(author, "config", "user.email", "test@example.invalid");
+    await g(author, "rm", "--quiet", ".oxagen/rules/ctx.base.always.toml");
+    await g(author, "commit", "--quiet", "-m", "context: retire ctx.base.always");
+    await g(author, "push", "--quiet", "origin", "main");
+
+    // A fresh clone of the pre-retirement state, with the deletion staged
+    // but the file left on disk, untracked.
+    const forced = join(tmp, "forced");
+    await g(tmp, "clone", "--quiet", origin, forced);
+    await g(forced, "config", "user.name", "Test");
+    await g(forced, "config", "user.email", "test@example.invalid");
+    await g(forced, "checkout", "--quiet", "HEAD~1");
+    await g(forced, "rm", "--quiet", "--cached", ".oxagen/rules/ctx.base.always.toml");
+    const path = join(forced, ".oxagen/rules/ctx.base.always.toml");
+    expect(existsSync(path)).toBe(true);
+
+    const verdict = await checkSteeringFreshness({ cwd: forced, policy: policy() });
+    expect(verdict.missing.map((c) => c.path)).toContain(
+      ".oxagen/rules/ctx.base.always.toml",
+    );
+    const result = await syncSteering({ cwd: forced, verdict, force: true });
+    expect(result.applied).toBe(true);
+    expect(existsSync(path)).toBe(false);
   });
 });
