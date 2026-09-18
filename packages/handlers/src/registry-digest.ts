@@ -107,7 +107,15 @@ function sortKeysDeep(
     }
 
     const record = object as Record<string, unknown>;
-    const sorted: Record<string, unknown> = {};
+    // Null prototype: `sorted["__proto__"] = …` on a plain object would invoke
+    // the inherited prototype setter rather than creating an own key, so a
+    // record carrying that name would digest identically to one without it. A
+    // canonical form that drops a key is not canonical. `null` is already an
+    // accepted prototype for the input above, so the recursion is unaffected.
+    const sorted: Record<string, unknown> = Object.create(null) as Record<
+      string,
+      unknown
+    >;
     for (const key of Object.keys(record).sort()) {
       sorted[key] = sortKeysDeep(record[key], join(path, key), ancestors);
     }

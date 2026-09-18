@@ -9,13 +9,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      // OXA-1898: lines/statements raised to the 85% gate (measured 94.7).
-      // branches/functions left at prior floors (measured 80.0 / 88.2).
+      // #2974: the scope-guard suite lifted every metric past the 90 cap
+      // (measured 95.33 / 93.80 / 97.91 / 95.33), so all four sit at the
+      // ceiling the ratchet allows.
       thresholds: {
-        lines: 85,
-        branches: 70,
-        functions: 63,
-        statements: 85,
+        lines: 90,
+        branches: 90,
+        functions: 90,
+        statements: 90,
       },
     },
   },

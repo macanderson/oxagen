@@ -108,7 +108,7 @@ describe("scopedSession — shared plane (default)", () => {
   it("rejects unscoped Cypher BEFORE resolving a plane", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       await expect(scopedSession().run("MATCH (n) RETURN n")).rejects.toThrow(
-        /must filter by \$orgId/,
+        /must bind the tenant/,
       );
     });
     expect(mocks.sharedSession).not.toHaveBeenCalled();

@@ -37,11 +37,11 @@ describe("scopedSession", () => {
     );
   });
 
-  it("rejects Cypher that does not reference the scope", async () => {
+  it("rejects Cypher that does not bind the tenant", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       const s = scopedSession();
       await expect(s.run("MATCH (n) RETURN n")).rejects.toThrow(
-        /must filter by \$orgId/,
+        /must bind the tenant/,
       );
     });
   });
