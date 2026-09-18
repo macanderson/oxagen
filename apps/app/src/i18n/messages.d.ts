@@ -2546,6 +2546,9 @@ type Messages = {
         reconnect: string;
         reconnecting: string;
         fixed: string;
+        refDrift: string;
+        reapprove: string;
+        reapproving: string;
       };
       manage: string;
       installChoose: string;
