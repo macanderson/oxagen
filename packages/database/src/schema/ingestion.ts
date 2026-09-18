@@ -521,7 +521,16 @@ export const repositoryBindings = ingestionSchema.table(
 // Which binding VERSION is current for one repository. Mutable on purpose: it
 // is a pointer, not evidence. Admission reads the head to resolve, then copies
 // the resolved binding's identity into the immutable run row — so advancing the
-// head afterwards can never rewrite what an admitted run claims.
+// head afterwards can never rewrite what an admitted run claims. Deleting a
+// head is how a repository is unlinked; the versions it pointed at stay.
+//
+// Not declared here: the trigger `repository_binding_heads_exclusive_main`
+// (20260918200000_repository_binding_heads_exclusive_across_roles.sql). It
+// serialises every writer of a head for one repository on a repository-keyed
+// advisory lock and refuses, as a 23505 carrying a constraint name, a main
+// head where another workspace holds any head for the repository, and a
+// linked head where another workspace holds its main. The partial index below
+// holds the main-against-main half on its own; the trigger holds the rest.
 export const repositoryBindingHeads = ingestionSchema.table(
   "repository_binding_heads",
   {

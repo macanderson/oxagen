@@ -1533,6 +1533,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "link_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_agent_defs",
       "reads": [],
@@ -2008,6 +2019,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_repositories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -3149,6 +3171,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "unlink_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "unset_secret_value",
       "reads": [],
@@ -3424,7 +3457,7 @@
       "writes": []
     }
   ],
-  "contentHash": "515fc9b54b0f7c8c69f193c81ba96228051aa79e226b4f337451fe7b6e9a7ff9",
+  "contentHash": "b4b8bb2ee7a157544f2b6612f1d2a217a0a3ce29176537c12f2262af5acea8d5",
   "domains": [
     {
       "name": "agent",

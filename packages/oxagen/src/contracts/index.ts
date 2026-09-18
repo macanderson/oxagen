@@ -75,6 +75,9 @@ import { onboardingAdvance } from "./onboarding.advance";
 import { onboardingFirstFrameGet } from "./onboarding.first_frame.get";
 import { repositoryMainBind } from "./repository.main.bind";
 import { repositoryMainGet } from "./repository.main.get";
+import { repositoryLink } from "./repository.link";
+import { repositoryUnlink } from "./repository.unlink";
+import { repositoryList } from "./repository.list";
 import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
@@ -613,6 +616,9 @@ export {
   onboardingFirstFrameGet,
   repositoryMainBind,
   repositoryMainGet,
+  repositoryLink,
+  repositoryUnlink,
+  repositoryList,
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
@@ -947,6 +953,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   onboardingFirstFrameGet,
   repositoryMainBind,
   repositoryMainGet,
+  repositoryLink,
+  repositoryUnlink,
+  repositoryList,
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,

@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { schema } from "@oxagen/database";
 import type { GitHubClient } from "@oxagen/github";
 
@@ -613,6 +615,47 @@ describe("the workspace's main repository", () => {
    * repository is worse than steering being off, so the head's existence is
    * read explicitly and a workspace that has one answers null.
    */
+  // §10.1 / ADR-099: a workspace may hold `linked` heads beside its one
+  // `main`. Steering resolves through THE main repository, so both reads —
+  // the joined one and the bare "does a head exist" one — pin the role. This
+  // rig discards predicates everywhere else; here they are captured and
+  // compiled, because a reader that ignored the column would write steering
+  // into a linked repository. repository.pg.test.ts proves the same with both
+  // heads present in Postgres.
+  it("asks only for the main head, on both reads", async () => {
+    const captured: SQL[] = [];
+    mocks.withTenantDb.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          select: () => ({
+            from: () => ({
+              innerJoin: () => ({
+                innerJoin: () => ({
+                  where: (cond: SQL) => {
+                    captured.push(cond);
+                    return { limit: async () => [] };
+                  },
+                }),
+              }),
+              where: (cond: SQL) => {
+                captured.push(cond);
+                return { limit: async () => [] };
+              },
+            }),
+          }),
+        }),
+    );
+    await readGitHubConnection(SELECT_SCOPE);
+    // The joined read, the heads read, then the legacy connection read.
+    expect(captured.length).toBeGreaterThanOrEqual(2);
+    const dialect = new PgDialect();
+    for (const cond of captured.slice(0, 2)) {
+      const query = dialect.sqlToQuery(cond);
+      expect(query.sql).toMatch(/"role" = \$\d+/);
+      expect(query.params).toContain("main");
+    }
+  });
+
   describe("a bound head whose connection is unusable is not a workspace with no binding", () => {
     it("answers null rather than the legacy repo when a head exists and the join missed", async () => {
       const counts = db({
