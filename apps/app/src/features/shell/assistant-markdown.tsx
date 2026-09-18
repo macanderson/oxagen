@@ -31,7 +31,17 @@ function InertImage({ alt }: { alt?: string }) {
   return alt ? <span>{alt}</span> : null;
 }
 
+/**
+ * A link in the screen-reader copy a reveal announces, read as its text. That
+ * copy is visually hidden, so a real anchor in it would be a tab stop nobody
+ * can see.
+ */
+function PlainLink({ children }: { children?: React.ReactNode }) {
+  return <span>{children}</span>;
+}
+
 const COMPONENTS = { img: InertImage };
+const READ_ONLY_COMPONENTS = { img: InertImage, a: PlainLink };
 
 export interface AssistantMarkdownProps {
   children: string;
@@ -39,7 +49,8 @@ export interface AssistantMarkdownProps {
   streaming?: boolean;
   /**
    * False for the screen-reader copy a reveal announces: it is visually
-   * hidden, so a copy button in it would be a tab stop nobody can see.
+   * hidden, so a copy button or a link in it would be a tab stop nobody can
+   * see. Both render as text.
    */
   interactive?: boolean;
 }
@@ -53,7 +64,7 @@ export function AssistantMarkdown({
     <Streamdown
       parseIncompleteMarkdown={streaming}
       shikiTheme={["github-light", "github-dark"]}
-      components={COMPONENTS}
+      components={interactive ? COMPONENTS : READ_ONLY_COMPONENTS}
       plugins={
         // @streamdown/code resolves shiki@3.x while streamdown's own type
         // expects shiki@1.29.2, so `getSupportedLanguages()` returns two

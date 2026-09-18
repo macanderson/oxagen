@@ -18,7 +18,13 @@
 // A reply reveals once. The flyout passes `reveal: false` for one that already
 // finished, so returning to a workspace paints its transcript whole instead of
 // retyping every answer in it.
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { AssistantMarkdown } from "./assistant-markdown";
 
 /** Floor reveal rate in characters/second; the loop below climbs above this
@@ -76,7 +82,6 @@ export function AssistantStreamingText({
       const advance = Math.max(1, Math.round(cps * dt));
       countRef.current = Math.min(text.length, countRef.current + advance);
       setCount(countRef.current);
-      grew();
       // Reported in the frame that paints the last character, not the next
       // one: a person who leaves the workspace in between would otherwise
       // come back to the whole reply typing itself out again.
@@ -91,6 +96,13 @@ export function AssistantStreamingText({
       if (frame) cancelAnimationFrame(frame);
     };
   }, [text, animate]);
+
+  // After React commits each frame's text, and before the browser paints it:
+  // called from the frame loop, the caller would read the height the reply had
+  // before this frame and scroll short of the tail.
+  useLayoutEffect(() => {
+    if (animate && count > 0) grew();
+  }, [animate, count]);
 
   if (!animate) return <AssistantMarkdown>{text}</AssistantMarkdown>;
 

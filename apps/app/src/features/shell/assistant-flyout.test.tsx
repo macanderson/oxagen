@@ -1011,6 +1011,28 @@ describe("AssistantFlyout", () => {
     }
   });
 
+  // The announced copy is visually hidden, and the growing copy is inert, so a
+  // real anchor in the announced copy would be the only tab stop in the answer
+  // and one nobody can see.
+  it("puts no link from the hidden announced copy in the tab order (negative)", async () => {
+    askAssistant.mockResolvedValue(
+      turn({ reply: "Read [the runbook](https://oxagen.sh/docs) first." }),
+    );
+    const frames = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation(() => 1);
+    try {
+      const { user } = await openFlyout();
+      await ask(user, "what is live?");
+      const announced = await screen.findByTestId("assistant-answer-announced");
+
+      expect(announced).toHaveTextContent("Read the runbook first.");
+      expect(announced.querySelector("a")).toBeNull();
+    } finally {
+      frames.mockRestore();
+    }
+  });
+
   // A reply is model output, and an image in it would be fetched the moment it
   // rendered, carrying whatever the model put in its URL to that host.
   it("renders an image in a reply as its alt text and never fetches it (negative)", async () => {
