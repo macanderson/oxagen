@@ -94,9 +94,19 @@ export const routes = {
    * Organization › API keys. A key names a workspace (ADR-073), so the
    * workspace in scope is a query value on this one route rather than a route
    * of its own; left off, the page takes the viewer's first workspace.
+   * `show` widens the roster to the revoked keys it hides by default and
+   * `offset` opens a later page of it — a filter and a page are query values,
+   * not routes (ARCHITECTURE.md §1.2).
    */
-  apiKeys: (org: string, q?: { workspace?: string }): SafePath =>
-    withQuery(pathOf(org, "api-keys"), { workspace: q?.workspace }),
+  apiKeys: (
+    org: string,
+    q?: { workspace?: string; show?: string; offset?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, "api-keys"), {
+      workspace: q?.workspace,
+      show: q?.show,
+      offset: q?.offset,
+    }),
   /** Fleet; `cursor` opens a later page of its runs table. */
   fleet: (org: string, ws: string, q?: { cursor: string }): SafePath =>
     withQuery(pathOf(org, ws), { cursor: q?.cursor }),
@@ -154,9 +164,24 @@ export const routes = {
     org: string,
     q: Readonly<Record<string, string | undefined>>,
   ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
-  /** A run opened from a list (a run id is a public id, never a raw row id). */
-  run: (org: string, ws: string, run: string): SafePath =>
-    pathOf(org, ws, "runs", run),
+  /**
+   * A run opened from a list (a run id is a public id, never a raw row id).
+   * `tab` picks the section, `zoom` the transcript's level and `frames` a
+   * later page of the frames; all three are query values, so the run keeps one
+   * route (§1.2).
+   */
+  run: (
+    org: string,
+    ws: string,
+    run: string,
+    q?: { tab?: string; zoom?: string; frames?: string; body?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "runs", run), {
+      tab: q?.tab,
+      zoom: q?.zoom,
+      frames: q?.frames,
+      body: q?.body,
+    }),
   /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
   spend: (
     org: string,

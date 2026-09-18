@@ -33,10 +33,12 @@
         "agent": "Agent",
         "operator": "Operator",
         "status": "Status",
+        "replay": "Replay",
         "cost": "Cost",
         "frames": "Frames",
         "started": "Started"
       },
+      "noSummary": "No summary yet. Open the run to read its frames.",
       "notRecorded": "not recorded",
       "basisNotRecorded": "basis not recorded",
       "source": {

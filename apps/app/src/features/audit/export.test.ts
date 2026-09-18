@@ -35,7 +35,13 @@ const resolveViewer = vi.fn();
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: { context: refuse },
-  runs: { list: refuse },
+  runs: {
+    list: refuse,
+    get: refuse,
+    frameBody: refuse,
+    cost: refuse,
+    transcript: refuse,
+  },
   approvals: { pending: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {

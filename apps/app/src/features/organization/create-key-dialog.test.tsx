@@ -35,7 +35,28 @@ vi.mock("./api-key-actions", () => ({
 
 const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
 
-const HERE = routes.apiKeys("acme", { workspace: "core-platform" });
+/**
+ * The view the row was read on: the third page of the revoked-keys-included
+ * roster. A revocation returns here, because it changes no order and holds the
+ * reader's place.
+ */
+const HERE = routes.apiKeys("acme", {
+  workspace: "core-platform",
+  show: "all",
+  offset: "40",
+});
+/**
+ * Where a rotation returns: the first page of *that same filter*. A rotation
+ * mints a key and the roster is newest first, so the replacement is only ever
+ * on the first page. The two paths differ in the page and never in the filter —
+ * which is why `show=all` is on both. A fixture that varied the filter instead
+ * would assert that an active-view rotation navigates into the all-keys view,
+ * which is not what the page does.
+ */
+const AFTER_MINT = routes.apiKeys("acme", {
+  workspace: "core-platform",
+  show: "all",
+});
 const WS = "core-platform";
 const KEY = "aky_7k2m9q4x8r1t5v3w6y0z2a";
 const SECRET = "ox_3fa85f64571b4c62a0f5e8c9d1b2a3f4";
@@ -66,6 +87,7 @@ function renderRow(listedIds: readonly string[] = [KEY], rotatable = true) {
         rotatable={rotatable}
         listedIds={listedIds}
         after={HERE}
+        afterRotate={AFTER_MINT}
       />
     </IntlProvider>,
   );
@@ -349,6 +371,26 @@ describe("rotate", () => {
       ),
     ).toHaveTextContent(SECRET);
     expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("returns to the first page of the filter, where the replacement is, not to the page the row was on", async () => {
+    // The roster is newest first and a rotation mints a key, so the
+    // replacement is on the first page and nowhere else. Returning to a later
+    // page would answer a rotation with a screen that does not hold its
+    // result — and the secret is shown once.
+    rotateApiKey.mockResolvedValue({
+      ok: true,
+      value: { ...minted, id: "aky_0a1b2c3d4e5f6g7h8j9k0m" },
+    });
+    renderRow();
+    const dialog = await openDialog("Rotate", "rotate-api-key");
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Rotate it" }),
+    );
+    await screen.findByTestId("api-key-secret");
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(router.replace).toHaveBeenCalledWith(AFTER_MINT);
+    expect(router.replace).not.toHaveBeenCalledWith(HERE);
   });
 
   it("names a refused rotation and shows no secret (negative)", async () => {

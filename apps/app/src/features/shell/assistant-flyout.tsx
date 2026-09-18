@@ -33,23 +33,23 @@
 // a turn compares the generation it was asked on, so its reply, its run and
 // its conversation id reach only the transcript that asked for them.
 //
-// Each answer names the run it was recorded as, and names it as text, not as a
-// link. `list_runs` excludes the `chat` and `api-chat` surfaces — the
-// assistant is Oxagen's, and its turns are recorded but never listed as the
-// customer's own runs (`packages/handlers/src/run.list.ts`) — so a link here
-// would be the only claimed way to the evidence, and there is nothing at the
-// other end of it yet: `app/[org]/[ws]/runs/[run]/page.tsx` renders a title
-// and reads nothing until WL-35 builds the Run page, and `get_run` declares
-// `layers: [schema, api, mcp, unit, docs]` with no `app`, so the contract
-// itself makes no app promise to bind. A link to a page that shows a title is
-// the same dead end with an anchor on it, and this is the one surface where
-// the link would be the whole claim rather than a convenience beside a row
-// that is already on screen.
+// Each answer names the run it was recorded as, and links it. `list_runs`
+// excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
+// its turns are recorded but never listed as the customer's own runs
+// (`packages/handlers/src/run.list.ts`) — so this link is the only way to that
+// evidence from the app, which is the reason it has to work rather than a
+// reason to withhold it.
 //
-// The id stays, in mono, because it is true and it is the handle: `get_run` is
-// implemented on the API, MCP and CLI surfaces, so an operator can inspect the
-// run today with the id this prints. The link belongs in the change that gives
-// it somewhere to go.
+// It was text until WL-35 (#3282). The page it points at rendered a title and
+// read nothing, and `get_run` declared no `app` layer, so an anchor would have
+// been a dead end with a claim on it. Both have since changed: the Run page
+// reads its run, and `get_run` declares `layers: [..., "app"]`. The link is
+// the change that gave it somewhere to go.
+//
+// Outside a workspace the id stays plain text, because `routes.run` needs an
+// org and a workspace to point into and the shell mounts at organization
+// scope. The id alone is still the handle: `get_run` is implemented on the
+// API, MCP and CLI surfaces, so an operator can inspect the run with it.
 //
 // Closing returns focus where it came from. The host is always mounted and
 // goes `inert` when it closes, so focus left on a control inside it would land
@@ -82,7 +82,7 @@
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
 import { CircleAlert, Send, Sparkles } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
   type SyntheticEvent,
@@ -94,8 +94,11 @@ import {
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
+import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
-import { useNavigate } from "@/ui/navigation";
+import { routes } from "@/shared/safe-path";
+import { linkText } from "@/ui/control-styles";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -175,62 +178,35 @@ function inertOutside(node: HTMLElement): () => void {
 }
 
 /**
- * The record on screen for a route that keeps it in the query string rather
- * than in a path segment (`shared/safe-path.ts`: Spend's finding and key drill,
- * Steering's proposal are query values on one route, ARCHITECTURE.md §1.2), in
- * the order the page selects them.
- *
- * An allow-list, not a pass-through. A query string is whatever the address bar
- * says, so the page context carries a value one of these routes asked for or it
- * carries nothing; a tab, a cursor or an offset names a view, not a record, and
- * is not on this table.
- */
-const QUERY_RECORD: Readonly<Record<string, readonly string[]>> = {
-  spend: ["finding", "drill"],
-  steering: ["proposal"],
-  // Register an agent keeps the identity it minted on the name step in the
-  // query, so the path segment after the route is the step (`wrap`, `run`) and
-  // the record on screen is the agent (`shared/safe-path.ts`, `routes.register`).
-  // Without this row "why has this agent not enrolled?" sends `entityId: "wrap"`.
-  register: ["agent"],
-};
-
-/**
  * `entityId`'s cap in `assistantPageContextSchema`. A longer value is not an
  * id; sending it would refuse the whole turn as invalid rather than answer the
  * question without the record.
  */
 const ENTITY_ID_MAX = 256;
 
-/** The first of `keys` the address bar selects something with; a key present but empty is a cleared selection, not a record. */
-function selectedBy(
-  keys: readonly string[],
-  query: Pick<URLSearchParams, "get">,
-): string | undefined {
-  for (const key of keys) {
-    const value = query.get(key);
-    if (value !== null && value !== "") return value;
-  }
-  return undefined;
-}
-
 /**
- * The record the page is showing. A route keeps it in the path segment after
- * the route — a run id, an agent key — or, where §1.2 makes a selection a query
- * value rather than a route of its own, in one of the values `QUERY_RECORD`
- * names for it. A route does one or the other, so there is no precedence to
- * settle: the table decides which half of the URL is read.
+ * The record the page is showing.
+ *
+ * A page that keeps its selection in the query string declares it, with
+ * `<PageRecord>`, from the parse it already did in order to render. The shell
+ * does not re-derive it: a `finding` outside the Findings tab, a `proposal` off
+ * the Context PRs tab, and the `agent` on `/register/wrap` are all cases where
+ * the URL and the page disagree, and the page is right.
+ *
+ * A route whose record is the path segment after it (`runs/[run]`,
+ * `agents/[agent]`) needs no declaration, because there the URL cannot
+ * disagree. `declared` wins where it exists, so a page that declares `null` --
+ * "I am showing no particular record" -- is believed over the path.
  */
 function recordOnPage(
-  route: string,
+  declared: { id: string | null } | null,
   fromPath: string | undefined,
-  query: Pick<URLSearchParams, "get">,
 ): string | null {
-  const keys = QUERY_RECORD[route];
-  const found = keys === undefined ? fromPath : selectedBy(keys, query);
+  const found = declared === null ? fromPath : declared.id;
   // Past the cap `assistantPageContextSchema` puts on `entityId` it is not an
   // id, and asking without the record beats refusing the turn as invalid.
-  if (found === undefined || found.length > ENTITY_ID_MAX) return null;
+  if (found === undefined || found === null || found.length > ENTITY_ID_MAX)
+    return null;
   return found;
 }
 
@@ -269,8 +245,11 @@ export function AssistantFlyout() {
   const t = useTranslations("shell.assistant");
   const { assistantOpen, setAssistantOpen } = useShellState();
   const pathname = usePathname();
-  const query = useSearchParams();
   const { org, ws, rest } = parseShellPath(pathname);
+  // The route the person is standing on, and what that page says it is showing.
+  // Read here rather than in the submit handler because it is a subscription.
+  const route = rest[0] ?? "fleet";
+  const declaredRecord = usePageRecord(route);
   const panelRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -420,12 +399,11 @@ export function AssistantFlyout() {
      */
     const stillOurs = () => generationRef.current === asked;
     try {
-      const route = rest[0] ?? "fleet";
       const result = await askAssistant(org, ws, {
         conversationId,
         content,
         route,
-        entityId: recordOnPage(route, rest[1], query),
+        entityId: recordOnPage(declaredRecord, rest[1]),
       });
       if (!stillOurs()) return;
       if (result.ok) {
@@ -553,7 +531,17 @@ export function AssistantFlyout() {
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
                     >
-                      {t("recordedAs", { run: entry.runId })}
+                      {t("recordedAs")}{" "}
+                      {org !== null && ws !== null ? (
+                        <SafeLink
+                          to={routes.run(org, ws, entry.runId)}
+                          className={linkText}
+                        >
+                          {entry.runId}
+                        </SafeLink>
+                      ) : (
+                        entry.runId
+                      )}
                     </p>
                     {entry.parked.length === 0 ? null : (
                       <p

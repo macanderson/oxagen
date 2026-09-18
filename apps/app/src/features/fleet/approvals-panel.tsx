@@ -137,18 +137,26 @@ export function ApprovalsPanel({
   now,
   org,
   ws,
+  on = "fleet",
 }: {
   approvals: Read<ApprovalItem[]>;
   /** The mandates the cards name, by public id; empty when none was read. */
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
+  /**
+   * Which page is drawing the panel. It names the heading's element, so the
+   * Run page's copy cannot collide with Fleet's id; nothing else changes with
+   * it, because an approval must read the same on both pages.
+   */
+  on?: "fleet" | "run";
 } & Place) {
   const t = useTranslations("fleet.approvals");
   const locale = useLocale();
+  const headingId = `${on}-approvals`;
   return (
-    <section aria-labelledby="fleet-approvals" className={`${panel} p-4`}>
+    <section aria-labelledby={headingId} className={`${panel} p-4`}>
       <div className="flex items-center justify-between gap-3 pb-3">
-        <h2 id="fleet-approvals" className="text-base font-semibold">
+        <h2 id={headingId} className="text-base font-semibold">
           {t("title")}
         </h2>
         {approvals.ok ? (

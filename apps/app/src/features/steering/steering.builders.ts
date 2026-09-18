@@ -178,7 +178,13 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: { context: refuse },
-    runs: { list: refuse },
+    runs: {
+      list: refuse,
+      get: refuse,
+      frameBody: refuse,
+      cost: refuse,
+      transcript: refuse,
+    },
     approvals: { pending: refuse },
     agents: {
       list: refuse,
