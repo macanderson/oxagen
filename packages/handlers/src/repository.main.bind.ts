@@ -141,11 +141,6 @@ export function repositoryHeadConflict(
   return null;
 }
 
-/** True when the repository is another workspace's main repository. */
-export function isMainRepositoryConflict(err: unknown): boolean {
-  return repositoryHeadConflict(err) === "main_elsewhere";
-}
-
 /**
  * Turn a head write that lost to the store's cross-workspace rule into the
  * sentence the pre-check would have given, or rethrow anything else.
@@ -239,7 +234,9 @@ export function assertNotHeldElsewhere(
  * cannot be stored on the plane it describes — so one `withSystemDb` read
  * answers (2) for every tenant at once.
  */
-export async function assertGlobalClaimIsKnowable(orgId: string): Promise<void> {
+export async function assertGlobalClaimIsKnowable(
+  orgId: string,
+): Promise<void> {
   const plane = await resolveDataPlane(orgId, "postgres");
   // Throws DataPlaneUnavailableError for any binding that is not active.
   assertDataPlaneUsable(plane);
@@ -431,9 +428,7 @@ export function createMainRepositoryBindHandler(
       result = await withTenantDb(async (tx) => {
         // A second bind in this workspace waits here until the first commits,
         // then reads the head it wrote.
-        await tx.execute(
-          workspaceRepositoriesLock(scope.workspaceId),
-        );
+        await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
 
         // Re-ask which plane this organisation is on, INSIDE the transaction
         // that writes.

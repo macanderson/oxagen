@@ -75,7 +75,6 @@ vi.mock("@oxagen/iam/org-role", () => ({
 import { schema } from "@oxagen/database";
 import {
   createMainRepositoryBindHandler,
-  isMainRepositoryConflict,
   repositoryHeadConflict,
 } from "./repository.main.bind";
 
@@ -305,17 +304,6 @@ describe("repositoryHeadConflict", () => {
     for (let i = 0; i < 6; i++)
       deep = Object.assign(new Error(`wrap ${i}`), { cause: deep });
     expect(repositoryHeadConflict(deep)).toBeNull();
-    expect(isMainRepositoryConflict(deep)).toBe(false);
-    expect(
-      isMainRepositoryConflict(
-        pg("repository_binding_heads_main_repository_uq"),
-      ),
-    ).toBe(true);
-    expect(
-      isMainRepositoryConflict(
-        pg("repository_binding_heads_main_is_linked_elsewhere"),
-      ),
-    ).toBe(false);
   });
 });
 
@@ -1017,9 +1005,7 @@ describe("bind_main_repository", () => {
         reason: "main_repo_plane_unsupported",
       });
       expect(
-        writes.inserts.filter(
-          (w) => w.table === schema.repositoryBindingHeads,
-        ),
+        writes.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
       ).toHaveLength(0);
     });
   });
