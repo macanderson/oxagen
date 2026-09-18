@@ -20,6 +20,7 @@ import {
   runRow,
   runSource,
   runTranscript,
+  transcriptBody,
   transcriptEntry,
 } from "./run.builders";
 
@@ -340,7 +341,15 @@ describe("transcript", () => {
         detail: ok(runDetail()),
         transcript: ok(
           runTranscript({
-            entries: [transcriptEntry({ text: null, fidelity: "digest_only" })],
+            entries: [
+              transcriptEntry({
+                response: transcriptBody({
+                  text: null,
+                  fidelity: "digest_only",
+                  bytesRef: null,
+                }),
+              }),
+            ],
           }),
         ),
       },
@@ -355,7 +364,12 @@ describe("transcript", () => {
         detail: ok(runDetail()),
         transcript: ok(
           runTranscript({
-            entries: [transcriptEntry({ seq: "37", truncated: true })],
+            entries: [
+              transcriptEntry({
+                seq: "37",
+                response: transcriptBody({ seq: "37", truncated: true }),
+              }),
+            ],
           }),
         ),
       },

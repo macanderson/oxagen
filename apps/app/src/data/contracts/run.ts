@@ -163,9 +163,58 @@ const TranscriptEntryKind = z.enum([
   "turn",
   "model_call",
   "tool_call",
+  "policy",
   "frame",
 ]);
 type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
+
+/** The chips the Transcript tab filters on, as `get_run_transcript` publishes them. */
+export const TranscriptKind = z.enum([
+  "prompt",
+  "responses",
+  "tools",
+  "policy",
+  "recall",
+  "usage",
+  "errors",
+]);
+export type TranscriptKind = z.infer<typeof TranscriptKind>;
+
+/**
+ * One half of an exchange: the frame that carried it, and what it said.
+ * `request` is what went out, `response` is what came back — so one tool step
+ * shows the input it was called with and the result it returned, in one entry.
+ */
+export const TranscriptBody = z.object({
+  seq: z.string().regex(/^\d+$/),
+  type: z.string(),
+  /** sha256 over the redacted bytes; null when the frame carried no content. */
+  digest: z.string().nullable(),
+  /** Where the bytes were retained; null under `digest_only`. */
+  bytesRef: z.string().nullable(),
+  redactions: z.array(
+    z.object({
+      path: z.string(),
+      reason: z.string(),
+      originalDigest: z.string(),
+    }),
+  ),
+  fidelity: FrameFidelity,
+  /** The body text; null when none was retained or it is not UTF-8. */
+  text: z.string().nullable(),
+  /** True when the text was cut at the contract's ceiling. */
+  truncated: z.boolean(),
+});
+export type TranscriptBody = z.infer<typeof TranscriptBody>;
+
+/** A decision a rule or a person made about the call the entry records. */
+export const TranscriptDecision = z.object({
+  seq: z.string().regex(/^\d+$/),
+  decision: z.string(),
+  type: z.string(),
+  at: z.iso.datetime({ offset: true }),
+});
+export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */
@@ -173,26 +222,33 @@ export const TranscriptEntry = z.object({
   /** The last frame folded into it; equals `seq` for a single frame. */
   endSeq: z.string().regex(/^\d+$/),
   at: z.iso.datetime({ offset: true }),
+  /** Milliseconds from the run's recorded start; never negative. */
+  elapsedMs: z.number().int().nonnegative(),
   kind: TranscriptEntryKind,
   /** The opening frame's recorded type. */
   type: z.string(),
   /** A short machine-derived label, never prose. */
   label: z.string(),
-  /** The opening frame's body text; null when none was retained or it is not UTF-8. */
-  text: z.string().nullable(),
-  /** True when the text was cut at the contract's ceiling. */
-  truncated: z.boolean(),
-  fidelity: FrameFidelity,
+  /** The chips this entry answers to. */
+  kinds: z.array(TranscriptKind),
+  request: TranscriptBody.nullable(),
+  response: TranscriptBody.nullable(),
+  decision: TranscriptDecision.nullable(),
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),
   cost: Cost.nullable(),
+  /** Every cost record of the run up to and including this entry. */
+  cumulativeCost: Cost.nullable(),
 });
 export type TranscriptEntry = z.infer<typeof TranscriptEntry>;
 
 /** `get_run_transcript` at one zoom level. */
 export const RunTranscript = z.object({
   zoom: TranscriptZoom,
+  kinds: z.array(TranscriptKind),
   entries: z.array(TranscriptEntry),
+  /** The point to continue from; null when nothing lies past this page. */
+  cursor: z.string().nullable(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
 });

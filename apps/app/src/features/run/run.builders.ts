@@ -8,6 +8,7 @@ import type {
   RunFrame,
   RunFrameBody,
   RunTranscript,
+  TranscriptBody,
   TranscriptEntry,
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
@@ -88,6 +89,23 @@ export function runFrameBody(
   };
 }
 
+/** One half of the exchange, with its body retained and readable. */
+export function transcriptBody(
+  overrides: Partial<TranscriptBody> = {},
+): TranscriptBody {
+  return {
+    seq: "11",
+    type: "model.call_completed",
+    digest: `sha256:${"a".repeat(64)}`,
+    bytesRef: "evb:v1:k:abc",
+    redactions: [],
+    fidelity: "full",
+    text: "Cutting release/3.2 from main.",
+    truncated: false,
+    ...overrides,
+  };
+}
+
 export function transcriptEntry(
   overrides: Partial<TranscriptEntry> = {},
 ): TranscriptEntry {
@@ -95,14 +113,21 @@ export function transcriptEntry(
     seq: "11",
     endSeq: "14",
     at: at(-3000),
+    elapsedMs: 3000,
     kind: "model_call",
     type: "model.call_completed",
     label: "claude-opus-5",
-    text: "Cutting release/3.2 from main.",
-    truncated: false,
-    fidelity: "full",
+    kinds: ["responses"],
+    request: null,
+    response: transcriptBody(),
+    decision: null,
     frames: 4,
     cost: { micros: "18240", currency: "USD", basis: "gateway_observed" },
+    cumulativeCost: {
+      micros: "18240",
+      currency: "USD",
+      basis: "gateway_observed",
+    },
     ...overrides,
   };
 }
@@ -112,7 +137,9 @@ export function runTranscript(
 ): RunTranscript {
   return {
     zoom: "steps",
+    kinds: [],
     entries: [transcriptEntry()],
+    cursor: null,
     complete: true,
     ...overrides,
   };

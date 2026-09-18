@@ -159,24 +159,47 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
   };
 }
 
+/** One half of the exchange, or null where the recording has only the other. */
+function toTranscriptBody(
+  half: RunTranscriptOutput["entries"][number]["request"],
+): z.input<typeof RunTranscript>["entries"][number]["request"] {
+  return half === null
+    ? null
+    : {
+        seq: half.seq,
+        type: half.type,
+        digest: half.digest,
+        bytesRef: half.bytesRef,
+        redactions: half.redactions,
+        fidelity: half.fidelity,
+        text: half.text,
+        truncated: half.truncated,
+      };
+}
+
 export function toRunTranscript(
   out: RunTranscriptOutput,
 ): z.input<typeof RunTranscript> {
   return {
     zoom: out.zoom,
+    kinds: out.kinds,
     entries: out.entries.map((entry) => ({
       seq: entry.seq,
       endSeq: entry.endSeq,
       at: entry.at,
+      elapsedMs: entry.elapsedMs,
       kind: entry.kind,
       type: entry.type,
       label: entry.label,
-      text: entry.text,
-      truncated: entry.truncated,
-      fidelity: entry.fidelity,
+      kinds: entry.kinds,
+      request: toTranscriptBody(entry.request),
+      response: toTranscriptBody(entry.response),
+      decision: entry.decision,
       frames: entry.frames,
       cost: toCost(entry.cost),
+      cumulativeCost: toCost(entry.cumulativeCost),
     })),
+    cursor: out.cursor,
     complete: out.complete,
   };
 }

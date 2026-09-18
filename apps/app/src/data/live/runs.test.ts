@@ -393,25 +393,41 @@ describe("runs.transcript", () => {
             seq: "1",
             endSeq: "4",
             at: "2026-09-15T08:56:00.000Z",
+            elapsedMs: 4000,
             kind: "turn",
             type: "llm_call",
             label: "claude-opus-5",
-            text: null,
-            truncated: false,
-            fidelity: "digest_only",
+            kinds: ["responses"],
+            request: null,
+            response: {
+              seq: "1",
+              type: "llm_call",
+              digest: `sha256:${"a".repeat(64)}`,
+              bytesRef: null,
+              redactions: [],
+              fidelity: "digest_only",
+              text: null,
+              truncated: false,
+            },
+            decision: null,
             frames: 4,
             cost: null,
+            cumulativeCost: null,
           },
         ],
+        kinds: [],
+        cursor: null,
         complete: false,
       }),
     );
     const read = await runs.transcript(ctx, "tse_4f0a", "turns");
     expect(read.ok && read.value.complete).toBe(false);
-    expect(read.ok && read.value.entries[0]?.fidelity).toBe("digest_only");
+    expect(read.ok && read.value.entries[0]?.response?.fidelity).toBe(
+      "digest_only",
+    );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runTranscriptGet,
-      input: { runId: "tse_4f0a", zoom: "turns" },
+      input: { runId: "tse_4f0a", zoom: "turns", kinds: [], limit: 200 },
       page: "run",
     });
   });

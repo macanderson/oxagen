@@ -26,6 +26,9 @@ const ledgerRun: Run = {
   sealedAt: "2026-09-15T08:40:00.000Z",
   replayGrade: "fork",
   verdict: null,
+  enforcementTier: "gateway",
+  completenessGaps: [],
+  canSummarize: true,
   name: "Cut the 3.2 release branch",
   summary: {
     text: "Cut release/3.2 from main and opened the release pull request.",
@@ -49,6 +52,11 @@ const unpricedSession: Run = {
   sealedAt: null,
   replayGrade: null,
   verdict: null,
+  // A live observe-tier session: it records what the agent did and gives
+  // Oxagen no connection point, so the page disables the direct controls.
+  enforcementTier: "observe",
+  completenessGaps: [],
+  canSummarize: false,
   name: null,
   summary: null,
 };

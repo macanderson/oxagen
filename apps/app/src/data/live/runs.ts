@@ -14,7 +14,10 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
-import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_DEFAULT,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
@@ -114,7 +117,9 @@ export const runs: DataSource["runs"] = {
   async transcript(ctx, runId, zoom) {
     const read = await kernelRead(ctx, {
       contract: runTranscriptGet,
-      input: { runId, zoom },
+      // The chips and the page are the contract's defaults: the Transcript
+      // tab reads one page of the whole transcript. Lane 3 wires the chips.
+      input: { runId, zoom, kinds: [], limit: TRANSCRIPT_ENTRY_DEFAULT },
       page: "run",
     });
     if (!read.ok) return read;

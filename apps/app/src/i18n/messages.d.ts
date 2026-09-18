@@ -1664,6 +1664,7 @@ type Messages = {
         model_call: string;
         tool_call: string;
         frame: string;
+        policy: string;
       };
       frame: string;
       frames: string;
@@ -1675,6 +1676,11 @@ type Messages = {
       empty: string;
       complete: string;
       cut: string;
+      request: string;
+      response: string;
+      decision: string;
+      elapsed: string;
+      cumulative: string;
     };
     frames: {
       title: string;

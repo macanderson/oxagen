@@ -9,7 +9,11 @@
 // not carry the whole run says how far it reached. The zoom is a query value,
 // so a level is a link and the page keeps one route.
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
+import type {
+  RunTranscript,
+  TranscriptBody,
+  TranscriptEntry,
+} from "@/data/contracts/run";
 import { TRANSCRIPT_ZOOMS } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
@@ -21,6 +25,52 @@ import { ReadFailure } from "@/ui/read-failure";
 import { Panel } from "./parts";
 
 type Place = { org: string; ws: string; runId: string };
+
+/**
+ * One half of the exchange: what went out, or what came back. A half whose
+ * body was not retained says so rather than showing an empty bubble, and one
+ * cut at the contract's ceiling links to the frame's whole body on the Frames
+ * tab (`get_run_frame_body`).
+ */
+function Half({
+  half,
+  label,
+  org,
+  ws,
+  runId,
+}: { half: TranscriptBody; label: string } & Place) {
+  const t = useTranslations("run.transcript");
+  return (
+    <div data-testid="transcript-half" data-half={label} className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {half.text === null ? (
+        <p className="text-xs text-muted-foreground">
+          {t(half.fidelity === "digest_only" ? "digestOnly" : "noBody")}
+        </p>
+      ) : (
+        <pre
+          className={`${mono} max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs`}
+        >
+          {half.text}
+        </pre>
+      )}
+      {half.truncated ? (
+        <p
+          data-testid="entry-truncated"
+          className="text-xs text-muted-foreground"
+        >
+          {t("truncated")}{" "}
+          <SafeLink
+            to={routes.run(org, ws, runId, { tab: "frames", body: half.seq })}
+            className={linkText}
+          >
+            {t("openFrame", { seq: half.seq })}
+          </SafeLink>
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
@@ -50,33 +100,49 @@ function Entry({ entry, org, ws, runId }: { entry: TranscriptEntry } & Place) {
             <Money value={entry.cost} precision="exact" />
           </span>
         )}
+        {entry.cumulativeCost === null ? null : (
+          <span data-testid="entry-cumulative">
+            {t.rich("cumulative", {
+              cost: () => (
+                <Money value={entry.cumulativeCost!} precision="exact" />
+              ),
+            })}
+          </span>
+        )}
         <span>{t("folded", { count: formatCount(entry.frames, locale) })}</span>
       </div>
-      {entry.text === null ? (
-        <p className="text-xs text-muted-foreground">
-          {t(entry.fidelity === "digest_only" ? "digestOnly" : "noBody")}
+      {entry.decision === null ? null : (
+        <p data-testid="entry-decision" className="text-xs text-muted-foreground">
+          {t("decision", {
+            decision: entry.decision.decision,
+            seq: entry.decision.seq,
+          })}
         </p>
-      ) : (
-        <pre
-          className={`${mono} max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-xs`}
-        >
-          {entry.text}
-        </pre>
       )}
-      {entry.truncated ? (
-        <p
-          data-testid="entry-truncated"
-          className="text-xs text-muted-foreground"
-        >
-          {t("truncated")}{" "}
-          <SafeLink
-            to={routes.run(org, ws, runId, { tab: "frames", body: entry.seq })}
-            className={linkText}
-          >
-            {t("openFrame", { seq: entry.seq })}
-          </SafeLink>
-        </p>
-      ) : null}
+      {entry.request === null && entry.response === null ? (
+        <p className="text-xs text-muted-foreground">{t("noBody")}</p>
+      ) : (
+        <>
+          {entry.request === null ? null : (
+            <Half
+              half={entry.request}
+              label={t("request")}
+              org={org}
+              ws={ws}
+              runId={runId}
+            />
+          )}
+          {entry.response === null ? null : (
+            <Half
+              half={entry.response}
+              label={t("response")}
+              org={org}
+              ws={ws}
+              runId={runId}
+            />
+          )}
+        </>
+      )}
     </li>
   );
 }

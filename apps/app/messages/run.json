@@ -35,7 +35,8 @@
         "turn": "Turn",
         "model_call": "Model call",
         "tool_call": "Tool call",
-        "frame": "Frame"
+        "frame": "Frame",
+        "policy": "Decision"
       },
       "frame": "frame {seq}",
       "frames": "frames {from} to {to}",
@@ -46,7 +47,12 @@
       "openFrame": "Read the whole body of frame {seq}",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
       "complete": "{count} entries. This is the whole run.",
-      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end."
+      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end.",
+      "request": "Sent",
+      "response": "Returned",
+      "decision": "Decision: {decision}, at frame {seq}",
+      "elapsed": "{elapsed} into the run",
+      "cumulative": "{cost} so far"
     },
     "frames": {
       "title": "Frames",
