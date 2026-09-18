@@ -4,14 +4,45 @@ import { makeCTX } from "./test-utils/fixtures";
 
 const mocks = vi.hoisted(() => ({
   withTenantDb: vi.fn(),
+  withSystemDb: vi.fn(),
   assertOrgRole: vi.fn(async () => "Owner"),
   resolveActingUserId: vi.fn(async (c: { userId: string | null }) => c.userId),
+  // Widened deliberately: a test overrides `mode` to "dedicated" to cover the
+  // ADR-042 refusal, and inferring the literal "shared" from the default would
+  // make that override a type error.
+  resolveDataPlane: vi.fn(
+    async (): Promise<{
+      orgId: string;
+      kind: "postgres";
+      mode: "shared" | "dedicated";
+      status: "active";
+    }> => ({
+      orgId: "org-uuid",
+      kind: "postgres",
+      mode: "shared",
+      status: "active",
+    }),
+  ),
+  assertDataPlaneUsable: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  const __dbMock = {
+    ...real,
+    withTenantDb: mocks.withTenantDb,
+    withSystemDb: mocks.withSystemDb,
+  };
   return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
+});
+
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return {
+    ...real,
+    resolveDataPlane: mocks.resolveDataPlane,
+    assertDataPlaneUsable: mocks.assertDataPlaneUsable,
+  };
 });
 
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -139,7 +170,32 @@ beforeEach(() => {
   mocks.resolveActingUserId.mockImplementation(
     async (c: { userId: string | null }) => c.userId,
   );
+  // Shared plane, and no other workspace claims this repository, unless the
+  // test says otherwise. `resetAllMocks` drops these, so they are re-armed
+  // here rather than only at the `vi.hoisted` definition.
+  mocks.resolveDataPlane.mockResolvedValue({
+    orgId: "org-uuid",
+    kind: "postgres",
+    mode: "shared",
+    status: "active",
+  });
+  claimedElsewhere([]);
 });
+
+/**
+ * What the cross-tenant exclusivity read finds. `[]` is "nobody else steers by
+ * this repository"; a row is another workspace's claim on it.
+ */
+function claimedElsewhere(result: unknown[]): void {
+  mocks.withSystemDb.mockImplementation(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({ where: () => ({ limit: async () => result }) }),
+        }),
+      }),
+  );
+}
 
 describe("bind_main_repository", () => {
   it("refuses a caller who is not an org Owner or Admin, before reading anything", async () => {
@@ -447,5 +503,149 @@ describe("bind_main_repository", () => {
       );
     const out = await handler().run(INPUT, makeCTX());
     expect(out).toMatchObject({ provisionalClosed: false });
+  });
+
+  // ── One repository steers exactly one workspace, anywhere ──────────────────
+  // `.oxagen/rules/` lives in the main repository and is keyed by the
+  // repository's full name, so two workspaces sharing one would write the same
+  // rule set into the same files and read each other's records back as their
+  // own. The guarantee is the partial unique index; these cover the handler's
+  // two jobs around it — refusing with a sentence, and never leaking whose
+  // claim it collided with.
+  describe("a repository already steering another workspace", () => {
+    it("is refused, and the refusal names neither the org nor the workspace holding it", async () => {
+      claimedElsewhere([{ workspaceId: "someone-elses-workspace" }]);
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+      const message = (err as Error).message;
+      expect(message).toContain("Acme/Widgets");
+      // The index is global, so this fires across tenants. Naming the holder
+      // would report one customer's existence and repository choices to
+      // another.
+      expect(message).not.toContain("someone-elses-workspace");
+      // Refused before the transaction: nothing is written, and the advisory
+      // lock is never even taken.
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.locks).toBe(0);
+    });
+
+    it("refuses with the same conflict when the claim lands mid-flight, rather than surfacing a raw constraint violation", async () => {
+      // The window the pre-check cannot close: both binds read no claim, and
+      // the loser meets the unique index inside its transaction. The advisory
+      // lock does not serialise them — it is keyed on the workspace.
+      claimedElsewhere([]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      const violation = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("duplicate key value"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_main_repository_uq",
+        }),
+      });
+      mocks.withTenantDb.mockReset();
+      mocks.withTenantDb
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            select: () => ({
+              from: () => ({
+                where: () => ({ orderBy: async () => [CONNECTED_CONNECTION] }),
+              }),
+            }),
+          }),
+        )
+        .mockImplementationOnce(async () => {
+          throw violation;
+        });
+
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+    });
+
+    it("lets an unrelated unique violation through as itself", async () => {
+      // Matching on 23505 alone would report a collision on
+      // `repository_binding_heads_repository_uq` — a different fault entirely —
+      // as "claimed by another workspace", sending the operator to look for a
+      // workspace that does not exist.
+      claimedElsewhere([]);
+      wire({ connections: [CONNECTED_CONNECTION] });
+      const unrelated = Object.assign(new Error("insert failed"), {
+        cause: Object.assign(new Error("duplicate key value"), {
+          code: "23505",
+          constraint_name: "repository_binding_heads_repository_uq",
+        }),
+      });
+      mocks.withTenantDb.mockReset();
+      mocks.withTenantDb
+        .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            select: () => ({
+              from: () => ({
+                where: () => ({ orderBy: async () => [CONNECTED_CONNECTION] }),
+              }),
+            }),
+          }),
+        )
+        .mockImplementationOnce(async () => {
+          throw unrelated;
+        });
+
+      await expect(handler().run(INPUT, makeCTX())).rejects.toThrow(
+        "insert failed",
+      );
+    });
+
+    it("marks the head it writes as the main repository, which is what the index constrains", async () => {
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      await handler().run(INPUT, makeCTX());
+      const head = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({ role: "main" });
+    });
+
+    it("refuses an organisation on a dedicated data plane, where the index cannot see other planes", async () => {
+      // ADR-042: a unique index is global only within one Postgres. Admitting
+      // the bind there would allow the second claim this guard exists to
+      // refuse, so it refuses rather than pretending to have checked.
+      mocks.resolveDataPlane.mockResolvedValue({
+        orgId: "org-uuid",
+        kind: "postgres",
+        mode: "dedicated",
+        status: "active",
+      });
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+
+      const err = await handler()
+        .run(INPUT, makeCTX())
+        .then(
+          () => null,
+          (e: unknown) => e,
+        );
+
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "main_repo_plane_unsupported",
+      });
+      expect(writes.inserts).toHaveLength(0);
+    });
   });
 });
