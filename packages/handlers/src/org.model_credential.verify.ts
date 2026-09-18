@@ -2,8 +2,9 @@
 // whether a key is accepted and reports the vendor's answer. The kernel's
 // capability.invoke_* audit records who asked; only the mutations
 // (org.model_credential.set / .delete) warrant a model_credential.* row.
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { probeModelCredential } from "@oxagen/ai";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { orgModelCredentialVerify } from "@oxagen/oxagen/contracts/org.model_credential.verify";
 import { and, eq, isNull } from "drizzle-orm";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -35,6 +36,15 @@ import { logger } from "./logger";
 export const orgModelCredentialVerifyHandler: CapabilityHandler<
   typeof orgModelCredentialVerify
 > = async (input, ctx) => {
+  // The org-role check lives HERE, not only in the contract's `defaultRoles`.
+  // The kernel's IAM check is an unconditional allow for every human caller
+  // in a non-enterprise org (packages/iam/src/check-iam.ts), so without this
+  // any member could make the server open the org's stored key and send it to a vendor. `defaultRoles` documents the intent; this
+  // enforces it (INV-29). Pinned by role-check.test.ts.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"] },
+  );
   const hasProvider = input.provider !== undefined;
   const hasKey = input.apiKey !== undefined;
   if (hasProvider !== hasKey) {
@@ -75,7 +85,13 @@ export const orgModelCredentialVerifyHandler: CapabilityHandler<
 
   const stored = await loadModelCredential(ctx.orgId);
   if (!stored) {
-    throw new Error("No model credential is stored for this organisation");
+    // A typed refusal, so every surface maps it to 404 rather than to an
+    // unclassified 500 — the caller asked about a thing that does not exist.
+    throw new HandlerError({
+      code: "not_found",
+      reason: "model_credential_not_stored",
+      message: "No model credential is stored for this organisation",
+    });
   }
   const probe = await probeModelCredential({
     provider: stored.provider,

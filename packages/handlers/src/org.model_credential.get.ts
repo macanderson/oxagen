@@ -2,6 +2,7 @@
 // kernel's capability.invoke_* audit already records who read it. Only the
 // mutations (org.model_credential.set / .delete) warrant a domain-specific
 // model_credential.* row.
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import {
@@ -94,6 +95,15 @@ export function toCredentialView(
 export const orgModelCredentialGetHandler: CapabilityHandler<
   typeof orgModelCredentialGet
 > = async (_input, ctx) => {
+  // The org-role check lives HERE, not only in the contract's `defaultRoles`.
+  // The kernel's IAM check is an unconditional allow for every human caller
+  // in a non-enterprise org (packages/iam/src/check-iam.ts), so without this
+  // any member could read which vendor the org pays and the endpoint its assistant calls. `defaultRoles` documents the intent; this
+  // enforces it (INV-29). Pinned by role-check.test.ts.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"] },
+  );
   const row = await withTenantDb((tx) =>
     tx.query.modelCredentials.findFirst({
       where: and(

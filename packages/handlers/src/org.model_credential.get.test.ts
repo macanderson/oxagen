@@ -21,6 +21,28 @@ import {
   orgModelCredentialGetHandler,
   toCredentialView,
 } from "./org.model_credential.get";
+// The org-role gate every model-credential handler asserts (INV-29). Allows
+// by default — an org Admin — so each case below tests its own behaviour;
+// the refusal cases set `roleGate.refuse` and assert nothing else ran.
+const roleGate = vi.hoisted(() => ({
+  refuse: false,
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId?: string | null }) =>
+    ctx.userId ?? null,
+  assertOrgRole: roleGate.assertOrgRole.mockImplementation(async () => {
+    if (roleGate.refuse) {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    }
+    return "Admin";
+  }),
+  resolveActorOrgRole: async () => null,
+  resolveActorWorkspaceRole: async () => null,
+}));
+
 import { orgModelCredentialGet } from "@oxagen/oxagen/contracts/org.model_credential.get";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -203,5 +225,19 @@ describe("org.model_credential.get handler", () => {
     const out = await orgModelCredentialGetHandler({}, CTX);
     expect(out.configured).toBe(true);
     expect(out.status).toBe("disabled");
+  });
+});
+
+describe("org.model_credential.get handler — the role gate", () => {
+  it("refuses a non-admin before reading the row", async () => {
+    roleGate.refuse = true;
+    try {
+      await expect(orgModelCredentialGetHandler({}, CTX)).rejects.toThrow(
+        /forbidden/,
+      );
+      expect(mocks.findFirst).not.toHaveBeenCalled();
+    } finally {
+      roleGate.refuse = false;
+    }
   });
 });

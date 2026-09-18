@@ -39,6 +39,28 @@ vi.mock("@oxagen/database/model-credential", () => ({
 }));
 
 import { orgModelCredentialVerifyHandler } from "./org.model_credential.verify";
+// The org-role gate every model-credential handler asserts (INV-29). Allows
+// by default — an org Admin — so each case below tests its own behaviour;
+// the refusal cases set `roleGate.refuse` and assert nothing else ran.
+const roleGate = vi.hoisted(() => ({
+  refuse: false,
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId?: string | null }) =>
+    ctx.userId ?? null,
+  assertOrgRole: roleGate.assertOrgRole.mockImplementation(async () => {
+    if (roleGate.refuse) {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    }
+    return "Admin";
+  }),
+  resolveActorOrgRole: async () => null,
+  resolveActorWorkspaceRole: async () => null,
+}));
+
 import { orgModelCredentialVerify } from "@oxagen/oxagen/contracts/org.model_credential.verify";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -240,5 +262,30 @@ describe("org.model_credential.verify handler — an openai_compatible key", () 
     mocks.loadModelCredential.mockResolvedValue(COMPAT_STORED);
     await orgModelCredentialVerifyHandler({}, CTX);
     expect(mocks.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("org.model_credential.verify handler — the role gate", () => {
+  it("refuses a non-admin before the stored key is opened", async () => {
+    roleGate.refuse = true;
+    try {
+      await expect(orgModelCredentialVerifyHandler({}, CTX)).rejects.toThrow(
+        /forbidden/,
+      );
+      expect(mocks.loadModelCredential).not.toHaveBeenCalled();
+      expect(mocks.probe).not.toHaveBeenCalled();
+    } finally {
+      roleGate.refuse = false;
+    }
+  });
+
+  it("reports a missing stored key as not_found, not an unclassified error", async () => {
+    mocks.loadModelCredential.mockResolvedValue(null);
+    await expect(
+      orgModelCredentialVerifyHandler({}, CTX),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "model_credential_not_stored",
+    });
   });
 });

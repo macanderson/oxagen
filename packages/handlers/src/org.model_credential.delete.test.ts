@@ -40,6 +40,28 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 import { orgModelCredentialDeleteHandler } from "./org.model_credential.delete";
+// The org-role gate every model-credential handler asserts (INV-29). Allows
+// by default — an org Admin — so each case below tests its own behaviour;
+// the refusal cases set `roleGate.refuse` and assert nothing else ran.
+const roleGate = vi.hoisted(() => ({
+  refuse: false,
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId?: string | null }) =>
+    ctx.userId ?? null,
+  assertOrgRole: roleGate.assertOrgRole.mockImplementation(async () => {
+    if (roleGate.refuse) {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    }
+    return "Admin";
+  }),
+  resolveActorOrgRole: async () => null,
+  resolveActorWorkspaceRole: async () => null,
+}));
+
 import { orgModelCredentialDelete } from "@oxagen/oxagen/contracts/org.model_credential.delete";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -122,5 +144,19 @@ describe("org.model_credential.delete handler — nothing was stored", () => {
     mocks.findFirst.mockResolvedValue(undefined);
     await orgModelCredentialDeleteHandler({}, CTX);
     expect(mocks.invalidate).toHaveBeenCalledWith(CTX.orgId);
+  });
+});
+
+describe("org.model_credential.delete handler — the role gate", () => {
+  it("refuses a non-admin before removing anything", async () => {
+    roleGate.refuse = true;
+    try {
+      await expect(orgModelCredentialDeleteHandler({}, CTX)).rejects.toThrow(
+        /forbidden/,
+      );
+      expect(mocks.invalidate).not.toHaveBeenCalled();
+    } finally {
+      roleGate.refuse = false;
+    }
   });
 });

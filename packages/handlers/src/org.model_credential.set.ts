@@ -1,3 +1,4 @@
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { createHash } from "node:crypto";
 import { assertPublicHttpUrl } from "@oxagen/config/public-url";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -68,6 +69,16 @@ export function keyHintOf(apiKey: string): string {
 export const orgModelCredentialSetHandler: CapabilityHandler<
   typeof orgModelCredentialSet
 > = async (input, ctx) => {
+  // The org-role check lives HERE, not only in the contract's `defaultRoles`.
+  // The kernel's IAM check is an unconditional allow for every human caller
+  // in a non-enterprise org (packages/iam/src/check-iam.ts), so without this
+  // any member could replace the org's key — and with an `openai_compatible` endpoint,
+  // route every assistant conversation in the org to a server they own. `defaultRoles` documents the intent; this
+  // enforces it (INV-29). Pinned by role-check.test.ts.
+  await assertOrgRole(
+    { ...ctx, userId: await resolveActingUserId(ctx) },
+    { org: ["Owner", "Admin"] },
+  );
   // The contract already refused an internal endpoint as `invalid_input`.
   // This is the backstop for a caller that reaches the handler without the
   // kernel's parse — a test, a script, a future internal path — since the
