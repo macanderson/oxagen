@@ -1293,6 +1293,78 @@ describe("a binding whose connection was retired", () => {
   });
 });
 
+/**
+ * Re-approving the production ref on a LIVE connection (#3265 review, P1).
+ *
+ * Steering pins Context PRs to the binding's approved ref and refuses any other
+ * base, so a default-branch rename on GitHub stops the workspace dead. The
+ * handler fix makes `bind_main_repository` write a successor when the recorded
+ * facts have moved; these prove a person can actually reach it, which is the
+ * half that makes it a recovery path rather than an API capability nobody can
+ * call.
+ */
+describe("re-approving the default branch on a live connection", () => {
+  beforeEach(() => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: bound });
+  });
+
+  it("offers the re-approval beside the note that the repository itself is fixed", async () => {
+    await openSettings();
+    await screen.findByTestId("workspace-repository-bound");
+    const panel = await screen.findByTestId("workspace-repository-reapprove");
+    expect(panel).toHaveTextContent(
+      /refused until the new branch is approved/i,
+    );
+    // Both statements are true at once and answer different questions: which
+    // repository is main is fixed here; which branch it publishes to is not.
+    expect(screen.getByText(/cannot be changed here/i)).toBeTruthy();
+  });
+
+  it("binds the SAME owner and name, so nothing about which repository is main moves", async () => {
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-reapprove");
+
+    await user.click(
+      screen.getByRole("button", { name: "Re-approve the default branch" }),
+    );
+
+    expect(bindWorkspaceRepository).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      { owner: "acme", name: "platform" },
+    );
+    // No picker is drawn and no listing is fetched: choosing a repository is a
+    // different act, and this one never offers it.
+    expect(screen.queryByTestId("workspace-repository-picker")).toBeNull();
+    expect(listInstallationRepositories).not.toHaveBeenCalled();
+  });
+
+  it("shows the refusal on the panel when the re-approval is refused (negative)", async () => {
+    bindWorkspaceRepository.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "org.admin",
+    });
+    const { user } = await openSettings();
+    await screen.findByTestId("workspace-repository-reapprove");
+
+    await user.click(
+      screen.getByRole("button", { name: "Re-approve the default branch" }),
+    );
+
+    expect(
+      await screen.findByTestId("workspace-repository-reapprove-failure"),
+    ).toHaveTextContent("Only an organization Owner or Admin");
+  });
+
+  it("is not drawn twice when the connection is retired — that panel owns the repair", async () => {
+    readWorkspaceRepository.mockResolvedValue({ ok: true, value: retired });
+    await openSettings();
+    await screen.findByTestId("workspace-repository-retired");
+    expect(screen.queryByTestId("workspace-repository-reapprove")).toBeNull();
+  });
+});
+
 describe("refusals on the panel's own read", () => {
   it("says a member without the role cannot read this, rather than showing nothing (negative)", async () => {
     readWorkspaceRepository.mockResolvedValue({

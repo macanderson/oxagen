@@ -285,6 +285,14 @@ describe("bind_main_repository", () => {
             publicId: "rpb_first",
             createdAt: boundAt,
             version: 1,
+            // Every fact the binding records still matches what GitHub reports,
+            // which is what makes this idempotent. Drift in any one of them is
+            // a re-approval and writes a successor — see the tests below.
+            connectionId: "conn-uuid",
+            providerOwner: REPO.owner,
+            providerName: REPO.name,
+            providerFullName: REPO.fullName,
+            configuredDefaultRef: REPO.defaultBranch,
           },
         ],
       ],
@@ -326,6 +334,14 @@ describe("bind_main_repository", () => {
       publicId: "rpb_first",
       createdAt: new Date("2026-09-16T08:00:00.000Z"),
       version: 3,
+      // The repository's own facts are unchanged; only the connection moved.
+      // Stated explicitly so these tests keep proving the CONNECTION repair
+      // rather than passing on incidental drift in some other field.
+      connectionId: "retired-conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: REPO.defaultBranch,
     };
 
     function repair() {
@@ -417,6 +433,113 @@ describe("bind_main_repository", () => {
       });
       expect(writes.inserts).toHaveLength(0);
       expect(writes.updates).toHaveLength(0);
+    });
+  });
+
+  /**
+   * The other repair, and the state that needs it (#3265 review, P1).
+   *
+   * Steering resolves `defaultBranch` from the binding's `configuredDefaultRef`
+   * and `assertProductionBase` refuses any Context PR whose base is not it — so
+   * once GitHub's default branch is renamed, a workspace whose binding still
+   * names the old one can open and merge nothing. Before this, re-binding the
+   * same repository through the same connection took the idempotent branch,
+   * compared only the connection, and wrote nothing: the one repair the UI
+   * offers did not repair it, and `set_main_repository` is a spec entry with no
+   * contract and no handler. The ref had no way to change from any surface.
+   *
+   * A binding version is defined by the table's own header as "a rename or a
+   * reconfigured default ref", so this is the case the version chain exists for.
+   */
+  describe("re-binding the same repository after its recorded facts moved", () => {
+    const HEAD = {
+      id: "head-uuid",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    /** Bound when `main` was the default; GitHub now reports `trunk`. */
+    const STALE_REF_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 1,
+      connectionId: "conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: "main",
+    };
+
+    function rebind(binding: Record<string, unknown>) {
+      return wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[HEAD], [binding]],
+        insertReturns: [{ id: "binding-2", publicId: "rpb_second" }],
+      });
+    }
+
+    it("approves the new default branch by superseding the binding, so steering is unstuck", async () => {
+      const writes = rebind(STALE_REF_BINDING);
+      const out = await handler().run(INPUT, makeCTX());
+
+      const binding = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindings,
+      );
+      // The successor carries the ref GitHub reports NOW. This is the only way
+      // the approved ref ever changes: a deliberate operator re-bind, never
+      // live GitHub state read at steering time — which is the invariant
+      // `resolveRepository` was fixed to hold.
+      expect(binding?.values).toMatchObject({
+        configuredDefaultRef: "trunk",
+        version: 2,
+        supersedesBindingId: "binding-1",
+        connectionId: "conn-uuid",
+        createdById: "u_1",
+      });
+      expect(out).toMatchObject({ bindingId: "rpb_second" });
+    });
+
+    it("moves the head onto the successor so readers resolve the approved ref", async () => {
+      const writes = rebind(STALE_REF_BINDING);
+      await handler().run(INPUT, makeCTX());
+
+      // Without this the successor exists and nothing reads it: `readGitHub-
+      // Connection` resolves through the head, so a head left on the stale
+      // binding would leave steering exactly as stuck as before.
+      const head = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({ currentBindingId: "binding-2" });
+      expect(
+        writes.updates.filter((w) => w.table === schema.repositoryBindings),
+      ).toHaveLength(0);
+    });
+
+    it("supersedes on a repository rename too, carrying every renamed field together", async () => {
+      // `fullName` is dotted into the `set_id` of every Context record file and
+      // `owner`/`name` address every GitHub call, so a rename that updated only
+      // some of them would put the binding in a state no observation produced.
+      const writes = rebind({
+        ...STALE_REF_BINDING,
+        configuredDefaultRef: REPO.defaultBranch,
+        providerOwner: "OldOrg",
+        providerName: "OldName",
+        providerFullName: "OldOrg/OldName",
+      });
+      await handler().run(INPUT, makeCTX());
+
+      const binding = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindings,
+      );
+      expect(binding?.values).toMatchObject({
+        providerOwner: "Acme",
+        providerName: "Widgets",
+        providerFullName: "Acme/Widgets",
+        configuredDefaultRef: "trunk",
+        version: 2,
+        supersedesBindingId: "binding-1",
+      });
     });
   });
 
