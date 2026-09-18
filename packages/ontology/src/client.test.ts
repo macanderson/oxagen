@@ -107,6 +107,16 @@ describe("session() factory (@oxagen/ontology)", () => {
     expect(s).toBe(sessionInstance);
   });
 
+  it("opens a named database when one is given (a provisioned org)", () => {
+    session("org-acme");
+    expect(mocks.sessionFn).toHaveBeenCalledWith({ database: "org-acme" });
+  });
+
+  it("falls back to the pooled database for null", () => {
+    session(null);
+    expect(mocks.sessionFn).toHaveBeenCalledWith({ database: "neo4j" });
+  });
+
   it("returns a fresh session object each call (no session caching)", () => {
     session();
     session();

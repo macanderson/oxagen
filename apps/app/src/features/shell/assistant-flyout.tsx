@@ -16,22 +16,32 @@
 // inside a workspace. On an organization page it says so rather than posting a
 // question that the kernel would refuse for want of a scope.
 //
-// The conversation belongs to the workspace it was opened in: the turn handler
-// matches the conversation on `(id, orgId, workspaceId)` and raises
-// ConversationNotFoundError otherwise. The chrome lives in the organization
-// layout and survives a workspace switch, so the transcript and the
-// conversation id are keyed to the workspace here — a switch clears them, and
-// a reply that lands after the switch is dropped rather than shown under the
-// workspace it does not belong to. Standing on an organization page is not a
-// switch: it has no workspace of its own, so the transcript waits.
+// A conversation belongs to the workspace it was opened in: the turn handler
+// matches it on `(id, orgId, workspaceId)` and raises ConversationNotFoundError
+// otherwise. The chrome lives in the organization layout and survives a
+// workspace switch, so the flyout keeps one thread per workspace (transcript,
+// conversation id, draft, and in-flight flag) and shows the thread of the
+// workspace the person is standing in. Standing on an organization page is not
+// a switch: it has no workspace of its own, so the last thread stays on screen
+// and only the composer is withheld.
 //
-// A turn in flight is invalidated by the occasion it was asked on, not by the
-// place. "org/ws" names a place: A → B → A puts the same string back, so a
-// comparison on it cannot tell "still the turn I started" from "back where I
-// started", and a slow A turn would land in the transcript the return to A had
-// just cleared. The reset bumps a generation instead — a return included — and
-// a turn compares the generation it was asked on, so its reply, its run and
-// its conversation id reach only the transcript that asked for them.
+// A turn the person walks away from is owned to completion, not cancelled
+// (ADR-092). Its reply, run, conversation id, and any parked writes are written
+// to the thread of the workspace it was asked in, so they are waiting there on
+// the way back, and the workspace the person moved to is never handed a reply
+// that is not its own. This used to be the other way round: leaving cleared
+// the transcript, a generation counter discarded the reply on its return, and
+// the counter had to be written during render, under an `eslint-disable`,
+// because an effect wrote it a task too late and a reply could land in that
+// gap. Routing by the workspace a turn was asked in removes the race instead
+// of winning it: there is no timing at which a reply can reach the wrong
+// thread.
+//
+// Stopping a turn on purpose is a different thing from walking away from it,
+// and it is not here. It belongs to run controls (#2953), whose job is to
+// cancel any run through one mechanism rather than one per surface. An
+// assistant turn is recorded as a run, so that mechanism will cover it. It
+// does not exist yet: today nothing stops a turn once it is asked.
 //
 // Each answer names the run it was recorded as, and links it. `list_runs`
 // excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
@@ -110,6 +120,26 @@ type Entry =
       parked: readonly ParkedCard[];
     }
   | { kind: "refused"; id: string; code: Refusal };
+
+/**
+ * One workspace's conversation with the assistant: what was said, the
+ * conversation id that continues it, the half-typed next question, and whether
+ * a turn is in flight. Kept per workspace so each one survives the person
+ * leaving and coming back (ADR-092).
+ */
+type Thread = {
+  entries: readonly Entry[];
+  conversationId: string | null;
+  draft: string;
+  pending: boolean;
+};
+
+const EMPTY_THREAD: Thread = {
+  entries: [],
+  conversationId: null,
+  draft: "",
+  pending: false,
+};
 
 /** The refusal reasons a turn can come back with, each said plainly. */
 type Refusal = "denied" | "invalid" | "exhausted" | "parked" | "unavailable";
@@ -256,52 +286,38 @@ export function AssistantFlyout() {
   // A monotonic key per entry: two turns in the same millisecond would collide
   // on a clock-derived one, and React needs these stable across re-renders.
   const nextIdRef = useRef(0);
-  const [entries, setEntries] = useState<readonly Entry[]>([]);
-  const [draft, setDraft] = useState("");
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  // One thread per workspace, keyed "org/ws" (ADR-092). A turn is written to
+  // the thread of the workspace it was asked in, whatever the person is looking
+  // at when it resolves, so a reply cannot land in the wrong conversation at
+  // any timing. The routing is structural, not a race the code has to win.
+  const [threads, setThreads] = useState<ReadonlyMap<string, Thread>>(
+    () => new Map(),
+  );
 
-  // The workspace the transcript belongs to, "org/ws". Null on an
-  // organization page, which owns no conversation and so changes nothing.
+  // The workspace the person is standing in, "org/ws". Null on an organization
+  // page, which owns no conversation.
   const scope = org === null || ws === null ? null : `${org}/${ws}`;
-  const [scopeShown, setScopeShown] = useState(scope);
-  // Which visit to a workspace the transcript belongs to. Every transition
-  // bumps it, a return to a workspace included, which is the whole point: a
-  // turn started on the first visit to A must not land on the second.
-  const [generation, setGeneration] = useState(0);
-  if (scope !== null && scope !== scopeShown) {
-    // Adjusting state during render rather than in an effect: the stale
-    // transcript never paints under the new workspace.
-    setScopeShown(scope);
-    setGeneration((n) => n + 1);
-    setEntries([]);
-    setConversationId(null);
-    setDraft("");
-    setPending(false);
+  // The workspace whose thread is on screen. An organization page is not a
+  // switch (it has no conversation of its own), so it keeps showing the last
+  // workspace's thread and only withholds the composer. Adjusted during render
+  // rather than in an effect so the previous thread never paints under the new
+  // workspace.
+  const [shownScope, setShownScope] = useState(scope);
+  if (scope !== null && scope !== shownScope) setShownScope(scope);
+  const thread =
+    shownScope === null
+      ? EMPTY_THREAD
+      : (threads.get(shownScope) ?? EMPTY_THREAD);
+  const { entries, draft, pending } = thread;
+
+  /** Change one workspace's thread, from whatever it holds now rather than from this render's copy. */
+  function updateThread(key: string, change: (prior: Thread) => Thread): void {
+    setThreads((prior) => {
+      const next = new Map(prior);
+      next.set(key, change(prior.get(key) ?? EMPTY_THREAD));
+      return next;
+    });
   }
-  // Read by a turn that is still in flight when the person moves: the reply
-  // resolves outside the render that started it and must compare against now,
-  // not against then.
-  //
-  // Written here rather than from an effect. React commits the reset above and
-  // flushes that render's passive effects a task later, so a reply landing in
-  // between would read the generation the person has left, pass the guard, and
-  // append one workspace's answer, run and conversation id to another
-  // workspace's transcript — the very thing the reset just cleared. The
-  // invalidation has to be as synchronous as the reset is.
-  //
-  // Assigning on every render, not only on the change, is what makes a render
-  // write safe: the value is a pure function of this render's own state, so a
-  // render React discards leaves nothing behind — the next committed render
-  // writes what that render's state says, and a navigation that never commits
-  // restores the generation its turn was asked on.
-  const generationRef = useRef(generation);
-  // react-hooks/refs guards against a ref whose value is *rendered from*, which
-  // can leave the screen behind the data. This one is never read during render
-  // — only from a turn's continuation, after the awaited action resolves — and
-  // the effect the rule steers towards is the defect being fixed here.
-  // eslint-disable-next-line react-hooks/refs -- an invalidation token read only outside render; an effect writes it a task too late (see above)
-  generationRef.current = generation;
 
   // Where focus came from, so closing can give it back. Captured at the open,
   // which is the launcher that was tapped — the rail's on a desktop, or, on a
@@ -377,27 +393,42 @@ export function AssistantFlyout() {
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = draft.trim();
-    if (pending || content === "" || org === null || ws === null) return;
+    if (
+      pending ||
+      content === "" ||
+      org === null ||
+      ws === null ||
+      scope === null
+    )
+      return;
     nextIdRef.current += 1;
     const id = `t${nextIdRef.current.toString()}`;
-    setEntries((prior) => [...prior, { kind: "asked", id, text: content }]);
-    setDraft("");
-    setPending(true);
-    const asked = generationRef.current;
     /**
-     * This turn still owns the transcript: the person has not left the
-     * workspace, nor left it and come back, since it was asked. Either would
-     * make its reply, its run and its conversation id belong to a transcript
-     * that is no longer this one.
+     * The thread this turn belongs to, fixed now. Everything it produces goes
+     * back to this thread: the reply, the run, the conversation id, a refusal,
+     * and the end of `pending`. None of it goes to whichever thread is on screen
+     * when the action resolves (ADR-092). A person who asks and then moves on
+     * finds the answer when they come back, and the workspace they moved to is
+     * never handed a reply that is not its own.
      *
-     * One generation holds at most one turn in flight, so nothing else can be
-     * racing this one for `conversationId`: a second turn needs a second
-     * submit, `onSubmit` refuses one while `pending`, and the only thing that
-     * clears `pending` early is the reset — which bumps the generation and
-     * discards this turn on its way past. The test named "refuses a second
-     * question while a turn is in flight" is what keeps that true.
+     * One thread holds at most one turn in flight, so nothing races this one
+     * for `conversationId`. Two layers hold it, and each is enough on its own:
+     * the composer is `disabled` while its thread is `pending`, and the check
+     * at the top of this function refuses a submit that reaches it anyway.
+     * Both survive the person leaving and coming back, because leaving no
+     * longer clears `pending`. The two tests named "refuses a second question
+     * …" fail only when both layers are gone, which is what "each is enough"
+     * means. Turns in two different workspaces are two conversations and run
+     * side by side.
      */
-    const stillOurs = () => generationRef.current === asked;
+    const asked = scope;
+    const { conversationId } = thread;
+    updateThread(asked, (t) => ({
+      ...t,
+      entries: [...t.entries, { kind: "asked", id, text: content }],
+      draft: "",
+      pending: true,
+    }));
     try {
       const result = await askAssistant(org, ws, {
         conversationId,
@@ -405,19 +436,19 @@ export function AssistantFlyout() {
         route,
         entityId: recordOnPage(declaredRecord, rest[1]),
       });
-      if (!stillOurs()) return;
       if (result.ok) {
-        setConversationId(result.value.conversationId);
-        setEntries((prior) => [
-          ...prior,
-          {
-            kind: "answered",
-            id: `${id}-a`,
-            text: result.value.reply,
-            runId: result.value.runId,
-            parked: result.value.parkedCards,
-          },
-        ]);
+        const answered: Entry = {
+          kind: "answered",
+          id: `${id}-a`,
+          text: result.value.reply,
+          runId: result.value.runId,
+          parked: result.value.parkedCards,
+        };
+        updateThread(asked, (t) => ({
+          ...t,
+          conversationId: result.value.conversationId,
+          entries: [...t.entries, answered],
+        }));
         // A parked write is a new approval on the record, created after Fleet
         // and the shell's waiting count were server-rendered
         // (`features/fleet/fleet.tsx` reads `approvals.pending` once per
@@ -427,21 +458,35 @@ export function AssistantFlyout() {
         // components at the URL already showing, without a history entry —
         // only when something actually parked, because an ordinary turn
         // changes nothing either surface reads.
+        //
+        // It refreshes even when the person has moved to another workspace.
+        // The shell's waiting count spans the organization, so it is stale
+        // wherever they are standing, and the parked notice itself waits in
+        // this turn's thread for when they come back.
         if (result.value.parkedCards.length > 0) navigate.refresh();
       } else {
-        setEntries((prior) => [
-          ...prior,
-          { kind: "refused", id: `${id}-a`, code: refusalKey(result) },
-        ]);
+        const refused: Entry = {
+          kind: "refused",
+          id: `${id}-a`,
+          code: refusalKey(result),
+        };
+        updateThread(asked, (t) => ({
+          ...t,
+          entries: [...t.entries, refused],
+        }));
       }
     } catch {
-      if (!stillOurs()) return;
-      setEntries((prior) => [
-        ...prior,
-        { kind: "refused", id: `${id}-a`, code: "unavailable" },
-      ]);
+      const unavailable: Entry = {
+        kind: "refused",
+        id: `${id}-a`,
+        code: "unavailable",
+      };
+      updateThread(asked, (t) => ({
+        ...t,
+        entries: [...t.entries, unavailable],
+      }));
     } finally {
-      if (stillOurs()) setPending(false);
+      updateThread(asked, (t) => ({ ...t, pending: false }));
     }
   }
 
@@ -593,7 +638,9 @@ export function AssistantFlyout() {
                 placeholder={t("composer.placeholder")}
                 data-testid="assistant-composer"
                 onChange={(e) => {
-                  setDraft(e.target.value);
+                  if (shownScope === null) return;
+                  const value = e.target.value;
+                  updateThread(shownScope, (t) => ({ ...t, draft: value }));
                 }}
                 className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
               />

@@ -19,10 +19,15 @@
 -- constraints match the record table's so the two copies cannot disagree on
 -- vocabulary.
 --
--- The backfill copies each classified record's four columns onto the version
--- its last Context PR merge inserted: the newest version whose provenance
--- names `context_pr`. That is the version the record row's copy was written
--- for, whichever version is pinned today.
+-- The backfill reads each version's own classification from the proposal that
+-- merged it, which its provenance names: a `context_pr` entry carries the
+-- proposal's public id in `by`. Copying the record row's four columns instead
+-- would only be right for one version -- whichever the row was last written
+-- for -- and would leave every other version NULL, so promoting an older one
+-- would fall back to that same stale row and reproduce #3312. A version whose
+-- proposal is gone, and every version the legacy `publish_context_record` path
+-- wrote, stays NULL and keeps the record-row fallback `classificationOf`
+-- already applies.
 ALTER TABLE "agent"."context_record_versions"
   ADD COLUMN IF NOT EXISTS "kind" text NULL,
   ADD COLUMN IF NOT EXISTS "force" text NULL,
@@ -36,19 +41,18 @@ ALTER TABLE "agent"."context_record_versions"
 
 UPDATE "agent"."context_record_versions" v
 SET
-  "kind" = r."kind",
-  "force" = r."force",
-  "constraint_effect" = r."constraint_effect",
-  "statement" = r."statement"
-FROM "agent"."context_records" r
-WHERE v."record_id" = r."id"
-  AND r."kind" IS NOT NULL
-  AND v."kind" IS NULL
-  AND v."version_number" = (
-    SELECT max(x."version_number")
-    FROM "agent"."context_record_versions" x
-    WHERE x."record_id" = r."id"
-      AND x."provenance" @> '[{"method": "context_pr"}]'::jsonb
+  "kind" = p."kind",
+  "force" = p."force",
+  "constraint_effect" = p."constraint_effect",
+  "statement" = p."statement"
+FROM "agent"."context_proposals" p
+WHERE v."kind" IS NULL
+  AND p."public_id" = (
+    SELECT e."value" ->> 'by'
+    FROM jsonb_array_elements(v."provenance") AS e("value")
+    WHERE e."value" ->> 'method' = 'context_pr'
+      AND e."value" ->> 'by' IS NOT NULL
+    LIMIT 1
   );
 
 COMMENT ON COLUMN "agent"."context_record_versions"."kind" IS

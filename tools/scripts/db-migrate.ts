@@ -18,7 +18,7 @@ import kleur from "kleur";
 import { formatError } from "./lib/format-error";
 import { migrate as migrateClickhouse } from "@oxagen/telemetry/migrate";
 import { closeClickhouse } from "@oxagen/telemetry";
-import { migrate as migrateNeo4j } from "@oxagen/ontology/migrate";
+import { migrateEveryGraphDatabase } from "@oxagen/ontology/migrate";
 import { closeDriver } from "@oxagen/ontology/client";
 
 /**
@@ -50,7 +50,17 @@ async function main(): Promise<void> {
   if (stores.has("neo4j")) {
     console.log(kleur.bold("[migrate] neo4j"));
     try {
-      await migrateNeo4j();
+      // The pooled database AND every provisioned `org-<namespace>` database
+      // (ADR-098). One entry for both, so a deploy cannot migrate one and not
+      // the other.
+      const { orgDatabases } = await migrateEveryGraphDatabase();
+      if (orgDatabases.length > 0) {
+        console.log(
+          kleur.dim(
+            `[migrate] neo4j: ${orgDatabases.length} organisation database(s): ${orgDatabases.join(", ")}`,
+          ),
+        );
+      }
     } finally {
       await closeDriver();
     }

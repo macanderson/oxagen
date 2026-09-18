@@ -17,6 +17,8 @@ describe("org.model_credential.get capability", () => {
       provider: null,
       status: null,
       keyHint: null,
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
     });
@@ -30,6 +32,8 @@ describe("org.model_credential.get capability", () => {
       provider: "gateway",
       status: "active",
       keyHint: "wxyz",
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: "2026-09-09T10:00:00.000Z",
       rotatedAt: "2026-09-08T10:00:00.000Z",
     });
@@ -41,13 +45,15 @@ describe("org.model_credential.get capability", () => {
     const base = {
       configured: true,
       keyHint: "wxyz",
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
     };
     expect(() =>
       orgModelCredentialGet.output.parse({
         ...base,
-        provider: "anthropic",
+        provider: "not-a-vendor",
         status: "active",
       }),
     ).toThrow();
@@ -66,6 +72,8 @@ describe("org.model_credential.get capability", () => {
       provider: "openrouter",
       status: "active",
       keyHint: "wxyz",
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: null,
       // Hostile / buggy extras — the ADR-053 §2 rule is that a read capability
