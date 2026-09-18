@@ -13,6 +13,7 @@ import {
   applyGraphScope,
   GraphScopeError,
   keepFilteringPositions,
+  rowSelectingParts,
 } from "./graph-scope";
 import type { GraphScope } from "./graph-scope";
 
@@ -133,20 +134,93 @@ const ANCHOR_PROPERTY = `(?<![${ID_PART}])[${ID_START}][${ID_PART}]*\\s*\\.\\s*o
 /** `orgId: $orgId` — a pattern property map key. Never preceded by a dot. */
 const ANCHOR_MAP_KEY = `(?<![${ID_PART}.])orgId\\s*:\\s*\\$orgId(?![${ID_PART}])`;
 const SCOPE_GUARD = new RegExp(`${ANCHOR_PROPERTY}|${ANCHOR_MAP_KEY}`, "u");
+/** `ANCHOR_PROPERTY` with the anchored variable captured, for the per-part rule. */
+const ANCHORED_VARIABLE = new RegExp(
+  `(?<![${ID_PART}])([${ID_START}][${ID_PART}]*)\\s*\\.\\s*orgId\\s*=\\s*\\$orgId(?![${ID_PART}])`,
+  "gu",
+);
+/** A pattern variable: the name written first inside a node `(` or relationship `[`. */
+const PATTERN_VARIABLE = new RegExp(
+  `[([]\\s*([${ID_START}][${ID_PART}]*)`,
+  "gu",
+);
+
+// EVERY ROW-SELECTING PATTERN PART IS ANCHORED (M0, spec §5.3).
+//
+// The query-wide check above answers "is the tenant bound somewhere", and the
+// query ADR-087 leads with shows why that is not enough:
+//
+//     MATCH (a:GraphNode {orgId: $orgId}) MATCH (b:GraphNode) RETURN b
+//
+// Against the pooled database it returns every tenant's nodes; the real-Neo4j
+// probe (`integration/tenant-isolation.test.ts`) runs the raw form to prove it.
+// So the seam also asks the question per PART: every comma-separated pattern
+// part of every `MATCH` / `OPTIONAL MATCH` clause, at every subquery level,
+// must be anchored in one of three ways:
+//
+//   - its own pattern property map binds the tenant (`(b {orgId: $orgId})`);
+//   - its clause's WHERE binds the tenant on a variable written in the part
+//     (`MATCH (b) WHERE b.orgId = $orgId`); or
+//   - it names a variable an EARLIER anchored part bound
+//     (`MATCH (c {orgId: $orgId}) OPTIONAL MATCH (e)-[:CITED]->(c)`).
+//
+// Every variable of an anchored part counts as anchored for the parts after
+// it, in the same top-level UNION branch. That closes the second unanchored
+// MATCH, the unanchored OPTIONAL MATCH, the unanchored UNION branch, the MATCH
+// after an anchoring MERGE, and the Cartesian product
+// (`MATCH (a {orgId: $orgId}), (b)`), which is the same defect spelled with a
+// comma.
+//
+// It is still a syntactic rule and still not Claim B. What it accepts, and
+// `tenant.scope-guard.test.ts` records: a part is credited as a whole, so a
+// traversal leaving an anchored node (`(a {orgId: $orgId})-[*1..3]-(b)`)
+// reaches whatever the edges reach. That crosses tenants only over a
+// cross-tenant edge, and writing one through this seam needs a MATCH on the
+// other tenant's node, which this rule now refuses. A variable re-bound by
+// `WITH … AS` keeps no credit (fail-closed), and a WHERE anchor inside an `OR`
+// is credited (the query-wide limitation, unchanged). #3199 remains the fix
+// that closes the class.
+function assertEveryPartAnchored(cypher: string): void {
+  let branch = -1;
+  let anchored = new Set<string>();
+  for (const part of rowSelectingParts(cypher)) {
+    if (part.branch !== branch) {
+      branch = part.branch;
+      anchored = new Set();
+    }
+    const variables = [...part.pattern.matchAll(PATTERN_VARIABLE)].map(
+      (m) => m[1]!,
+    );
+    const whereAnchored = new Set(
+      [...part.where.matchAll(ANCHORED_VARIABLE)].map((m) => m[1]!),
+    );
+    const isAnchored =
+      SCOPE_GUARD.test(part.anchors) ||
+      variables.some((v) => whereAnchored.has(v) || anchored.has(v));
+    if (!isAnchored) {
+      throw new TenantScopeError(
+        `Every MATCH pattern in a scoped query must bind the tenant — in its own pattern map (\`(b {orgId: $orgId})\`), in its clause's WHERE on one of its own variables (\`WHERE b.orgId = $orgId\`), or through a variable an earlier anchored pattern bound. An anchor on some other pattern does not scope this one: ${part.pattern.trim().slice(0, 80)}`,
+      );
+    }
+    for (const v of variables) anchored.add(v);
+  }
+}
 
 /**
  * Throw unless `cypher` binds the tenant to the seam's own `$orgId` in a
- * FILTERING position.
+ * FILTERING position, and every row-selecting pattern part binds it itself.
  *
  * Exported for the seam's own tests, which need to drive the assertion with a
  * string the clamps cannot currently produce — see the re-check in `run()`
  * below, which is an enforced invariant rather than a reachable failure today.
  */
 export function assertAnchorsTenant(cypher: string): void {
-  if (SCOPE_GUARD.test(keepFilteringPositions(cypher))) return;
-  throw new TenantScopeError(
-    `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
-  );
+  if (!SCOPE_GUARD.test(keepFilteringPositions(cypher))) {
+    throw new TenantScopeError(
+      `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
+    );
+  }
+  assertEveryPartAnchored(cypher);
 }
 
 /**

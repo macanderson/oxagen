@@ -10,6 +10,7 @@ import {
   GraphScopeError,
   keepFilteringPositions,
   keepPredicatePositions,
+  rowSelectingParts,
   SCOPE_LABELS_PARAM,
   SCOPE_REL_TYPES_PARAM,
   scanLiteralsAndComments,
@@ -2288,5 +2289,91 @@ describe("the sanitizer agrees with Cypher about which text is live", () => {
     expect(stripLiteralsAndComments("MATCH (n) /* x")).toBe(
       scanLiteralsAndComments("MATCH (n) /* x").text,
     );
+  });
+});
+
+describe("rowSelectingParts", () => {
+  const squash = (t: string) => t.replace(/\s+/g, " ").trim();
+  const parts = (cypher: string) =>
+    rowSelectingParts(cypher).map((p) => ({
+      pattern: squash(p.pattern),
+      anchors: squash(p.anchors),
+      where: squash(p.where),
+      branch: p.branch,
+    }));
+
+  it("splits a MATCH clause at its top-level commas and shares its WHERE", () => {
+    expect(
+      parts("MATCH (a {orgId: $orgId}), (b) WHERE b.x = 1 RETURN a, b"),
+    ).toEqual([
+      {
+        pattern: "MATCH (a {orgId: $orgId})",
+        anchors: "{orgId: $orgId",
+        where: "WHERE b.x = 1",
+        branch: 0,
+      },
+      { pattern: ", (b)", anchors: "", where: "WHERE b.x = 1", branch: 0 },
+    ]);
+  });
+
+  it("keeps a comma inside a pattern map in its part", () => {
+    expect(parts("MATCH (a {x: 1, orgId: $orgId}) RETURN a")).toHaveLength(1);
+  });
+
+  it("reads OPTIONAL MATCH as one clause and ON MATCH as none", () => {
+    expect(
+      parts(
+        "MERGE (n {orgId: $orgId}) ON MATCH SET n.x = 1 WITH n OPTIONAL MATCH (n)-->(m) RETURN m",
+      ),
+    ).toEqual([
+      {
+        pattern: "OPTIONAL MATCH (n)-->(m)",
+        anchors: "",
+        where: "",
+        branch: 0,
+      },
+    ]);
+  });
+
+  it("does not credit a USING hint to the pattern, and keeps the WHERE after it", () => {
+    const [part] = parts(
+      "MATCH (n:L) USING INDEX n:L(x) WHERE n.orgId = $orgId RETURN n",
+    );
+    expect(part?.pattern).toBe("MATCH (n:L)");
+    expect(part?.where).toBe("WHERE n.orgId = $orgId");
+  });
+
+  it("gives a subquery's MATCH its own part and keeps it out of the outer WHERE", () => {
+    expect(
+      parts(
+        "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } AND n.x = 1 RETURN n",
+      ),
+    ).toEqual([
+      {
+        pattern: "MATCH (n)",
+        anchors: "",
+        where: "WHERE EXISTS } AND n.x = 1",
+        branch: 0,
+      },
+      {
+        pattern: "MATCH (m)",
+        anchors: "",
+        where: "WHERE m.orgId = $orgId",
+        branch: 0,
+      },
+    ]);
+  });
+
+  it("numbers the top-level UNION branches", () => {
+    expect(
+      parts("MATCH (a) RETURN a UNION ALL MATCH (b) RETURN b").map(
+        (p) => p.branch,
+      ),
+    ).toEqual([0, 1]);
+  });
+
+  it("reports no parts for a query without MATCH, or one it cannot project", () => {
+    expect(parts("MERGE (n {orgId: $orgId}) RETURN n")).toEqual([]);
+    expect(parts("MATCH (n) /* unterminated")).toEqual([]);
   });
 });

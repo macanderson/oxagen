@@ -84,8 +84,14 @@ function relTypePattern(relTypes: string[] | null): string {
   return relTypes.map((t) => `\`${t}\``).join("|");
 }
 
-/** Compose the directional variable-length relationship pattern. */
-function buildMatchPattern(
+/**
+ * Compose the directional variable-length RELATIONSHIP segment that joins
+ * `(start)` to `(reached:GraphNode)`. The two node patterns are written
+ * literally in the query below, not interpolated, so the tenancy seam's
+ * per-pattern check (and the repo-corpus test that reads this file) can see
+ * the variable the WHERE anchors.
+ */
+function buildRelationshipSegment(
   direction: "out" | "in" | "both",
   relTypes: string,
   maxDepth: number,
@@ -96,11 +102,11 @@ function buildMatchPattern(
   const variable = `[r${typeSelector}*1..${maxDepth}]`;
   switch (direction) {
     case "out":
-      return `(start)-${variable}->(reached:GraphNode)`;
+      return `-${variable}->`;
     case "in":
-      return `(start)<-${variable}-(reached:GraphNode)`;
+      return `<-${variable}-`;
     case "both":
-      return `(start)-${variable}-(reached:GraphNode)`;
+      return `-${variable}-`;
   }
 }
 
@@ -117,7 +123,7 @@ export const ontologyQueryHandler: CapabilityHandler<
     : null;
   const relTypeList = resolveRelationshipTypes(input.edgeTypes, activeVocab);
   const relTypes = relTypePattern(relTypeList);
-  const matchPattern = buildMatchPattern(
+  const relationshipSegment = buildRelationshipSegment(
     input.direction,
     relTypes,
     input.maxDepth,
@@ -214,7 +220,7 @@ export const ontologyQueryHandler: CapabilityHandler<
     try {
       const traverseResult = await session.run(
         `MATCH (start:GraphNode {publicId: $startNodeId, orgId: $orgId, workspaceId: $workspaceId})
-         MATCH path = ${matchPattern}
+         MATCH path = (start)${relationshipSegment}(reached:GraphNode)
          WHERE reached.orgId = $orgId AND reached.workspaceId = $workspaceId
            AND reached.is_system = false
            AND ALL(n IN nodes(path) WHERE n.orgId = $orgId AND n.workspaceId = $workspaceId

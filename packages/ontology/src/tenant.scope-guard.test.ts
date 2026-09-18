@@ -280,17 +280,48 @@ describe("tenancy guard — a MERGE map after something is already bound", () =>
 // rediscovers, and so that anyone tempted to call this guard an enforcement
 // mechanism has to delete a passing test first.
 //
-// Each one contains a genuine anchor: seam-bound `$orgId`, in a filtering
-// position, in a row-selecting clause. The anchor is simply not the only thing
-// the query reads. No refinement of a SYNTACTIC check closes this, and that
-// includes a full Cypher parse — a parser reports structure, and the structure
-// here is correct. What is wrong is reachability, which is a semantic property
-// of the whole query.
-//
-// The real guarantee belongs elsewhere: see the ADR referenced from
-// packages/ontology/src/tenant.ts.
+// This list used to lead with `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b`.
+// The real-Neo4j probe (`integration/tenant-isolation.test.ts`) showed that
+// query returning every tenant's nodes from the pooled database, and the seam
+// now refuses it: every row-selecting pattern part must carry its own anchor
+// (see the per-pattern describe block below). What remains is what a
+// per-pattern rule cannot see — reachability along an edge, and a boolean
+// that makes the anchor optional. No syntactic check closes either; #3199,
+// constructing the scoping instead of validating it, does.
 describe("tenancy guard — KNOWN cross-tenant reads it accepts", () => {
   const accepted: Array<[name: string, cypher: string]> = [
+    [
+      // Reaches another tenant only over a cross-tenant edge. Writing one
+      // through this seam needs a MATCH on the other tenant's node, which the
+      // per-pattern rule refuses; the integration probe asserts the traversal
+      // finds nothing foreign on a graph written through the seam.
+      "a traversal leaving the anchored node",
+      "MATCH (a {orgId: $orgId})-[*1..3]-(b) RETURN b",
+    ],
+    [
+      "an anchor made optional by OR",
+      "MATCH (n) WHERE n.orgId = $orgId OR true RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of accepted) {
+    it(`accepts (and should not be trusted): ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
+// ── Every row-selecting pattern is anchored (M0) ─────────────────────────────
+//
+// The query-wide anchor accepted every query below. Each has at least one
+// MATCH pattern that no anchor reaches, so each reads rows from every tenant in
+// the pooled database — a Cartesian product, an unconstrained existence test,
+// or an id join to another tenant's node. The first five were in the
+// KNOWN-accepted list above; the rest were asserted as "still accepted" by the
+// rounds that closed other holes, because those rounds asked only whether an
+// anchor sat in a filtering position somewhere.
+describe("tenancy guard — every row-selecting pattern is anchored", () => {
+  const refused: Array<[name: string, cypher: string]> = [
     [
       "a second, unanchored MATCH",
       "MATCH (a:GraphNode {orgId: $orgId}) MATCH (b:GraphNode) RETURN b",
@@ -304,17 +335,133 @@ describe("tenancy guard — KNOWN cross-tenant reads it accepts", () => {
       "MATCH (a) WHERE a.orgId = $orgId RETURN a UNION MATCH (b) RETURN b",
     ],
     [
-      "a traversal leaving the anchored node",
-      "MATCH (a {orgId: $orgId})-[*1..3]-(b) RETURN b",
-    ],
-    [
       "a MERGE that anchors, followed by an unanchored MATCH",
       "MERGE (a:GraphNode {orgId: $orgId}) WITH a MATCH (b) RETURN b",
+    ],
+    [
+      "a Cartesian product: the same defect spelled with a comma",
+      "MATCH (a {orgId: $orgId}), (b) RETURN b",
+    ],
+    [
+      "a WHERE anchor on another pattern's variable",
+      "MATCH (a {orgId: $orgId}) MATCH (b) WHERE a.orgId = $orgId RETURN b",
+    ],
+    [
+      "a property access on a map alias",
+      "WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId = $orgId RETURN n",
+    ],
+    [
+      "the anchor inside an EXISTS in an inline predicate",
+      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
+    ],
+    [
+      "the anchor inside an inline-predicate subquery's WHERE",
+      "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
+    ],
+    [
+      "the anchor inside a top-level EXISTS",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
+    ],
+    [
+      "the anchor inside a top-level COUNT",
+      "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
+    ],
+    [
+      "the anchor as a pattern map inside EXISTS",
+      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
+    ],
+    [
+      "the anchor in a nested COLLECT's WHERE",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m) WHERE m.orgId = $orgId RETURN m }) > 0 RETURN n",
+    ],
+    [
+      "the anchor as a pattern map in a nested COLLECT",
+      "MATCH (n) WHERE size(COLLECT { MATCH (m {orgId: $orgId}) RETURN m }) > 0 RETURN n",
+    ],
+    [
+      "the anchor inside a scoped CALL, the outer MATCH bare",
+      "MATCH (n) CALL (n) { MATCH (m) WHERE m.orgId = $orgId RETURN m } RETURN m",
+    ],
+    [
+      "an uncorrelated EXISTS beside an anchored pattern",
+      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } RETURN n",
+    ],
+    [
+      "an uncorrelated EXISTS beside an anchored WHERE",
+      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "an uncorrelated EXISTS returning its rows",
+      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "an id join to an unanchored pattern in a CALL",
+      "MATCH (a) WHERE a.orgId = $orgId CALL { WITH a MATCH (b) WHERE b.id = a.id RETURN b } RETURN b",
+    ],
+    [
+      "an unanchored pattern before the anchored one",
+      "MATCH (a WHERE a.x = 1) MATCH (b {orgId: $orgId}) RETURN b",
+    ],
+    [
+      "UNION credit does not carry across branches",
+      "MATCH (n {orgId: $orgId}) RETURN n UNION MATCH (n) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of refused) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+    it(`is discriminating: the query-wide anchor accepted ${name}`, () => {
+      expect(() => assertAnchorsTenant(cypher)).toThrow(/Every MATCH pattern/);
+    });
+  }
+
+  const accepted: Array<[name: string, cypher: string]> = [
+    [
+      "a pattern that reuses a variable an anchored pattern bound",
+      "MATCH (c:Citation {orgId: $orgId}) OPTIONAL MATCH (e:Execution)-[:CITED]->(c) RETURN c, e",
+    ],
+    [
+      "a WHERE anchor on the part's own variable",
+      "MATCH (a {orgId: $orgId}) MATCH (b) WHERE b.orgId = $orgId RETURN a, b",
+    ],
+    [
+      "a traversal whose WHERE anchors the far end",
+      "MATCH (start:GraphNode {orgId: $orgId}) MATCH path = (start)-[r*1..3]->(reached:GraphNode) WHERE reached.orgId = $orgId RETURN reached",
+    ],
+    [
+      "both parts of a comma product anchored",
+      "MATCH (a {orgId: $orgId}), (b {orgId: $orgId}) RETURN a, b",
+    ],
+    [
+      "a correlated EXISTS over an anchored variable",
+      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (n)-[:R]->(m) } RETURN n",
+    ],
+    [
+      "a correlated CALL over an anchored variable",
+      "MATCH (n:GraphNode) WHERE n.orgId = $orgId CALL { WITH n MATCH (n)-[r]->(m) RETURN count(r) AS c } RETURN n, c",
+    ],
+    [
+      "each UNION branch anchored on its own",
+      "MATCH (a {orgId: $orgId}) RETURN a AS x UNION MATCH (b) WHERE b.orgId = $orgId RETURN b AS x",
+    ],
+    [
+      "a USING hint between the pattern and its WHERE",
+      "MATCH (n:GraphNode) USING INDEX n:GraphNode(publicId) WHERE n.orgId = $orgId RETURN n",
+    ],
+    [
+      "MERGE's ON MATCH SET is not a row-selecting clause",
+      "MERGE (n:GraphNode {orgId: $orgId, publicId: $p}) ON MATCH SET n.seen = true RETURN n",
+    ],
+    [
+      "an anchor inside a top-level CALL",
+      "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
     ],
   ];
 
   for (const [name, cypher] of accepted) {
-    it(`accepts (and should not be trusted): ${name}`, async () => {
+    it(`accepts: ${name}`, async () => {
       await expect(guardAccepts(cypher)).resolves.toBe(true);
     });
   }
@@ -458,20 +605,8 @@ describe("tenancy guard — a subquery inside an inline node predicate", () => {
 
   const stillAccepted: Array<[name: string, cypher: string]> = [
     [
-      "a pattern map inside an inline-predicate subquery",
-      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
-    ],
-    [
       "a pattern map beside an inline predicate on the same node",
       "MATCH (n {orgId: $orgId} WHERE n.x > 1) RETURN n",
-    ],
-    [
-      "a top-level EXISTS with the anchor in its WHERE",
-      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
-    ],
-    [
-      "a top-level COUNT with the anchor in its WHERE",
-      "MATCH (n) WHERE COUNT { MATCH (m) WHERE m.orgId = $orgId } > 0 RETURN n",
     ],
     ["a plain node pattern map", "MATCH (n {orgId: $orgId}) RETURN n"],
     [
@@ -490,17 +625,15 @@ describe("tenancy guard — a subquery inside an inline node predicate", () => {
   // inside an inline node predicate never becomes the clause; an anchor written
   // ONLY there is now refused. Fail-closed, 0 of the 63 corpus queries, and the
   // pattern-map spelling of the same query (asserted above) still passes.
-  it("accepts an anchor in an inline-predicate subquery's WHERE, as at top level", async () => {
-    // Round 12 recorded the refusal here as a fail-closed cost of the swap.
-    // Round 14 removed it: the cost and a cross-tenant read were one mechanism
-    // (absolute-depth clause recognition), and recognising the subquery's own
-    // clause sequence NARROWS what is kept rather than widening it. See
-    // `describe("tenancy guard — a subquery's clause baseline is its own")`.
+  it("refuses an anchor that exists only inside an inline-predicate subquery", async () => {
+    // Round 14 accepted this, because the subquery's WHERE is a real filtering
+    // position. It filters `m`, not `n`, and `n` is what comes back, so the
+    // per-pattern rule refuses it — as it refuses the top-level spelling.
     await expect(
       guardAccepts(
         "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
       ),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     // The projection spelling of the same query is still refused.
     await expect(
       guardAccepts(
@@ -579,19 +712,12 @@ describe("tenancy guard — a bare name is not a tenant property", () => {
     });
   }
 
-  // Claim B, and recorded rather than claimed closed. This wears an anchor's
-  // exact syntax — a qualified property access on a variable — and is a
-  // tautology, because the variable is bound to a map rather than to a graph
-  // row. Telling the two apart requires knowing what `m` is BOUND to, which is
-  // dataflow and not spelling. No lexical rule reaches it; ADR-087's decision
-  // (2) does, by constructing the query instead of reading it.
-  it("accepts, and should not be trusted: a property access on a map alias", async () => {
-    await expect(
-      guardAccepts(
-        "WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId = $orgId RETURN n",
-      ),
-    ).resolves.toBe(true);
-  });
+  // Round 11 recorded `WITH {orgId: $orgId} AS m MATCH (n) WHERE m.orgId =
+  // $orgId RETURN n` as accepted: telling `m.orgId` from `n.orgId` needs to know
+  // what `m` is bound to. The per-pattern rule does not answer that question; it
+  // asks a narrower one — is the anchored variable written in THIS pattern —
+  // and `m` is not, so the query is now refused. It is asserted with the other
+  // per-pattern refusals below.
 });
 
 // ── A map literal is a value, not a filter ──────────────────────────────────
@@ -650,14 +776,6 @@ describe("tenancy guard — a map literal is not a tenant anchor", () => {
       "a property predicate in a WHERE",
       "MATCH (n) WHERE n.orgId = $orgId RETURN n",
     ],
-    [
-      "a pattern map inside an EXISTS subquery",
-      "MATCH (n) WHERE EXISTS { MATCH (m {orgId: $orgId}) } RETURN n",
-    ],
-    [
-      "a property predicate inside a SCOPED CALL subquery",
-      "MATCH (n) CALL (n) { MATCH (m) WHERE m.orgId = $orgId RETURN m } RETURN m",
-    ],
   ];
   for (const [name, cypher] of stillAccepted) {
     it(`still accepts: ${name}`, async () => {
@@ -696,14 +814,6 @@ describe("tenancy guard — a clause inside an expression subquery", () => {
   });
 
   const stillAccepted: Array<[name: string, cypher: string]> = [
-    [
-      "anchored in a pattern map, with EXISTS { … WHERE … } in the WHERE",
-      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } RETURN n",
-    ],
-    [
-      "anchored in the same WHERE, after the subquery",
-      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.x = 1 } AND n.orgId = $orgId RETURN n",
-    ],
     [
       "anchored inside a CALL subquery",
       "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
@@ -897,10 +1007,6 @@ describe("tenancy guard — a keyword-shaped name does not break a real clause",
       "MATCH (n) WHERE n.x = $limit AND n.orgId = $orgId RETURN n",
     ],
     [
-      "a CALL subquery's inner clauses are still clauses",
-      "MATCH (a) WHERE a.orgId = $orgId CALL { WITH a MATCH (b) WHERE b.id = a.id RETURN b } RETURN b",
-    ],
-    [
       "the ANN shape: WHERE after `YIELD node AS n, score`",
       `CALL db.index.vector.queryNodes('i', $k, $v) YIELD node AS n, score
        WHERE n.orgId = $orgId RETURN n LIMIT 10`,
@@ -1021,14 +1127,6 @@ describe("tenancy guard — an inline pattern predicate is not a property map", 
       "MATCH (a WHERE a.x = 1)-[r {orgId: $orgId}]->(b) RETURN r",
     ],
     [
-      "a following MATCH's property map",
-      "MATCH (a WHERE a.x = 1) MATCH (b {orgId: $orgId}) RETURN b",
-    ],
-    [
-      "a pattern map inside a subquery inside the predicate",
-      "MATCH (n WHERE EXISTS { MATCH (m {orgId: $orgId}) }) RETURN n",
-    ],
-    [
       "a map key spelled `where`",
       "MATCH (n {where: 1, orgId: $orgId}) RETURN n",
     ],
@@ -1128,28 +1226,8 @@ describe("tenancy guard — a subquery's clause baseline is its own", () => {
   // and both are this same mechanism seen from its fail-closed side.
   const nowAccepted: Array<[name: string, cypher: string]> = [
     [
-      "an anchor in a nested subquery's own WHERE",
-      "MATCH (n) WHERE size(COLLECT { MATCH (m) WHERE m.orgId = $orgId RETURN m }) > 0 RETURN n",
-    ],
-    [
-      "an anchor in an inline-predicate subquery's WHERE",
-      "MATCH (n WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId }) RETURN n",
-    ],
-    [
-      "a pattern map in a nested subquery",
-      "MATCH (n) WHERE size(COLLECT { MATCH (m {orgId: $orgId}) RETURN m }) > 0 RETURN n",
-    ],
-    [
-      "the top-level spelling of the first, which always passed",
-      "MATCH (n) WHERE EXISTS { MATCH (m) WHERE m.orgId = $orgId } RETURN n",
-    ],
-    [
       "a top-level CALL subquery",
       "CALL { MATCH (n) WHERE n.orgId = $orgId RETURN n } RETURN n",
-    ],
-    [
-      "a clause correctly restored after the subquery closes",
-      "MATCH (n) WHERE EXISTS { MATCH (m) RETURN m } AND n.orgId = $orgId RETURN n",
     ],
   ];
 

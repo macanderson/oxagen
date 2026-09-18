@@ -670,8 +670,53 @@ type PositionPolicy =
  * and enforce on every query in the platform.
  */
 function keepPositions(cypher: string, policy: PositionPolicy): string {
+  return projectPositions(cypher, policy).kept;
+}
+
+/** What {@link projectPositions} reports alongside the kept projection. */
+interface PositionProjection {
+  /** The kept projection: every non-filtering character blanked. */
+  readonly kept: string;
+  /** The query with comments, literals and backtick names blanked. */
+  readonly src: string;
+  /** Per character, the row-selecting PATTERN PART it belongs to, or -1. */
+  readonly partOwner: Int32Array;
+  /** Per character, the row-selecting clause whose WHERE it belongs to, or -1. */
+  readonly whereOwner: Int32Array;
+  /** For each part id, the clause id it belongs to. */
+  readonly clauseOfPart: readonly number[];
+  /** For each part id, which top-level UNION branch it sits in (0-based). */
+  readonly branchOfPart: readonly number[];
+}
+
+function projectPositions(
+  cypher: string,
+  policy: PositionPolicy,
+): PositionProjection {
   const { text: src, unterminated } = scanLiteralsAndComments(cypher);
   const out = new Array<string>(src.length).fill(" ");
+  // Row-selecting clause ownership, for `rowSelectingParts`. A `MATCH` or
+  // `OPTIONAL MATCH` clause is split into its comma-separated PATTERN PARTS,
+  // and its `WHERE` is recorded against the clause, so the tenancy guard can
+  // ask of each part whether IT is anchored rather than whether the query is.
+  const partOwner = new Int32Array(src.length).fill(-1);
+  const whereOwner = new Int32Array(src.length).fill(-1);
+  const clauseOfPart: number[] = [];
+  const branchOfPart: number[] = [];
+  let branch = 0;
+  let nextClauseId = 0;
+  let currentClause = -1;
+  let currentPart = -1;
+  let inClauseWhere = false;
+  const openPart = () => {
+    currentPart = clauseOfPart.length;
+    clauseOfPart.push(currentClause);
+    branchOfPart.push(branch);
+  };
+  const own = (k: number) => {
+    if (inClauseWhere) whereOwner[k] = currentClause;
+    else partOwner[k] = currentPart;
+  };
   // An unterminated comment, string or backtick means there is no faithful
   // projection to produce, so NOTHING is reported as a filtering position and
   // both guards that read this refuse for want of an anchor or a marker.
@@ -681,7 +726,16 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
   // message, and `keepFilteringPositions` has no business deciding which of them
   // is asking. `assertReadOnly` takes the opposite branch on the same flag, for
   // the reason given there.
-  if (unterminated) return out.join("");
+  if (unterminated) {
+    return {
+      kept: out.join(""),
+      src,
+      partOwner,
+      whereOwner,
+      clauseOfPart,
+      branchOfPart,
+    };
+  }
 
   let paren = 0;
   let bracket = 0;
@@ -821,6 +875,9 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     inlinePredicateFrames: number;
     clauseParenBase: number;
     clauseBracketBase: number;
+    currentClause: number;
+    currentPart: number;
+    inClauseWhere: boolean;
   }> = [];
   let mapDepth = 0;
   let clause = "";
@@ -935,6 +992,32 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         CLAUSE_KEYWORDS.has(word) &&
         startsAClause(src, i, j)
       ) {
+        // Row-selecting clause bookkeeping. `OPTIONAL MATCH` is one clause
+        // spelled with two keywords; `WHERE` and a `USING` planner hint belong
+        // to the clause they follow; every other keyword ends it.
+        if (word === "MATCH" && clause === "OPTIONAL" && currentClause !== -1) {
+          // The clause OPTIONAL opened continues.
+        } else if (
+          (word === "MATCH" && clause !== "ON") ||
+          word === "OPTIONAL"
+        ) {
+          // `ON MATCH SET` is MERGE's update branch, not a clause that selects.
+          currentClause = nextClauseId++;
+          inClauseWhere = false;
+          openPart();
+        } else if (word === "WHERE" && currentClause !== -1) {
+          inClauseWhere = true;
+          currentPart = -1;
+        } else if (word === "USING" && currentClause !== -1) {
+          currentPart = -1;
+        } else {
+          currentClause = -1;
+          currentPart = -1;
+          inClauseWhere = false;
+          // A top-level UNION starts a query of its own; nothing either branch
+          // bound is visible in the other.
+          if (word === "UNION" && braceClause.length === 0) branch += 1;
+        }
         clause = word;
         // Decided as the clause OPENS, before this MERGE marks the query as
         // having bound something — otherwise a MERGE would always disqualify
@@ -979,8 +1062,23 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         }
       }
       if (keeping()) for (let k = i; k < j; k += 1) out[k] = src[k]!;
+      for (let k = i; k < j; k += 1) own(k);
       i = j;
       continue;
+    }
+
+    if (
+      ch === "," &&
+      currentClause !== -1 &&
+      !inClauseWhere &&
+      currentPart !== -1 &&
+      paren === clauseParenBase &&
+      bracket === clauseBracketBase
+    ) {
+      // A top-level comma in a MATCH pattern starts the next pattern part:
+      // `MATCH (a {orgId: $orgId}), (b)` is a Cartesian product of two parts,
+      // and the second is exactly as unscoped as a second MATCH would be.
+      openPart();
     }
 
     if (ch === "(") {
@@ -1054,6 +1152,9 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         inlinePredicateFrames,
         clauseParenBase,
         clauseBracketBase,
+        currentClause,
+        currentPart,
+        inClauseWhere,
       });
       // A subquery is a clause sequence of its own, so the enclosing pattern's
       // inline predicate does not reach into it, its clause baseline is the
@@ -1066,6 +1167,13 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         clauseParenBase = paren;
         clauseBracketBase = bracket;
         clause = "";
+        // The subquery's own clauses are recorded as their own; nothing inside
+        // it belongs to the enclosing part or WHERE. The brace itself stays
+        // with the enclosing clause, so its ownership is recorded first.
+        own(i);
+        currentClause = -1;
+        currentPart = -1;
+        inClauseWhere = false;
       }
     } else if (ch === "}") {
       if (braceKinds.pop() === "map") mapDepth = Math.max(0, mapDepth - 1);
@@ -1078,6 +1186,9 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
         inlinePredicateFrames = saved.inlinePredicateFrames;
         clauseParenBase = saved.clauseParenBase;
         clauseBracketBase = saved.clauseBracketBase;
+        currentClause = saved.currentClause;
+        currentPart = saved.currentPart;
+        inClauseWhere = saved.inClauseWhere;
       }
       // `boundAGraphVariable` deliberately does NOT restore. It only ever makes
       // a later MERGE map stop counting, so letting an inner `MATCH` set it is
@@ -1086,10 +1197,73 @@ function keepPositions(cypher: string, policy: PositionPolicy): string {
     }
 
     if (keeping()) out[i] = ch;
+    // A subquery brace recorded its owner before clearing the clause state.
+    if (!(ch === "{" && braceKinds[braceKinds.length - 1] === "subquery")) {
+      own(i);
+    }
     i += 1;
   }
 
-  return out.join("");
+  return {
+    kept: out.join(""),
+    src,
+    partOwner,
+    whereOwner,
+    clauseOfPart,
+    branchOfPart,
+  };
+}
+
+/** One comma-separated pattern part of a `MATCH` / `OPTIONAL MATCH` clause. */
+export interface RowSelectingPart {
+  /**
+   * The part's own pattern text, comments and literals blanked, every other
+   * character of the query replaced by a space (offsets preserved).
+   */
+  readonly pattern: string;
+  /** The part's kept filtering positions: its own pattern property maps. */
+  readonly anchors: string;
+  /** The kept projection of the WHERE of the clause the part belongs to. */
+  readonly where: string;
+  /** The top-level UNION branch the part sits in (0-based). */
+  readonly branch: number;
+}
+
+/**
+ * Every pattern part of every row-selecting clause in `cypher`, at every
+ * clause-sequence level (a `MATCH` inside `CALL { … }` or `EXISTS { … }` is its
+ * own clause, and nothing in the subquery is credited to the enclosing one).
+ *
+ * The tenancy guard reads this to ask a narrower question than "does the query
+ * bind the tenant somewhere": does EACH part that selects rows bind it, in its
+ * own pattern map or through its clause's WHERE on one of its own variables.
+ * That is the question `MATCH (a {orgId: $orgId}) MATCH (b) RETURN b` fails and
+ * the query-wide check passed.
+ *
+ * An unterminated input yields no parts; the query-wide check refuses it first.
+ */
+export function rowSelectingParts(cypher: string): RowSelectingPart[] {
+  const p = projectPositions(cypher, "filtering");
+  const n = p.src.length;
+  return p.clauseOfPart.map((clauseId, partId) => {
+    const pattern = new Array<string>(n).fill(" ");
+    const anchors = new Array<string>(n).fill(" ");
+    const where = new Array<string>(n).fill(" ");
+    for (let k = 0; k < n; k += 1) {
+      if (p.partOwner[k] === partId) {
+        pattern[k] = p.src[k]!;
+        anchors[k] = p.kept[k]!;
+      } else if (p.whereOwner[k] === clauseId) {
+        where[k] = p.kept[k]!;
+      }
+    }
+    return {
+      pattern: pattern.join(""),
+      anchors: anchors.join(""),
+      where: where.join(""),
+      branch: p.branchOfPart[partId]!,
+    };
+  });
 }
 
 /**
