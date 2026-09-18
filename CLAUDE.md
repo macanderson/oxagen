@@ -23,6 +23,20 @@ Vendor-neutral BYOK (own model keys, own Neo4j endpoint) is a design constraint,
 - **When recommending or prioritizing features,** prefer work that deepens metering→billing, contract governance, graph grounding, vendor neutrality, or fleet lineage. If a request diverges from that direction, say so and propose the aligned alternative alongside doing what was asked.
 - **CI enforcement:** the Vision Gate (`.github/workflows/vision-gate.yml` → `tools/scripts/vision-gate.mjs`, `pnpm check:vision`) LLM-judges every PR diff against `docs/VISION.md` and posts an advisory verdict (advances / neutral / drifts). A `drifts` verdict signals to justify the exception in the PR description or redirect the work — routine maintenance, fixes, tests, and tooling are neutral by definition.
 
+## Four first-class harnesses: Claude Code, Codex, Cursor, Stella
+
+Oxagen wraps four agent harnesses as equals (ADR-099): **Claude Code, Codex, Cursor and Stella.** Claude Desktop is a fifth, connected rather than wrapped (ADR-078). No harness is the default in a design, a list, a help string, or a test.
+
+- **Everything Oxagen exports must load in all four.** Agents, skills, steering and rules, memories, commands, MCP entries, hooks: a harness-facing feature is not done until each of the four can load it, or its PR names the harness that cannot and why. Check the table in ADR-099 for where each harness reads each artifact before you write a file for one.
+- **Claude Code's layout is canonical; bridges point, they do not copy.** Author skills in `.claude/skills/`, subagents in `.claude/agents/`, commands in `.claude/commands/`, and rules in `AGENTS.md` and this file. The bridges already in the tree:
+  - `.agents/skills` is a symlink to `.claude/skills`, so Codex sees the skills.
+  - `.cursor/rules/oxagen.mdc` always applies and pulls in `AGENTS.md` and this file, so Cursor reads the rules.
+  - `.cursor/commands` is a symlink to `.claude/commands`.
+  - Cursor reads `.claude/skills` and `.claude/agents` natively. Stella adopts `.claude/{skills,agents,commands}` on `stella init` and reads both `AGENTS.md` and this file.
+- **A rule every agent must follow goes in `AGENTS.md` or this file**, never only in a harness-specific path. Codex reads `AGENTS.md` alone, and `AGENTS.md` tells it to read this file too.
+- **Adding a harness-facing enum member is a set of four.** `WRAPPED_HARNESSES` (`packages/tacho/src/wire.ts`), `TACHO_RUNTIMES` (envelope and database, with an Atlas migration for the `tacho_sessions_runtime_check` constraint), the agent-registry harness enums (`agent.list.ts`, `v2/register-agent.ts`, `v2/get-agent.ts`, and the `agents_harness_check` constraint), and the desktop app's `Harness` union. A list that names Codex and not Cursor is a defect.
+- **How Cursor is wrapped.** `tacho enroll --harness cursor` writes `~/.cursor/hooks.json`, which the IDE and `cursor-agent` both read. `tacho-hook --harness cursor` runs Cursor's payload and answer through `packages/tacho/src/claude-code/cursor-adapter.ts`, the way Stella's go through `stella-adapter.ts`. Cursor has no `ask` on `preToolUse`, so a policy that asks is answered deny with the reason. Cursor's model calls do not pass through the Oxagen gateway, so its spend is not metered.
+
 ## Prime directive — fix every issue you encounter
 
 When you encounter a bug, broken path, dead value, mispriced meter, stale config, or any defect — **fix it now, in place, completely.** Investigate to root cause, fix every co-located instance, and verify with tests/typecheck before declaring done. The only acceptable deferral is a true external action you cannot perform (e.g. flipping a prod env var) — and even then, fix everything in code first.
@@ -179,7 +193,7 @@ Real skill directories live in `.claude/skills/` (checked in). Consult the match
 
 Routing: any prose → `clear-prose` first (plus `oxagen-branding` for customer-facing copy); code/schema/test/PR/CI → the matching `oxagen-*` skill first; then `pnpm gate`, push, and `gh run watch` until green before opening or finalizing the PR. UI → `oxagen-app-conventions` + `quality-gates`. Auth → Better Auth docs via Context7 plus `oxagen-tenancy`. Agent definitions for review, debugging, docs, e2e, and shipping live in `.claude/agents/`.
 
-The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `frontend-patterns`, `reablocks`, `reagraph`, `reaviz`, `oxagen-feature`, `vendor-better-auth`, `oxagen-code-audit`, `ci-green`, `test-completeness-judge`, and the vendored third-party skills) was deleted from git on 2026-07-10 in commit `dd36ade55`. Its symlinks under `.claude/skills/` dangled for two months and were pruned; the content is recoverable from `dd36ade55^` if any of it is wanted back.
+`.agents/skills` exists again, as a symlink to `.claude/skills` so Codex can load the same skills (ADR-099). Do not put files in it; author in `.claude/skills/`. The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `frontend-patterns`, `reablocks`, `reagraph`, `reaviz`, `oxagen-feature`, `vendor-better-auth`, `oxagen-code-audit`, `ci-green`, `test-completeness-judge`, and the vendored third-party skills) was deleted from git on 2026-07-10 in commit `dd36ade55`. Its symlinks under `.claude/skills/` dangled for two months and were pruned; the content is recoverable from `dd36ade55^` if any of it is wanted back.
 
 ## Production URLs (interim)
 
