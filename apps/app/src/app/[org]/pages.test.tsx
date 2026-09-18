@@ -18,7 +18,7 @@
 // run id and the tab, zoom and frames cursor the URL carries to the Run feature
 // (WL-35).
 import { screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { translator } from "@/test/intl";
 import {
   expectPageTitle,
@@ -485,6 +485,15 @@ describe("the Run page", () => {
 });
 
 describe("Organization › People", () => {
+  // This page renders the real organization feature, and its first import is
+  // the slowest thing in this file: under coverage in CI it ran past the
+  // default 5 s test timeout. The timed-out render then finished inside the
+  // next test and counted a second `Workspaces` call there. Importing the page
+  // once up front, with a budget of its own, keeps that cost out of both.
+  beforeAll(async () => {
+    await import("./page");
+  }, 60_000);
+
   it("resolves the organization viewer, names the page once and renders the roster org.members read for that viewer", async () => {
     const ctx = { orgSlug: "acme", orgRole: "owner" };
     requireViewer.mockResolvedValue(ctx);

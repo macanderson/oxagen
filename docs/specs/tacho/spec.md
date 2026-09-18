@@ -373,6 +373,8 @@ These are the same operations `stella-serve` exposes as `/pause`, `/resume`, `/c
 
 The bundle's `context.system` is injected at `SessionStart` and after `compact` via `additionalContext`. It is authored on the control plane through the same closed operation set the lifecycle framework already uses (`prepend_system_context` / `append_system_context` only; nothing rewrites the harness's instructions), it is IAM-gated, and the injected text's digest is chained as part of `agent_start` so a replay shows what the agent was told. The control plane fills it from the workspace's active `must` and `should` context records (ADR-091), capped at the 16,384 characters the host accepts.
 
+> **Status (2026-09-18).** The delivery path is built, and since Phase 0 of the refactor path approved on 2026-09-18 merged (PR #3289, `c9db463e9`, ADR-091) the workspace's active `must` and `should` records travel on it: `readWorkspaceSteering` (`packages/handlers/src/lib/tacho-steering.ts`) compiles them and `unsignedBundle` (`packages/handlers/src/lib/tacho-host.ts`) carries the text, `null` only when there are none. The server still sends empty `permissions` and `tools` and sets `budget.mode` to `"observed"`, and nothing reads `session_limit_usd`. Phase 1 puts one assembler behind the compile step (`docs/specs/mission-control/spec.md` §10.4 and §10.5, `docs/specs/mission-control/plan.md` §8). An enforced budget needs the gateway of Phase 4, which is in build on branch `gateway-model-proxy` (issue #3299, ADR-094).
+
 ---
 
 ## 8. Claude Agent SDK adapter

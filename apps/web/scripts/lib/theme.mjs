@@ -7,17 +7,17 @@
 // No gradients anywhere.
 
 export const INK = Object.freeze({
-  ground: "#10100F",
-  panel: "#181715",
-  raised: "#201F1C",
-  line: "#292722",
-  rule: "#34322D",
-  dim: "#504C44",
-  muted: "#8C877C",
-  silver: "#9B958A",
-  body: "#DDD8CD",
-  text: "#F2EEE5",
-  gold: "#D6962C",
+  ground: "#09090B",
+  panel: "#18181B",
+  raised: "#27272A",
+  line: "#27272A",
+  rule: "#3F3F46",
+  dim: "#52525B",
+  muted: "#A1A1AA",
+  silver: "#A1A1AA",
+  body: "#E4E4E7",
+  text: "#FFFFFF",
+  gold: "#D4AF37",
 });
 
 /**

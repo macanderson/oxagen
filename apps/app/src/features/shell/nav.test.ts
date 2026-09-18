@@ -19,6 +19,7 @@ const ALL_KEYS: readonly NavKey[] = [
   ...ORG_NAV,
   "apiKeys",
   "roles",
+  "modelFunding",
 ];
 
 describe("parseShellPath", () => {
@@ -31,7 +32,13 @@ describe("parseShellPath", () => {
   });
 
   it("treats the static organization segments as organization pages, not workspaces", () => {
-    for (const segment of ["billing", "audit", "api-keys", "roles"])
+    for (const segment of [
+      "billing",
+      "audit",
+      "api-keys",
+      "roles",
+      "model-funding",
+    ])
       expect(parseShellPath(`/acme/${segment}`)).toEqual({
         org: "acme",
         ws: null,
@@ -67,6 +74,7 @@ describe("isNavItemCurrent", () => {
     ["/acme/billing", "billing"],
     ["/acme/audit", "audit"],
     ["/acme/api-keys", "apiKeys"],
+    ["/acme/model-funding", "modelFunding"],
     ["/acme/roles", "roles"],
     ["/acme/core-platform", "fleet"],
     ["/acme/core-platform/runs/run_01/chain", "fleet"],
@@ -80,7 +88,10 @@ describe("isNavItemCurrent", () => {
       ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
     ).toEqual(key === "organization" ? [] : [key]);
     expect(isNavItemCurrent("organization", path)).toBe(
-      key === "organization" || key === "apiKeys" || key === "roles",
+      key === "organization" ||
+        key === "apiKeys" ||
+        key === "roles" ||
+        key === "modelFunding",
     );
   });
 
@@ -116,6 +127,7 @@ describe("hrefs", () => {
     expect(orgHref("acme", "organization")).toBe("/acme");
     expect(orgHref("acme", "audit")).toBe("/acme/audit");
     expect(orgHref("acme", "apiKeys")).toBe("/acme/api-keys");
+    expect(orgHref("acme", "modelFunding")).toBe("/acme/model-funding");
     expect(orgHref("acme", "roles")).toBe("/acme/roles");
   });
 
