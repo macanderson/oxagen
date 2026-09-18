@@ -4,7 +4,8 @@
       "label": "Organization",
       "people": "People",
       "roles": "Roles",
-      "apiKeys": "API keys"
+      "apiKeys": "API keys",
+      "modelFunding": "Model funding"
     },
     "roles": {
       "owner": "Owner",
@@ -283,6 +284,103 @@
       },
       "noRole": "No membership",
       "empty": "This organization has no workspaces."
+    },
+    "modelFunding": {
+      "title": "Model funding",
+      "intro": "The assistant needs a model to answer questions. Choose whose key pays for it. With no key stored, your organization runs on Oxagen's key and the tokens are billed as assistant usage. With your own key, your vendor bills you directly and Oxagen charges nothing for those tokens.",
+      "explain": {
+        "platform": "Your organization runs on Oxagen's key. Add your own key below to pay your vendor directly.",
+        "byok": "Your key pays your vendor directly. Oxagen does not charge for these tokens."
+      },
+      "current": {
+        "title": "Current key",
+        "none": "No key stored.",
+        "provider": "Vendor",
+        "key": "Key",
+        "keyEnding": "Ends in {hint}",
+        "endpoint": "Endpoint",
+        "status": "Status",
+        "active": "In use",
+        "disabled": "Disabled. Turns run on Oxagen's key.",
+        "tested": "Last tested",
+        "at": "{when, date, medium}, {when, time, short}",
+        "never": "Not tested since it was saved"
+      },
+      "tiers": {
+        "balanced": "Balanced model",
+        "fast": "Fast model",
+        "precise": "Precise model"
+      },
+      "providers": {
+        "openrouter": {
+          "name": "OpenRouter",
+          "hint": "One key reaches every model. Embeddings stay on Oxagen's key and are billed."
+        },
+        "gateway": {
+          "name": "Vercel AI Gateway",
+          "hint": "One key reaches every model, embeddings included."
+        },
+        "openai": {
+          "name": "OpenAI",
+          "hint": "Your OpenAI key. Name the model the assistant should use."
+        },
+        "anthropic": {
+          "name": "Anthropic",
+          "hint": "Your Anthropic key. Name the model the assistant should use.",
+          "caching": "Oxagen reaches Anthropic through its OpenAI-compatible endpoint, which has no prompt caching. An OpenRouter or Vercel AI Gateway key keeps caching on Claude models."
+        },
+        "openai_compatible": {
+          "name": "Other OpenAI-compatible server",
+          "hint": "Together, Fireworks, Groq, Azure, or your own server. Give its URL and model."
+        }
+      },
+      "form": {
+        "title": "Add your key",
+        "replaceTitle": "Replace your key",
+        "provider": "Vendor",
+        "key": "API key",
+        "show": "Show",
+        "hide": "Hide",
+        "baseUrl": "Endpoint URL",
+        "baseUrlHint": "Must start with https and be reachable on the public internet.",
+        "baseUrlPlaceholder": "https://api.together.xyz/v1",
+        "models": "Models",
+        "balancedHint": "Required. The assistant runs on this model.",
+        "unmappedNote": "Any model you leave blank uses the balanced model.",
+        "test": "Test key",
+        "testing": "Testing",
+        "save": "Save key",
+        "saving": "Saving",
+        "saved": "Key saved. The next assistant turn uses it."
+      },
+      "verdict": {
+        "ok": "The vendor accepted the key ({ms} ms).",
+        "okWithTools": "The vendor accepted the key and the model can use tools ({ms} ms).",
+        "refused": "The vendor refused the key: {reason}",
+        "noTools": "The key works, but this model cannot use tools, so the assistant cannot answer questions about your workspace with it. Choose a model that supports tool calls. The vendor said: {reason}",
+        "noReason": "no reason given"
+      },
+      "remove": {
+        "label": "Remove key",
+        "confirm": "Remove the key? Your organization's next turn runs on Oxagen's key and is billed.",
+        "yes": "Remove",
+        "pending": "Removing",
+        "cancel": "Keep it"
+      },
+      "denied": {
+        "title": "Owners and admins only",
+        "body": "Only an organization owner or admin can see or change whose key pays for the assistant."
+      },
+      "failure": {
+        "denied": "Only an organization owner or admin can change this.",
+        "keyRequired": "Paste a key of at least 8 characters.",
+        "baseUrlRequired": "Enter the server's URL.",
+        "balancedRequired": "Enter the model the assistant should use.",
+        "invalid": "Oxagen refused these settings. Check that the URL starts with https and is not a private address.",
+        "refused": "Refused ({code}).",
+        "pendingApproval": "This change is waiting for approval.",
+        "unavailable": "Oxagen could not reach the key service ({code}). Try again."
+      }
     }
   }
 }

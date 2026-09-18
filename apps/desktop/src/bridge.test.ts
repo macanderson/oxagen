@@ -92,12 +92,18 @@ describe("Rust commands", () => {
       note: "",
     });
     answers.set("uninstall_cli", ["/usr/local/bin/oxagen"]);
-    answers.set("remove_local_data", "/Users/dev/.config/oxagen");
+    answers.set("remove_local_data", {
+      removed: ["/Users/dev/.config/oxagen"],
+      left: [],
+    });
     answers.set("log_tail", "line\n");
     expect(await readState()).toEqual({ platform: "macos" });
     expect((await installCli()).on_path).toBe(true);
     expect(await uninstallCli()).toEqual(["/usr/local/bin/oxagen"]);
-    expect(await removeLocalData()).toBe("/Users/dev/.config/oxagen");
+    expect(await removeLocalData()).toEqual({
+      removed: ["/Users/dev/.config/oxagen"],
+      left: [],
+    });
     expect(await logTail()).toBe("line\n");
     await logTail(40);
     expect(invoked).toEqual([

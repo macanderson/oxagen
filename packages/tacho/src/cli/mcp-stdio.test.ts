@@ -205,3 +205,62 @@ describe("the error envelope", () => {
     expect(shimError(undefined, "no")).toHaveProperty("id", null);
   });
 });
+
+describe("what the shim writes back is always something the client can parse", () => {
+  const respond = (status: number, body: string) =>
+    (async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      headers: { get: () => null },
+      text: async () => body,
+    })) as unknown as typeof globalThis.fetch;
+
+  it("turns a non-JSON error body into a JSON-RPC error", async () => {
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", id: 7, method: "tools/list" }),
+      fetch: respond(401, "Unauthorized"),
+    });
+    await runMcpStdio({ port: 1 }, d);
+    expect(d.out).toHaveLength(1);
+    const reply = JSON.parse(d.out[0] as string) as {
+      id: number;
+      error: { message: string };
+    };
+    expect(reply.id).toBe(7);
+    expect(reply.error.message).toContain("401");
+  });
+
+  it("writes nothing for a notification, whatever the gateway answered", async () => {
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", method: "notifications/initialized" }),
+      fetch: respond(202, ""),
+    });
+    await runMcpStdio({ port: 1 }, d);
+    expect(d.out).toEqual([]);
+    const refused = deps({
+      stdin: lines({ jsonrpc: "2.0", method: "notifications/initialized" }),
+      fetch: respond(500, "boom"),
+    });
+    await runMcpStdio({ port: 1 }, refused);
+    expect(refused.out).toEqual([]);
+    expect(refused.err.join("")).toContain("500");
+  });
+
+  it("gives the gateway a deadline, so one hung call cannot block the shim for good", async () => {
+    let signal: AbortSignal | undefined;
+    const d = deps({
+      stdin: lines({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      fetch: (async (_url: string, init: { signal?: AbortSignal }) => {
+        signal = init.signal;
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          text: async () => '{"jsonrpc":"2.0","id":1,"result":{}}',
+        };
+      }) as unknown as typeof globalThis.fetch,
+    });
+    await runMcpStdio({ port: 1 }, d);
+    expect(signal).toBeInstanceOf(AbortSignal);
+  });
+});

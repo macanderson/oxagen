@@ -145,6 +145,10 @@ tools/eval-out/
 # Generated codemap/report scratch output
 .reports/
 
+# apps/desktop/scripts/e2e-smoke.mjs writes its report into cwd, named after
+# the host; never meant to be committed.
+oxagen-e2e-smoke-*.json
+
 # Personal CLI settings scope (may contain MCP credentials) — never commit
 .oxagen/settings.local.json
 

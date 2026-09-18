@@ -21,7 +21,7 @@ export const orgModelCredentialGet = registerCapability({
     "Read whether the organisation has stored its own model-vendor API key, and if so which provider, its status, the last four characters of the key, and when it was last verified and last rotated. Never returns the key.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   agent: {
     requiresApproval: false,

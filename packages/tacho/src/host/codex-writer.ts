@@ -22,6 +22,7 @@ import {
   COMMAND_HOOK_EVENTS,
   COMMAND_HOOK_TIMEOUTS_S,
   commandHookEntry,
+  documentShapeProblem,
   type HookGroup,
   type HookInstallConfig,
   isTachoGroup,
@@ -86,6 +87,14 @@ export interface CodexMergeResult {
 }
 
 /**
+ * Why a parsed `hooks`-keyed document (Codex's `hooks.json`, Stella's legacy
+ * `settings.json`) cannot be merged into, or undefined when it can.
+ */
+export function hooksShapeProblem(document: unknown): string | undefined {
+  return documentShapeProblem(document, ["hooks"], "hooks");
+}
+
+/**
  * Merge hook groups into a `hooks`-keyed document for one enrollment:
  * foreign groups survive, earlier groups of the same enrollment are
  * replaced, and the input is never mutated.
@@ -113,6 +122,12 @@ export function stripHookGroups(
   existing: unknown,
   enrollmentId?: string,
 ): CodexMergeResult {
+  // Not a hooks document: nothing of ours is in it, and it goes back as it is.
+  if (hooksShapeProblem(existing) !== undefined)
+    return {
+      settings: existing as CodexMergeResult["settings"],
+      changed: false,
+    };
   const settings = documentOf(existing);
   const before = JSON.stringify(settings);
   if (settings.hooks !== undefined) {
