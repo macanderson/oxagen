@@ -1,11 +1,11 @@
 -- The main rule holds in both directions, at the store, and a head can be
 -- deleted.
 --
--- Two defects in the model 20260918040000_repository_main_binding_is_exclusive
--- landed, both found in review of #3326. This migration repairs both, in one
--- file, because they are two halves of the same invariant: a head is the
--- mutable pointer "this workspace sees this repository", and the store, not
--- the handler, is what holds the rule about which pointers may coexist.
+-- Three defects in the model 20260918040000_repository_main_binding_is_exclusive
+-- landed, all found in review of #3326. This migration repairs them in one
+-- file, because they are parts of the same invariant: a head is the mutable
+-- pointer "this workspace sees this repository", and the store, not the
+-- handler, is what holds the rule about which pointers may coexist.
 --
 -- ## 1. `unlink_repository` deletes a head, and the role could not
 --
