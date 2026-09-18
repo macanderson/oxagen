@@ -14,13 +14,15 @@ inverts.
 This file is the register of what has to change at that boundary, and the plan
 for changing it. It exists so the boundary does not arrive before the list does.
 
-**Status:** opened 2026-09-18. The plan for working through it is #3268, which
-records the options and the recommendation for each item and is the parent of
-one issue per item. #3268 does not itself carry the work: these items are
-independently shippable and their definitions of done have nothing in common,
-so an issue that closed only when all of them were done could never close. The
-one exception is items 4 and 5, which are a single change and so share a single
-issue — the "Order to do them in" section below says why.
+**Status:** opened 2026-09-18. #3268 records the options and the recommendation
+for each item, as a reference. It is not a parent, an epic, or a tracking
+ticket, and nothing closes because of it: this repo carries one full change per
+issue and adds checklist rows rather than hierarchy (AGENTS.md, SCR-004). Each
+item below gets its own independent issue, linked from #3268 and standing on its
+own — their definitions of done have nothing in common, so an issue that closed
+only when all of them were done could never close. The one exception is items 4
+and 5, which are a single change and so share a single issue — the "Order to do
+them in" section below says why.
 
 ---
 
@@ -270,9 +272,14 @@ not a de-registration.
 
 **Done looks like:** each row in `DEREGISTERED.md` has been read once against a
 live roadmap and either kept with a reason or deleted — and a deletion still
-lands the ADR naming the feature being removed, which is what `check:deregistered`
-enforces today (AGENTS.md). The roadmap review decides *whether* a row is worth
-retaining; it is not itself the authorisation to delete it.
+lands the ADR naming the feature being removed, which is the rule AGENTS.md
+states. Note what enforces it: `check:deregistered` reads only the §14
+`preserved-paths` block and asserts every path still listed there exists. A
+deletion that also removes the path from that block passes the guard without it
+reading §13 or looking for an ADR. The ADR requirement is a rule people follow,
+not a check CI makes, so do not merge on the guard's green as though it had
+verified one. The roadmap review decides *whether* a row is worth retaining; it
+is not itself the authorisation to delete it.
 
 ---
 
