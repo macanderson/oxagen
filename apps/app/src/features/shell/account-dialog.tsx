@@ -831,7 +831,7 @@ type ExportState =
   | { kind: "idle" }
   | { kind: "pending"; scope: "user" | "org" }
   | { kind: "queued"; scope: "user" | "org"; exportId: string }
-  | { kind: "ready"; scope: "user" | "org"; exportId: string; url: string }
+  | { kind: "ready"; scope: "user" | "org"; exportId: string }
   | { kind: "expired"; scope: "user" | "org"; exportId: string }
   | { kind: "denied"; scope: "user" | "org" }
   | { kind: "failed"; scope: "user" | "org" };
@@ -878,13 +878,7 @@ function PrivacyTab({ data }: { data: ShellData }) {
       if (!live || !read.ok) return;
       const scope = queuedScope as "user" | "org";
       const id = queuedId as string;
-      if (read.value.status === "ready" && read.value.downloadUrl)
-        setState({
-          kind: "ready",
-          scope,
-          exportId: id,
-          url: read.value.downloadUrl,
-        });
+      if (read.value.ready) setState({ kind: "ready", scope, exportId: id });
       else if (read.value.status === "failed")
         setState({ kind: "expired", scope, exportId: id });
     }
@@ -943,14 +937,13 @@ function PrivacyTab({ data }: { data: ShellData }) {
           {state.kind === "ready" ? (
             <span data-testid="account-export-ready">
               {t("ready")}{" "}
-              <a
+              <SafeLink
                 data-testid="account-export-download"
                 className="underline"
-                href={state.url}
-                download
+                to={routes.accountExport(data.org.slug, state.exportId)}
               >
                 {t("download")}
-              </a>
+              </SafeLink>
             </span>
           ) : null}
         </p>

@@ -60,7 +60,8 @@ describe("privacy.data.export.status capability", () => {
       privacyDataExportStatus.output.parse({
         exportId: VALID_UUID,
         status: "ready",
-        downloadUrl: "https://blob.example/bundle.zip",
+        ready: true,
+        storageKey: "privacy-exports/org/exp.zip",
         completedAt: "2026-09-18T22:00:00.000Z",
       }),
     ).not.toThrow();
@@ -68,10 +69,25 @@ describe("privacy.data.export.status capability", () => {
       privacyDataExportStatus.output.parse({
         exportId: VALID_UUID,
         status: "queued",
-        downloadUrl: null,
+        ready: false,
+        storageKey: null,
         completedAt: null,
       }),
     ).not.toThrow();
+  });
+
+  // The archive is a private object, so the contract must not carry a url a
+  // browser could be pointed at: the storage contract forbids rendering one.
+  it("offers no download url at all", () => {
+    const result = privacyDataExportStatus.output.safeParse({
+      exportId: VALID_UUID,
+      status: "ready",
+      ready: true,
+      storageKey: "privacy-exports/org/exp.zip",
+      downloadUrl: "https://blob.example/bundle.zip",
+      completedAt: null,
+    });
+    expect(result.success).toBe(false);
   });
 
   it("rejects a status the table cannot hold", () => {
@@ -79,7 +95,8 @@ describe("privacy.data.export.status capability", () => {
       privacyDataExportStatus.output.parse({
         exportId: VALID_UUID,
         status: "expired",
-        downloadUrl: null,
+        ready: false,
+        storageKey: null,
         completedAt: null,
       }),
     ).toThrow();

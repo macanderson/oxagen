@@ -45,13 +45,17 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     throw new HandlerError({ code: "not_found", reason: "export_not_found" });
   }
 
-  // The link is only meaningful once the bundle exists. A url left on a row
-  // that has since failed is not offered.
-  const ready = row.status === "ready";
+  // export_url holds the storage KEY, not a browser URL: the archive is a
+  // private object, and the storage contract forbids rendering a private
+  // object's url (Vercel Blob needs the store token; the filesystem driver
+  // returns the key itself). A key left on a row that has since failed is not
+  // offered either, so nothing points at a half-written bundle.
+  const ready = row.status === "ready" && row.exportUrl !== null;
   return {
     exportId: row.id,
     status: row.status,
-    downloadUrl: ready ? (row.exportUrl ?? null) : null,
+    ready,
+    storageKey: ready ? row.exportUrl : null,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
   };
 };

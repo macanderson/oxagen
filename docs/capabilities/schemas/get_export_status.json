@@ -44,7 +44,10 @@
           "failed"
         ]
       },
-      "downloadUrl": {
+      "ready": {
+        "type": "boolean"
+      },
+      "storageKey": {
         "anyOf": [
           {
             "type": "string"
@@ -68,7 +71,8 @@
     "required": [
       "exportId",
       "status",
-      "downloadUrl",
+      "ready",
+      "storageKey",
       "completedAt"
     ],
     "additionalProperties": false

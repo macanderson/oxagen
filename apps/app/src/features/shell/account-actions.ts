@@ -150,8 +150,13 @@ export async function requestExport(
 export type ExportProgress = {
   exportId: string;
   status: "queued" | "processing" | "ready" | "failed";
-  /** Set only once the status is `ready`. */
-  downloadUrl: string | null;
+  /** Whether the bundle exists and can be fetched. */
+  ready: boolean;
+  /**
+   * The canonical storage key, for the download route to stream back. The
+   * archive is a private object, so there is no URL a browser could fetch.
+   */
+  storageKey: string | null;
 };
 
 /**
@@ -171,6 +176,6 @@ export async function readExportStatus(
     page: "shell",
   });
   if (!read.ok) return asActionResult(read);
-  const { status, downloadUrl } = read.value;
-  return { ok: true, value: { exportId, status, downloadUrl } };
+  const { status, ready, storageKey } = read.value;
+  return { ok: true, value: { exportId, status, ready, storageKey } };
 }

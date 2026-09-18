@@ -193,9 +193,9 @@
     "get_export_status": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account dialog › Privacy — a queued export is polled with get_export_status until it is ready, and the bundle is offered as a download link (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account dialog › Privacy — a queued export is polled with get_export_status until it is ready, then the bundle is fetched from /[org]/account/export/[exportId], which streams the private object after checking the viewer (features/shell/account-dialog.tsx, features/shell/export-download.ts)",
       "testid": "account-export-download",
-      "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
+      "proof": "apps/app/src/features/shell/export-download.test.ts",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-01GYhmZx-account-dialog-w11"
     },

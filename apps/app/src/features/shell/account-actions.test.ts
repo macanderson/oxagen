@@ -176,11 +176,12 @@ describe("readExportStatus", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("asks by export id alone and hands back the link once it is ready", async () => {
+  it("asks by export id alone and hands back the key once it is ready", async () => {
     invoke.mockResolvedValue({
       exportId: EXPORT_ID,
       status: "ready",
-      downloadUrl: "https://blob.example/bundle.zip",
+      ready: true,
+      storageKey: "privacy-exports/org/exp.zip",
       completedAt: "2026-09-18T22:00:00.000Z",
     });
     const result = await readExportStatus("acme", EXPORT_ID);
@@ -194,7 +195,8 @@ describe("readExportStatus", () => {
       value: {
         exportId: EXPORT_ID,
         status: "ready",
-        downloadUrl: "https://blob.example/bundle.zip",
+        ready: true,
+        storageKey: "privacy-exports/org/exp.zip",
       },
     });
   });
@@ -205,7 +207,8 @@ describe("readExportStatus", () => {
     invoke.mockResolvedValue({
       exportId: EXPORT_ID,
       status: "queued",
-      downloadUrl: null,
+      ready: false,
+      storageKey: null,
       completedAt: null,
     });
     await readExportStatus("acme", EXPORT_ID);

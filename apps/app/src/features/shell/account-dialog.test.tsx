@@ -169,7 +169,8 @@ beforeEach(() => {
     value: {
       exportId: "7a000000-0000-4000-8000-0000000000e1",
       status: "queued",
-      downloadUrl: null,
+      ready: false,
+      storageKey: null,
     },
   });
   requestExport.mockReset();
@@ -525,7 +526,8 @@ describe("Privacy", () => {
       value: {
         exportId: "7a000000-0000-4000-8000-0000000000e1",
         status: "ready",
-        downloadUrl: "https://blob.example/bundle.zip",
+        ready: true,
+        storageKey: "privacy-exports/org/exp.zip",
       },
     });
     const { user } = await openDialog("privacy");
@@ -537,7 +539,11 @@ describe("Privacy", () => {
       "acme",
       "7a000000-0000-4000-8000-0000000000e1",
     );
-    expect(link.getAttribute("href")).toBe("https://blob.example/bundle.zip");
+    // The archive is a private object, so the tab links at the app's own
+    // authenticated route, never at storage.
+    expect(link.getAttribute("href")).toBe(
+      "/acme/account/export/7a000000-0000-4000-8000-0000000000e1",
+    );
   });
 
   it("says so when the bundle could not be prepared (negative)", async () => {
@@ -546,7 +552,8 @@ describe("Privacy", () => {
       value: {
         exportId: "7a000000-0000-4000-8000-0000000000e1",
         status: "failed",
-        downloadUrl: null,
+        ready: false,
+        storageKey: null,
       },
     });
     const { user } = await openDialog("privacy");

@@ -1,0 +1,76 @@
+// The authenticated download of a queued data export: `GET
+// /{org}/account/export/{exportId}`.
+//
+// The archive is written as a PRIVATE object (`access: "private"` in
+// `packages/inngest-functions/src/functions/privacy.export.process.ts`), and
+// the storage contract is explicit that a private object's `url` is never
+// rendered in a browser: on Vercel Blob it needs the store's read-write token,
+// and on the filesystem driver it is a key rather than a route. So the tab
+// links here instead, and the bytes are streamed server-side.
+//
+// Two gates, in order: the viewer must be signed in and a member of the org,
+// and `get_export_status` must say the bundle is this person's and ready. The
+// capability matches the row on the authenticated principal, so an id
+// belonging to someone else answers `not_found` and never reaches storage.
+import "server-only";
+import type { StorageAdapter } from "@oxagen/storage";
+import type { ActionResult } from "@/server/kernel";
+import type { RouteViewer } from "@/server/viewer";
+
+export type ExportDownloadDeps = {
+  resolveViewer: (org: string) => Promise<RouteViewer>;
+  readStatus: (
+    org: string,
+    exportId: string,
+  ) => Promise<ActionResult<{ ready: boolean; storageKey: string | null }>>;
+  storage: () => StorageAdapter;
+};
+
+function refusal(status: number, code: string): Response {
+  return Response.json({ code }, { status });
+}
+
+export async function handleExportDownload(
+  _request: Request,
+  context: { params: Promise<{ org: string; exportId: string }> },
+  deps: ExportDownloadDeps,
+): Promise<Response> {
+  const { org, exportId } = await context.params;
+  const viewer = await deps.resolveViewer(org);
+  switch (viewer.kind) {
+    case "unauthenticated":
+      return refusal(401, "unauthenticated");
+    case "not_found":
+      return refusal(404, "not_found");
+    case "mfa_enroll":
+      return refusal(403, "mfa_required");
+    case "redirect":
+    case "ok":
+      break;
+  }
+
+  const read = await deps.readStatus(org, exportId);
+  if (!read.ok) {
+    if (read.reason === "denied") return refusal(403, "denied");
+    // An id that is not this person's is not_found, the same answer as an id
+    // that does not exist: distinguishing them would say whether a stranger's
+    // export id is real.
+    return refusal(404, "not_found");
+  }
+  // Still being written, or written and then failed. Either way there is
+  // nothing to hand over yet.
+  if (!read.value.ready || read.value.storageKey === null) {
+    return refusal(409, "not_ready");
+  }
+
+  const object = await deps.storage().get(read.value.storageKey);
+  return new Response(object.body, {
+    status: 200,
+    headers: {
+      "content-type": object.contentType ?? "application/zip",
+      "content-disposition": `attachment; filename="oxagen-export-${exportId}.zip"`,
+      // A data-subject export is never cached by a shared cache.
+      "cache-control": "private, no-store",
+    },
+  });
+}

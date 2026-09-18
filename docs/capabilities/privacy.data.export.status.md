@@ -34,7 +34,8 @@ bundle. A field here would be a way to enumerate other people's exports.
 |---|---|---|
 | `exportId` | `string` | Echoed back. |
 | `status` | `"queued" \| "processing" \| "ready" \| "failed"` | The four states `privacy.privacy_export_requests` can hold. |
-| `downloadUrl` | `string \| null` | The signed URL, and only while `status` is `ready`. A url left on a row that later failed is not offered. |
+| `ready` | `boolean` | Whether the bundle exists and can be fetched. |
+| `storageKey` | `string \| null` | The canonical object key, for the serving route to read back; null until the bundle is written. |
 | `completedAt` | `string \| null` | ISO 8601, set when the job finished. |
 
 ## Refusals
@@ -54,3 +55,18 @@ In the app it backs the Account dialog's Privacy tab: a queued export is polled
 every three seconds until it settles, then the bundle is offered as a download
 link (`apps/app/src/features/shell/account-dialog.tsx`). The interval is
 cleared when the export settles and when the dialog closes.
+
+## Why there is no download URL
+
+The archive is written as a **private** object (`access: "private"`), and
+`packages/storage/src/types.ts` is explicit: never render a private object's
+`url` in a browser. On Vercel Blob that url needs the store's read-write token;
+on the filesystem driver it is the storage key, not a route. So the contract
+carries no url at all.
+
+The bytes are served by `GET /{org}/account/export/{exportId}`
+(`apps/app/src/features/shell/export-download.ts`), which resolves the viewer,
+invokes this capability to confirm the export is theirs and ready, and streams
+`storage().get(storageKey)` with `cache-control: private, no-store`. A refusal
+from either gate answers before storage is touched, and an export that is not
+the caller's answers `not_found` like one that does not exist.

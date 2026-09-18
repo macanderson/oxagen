@@ -248,14 +248,16 @@ describe("privacyExportProcess Inngest handler", () => {
 
     await handler({ event: { data: baseEvent }, step: makeStep() });
 
-    // Marked processing first, then ready with the stored URL.
+    // Marked processing first, then ready with the canonical storage KEY --
+    // never the url. For a private object the url is not a route anyone can
+    // fetch (the fs driver returns the key itself), so the column carries the
+    // key the serving route reads back with storage().get().
     const setCalls = mocks.updateSet.mock.calls.map((c) => c[0].payload);
     expect(setCalls.some((p) => p.status === "processing")).toBe(true);
     const readyCall = setCalls.find((p) => p.status === "ready");
     expect(readyCall).toBeDefined();
-    expect(readyCall?.exportUrl).toBe(
-      "blob-private://privacy-exports/org-1/exp-1.zip",
-    );
+    expect(readyCall?.exportUrl).toBe("privacy-exports/org-1/exp-1.zip");
+    expect(readyCall?.exportUrl).not.toContain("blob-private://");
     expect(readyCall?.completedAt).toBeInstanceOf(Date);
     expect(setCalls.some((p) => p.status === "failed")).toBe(false);
 

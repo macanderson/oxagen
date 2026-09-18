@@ -73,8 +73,23 @@ export const privacyDataExportStatus = registerCapability({
     .object({
       exportId: z.string(),
       status: z.enum(exportStatusValues),
-      /** Set only once the status is `ready`. */
-      downloadUrl: z.string().nullable(),
+      /**
+       * Whether the bundle exists and can be fetched. The archive is written
+       * as a **private** object (`access: "private"`), and the storage
+       * contract is explicit that a private object's `url` is never rendered
+       * in a browser: on Vercel Blob it needs the store's token, and on the
+       * filesystem driver it is a key rather than a route. So no URL is
+       * offered here at all — bytes are served by an authenticated route
+       * that streams `storage().get(storageKey)`.
+       */
+      ready: z.boolean(),
+      /**
+       * The canonical object key, for the serving route to read back. Null
+       * until the bundle is written. It is an opaque path to the caller's own
+       * object and grants nothing on its own: reading it needs the store's
+       * credentials, which only the server holds.
+       */
+      storageKey: z.string().nullable(),
       completedAt: z.string().nullable(),
     })
     .strict(),

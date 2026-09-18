@@ -75,13 +75,13 @@ describe("get_export_status", () => {
     expect(mocks.where).not.toBeNull();
   });
 
-  it("hands back the download link once the bundle is ready", async () => {
+  it("hands back the storage key once the bundle is ready", async () => {
     const completed = new Date("2026-09-18T22:00:00.000Z");
     mocks.rows = [
       {
         id: EXPORT_ID,
         status: "ready",
-        exportUrl: "https://blob.example/bundle.zip",
+        exportUrl: "privacy-exports/org/exp.zip",
         completedAt: completed,
       },
     ];
@@ -92,7 +92,8 @@ describe("get_export_status", () => {
     expect(out).toEqual({
       exportId: EXPORT_ID,
       status: "ready",
-      downloadUrl: "https://blob.example/bundle.zip",
+      ready: true,
+      storageKey: "privacy-exports/org/exp.zip",
       completedAt: "2026-09-18T22:00:00.000Z",
     });
   });
@@ -113,19 +114,20 @@ describe("get_export_status", () => {
     expect(out).toEqual({
       exportId: EXPORT_ID,
       status: "processing",
-      downloadUrl: null,
+      ready: false,
+      storageKey: null,
       completedAt: null,
     });
   });
 
   // A url left on a row that later failed is not a bundle anyone should be
   // pointed at.
-  it("offers no link for a failed export that still carries a url", async () => {
+  it("offers no key for a failed export that still carries one", async () => {
     mocks.rows = [
       {
         id: EXPORT_ID,
         status: "failed",
-        exportUrl: "https://blob.example/half-written.zip",
+        exportUrl: "privacy-exports/org/half-written.zip",
         completedAt: null,
       },
     ];
@@ -134,6 +136,7 @@ describe("get_export_status", () => {
       ctx(),
     );
     expect(out.status).toBe("failed");
-    expect(out.downloadUrl).toBeNull();
+    expect(out.ready).toBe(false);
+    expect(out.storageKey).toBeNull();
   });
 });

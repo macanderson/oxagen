@@ -316,7 +316,11 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
           "privacy.export-process: ZIP assembled and uploaded",
         );
 
-        return { url: result.url, bytes: result.bytes };
+        // The KEY, not the url: for a private object the url is not a route
+        // anyone can fetch (the filesystem driver returns the key itself, and
+        // a Vercel blob needs the store token), and the serving route reads
+        // the bytes back with storage().get(key).
+        return { key: result.key, bytes: result.bytes };
       });
 
       // Step 3: mark the request ready with the stored export URL.
@@ -326,7 +330,7 @@ export const [privacyExportProcess, privacyExportProcessOnFailure] =
             .update(schema.privacyExportRequests)
             .set({
               status: "ready",
-              exportUrl: uploaded.url,
+              exportUrl: uploaded.key,
               completedAt: new Date(),
               updatedAt: new Date(),
             })
