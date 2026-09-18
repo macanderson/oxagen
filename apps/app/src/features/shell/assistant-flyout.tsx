@@ -96,7 +96,9 @@ import { askAssistant, type ParkedCard } from "./assistant-actions";
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
-import { useNavigate } from "@/ui/navigation";
+import { routes } from "@/shared/safe-path";
+import { linkText } from "@/ui/control-styles";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 
 type Entry =
   | { kind: "asked"; id: string; text: string }
@@ -529,7 +531,17 @@ export function AssistantFlyout() {
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
                     >
-                      {t("recordedAs", { run: entry.runId })}
+                      {t("recordedAs")}{" "}
+                      {org !== null && ws !== null ? (
+                        <SafeLink
+                          to={routes.run(org, ws, entry.runId)}
+                          className={linkText}
+                        >
+                          {entry.runId}
+                        </SafeLink>
+                      ) : (
+                        entry.runId
+                      )}
                     </p>
                     {entry.parked.length === 0 ? null : (
                       <p
