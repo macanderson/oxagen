@@ -12,6 +12,7 @@ Read this whole file first. Then read the reference for what you are making:
 | Anything with words in it | `references/voice.md`, then `references/words.md` |
 | A headline, hero, ad, tagline, or the first sentence of anything | `references/positioning.md` |
 | Anything about identity, access, credentials, connections, permissions, or tools | `references/positioning.md`, the section *The keys stay with you* |
+| Outreach, a sales brief, or anything that names who Oxagen sells to | `references/positioning.md`, the section *The buyer we are built for* |
 | A page, ad, deck, or UI | `references/system.md` and `assets/tokens.css` |
 | Copy for a specific surface (site, ad, email, docs, UI, launch) | `references/examples.md` |
 
@@ -87,5 +88,8 @@ Full guidance, with before and after pairs, is in `references/voice.md`.
 - [ ] Buyer quotes are labelled hypothetical unless an attributed customer approved them
 - [ ] No traction numbers, partner counts, or setup durations without dated evidence
 - [ ] Every claim is one the record can back
-- [ ] Space Grotesk for everything; system mono for data, digests, and commands
-- [ ] 12px card radius, 1120px wrap, dark first with the parchment light theme intact
+- [ ] Space Grotesk for wordmarks and h1 to h3 only, Geist for h4 to h6, body, and UI, Monaspace Neon for code, data, digests, and commands
+- [ ] One type scale per surface: marketing (`text-m-*`) or app (`text-a-*`)
+- [ ] 12px card radius, 1120px wrap, dark first on obsidian with the white light theme intact
+- [ ] Gold as text on white is gold-deep `#977017`
+- [ ] Every text role that carries meaning clears 4.5:1 on its ground
