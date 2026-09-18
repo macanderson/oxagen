@@ -81,6 +81,7 @@ import {
   deriveSealRollup,
   NO_BODY,
   readArchiveFrame,
+  type SealedFrameRow,
 } from "./frame-body";
 import {
   buildArchiveSegment,
@@ -2555,6 +2556,32 @@ describe("the seal's rollup", () => {
       modelCalls: 0,
       toolCalls: 0,
       turns: 0,
+    });
+  });
+
+  it("counts a run the in-app assistant recorded, whose calls are spelled engine_call", () => {
+    // The assistant is the only ledger producer in the tree and it writes
+    // `model.engine_call_completed` / `tool.engine_call_completed`. The
+    // rollup matched only the other spelling, so every one of its runs
+    // sealed claiming zero calls however many it made.
+    const rows: SealedFrameRow[] = [
+      {
+        ...modelRow(1, 0),
+        event_type: "model.engine_call_completed",
+      },
+      {
+        ...modelRow(2, 1),
+        event_type: "model.engine_call_completed",
+      },
+      {
+        ...modelRow(3, 0),
+        event_type: "tool.engine_call_completed",
+      },
+    ];
+    expect(deriveSealRollup(rows)).toEqual({
+      modelCalls: 2,
+      toolCalls: 1,
+      turns: 2,
     });
   });
 

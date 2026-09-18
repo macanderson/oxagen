@@ -41,6 +41,7 @@ vi.mock("@oxagen/tenancy", () => ({
 import {
   ASSISTANT_CONTEXT_PROVIDERS,
   ASSISTANT_ENGINE,
+  ASSISTANT_MAX_BODY_BYTES,
   ASSISTANT_MAX_CONTEXT_FRAMES,
   ASSISTANT_MAX_CONTEXT_TOKENS,
   ASSISTANT_PRINCIPAL_NAME,
@@ -961,5 +962,215 @@ describe("openAssistantRun", () => {
       }),
     ).rejects.toMatchObject({ reason: "operator_principal_missing" });
     expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
+});
+
+// ── frame bodies ──────────────────────────────────────────────────────────────
+
+describe("the recorder hands the ledger the content its frames are about", () => {
+  const decode = (body: { bytes: Uint8Array } | undefined) =>
+    body === undefined ? undefined : new TextDecoder().decode(body.bytes);
+  const bodyOf = (
+    batches: ReadonlyArray<{ events: readonly { eventType: string }[] }>,
+    eventType: string,
+  ) =>
+    (
+      batches.find((b) => b.events[0]!.eventType === eventType) as
+        | {
+            events: readonly {
+              body?: { contentType: string; bytes: Uint8Array };
+            }[];
+          }
+        | undefined
+    )?.events[0]!.body;
+
+  async function record(): Promise<ReturnType<typeof fakeStore>> {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory", "search_tools"],
+      store: ledger.store,
+    });
+    await recorder.modelCallStarted({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      request: { messages: [{ role: "user", content: "what did we spend?" }] },
+    });
+    await recorder.modelCall({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+      response: { text: "four dollars", model: "anthropic/claude-sonnet-4" },
+    });
+    await recorder.toolCallStarted({
+      seq: 3,
+      requestId: "tool-1-0",
+      toolName: "search_tools",
+      input: { query: "grant" },
+    });
+    await recorder.toolCall({
+      seq: 3,
+      requestId: "tool-1-0",
+      toolName: "search_tools",
+      outcome: "completed",
+      input: { query: "grant" },
+      output: { rows: ["a"] },
+      durationMs: 12,
+    });
+    return ledger;
+  }
+
+  it("puts the request on the intention frame and the completion on the call frame", async () => {
+    const { batches } = await record();
+    // The prompt is inside the request, and the request is durable before the
+    // provider is contacted: this is the frame a `view` reader opens to see
+    // what the agent was asked.
+    expect(decode(bodyOf(batches, "model.engine_call_started"))).toBe(
+      '{"messages":[{"content":"what did we spend?","role":"user"}]}',
+    );
+    expect(decode(bodyOf(batches, "model.engine_call_completed"))).toBe(
+      '{"model":"anthropic/claude-sonnet-4","text":"four dollars"}',
+    );
+    expect(bodyOf(batches, "model.engine_call_started")!.contentType).toBe(
+      "application/json",
+    );
+  });
+
+  it("puts the tool's arguments on the intention frame and its result on the call frame", async () => {
+    const { batches } = await record();
+    expect(decode(bodyOf(batches, "tool.engine_call_started"))).toBe(
+      '{"query":"grant"}',
+    );
+    // The result alone: the arguments are already on the frame above, and
+    // writing them twice would double every tool argument in the run.
+    expect(decode(bodyOf(batches, "tool.engine_call_completed"))).toBe(
+      '{"rows":["a"]}',
+    );
+  });
+
+  it("serialises a body canonically, so the same content always digests the same", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    await recorder.toolCallStarted({
+      seq: 1,
+      requestId: "t",
+      toolName: "search_tools",
+      input: { b: 2, a: 1 },
+    });
+    expect(decode(bodyOf(ledger.batches, "tool.engine_call_started"))).toBe(
+      '{"a":1,"b":2}',
+    );
+  });
+
+  it("records a failed tool's error rather than an output it never produced", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["set_budget"],
+      store: ledger.store,
+    });
+    await recorder.toolCall({
+      seq: 1,
+      requestId: "t",
+      toolName: "set_budget",
+      outcome: "denied",
+      input: { usd: 5 },
+      error: "approval denied",
+      durationMs: 2,
+    });
+    expect(decode(bodyOf(ledger.batches, "tool.engine_call_completed"))).toBe(
+      '"approval denied"',
+    );
+  });
+
+  it("writes no body past the cap, and the frame's own digest still names the content", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    const huge = { blob: "x".repeat(ASSISTANT_MAX_BODY_BYTES + 1) };
+    await recorder.toolCall({
+      seq: 1,
+      requestId: "t",
+      toolName: "search_tools",
+      outcome: "completed",
+      input: { q: "a" },
+      output: huge,
+      durationMs: 1,
+    });
+    const frame = ledger.batches.find(
+      (b) => b.events[0]!.eventType === "tool.engine_call_completed",
+    )!.events[0]! as {
+      body?: unknown;
+      payload: { output_digest: string };
+    };
+    // Truncating would write bytes whose digest names nothing that ever
+    // existed; the receipt's digest is what keeps the omission honest.
+    expect(frame.body).toBeUndefined();
+    expect(frame.payload.output_digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it("records the frame without a body when the content has no canonical form", async () => {
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      surface: "api-chat",
+      instruction: "hi",
+      maxSteps: 1,
+      toolAllowlist: ["search_tools"],
+      store: ledger.store,
+    });
+    // A turn whose content cannot be serialised must still be recorded: a
+    // missing body is a smaller loss than a failed append. The model frames
+    // are where this is reachable — a tool frame digests its input first, and
+    // that digest is fail-closed by design, so an unserialisable tool input
+    // aborts the turn rather than recording a call nobody can attribute.
+    const cyclic: Record<string, unknown> = {};
+    cyclic["self"] = cyclic;
+    await expect(
+      recorder.modelCallStarted({
+        seq: 1,
+        requestId: "prov-1-0",
+        role: "worker",
+        provider: "oxagen",
+        model: "anthropic/claude-sonnet-4",
+        request: cyclic,
+      }),
+    ).resolves.toBeUndefined();
+    expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
   });
 });

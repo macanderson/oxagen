@@ -30,10 +30,12 @@ import { createAgentRunAuthorizationSnapshot } from "@oxagen/iam";
 import { INTERACTIVE_AGENT_SLUG } from "@oxagen/oxagen/interactive-agent";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
+  canonicalJson,
   createPostgresRunStore,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
   TERMINAL_EVENT_TYPE,
+  type AttemptEventBodyInput,
   type AttemptEventInput,
   type PlatformSurface,
   type ResolvedEngineIdentity,
@@ -592,7 +594,56 @@ async function terminalizeUnattemptedRun(
   }
 }
 
-type PendingEvent = Pick<AttemptEventInput, "eventType" | "payload">;
+type PendingEvent = Pick<AttemptEventInput, "eventType" | "payload" | "body">;
+
+/**
+ * The most bytes one frame body may carry, matching `TACHO_MAX_BODY_BYTES`
+ * on the host side so an in-app run and a wrapped one are capped alike. A
+ * body past it is not written at all: the payload's own `*_digest` still
+ * names the content, and the seal derives `body_missing` from the frame, so
+ * a reader sees a size limit rather than a recorder that never captured. The
+ * alternative — truncating — would write bytes whose digest names nothing
+ * that ever existed and whose JSON no reader can parse.
+ */
+export const ASSISTANT_MAX_BODY_BYTES = 1_048_576;
+
+const bodyEncoder = new TextEncoder();
+
+/**
+ * The content of a frame as a body the ledger can redact, digest and retain
+ * (MC spec §8.2). Canonical JSON, so the same content always serialises to
+ * the same bytes and therefore the same digest.
+ *
+ * `undefined` when there is nothing to record or when the content is past
+ * the cap, and `append` then writes the frame with its receipt alone. A
+ * value `canonicalJson` refuses — a non-finite number, a cycle — is treated
+ * the same way and logged: a frame with no body is a smaller loss than a
+ * turn that fails because its evidence could not be serialised.
+ */
+function jsonBody(
+  eventType: string,
+  content: unknown,
+): AttemptEventBodyInput | undefined {
+  if (content === undefined) return undefined;
+  let bytes: Uint8Array;
+  try {
+    bytes = bodyEncoder.encode(canonicalJson(content));
+  } catch (err) {
+    logger.warn(
+      { err, eventType },
+      "frame content could not be canonicalised; the frame is recorded without a body",
+    );
+    return undefined;
+  }
+  if (bytes.byteLength > ASSISTANT_MAX_BODY_BYTES) {
+    logger.info(
+      { eventType, bytes: bytes.byteLength, cap: ASSISTANT_MAX_BODY_BYTES },
+      "frame content is past the body cap; the frame is recorded without a body",
+    );
+    return undefined;
+  }
+  return { contentType: "application/json", bytes };
+}
 
 /**
  * Appends run in the order the engine's frames arrived, one transaction each,
@@ -658,6 +709,7 @@ class Recorder implements AssistantRunRecorder {
                 eventType: event.eventType,
                 observedAt: this.now().toISOString(),
                 payload: event.payload,
+                ...(event.body !== undefined ? { body: event.body } : {}),
               },
             ],
           }),
@@ -685,8 +737,9 @@ class Recorder implements AssistantRunRecorder {
    * every completion twice. The durable evidence is the event.
    */
   modelCallStarted(record: TurnLedgerModelIntent): Promise<void> {
+    const eventType = "model.engine_call_started";
     return this.append({
-      eventType: "model.engine_call_started",
+      eventType,
       payload: {
         engine_seq: record.seq,
         model_call_id: record.requestId,
@@ -694,13 +747,19 @@ class Recorder implements AssistantRunRecorder {
         provider: record.provider,
         model: record.model,
       },
+      // The request, and so the turn's prompt, rides the write-ahead frame
+      // rather than the completion: it is what was asked, and it is already
+      // durable when the provider is contacted, so a turn that dies mid-call
+      // still says what it was asked to do.
+      body: jsonBody(eventType, record.request),
     });
   }
 
   modelCall(record: TurnLedgerModelCall): Promise<void> {
     this.receipts.push({ kind: "model", ...record });
+    const eventType = "model.engine_call_completed";
     return this.append({
-      eventType: "model.engine_call_completed",
+      eventType,
       payload: {
         engine_seq: record.seq,
         model_call_id: record.requestId,
@@ -716,6 +775,11 @@ class Recorder implements AssistantRunRecorder {
             }
           : {}),
       },
+      // The completion, not the request: duplicating the messages onto both
+      // frames would double the largest bytes a turn writes. This is the
+      // frame `isContentBearingFrame` requires a body on, which is what
+      // carries a run from `inspect` to `view`.
+      body: jsonBody(eventType, record.response),
     });
   }
 
@@ -726,8 +790,9 @@ class Recorder implements AssistantRunRecorder {
    * would report every tool call twice. The durable evidence is the event.
    */
   toolCallStarted(record: TurnLedgerToolIntent): Promise<void> {
+    const eventType = "tool.engine_call_started";
     return this.append({
-      eventType: "tool.engine_call_started",
+      eventType,
       payload: {
         engine_seq: record.seq,
         tool_call_id: record.requestId,
@@ -735,13 +800,18 @@ class Recorder implements AssistantRunRecorder {
         ...(record.toolAlias ? { tool_alias: record.toolAlias } : {}),
         input_digest: digestJcs(record.input ?? null),
       },
+      // What the tool was called with, on the frame that is durable before
+      // the tool runs, so a side effect that commits is never recorded
+      // without the arguments that caused it.
+      body: jsonBody(eventType, record.input ?? null),
     });
   }
 
   toolCall(record: TurnLedgerToolCall): Promise<void> {
     this.receipts.push({ kind: "tool", ...record });
+    const eventType = "tool.engine_call_completed";
     return this.append({
-      eventType: "tool.engine_call_completed",
+      eventType,
       payload: {
         engine_seq: record.seq,
         tool_call_id: record.requestId,
@@ -753,6 +823,15 @@ class Recorder implements AssistantRunRecorder {
           : { error_digest: digestJcs(record.error ?? null) }),
         duration_ms: Math.max(0, Math.round(record.durationMs)),
       },
+      // What came back — the output, or the error when the call failed.
+      // The input is on the intention frame above; recording it twice would
+      // double every tool argument in the run.
+      body: jsonBody(
+        eventType,
+        record.outcome === "completed"
+          ? (record.output ?? null)
+          : (record.error ?? null),
+      ),
     });
   }
 
