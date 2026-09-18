@@ -10,12 +10,15 @@ import {
   signBundle,
   unsignedBundle,
 } from "./lib/tacho-host";
+import { readWorkspaceSteering } from "./lib/tacho-steering";
 
 /**
  * The signed policy bundle for the calling host. In this phase the bundle is
  * observe-mode with no rules: the shape, signing, etag, and status plumbing
  * are what the collector depends on; the IAM compiler that fills
  * `permissions` and `tools` lands with the authority phase (plan PR 6).
+ * `context.system` carries the workspace's `must` and `should` steering
+ * records (ADR-091), which the collector hands the agent at session start.
  */
 export const tachoBundleGetHandler: CapabilityHandler<
   typeof tachoBundleGet
@@ -29,11 +32,18 @@ export const tachoBundleGetHandler: CapabilityHandler<
       tx as never,
       input.host_enrollment_id,
     );
-    const [denyGeneration, retention] = await Promise.all([
+    const [denyGeneration, retention, steering] = await Promise.all([
       readDenyGeneration(tx as never, ctx.orgId, ctx.workspaceId),
       readWorkspaceRetention(tx as never, ctx.orgId, ctx.workspaceId),
+      readWorkspaceSteering(tx as never, ctx.orgId, ctx.workspaceId),
     ]);
-    const unsigned = unsignedBundle(host, denyGeneration, retention, now);
+    const unsigned = unsignedBundle(
+      host,
+      denyGeneration,
+      retention,
+      steering,
+      now,
+    );
     await tx
       .update(schema.tachoHosts)
       .set({

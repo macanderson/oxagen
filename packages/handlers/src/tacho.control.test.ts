@@ -155,6 +155,8 @@ interface Fake {
   commands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
   inserts: Array<{ table: string; values: Record<string, unknown> }>;
+  /** Active context records the workspace has published. */
+  records?: Array<Record<string, unknown>>;
 }
 
 function tableName(table: unknown): string {
@@ -238,6 +240,7 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
             findMany: async () => [{ workspaceId: null, generation: 1 }],
           },
           retentionPolicyVersions: { findFirst: async () => undefined },
+          contextRecords: { findMany: async () => db.records ?? [] },
           tachoControlCommands: {
             findMany: async () =>
               db.commands.filter((c) => c["outcome"] === "queued"),
@@ -328,6 +331,52 @@ describe("get_tacho_bundle", () => {
     await expect(
       tachoBundleGetHandler({ host_enrollment_id: HOST_PUBLIC }, OPERATOR),
     ).rejects.toThrow(/API key required/);
+  });
+
+  // The witness for #2592 against this seam (ADR-091): before this, a merged
+  // record changed nothing the host could see.
+  it("carries a merged must record into context.system and moves the etag, so the host refetches", async () => {
+    const db: Fake = {
+      hosts: [host()],
+      sessions: [],
+      commands: [],
+      updates: [],
+      inserts: [],
+      records: [],
+    };
+    wire(db);
+    const before = await tachoBundleGetHandler(
+      { host_enrollment_id: HOST_PUBLIC },
+      MACHINE,
+    );
+    expect(before.bundle?.context.system).toBeNull();
+
+    db.records = [
+      {
+        slug: "no-force-push",
+        kind: "constraint",
+        force: "must",
+        constraintEffect: "forbid",
+        statement: "Never force-push to the production branch.",
+      },
+      {
+        slug: "prefer-small-prs",
+        kind: "preference",
+        force: "may",
+        constraintEffect: null,
+        statement: "Small pull requests are easier to review.",
+      },
+    ];
+    const after = await tachoBundleGetHandler(
+      { host_enrollment_id: HOST_PUBLIC, etag: before.etag },
+      MACHINE,
+    );
+    expect(after.not_modified).toBe(false);
+    expect(after.etag).not.toBe(before.etag);
+    expect(after.bundle?.context.system).toContain(
+      "- Never force-push to the production branch. (constraint, forbid; no-force-push)",
+    );
+    expect(after.bundle?.context.system).not.toContain("Small pull requests");
   });
 });
 
