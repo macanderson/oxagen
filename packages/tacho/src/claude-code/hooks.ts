@@ -14,7 +14,7 @@ import { effectId } from "../ids";
 import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import type { BodyOf, TachoKind } from "../envelope";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
-import { classifyTool } from "./tools";
+import { classifyTool, type EffectKind } from "./tools";
 
 /** Tolerant: passthrough so a new upstream member lands in `attrs`. */
 export const hookInputSchema = z
@@ -152,7 +152,9 @@ function contentDraft(text: string): {
     content_digest: frame.digest,
     content_bytes: frame.bytes,
     ...(total > 0
-      ? { content_redactions: frame.redactions.slice(0, MAX_CONTENT_REDACTIONS) }
+      ? {
+          content_redactions: frame.redactions.slice(0, MAX_CONTENT_REDACTIONS),
+        }
       : {}),
     ...(total > MAX_CONTENT_REDACTIONS
       ? { attrs: { "oxagen.content_redactions_total": String(total) } }
@@ -184,6 +186,38 @@ function leftovers(input: HookInput): Record<string, string> {
       typeof value === "string" ? value : JSON.stringify(value);
   }
   return attrs;
+}
+
+/**
+ * The frame a successful effect seals beside its `tool_call`, or undefined
+ * when the effect seals none.
+ *
+ * A git commit, a git push and a pull request opened from the shell are
+ * commands, so they seal `command` frames; the same pull request opened
+ * through an MCP server is a network call and seals a `network` frame. The
+ * `effect_kind` on the body is what tells the three git effects apart from an
+ * ordinary `ls`, which is why they do not need a frame kind of their own.
+ */
+export function effectFrameKind(
+  effectKind: EffectKind | undefined,
+  toolSource: string | undefined,
+): TachoKind | undefined {
+  switch (effectKind) {
+    case "file_write":
+    case "file_edit":
+    case "file_delete":
+      return "file_io";
+    case "command":
+    case "git_commit":
+    case "git_push":
+      return "command";
+    case "network":
+      return "network";
+    case "pr_open":
+      return toolSource === "mcp" ? "network" : "command";
+    default:
+      return undefined;
+  }
 }
 
 function toolFacts(
@@ -346,11 +380,7 @@ export function normalizeHook(
           ? "turn_start"
           : "oxagen:message";
       return [
-        draft(
-          kind,
-          body,
-          prompt !== undefined ? contentDraft(prompt) : {},
-        ),
+        draft(kind, body, prompt !== undefined ? contentDraft(prompt) : {}),
       ];
     }
     case "PreToolUse": {
@@ -403,27 +433,15 @@ export function normalizeHook(
         }
       }
       const drafts = [draft("tool_call", body)];
-      const effectKind = facts["effect_kind"];
-      if (
-        !failed &&
-        facts["effect_id"] !== undefined &&
-        (effectKind === "file_write" ||
-          effectKind === "file_edit" ||
-          effectKind === "file_delete")
-      ) {
-        drafts.push(draft("file_io", { ...facts, tool_status: "ok" }));
-      } else if (
-        !failed &&
-        facts["effect_id"] !== undefined &&
-        effectKind === "command"
-      ) {
-        drafts.push(draft("command", { ...facts, tool_status: "ok" }));
-      } else if (
-        !failed &&
-        facts["effect_id"] !== undefined &&
-        effectKind === "network"
-      ) {
-        drafts.push(draft("network", { ...facts, tool_status: "ok" }));
+      const effectFrame =
+        failed || facts["effect_id"] === undefined
+          ? undefined
+          : effectFrameKind(
+              facts["effect_kind"] as EffectKind | undefined,
+              facts["tool_source"] as string | undefined,
+            );
+      if (effectFrame !== undefined) {
+        drafts.push(draft(effectFrame, { ...facts, tool_status: "ok" }));
       }
       return drafts;
     }

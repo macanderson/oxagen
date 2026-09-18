@@ -169,6 +169,65 @@ describe("hook normalization", () => {
     ).toMatchObject({ policy_decision: "deny", tool_decision: "reject" });
   });
 
+  it("seals a git commit, a git push, and a pull request as their own frames", () => {
+    const push = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "git push --force-with-lease origin HEAD:main" },
+      tool_use_id: "toolu_git_1",
+    });
+    expect(push.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(push[1]?.body).toMatchObject({
+      effect_kind: "git_push",
+      tool_status: "ok",
+      tool_target: "git push --force-with-lease origin HEAD:main",
+    });
+    expect((push[1]?.body as Record<string, unknown>)["effect_id"]).toMatch(
+      /^eff_/,
+    );
+
+    const commit = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: 'git commit -m "wire the git effects"' },
+      tool_use_id: "toolu_git_2",
+    });
+    expect(commit.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(commit[1]?.body).toMatchObject({ effect_kind: "git_commit" });
+
+    const shellPr = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "gh pr create --fill" },
+      tool_use_id: "toolu_git_3",
+    });
+    expect(shellPr.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(shellPr[1]?.body).toMatchObject({ effect_kind: "pr_open" });
+
+    const mcpPr = hook("PostToolUse", {
+      tool_name: "mcp__github__create_pull_request",
+      tool_input: { title: "x" },
+      tool_use_id: "toolu_git_4",
+    });
+    expect(mcpPr.map((d) => d.kind)).toEqual(["tool_call", "network"]);
+    expect(mcpPr[1]?.body).toMatchObject({
+      effect_kind: "pr_open",
+      mcp_tool_name: "create_pull_request",
+    });
+
+    const failedPush = hook("PostToolUseFailure", {
+      tool_name: "Bash",
+      tool_input: { command: "git push" },
+      tool_use_id: "toolu_git_5",
+      error: "rejected: non-fast-forward",
+    });
+    expect(failedPush.map((d) => d.kind)).toEqual(["tool_call"]);
+
+    const status = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "git status" },
+      tool_use_id: "toolu_git_6",
+    });
+    expect(status[1]?.body).toMatchObject({ effect_kind: "command" });
+  });
+
   it("maps the lifecycle, context, and collaboration events", () => {
     expect(hook("Setup", { trigger: "maintenance" })[0]?.body).toEqual({
       setup_trigger: "maintenance",
