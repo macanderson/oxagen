@@ -8,14 +8,16 @@ import { describeTarget, parseFlags, reportLines } from "./price-book-sync";
 const NOW = new Date("2026-09-14T17:42:31.123Z");
 
 describe("parseFlags", () => {
-  // The run instant, not the top of the hour: a same-instant re-run that
-  // changed a rate would rewrite a row frames earlier in the hour were priced
-  // with, and syncPriceBook now refuses that, so the default must be an
-  // instant no earlier run can have used.
-  it("is a dry run effective from the run instant by default", () => {
+  // The NEXT top of the hour, the same instant the hourly job uses. The run
+  // instant was read before the catalogs and the transaction, so a frame
+  // rolled up in between was priced against a row the run then closed behind
+  // it. A future boundary cannot be observed early, and because it is still
+  // ahead, a re-run within the hour may correct it in place: syncPriceBook
+  // refuses a same-instant rewrite only once that instant is in force.
+  it("is a dry run effective from the next hour boundary by default", () => {
     const flags = parseFlags([], NOW);
     expect(flags.apply).toBe(false);
-    expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T17:42:31.123Z");
+    expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T18:00:00.000Z");
   });
 
   it("takes --apply and an explicit --effective-from", () => {

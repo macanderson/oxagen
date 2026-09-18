@@ -357,6 +357,27 @@ describe("the negotiated write path", () => {
     expect(fake.rows[0]!.microsPerMillion).toBe(2_000_000n);
   });
 
+  // A LATER correction inserts a successor and never reaches the conflict
+  // clause, so it has to carry the names itself. Starting it with an empty
+  // list dropped every stored alias from that instant on.
+  it("carries the stored aliases into a later successor when a correction names none", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: ["anthropic/claude-sonnet-5"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+    const successor = fake.rows.find(
+      (r) => (r.effectiveFrom as Date).getTime() === T2.getTime(),
+    );
+    expect(successor?.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
+  });
+
   it("replaces the stored aliases when a correction names an empty list", async () => {
     await setNegotiatedPriceEntry({
       ...SET,

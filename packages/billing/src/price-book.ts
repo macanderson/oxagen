@@ -1006,13 +1006,18 @@ export async function setNegotiatedPriceEntry(
     // as strings under an explicit cast. The ON CONFLICT target restates
     // `price_entries_key_idx`'s own expressions, or Postgres finds no index
     // to arbitrate on.
+    // An omitted list means "keep the names the rate already has", on both
+    // paths a correction can take. On conflict (same instant) the assignment
+    // below leaves the row's own aliases alone. A LATER correction inserts a
+    // successor instead and never reaches that clause, so the successor
+    // inherits the aliases of the row it replaces. Starting it with an empty
+    // list dropped every stored alias from that instant on, and calls under
+    // those names fell back to list pricing or went unpriced.
+    const inherited = modelAliases ?? open?.modelAliases ?? [];
     const aliases = sql.join(
-      (modelAliases ?? []).map((a) => sql`${a}`),
+      inherited.map((a) => sql`${a}`),
       sql`, `,
     );
-    // On a fresh insert an omitted list is simply empty — there is nothing to
-    // preserve. On conflict it must leave `model_aliases` alone, which is why
-    // the assignment is written rather than always taking EXCLUDED.
     const aliasAssignment =
       modelAliases === undefined
         ? sql`model_aliases = ${schema.priceEntries}.model_aliases`

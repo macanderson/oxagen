@@ -31,7 +31,11 @@
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
  */
 import kleur from "kleur";
-import { syncPriceBookFromSources, type PriceEntrySeed } from "@oxagen/billing";
+import {
+  nextPriceBookBoundary,
+  syncPriceBookFromSources,
+  type PriceEntrySeed,
+} from "@oxagen/billing";
 import { closeDatabase } from "@oxagen/database";
 
 export interface Flags {
@@ -41,10 +45,14 @@ export interface Flags {
 }
 
 export function parseFlags(argv: string[], now: Date): Flags {
+  // The next hour boundary, the same instant the hourly job uses. `now` is
+  // read before the catalogs and the transaction, so a frame rolled up in
+  // between is priced against a row this run then closes behind it. An
+  // operator who names an instant with --effective-from gets exactly that.
   const flags: Flags = {
     apply: false,
     offline: false,
-    effectiveFrom: now,
+    effectiveFrom: nextPriceBookBoundary(now),
   };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;
