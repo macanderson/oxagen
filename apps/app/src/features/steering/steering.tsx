@@ -5,6 +5,7 @@
 // promotion thresholds are not in this release. Each tab makes only the reads
 // it shows.
 import type { DataSource } from "@/data/ports";
+import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
 import { ContextPrs } from "./context-prs";
 import { Proposals } from "./proposals";
@@ -72,6 +73,9 @@ export async function Steering({
   const at: SteeringAt = { org: ctx.orgSlug, ws: ctx.wsSlug };
   return (
     <div className="flex flex-col gap-6">
+      {/* `proposal` selects nothing off the Context PRs tab, so the parse
+          decides this, not the query string. */}
+      <PageRecord route="steering" id={view.proposal} />
       <SteeringTabs at={at} current={view.tab} />
       {await TabBody({ ctx, source, view, at })}
     </div>
