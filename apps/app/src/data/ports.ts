@@ -32,6 +32,7 @@ import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
   MemberList,
+  ModelCredential,
   RoleCatalog,
   WorkspaceList,
 } from "./contracts/org";
@@ -264,6 +265,11 @@ export interface DataSource {
      * it before it reads a key.
      */
     apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>>;
+    /**
+     * get_model_credential — the organisation's own model key, redacted.
+     * Org-scoped: the key pays for every workspace's assistant turns.
+     */
+    modelCredential(ctx: OrgCtx): Promise<Read<ModelCredential>>;
   };
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an

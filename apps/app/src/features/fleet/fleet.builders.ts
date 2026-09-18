@@ -136,6 +136,7 @@ export function fleetSource(reads: FleetReads) {
       roles: refuse,
       workspaces: refuse,
       apiKeys: refuse,
+      modelCredential: refuse,
     },
     mandates: {
       list: (...args) => {

@@ -10,6 +10,7 @@ import {
   Radar,
   Receipt,
   ShieldCheck,
+  Wallet,
   Wrench,
 } from "lucide-react";
 import type { NavKey } from "./nav";
@@ -25,5 +26,6 @@ export const NAV_ICONS: Record<NavKey, LucideIcon> = {
   billing: Receipt,
   audit: ShieldCheck,
   apiKeys: KeyRound,
+  modelFunding: Wallet,
   roles: ShieldCheck,
 };

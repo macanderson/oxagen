@@ -48,7 +48,13 @@ describe("static org route segments", () => {
     // The ones shipped at the time of writing. A new page adds to this and the
     // reserved-set assertion below is what has to be satisfied, not this list.
     expect(segments).toEqual(
-      expect.arrayContaining(["api-keys", "audit", "billing", "roles"]),
+      expect.arrayContaining([
+        "api-keys",
+        "audit",
+        "billing",
+        "model-funding",
+        "roles",
+      ]),
     );
   });
 

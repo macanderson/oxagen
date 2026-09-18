@@ -133,6 +133,7 @@ export function onboardingSource(reads: Reads): {
       roles: refuse("org.roles"),
       workspaces: refuse("org.workspaces"),
       apiKeys: refuse("org.apiKeys"),
+      modelCredential: refuse("org.modelCredential"),
     },
     skills: { inventory: refuse("skills.inventory") },
     steering: {
