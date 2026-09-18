@@ -46,6 +46,34 @@ describe("probeModelCredential — the request", () => {
     expect(url).toBe(CREDENTIAL_PROBE_URL.gateway);
   });
 
+  it("does not follow a redirect — the target is a URL the guard never saw", async () => {
+    // The handler checked the URL the admin typed. A public endpoint answering
+    // 302 to a private host would carry the key past that check, so the probe
+    // sends redirect: manual and reports the 3xx as the vendor's answer.
+    const fetchMock = stubFetch(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "http://10.0.0.5/v1/models" },
+        }),
+    );
+    const result = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1",
+      toolProbeModel: "m",
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.redirect).toBe("manual");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(false);
+    expect(result.toolCalling).toBeNull();
+    expect(result.error).toContain(
+      'redirecting to "http://10.0.0.5/v1/models"',
+    );
+    expect(result.error).not.toContain(KEY);
+  });
+
   it("bounds the request with a timeout signal", async () => {
     const fetchMock = stubFetch(async () => jsonResponse(200, {}));
     await probeModelCredential({ provider: "openrouter", apiKey: KEY });

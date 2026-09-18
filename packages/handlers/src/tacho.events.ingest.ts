@@ -41,6 +41,8 @@ import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
   TACHO_GATEWAY_TIER,
+  TACHO_METERING_ATTR,
+  TACHO_METERING_OBSERVED,
   type TachoEvent,
   verifyChain,
 } from "@oxagen/tacho";
@@ -153,7 +155,69 @@ function emptyDelta(): SessionDelta {
   };
 }
 
-/** Fold one event into the session's counters. Model usage counts only the OTel log view. */
+/**
+ * A model call the host's loopback proxy observed on the wire (ADR-094): an
+ * `llm_call` the collector sealed with `proxy` fidelity and
+ * `oxagen.metering: observed`. Its usage is the vendor's own, read off the
+ * response, and not the harness's report of it.
+ *
+ * All three marks are required. A record posted to the host's OTLP endpoint is
+ * sealed `otel_log` with `sdk` fidelity whatever attributes it carries, so a
+ * process holding the local bearer cannot mint one of these by setting the
+ * attribute alone.
+ */
+export function isObservedModelCall(event: TachoEvent): boolean {
+  return (
+    event.kind === "llm_call" &&
+    event.source === "collector" &&
+    event.fidelity === "proxy" &&
+    event.attrs[TACHO_METERING_ATTR] === TACHO_METERING_OBSERVED
+  );
+}
+
+/**
+ * The events that count toward usage, with observed metering taking precedence
+ * over self-reported metering for the same calls.
+ *
+ * A session routed through the proxy reports every model call twice: once as
+ * the proxy's observed frame, and once as the harness's own telemetry (an
+ * `otel_log` or a `transcript` `llm_call`). Counting both doubles the session's
+ * tokens and cost. The observed frame is sealed when the response ends, and the
+ * harness exports its own record after that, so on one chain the observed frame
+ * always comes first. The rule follows from that order: once a session has an
+ * observed model call, every self-reported `llm_call` after it is dropped from
+ * the counters. The frame itself is still stored; only its usage is not added.
+ *
+ * `sessionObserved` carries the answer across batches: it is true when an
+ * earlier batch already recorded an observed call for this session
+ * (`cost_basis = 'observed'` on the row).
+ *
+ * A session that bypassed the proxy has no observed frame, so nothing is
+ * dropped and its self-reported usage counts as it always has.
+ */
+export function usageCountedEvents(
+  fresh: readonly TachoEvent[],
+  sessionObserved: boolean,
+): TachoEvent[] {
+  let observed = sessionObserved;
+  const counted: TachoEvent[] = [];
+  for (const event of fresh) {
+    if (isObservedModelCall(event)) {
+      observed = true;
+      counted.push(event);
+      continue;
+    }
+    if (observed && event.kind === "llm_call") continue;
+    counted.push(event);
+  }
+  return counted;
+}
+
+/**
+ * Fold one event into the session's counters. Model usage counts the OTel log
+ * view, or the proxy's observed view when the session has one: the caller
+ * passes the events through `usageCountedEvents` first.
+ */
 export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
   const body = event.body as Body;
   switch (event.kind) {
@@ -174,7 +238,9 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
         delta.cacheCreationTokens += num(body["cache_creation_tokens"]);
         delta.totalCostMicros += num(body["cost_usd_micros"]);
       }
-      if (event.source === "transcript") {
+      // The observed frame carries the classes the harness's OTel record does
+      // not, and in an observed session the transcript view is not counted.
+      if (event.source === "transcript" || isObservedModelCall(event)) {
         delta.cacheCreation5mTokens += num(body["cache_creation_5m_tokens"]);
         delta.cacheCreation1hTokens += num(body["cache_creation_1h_tokens"]);
         delta.thinkingTokens += num(body["thinking_tokens"]);
@@ -453,7 +519,30 @@ export function enforcementTierOf(
   // created by this batch, the batch's first event. Null for a chain with none
   // — one whose first batch did not start at seq 0 — and null never matches.
   sessionGenesisHash: string | null,
+  // Whether this session's verified chain holds a model call the host's
+  // loopback proxy observed (ADR-094, ADR-095: "model and MCP requests seen by
+  // the gateway for that run give `gateway`").
+  //
+  // This is the second road to `gateway`, and it stands on different evidence
+  // from the first, so say which. The MCP road above is the control plane's own
+  // record of a call it served. For model traffic no such record can exist:
+  // the proxy's whole design is that the prompt goes from the machine to the
+  // vendor and never to Oxagen, so the only witness is the daemon, and its
+  // testimony is the frame it sealed. What makes that more than a claim is
+  // that the chain verifies, so the frame is part of the hash-linked record
+  // and not an attribute somebody set, and that `isObservedModelCall` requires
+  // the collector's own source and fidelity, which a record posted through the
+  // local OTLP endpoint cannot carry. It is host-attested, and the word
+  // ADR-095 allows for it is exactly that narrow: "observed" metering and
+  // "enforced" budgets on routed traffic, never "enforced" against the
+  // machine's operator.
+  //
+  // It is computed from traffic. A host whose harness config has the base URL
+  // written and whose run went around the proxy has no such frame, and stays
+  // on the host's own mode.
+  modelRouted = false,
 ): string {
+  if (evidenceColumn && chainVerified && modelRouted) return TACHO_GATEWAY_TIER;
   const observed = gatewayObservationFor(host);
   if (
     evidenceColumn &&
@@ -849,6 +938,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           // the same hash on every call, and a tier rises only when the two
           // agree (#3221).
           genesisHash: true,
+          // `observed` once the host's model proxy has metered this session,
+          // which is what stops its self-reported usage being counted too.
+          costBasis: true,
           // The session's own server-clock birth. A gateway call the control
           // plane served before this chain existed is not evidence about it.
           createdAt: true,
@@ -907,8 +999,15 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           reason,
         });
 
+      // Observed metering takes precedence over self-reported metering for
+      // the same calls, so a session routed through the proxy counts once.
+      const counted = usageCountedEvents(
+        fresh,
+        existing?.costBasis === TACHO_METERING_OBSERVED,
+      );
+      const firstObserved = fresh.find(isObservedModelCall);
       const delta = emptyDelta();
-      for (const event of fresh) foldDelta(delta, event);
+      for (const event of counted) foldDelta(delta, event);
       const contentFrames = countContentFrames(fresh);
       const freshIds = new Set(fresh.map((event) => event.event_id_idem));
       const freshBodies = retained.filter(
@@ -961,7 +1060,13 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ok,
         sessionGatewayColumn,
         sessionGenesisHash,
+        firstObserved !== undefined,
       );
+      // What a `gateway` tier stands on: the control plane's record of a
+      // served MCP call, or the first model call the proxy observed.
+      const gatewayEvidenceAt =
+        chainRecord?.at ??
+        (firstObserved !== undefined ? new Date(firstObserved.ts) : null);
       const promoteToGateway =
         existing !== undefined &&
         // Truthiness, matching `terminal` just below: a row read without the
@@ -1089,9 +1194,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               // host column: that coupling holds today and is invisible to
               // anyone changing either half.
               ...(sessionGatewayColumn
-                ? { gatewayObservedAt: chainRecord?.at ?? null }
+                ? { gatewayObservedAt: gatewayEvidenceAt }
                 : {}),
             }
+          : {}),
+        ...(firstObserved !== undefined
+          ? { costBasis: TACHO_METERING_OBSERVED }
           : {}),
         updatedAt: now,
         ...terminalColumns,
@@ -1171,7 +1279,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           now,
           sessionGatewayColumn,
           derivedTier,
-          derivedTier === TACHO_GATEWAY_TIER ? (chainRecord?.at ?? null) : null,
+          derivedTier === TACHO_GATEWAY_TIER ? gatewayEvidenceAt : null,
           sessionGenesisHash,
         );
         const written = await tx
@@ -1179,6 +1287,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           .values({
             ...row,
             ...terminalColumns,
+            ...(firstObserved !== undefined
+              ? { costBasis: TACHO_METERING_OBSERVED }
+              : {}),
             chainVerified: ok,
             chainBreakAtSeq: ok ? null : breakSeq,
             lastHash: last.hash,
@@ -1274,7 +1385,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // proof frames and spend are not that session's evidence, and counting
       // them is the same defect as the counters were.
       if (sessionId && accepted) {
-        await rollupModels(tx, ctx, sessionId, fresh, now);
+        await rollupModels(tx, ctx, sessionId, counted, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
       }
@@ -1552,7 +1663,7 @@ async function rollupModels(
       entry.cost += num(body["cost_usd_micros"]);
       entry.duration += num(body["api_duration_ms"]);
     }
-    if (event.source === "transcript")
+    if (event.source === "transcript" || isObservedModelCall(event))
       entry.thinking += num(body["thinking_tokens"]);
     entry.canonical = entry.canonical ?? str(body["canonical_model"]);
     entry.provider = entry.provider ?? str(body["provider"]);

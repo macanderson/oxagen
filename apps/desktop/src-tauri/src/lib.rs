@@ -7,6 +7,9 @@
 //! calls the pickers need, and the PATH install that a sidecar cannot do for
 //! itself.
 mod cli_install;
+#[cfg(test)]
+mod install_rig_tests;
+mod machine;
 
 use cli_install::{CliInstallState, CliInstallView};
 use serde::Serialize;
@@ -23,16 +26,11 @@ use tauri::{
 /// `~/.config/oxagen` on every platform, matching `oxagenConfigPath` in
 /// packages/tacho and `CONFIG_DIR` in apps/cli.
 pub(crate) fn oxagen_dir() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".config")
-        .join("oxagen")
+    machine::Roots::real().oxagen_dir()
 }
 
 fn tacho_root() -> PathBuf {
-    std::env::var_os("TACHO_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| oxagen_dir().join("tacho"))
+    machine::Roots::real().tacho_root()
 }
 
 pub(crate) fn read_json(path: &Path) -> Option<Value> {
@@ -132,9 +130,7 @@ fn host_view(host: &Value) -> Value {
 fn daemon_status(host: &Value) -> Option<Value> {
     let port = host.get("port")?.as_u64()?;
     let token = host.get("local_token")?.as_str()?;
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_millis(1500))
-        .build();
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_millis(1500)).build();
     agent
         .get(&format!("http://127.0.0.1:{port}/status"))
         .set("Authorization", &format!("Bearer {token}"))
@@ -208,7 +204,7 @@ fn desktop_state(app: tauri::AppHandle, install_state: tauri::State<CliInstallSt
         tacho_on_path: cli_install::on_path("tacho"),
         cli_install_dir: cli_install::cli_install_dir().display().to_string(),
         cli_links_present: cli_install::cli_links_present(),
-        cli_install: install_state.0.lock().unwrap().clone(),
+        cli_install: install_state.0.lock().unwrap_or_else(|e| e.into_inner()).clone(),
     }
 }
 
@@ -236,9 +232,7 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
     }
     let (config, token) = cli_config();
     let token = token.ok_or_else(|| "not signed in".to_string())?;
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(15))
-        .build();
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(15)).build();
     let response = agent
         .post(&format!("{}{}", config.api_url, path))
         .set("Authorization", &format!("Bearer {token}"))
@@ -254,36 +248,26 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
     }
 }
 
-/// Delete `~/.config/oxagen` (session, telemetry prefs, and whatever Tacho
-/// left after `unenroll --purge`). The UI only offers this after unenroll.
+/// "Uninstall": everything the app put on this machine that `tacho unenroll`
+/// does not own. See `cli_install::remove_everything_in`. The report names
+/// what was removed and what is still there, so the UI says what happened
+/// instead of "everything is gone".
 #[tauri::command]
-fn remove_local_data() -> Result<String, String> {
-    let dir = oxagen_dir();
-    if tacho_root().join("host.json").is_file() {
-        return Err("this machine is still enrolled; unenroll first".into());
-    }
-    // `desktop.json` lives in this directory, so the purge takes the
-    // `autoLinkCli` opt-out with it and the next launch would re-link and
-    // re-edit the profile. "Remove links" then "Remove local data" has to
-    // stay removed, so an opt-out is carried across the delete. An enabled
-    // (default) flag is not rewritten: nothing to remember, and the
-    // directory stays gone.
-    let opted_out = !cli_install::read_auto_link_cli();
-    if dir.is_dir() {
-        fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
-    }
-    if opted_out {
-        cli_install::write_auto_link_cli(false)?;
-    }
-    Ok(dir.display().to_string())
+fn remove_local_data(install_state: tauri::State<CliInstallState>) -> Result<cli_install::RemovalReport, String> {
+    let report = cli_install::remove_everything_in(&cli_install::InstallEnv::real())?;
+    let view = CliInstallView {
+        state: "opted_out".to_string(),
+        note: "Removed. Oxagen links the command line tools again the next time it opens.".to_string(),
+        ..Default::default()
+    };
+    *install_state.0.lock().unwrap_or_else(|e| e.into_inner()) = view;
+    Ok(report)
 }
 
+/// The end of the collector log. Bounded: see `machine::tail_lines`.
 #[tauri::command(async)]
 fn log_tail(lines: usize) -> String {
-    let text = fs::read_to_string(tacho_root().join("tachod.log")).unwrap_or_default();
-    let all: Vec<&str> = text.lines().collect();
-    let start = all.len().saturating_sub(lines);
-    all[start..].join("\n")
+    machine::tail_lines(&tacho_root().join("tachod.log"), lines, 256 * 1024)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -331,7 +315,7 @@ pub fn run() {
             std::thread::spawn(move || {
                 let outcome = cli_install::ensure_cli_installed();
                 if let Some(state) = handle.try_state::<CliInstallState>() {
-                    *state.0.lock().unwrap() = outcome;
+                    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = outcome;
                 }
             });
 

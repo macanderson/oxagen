@@ -1,0 +1,77 @@
+# The install and uninstall rig for the desktop app and Tacho.
+#
+# Two halves, both against a scratch HOME and a fake launchctl / systemctl,
+# never the runner's own home directory:
+#   - packages/tacho/src/cli/install-rig.test.ts: enroll, enroll again,
+#     unenroll, unenroll again, the tree compared byte for byte, plus the
+#     failure variants (malformed settings, a read-only file, a symlinked
+#     settings file, an offline revoke, the process dying at each step).
+#   - apps/desktop/src-tauri (cargo test): Link into PATH and Uninstall over
+#     injected roots, the same comparison.
+# It also runs cargo fmt --check and clippy, which no other workflow does:
+# desktop.yml only builds on a tag.
+name: Desktop install rig
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "packages/tacho/**"
+      - ".github/workflows/desktop-rig.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "packages/tacho/**"
+
+concurrency:
+  group: desktop-rig-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rig:
+    name: Install, reinstall, uninstall, compare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Tacho rig (enroll and unenroll against a snapshot)
+        run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: WebKit, for the Tauri crate to compile
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
+
+      # tauri-build refuses to compile without the two externalBin files and
+      # a frontendDist. The tests never run them, so stubs are enough.
+      - name: Stub sidecars and frontend
+        run: node apps/desktop/scripts/rig-stubs.mjs
+
+      - name: cargo fmt
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Desktop rig (link and uninstall against a snapshot)
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --lib

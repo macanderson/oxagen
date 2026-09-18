@@ -121,6 +121,39 @@ export type ApiKey = z.infer<typeof ApiKey>;
 
 export const ApiKeyList = z.array(ApiKey);
 
+/** The vendors an organisation can bring a model key for (ADR-053 §2). */
+export const ModelProvider = z.enum([
+  "openrouter",
+  "gateway",
+  "openai",
+  "anthropic",
+  "openai_compatible",
+]);
+export type ModelProvider = z.infer<typeof ModelProvider>;
+
+/**
+ * The organisation's own model key as `get_model_credential` reports it: which
+ * vendor, whether it is in use, the last four characters, the endpoint and
+ * per-tier models, and when it was last tested and last changed. Never the
+ * key — the contract has no field for it, and this view model has none
+ * either. `configured: false` is an organisation on Oxagen's key.
+ */
+export const ModelCredential = z.object({
+  configured: z.boolean(),
+  provider: ModelProvider.nullable(),
+  status: z.enum(["active", "disabled"]).nullable(),
+  keyHint: z.string().nullable(),
+  baseUrl: z.string().nullable(),
+  modelMap: z.object({
+    fast: z.string().optional(),
+    balanced: z.string().optional(),
+    precise: z.string().optional(),
+  }),
+  lastVerifiedAt: z.iso.datetime().nullable(),
+  rotatedAt: z.iso.datetime().nullable(),
+});
+export type ModelCredential = z.infer<typeof ModelCredential>;
+
 /**
  * The roles `change_member_role` can grant. `bootstrapOrgIAM` seeds four
  * org-scoped roles (`ORG_ROLES`, packages/handlers/src/iam-provision.ts:55-60)

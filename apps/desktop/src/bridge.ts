@@ -4,6 +4,7 @@
  * and the bundled `tacho` / `oxagen` sidecars for every action that changes
  * state. Nothing here keeps state of its own.
  */
+import type { InstallResult, RemovalReport } from "./machine-state";
 import { invoke } from "@tauri-apps/api/core";
 import { Command } from "@tauri-apps/plugin-shell";
 import type { CliInstallReport, Harness } from "./commands";
@@ -152,15 +153,16 @@ export const readState = () => invoke<DesktopState>("desktop_state");
 export const apiPost = <T>(path: string, body: unknown) =>
   invoke<T>("api_post", { path, body });
 
-export interface InstallResult {
-  dir: string;
-  files: string[];
-  on_path: boolean;
-  note: string;
-}
+export type { InstallResult, RemovalReport } from "./machine-state";
 export const installCli = () => invoke<InstallResult>("install_cli");
 export const uninstallCli = () => invoke<string[]>("uninstall_cli");
-export const removeLocalData = () => invoke<string>("remove_local_data");
+/**
+ * Everything the app itself put on the machine: the PATH links and the
+ * profile block, the durable copy of the tools, and `~/.config/oxagen`.
+ * Refused while the machine is still enrolled. The report names what was
+ * removed and what is still there.
+ */
+export const removeLocalData = () => invoke<RemovalReport>("remove_local_data");
 export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
 
 export interface OrgItem {
