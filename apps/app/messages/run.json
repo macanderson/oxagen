@@ -373,6 +373,7 @@
         "keyB": "The other run",
         "noFrame": "no frame at this position"
       }
-    }
+    },
+    "loading": "Loading this run"
   }
 }

@@ -2010,6 +2010,7 @@ type Messages = {
         noFrame: string;
       };
     };
+    loading: string;
   };
   shell: {
     skipToContent: string;
