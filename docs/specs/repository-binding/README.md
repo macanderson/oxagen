@@ -35,7 +35,9 @@ write a file into `.oxagen/` but cannot account for the directory it writes into
    definition can be in force in the product without the pull request carrying it ever
    merging — the exact inversion of the rule records follow.
    Skills have none (`list_skills` is observational telemetry). Tools have none, and
-   `tool.import.ts` says so in a comment (ADR-072). Workspace configuration has none.
+   `tool.import.ts` says so in a comment (ADR-072), and its stated blocker — "needs a bound
+   repository, which no capability records" — is what §2.2 records. Workspace configuration
+   has none.
 4. **A local directory is invisible to the product.** `oxagen init`
    (`apps/cli/src/commands/init.ts`) writes `.oxagen/workspace.json` locally and reports
    nothing back, so nobody can see which machines hold the workspace's files, whether
@@ -84,6 +86,17 @@ failure and somebody goes looking for a breach that did not happen.
 app; an agent's mandate decides what it may do on the machine. A laptop is not a
 principal, and pairing one must not be a path to authority.
 
+**The GitHub App is read-write, and that is settled** (maintainer, 2026-09-18, on #3242).
+It holds Contents read and write, Pull requests read and write, and Checks write, so Oxagen
+can open a pull request, close one, and run the CI tasks a governed change needs. This was
+Q1; it is no longer a question. `docs/specs/github-app/github-app-setup.md` said to keep
+every permission read-only because "the connector never writes to GitHub" — true of the
+ingestion connector, and never true of the product around it, which has been creating
+branches and opening pull requests through installation tokens since ADR-061. That document
+is corrected in the same change. What the write access still does not buy is unchanged:
+Oxagen writes to a branch and never to the production branch, and it merges only what a
+person merges.
+
 **The governance mode is chosen once, by a person, in the init pull request**, and changed
 afterwards the way everything else is. It is never a settings screen: a mode that a click
 could raise is a mode a click could lower, and it is read on every merge.
@@ -128,12 +141,12 @@ next starts, each read from the file at the head rather than from the text that 
 | 4 | `secret_pii_scan` | nothing found by `findSecretsAndPii` over every added file | any finding, named by file and field |
 | 5 | `no_authority` | nothing added grants a tool, raises a tier or lifts a budget | any grant-shaped declaration |
 
-The permissions step is not decoration. **The documented GitHub App permission set is
-read-only** (`docs/specs/github-app/github-app-setup.md`: "the connector never writes to
-GitHub"), while this lifecycle writes branches, files, pull requests and check runs. The
-step states what the installation must hold — Contents read **and write**, Pull requests
-read **and write**, Checks **write** — and §5 tracks reconciling the documented set with
-what the code already does.
+The permissions step is not decoration. The installation holds Contents read **and write**,
+Pull requests read **and write**, and Checks **write** (§2.1), and this is the one screen in
+the product where a person sees that stated before Oxagen first writes to their repository.
+It says what that access buys — a branch, a file, a pull request, a check run — beside what
+it does not: no push to the production branch, no merge without a person, no secret in the
+tree, no grant of authority.
 
 ### 2.4 Connecting a directory
 
@@ -168,7 +181,9 @@ nothing to check.
 | `init_oxagen_directory` | api | yes | org Owner/Admin | opens the init pull request |
 | `list_oxagen_prs` | api, mcp | no | ws Viewer+ | every kind, one shape |
 | `get_oxagen_pr` | api, mcp | no | ws Viewer+ | files, checks, what merge will do |
+| `open_oxagen_pr` | api | yes | ws Owner/Member | the generalisation of `open_context_pr`: branch, commit, open, run the checks |
 | `merge_oxagen_pr` | api | yes | ws Owner/Member | the generalisation of `merge_context_pr` |
+| `close_oxagen_pr` | api | yes | ws Owner/Member | the generalisation of `dismiss_proposal`: close, delete the branch, publish nothing |
 | `pair_working_copy` | api | yes | ws Member+ | mints the pairing code |
 | `report_working_copy` | api | yes | agent key | the CLI's callback; carries no authority |
 | `list_working_copies` | api, mcp | no | ws Viewer+ | |
@@ -184,6 +199,17 @@ its last step.** `merge_oxagen_pr` lifts the first eight into a kind-agnostic me
 dispatches publication by kind — which is also what joins `commit_agent_definition`'s
 branch to `publish_agent_def`'s row, so that an agent version becomes active because a
 commit merged rather than in spite of one.
+
+**One lifecycle, three verbs, four kinds.** A governed file is opened, checked, and then
+either merged or closed, and every one of those steps is the same for a skill, an agent
+definition, a context record and a tool. `open_oxagen_pr` generalises `open_context_pr`
+(branch from the production head, commit the file, open the pull request, run the checks
+one at a time against the file read back at the head, mirror each as a check run).
+`close_oxagen_pr` generalises `dismiss_proposal` (close the pull request, delete the head
+branch, publish nothing) and is the only way to withdraw a change that has not merged —
+taking something back out of force after it has merged is its own pull request, never a
+close. Only publication differs by kind, so the kind is a dispatch argument and not a
+second implementation.
 
 ## 4. Data
 
@@ -204,22 +230,28 @@ commit merged rather than in spite of one.
 
 Each phase is shippable and leaves the gate green.
 
-1. **The merge generalisation.** Lift `merge_context_pr`'s kind-agnostic body into
-   `merge_oxagen_pr`; `merge_context_pr` becomes a thin caller. Give
-   `commit_agent_definition` its merge, and make `publish_agent_def` a consequence of that
-   merge rather than a parallel path to the same state. No UI. This is the highest-value
-   phase and the only one that fixes an existing inversion rather than adding surface.
-2. **Bindings and the page shell.** `list_repository_bindings`, `get_repository_binding`,
+1. **The lifecycle generalisation.** Lift `open_context_pr`'s and `merge_context_pr`'s
+   kind-agnostic bodies into `open_oxagen_pr`, `merge_oxagen_pr` and `close_oxagen_pr`;
+   the three context capabilities become thin callers. Give `commit_agent_definition` its
+   merge and its close, and make `publish_agent_def` a consequence of that merge rather
+   than a parallel path to the same state. No UI. This is the highest-value phase and the
+   only one that fixes an existing inversion rather than adding surface.
+2. **The four kinds on that lane.** Register the skill and tool kinds against it —
+   `.oxagen/skills/<name>/SKILL.md` and `.oxagen/tools/<name>.toml`, with their own
+   publication step and their own checks, and nothing else new. With records and agent
+   definitions already on it from phase 1, opening and closing a pull request works for
+   all four kinds here rather than at the end (ADR-072; decided on #3242).
+3. **Bindings and the page shell.** `list_repository_bindings`, `get_repository_binding`,
    `link_repository`, `set_main_repository`; the page with the Repositories tab; the
    `.oxagen/` presence read.
-3. **The init wizard.** `init_oxagen_directory` and its five checks. Closes the
+4. **The init wizard.** `init_oxagen_directory` and its five checks. Closes the
    `governance.toml` gap.
-4. **Changes.** `list_oxagen_prs` / `get_oxagen_pr`; the Changes tab over every kind.
-5. **Working copies.** `pair_working_copy`, `report_working_copy`,
+5. **Changes.** `list_oxagen_prs` / `get_oxagen_pr`; the Changes tab over every kind,
+   with Merge and Close on the selected pull request.
+6. **Working copies.** `pair_working_copy`, `report_working_copy`,
    `list_working_copies`; `oxagen init --pair`, `oxagen status`, `oxagen pull`.
-6. **Configuration and drift.** `get_workspace_config`, `list_config_drift`,
+7. **Configuration and drift.** `get_workspace_config`, `list_config_drift`,
    `open_reconcile_pr`, the reconciler job.
-7. **Skill and tool pull requests** on the lane phase 1 built (ADR-072).
 
 **Not in scope.** Ontology pull requests (`v2/propose_ontology_version` is an inert
 descriptor). The `oxagen config` interview from
@@ -231,8 +263,7 @@ agent are their own body of work.
 
 | # | Question | Blocks | Recommendation |
 |---|---|---|---|
-| Q1 | Does the GitHub App's permission set get widened to Contents/PRs write + Checks write, or does this lane stay on the workspace OAuth token? | 3 | Widen it. `packages/github/src/workspace-token.ts` already mints installation tokens and the steering lane already writes with them; the setup doc is behind the code, and an installation token is the narrower credential. |
-| Q2 | One `oxagen_pull_requests` table, or per-kind tables? | 1, 4 | One. The lifecycle is identical for all six kinds and only publication differs; two tables would duplicate the head/base/checks invariants that `context.pr.open.ts` got right once. |
+| Q2 | One `oxagen_pull_requests` table, or per-kind tables? | 1, 5 | One. The lifecycle is identical for all six kinds and only publication differs; two tables would duplicate the head/base/checks invariants that `context.pr.open.ts` got right once. |
 | Q3 | Do the two overlapping record generations (`publish_context_record` / `promote_context_record` vs `merge_context_pr` / `list_records`) get reconciled here? | none | No — name it in the ADR and leave it. It is a real problem and it is not this one. |
 | Q4 | Does `set_main_repository` reuse the existing approval machinery or get its own? | 2 | Reuse. `requiresApproval: true` on the contract, as `open_context_pr` and `merge_context_pr` already do. |
 

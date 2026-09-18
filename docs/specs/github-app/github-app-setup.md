@@ -174,9 +174,10 @@ These grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
 
 | Permission | Access | Why |
 | --- | --- | --- |
-| **Contents** | Read-only | Read the repo tree + file blobs — **required for source ingestion**. |
+| **Contents** | Read **and write** | Read the repo tree + file blobs for source ingestion, and write the branch and the file every governed pull request carries. |
 | **Metadata** | Read-only | Mandatory (auto-selected); repo names, default branch, languages. |
-| **Pull requests** | Read-only | Ingest PRs (`pull_request` record type). |
+| **Pull requests** | Read **and write** | Ingest PRs (`pull_request` record type), and open, re-read and close the pull requests that carry a skill, an agent definition, a context record or a tool. |
+| **Checks** | Write | Report each governed-file check as a check run on the head commit, and run the CI tasks a governed pull request needs. |
 | **Issues** | Read-only | Ingest issues + issue comments. |
 | **Commit statuses** | Read-only *(optional)* | Useful if status/check context is ingested later. |
 
@@ -186,7 +187,19 @@ These grant the connector access (the OAuth `scope` is ignored for GitHub Apps).
 | --- | --- | --- |
 | **Members** | Read-only *(optional)* | Resolve author/org membership; only needed if you map GitHub users to org members. |
 
-Keep everything **read-only** — the connector never writes to GitHub.
+**This App is read-write** (decided 2026-09-18, on #3242). Earlier revisions of this document said
+to keep every permission read-only because "the connector never writes to GitHub". That was true of
+the ingestion connector and was never true of the product around it: `packages/github/src/workspace-token.ts`
+mints installation tokens, and `packages/handlers/src/context.pr.open.ts` has been creating branches,
+committing files, opening pull requests and reporting check runs with them since ADR-061. A read-only
+permission set cannot open a pull request, so the documented set described something the code had
+already outgrown.
+
+What the write access does **not** buy, and what no permission here should be read as granting:
+Oxagen writes to a branch and never to the production branch; it opens and closes pull requests but
+merges only what a person merges, under the governance mode the repository itself declares
+(`.oxagen/rules/governance.toml`); and nothing it writes can grant a tool, raise a tier or lift a
+budget. See `docs/specs/repository-binding/README.md`.
 
 ### Where can this App be installed?
 
