@@ -69,7 +69,7 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].{request,response}.digest`, `.bytesRef` | string or null | the recorded digest, and where the bytes were retained |
 | `entries[].{request,response}.redactions` | object[] | what was removed before the body was written |
 | `entries[].{request,response}.fidelity` | `full` \| `digest_only` | so a `digest_only` recording says so on every half |
-| `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at 16 384 characters; null when no body was retained, the body is not text, the frame carried no content, or the stored bytes do not hash to the recorded digest |
+| `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, or the stored bytes do not hash to the recorded digest |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
 | `entries[].frames` | integer | frames folded, the opening frame included |
@@ -77,6 +77,10 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
+
+## How much body text a zoom carries
+
+`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
 
 ## Errors
 

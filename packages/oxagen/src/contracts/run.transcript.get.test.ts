@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_MAX,
+  TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
+  transcriptTextMax,
   transcriptBodySchema,
   transcriptEntrySchema,
 } from "./run.transcript.get";
@@ -135,5 +137,16 @@ describe("get_run_transcript contract", () => {
         complete: false,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("transcriptTextMax", () => {
+  it("carries the whole body per frame, and an excerpt per folded exchange", () => {
+    expect(transcriptTextMax("everything")).toBe(TRANSCRIPT_TEXT_MAX);
+    expect(transcriptTextMax("steps")).toBe(TRANSCRIPT_STEP_TEXT_MAX);
+    expect(transcriptTextMax("turns")).toBe(TRANSCRIPT_STEP_TEXT_MAX);
+    // The folded cap is genuinely smaller: a page of 200 steps at the full cap
+    // is megabytes of body text nobody asked for on that render.
+    expect(TRANSCRIPT_STEP_TEXT_MAX).toBeLessThan(TRANSCRIPT_TEXT_MAX);
   });
 });

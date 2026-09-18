@@ -20,9 +20,10 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
-  TRANSCRIPT_TEXT_MAX,
+  transcriptTextMax,
   type TranscriptEntry,
   type TranscriptEntryBody,
+  type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
   filterFramesByKind,
@@ -78,6 +79,7 @@ async function half(
   bodies: Pick<EvidenceStore, "getBody">,
   scope: RunScope,
   frame: RunFrame | null,
+  textMax: number,
 ): Promise<TranscriptEntryBody | null> {
   if (frame === null) return null;
   const { bodyRef, bodyDigest, fidelity, redactions } = frame.body;
@@ -106,8 +108,8 @@ async function half(
   } catch {
     return { ...base, text: null, truncated: false };
   }
-  return text.length > TRANSCRIPT_TEXT_MAX
-    ? { ...base, text: text.slice(0, TRANSCRIPT_TEXT_MAX), truncated: true }
+  return text.length > textMax
+    ? { ...base, text: text.slice(0, textMax), truncated: true }
     : { ...base, text, truncated: false };
 }
 
@@ -201,9 +203,11 @@ export function createRunTranscriptGetHandler(
     const page = folds.slice(start, start + input.limit);
     const runStartedAt = Date.parse(run.item.startedAt);
 
+    // A folded zoom carries an excerpt; `everything` carries the whole body.
+    const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
     const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => ({
-      request: await half(deps.bodies, scope, fold.request),
-      response: await half(deps.bodies, scope, fold.response),
+      request: await half(deps.bodies, scope, fold.request, textMax),
+      response: await half(deps.bodies, scope, fold.response, textMax),
     }));
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {

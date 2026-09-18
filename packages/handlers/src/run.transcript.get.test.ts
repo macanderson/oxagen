@@ -1,6 +1,7 @@
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import {
   runTranscriptGet,
+  TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { digestBytes } from "@oxagen/tacho";
@@ -335,6 +336,26 @@ describe("get_run_transcript", () => {
     expect(out.entries[2]?.response).toMatchObject({
       text: null,
       fidelity: "full",
+    });
+  });
+
+  it("carries an excerpt at a folded zoom and the whole body at everything", async () => {
+    // A page of 200 steps at the full cap is megabytes of body text nobody
+    // asked for on that render; a folded entry stands for an exchange, so it
+    // carries an excerpt and says it was cut.
+    const long = "y".repeat(TRANSCRIPT_TEXT_MAX + 5);
+    const { transcript } = harness([tachoRow(0, { ...stored(long) })]);
+
+    const steps = await transcript(input({ zoom: "steps" }), ctx());
+    expect(steps.entries[0]?.response).toMatchObject({
+      text: "y".repeat(TRANSCRIPT_STEP_TEXT_MAX),
+      truncated: true,
+    });
+
+    const all = await transcript(input({ zoom: "everything" }), ctx());
+    expect(all.entries[0]?.response).toMatchObject({
+      text: "y".repeat(TRANSCRIPT_TEXT_MAX),
+      truncated: true,
     });
   });
 
