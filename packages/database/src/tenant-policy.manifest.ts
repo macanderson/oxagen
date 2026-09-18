@@ -295,7 +295,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tools.mandate_ledger", policyClass: "standard" },
 
   // ── tacho.* — hosts, sessions, and control state for agents Oxagen does
-  //   not run (docs/specs/tacho/data-model.md section 3). All eight carry
+  //   not run (docs/specs/tacho/data-model.md section 3). Every one carries
   //   org_id + workspace_id NOT NULL → standard tenant_isolation.
   { table: "tacho.hosts", policyClass: "standard" },
   { table: "tacho.sessions", policyClass: "standard" },
@@ -308,4 +308,10 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // Single-use enrollment tokens (#2967): orgScopeMixin, consumed by
   // enroll_host inside the token's own tenant scope.
   { table: "tacho.enrollment_tokens", policyClass: "standard" },
+  // The control plane's record of each authorised local-MCP-gateway call and
+  // the daemon chain it was serving (#3221). Written by `machineKeyDenial`
+  // through `withOrgPlaneSystemDb`, which bypasses RLS at authorisation time;
+  // read by `tacho.events.ingest` through `withTenantDb`, where the policy is
+  // what keeps one organisation's evidence out of another's tier.
+  { table: "tacho.gateway_chains", policyClass: "standard" },
 ];

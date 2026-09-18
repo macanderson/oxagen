@@ -153,6 +153,11 @@ describe("resolveMcpContext", () => {
         surface: "mcp",
         messageId: null,
         clientIp: null,
+        // Null, not absent: the exact shape is asserted here on purpose, so a
+        // field added to the context has to be accounted for by whoever adds
+        // it rather than appearing unnoticed in every MCP request.
+        gatewaySessionUuid: null,
+        gatewayChainGenesisHash: null,
       },
     });
     expect(resolveApiKey).toHaveBeenCalledWith("ox_mysecret");
@@ -634,5 +639,108 @@ describe("buildContext and the platform-operator binding", () => {
     const ctx = await buildContext({ authorization: "Bearer ox_valid" });
 
     expect("platformOperator" in ctx).toBe(false);
+  });
+});
+
+// ── the Tacho gateway chain header (#3221) ───────────────────────────────────
+//
+// `x-tacho-gateway-session` names the daemon chain a local MCP gateway is
+// serving. It is the one header besides `x-request-id` this surface reads, and
+// unlike that one it ends up in a durable evidence row — so what it is allowed
+// to be is part of the contract, not an implementation detail.
+describe("the gateway chain header", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(resolveApiKey).mockResolvedValue({
+      ok: true,
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      apiKeyId: "key-1",
+      userId: null,
+    });
+  });
+
+  it("carries a chain id through to the context", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-tacho-gateway-session": "tachod-8f2c1e40-0000-4000-8000-000000000001",
+    });
+    expect(ctx.gatewaySessionUuid).toBe(
+      "tachod-8f2c1e40-0000-4000-8000-000000000001",
+    );
+  });
+
+  it("is null when absent, which is every non-gateway request", async () => {
+    const ctx = await buildContext({ authorization: "Bearer ox_valid" });
+    expect(ctx.gatewaySessionUuid).toBeNull();
+  });
+
+  it("refuses a value that is not shaped like a chain id", async () => {
+    // Not because a malformed value is dangerous on its own — it decides
+    // nothing, and `machineKeyDenial` reads it only for a gateway key — but
+    // because it is written to a row that an operator later reads as evidence.
+    // Rejecting here keeps the evidence table free of anything that cannot be
+    // a chain, rather than trusting the credential to imply the value is sane.
+    for (const bad of [
+      "",
+      "   ",
+      "chain with spaces",
+      "chain'; drop table--",
+      "x".repeat(129),
+    ]) {
+      const ctx = await buildContext({
+        authorization: "Bearer ox_valid",
+        "x-tacho-gateway-session": bad,
+      });
+      expect(ctx.gatewaySessionUuid).toBeNull();
+    }
+  });
+
+  it("takes the first value when the header repeats", async () => {
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-tacho-gateway-session": ["tachod-first", "tachod-second"],
+    });
+    expect(ctx.gatewaySessionUuid).toBe("tachod-first");
+  });
+
+  it("carries the chain's genesis hash, in the shape every chain hash has", async () => {
+    // The hash is what makes the chain id above evidence rather than a name,
+    // and it is written to a durable evidence row and compared against one —
+    // so it is accepted only in the shape a Tacho chain hash has.
+    const good = `sha256:${"a".repeat(64)}`;
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-tacho-gateway-genesis": good,
+    });
+    expect(ctx.gatewayChainGenesisHash).toBe(good);
+
+    for (const bad of [
+      "",
+      "deadbeef",
+      `sha256:${"A".repeat(64)}`,
+      `sha256:${"a".repeat(63)}`,
+      `sha512:${"a".repeat(64)}`,
+    ]) {
+      const rejected = await buildContext({
+        authorization: "Bearer ox_valid",
+        "x-tacho-gateway-genesis": bad,
+      });
+      expect(rejected.gatewayChainGenesisHash).toBeNull();
+    }
+  });
+
+  it("never lets the header touch tenant identity", async () => {
+    // The standing invariant of this module. A header that can be set by
+    // anything reaching the endpoint must not select an org, a workspace or a
+    // key, and this one is read into a field beside them.
+    const ctx = await buildContext({
+      authorization: "Bearer ox_valid",
+      "x-tacho-gateway-session": "tachod-abc",
+      "x-oxagen-org-id": "org-attacker",
+    });
+    expect(ctx.orgId).toBe("org-1");
+    expect(ctx.workspaceId).toBe("ws-1");
+    expect(ctx.apiKeyId).toBe("key-1");
   });
 });

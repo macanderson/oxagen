@@ -884,3 +884,132 @@ export const SESSION_GATEWAY_COLUMN = {
   table: "sessions",
   column: "gateway_observed_at",
 } as const;
+
+/**
+ * Which of a host's daemon chains the control plane has served a gateway call
+ * for, and when it last did.
+ *
+ * ## Why a row rather than a timestamp
+ *
+ * `hosts.gateway_last_seen_at` records *that* a host served a gateway call. It
+ * cannot record *which of the host's sessions* the call belongs to, because it
+ * is one value with no session on it. Ingest closed that gap by reading
+ * `oxagen.enforcement_tier` off the submitted batch — and whoever can submit a
+ * batch chooses that attribute, so a holder of the host's control-plane key
+ * could point a real observation at any session it liked, including one it had
+ * just invented (#3221).
+ *
+ * This table is the correlation, written where the platform knows rather than
+ * where it is told. `machineKeyDenial` authenticates a server-minted, per-host
+ * `tacho_gateway_v1` credential, reads the daemon's own chain id off the
+ * request, and files the two together. A batch submitter cannot cause a row
+ * here: it would need the gateway credential, which never leaves the daemon.
+ *
+ * ## One row per chain, not per call
+ *
+ * Bounded correlation state, which is what Postgres is for. A row per
+ * authorised call would be an append-only audit stream growing with gateway
+ * traffic forever inside the transactional database — what AGENTS.md's storage
+ * table assigns to ClickHouse and names as a thing Postgres is never for.
+ *
+ * Nothing is lost by collapsing it. The per-call history already exists in
+ * ClickHouse, and it is richer than a row here would be:
+ * `recordGatewayCall` seals a `tool_call` or `policy_decision` event carrying
+ * the tool, the connected app and the outcome onto the very chain this row
+ * names, and ingest writes those through `insertTachoEvents`. The only
+ * question Postgres must answer inside a transaction is the one ingest asks —
+ * has this host's gateway served this chain, and how recently.
+ *
+ * `lastSeenAt` rather than the first: a chain that has served gateway calls for
+ * a week should not be judged on the one it opened with. A refused call
+ * advances it too, because a call Oxagen stopped is evidence that Oxagen was
+ * enforcing, not evidence that it was not.
+ *
+ * ## What the chain id is, and is not
+ *
+ * `chain_session_uuid` is named by the caller — but by a caller holding the
+ * gateway credential, which is the credential whose use is the thing being
+ * attested. That is the whole distinction #3221 turns on: the value is not
+ * trusted because it was sent, it is trusted because of *who* the control
+ * plane authenticated when it arrived. Ingest never reads a session id out of
+ * a batch; it asks this table which chains this host's gateway actually
+ * served.
+ *
+ * `chainGenesisHash` is what makes `chainSessionUuid` evidence rather than a
+ * claim; ingest requires the session's own recorded `genesisHash` to equal it.
+ *
+ * It is deliberately NOT a foreign key to `tacho.sessions`. The daemon's chain
+ * is created locally and reaches the control plane only when its first batch
+ * is flushed, which is routinely after the gateway call that named it — so a
+ * row here regularly precedes the session it refers to, and the join happens
+ * at read time.
+ *
+ * Nothing deletes a row, and ingest does NOT consume one on match. Consuming
+ * would let a forged batch that arrived first burn a real record belonging to
+ * the session that earned it, which trades this defect for a worse one.
+ */
+export const tachoGatewayChains = tachoSchema.table(
+  "gateway_chains",
+  {
+    ...idMixin("tgc"),
+    ...orgScopeMixin(),
+    /** The host whose gateway credential was authenticated. App-enforced FK. */
+    hostId: uuid("host_id").notNull(),
+    /**
+     * The daemon chain the gateway was serving, as the daemon named it on the
+     * request: `hostRecorder.sessionUuid`, the v5 uuid derived from the host
+     * enrollment id and the daemon's `tachod-<ulid>` boot id
+     * (`packages/tacho/src/ids.ts`). It is the value ingest matches against
+     * `tacho.sessions.session_uuid`, which is a `uuid` column.
+     *
+     * Text rather than uuid here all the same, and not because the value is
+     * anything but a uuid. It arrives on a request header, and this row is
+     * written inside `machineKeyDenial` — the authorisation path, which must
+     * take a note without ever failing the call it was only observing. A `uuid`
+     * column would turn a malformed header into 22P02 and abort that
+     * transaction; `text` turns it into a row that matches no session, which is
+     * the same outcome as no row at all.
+     */
+    chainSessionUuid: text("chain_session_uuid").notNull(),
+    /**
+     * The hash of that chain's first sealed event, as the gateway stated it.
+     *
+     * What makes the name above evidence. A forger holding the host's ingest
+     * key can write the same chain id — open the session first with a chain of
+     * its own and let a genuine gateway call advance `lastSeenAt` — but not the
+     * same genesis hash, because its chain begins with a different event.
+     *
+     * Nullable, for a daemon too old to send it. Ingest then refuses to promote
+     * rather than promoting on the name alone.
+     */
+    chainGenesisHash: text("chain_genesis_hash"),
+    firstSeenAt: ts("first_seen_at").notNull().defaultNow(),
+    /** What ingest reads. Moved forward by every served call, refusals too. */
+    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    // The upsert target AND the read ingest makes. One index serves both
+    // because there is one row per (host, chain) — the bound stated as a
+    // constraint rather than as an intention.
+    hostChainUniq: uniqueIndex("tacho_gateway_chains_host_chain_uniq").on(
+      t.hostId,
+      t.chainSessionUuid,
+    ),
+  }),
+);
+
+/**
+ * A column of {@link tachoGatewayChains}, for the deploy-before-migrate probe.
+ *
+ * One ref answers for the whole table: `information_schema.columns` has no row
+ * for a column of a table that does not exist, so a probe for this reads
+ * `false` both while the migration is pending and while only half of it ran.
+ * That matters more here than for a plain added column — querying an absent
+ * TABLE raises 42P01, which aborts the transaction exactly as 42703 does, and
+ * would turn a pending migration into failed ingestion for every host.
+ */
+export const GATEWAY_CHAIN_COLUMN = {
+  schema: "tacho",
+  table: "gateway_chains",
+  column: "chain_session_uuid",
+} as const;

@@ -40,7 +40,6 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
-  TACHO_ENFORCEMENT_TIER_ATTR,
   TACHO_GATEWAY_TIER,
   type TachoEvent,
   verifyChain,
@@ -51,10 +50,13 @@ import {
   type TachoEventInsert,
 } from "@oxagen/telemetry";
 import { recordSpend } from "@oxagen/billing";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { unlockOnboardingGate } from "./lib/onboarding";
-import { sessionGatewayColumnReady } from "./lib/tacho-gateway-columns";
+import {
+  gatewayInvocationColumnReady,
+  sessionGatewayColumnReady,
+} from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
 import {
@@ -242,35 +244,94 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
 }
 
 /**
- * Which chain of the batch the daemon filed a gateway call on.
+ * Which of this host's chains the control plane actually served a gateway call
+ * for, and when it last did — read from its own records, never from the batch.
  *
- * **This is correlation, never authority.** It answers *which* session a
- * gateway call belongs to, and it is asked only after the control plane has
- * already established from its own records that a gateway call happened at all
- * (`gatewayObservationFor`). On its own it decides nothing, because everything
- * in a submitted batch is client-attested: `normalizeOtlp` used to keep unknown
- * attributes verbatim, so any process holding the local OTLP bearer could put
- * this key on an ordinary record and have the daemon seal it onto a valid
- * chain. `otel.ts` now quarantines the whole `oxagen.` namespace on the way in,
- * which is the belt; the server observation is the braces, and the braces are
- * what hold.
+ * ## What this replaces
  *
- * `recordGatewayCall` puts `oxagen.enforcement_tier: "gateway"` in the event
- * `attrs`; the daemon's host recorder sets no identity tier, so the envelope
- * field is empty for these (#3161, discussion_r4033641270).
+ * The correlation used to be `carriesGatewayCall(events)`: does some event in
+ * the batch carry `oxagen.enforcement_tier: "gateway"`. That answered the right
+ * question with the wrong authority. The server observation
+ * (`hosts.gateway_last_seen_at`) established only that the host had served a
+ * gateway call at some point — one timestamp with no session on it — so the
+ * batch chose which session it landed on, and whoever can submit a batch
+ * chooses the batch. Once a host had served ONE legitimate gateway call the
+ * timestamp was a reusable value: an existing session passed whenever the
+ * observation was newer than its `createdAt`, and a newly invented session
+ * passed unconditionally, because nothing predates a session being opened by
+ * the same batch (#3221, discussion_r4036718127, discussion_r4040352859).
  *
- * The key and value come from `@oxagen/tacho`'s wire module, which is also
- * where the daemon takes them from. This attribute is a contract between two
- * packages with nothing else joining them, so a literal at each end could be
- * renamed on one side without breaking a build or a test — it would simply
- * stop matching, and gateway calls would go on being filed as `observe` with
- * nothing to show for it. That is the silence this whole path exists to end.
+ * Now both halves come from `tacho.gateway_chains`, written where
+ * `machineKeyDenial` authenticated the host's `tacho_gateway_v1` credential and
+ * ruled on the call. A batch submitter cannot cause a row there: it would need
+ * the gateway credential, which never leaves the daemon. So a forged
+ * `oxagen.enforcement_tier` on a host with a real observation now names a chain
+ * the table has never heard of, and the session stays on the host's own mode.
+ *
+ * ## Why the latest, and why not consumed
+ *
+ * The newest invocation per chain is what the lifetime bound is applied to: a
+ * chain that has served gateway calls for a week should not be judged on the
+ * first one. Rows are never consumed on match. Consuming would let a forged
+ * batch that arrived first burn a real observation belonging to the session
+ * that earned it — trading this defect for a worse one, which is exactly why
+ * #3178 declined to narrow the window instead of fixing the correlation.
+ *
+ * ## The empty answer
+ *
+ * `undefined` is returned without touching the database whenever a promotion is
+ * impossible anyway — no host observation, or the table not migrated yet. That
+ * is not an optimisation: querying a table that does not exist raises 42P01,
+ * which aborts the transaction exactly as 42703 does, and would take out
+ * ingestion for every host during the deploy-before-migrate window (#1275).
  */
-export function carriesGatewayCall(events: TachoEvent[]): boolean {
-  return events.some(
-    (event) =>
-      event.attrs?.[TACHO_ENFORCEMENT_TIER_ATTR] === TACHO_GATEWAY_TIER,
-  );
+/** What the control plane recorded about one chain its gateway served. */
+interface GatewayChainRecord {
+  /** The newest call, which the session's lifetime is measured against. */
+  at: Date;
+  /**
+   * The chain's genesis hash as the gateway stated it, or null for a daemon
+   * too old to send one. Null never promotes: the chain NAME alone is
+   * something a forger holding the host's ingest key can also write.
+   */
+  genesisHash: string | null;
+}
+
+async function gatewayInvocationsFor(
+  tx: Tx,
+  host: GatewayObservable & { id: string },
+  chains: string[],
+  invocationTable: boolean,
+): Promise<Map<string, GatewayChainRecord>> {
+  const answers = new Map<string, GatewayChainRecord>();
+  if (!invocationTable) return answers;
+  if (gatewayObservationFor(host) === null) return answers;
+  if (chains.length === 0) return answers;
+  // No aggregate: `tacho.gateway_chains` holds one row per (host, chain), so
+  // the newest call on a chain IS the row's `lastSeenAt`. The bound is a unique
+  // index rather than a convention, which is what lets this be a plain read.
+  const rows = await tx
+    .select({
+      chain: schema.tachoGatewayChains.chainSessionUuid,
+      at: schema.tachoGatewayChains.lastSeenAt,
+      genesisHash: schema.tachoGatewayChains.chainGenesisHash,
+    })
+    .from(schema.tachoGatewayChains)
+    .where(
+      and(
+        eq(schema.tachoGatewayChains.hostId, host.id),
+        inArray(schema.tachoGatewayChains.chainSessionUuid, chains),
+      ),
+    );
+  for (const row of rows) {
+    // Normalised rather than trusted: some pooled paths hand back a string,
+    // and the value is compared against a session's `createdAt`, where a string
+    // comparison would silently read as "always after".
+    const at = row.at instanceof Date ? row.at : new Date(row.at);
+    if (!isNaN(at.getTime()))
+      answers.set(row.chain, { at, genesisHash: row.genesisHash ?? null });
+  }
+  return answers;
 }
 
 /** The bits of the host row the tier is derived from. Nothing else may be. */
@@ -320,29 +381,60 @@ export function gatewayObservationFor(host: GatewayObservable): Date | null {
  *
  *  1. The control plane authorised a call on this host's gateway credential.
  *     Its own record, unreachable from any submission.
- *  2. The observation does not predate the session. `sinceAt` is the session
- *     row's server-clock `createdAt`; a gateway call Oxagen served before this
- *     chain existed cannot be what enforced anything on it. `null` for a
- *     session being opened by this very batch, where nothing predates it.
- *  3. The batch files a gateway call on *this* chain, which says which session
- *     of the host's the observation belongs to (`carriesGatewayCall`).
+ *  2. The call was served for *this* chain, and this chain is the one it says
+ *     it is. `chain` is the `tacho.gateway_chains` row matching the session's
+ *     uuid, written where the gateway credential was authenticated — so the
+ *     correlation is the server's too, not the batch's (#3221) — and its
+ *     `genesisHash` must equal the session's own. The uuid alone is a NAME,
+ *     which a forger holding the host's ingest key can write; the genesis hash
+ *     is the hash of the daemon's own first sealed event, which it cannot.
+ *  3. The chain the batch presents actually verifies. An unverified chain
+ *     proves nothing about the hashes in it, and the genesis hash above is one
+ *     of them — a forger who cannot produce the daemon's first event can still
+ *     WRITE its hash into an event of their own, and only chain verification
+ *     catches that.
  *
  * Otherwise the host's own mode decides, which is server-owned already: the
  * operator sets it in Oxagen and the daemon is told, not asked.
  *
- * ## Why ANY event rather than ALL, on condition 3
+ * ## Why there is no lifetime bound any more
  *
- * The first version of this required every event in the batch to agree, which
- * read as conservative and was in fact the bug (discussion_r4034318913). A
- * gateway call is sealed onto the daemon's own `tachod-*` chain, whose genesis
- * is the daemon's `agent_start` — so the batch is mixed by construction and
- * unanimity always fell back to the host's observe/harness mode. Nothing was
- * ever labelled `gateway`.
+ * There used to be a fourth condition: the call must not predate the session's
+ * `createdAt`. It existed when the correlation was a host-level timestamp with
+ * no session on it, where "predates" was the only thing standing between a
+ * stale observation and a chain it had nothing to do with.
+ *
+ * The genesis hash subsumes it, and keeping it was actively wrong. The control
+ * plane records the call while HANDLING it; the daemon seals the corresponding
+ * event only after the call returns. When those events are the chain's first
+ * batch, `createdAt` is necessarily later than the record — so a chain whose
+ * first gateway call precedes its first ingest failed the comparison at
+ * genesis and kept failing it on every later batch, until some other gateway
+ * call happened to advance `lastSeenAt`. If that first batch also sealed the
+ * chain, the wrong tier was permanent.
+ *
+ * That is the failure this file has had twice before, in the direction that
+ * does not announce itself: nothing is labelled `gateway`, and a silent
+ * under-report of enforcement looks exactly like a quiet system. A record
+ * bound to this exact chain by its genesis hash is about this chain whenever
+ * it was written, so there is nothing left for an ordering to decide.
+ *
+ * ## What is no longer read
+ *
+ * `oxagen.enforcement_tier` on the batch. The daemon still writes it, because
+ * it is true of the EVENT — that call really did come through the gateway, and
+ * an operator reading the stream wants to see which ones did. It is not true of
+ * the SESSION in any way the control plane can check, and a value that decides
+ * a signed tier has to be one the control plane established itself.
+ * `tacho-gateway-attribute.test.ts` fails if any handler reads it back.
  */
 export function enforcementTierOf(
-  events: TachoEvent[],
+  chain: GatewayChainRecord | null,
   host: GatewayObservable,
-  sinceAt: Date | null,
+  // Whether the chain the batch presents verifies. An unverified chain's
+  // hashes are unproven, and the genesis hash the match turns on is one of
+  // them.
+  chainVerified: boolean,
   // Whether `tacho.sessions.gateway_observed_at` exists yet.
   //
   // `gateway` is never assigned without somewhere to write the observation
@@ -357,13 +449,40 @@ export function enforcementTierOf(
   // self-correcting: the probe re-asks once a minute, and a session that was
   // not sealed meanwhile is promoted by the next batch, evidence and all.
   evidenceColumn: boolean,
+  // This chain's OWN genesis hash: the session row's, or for a session being
+  // created by this batch, the batch's first event. Null for a chain with none
+  // — one whose first batch did not start at seq 0 — and null never matches.
+  sessionGenesisHash: string | null,
 ): string {
   const observed = gatewayObservationFor(host);
   if (
     evidenceColumn &&
+    // The host has served a gateway call at all. Redundant with the
+    // invocation row by construction — the same function writes both — and
+    // kept as a belt, because the two are written by separate statements and a
+    // deployment can be mid-migration on one and not the other.
     observed !== null &&
-    (sinceAt == null || observed.getTime() >= sinceAt.getTime()) &&
-    carriesGatewayCall(events)
+    chain !== null &&
+    // The chain is the one it says it is. The NAME is something a forger
+    // holding the host's ingest key can write too: open the session first with
+    // a chain of its own and let a genuine gateway call advance `lastSeenAt`,
+    // and the name, the lifetime and the host observation are all satisfied by
+    // the row the forger created. The genesis hash is not — a chain that does
+    // not begin with the daemon's own first event has a different one, and
+    // producing a different chain with the same one is a preimage attack.
+    //
+    // Both sides must be present. A daemon too old to state its genesis, or a
+    // session row that never recorded one, leaves the tier on the host's mode
+    // rather than promoting on a name.
+    chain.genesisHash !== null &&
+    sessionGenesisHash !== null &&
+    chain.genesisHash === sessionGenesisHash &&
+    // …and the chain it came from verifies. Without this the match is on a
+    // hash the batch simply asserts: a forger cannot produce the daemon's
+    // first event, but nothing stops them writing its hash into an event of
+    // their own, and only `verifyChain` rejects an event whose hash is not the
+    // hash of its contents.
+    chainVerified
   )
     return TACHO_GATEWAY_TIER;
   return host.mode === "enforce" ? "harness" : "observe";
@@ -405,6 +524,25 @@ function genesisRow(
   // migration every new session would fail to open — for a field that is null
   // on all but the gateway tier (discussion_r4040352870).
   sessionGatewayColumn: boolean,
+  // The tier this session opens on, and the gateway call that justifies it.
+  //
+  // Passed in rather than derived here. This function used to compute it a
+  // second time, from the batch's own first hash, while the caller computed it
+  // from `existing?.genesisHash` — which is null for a session being created.
+  // The two disagreed for exactly the session this function is for: the row
+  // was written `gateway` and the seal, computed from the caller's value, was
+  // graded `observe`. A sealed session is never regraded, so exports and
+  // attestations carried that pair for good.
+  //
+  // One derivation, one caller. There is nothing left to disagree.
+  tier: string,
+  gatewayObservedAt: Date | null,
+  // The chain's own genesis, recorded on the row so a later batch can be
+  // matched against it — and so the conflict guard (`landsOnThisChain`) checks
+  // the same value this INSERT writes. Passed in for the same reason `tier` is:
+  // the caller derives it to build that guard, and a second derivation here is
+  // two values that have to agree.
+  genesisHash: string | null,
 ) {
   const first = events[0] as TachoEvent;
   const genesis = events.find((event) => event.kind === "agent_start") ?? first;
@@ -413,9 +551,6 @@ function genesisRow(
   const anthropic = genesis.anthropic ?? {};
   const subagent = genesis.subagent;
   const ingestedAt = new Date(first.ts);
-  // `null`: this row is the session's creation, so there is no earlier
-  // lifetime for the host's observation to predate.
-  const tier = enforcementTierOf(events, host, null, sessionGatewayColumn);
   return {
     orgId: ctx.orgId,
     workspaceId: ctx.workspaceId,
@@ -484,12 +619,13 @@ function genesisRow(
     // the row: a `gateway` session points at the observation that made it one.
     ...(sessionGatewayColumn
       ? {
-          gatewayObservedAt:
-            tier === TACHO_GATEWAY_TIER ? gatewayObservationFor(host) : null,
+          // The call that raised it, or nothing. A tier that is `gateway`
+          // from the first row still has to point at what made it one.
+          gatewayObservedAt,
         }
       : {}),
     bundleMode: host.mode,
-    genesisHash: first.seq === 0 ? first.hash : null,
+    genesisHash,
     createdAt: now,
     updatedAt: now,
   };
@@ -678,6 +814,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
     const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    // Which of this batch's chains the control plane's own records say it
+    // served a gateway call for (#3221). One grouped read for the whole batch,
+    // and skipped entirely when no promotion is possible — including while
+    // `tacho.gateway_chains` is still an unapplied migration, where
+    // naming the table would raise 42P01 and abort the transaction.
+    const gatewayInvocations = await gatewayInvocationsFor(
+      tx,
+      host,
+      [...bySession.keys()],
+      await gatewayInvocationColumnReady(tx),
+    );
 
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
@@ -698,6 +845,10 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           toolBodyFrames: true,
           enforcementTier: true,
           sealedAt: true,
+          // What the chain proved it was when it opened. The gateway states
+          // the same hash on every call, and a tier rises only when the two
+          // agree (#3221).
+          genesisHash: true,
           // The session's own server-clock birth. A gateway call the control
           // plane served before this chain existed is not evidence about it.
           createdAt: true,
@@ -778,11 +929,38 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // seal. A sealed session's tier is final: its replay grade was computed
       // from it and signed into the attestation, and a value that moves
       // underneath a signature is the escalation, not the mislabel.
+      const chainRecord = gatewayInvocations.get(sessionUuid) ?? null;
+      // The chain's genesis hash: the recorded one, or — for a session this
+      // batch is opening — the batch's own first event. Resolved HERE, because
+      // this value feeds both the row and the seal and deriving it twice is
+      // how they came to disagree.
+      //
+      // `existing ? … : …` rather than `existing?.genesisHash ?? …`. A row that
+      // exists and recorded no genesis is answered with NOTHING, not with a
+      // hash off the batch. Those are different questions: the recorded value
+      // is what the row can be checked against afterwards, and a batch's
+      // re-sent seq-0 event is not written back to it — so promoting on one
+      // would leave a `gateway` row whose `genesis_hash` is null, pointing at
+      // evidence nobody can re-derive. That is the failure this whole
+      // correlation exists to end, one level in.
+      //
+      // Rows predating this feature are the reachable case, not a hypothetical:
+      // they carry a null `genesis_hash` and a true `chain_verified`, and
+      // whether they promote would otherwise depend on whether some later batch
+      // happened to re-send seq 0. They stay on the host's own mode instead,
+      // which is the same degradation a daemon too old to state its genesis
+      // gets.
+      const sessionGenesisHash = existing
+        ? existing.genesisHash
+        : first.seq === 0
+          ? first.hash
+          : null;
       const derivedTier = enforcementTierOf(
-        events,
+        chainRecord,
         host,
-        existing?.createdAt ?? null,
+        ok,
         sessionGatewayColumn,
+        sessionGenesisHash,
       );
       const promoteToGateway =
         existing !== undefined &&
@@ -888,14 +1066,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         // therefore never reached the row: the existing-session branch applies
         // this patch and nothing else.
         //
-        // What changed (discussion_r4036718127, P1): the condition used to be
-        // `carriesGatewayCall(events)` on its own — an attribute in the batch,
-        // which a process holding the local OTLP bearer can set on an ordinary
-        // record. That made a later submission able to promote an existing
-        // observe session retroactively, and exports then signed the tier.
-        // `promoteToGateway` is the same rise gated on the control plane's own
-        // observation, bounded to the session's lifetime, and refused outright
-        // once the session is sealed.
+        // What changed. The condition was once `carriesGatewayCall(events)` on
+        // its own — an attribute in the batch, which a process holding the
+        // local OTLP bearer can set on an ordinary record — so a later
+        // submission could promote an existing observe session retroactively,
+        // and exports then signed the tier. #3178 gated that rise on the
+        // control plane's own host observation; #3221 replaced the remaining
+        // client-attested half, which said WHICH session, with a server record
+        // of the chain the gateway was serving. Both halves are now Oxagen's
+        // own, still bounded to the session's lifetime and still refused
+        // outright once the session is sealed.
         //
         // Monotonic still. Once a chain has served a connected app that fact
         // does not stop being true, so a later batch of daemon bookkeeping must
@@ -909,7 +1089,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
               // host column: that coupling holds today and is invisible to
               // anyone changing either half.
               ...(sessionGatewayColumn
-                ? { gatewayObservedAt: gatewayObservationFor(host) }
+                ? { gatewayObservedAt: chainRecord?.at ?? null }
                 : {}),
             }
           : {}),
@@ -918,13 +1098,69 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         ...increments,
       };
 
+      // Identity is still enforced, and not by a predicate here.
+      //
+      // The INSERT no longer updates anything, so there is no conflict clause
+      // left to guard. On the existing-session path the question is asked where
+      // it belongs: `enforcementTierOf` promotes only when the gateway record's
+      // genesis hash equals the ROW'S own, so a chain wearing another's uuid
+      // cannot be promoted — and its frames fail chain verification against the
+      // recorded head, which is reported as a chain break.
+      // Whether this batch's writes landed, and whether they opened the
+      // session. Decided by the statement on BOTH paths: on neither is the row
+      // this transaction writes necessarily the row it read.
+      let accepted: boolean;
+      let inserted = false;
       if (existing) {
-        await tx
+        // The row must still be where the read left it.
+        //
+        // `fresh` — and everything folded from it: the delta, the content and
+        // body counts, the seal and the grade computed from them — is derived
+        // from `existing.seqCount`, a head read under no lock. A concurrent
+        // batch for the same session advances that head between the read and
+        // this statement, and then both transactions fold the SAME frames:
+        // every counter on the row is applied twice, and a row the first one
+        // sealed is written again by the second, whose `terminalPatch` was
+        // computed against an unsealed read.
+        //
+        // That is not an adversarial case. The daemon's spool re-sends a batch
+        // whose response it did not see, so a retry overlapping an in-flight
+        // original is the ordinary way it happens, and the two carry identical
+        // frames.
+        //
+        // `seq_count` is written only here and only ever forward, so matching
+        // it IS the question "is this still the row `fresh` was computed
+        // against". A refusal costs one round trip: the batch is re-sent by the
+        // daemon's spool, and the next read sees the real head.
+        //
+        // The TIER has to be matched too, and separately, because it is the one
+        // piece of tier-relevant state that moves WITHOUT the head. A
+        // promotion-only re-send — same frames, already recorded, so no new
+        // seq — raises `enforcement_tier` and leaves `seq_count` exactly where
+        // this batch read it. A concurrent terminal batch that derived
+        // `observe` then still matches the head, and writes an observe-derived
+        // `replayGrade` onto a row that is now `gateway`: the sealed tier and
+        // the signed grade disagree, and a sealed session is never regraded.
+        //
+        // `common`'s grade is computed from `effectiveTier`, which is computed
+        // from `existing.enforcementTier` — so matching the tier is the same
+        // question as matching the head, asked of the other input.
+        const written = await tx
           .update(schema.tachoSessions)
           .set(common)
-          .where(eq(schema.tachoSessions.id, existing.id));
+          .where(
+            and(
+              eq(schema.tachoSessions.id, existing.id),
+              eq(schema.tachoSessions.seqCount, existing.seqCount),
+              eq(
+                schema.tachoSessions.enforcementTier,
+                existing.enforcementTier,
+              ),
+            ),
+          )
+          .returning({ id: schema.tachoSessions.id });
+        accepted = written.length > 0;
       } else {
-        newSessions += 1;
         if (initiatingPrincipalId === undefined)
           initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
         const row = genesisRow(
@@ -934,8 +1170,11 @@ export const tachoEventsIngestHandler: CapabilityHandler<
           events,
           now,
           sessionGatewayColumn,
+          derivedTier,
+          derivedTier === TACHO_GATEWAY_TIER ? (chainRecord?.at ?? null) : null,
+          sessionGenesisHash,
         );
-        await tx
+        const written = await tx
           .insert(schema.tachoSessions)
           .values({
             ...row,
@@ -945,15 +1184,72 @@ export const tachoEventsIngestHandler: CapabilityHandler<
             lastHash: last.hash,
             seqCount: last.seq + 1,
           } as typeof schema.tachoSessions.$inferInsert)
-          .onConflictDoUpdate({
-            target: schema.tachoSessions.sessionUuid,
-            set: common,
-          });
-        // Counters on a fresh row start from the insert's zero defaults; apply the delta.
-        await tx
-          .update(schema.tachoSessions)
-          .set(increments)
-          .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
+          // DO NOTHING, not DO UPDATE.
+          //
+          // The conflict path used to apply a `common` computed from
+          // `existing` — the read that preceded the INSERT, which says nothing
+          // about the row this statement is now hitting. Every attempt to make
+          // that safe added another predicate and another way to be half
+          // right: it doubled the counters (`common` already carries
+          // `increments`, and the follow-up applied them again), and on the
+          // branch that dropped the seal it still advanced `seq_count` through
+          // the `agent_stop`, putting the stop below the recorded head so that
+          // even a re-send folded `fresh = []` and the session could never be
+          // sealed by anyone.
+          //
+          // There is nothing this statement can safely write to a row it has
+          // not read. So it writes nothing: the INSERT either opens the
+          // session or does nothing at all, and a conflict is refused and
+          // retried. The retry reads the row and takes the existing-session
+          // path, which has the real values and its own guards — which is
+          // where a decision about an existing row belongs.
+          .onConflictDoNothing()
+          // RETURNING, or there is nothing to read. An INSERT without it yields
+          // no rows through postgres-js even when it inserted, so `written`
+          // would be empty for EVERY new session — each one refused, rolled
+          // back, and retried for ever. Named rather than bare, like every
+          // other RETURNING in this file: a bare one asks for every column the
+          // schema declares and fails on a pending migration
+          // (`tacho-column-projection.test.ts`).
+          .returning({ id: schema.tachoSessions.id });
+        // `DO NOTHING` returns a row only when it inserted one, so the two
+        // questions have one answer here.
+        accepted = written.length > 0;
+        inserted = accepted;
+        if (inserted) newSessions += 1;
+        // Counters on a fresh row start from the insert's zero defaults, so
+        // the delta is applied here. Only on a real insert: a conflict wrote
+        // nothing, so there is nothing of this batch's on that row to complete.
+        if (inserted) {
+          await tx
+            .update(schema.tachoSessions)
+            .set(increments)
+            .where(eq(schema.tachoSessions.sessionUuid, sessionUuid));
+        }
+      }
+      // Refused, on either path: the row this batch hit moved under the read
+      // its frames were folded against, or the INSERT lost to a row it has not
+      // read. Both are transient — the same batch succeeds against a fresh
+      // read — so the whole attempt is rolled back and the daemon re-sends.
+      //
+      // Thrown INSIDE the transaction, and that is the point. Raising it after
+      // the commit left the accepted half of a mixed batch committed while the
+      // response never reached the daemon: control commands were marked `sent`
+      // and could not be selected again, and the accepted sessions' spend
+      // deltas were skipped — and on the retry their heads had advanced, so the
+      // deltas folded empty and the spend was undercounted for good.
+      //
+      // `conflict` maps to 409: neither `ControlUnreachable` nor the 400/422
+      // the shipper quarantines on, so it takes the "keep the batch, back off"
+      // branch (`spool.ts`) and the next attempt reads the rows as they now
+      // are. At most one retry: a conflict on the INSERT path means the row
+      // exists, so the retry takes the existing-session path.
+      if (!accepted) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "session_moved_under_read",
+          message: `session ${sessionUuid} changed between this batch's read and its write; re-send it`,
+        });
       }
 
       const sessionRow = await tx.query.tachoSessions.findFirst({
@@ -961,28 +1257,39 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         columns: { id: true, publicId: true, parentSessionUuid: true },
       });
       const sessionId = sessionRow?.id;
+      // `inserted`, not `accepted && !existing`: a conflict that took the update
+      // path is accepted and still did not open the session, and `!existing` is
+      // the read that preceded the statement.
       if (
         sessionRow?.publicId &&
-        !existing &&
+        inserted &&
         firstOpenedRunId === null &&
         first.parent_session_uuid == null
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }
-      if (sessionId) {
+      // Everything below is this batch's events landing on the session row, so
+      // it is gated on the same answer. A refused batch belongs to a different
+      // chain or to a session already sealed; its models, files, commands,
+      // proof frames and spend are not that session's evidence, and counting
+      // them is the same defect as the counters were.
+      if (sessionId && accepted) {
         await rollupModels(tx, ctx, sessionId, fresh, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
       }
-      for (const event of fresh) {
-        if (event.kind !== PROOF_OBSERVED_KIND) continue;
-        const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
-        frames.push(event);
-        proofsByRoot.set(event.root_session_uuid, frames);
+      if (accepted) {
+        for (const event of fresh) {
+          if (event.kind !== PROOF_OBSERVED_KIND) continue;
+          const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
+          frames.push(event);
+          proofsByRoot.set(event.root_session_uuid, frames);
+        }
+        if (delta.totalCostMicros > 0)
+          spendDeltas.push({ micros: delta.totalCostMicros, at: now });
       }
-      if (delta.totalCostMicros > 0)
-        spendDeltas.push({ micros: delta.totalCostMicros, at: now });
       if (
+        accepted &&
         sessionRow &&
         sessionRow.parentSessionUuid === null &&
         "sealedAt" in terminalColumns

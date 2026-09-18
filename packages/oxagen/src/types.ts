@@ -463,6 +463,42 @@ export interface CapabilityContext {
    */
   clientIp?: string | null;
   /**
+   * The Tacho daemon chain a local MCP gateway call is being served for, as
+   * the gateway named it on the request (`x-tacho-gateway-session`).
+   *
+   * **Not identity, and never usable as any part of one.** The org, the
+   * workspace, the API key and the host are all resolved from the validated
+   * credential; this names the caller's own chain, which is the one thing the
+   * credential cannot say. Its authority comes entirely from the credential it
+   * arrives with: `machineKeyDenial` records it only for a key whose scope is
+   * `tacho_gateway_v1`, and that key never leaves the daemon. A request on any
+   * other credential carries this nowhere — it is read, and then nothing reads
+   * it back.
+   *
+   * Why it exists (#3221): the Tacho enforcement tier needs to know which of a
+   * host's sessions a gateway call belongs to. The server's own observation is
+   * one timestamp per host with no session on it, so ingest used to take the
+   * correlation from an attribute on the submitted batch — which whoever can
+   * submit a batch chooses. This moves that half of the answer onto the
+   * authenticated gateway call too.
+   *
+   * Absent on every surface but the MCP one, and absent there for every caller
+   * that is not a gateway.
+   */
+  gatewaySessionUuid?: string | null;
+  /**
+   * The genesis hash of that daemon chain, as the gateway stated it
+   * (`x-tacho-gateway-genesis`).
+   *
+   * Carries the same caveats as {@link gatewaySessionUuid} and exists for the
+   * same reason, one level deeper: the chain id is a NAME, and a forger
+   * holding the host's ingest key can write the same name. The genesis hash is
+   * the hash of the daemon's own first sealed event, so a chain that does not
+   * begin with that event has a different one. Ingest compares it against the
+   * session's recorded `genesis_hash`.
+   */
+  gatewayChainGenesisHash?: string | null;
+  /**
    * Present when this capability call originates from an AGENT RUN (Agent
    * RBAC Phase 2, docs/specs/agent-rbac/spec.md §3.4/§3.5). Carries the two
    * principals of the delegation ceiling (agent ∩ invoking human), the run
