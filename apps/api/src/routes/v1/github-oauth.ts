@@ -37,7 +37,7 @@ import {
 import { encrypt, decrypt, createIngestionCryptoAdapter } from "@oxagen/crypto";
 import { and, desc, eq, isNull, notInArray } from "drizzle-orm";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { assertOrgRole } from "@oxagen/iam/org-role";
+import { assertOrgRole, type OrgRoleRequirement } from "@oxagen/iam/org-role";
 import type { AppEnv } from "../../app";
 import { requireEnv } from "@oxagen/config/env";
 import { upsertGithubInstallation } from "./github-installations";
@@ -309,13 +309,51 @@ const STATE_ERROR_MESSAGES: Record<GithubInstallStateError, string> = {
  * second path to the same write and only one of them was gated. Membership is
  * what the mounted middleware establishes; role is what this asserts.
  */
-const SETTINGS_CONNECT_ROLES = ["Owner", "Admin"] as const;
+const SETTINGS_CONNECT_ROLES: OrgRoleRequirement = {
+  org: ["Owner", "Admin"],
+};
 
 /**
- * Refuse to mint a state that reaches the settings write for anyone below
- * Owner/Admin. That is every state naming no `connectionId`, whatever its
- * `returnTo` — see the call site for why the connection, not the label, is the
- * predicate.
+ * The roles that may start the LEGACY IN-WIZARD connect — a state that NAMES a
+ * pre-created `source_connection`.
+ *
+ * The same pair `create_connection` and `delete_connection` admit
+ * (`packages/oxagen/src/contracts/connection.create.ts`: org Owner/Admin, or
+ * workspace Owner), so the route and the capability give one answer about who
+ * may set a connection's credentials up rather than two.
+ *
+ * It needs a gate, and it never had one. The three earlier attempts at this
+ * finding all spared this leg, each time on the reasoning that it "keeps the
+ * authorization it already has" — and it had none. The mounted middleware
+ * establishes workspace MEMBERSHIP and says nothing about role, and
+ * `list_connections` admits a workspace Member, so a Member could read an
+ * Owner-created connection's `publicId` out of the list, ask this route for a
+ * state naming it, and authorize their own GitHub account into the callback's
+ * `conn` branch — which:
+ *
+ *   - repoints `source_connections.oauth_account_id` at whichever GitHub
+ *     account authorized the callback, unconditionally, so every later
+ *     `/installations` and `/repositories` read for that connection resolves
+ *     THEIR token;
+ *   - overwrites `deliveryConfig.installationId` with any installation that
+ *     account reaches (`installationClaimVerified` proves reachability BY THE
+ *     AUTHORIZING USER, which is exactly what an attacker has), and that id is
+ *     what `resolveWorkspaceGithubInstallation` hands to
+ *     `list_installation_repositories` / `bind_main_repository`, which mint a
+ *     token with the platform App's private key;
+ *   - resets `status` to `pending_setup`, taking a live connection out of
+ *     service.
+ *
+ * None of that is a read. Membership is not the bar for it.
+ */
+const CONNECTION_SETUP_ROLES: OrgRoleRequirement = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+};
+
+/**
+ * Refuse to mint a signed install state for anyone who does not hold the roles
+ * the write on the other side of it admits.
  *
  * Mint time is the enforceable point. The callback is a public OAuth redirect
  * with no session guarantee — that is exactly why it writes no `created_by_id`
@@ -323,24 +361,66 @@ const SETTINGS_CONNECT_ROLES = ["Owner", "Admin"] as const;
  * when they ask for the URL. `assertOrgRole` throws `HandlerError
  * { code: "forbidden" }`, which the API's error middleware maps to 403.
  *
- * An API-key caller has no `userId` and is refused as `no_principal`. That is
- * the intended answer and not an oversight: a key identifies no human, and
- * every capability on the other side of this flow requires one.
+ * A caller with no `userId` is refused as `no_principal`. That is the intended
+ * answer and not an oversight: every capability on the other side of this flow
+ * requires a human. It does not refuse the CLI, which is a real caller of the
+ * connection leg (`oxagen init` creates the connection and then asks for its
+ * auth URL): `ApiKeyResult.userId` carries the key's creator for a CLI session
+ * key, so the gate resolves that person's roles. A key that names no creator —
+ * every other kind — is the one this turns away.
  *
  * Scoped by hand because this route makes no `invoke()` call, so nothing else
  * has opened a tenant scope for the role lookup to read in.
  */
-async function assertMaySettingsConnect(
+async function assertMayMintInstallState(
   orgId: string,
   workspaceId: string,
   userId: string | null,
+  required: OrgRoleRequirement,
 ): Promise<void> {
   await runInTenantScope({ orgId, workspaceId }, () =>
-    assertOrgRole(
-      { orgId, workspaceId, userId },
-      { org: [...SETTINGS_CONNECT_ROLES] },
+    assertOrgRole({ orgId, workspaceId, userId }, required),
+  );
+}
+
+/**
+ * Whether `connectionPublicId` names a live `source_connection` of THIS org and
+ * workspace.
+ *
+ * A state is a signed, ten-minute bearer of the connection it names, so the
+ * name is checked before it is signed rather than after it comes back. The
+ * callback fences the same lookup and 404s an unresolvable id, which stops the
+ * write; it does not stop the state existing, and a signed state for a
+ * connection that does not resolve is a credential for nothing that still reads
+ * as one. Refusing at mint keeps the two answers identical and moves the
+ * failure to the moment a person is on the other end of it.
+ *
+ * Read inside the tenant scope so RLS bounds it to this org, with the org and
+ * workspace written out as well — the same shape `resolveConnectionAccessToken`
+ * and the callback both use.
+ */
+async function connectionExistsInScope(
+  orgId: string,
+  workspaceId: string,
+  connectionPublicId: string,
+): Promise<boolean> {
+  const rows = await runInTenantScope({ orgId, workspaceId }, () =>
+    withTenantDb((tx) =>
+      tx
+        .select({ id: schema.sourceConnections.id })
+        .from(schema.sourceConnections)
+        .where(
+          and(
+            eq(schema.sourceConnections.publicId, connectionPublicId),
+            eq(schema.sourceConnections.orgId, orgId),
+            eq(schema.sourceConnections.workspaceId, workspaceId),
+            isNull(schema.sourceConnections.deletedAt),
+          ),
+        )
+        .limit(1),
     ),
   );
+  return rows.length > 0;
 }
 
 // ── GET /connections/github/auth-url ─────────────────────────────────────────
@@ -391,26 +471,46 @@ githubOauthRoute.get("/auth-url", async (c) => {
     );
   }
 
-  // Gate on what the state can DO, not on the label the caller typed.
+  // EVERY state this route mints is gated. Which roles, by what the state can
+  // DO — never by the label the caller typed.
   //
   // `returnTo` is a free query parameter and the callback does not dispatch on
-  // it: it picks the write path from the RESOLVED CONNECTION. A state naming no
-  // `connectionId` reaches `attachVerifiedSettingsInstallation` /
-  // `resolveSettingsInstallationFromUser` — the settings write, onto the
-  // workspace's authoritative GitHub connection — whatever `returnTo` says.
-  // `returnTo` only decides which page the redirect lands on at the end.
+  // it: it picks the write path from the RESOLVED CONNECTION, and `returnTo`
+  // only decides which page the redirect lands on at the end. So it appears in
+  // neither predicate below. It appeared in two earlier ones and both were
+  // walked around by asking for the other word.
   //
-  // So a null `connectionId` is the predicate, for every `returnTo`. Gating on
-  // `returnTo === "settings"` alone closed nothing: `?mode=identity&returnTo=sources`
-  // with no `connectionId` asked for the same state and skipped the check.
+  //   - No `connectionId` → the callback reaches
+  //     `attachVerifiedSettingsInstallation` / `resolveSettingsInstallationFromUser`,
+  //     the settings write onto the workspace's authoritative GitHub
+  //     connection → `SETTINGS_CONNECT_ROLES`.
+  //   - A `connectionId` → the callback's `conn` branch, which repoints that
+  //     connection's OAuth account, its installation id and its status →
+  //     `CONNECTION_SETUP_ROLES`. See that constant for why membership was
+  //     never the bar for it.
   //
-  // `returnTo === "settings"` stays in the predicate as well. It is redundant
-  // for the states the app mints (a settings connect carries no connectionId),
-  // but the union is the safe direction: it can only refuse more, never less,
-  // and the legacy leg keeps exactly the authorization it has today —
-  // `returnTo=sources` WITH a connectionId is untouched.
-  if (connectionId === null || returnTo === "settings") {
-    await assertMaySettingsConnect(orgId, workspaceId, c.get("userId") ?? null);
+  // A named connection is then resolved before it is signed into anything: a
+  // state is a ten-minute bearer of the connection it names, so an id that does
+  // not resolve in this org and workspace is refused here rather than carried
+  // to GitHub and refused on the way back.
+  const userId = c.get("userId") ?? null;
+  if (connectionId === null) {
+    await assertMayMintInstallState(
+      orgId,
+      workspaceId,
+      userId,
+      SETTINGS_CONNECT_ROLES,
+    );
+  } else {
+    await assertMayMintInstallState(
+      orgId,
+      workspaceId,
+      userId,
+      CONNECTION_SETUP_ROLES,
+    );
+    if (!(await connectionExistsInScope(orgId, workspaceId, connectionId))) {
+      return c.json({ error: "Connection not found" }, 404);
+    }
   }
 
   const statePayload = { orgId, workspaceId, connectionId, returnTo };
@@ -750,7 +850,12 @@ githubOauthRoute.get("/status", async (c) => {
   // /auth-url?returnTo=settings and takes the same gate. Refusing the whole
   // response rather than blanking the two URLs keeps one rule with one shape:
   // a settings-scoped signed state is an Owner/Admin thing to hold.
-  await assertMaySettingsConnect(orgId, workspaceId, c.get("userId") ?? null);
+  await assertMayMintInstallState(
+    orgId,
+    workspaceId,
+    c.get("userId") ?? null,
+    SETTINGS_CONNECT_ROLES,
+  );
 
   const stateArgs = {
     orgId,

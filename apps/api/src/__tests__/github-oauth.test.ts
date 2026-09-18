@@ -202,6 +202,21 @@ const API_URL = "https://api.test.oxagen.ai";
 
 const APP_SLUG = "oxagen-test";
 
+/**
+ * The two role requirements `/auth-url` and `/status` assert, spelled out here
+ * so a test can say WHICH one a leg asked for rather than only that it asked.
+ *
+ * `SETTINGS_REQUIREMENT` is what `attach_github_installation`,
+ * `get_main_repository` and `bind_main_repository` admit (org only — their
+ * contracts carry `workspace: {}`); `CONNECTION_REQUIREMENT` is what
+ * `create_connection` and `delete_connection` admit.
+ */
+const SETTINGS_REQUIREMENT = { org: ["Owner", "Admin"] } as const;
+const CONNECTION_REQUIREMENT = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+} as const;
+
 const DEFAULT_ENV = {
   GITHUB_APP_CLIENT_ID: CLIENT_ID,
   GITHUB_APP_CLIENT_SECRET: CLIENT_SECRET,
@@ -405,6 +420,15 @@ beforeEach(() => {
 // ── GET /connections/github/auth-url ──────────────────────────────────────────
 
 describe("GET /connections/github/auth-url", () => {
+  // The connection-named leg resolves the connection before it signs it into a
+  // state, so every `?connectionId=` case below needs one that resolves. The
+  // refusal of an id that does not has its own test, where it is the subject.
+  beforeEach(() => {
+    mocks.withTenantDb.mockImplementation((fn: Parameters<DbFn>[0]) =>
+      fn(makeTxChain([{ id: "conn-uuid-1" }]) as TxLike),
+    );
+  });
+
   it("works WITHOUT a connectionId (settings-level connect) and encodes a null connectionId", async () => {
     // The install lives in workspace settings (1 workspace = 1 app install),
     // so auth-url does not require a pre-created source_connection.
@@ -460,7 +484,7 @@ describe("GET /connections/github/auth-url", () => {
           orgId: TEST_ORG_ID,
           workspaceId: TEST_WORKSPACE_ID,
         }),
-        { org: ["Owner", "Admin"] },
+        SETTINGS_REQUIREMENT,
       );
     });
 
@@ -504,13 +528,15 @@ describe("GET /connections/github/auth-url", () => {
       expect(JSON.stringify(await res.json())).not.toContain("state=");
     });
 
-    it("leaves the legacy sources leg's authorization exactly as it was (negative)", async () => {
-      // A `sources` state names a pre-created connectionId, whose creation
-      // carries its own gate. Whether that leg should also assert a role is a
-      // separate question, and this change does not answer it.
-      const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
-      expect(res.status).toBe(200);
-      expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+    it("asks for the settings roles ONLY when the state names no connection", async () => {
+      // The two legs reach two different writes, so they take two different
+      // requirements. A state naming a connection must not be answered with
+      // the settings one.
+      await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
+      expect(mocks.assertOrgRole).not.toHaveBeenCalledWith(
+        expect.anything(),
+        SETTINGS_REQUIREMENT,
+      );
     });
   });
 
@@ -580,23 +606,160 @@ describe("GET /connections/github/auth-url", () => {
           orgId: TEST_ORG_ID,
           workspaceId: TEST_WORKSPACE_ID,
         }),
-        { org: ["Owner", "Admin"] },
+        SETTINGS_REQUIREMENT,
+      );
+    });
+  });
+
+  /**
+   * The LEGACY IN-WIZARD leg is gated too (#3233 review, P1 — the third pass at
+   * this route, and the first to cover this leg).
+   *
+   * Two earlier gates spared `returnTo=sources` WITH a `connectionId`, each
+   * time on the reasoning that the leg "keeps the authorization it already
+   * has". It had none: the mounted middleware establishes workspace MEMBERSHIP
+   * and nothing more, and `list_connections` admits a workspace Member, so a
+   * Member could read an Owner-created connection's publicId and ask for a
+   * state naming it.
+   *
+   * What that state buys, in the callback's `conn` branch: the connection's
+   * `oauth_account_id` is repointed at whoever authorized the callback
+   * (unconditional), its `deliveryConfig.installationId` is replaced with any
+   * installation that account reaches, and its `status` is reset to
+   * `pending_setup`. The installation id is what the platform App mints tokens
+   * against. So the gate is `create_connection`'s own pair — org Owner/Admin,
+   * or workspace Owner — and the route and the capability now give one answer.
+   */
+  describe("the leg that NAMES a connection takes the connection-setup roles", () => {
+    const forbidden = () =>
+      new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+        message:
+          "Requires one of the org roles Owner, Admin or workspace roles Owner",
+      });
+
+    const NAMED_CONNECTION_QUERIES = [
+      "connectionId=con_ABC",
+      "connectionId=con_ABC&returnTo=sources",
+      "connectionId=con_ABC&mode=identity",
+      "connectionId=con_ABC&returnTo=sources&mode=identity",
+    ] as const;
+
+    for (const query of NAMED_CONNECTION_QUERIES) {
+      it(`refuses a member asking with ${query}, and mints no state`, async () => {
+        mocks.assertOrgRole.mockRejectedValueOnce(forbidden());
+        const res = await authGet(`${BASE}/auth-url?${query}`);
+        expect(res.status).toBe(403);
+        const body = (await res.json()) as { error?: { code?: string } };
+        expect(body.error?.code).toBe("forbidden");
+        // Nothing that could be carried to GitHub came back.
+        expect(JSON.stringify(body)).not.toContain("github.com");
+      });
+    }
+
+    it("asks for exactly what create_connection admits, for this org and workspace", async () => {
+      await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
+      expect(mocks.assertOrgRole).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orgId: TEST_ORG_ID,
+          workspaceId: TEST_WORKSPACE_ID,
+        }),
+        CONNECTION_REQUIREMENT,
       );
     });
 
-    it("still does not gate a sources state that NAMES a connection", async () => {
-      // The genuine legacy wizard leg, unchanged: the connectionId is what the
-      // callback dispatches on, so this state cannot reach the settings write.
-      for (const query of [
-        "connectionId=con_ABC",
-        "connectionId=con_ABC&returnTo=sources",
-        "connectionId=con_ABC&mode=identity",
-      ]) {
-        mocks.assertOrgRole.mockClear();
-        const res = await authGet(`${BASE}/auth-url?${query}`);
+    for (const role of ["Owner", "Admin"] as const) {
+      it(`mints a state for an org ${role}`, async () => {
+        mocks.assertOrgRole.mockResolvedValueOnce(role);
+        const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
         expect(res.status).toBe(200);
-        expect(mocks.assertOrgRole).not.toHaveBeenCalled();
+        const body = (await res.json()) as { authUrl: string };
+        expect(new URL(body.authUrl).searchParams.get("state")).not.toBeNull();
+      });
+    }
+
+    it("mints a state for a workspace Owner", async () => {
+      // `assertOrgRole` answers with the role that satisfied it, and the
+      // workspace leg is the one `create_connection` names; the route must not
+      // be tighter than the capability or the connection's own creator cannot
+      // finish connecting it.
+      mocks.assertOrgRole.mockResolvedValueOnce("Owner");
+      const res = await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
+      expect(res.status).toBe(200);
+      expect(mocks.assertOrgRole).toHaveBeenCalledWith(expect.anything(), {
+        org: ["Owner", "Admin"],
+        workspace: ["Owner"],
+      });
+    });
+
+    it("refuses a caller with no signed-in user at all", async () => {
+      mocks.assertOrgRole.mockRejectedValueOnce(
+        new HandlerError({
+          code: "forbidden",
+          reason: "no_principal",
+          message: "No signed-in user on the request",
+        }),
+      );
+      expect(
+        (await authGet(`${BASE}/auth-url?connectionId=con_ABC`)).status,
+      ).toBe(403);
+    });
+
+    it("checks the role BEFORE it looks the connection up", async () => {
+      // An unauthorized caller learns nothing about which connections exist,
+      // and no work is done on their behalf.
+      mocks.assertOrgRole.mockRejectedValueOnce(forbidden());
+      await authGet(`${BASE}/auth-url?connectionId=con_ABC`);
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * A named connection is resolved before it is signed into a state.
+   *
+   * The callback fences the same lookup and 404s an id that does not resolve,
+   * so the WRITE was already safe. What was not: a validly signed, ten-minute
+   * bearer naming a connection of another workspace, or a deleted one, or none
+   * at all, handed out to a caller and carried to GitHub before anything
+   * refused it.
+   */
+  describe("the named connection must resolve in this org and workspace", () => {
+    beforeEach(() => {
+      mocks.withTenantDb.mockImplementation((fn: Parameters<DbFn>[0]) =>
+        fn(makeTxChain([]) as TxLike),
+      );
+    });
+
+    it("refuses a connectionId that resolves to nothing, and mints no state", async () => {
+      const res = await authGet(`${BASE}/auth-url?connectionId=con_NOPE`);
+      expect(res.status).toBe(404);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toBe("Connection not found");
+      expect(JSON.stringify(body)).not.toContain("github.com");
+    });
+
+    it("refuses it on every returnTo and mode the caller can type", async () => {
+      for (const query of [
+        "connectionId=con_NOPE&returnTo=sources",
+        "connectionId=con_NOPE&returnTo=settings",
+        "connectionId=con_NOPE&mode=identity",
+      ]) {
+        const res = await authGet(`${BASE}/auth-url?${query}`);
+        expect(res.status).toBe(404);
       }
+    });
+
+    it("fences the lookup on the publicId, this org and this workspace", async () => {
+      const { tx, captured } = makeCapturingTx([]);
+      mocks.withTenantDb.mockImplementation((fn: Parameters<DbFn>[0]) =>
+        fn(tx),
+      );
+      await authGet(`${BASE}/auth-url?connectionId=con_FENCED`);
+      const params = boundParams(captured.selectWhere);
+      expect(params).toContain("con_FENCED");
+      expect(params).toContain(TEST_ORG_ID);
+      expect(params).toContain(TEST_WORKSPACE_ID);
     });
   });
 
