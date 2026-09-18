@@ -23,8 +23,8 @@ const Ratio = z.number().min(0).max(1);
  * redacted bytes; `digest_only` kept the digest and nothing else, and the page
  * says so rather than showing an empty body.
  */
-export const FrameFidelity = z.enum(["full", "digest_only"]);
-export type FrameFidelity = z.infer<typeof FrameFidelity>;
+const FrameFidelity = z.enum(["full", "digest_only"]);
+type FrameFidelity = z.infer<typeof FrameFidelity>;
 
 /** One removal the redactor made before the body was written (§13.5). */
 const FrameRedaction = z.object({
@@ -159,13 +159,13 @@ export const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
 export type TranscriptZoom = z.infer<typeof TranscriptZoom>;
 
-export const TranscriptEntryKind = z.enum([
+const TranscriptEntryKind = z.enum([
   "turn",
   "model_call",
   "tool_call",
   "frame",
 ]);
-export type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
+type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
 
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */

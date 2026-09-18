@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import type { ReplayGrade } from "@/data/contracts/runs";
 
 /** Weakest first, so a caller can read the ladder's rank off the array. */
-export const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
+const REPLAY_GRADES = ["inspect", "view", "fork", "retry"] as const;
 
 export function ReplayGradeBadge({ grade }: { grade: ReplayGrade }) {
   const t = useTranslations("ui.replayGrade");

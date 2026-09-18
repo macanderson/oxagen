@@ -7,7 +7,7 @@
 import { useFormatter, useTranslations } from "next-intl";
 import type { RunSummary } from "@/data/contracts/runs";
 
-export function GeneratedLabel() {
+function GeneratedLabel() {
   const t = useTranslations("ui.generated");
   return (
     <span className="inline-flex items-center rounded-sm bg-muted px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
