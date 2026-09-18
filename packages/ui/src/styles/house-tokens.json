@@ -426,13 +426,19 @@
     "oxagen": {
       "text": "oxagen",
       "accent": "x",
-      "box": [453.868, 93.246],
+      "box": [
+        453.868,
+        93.246
+      ],
       "baseline": 66.915
     },
     "stella": {
       "text": "stella*",
       "accent": "*",
-      "box": [405.544, 94.003],
+      "box": [
+        405.544,
+        94.003
+      ],
       "baseline": 92.16
     }
   }
