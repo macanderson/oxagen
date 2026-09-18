@@ -3436,7 +3436,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8a963e61b42efd40d6081e31b16f33376c5aa64cedf5af9897b6efb0cb01fb9b",
+  "contentHash": "7b0a46757babef206ea07e211c28caccbc20c267296485c432df19529ee0699c",
   "domains": [
     {
       "name": "agent",
@@ -8029,6 +8029,30 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "force",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "constraint_effect",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "statement",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
