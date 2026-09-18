@@ -31,15 +31,23 @@ const state: {
   // IDs of credit_lots rows that were updated (excluding credit_balances updates)
   lotUpdateIds: string[];
   balanceUpdateCount: number;
-  /** org_billing_settings.meter_carry_micro_credits — the sub-credit carry. */
-  carryMicroCredits: bigint;
+  /**
+   * org_billing_settings.meter_carry_micro_credits_by_reason — the sub-credit
+   * carry, one bucket per `credit_ledger.reason`.
+   */
+  carryByReason: Record<string, number>;
 } = {
   lots: [],
   ledgerInserts: [],
   lotUpdateIds: [],
   balanceUpdateCount: 0,
-  carryMicroCredits: 0n,
+  carryByReason: {},
 };
+
+/** The micro-credits banked against one reason, as the column stores them. */
+function carryFor(reason: string): bigint {
+  return BigInt(state.carryByReason[reason] ?? 0);
+}
 
 // ---------------------------------------------------------------------------
 // DB mock
@@ -57,7 +65,7 @@ const SCHEMA = {
   creditBalances: { orgId: "cb.orgId", balanceCents: "cb.balanceCents" },
   orgBillingSettings: {
     orgId: "obs.orgId",
-    meterCarryMicroCredits: "obs.meterCarryMicroCredits",
+    meterCarryMicroCreditsByReason: "obs.meterCarryMicroCreditsByReason",
   },
 } as const;
 
@@ -94,10 +102,11 @@ function makeTx() {
               const lotId = (cond?._eq?.[1] as string) ?? "unknown";
               state.lotUpdateIds.push(lotId);
             } else if (isSettings) {
-              // The carry write-back: only the remainder stays banked.
-              state.carryMicroCredits = fields[
-                "meterCarryMicroCredits"
-              ] as bigint;
+              // The carry write-back: only this reason's remainder stays banked,
+              // and the other reasons' buckets ride along untouched.
+              state.carryByReason = fields[
+                "meterCarryMicroCreditsByReason"
+              ] as Record<string, number>;
             } else {
               state.balanceUpdateCount++;
             }
@@ -107,20 +116,18 @@ function makeTx() {
       };
     }),
 
-    // INSERT — credit_ledger, or the org_billing_settings carry upsert, which
-    // accumulates and hands back the running total the way ON CONFLICT DO
-    // UPDATE … RETURNING does.
+    // INSERT — credit_ledger, or the org_billing_settings upsert that locks the
+    // row and hands back the stored carry map the way ON CONFLICT DO UPDATE …
+    // RETURNING does. A copy, so a caller that spreads it cannot mutate the
+    // stored row without going through the UPDATE.
     insert: vi.fn((table: unknown) => {
       if (table === SCHEMA.orgBillingSettings) {
         return {
-          values: vi.fn((v: Record<string, unknown>) => ({
+          values: vi.fn(() => ({
             onConflictDoUpdate: vi.fn(() => ({
-              returning: vi.fn(async () => {
-                state.carryMicroCredits += v[
-                  "meterCarryMicroCredits"
-                ] as bigint;
-                return [{ total: state.carryMicroCredits }];
-              }),
+              returning: vi.fn(async () => [
+                { carryByReason: { ...state.carryByReason } },
+              ]),
             })),
           })),
         };
@@ -191,7 +198,7 @@ describe("consumeCredits — lots model", () => {
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
     state.balanceUpdateCount = 0;
-    state.carryMicroCredits = 0n;
+    state.carryByReason = {};
   });
 
   // ── basic debit ──────────────────────────────────────────────────────────
@@ -394,7 +401,7 @@ describe("consumeCredits — sub-credit carry", () => {
     state.ledgerInserts = [];
     state.lotUpdateIds = [];
     state.balanceUpdateCount = 0;
-    state.carryMicroCredits = 0n;
+    state.carryByReason = {};
   });
 
   it("charges nothing for a call worth a fraction of a credit, and banks the fraction", async () => {
@@ -431,9 +438,9 @@ describe("consumeCredits — sub-credit carry", () => {
 
     const owedMicro = EMBEDDING_MICRO * 740n;
     expect(charged).toBe(owedMicro / 1_000_000n);
-    expect(state.carryMicroCredits).toBe(owedMicro % 1_000_000n);
+    expect(carryFor("consume_execution")).toBe(owedMicro % 1_000_000n);
     // The carry never holds a whole credit — that is what makes it exact.
-    expect(state.carryMicroCredits).toBeLessThan(1_000_000n);
+    expect(carryFor("consume_execution")).toBeLessThan(1_000_000n);
   });
 
   it("prices an ingestion pass at its cost, not at one credit per chunk", async () => {
@@ -465,6 +472,114 @@ describe("consumeCredits — sub-credit carry", () => {
     expect(r.chargedCents).toBe(20n);
     // A whole-credit caller does not carry.
     expect(r.carryMicroCents).toBe(0n);
-    expect(state.carryMicroCredits).toBe(0n);
+    expect(carryFor("consume_execution")).toBe(0n);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The carry is partitioned by billing reason
+// ---------------------------------------------------------------------------
+
+describe("consumeCredits — carry is partitioned by reason", () => {
+  /** 0.9 of a credit, and 0.1 of a credit, in micro-credits. */
+  const NINE_TENTHS = 900_000n;
+  const ONE_TENTH = 100_000n;
+
+  beforeEach(() => {
+    state.lots = [];
+    state.ledgerInserts = [];
+    state.lotUpdateIds = [];
+    state.balanceUpdateCount = 0;
+    state.carryByReason = {};
+  });
+
+  it("does not bill an embedding fraction as an assistant turn", async () => {
+    // The exact case that made a pooled carry wrong. consume_embedding carries
+    // the solved blended markup; consume_assistant_tokens bills at exactly the
+    // platform key's cost (ADR-053 §3, amended 2026-09-18). A single pooled
+    // counter reached one credit on the assistant's 0.1 and wrote the whole
+    // credit as consume_assistant_tokens — 0.9 of it embedding margin, on a line
+    // that is supposed to carry none, and counted against the assistant cap.
+    state.lots = [makeLot("lot-1", 1000n)];
+
+    const embedding = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: NINE_TENTHS,
+      reason: "consume_embedding",
+    });
+    const assistant = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: ONE_TENTH,
+      reason: "consume_assistant_tokens",
+    });
+
+    // Neither reason reached a whole credit on its own, so nothing is debited
+    // and no ledger row is written under either name.
+    expect(embedding.chargedCents).toBe(0n);
+    expect(assistant.chargedCents).toBe(0n);
+    expect(state.ledgerInserts).toHaveLength(0);
+
+    // Each fraction is still banked, under the reason that accrued it.
+    expect(carryFor("consume_embedding")).toBe(NINE_TENTHS);
+    expect(carryFor("consume_assistant_tokens")).toBe(ONE_TENTH);
+  });
+
+  it("debits a whole credit under the reason whose own fractions reached it", async () => {
+    state.lots = [makeLot("lot-1", 1000n)];
+
+    // Embedding gets to 1.2 credits on its own; the assistant stays at 0.1.
+    await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: NINE_TENTHS,
+      reason: "consume_embedding",
+    });
+    await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: ONE_TENTH,
+      reason: "consume_assistant_tokens",
+    });
+    const crossing = await consumeCredits({
+      orgId: "org-1",
+      requestedMicroCents: 300_000n,
+      reason: "consume_embedding",
+    });
+
+    expect(crossing.chargedCents).toBe(1n);
+    expect(state.ledgerInserts).toHaveLength(1);
+    expect(state.ledgerInserts[0]!.reason).toBe("consume_embedding");
+    expect(state.ledgerInserts[0]!.deltaCents).toBe(-1n);
+    // 0.2 left on embedding; the assistant's 0.1 was never touched.
+    expect(carryFor("consume_embedding")).toBe(200_000n);
+    expect(carryFor("consume_assistant_tokens")).toBe(ONE_TENTH);
+  });
+
+  it("keeps each reason exact over a long interleaved sequence", async () => {
+    state.lots = [makeLot("lot-1", 1000n)];
+
+    // Ten of each, alternating, so a pooled counter would cross the boundary on
+    // whichever call happened to land there.
+    for (let i = 0; i < 10; i++) {
+      await consumeCredits({
+        orgId: "org-1",
+        requestedMicroCents: NINE_TENTHS,
+        reason: "consume_embedding",
+      });
+      await consumeCredits({
+        orgId: "org-1",
+        requestedMicroCents: ONE_TENTH,
+        reason: "consume_assistant_tokens",
+      });
+    }
+
+    const byReason = (reason: string): bigint =>
+      state.ledgerInserts
+        .filter((row) => row.reason === reason)
+        .reduce((acc, row) => acc + (row.deltaCents as bigint), 0n);
+
+    // 10 × 0.9 = 9 credits of embedding, 10 × 0.1 = 1 credit of assistant.
+    expect(byReason("consume_embedding")).toBe(-9n);
+    expect(byReason("consume_assistant_tokens")).toBe(-1n);
+    expect(carryFor("consume_embedding")).toBe(0n);
+    expect(carryFor("consume_assistant_tokens")).toBe(0n);
   });
 });

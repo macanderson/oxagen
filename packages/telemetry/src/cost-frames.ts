@@ -21,6 +21,10 @@
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
  */
+import {
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  LLM_CALL_TOKEN_SOURCES,
+} from "@oxagen/tacho";
 import { breakerEnvConfig } from "./breaker-config";
 import { getBreaker } from "./circuit-breaker";
 import { clickhouse } from "./clickhouse";
@@ -55,7 +59,14 @@ export type FrameRunRef =
 
 const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
 
-const TACHO_TOKEN_SOURCES = ["otel_log", "collector", "hook"];
+/**
+ * The rollup prices each model call once, by the rule the ingest fold uses
+ * (`countsLlmCallUsage` in @oxagen/tacho): a token-bearing source, transcript
+ * included, and no duplicate stamp. The host stamps a later sighting of a call
+ * it already sealed from another source, and a transcript continuation block,
+ * with `oxagen.llm_call_duplicate_of`.
+ */
+const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -132,6 +143,7 @@ export async function readModelCallFrames(args: {
         AND root_session_uuid = {rootSessionUuid:UUID}
         AND kind = 'llm_call'
         AND source IN {sources:Array(String)}
+        AND attrs[{duplicateAttr:String}] = ''
         AND model != ''
       ORDER BY ts, seq
     `,
@@ -139,6 +151,7 @@ export async function readModelCallFrames(args: {
         orgId: args.orgId,
         rootSessionUuid: run.rootSessionUuid,
         sources: TACHO_TOKEN_SOURCES,
+        duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
       },
       format: "JSONEachRow",
     }),

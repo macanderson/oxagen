@@ -3,17 +3,18 @@ import { INK, lineTones } from "./theme.mjs";
 
 describe("INK", () => {
   it("is the house ink palette, byte for byte", () => {
-    expect(INK.ground).toBe("#10100F");
-    expect(INK.panel).toBe("#181715");
-    expect(INK.line).toBe("#292722");
-    expect(INK.text).toBe("#F2EEE5");
-    expect(INK.gold).toBe("#D6962C");
+    expect(INK.ground).toBe("#09090B");
+    expect(INK.panel).toBe("#18181B");
+    expect(INK.line).toBe("#27272A");
+    expect(INK.text).toBe("#FFFFFF");
+    expect(INK.gold).toBe("#D4AF37");
   });
 
   it("has no paper surface: every generated image is on ink", () => {
-    // paper (#F2EEE5) is the text tone here, never a ground or a panel
-    expect(INK.ground).not.toBe("#F2EEE5");
-    expect(Object.values(INK)).not.toContain("#F8F5EE");
+    // white (#FFFFFF) is the text tone here, never a ground or a surface
+    for (const surface of [INK.ground, INK.panel, INK.raised]) {
+      expect(surface).not.toBe("#FFFFFF");
+    }
     expect(Object.isFrozen(INK)).toBe(true);
   });
 

@@ -8,6 +8,9 @@
 | **Supersedes** | The `oxagen-platform` and `oxagen` codebases as products. Carries forward the designs named in §16. |
 | **Builds on** | Context Graph Protocol `contextgraph/1.0` and the `contextgraph/lifecycle/1.0-draft` profile (repo at `origin/main`, ADRs 0001 to 0018). Stella's context-record and Context PR corpus. Oxagen ADR-024, 025, 042, 043, 051, 052, 053 and the current wrapper spec (in the repo today under `docs/specs/tacho/`, renamed here). |
 | **Amended** | 2026-09-13, by Oxagen ADR-055 (`docs/adr/ADR-055-gau-buckets-and-contracted-rates.md`) and `apps/app/ARCHITECTURE.md` §3.9: the billing model. Blocks marked **Amendment 2026-09-13 (ADR-055)** supersede the text they follow in §0 row 13, §12.1, A.8, A.11 and Appendix E. (A.11 was A.10 before ADR-090 inserted the `skills` schema.) |
+| **Amended 2026-09-18** | By the steering, graph and gateway review of 2026-09-18, approved in full by the maintainer on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md`). One assembler with a manifest frame, two planes compiled twice, the gateway on loopback in `tachod`, the four-word tier ladder, the contained tier, skills as governed files under Steering, and the six-phase refactor path. Rewritten: §4.2, §7.1 to §7.3, §10.4, §12.5, and the §9 storage paragraph. New: §10.5 to §10.7, §13.6, §17.2 and §21. Corrected in place, where the text described something as present that is not built: §0 rows 6, 7 and 10, §1, §2.1, §3, §4.1, §4.5, §6.2, §6.8, §7.4, §7.5, §8.2, §9.1, §12.6, §14, §15, §17, §18 and Appendix D. Sections marked **Status of this section** describe a target and name the phase that delivers it. |
+| **Not built at 2026-09-18** | This specification is written in the present tense as a target. Read against oxagen `main` at `02278c913`, these things it names do not exist yet, wherever a section mentions them: the model proxy, base URL enrollment, run tokens, budgets enforced at a proxy, any sandbox, the witness runner, a skills package or skills tables, `:Record` nodes in the graph, and any delivery of a `may` or `info` record to a wrapped agent. §7.1, §10.4 and §17.2 say what is built and which phase delivers the rest. Phase 0 merged the same day (oxagen PR #3289, `c9db463e9`, ADR-091): active `must` and `should` records reach a wrapped agent through the bundle's `context.system`. Phase 4 is in build (branches `gateway-model-proxy` and `desktop-install-hardening`) and is not on `main`. The ADRs are ADR-091 on `main`, and ADR-093 to ADR-097 in oxagen draft PR #3294. |
+| **Canonical copy** | The canonical copy of this specification is `docs/mission-control-spec.md` in https://github.com/macanderson/roadmap, the copy the mockups render and the one that carries the maintainer decisions of 2026-09-14 and 2026-09-15. This file is the copy carried in the oxagen monorepo for build agents. No build step joins the two, so a change is made in both by hand, in the same change set. The sections named in the row above are identical in both copies. Still diverged, and to be reconciled toward the canonical copy: §0 rows 1, 4, 5, 8, 11 and 13 to 16, §2, §4.4, §5.3, §6.12, §6.13, §8, §11, §12.1 to §12.4, §13, §14's page count, §19, §20 and Appendices A, B, E and F. This copy alone carries ADR-090 (the Skills tools and the `skills` tables) and the de-registered rule of §2.2. |
 
 ---
 
@@ -22,11 +25,11 @@ This table lists every decision that shapes the rest of the document, in one pla
 | 3 | Postgres tenant isolation uses Row-Level Security (RLS). RLS is a database feature that filters every row by rules tied to settings on the current transaction. There is **no bypass setting**. System access uses a separate database role with its own policy. | §5.2 |
 | 4 | Neo4j isolation is **one database per organization**, and the engine enforces it. Workspace is a required property on the data, and a single graph service enforces that rule. | §5.3 |
 | 5 | Three stores, not four. Postgres holds the control ledger. Neo4j holds the knowledge graph and the run record, and it is the source of truth. Object storage with write-once retention holds frame bodies and the archive. Write-once means a stored object cannot be changed after it is written. ClickHouse is retired. | §4 |
-| 6 | Every wrapped agent passes through at least one of two gateway points where the agent connects to Oxagen: the **model proxy** and the **tool gateway**. Hooks and SDK adapters (the wrapper) add finer control. An SDK is a software development kit, the code library an agent is built with. Oxagen records the enforcement tier on every run, and the tier can never be over-stated. | §7 |
-| 7 | Intervention is a defined contract: pause, resume, steer, cancel, revoke, approve, and inject. The guarantees are stated for each gateway point. Halting works by revoking credentials, not by asking the agent to cooperate. | §7.4 |
+| 6 | Oxagen's connection to a wrapped agent is the **gateway**, which `tachod` (the daemon enrollment installs on the agent's machine) grows into: a hook adapter, a **loopback model proxy**, an **MCP aggregator** and a control channel. The proxy forwards prompt bodies to the vendor only: none is sent to Oxagen's servers, and the vendor credential stays on the machine. Oxagen records the enforcement tier on every run as one of four words, **observe, harness, gateway, contained**, computed from what was actually routed, and the tier can never be over-stated. Status 2026-09-18: the hook adapter and the control channel are built, and the tool gateway is registered only into Claude Desktop. The loopback proxy and the aggregator are Phase 4, which is in build and not on `main`, and the contained tier is Phase 5 (§17.2). | §7 |
+| 7 | Intervention is a defined contract: pause, resume, steer, cancel, revoke, approve, and inject. The guarantees are stated for each seam and each tier. At the `harness` tier a command is delivered at the next hook boundary, client-attested, on a tier that is fail-open against the person at the keyboard (§7.1). A halt that does not depend on the agent's machine cooperating needs the `gateway` tier, and only the `contained` tier earns the word "enforced" against the machine's operator. | §7.4 |
 | 8 | A run is a hash-chained sequence of **frames**. A hash is a short fingerprint computed from data. A hash chain links each frame to the one before it, so no frame can be altered without detection. A frame is the replay unit. Frame metadata and cost live in the graph. Frame bodies are content-addressed, encrypted blobs. Content-addressed means each body is stored under the hash of its own content. | §8 |
 | 9 | Agents learn by appending **context records** (the protocol's record kinds). They never learn by writing frames. Records are canonically hashed and countersigned. Canonical hashing puts a record in one standard form before hashing, so the same content always gives the same hash. Countersigned means a second party adds its own signature. | §9 |
-| 10 | A workspace links to one or more GitHub repositories. Exactly one of them is its **main repo**, bound at creation. The main repo is the place where the workspace's steering and configuration are managed in source control. Published steering and every agent definition live there under `.oxagen/`. Stella reads that folder natively through a symlink, a file system pointer to another path. Oxagen mirrors the same folder into each coding harness's own agent format in the same pull request. Linked repos may carry repository-scoped records of their own. A **Context PR** is a GitHub pull request (PR), a proposed change that others review before it is merged. Merge is the promotion event. Nothing steers until it is published. The graph is the system of record. Git is the system of control, which is GitOps: steering changes are managed through git. | §10 |
+| 10 | A workspace links to one or more GitHub repositories. Exactly one of them is its **main repo**, bound at creation. The main repo is the place where the workspace's steering and configuration are managed in source control. Published steering and every agent definition live there under `.oxagen/`. Stella reads that folder natively through a symlink, a file system pointer to another path. Oxagen mirrors the same folder into each coding harness's own agent format in the same pull request. Linked repos may carry repository-scoped records of their own. A **Context PR** is a GitHub pull request (PR), a proposed change that others review before it is merged. Merge is the promotion event. Nothing steers until it is published. Storage stays plural, with one writer per fact (§4.2). Git is the system of control, which is GitOps: steering changes are managed through git. One assembler decides what reaches an agent and records what it cut (§10.5). | §10 |
 | 11 | Oxagen infers ontologies from ingested sources. An ontology is the set of entity types and the relationships between them. Each ontology is proposed, reviewed, and activated as a versioned graph object. Entities carry provenance, a trace back to their source records. Linking a GitHub repo confirms its production branch, subscribes to every relevant event by webhook, imports its issues, and keeps a code graph of the production branch current on every push. A webhook is a call GitHub sends to Oxagen when an event happens. A manual sync is available, and there is no cron (a timer that runs jobs on a schedule). | §11 |
 | 12 | Oxagen governs the toolbelt. An agent sees only the tools it is granted, and it can search them when the belt is large. The agent holds no credentials at all. Every call passes one pipeline: validate, taint-check, decide (allow, approve, or deny, deterministically), broker a per-call credential, dispatch idempotently, validate output, sign a receipt. A taint-check looks for data marked as untrusted or sensitive. Deterministic means the same input always gives the same decision. Idempotent dispatch means a repeated call has the same effect as a single call. A tool's safety classification describes the tool. The customer's approval rules decide, with auto-approval conditions Oxagen can apply to skip the human. Any consequence the customer marks (money, data destruction, production changes, external communication, access changes) requires a human-granted mandate. The mandate sets limits over the tool's declared measures and keeps a ledger. Kill switches exist at every level. Policy is versioned and simulated against real history before activation. An adversarial suite proves the guarantees per release. | §6.5–6.13 |
 | 13 | Oxagen accounts customer spend per model call by normalized token class, including cache reads and writes. It attributes spend up the chain operator → agent → run → turn → step. It reports proven versus unproven spend with a productive ratio and ranked optimization findings. It reconciles spend to the cent against provider statements. Oxagen bills per run on a plan allowance and never marks up tokens. It reports governed actions and retained storage as secondary meters. **Amendment 2026-09-13 (ADR-055):** Oxagen bills governed action units (GAUs) from a monthly bucket on the subscription, sells more in unit quantities at the customer's contracted rate, and never marks up tokens; see §12.1. | §12 |
@@ -50,7 +53,7 @@ The wedge is narrow on purpose. A customer wraps the agents they already run (St
 
 Owned intelligence (training a model per customer on proven runs) is the phase-three business. Nothing in this spec builds it. Nothing in this spec makes it harder, because proven runs are stored in the shape a training set needs.
 
-**What this product is not.** It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evals harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evals harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is **skill resolution**: which skills a workspace's `.oxagen/skills.toml` lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is procedure written down — a file, in a repository, with a version and a digest. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call (ADR-090). The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut. Oxagen does have one **in-app agent**. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).
+**What this product is not.** It is not a coding-agent runtime, the system that runs an agent's code. It has no sandbox for agents, no file system, and no browser. A sandbox is an isolated space where code runs. It has no subagent fan-out, no skills engine, no evaluation harness, and no content generation. Subagent fan-out means one agent starting many helper agents. An evaluation harness is a test setup that scores agent output. No skills engine means Oxagen never runs a skill; the harness runs it. What Oxagen governs is **skill resolution**: which skills a workspace's `.oxagen/skills.toml` lets an agent find, which of them it may load, what that load cost, and what was held back and why. A skill is procedure written down: a file, in a repository, with a version and a digest. Resolution is the lookup that answers which of them an agent may see. That is the same cut as the toolbelt (§4.4), where Oxagen holds no credential and runs no tool and still decides every call (ADR-090). The one execution plane it operates is the witness runner (§8.5). An execution plane is the place where work runs. The witness runner runs proofs, never agents. ADR-043 already made that cut in the current repo. An ADR is an architecture decision record, a short written note of a design choice. This spec keeps that cut, with one sentence of revision approved on 2026-09-18: "Oxagen does not run turns, but it may contain the process that does. A launcher that confines a process is not an agent runtime." The contained tier (§7.2, Phase 5 of §17.2) launches an agent under an OS sandbox whose only egress is the gateway. It does not exist yet, and neither does the witness runner, which is built on the same launcher. Oxagen does have one **in-app agent**. It onboards a new organization (bind the repo, register the first agent, pick tools, set budgets). It helps configure the workspace afterwards. It answers questions over the fleet record and the graph. Its engine is Stella, running as a separate service over HTTP (ADR-053). HTTP is the standard web protocol. Its tools are agent tool contracts and nothing else (§4.4).
 
 ---
 
@@ -62,7 +65,8 @@ Owned intelligence (training a model per customer on proven runs) is the phase-t
 - **A free tier with the whole product in it, and one-click wrapping.** Every organization gets its first 1,000 runs each month free. Every governance feature is on for those runs (§12.1). Governance means the rules, approvals, and records that control what agents do. Wrapping Claude Code or Codex takes one click. That click runs a signed installer on macOS, Windows, or Linux (§7.2). Onboarding is three steps. The app does not open until an agent has talked to Oxagen (§4.4).
 - Organizations, workspaces, members, invitations, roles.
 - Agent identity, credentials, RBAC down to the tool version, and delegation ceilings. RBAC is role-based access control, where a role decides what each agent may do. A delegation ceiling means an agent can never do more than the person it acts for.
-- The gateway. It includes the model proxy (the path each model call travels through), the tool gateway, the hook and SDK adapters, and the control channel.
+- The gateway. `tachod` grows into it: the hook adapter, the loopback model proxy (the path each model call travels through, on the agent's own machine), the MCP aggregator and the tool gateway, and the control channel (§7.1). The hook adapter and the control channel are built. The rest is Phases 4 and 5 of §17.2.
+- One assembler for steering, `assembleSteering`, with its manifest frame, and the Steering hub that shows it (§10.5, §10.7). Phases 0 to 2 of §17.2.
 - Run recording, the frame chain (the ordered, linked sequence of frames in a run), checkpoints (saved points a run can be restored from), attestation (a signed statement that a record is what it claims to be), replay in two forms (render and fork), and bisect between two runs (narrowing down the step where two runs start to differ).
 - Cost ledger, price book, budgets, provider reconciliation (matching Oxagen's cost records against the provider's bill), and spend views.
 - Knowledge graph per organization. It includes the ontology engine (the ontology is the set of entity types and the relationships between them), three connectors (GitHub, Linear, Postgres), entity resolution (deciding when two source records describe the same entity), and provenance (the record of where each fact came from).
@@ -120,10 +124,15 @@ This document uses each name exactly as defined here.
 | **Frame** | One recorded event in a run. The frame is the replay unit. Each frame is hash-chained to the frame before it, meaning it stores a hash (a short fingerprint of data) of that earlier frame. A step produces one or more frames. A model call produces a request frame and a response frame. A tool call produces a requested frame and a result frame. A frame is distinct from a **context frame**. |
 | **Context frame** | The protocol's atomic retrieval unit (`ContextFrame`), meaning the smallest piece of evidence the system fetches. It is evidence served into a prompt. Each context frame is typed, has a budget, and carries provenance (a record of where the evidence came from). |
 | **Context record** | The protocol's immutable record (`ContextRecord`), one that cannot change once written. It holds what an agent or a person asserts, learns, proposes, or decides. There are twelve kinds. |
-| **Steering** | Published directive and knowledge records that reach an agent during a run. |
+| **Steering** | What the model reads: everything Oxagen puts into an agent's context. It is advisory, ranked, budgeted, and may be dropped. Every piece of it is a `SteeringItem` (§10.5). |
+| **Gating** | What the kernel refuses. It is deterministic, never budgeted, never ranked, and works when Neo4j is down. Steering and gating are two planes that never merge (§10.5). |
+| **Steering item** | The one item type everything that can steer is turned into (`SteeringItem`): a record, a skill description, a memory, an ontology note, a gate notice, or the workspace's additional instructions. It carries a `force` of `must`, `should`, `may` or `info`. |
+| **Assembler** | `assembleSteering(run, budget)`, the one function where everything competes for Oxagen's slice of the agent's context. It returns a stable prefix, a volatile selection, and a manifest of what was rendered and what was cut (§10.5). |
+| **Gate notice** | The one line every gate emits into steering, so the agent does not walk into a denial. |
+| **Gateway** | What `tachod` grows into: hook adapter, loopback model proxy, MCP aggregator, control channel (§7.1). |
 | **Context PR** | A pull request (PR, a proposed change submitted for review) on the workspace repository. It proposes a change to steering. |
 | **Governed action** | One top-level kernel call that passed IAM and the other gates, ran its handler, and wrote an audit record. The kernel is the system's core, a gate is a check a call must pass, and an audit record is a log entry of what happened. This is the billable unit (ADR-052). Invoices and the UI (user interface) show it as **action**. A governed action is something *Oxagen enforced*. A tool call is something *an agent did*. The two overlap only where an agent's tool call went through the tool gateway. A harness-native tool call under the harness tier is a tool call but not a governed action. Oxagen observed it but did not gate it. A denied tool call is recorded but is not a governed action. Denials are free. Some things are governed actions but are not the worker's tool calls. These include a human granting a role, a Context PR merge, a repo sync, an approval decision, and every call the in-app agent makes. |
-| **Enforcement tier** | What Oxagen could enforce on a run in practice. The tiers are `gateway`, `harness`, and `observe`. |
+| **Enforcement tier** | What was actually routed through Oxagen on a run. The ladder is four words: `observe`, `harness`, `gateway`, `contained` (§7.1). Only `contained` earns the word "enforced" against the machine's operator. |
 | **Replay grade** | The strongest thing a person can do with a run's recording. The grade comes from gaps in how complete the recording is. The grades are `inspect`, `view`, `fork`, and `retry`, ordered weakest first (§8.4). |
 | **Delivery mode** | The boundary where a steer (one steering message) or a message enters a run. The modes are `next_step` (the default), `interrupt`, and `turn_boundary` (§7.3). |
 | **Interrupt** | A steer that cuts the current step short instead of waiting for it to finish. It redirects a run. It does not stop one. Stopping is `pause`. |
@@ -142,10 +151,10 @@ This document uses each name exactly as defined here.
 
 ```
                     ┌──────────────────────────────────────────────────────┐
-  agents            │  GATEWAY (stateless, horizontally scaled)            │
+  agents            │  GATEWAY (tachod, on the agent's machine, loopback)  │
   ──────            │  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
   Stella ──────────▶│  │ model proxy  │  │ tool gateway │  │ control ch │  │
-  Claude Code ─────▶│  │ /v1/models/* │  │ MCP endpoint │  │ bundle,cmd │  │
+  Claude Code ─────▶│  │ (Phase 4)    │  │ MCP endpoint │  │ bundle,cmd │  │
   Agent SDK ───────▶│  └──────┬───────┘  └──────┬───────┘  └─────┬──────┘  │
   custom ──────────▶│         │  kernel.invoke() with IAM, budget, approval │
                     └─────────┼────────────────┼───────────────┼───────────┘
@@ -168,7 +177,8 @@ This document uses each name exactly as defined here.
                     └────────────────────────────────────────────────────┘
 ```
 
-- **Gateway.** The only path from an agent to a model or a tool. It is stateless, meaning it keeps no data of its own between requests. It reads policy bundles and budgets from Postgres through a short-lived cache. It writes frames to the recorder queue.
+- **Gateway.** `tachod`, the daemon on the agent's machine, grown into four parts: the hook adapter, the loopback model proxy, the MCP aggregator and the control channel (§7.1). It reads the signed policy bundle from the control channel and works from its cached copy offline. It sends frames, digests and usage up to the recorder. Prompt bodies go to the vendor, never to Oxagen's servers. It is the only path from an agent to a model or a tool at the `contained` tier, and one path among others below it. The hook adapter and the control channel are built. The proxy and the aggregator are Phase 4 (§17.2). The kernel behind the tool gateway runs on Oxagen's servers.
+- **Assembler.** `assembleSteering(run, budget)`, the one function that decides what Oxagen puts into an agent's context, and records what it cut (§10.5). Phase 1.
 - **Kernel.** One `invoke()` call runs the pipeline that exists today. The steps are: resolve the agent tool, validate the input, enter tenant scope (limit the call to one organization's data), make the IAM decision (IAM is identity and access management, the check of who may do what), which is always audited, admit the call against the budget, pass the approval gate, run the handler, validate the output, and write the audit record. The shape carries over unchanged. The count drops to about seventy agent tools.
 - **Recorder.** Consumes batches of frames and checks that each frame chain is intact. Writes frame nodes to Neo4j and frame bodies to object storage. Prices model frames and updates run rollups (summed totals per run).
 - **Reflector.** After a seal (the step that closes a run's record), it produces observation and memory records from the run.
@@ -178,31 +188,47 @@ This document uses each name exactly as defined here.
 - **Archiver.** Seals archive segments, compacts frame nodes older than the hot window (the recent period kept in the graph for fast queries), and enforces retention rules and holds.
 - **GitHub App.** Binds repositories, creates Context PRs, runs checks, handles merges, and re-indexes after changes.
 - **Engine.** `stella serve` running in its own container. The in-app agent service reaches it over HTTP (§4.4). It runs no model and no tool itself.
-- **Model layer.** The one path for every model call Oxagen makes on its own behalf (the in-app agent, reflector, promoter, and ontology engine). Calls route by tier through OpenRouter (§4.5), a service that forwards model calls to many vendors. Customer agents' model calls go through the model proxy, not this layer.
+- **Model layer.** The one path for every model call Oxagen makes on its own behalf (the in-app agent, reflector, promoter, and ontology engine). Calls route by tier through OpenRouter (§4.5), a service that forwards model calls to many vendors. Customer agents' model calls never touch this layer. They go to the customer's own vendor with the customer's own credential, through the gateway's loopback proxy once Phase 4 ships (§7.1).
 
-### 4.2 The three stores and what belongs where
+### 4.2 The stores and what belongs where
+
+> **Status of this section (2026-09-18).** This section carries the storage rule approved on 2026-09-18 (the steering, graph and gateway review of 2026-09-18, linked in this document's header; ADR-093 "One assembler decides what reaches the agent, and records what it cut"). The rule is in force now. Two parts of it are targets: the steering index with its `steering_drift` check arrives with the assembler in Phase 1, and the graph projection of steering items arrives in Phase 3 (§17.2). Lines marked **Today** describe oxagen `main` at `02278c913`.
+
+**The rule: storage stays plural, with one writer per fact. Only the assembler and its index are single.** Nothing is collapsed into Neo4j.
+
+"Single source" names three different things, and only two of them have to be single:
+
+| Thing | What it is | How many |
+|---|---|---|
+| **System of record** | Where a fact is authored. | Plural. Git for what is published. Postgres for what must be transactional or money-grade. The graph for lineage, evidence and entity links. Each fact has exactly one writer. |
+| **Index** | Where steering is queried at run time. | One, behind a port (§10.5). First on the Postgres record registry. It moves to the graph in Phase 3, with Postgres kept as the fallback behind the same port. |
+| **Assembler** | Where everything competes for Oxagen's slice of the agent's context. | One function, `assembleSteering(run, budget)` (§10.5). |
 
 | Store | Holds | Never holds |
 |---|---|---|
-| **Postgres** (shared plane, or dedicated for tenant data) | Identity, tenancy, IAM, the tool registry and its schemas, the price book, the cost ledger and its rollups, reconciliation, billing, budgets, approvals, intervention commands, archive manifests, control-plane audit events, connector sync state | Graph relationships, frame bodies, traces |
-| **Neo4j** (one database per organization) | Ontology versions, entities and relationships, source records, context records and their lineage, runs, attempts, frames (metadata, digests as content fingerprints, and cost), the steering index, provenance edges | Bytes larger than a few KB, money of record, credentials |
+| **Git** (the workspace's main repo and its linked repos) | What is published: steering records, skills, agent definitions, the workspace configuration, and the promotion ledger. Each change is approved through a pull request. | Traces, memories, proposals |
+| **Postgres** (shared plane, or dedicated for tenant data) | What must be transactional or money-grade (each change lands whole or not at all, and the amounts are exact): identity, tenancy, IAM, the tool registry and its schemas, decision rules and mandates, the price book, the cost ledger and its rollups, billing, budgets, approvals, intervention commands, archive manifests and control-plane audit events. The run record: runs, attempts, and frame metadata with digests and cost. The record registry: records, versions, the promotions ledger and proposals. The registry is the first steering index. | Frame bodies. The authored text of anything git publishes |
+| **The graph** (Neo4j, one database per organization) | Lineage, evidence and entity links: the ontology, entities and relationships with provenance, agent memory (`:AgentMemory`), and from Phase 3 the projection of every steering item as a `:Record` node with `ABOUT` edges to files, repositories and entities. | Money of record, credentials, anything a gate needs to decide, bytes larger than a few KB |
 | **Object storage** (write-once, per-org key) | Frame bodies (prompts, completions, tool input and output), archive segments, exports | Anything queried directly |
-| **GitHub repository** (per workspace) | Published steering records and the promotion ledger | Traces, memories, proposals |
 
-Rule: **the graph is the system of record, and git is the system of control.** The graph is the source of truth for everything the product explains: entities, the ontology's versions and provenance, runs, frames, records, and their whole lineage. Git is the source of truth for exactly one thing: what is published and active. That means steering records, agent definitions, and the ontology's active version, each approved through a pull request. Postgres holds what must be transactional and money-grade (each change lands whole or not at all, and the amounts are exact). Object storage holds raw bytes. A rollup in Postgres (per-run cost, daily spend by agent) is a derived index. It is labeled as such and can be rebuilt from the graph.
+Gating never depends on the graph. A rule, a mandate or a kill switch is decided from Postgres and the signed bundle, so it still decides when Neo4j is down (§10.5, the two planes).
 
 This is not the mirror problem (two copies that drift apart), because every fact has exactly one writer:
 
 | Fact | Written by | Read by | How the copy is kept honest |
 |---|---|---|---|
-| Published text of a record, an agent definition, or the active ontology | git, on merge | the graph indexes it by content hash (a short fingerprint computed from the text) at the merged commit | recompute the hash, and a mismatch is `steering_drift`, which blocks delivery |
-| A record's lineage, evidence, contradictions, promotion events, and effect | the graph | Mission Control and agents | never in git |
-| A proposal | the graph | delivered to git as a pull request | one direction only: graph to git |
-| Publication | git | flows to the graph on merge | one direction only: git to graph |
+| Published text of a record, a skill or an agent definition | git, on merge | the index stores it by content hash (a short fingerprint computed from the text) at the merged commit | recompute the hash. A mismatch is `steering_drift`, which blocks delivery of that item |
+| A record's registry row (`kind`, `force`, scope, status), its lineage, contradictions and promotion events | Postgres | the assembler and Mission Control | never in git |
+| A proposal | Postgres | delivered to git as a pull request | one direction only: registry to git |
+| Publication | git | flows to the registry on merge | one direction only: git to registry |
+| A steering item in the graph (Phase 3) | the projector, from the registry | the assembler's relevance stage | one direction only: registry to graph, verified by hash. On a mismatch, or with the graph off, the assembler reads the Postgres path |
+| A memory | the graph (`:AgentMemory`) | the assembler, through the memory adapter | not applicable: one copy |
+| A decision rule, a mandate, a kill switch | Postgres | the kernel. The assembler reads them only to write gate notices (§10.5) | not applicable: one copy |
+| A locked dod set | the harness, at lock | the cloud keeps a copy and the hidden checks | the digest. A mismatch is `LOCK_MISMATCH` (the dod spec) |
 
-Platform engineers call this pattern GitOps: the desired state lives in git, a controller reconciles the live system to it, and drift is detected and reported. Oxagen is the controller. Steering and definitions are the desired state. The graph and the wrapped agents are the live system.
+Platform engineers call this pattern GitOps: the desired state lives in git, a controller reconciles the live system to it, and drift is detected and reported. Oxagen is the controller. Steering, skills and definitions are the desired state. The registry, the index and the wrapped agents are the live system.
 
-ClickHouse is retired. Its two jobs, append-only trace rows and spend analytics, are now covered by frame nodes in the graph (for the hot window) plus Postgres rollups. The current `tacho_events` table, `token_usage`, and `tool_invocations` do not carry forward. The reason is the one already stated: one store of truth for the run record, with no mirror copy to keep in sync.
+**Today.** Records live in Postgres (`agent.context_records`, `packages/database/src/schema/agent.ts:1303`) with their versions, promotions ledger and proposals, mirrored in git as `.oxagen/rules/*.toml`. The graph holds no steering: neither `packages/ontology` nor `packages/ingestion` writes a `:Record` node. Memory is in the graph as `:AgentMemory` and reaches only the in-app agent (§10.4). The knowledge graph is off unless `NEO4J_URI` is set. ClickHouse is still in the tree. Retiring it is a target of this specification and is not part of the 2026-09-18 refactor path.
 
 ### 4.3 Language and runtime
 
@@ -225,7 +251,7 @@ The in-app agent does three things, in order of importance: **onboarding**, **co
 
 Every model call Oxagen makes on its own behalf goes through one model layer. That layer resolves three things, in order: the organization's **funding source**, the **tier** the caller asked for, and the **provider route** for that tier.
 
-**Funding source** (ADR-053, carried): `platform` or `customer_key`. With the first, Oxagen pays on Oxagen's OpenRouter account. That usage is billed back as assistant usage at vendor cost plus a published markup, capped per organization. With the second, the customer's own OpenRouter or vendor key is used. That key is stored enveloped (encrypted with a key that is itself encrypted), tested before save, and never returned, and every read of it is audited. Its tokens are reported and billed at zero. A new organization starts on `platform`. Vendor neutrality is preserved: a customer key may point at OpenRouter or directly at a vendor, and the route table below is set per organization.
+**Funding source** (ADR-053, carried): `platform` or `customer_key`. With the first, Oxagen pays on Oxagen's OpenRouter account. That usage is billed back as assistant usage at exactly vendor cost, no margin (amended 2026-09-18), capped per organization. With the second, the customer's own OpenRouter or vendor key is used. That key is stored enveloped (encrypted with a key that is itself encrypted), tested before save, and never returned, and every read of it is audited. Its tokens are reported and billed at zero. A new organization starts on `platform`. Vendor neutrality is preserved: a customer key may point at OpenRouter or directly at a vendor, and the route table below is set per organization.
 
 **Tiers and default routes:**
 
@@ -242,7 +268,7 @@ Rules:
 2. **Routes are organization settings** with platform defaults. An organization may pin a concrete id, choose a different vendor per tier, or set a fallback route for when the primary returns a provider error. Every fallback is recorded as a frame.
 3. **No call reads the process environment.** Keys and routes come from the model layer's resolver, the same lookup point the data-plane resolver uses. A call path that bypasses it is a defect.
 4. **Batch variants** (`:batch`) queue calls to be processed together later, at their own price. They are allowed only for the reflector and promoter, which run asynchronously (outside the request path). They are recorded with their own price entries.
-5. **Customer agents are unaffected.** Their model calls pass through the model proxy with their own keys and models. The tier table governs Oxagen's own work only.
+5. **Customer agents are unaffected.** Their model calls go to their own vendor with their own keys and models, through the gateway's loopback proxy once Phase 4 ships (§7.1). The tier table governs Oxagen's own work only.
 
 ---
 
@@ -348,7 +374,7 @@ An agent is registered once, in a workspace, with:
 - `harness`: `stella` | `claude-code` | `claude-agent-sdk` | `custom`.
 - `principal_id`.
 - A **long-lived agent credential**. This is an API key issued to the operator once. It is stored as a hash (a one-way fingerprint of the key), locked to one purpose, and revocable.
-- **Short-lived run tokens** minted by the gateway at run start. The default life is fifteen minutes, refreshed on the control channel. Every model-proxy and tool-gateway call carries a run token. Revoking the agent credential or suspending the agent invalidates every run token at the next call. This is what makes a halt stick (§7.4).
+- **Short-lived run tokens** (target, not built: no run token exists on `main` at 2026-09-18, and they arrive with the gateway in Phase 4, §17.2) minted by the gateway at run start. The default life is fifteen minutes, refreshed on the control channel. Every model-proxy request is bound to a run token, by the token in a run-scoped base URL path or by the connecting process (§7.1), and every tool-gateway call carries one. Revoking the agent credential or suspending the agent invalidates every run token at the next call while the control channel is up, and within the cached bundle's remaining life when it is down (§7.1). This is what makes a halt stick (§7.4).
 - For hook-enrolled hosts (Claude Code), the host device key (Ed25519) from the agent enrollment. It signs checkpoints.
 
 Delegation ceiling: an agent can never do more than the person it acts for. Its effective permission is its own grants intersected with the invoking human's grants. Subagents can only narrow. This carries over from the agent-RBAC spec (RBAC is role-based access control, permissions granted by role).
@@ -475,7 +501,7 @@ Latency budget for steps 1 through 5 and 9 through 10 combined: 20 ms at p99 for
 
 ### 6.8 The credential broker
 
-**A wrapped agent holds no credentials. Not an API key, not an OAuth token, not a cloud role, not a GitHub token.** (OAuth is the standard for letting one service act on a user's behalf.) It holds one run token that is good for talking to Oxagen and nothing else. Most of the threat model rests on this single property. It is what makes a Fortune 500 tool estate governable: every secret stays in one place, under one audit log.
+**A wrapped agent holds no credentials. Not an API key, not an OAuth token, not a cloud role, not a GitHub token.** (OAuth is the standard for letting one service act on a user's behalf.) It holds one run token that is good for talking to Oxagen and nothing else. One credential is outside this rule by design: the model vendor's own credential (an API key or a subscription login) stays on the agent's machine, and the loopback proxy forwards it without Oxagen ever holding it (§7.1). This paragraph describes tool credentials, and it is a target: the broker and run tokens are not built at 2026-09-18. Most of the threat model rests on this single property. It is what makes a Fortune 500 tool estate governable: every secret stays in one place, under one audit log.
 
 **Connections** are the customer's credentials to tool servers and APIs, stored in the vault (enveloped under the organization's key, every read audited). They include OAuth grants with refresh tokens, API keys, cloud roles Oxagen may assume, and GitHub App installations. A connection is bound to a workspace and to the tool servers it authorizes. It has an owner (a human) and a review date.
 
@@ -592,60 +618,136 @@ Results are published per release with the suite's version. The suite is part of
 
 ### 7.1 The three seams
 
+> **Status of this section (2026-09-18).** §7 describes the approved target (ADR-094 "tachod grows into the gateway: a loopback model proxy and an MCP aggregator"; ADR-095 "The tier ladder is four words, computed from what was routed"; ADR-096 "Oxagen may contain the process that runs turns: the contained tier"). Earlier revisions of this section described the model proxy, base URL enrollment, run tokens and proxy budgets as present. None of them exists on oxagen `main` at `02278c913`. The hook adapter and the control channel are built. The tool gateway is built on the server and is registered only into Claude Desktop. The loopback model proxy and the MCP aggregator are Phase 4, which is in build now on branch `gateway-model-proxy` (oxagen issue #3299) and is not on `main`. The contained tier is Phase 5 (§17.2). Each table below says what is built on `main`.
+
+**The gateway is `tachod`, grown.** `tachod` is the daemon that enrollment installs on the machine where the agent runs. It already exists, already listens on loopback (the machine's own network address, reachable only from that machine), and already receives the harness's hook events and telemetry. The gateway is that daemon with four parts:
+
+| Part | What it does | Built today |
+|---|---|---|
+| **Hook adapter** | Answers the harness's lifecycle hooks. Five events run as command hooks (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `Stop`, listed in `COMMAND_HOOK_EVENTS` in `packages/tacho/src/host/settings-writer.ts`). Four of them can refuse, and `Stop` is the fifth. The adapter delivers steering as additional context, refuses at the four blocking events, and records the rest | Yes (`packages/tacho/src/collector/hook-handler.ts`) |
+| **Loopback model proxy** | Passes Anthropic Messages and OpenAI Responses requests through to the vendor, with streaming. Enrollment writes the harness's base URL setting to point at it | Not on `main`, where there is no source hit for `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL` or `/v1/messages` outside docs. Phase 4, in build on `gateway-model-proxy` (#3299) |
+| **MCP aggregator** | Re-serves the harness's existing MCP servers through loopback, so every tool call to them passes Oxagen. Enrollment displaces the harness's MCP entries and restores them on unenroll | Partly. `packages/tacho/src/collector/mcp-gateway.ts` is real and the server enforces it, but it is registered only into Claude Desktop (`packages/tacho/src/host/claude-desktop-writer.ts`). A wrapped Claude Code or Codex still talks to every other MCP server directly. The aggregator is Phase 4 |
+| **Control channel** | Carries the signed policy bundle down and commands (pause, resume, steer, cancel) down, and events up | Yes |
+
+Running the proxy on loopback inside `tachod`, and not as a service in Oxagen's cloud, is the design choice that makes the rest cheap:
+
+- No extra network hop, and no new availability dependency on Oxagen's cloud.
+- **No prompt body is sent to Oxagen's servers.** The proxy forwards each body to the vendor, as the harness does today; only digests and usage go up to Oxagen. Oxagen does not take custody of a customer's source code in transit.
+- **The vendor credential stays on the machine.** The proxy forwards the harness's own credential. Oxagen never holds it.
+- Metering becomes **observed** instead of self-reported, for every harness, including Codex and Stella.
+- Per-turn steering injection, an enforced `session_limit_usd` and a real `interrupt` become possible (§7.3, §12.5).
+
+Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18 (ADR-094). The review listed this as its one unverified risk. It is closed, and it does not gate Phase 4.
+
+**How a proxied request binds to a run.** An unmodified harness sends an ordinary vendor request to the loopback base URL, and two sessions on one host send to the same one. The proxy binds each request to one run before it forwards it, by one of two mechanisms, and every `model.request` frame records which:
+
+- **Run-scoped base URL** (`binding: "token"`). A harness whose environment holds `ANTHROPIC_BASE_URL` or `OPENAI_BASE_URL` as `http://127.0.0.1:<port>/r/<run_token>` before its process starts sends every request on a run-scoped path, and the token in the path, which `tachod` minted and verifies locally, authenticates the binding. Only something that starts the harness can set this: the launcher of a contained run (§7.2, Phase 5) does, minting the token first. A hook cannot. Claude Code's `CLAUDE_ENV_FILE` persists variables for the session's later Bash commands and does not change the environment of the running process that sends Messages requests, so a `SessionStart` hook cannot rebind a session this way. The host-level base URL that enrollment writes is what every wrapped session uses, and those sessions bind by process.
+- **Connecting process** (`binding: "process"`). Every wrapped session, Claude Code, Codex and Stella alike, binds this way. The proxy resolves the loopback connection's peer socket to a pid and matches it to a harness pid the session registry holds, keyed by session id, from that session's `SessionStart`. The connecting pid, or an ancestor of it inside that session's process tree, selects the run. Today the pid reaches the daemon for two harnesses only: `pidFromEnv` (`packages/tacho/src/collector/hook-handler.ts`) reads `CLAUDE_PID`, which Claude Code exports, and `TACHO_HARNESS_PID`, which `tacho-hook` sets for Stella by walking up from its own parent (`stellaHarnessPid`). Codex passes no pid, and the envelope's `claude_ppid` is declared and flattened but never assigned. Phase 4 captures a harness pid keyed by session id for every process-bound harness, walking up from the hook's parent for a harness that exports none, and stores it in the session registry at `SessionStart`. A session with no captured pid cannot bind by process, and its calls are unattributed.
+
+**MCP calls bind the same way.** The aggregator is the same loopback listener, and a wrapped harness reaches it through the stdio shim enrollment writes into its MCP config (`tacho mcp-stdio`, `packages/tacho/src/cli/mcp-stdio.ts`), which the harness spawns as a child process and which POSTs each JSON-RPC message to the gateway with the host's local bearer. The bearer names the host, never the run. The shim's parent is the harness process, so the shim sends its parent pid with every message, the aggregator checks it against the peer socket's process tree, and the session registry's pid-by-session map selects the run: `binding: "process"`, the same rule and the same registry as the model proxy. A harness that dials the aggregator's URL directly binds by the peer socket. Inside a contained run the launcher binds every connection, as above. Every `tool.requested` frame records its binding, and an MCP call that binds to no run is unattributed under the same rule as a model call: forwarded outside a run with no run's permissions, refused inside a contained run.
+
+A request that binds to no run is **unattributed**. The proxy forwards it, so a person's other vendor tools on the same machine keep working, and records it against the host with digests and usage, charged to no run. It receives no steering, counts toward no `session_limit_usd`, and no run command can interrupt it. Every run open on the host during an unattributed request records the completeness gap `model_call_unattributed` for that window, and that run's tier reads `harness`, because the proxy cannot say it routed that run's model traffic (ADR-095: the tier is computed from what was routed and is never over-stated). A vendor client's own correlation fields, where it sends any, are recorded as a cross-check and never used as the binding.
+
+The permissive fallback is for host clients outside any run. **Inside a contained run there is none.** The launcher (§7.2, Phase 5) owns the sandbox's one egress socket, so every connection from inside it is the launched run's by construction, and the launcher binds it to that run before the proxy sees it (`binding: "launcher"`). A connection from inside a sandbox that binds to no run, because the run has ended or the token or pid it carries does not match the launched run, is refused and recorded as `contained_unbound`, never forwarded. A process an agent starts inside the sandbox to escape the binding reaches the same socket and the same refusal.
+
+**Revocation, and how long the proxy can be wrong offline.** A run token is minted and verified on the machine, so a revocation cannot travel in the token. It travels on the control channel, as a bundle refresh that moves `deny_generation` or marks the host, and a `revoke` or `cancel` command. With the channel up, it applies at the next proxied call, as §6.2 and §7.4 say. With the channel down, the proxy works from its cached bundle and its last commands, and so can admit a call the server has already revoked. That window is bounded by the same clock that makes `PreToolUse` fail closed: the bundle's `expires_at` (`isStale` in `packages/tacho/src/host/bundle.ts`). Once the cached bundle has expired with the channel still down, the proxy refuses every proxied call, token-bound and process-bound alike, until a fresh bundle arrives. The maximum offline revocation window is therefore the bundle's remaining life at the moment the channel dropped, which the workspace sets through the bundle's TTL. Every call admitted while the channel is down carries `revocation_freshness`, the age of the last successful control-channel exchange, on its `model.request` frame, and the record says for each such call how stale the proxy's view could have been. Where §6.2 and §7.4 say a revocation applies at the next call, they mean with the channel up, and within this window otherwise.
+
+The seams, and the tier each one earns:
+
 | Seam | What passes through | What Oxagen can do | Tier it earns |
 |---|---|---|---|
-| **Model proxy** | Every model request and response, streamed | Inject steering and context frames, price the call, enforce budgets, park the call for approval, halt the run by returning a stop, record full bodies | `gateway` |
-| **Tool gateway** | Every tool call and result | Check both directions, allow or deny or send for approval, narrow the input, record | `gateway` |
-| **Hook and SDK adapter** (the wrapper). A hook is a script the harness runs at set points in its lifecycle. An SDK is a code library an agent is built on. | Harness lifecycle events: session start, prompt submit, pre-tool, permission request, stop, compaction, config change | Deny at boundaries, inject context, request elevation, detect tampering | `harness` |
+| **Model proxy** (loopback, in `tachod`) | Every model request and response, streamed | Inject the volatile steering selection, meter the call from the bytes it saw, enforce budgets, halt the run by returning a stop | `gateway` |
+| **MCP aggregator** and the tool gateway | Every MCP tool call and result | Check both directions, allow or deny or send for approval, narrow the input, record | `gateway` |
+| **Hook adapter** (the wrapper). A hook is a script the harness runs at set points in its lifecycle. | Harness lifecycle events: session start, prompt submit, pre-tool, permission request, stop, compaction, config change | Deliver steering as additional context, refuse at the four blocking events (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`), record, detect tampering after the fact. `Stop` is the fifth command hook and refuses nothing | `harness` |
 | None of the above | Attested events only | Record and grade | `observe` |
 
-A wrapped agent is one that routes through at least one gateway connection point, the point where the agent connects to Oxagen. Routing the model proxy is the strongest single control. It sees every token and can stop the loop at its source. Claude Code and Codex CLI both reach the proxy through their base URL setting, the address a harness sends its model requests to. The enrollment writes that setting. So a hook-enrolled host earns `gateway` on model calls whatever the model vendor. Tools reach the gateway through the Oxagen MCP endpoint. MCP is the Model Context Protocol, the standard way agents call tools. Harness-native tools remain `harness` tier.
+**The tier ladder is four words, computed from what was actually routed: observe → harness → gateway → contained.** The table is ADR-095's, word for word in its first four columns.
 
-The **enforcement tier is computed per run from what was actually observed**. It is recorded on the run and shown word for word. The UI, exports, and attestation reports cannot show a stronger word than the tier allows. This is the rule from ADR-040 and the wrapper spec that the tier is reported as it is, with its source. It is kept as a rule that must not change.
+| Word | What it means | What it may claim | What it may not claim | On `main` today |
+|---|---|---|---|---|
+| `observe` | Recorded only | "recorded" | Anything about refusal or delivery | Yes |
+| `harness` | Hooks installed; steering is delivered and the four blocking hook events can refuse, client-attested and fail-open | "delivered", "recorded", "client-attested", "fail-open" | "enforced". Never | Yes. This is the tier of every wrapped Claude Code, Codex and Stella run |
+| `gateway` | Model and MCP traffic routed through `tachod`; metering observed, budgets enforced | "observed" metering, "enforced" budgets on routed traffic | "enforced" against the machine's operator; anything about traffic that was not routed | Only for a Claude Desktop host's Oxagen MCP calls (below). For a wrapped harness it arrives with Phase 4, in build |
+| `contained` | The agent runs under an OS sandbox whose only egress is the gateway | "enforced". This is the only tier that earns the word against the machine's operator | Anything about a run that was not launched by the launcher | No. Phase 5 (§7.2) |
+
+A control claim always carries its scope: "for actions routed through Oxagen".
+
+**Computed, not assigned.** A run's tier is derived from the traffic the record shows: hook events give `harness`; model and MCP requests seen by the gateway for that run give `gateway`; a launcher attestation plus gateway-only egress gives `contained`. What was installed on the host is not evidence of what a run did. The tier is recorded on the run and shown word for word. The UI, exports, and attestation reports cannot show a stronger word than the tier allows. This is the rule from ADR-040 and the wrapper spec, and it must not change. Today the tier is assigned from the harness name (`packages/tacho/src/wire.ts` maps `"claude-desktop"` to `gateway`). Phase 4 makes it computed from routing.
+
+**"Fail-open" describes the tier, not the hook process.** The two senses look like they disagree, so this specification says which one it means every time. The hook process fails closed against its cached bundle: in enforce mode a stale or unverified bundle denies non-read-only tools (`packages/tacho/src/host/bundle.ts`, `hook-handler.ts`). The tier as a whole is fail-open against the person at the keyboard: remove the hook entry, disable hooks or run another build of the harness, and the action proceeds. Where a table says "fail-open" beside the `harness` tier, it means the second sense.
+
+**How today's three words and the connected tier read on the ladder (ADR-095, which amends ADR-078 §1).** The code's tier enum is three words today: `ENFORCEMENT_TIERS` in `packages/tacho/src/envelope.ts:63` is `["gateway", "harness", "observe"]`, and `TACHO_ENFORCEMENT_TIERS` (`packages/database/src/schema/tacho.ts:74`) mirrors it. ADR-078 gave the three values product words: wrapped is `harness`, connected is `gateway`, and `observe` is what a wrapped host reports in observe-only mode. All three keep their value and their meaning. ADR-095 changes two sentences of ADR-078 §1:
+
+- "No fourth value is minted" no longer holds. `contained` is the fourth. `ENFORCEMENT_TIERS` gains it in Phase 5 as a wire-compatible addition, and the column on the run row and the ClickHouse column take the new value without a rename.
+- `gateway` is no longer only the connected tier. It is any run whose model or MCP traffic was routed through `tachod`. Today's meaning of the word, a Claude Desktop host connected through the MCP gateway, is the first case of it: that host is on `gateway` for the calls that routed, which are its Oxagen MCP calls and no model traffic, and it is invisible otherwise, exactly as ADR-078 §5 says. From Phase 4 a wrapped Claude Code, Codex or Stella run whose traffic routed through `tachod` earns the same word.
+
+ADR-078 §2 is kept: breadth and certainty are different things. For a wrapped harness the ladder is cumulative, since each rung adds a seam to the ones below. For a connected app it is not: `gateway` there has no `harness` rung under it. So a tier word is never rendered as a score, a percentage or "fully governed", and every surface still states what the tier records and what it does not. ADR-078 §3 to §6 stand unchanged: the routed-around property, the proxy is not a second materialiser, the ledger table, both tiers on one machine.
+
+**Today.** The wrapped tier is a recorder plus a kill switch that tells the agent what the workspace requires. The signed bundle carries empty permissions and `budget.mode = "observed"` (`packages/handlers/src/lib/tacho-host.ts`, `unsignedBundle`), so `PreToolUse` can deny only on host status or a paused run. Since PR #3289 (ADR-091) its `context.system` is the workspace's active `must` and `should` records compiled to text, and `null` only when there are none. A person can step outside the wrapper by deleting the hook entry, setting `disableAllHooks`, killing the daemon, going offline, adding another MCP server, or running the harness somewhere else. Detection is after the fact. With the daemon down, every command hook but `PreToolUse` answers `{}`, which the harness reads as allow, and `PreToolUse` decides from the cached bundle and fails closed on a stale one (`packages/tacho/src/claude-code/hook-client.ts`). Until Phase 4 and Phase 5 land, a surface shows `gateway` for a wrapped harness and `contained` as tiers not yet available, and claims no model proxy, observed metering, enforced budget, real interrupt or sandbox as present (ADR-095).
 
 ### 7.2 Adapters and supported agents
 
-Oxagen is vendor-neutral on the agent side as well as the model side. The model proxy speaks the **Anthropic Messages API**, the **OpenAI Chat Completions and Responses APIs**, and the OpenAI-compatible dialect most other vendors and gateways expose. So any harness that uses a base URL setting can be routed through it. The tool gateway is plain MCP, which every current harness speaks.
+Oxagen is vendor-neutral on the agent side as well as the model side. The target proxy speaks the **Anthropic Messages API** and the **OpenAI Responses API**, as a passthrough with streaming, so a harness that reads a base URL setting can be routed through it. That holds for subscription logins as well as API keys: validated by the maintainer on 2026-09-18 (§7.1). The tool side is plain MCP, which every current harness speaks.
 
-| Agent | How it is wrapped | Model calls | Tools | Tier |
+| Agent | How it is wrapped today | Tier today | What Phase 4 adds | Tier after Phase 4 |
 |---|---|---|---|---|
-| **Stella** | native: control contract over `stella serve` (`/pause`, `/resume`, `/cancel`, `/steer`), journal drained to the recorder | proxy | gateway | `gateway` |
-| **Claude Code** | agent enrollment: device key, `oxagend` collector, hooks in user or managed settings (command hooks fail closed), OpenTelemetry export (a standard format for activity data) to the collector, `ANTHROPIC_BASE_URL` at the proxy | proxy | MCP tools via gateway. Native tools at the hook | `gateway` for model and MCP tools, `harness` for native tools |
-| **Codex CLI** (OpenAI) | agent enrollment writes `~/.codex/config.toml`: MCP servers pointed at the gateway, `OPENAI_BASE_URL` at the proxy, the notify hook to the collector, and the approval policy set to route through Oxagen. The managed variant pins the config | proxy | MCP tools via gateway. Native shell and file tools are observed through the proxy's tool call frames and enforced by approval policy where the harness exposes it | `gateway` for model and MCP tools, `harness` or `observe` for native tools by harness version |
-| **OpenAI Agents SDK** (Python, TypeScript) | `oxagen.agent.wrap(agent)` installs the proxy base URL, a tracing processor that emits frames, input and output guardrails that call the checkpoint gate, and the MCP endpoint as the agent's tool server | proxy | gateway | `gateway` |
-| **Claude Agent SDK** | `oxagen.agent.wrap(agent)` with the SDK's hooks and the proxy base URL | proxy | gateway | `gateway` |
-| **Custom agents** (any language) | the SDK wrapper in TypeScript, Python, or Go, or the raw contract: run token, proxy base URL, MCP endpoint, checkpoint gate before each turn, frame emitter | proxy | gateway | depends on what the wrapper could route, computed per run |
-| **Other CLIs** (Gemini CLI and similar) | enrollment writes their MCP and base URL settings where they exist. Otherwise, observe-only ingestion of their telemetry | proxy where supported | gateway where supported | as observed |
+| **Claude Code** | `oxagen tacho enroll` (or `oxagen agent enroll --token` on a managed fleet) writes hook entries into the harness's settings file and installs `tachod`. Token and cost numbers are the harness's own telemetry, self-reported | `harness` | Enrollment writes `ANTHROPIC_BASE_URL` to the loopback proxy and re-serves the harness's MCP servers through the aggregator | `gateway` for model calls and MCP tools, `harness` for native tools |
+| **Codex CLI** (OpenAI) | The same enrollment, through Codex's command hooks (`packages/tacho/src/host/codex-writer.ts`). Codex exports no spend, so its spend is absent from the record today | `harness` | Enrollment writes `OPENAI_BASE_URL` to the loopback proxy and re-serves MCP servers. Spend becomes observed | `gateway` for model calls and MCP tools, `harness` or `observe` for native tools by harness version |
+| **Stella** | Wrapped through its hooks until it speaks the control contract natively (ADR-080). It exports no spend today | `harness` | Its model calls route through the same loopback proxy | `gateway` |
+| **Claude Desktop** | The Oxagen MCP gateway is registered into its config. Tools it reaches through that gateway are checked on the server. No model traffic is routed | `gateway` for those tools only (ADR-078) | Nothing planned | unchanged |
+| **SDK agents** (OpenAI Agents SDK, Claude Agent SDK, custom) | Not built. `oxagen.agent.wrap(agent)` is a target of this specification and is outside the six phases of §17.2 | none | The same loopback proxy and aggregator serve them once a wrapper exists | as routed |
+| **Other CLIs** (Gemini CLI and similar) | Observe-only ingestion of their telemetry where they export any | `observe` | Base URL and MCP settings where the harness has them | as routed |
 
-The **checkpoint gate** is the one interface every wrapper shares. Before each turn the agent asks Oxagen for pending commands and the current context. After each tool result it reports back. Harness-specific hooks add finer control on top of it. Nothing depends on them. Every adapter records the harness name and version on the run. The tier is computed from what was actually routed, never from what the adapter could do on paper.
+Every adapter records the harness name and version on the run. The tier is computed from what was actually routed, never from what the adapter could do on paper.
 
-**Wrapping a hook-based harness is one click.** On the Agents page, "Wrap Claude Code" and "Wrap Codex" produce a signed installer link with a one-time enrollment token embedded. Nothing is copied or pasted. The installer installs the `oxagend` collector and the `oxagen-hook` binary. It registers them to start at login (launchd on macOS, a user-level service or scheduled task on Windows, a systemd user unit on Linux). It writes the harness hooks and the environment block (base URL to the model proxy, the MCP endpoint). It enrolls the host with a device key and runs a one-turn smoke session. The browser page flips to "connected" when the first frame arrives, with a rollback command shown beside it. Supported from the first release: macOS (notarized package and Homebrew), Windows (signed MSI and winget), Linux (deb, rpm, and a curl script). `oxagen agent enroll` remains the scripted path for managed fleets. The enterprise managed enrollment writes locked settings instead of user settings.
+**Wrapping is file edits plus a daemon. It is not a supervisor.** Enrollment writes hook entries into the harness's settings file, installs `tachod`, registers it to start at login, and enrolls the host with a device key. No Oxagen command launches the agent. Earlier revisions of this specification call the daemon `oxagend` and the hook binary `oxagen-hook` (§2.1). That rename has not happened in the tree, and this section uses the names in the tree. From Phase 4, enrollment also writes the model base URL into each harness (Claude Code and Codex) with displace-and-restore, and only after the daemon is confirmed listening on loopback. It re-serves the harness's MCP servers through loopback with the displace-and-restore logic `packages/tacho/src/host/mcp-config-writer.ts` already has. Where a vendor offers managed settings, the managed variant pins them. Unenroll and uninstall restore every file they touched before they stop the daemon, so no harness is left pointing at a dead base URL (ADR-094). The installer that carries this to a laptop is Oxagen Desktop (the desktop spec §14, oxagen issue #3301, branch `desktop-install-hardening`).
+
+**The contained tier: `oxagen run -- <agent>`.** Phase 5 adds one command. `oxagen run -- <agent>` is a supervisor that launches the agent under an OS sandbox whose only allowed egress is the gateway. It is the top tier, not the only tier, and hooks stay:
+
+- It is aimed at CI, headless runs, cloud runners and managed devices first. Those are the places where the operator of the machine is not its owner, where unattended risk lives, and where "enforced" means something.
+- It is never mandatory on a developer's own laptop. Nothing is enforceable against the owner of a machine, and a mandatory sandbox there breaks toolchains, SSH keys, Docker and local services.
+- The witness runner (§8.5, ADR-064) is built on the same launcher.
+- The `--` separates the supervisor's own flags from the agent's command line. It is distinct from the read verbs `oxagen run list|show|export` (§14.1).
+
+ADR-043 is revised by one sentence to allow it: **"Oxagen does not run turns, but it may contain the process that does. A launcher that confines a process is not an agent runtime."** No sandbox exists today. ADR-043 removed the last one, and the witness runner is not built.
 
 ### 7.3 Steering into the loop
 
-Context enters a run at three points. All three are recorded as frames:
+> **Status of this section (2026-09-18).** The five injection points and the delivery modes are the approved design. On oxagen `main` at `02278c913`, operator steer commands are the only live text channel from the server to a running wrapped agent. `UserPromptSubmit` carries no steering, and no proxy exists. Phase 0 fills `context.system` with active `must` and `should` records, and it merged the same day (oxagen PR #3289, `c9db463e9`, ADR-091). Phase 1 adds the per-prompt selection. Phase 4 adds the model request, and it is in build: the proxy ships the seam, and the volatile selection rides it once the Phase 1 assembler exists (§17.2).
 
-1. **Run start.** The policy bundle's `context.system` (published steering compiled for this agent and workspace) is injected as governed system context. Its digest, a short hash that identifies the exact content, is chained into `run.start`.
-2. **Each turn.** The model proxy prepends steering as a volatile message right after the cached system block (ADR-051). It then adds context frames retrieved for the turn's goal under a token budget, with a usage report. For agents that host the protocol themselves (Stella), Oxagen is a provider and the agent does the composing.
-3. **Operator steer.** A `steer` command carries text delivered at a named boundary as additional context. It is attributed to the operator and recorded as a `control.steer` frame.
+**Oxagen does not own the context window. The harness does.** For Claude Code and Codex, the harness composes the prompt. Oxagen controls exactly five injection points, and "competition for the window" means competition for Oxagen's slice of it. That slice is what `assembleSteering` fills (§10.5).
 
-**Steering can only enter at a model request.** Steering is prompt content, so the physical injection point is always a `model.request` frame. Nothing else in a run can receive text. A delivery mode therefore does not choose *where* the steer lands. It chooses *which* model request the steer rides, and whether Oxagen cuts the current step short to reach one sooner.
+| # | Injection point | What it can carry | Today |
+|---|---|---|---|
+| 1 | **`SessionStart` additional context**, capped at 16 KiB (`packages/tacho/src/wire.ts:375`) | The stable prefix: `must` and `should` items, compiled into the signed bundle's `context.system`. It is cached in the bundle, so it works offline. Its digest is recorded on the run as `oxagen.context_digest` | Built. The host injects it (`packages/tacho/src/collector/hook-handler.ts:322`) and the server compiles it from active `must` and `should` records (`packages/handlers/src/lib/tacho-steering.ts`), since Phase 0 merged as PR #3289 (ADR-091). Every other kind of item waits for Phase 1 |
+| 2 | **`UserPromptSubmit` additional context** | The volatile selection: `may` and `info` items picked for this prompt under a token budget. This hook receives the operator's prompt, so it can retrieve by relevance | Carries operator steer messages only (`hook-handler.ts:383`). Unused for steering. Phase 1 |
+| 3 | **MCP tool results** | Context frames and records an agent asks for through Oxagen's MCP tools | Live, and only when the model chooses to call the tool. Nothing is pushed |
+| 4 | **Files in the checkout**, including skills | Published records under `.oxagen/rules/` and skills materialized by sync (§10.6). The harness loads them by its own rules | Published records are in the checkout once their pull request merges, and only a harness that reads that path sees them (Stella does). Skills sync is Phase 2 |
+| 5 | **The model request itself** | The volatile selection re-landed per turn, right after the cached system block (ADR-051) | Not available on `main`. It exists only once the gateway's proxy exists. Phase 4, in build, ships the seam for it. The selection that rides it arrives with the Phase 1 assembler (ADR-094) |
+
+All five are recorded. Whatever the assembler rendered and whatever it cut is a `steering.manifest` frame on the run (§10.5).
+
+**Operator steer.** A `steer` command carries text delivered at a named boundary as additional context. It is attributed to the operator and recorded as a `control.steer` frame. This channel is built and live for wrapped agents: commands are drained at the next hook boundary (`hook-handler.ts:216`).
+
+Steering is prompt content, so it reaches the model only when the harness next builds a model request. At the `harness` tier Oxagen hands the text to the harness at a hook boundary and the harness places it. At the `gateway` tier the proxy places it in the `model.request` itself. A delivery mode therefore does not choose *where* the steer lands. It chooses *which* boundary the steer rides, and whether Oxagen cuts the current step short to reach one sooner.
 
 | Delivery mode | The event it hangs off, exactly | What it costs | Use it for |
 |---|---|---|---|
-| `next_step` (**default**) | The current step runs to its terminal frame. For a model call that is a `model.response`. For a tool call it is a `tool_call` result frame. The steer is injected into the **first `model.request` after that frame**. For a tool call in flight, the result is recorded first and the steer rides the same request that carries that result to the model. | Nothing. No work is discarded. | Almost everything. Redirecting a plan, adding a constraint, correcting a wrong assumption. |
-| `interrupt` | Oxagen does not wait for the current step. At the model proxy an in-flight streaming response is **stopped**. The proxy returns a stop, and the partial output is recorded and **billed**, because the tokens were generated. At the tool gateway a pending call is **abandoned** and denied with reason `interrupted`. The run is then forced to a model request carrying the steer. | The partial model output, and the work of any abandoned tool call. | Harm in progress. The agent is about to do the wrong thing and the next step is too late. |
-| `turn_boundary` | The steer waits for `turn_end` and enters on the **first `model.request` of the next turn**. | Nothing, but it may wait a long time. | Steering that should not land mid-plan: a change of priority, a new standing constraint. |
+| `next_step` (**default**) | The current step runs to its terminal frame. For a model call that is a `model.response`. For a tool call it is a `tool_call` result frame. The steer is delivered at the **first boundary after that frame**: the next hook event at the `harness` tier, the first `model.request` at the `gateway` tier. | Nothing. No work is discarded. | Almost everything. Redirecting a plan, adding a constraint, correcting a wrong assumption. |
+| `interrupt` | Oxagen does not wait for the current step. At the model proxy an in-flight streaming response is **stopped**. The proxy returns a stop, and the partial output is recorded and **billed**, because the tokens were generated. At the aggregator a pending call is **abandoned** and denied with reason `interrupted`. The run is then forced to a model request carrying the steer. **This needs the proxy, so it becomes real in Phase 4.** | The partial model output, and the work of any abandoned tool call. | Harm in progress. The agent is about to do the wrong thing and the next step is too late. |
+| `turn_boundary` | The steer waits for `turn_end` and enters at the **first boundary of the next turn**. | Nothing, but it may wait a long time. | Steering that should not land mid-plan: a change of priority, a new standing constraint. |
 
 **An irreversible tool call in flight is never abandoned.** Nobody can un-publish a package or un-send a payment. So an `interrupt` that arrives while a tool call of side-effect class `irreversible` is executing **degrades to `next_step`**. The call completes, and the frame records `degraded_reason: irreversible_tool_in_flight`. The interface shows the degraded mode, never the requested one.
 
 **Interrupt is not pause.** `pause` stops the run at the next boundary and waits for a human. `interrupt` cuts the current step short and at once hands the agent new context, so it keeps working in a different direction. An operator who wants the agent to stop and think uses `pause`. An operator who wants the agent to change course without losing the run uses `steer` with `interrupt`.
 
-**What each tier can carry out.** At `gateway` tier all three modes are enforceable, because the proxy is in the path of every request. At `harness` tier there is usually no way to stop an in-flight call, so `interrupt` degrades to `next_step` and the frame says so. At `observe` tier no steering is possible at all. The command is refused, not queued. The rule in §7.1 applies: the interface shows the mode that was actually achieved.
+**What each tier can carry out.** At the `gateway` and `contained` tiers all three modes can be carried out, because the proxy is in the path of every request. At the `harness` tier there is no way to stop an in-flight call, so `interrupt` degrades to `next_step` and the command records both the requested mode and the delivered one. That is what every wrapped run does today. At the `observe` tier no steering is possible at all. The command is refused, not queued. The rule in §7.1 applies: the interface shows the mode that was actually achieved.
 
 Steering text is always evidence, quoted and cited. Oxagen itself never executes it as instructions. Whether a harness treats it as instruction is the harness's contract.
 
 ### 7.4 Halting and commands
+
+> **Status of this section (2026-09-18).** Commands, their statuses and the hook adapter column are built, and they are what every wrapped run uses today: delivered at the next hook boundary and client-attested, on a tier that is fail-open against the person at the keyboard (§7.1). The model proxy column, run token revocation and automatic halts on a budget breach describe the `gateway` tier and arrive in Phase 4 (§17.2). Offline, a revocation reaches the proxy no later than the cached bundle's expiry, after which it refuses every proxied call until the channel returns (§7.1). In the tables below, "tool gateway" reads as the MCP aggregator for a wrapped harness.
 
 Commands are rows in `control.commands`. They travel on the control channel, either by long-poll (a request that stays open until a command is ready) or in the next ingest response. For proxied connection points they are applied inline. **The status vocabulary is closed and shared by commands and messages**, so one delivery report reads the same whatever was sent:
 
@@ -679,6 +781,8 @@ Automatic halts are the same commands issued by policy. A budget breach, a schem
 
 ### 7.5 Human approval
 
+> **Status of this section (2026-09-18).** Parking a call is built for tools that reach the server-side tool gateway and for the harness's `PermissionRequest` hook. A wrapped harness's other MCP servers bypass it until the aggregator of Phase 4 (§17.2).
+
 `require_approval` on a grant, a tool's risk grade, a budget threshold, or a standing rule routes an action to the **approvals queue**. The gateway parks the call (default timeout ten minutes, set per bundle). It creates an `approvals.requests` row with the canonical action, input digest, requesting span, and trust tier. It then notifies (Mission Control, Slack, email). A resolution mints a single-use **approval token** bound to the agent, run, exact action, expiry, and the approval event. The token is a Biscuit v2 token, a signed token format that can be checked without calling back to Oxagen, as decided in the wrapper design. The adapter verifies it offline and the gateway verifies it inline. Approve, deny, and expiry are all frames. The approver's reason reaches the model as the permission decision reason.
 
 ### 7.6 Messages between agents, and mass steering
@@ -707,7 +811,7 @@ Customers subscribe to what happens in their runs and receive it in their own sy
 
 ### 8.1 Run
 
-A run starts when a wrapped agent opens a session. It also starts when a proxied first call arrives with a fresh run token. The run carries a trusted identity that only server code builds (the `RunSpecV2` pattern). That identity holds the operator (`initiating_principal`), the agent principal, the agent version digest (a digest is a hash that names exact content), the authorization snapshot id, the repository and base commit, the retention policy version, the enforcement tier (computed at seal, the signed close of a run), the governance mode, and an optional **task reference**. A task reference is a Linear issue, a GitHub issue or PR, or a free-text goal. It lets spend be reported by what the work was for. Attempts are immutable. A resume or fork creates a new attempt linked to the prior one. Turns and steps are not rows of their own. They are derived from frames and materialized in the rollups (§12.7). `turn_start`/`turn_end` bound a turn. A model request/response pair or a tool requested/result pair is a step.
+A run starts when a wrapped agent opens a session. It also starts when a proxied first call arrives with a fresh run token (a target: no proxy and no run token exist at 2026-09-18, so today every wrapped run starts at the harness's `SessionStart` hook). The run carries a trusted identity that only server code builds (the `RunSpecV2` pattern). That identity holds the operator (`initiating_principal`), the agent principal, the agent version digest (a digest is a hash that names exact content), the authorization snapshot id, the repository and base commit, the retention policy version, the enforcement tier (computed at seal, the signed close of a run), the governance mode, and an optional **task reference**. A task reference is a Linear issue, a GitHub issue or PR, or a free-text goal. It lets spend be reported by what the work was for. Attempts are immutable. A resume or fork creates a new attempt linked to the prior one. Turns and steps are not rows of their own. They are derived from frames and materialized in the rollups (§12.7). `turn_start`/`turn_end` bound a turn. A model request/response pair or a tool requested/result pair is a step.
 
 ### 8.2 Frame
 
@@ -715,8 +819,9 @@ A frame is the `oxagen.frame/1.0` envelope, kept as is. Its fields are `event_id
 
 | Kind | Emitted by | Body |
 |---|---|---|
-| `model.request` | model proxy | provider, model, full request (messages, tools, params), injected steering digests, `injected_steer_ids[]` naming the `control.steer` frames this request carried, context frame ids and usage report, provider request id |
-| `model.response` | model proxy | full response, stop reason, usage by token class, latency, **cost record** (§12) |
+| `model.request` | model proxy (Phase 4 of §17.2; until then a model call is known only from the harness's own telemetry, client-attested), or Oxagen's own model layer for the in-app agent (§4.5) | provider, model, params (no messages, no tools), `content.digest` over the canonical request, request size, the input-token count and which estimator produced it, the output cap and whether the proxy set it, the run binding (`token`, `process`, `launcher`), `revocation_freshness` when admitted offline, injected steering digests, `injected_steer_ids[]` naming the `control.steer` frames this request carried, context frame ids, provider request id. From the proxy the body is never present and there is no `bytes_ref` (§13.6). From Oxagen's own model layer the body is retained under §13.1 |
+| `model.response` | model proxy, or Oxagen's own model layer | `content.digest` over the canonical response, response size, stop reason, usage by token class, latency, **cost record** (§12) with its basis and the settled reservation. From the proxy the body is never present and there is no `bytes_ref` (§13.6). From Oxagen's own model layer the body is retained under §13.1 |
+| `steering.manifest` | the assembler (§10.5) | injection point, bundle and steering versions, prompt digest, budget and spend, the items rendered and the items cut with a reason each, source status, prefix and volatile digests, `fail_open`. Ids, hashes and digests only, never bodies |
 | `context.assembled` | model proxy or Stella | budget, context frame ids by `(provider_id, frame_id, content_digest)`, usage report, composition digest |
 | `record.appended` | exchange provider | record id, lineage id, record hash, kind |
 | `skills.searched` | gateway | query digest, resolved config version, returned ids, withheld count by reason class (never the withheld names), load cost, replay grade |
@@ -825,7 +930,8 @@ Agents do not write frames as memory. When an agent wants to remember something,
 - **Scope.** `scope` uses the protocol's portable keys (`organization_id`, `workspace_id`, `repository_id`, `user_id`, `session_id`, `task_id`). `sharing_scope ∈ {user, repository, workspace, organization}` widens visibility. The sharing scope sets how far beyond its author a record can be seen. Oxagen enforces sharing authorization before persistence and on every read, per the profile.
 - **Provenance.** Provenance is the trail that shows where a record came from. `provenance.source_refs` point at frames (`frame:<run>/<seq>`) and at other records. `evidence_links` point at frames or tool outputs by digest. An evidence link is a pointer to the proof behind a record. So every learned thing walks back to the exact frame that taught it.
 - **Retention.** Oxagen honors or refuses `requested_retention` before persistence. A refusal returns `retention_rejected`. The accepted value is stored on the record.
-- **Storage.** Records are `:Record` nodes in the organization's graph. Each node carries `ws`, `kind`, `lineage_id`, `record_hash`, `status`, and temporal fields. Typed edges connect the nodes: `DERIVED_FROM → :Frame|:Record`, `EVIDENCED_BY → :Frame`, `SUPERSEDES`, `REFINES`, `CONTRADICTS`, `PROPOSES → :Record`, `PROMOTED_BY → :Record(promotion_event)`, `ABOUT → :Entity`.
+- **Storage.** A record's system of record is the Postgres registry (`agent.context_records`, its versions, the promotions ledger and proposals), and its published text is in git (§4.2). From Phase 3 every record is also projected into the organization's graph as a `:Record` node, one direction registry to graph, verified by hash. Each node carries `ws`, `kind`, `lineage_id`, `record_hash`, `status`, and temporal fields. Typed edges connect the nodes: `DERIVED_FROM → :Frame|:Record`, `EVIDENCED_BY → :Frame`, `SUPERSEDES`, `REFINES`, `CONTRADICTS`, `PROPOSES → :Record`, `PROMOTED_BY → :Record(promotion_event)`, `ABOUT → :Entity`. The `ABOUT` edges are why the graph earns the index: "records relevant to the files and entities this run touches". **Status 2026-09-18:** no `:Record` node exists. Neither `packages/ontology` nor `packages/ingestion` writes one, and the graph holds no steering.
+- **What a record is to an agent.** A published record is one kind of `SteeringItem` (§10.5). Its `force` decides where it competes: `must` and `should` in the stable prefix, `may` and `info` in the volatile selection. Status 2026-09-18: no published record reaches a wrapped agent (§10.4). Phase 0 of §17.2 is the first delivery.
 
 ### 9.1 Reflection
 
@@ -835,7 +941,7 @@ After every seal, the reflector reads the run. The reflector is a governed servi
 - `memory` records for what the agent itself asked to remember during the run.
 - `context_use_feedback` for each context frame that was rendered, cited, or ignored. This closes the loop on retrieval quality.
 
-Reflection uses a model. It runs through the model proxy under a service principal. Its own cost is therefore a frame in a run of its own.
+Reflection uses a model. It runs through Oxagen's own model layer (§4.5) under a service principal. Its own cost is therefore a frame in a run of its own.
 
 ### 9.2 Aggregation and promotion
 
@@ -845,7 +951,7 @@ The promoter aggregates records across runs by lineage and by entity. A candidat
 
 ## 10. The repository, steering, and Context PRs
 
-People trust pull requests, proposed code changes that named reviewers approve before they merge. Every engineering organization already runs them, with named reviewers, required checks, and a history the customer can verify without Oxagen. So Oxagen governs the records that steer agents the same way teams govern code. Each record is authored in the workspace's main repo, proposed as a pull request, and published on merge. The graph remembers everything about those records. Git decides what is in force. Section 4.2 states the rule. This section describes the mechanism.
+People trust pull requests, proposed code changes that named reviewers approve before they merge. Every engineering organization already runs them, with named reviewers, required checks, and a history the customer can verify without Oxagen. So Oxagen governs the records that steer agents the same way teams govern code. Each record is authored in the workspace's main repo, proposed as a pull request, and published on merge. The registry keeps everything about those records. Git decides what is in force. Section 4.2 states the rule. This section describes the mechanism.
 
 ### 10.1 Repositories: one main repo, any number of linked repos
 
@@ -869,6 +975,8 @@ The directory is `.oxagen/`. The word `.stella` never appears in an Oxagen produ
     ctx.<set>.<slug>.toml    # one published record per lineage id
   proposals/*.toml           # candidates; steer nothing
   agents/<slug>.toml         # agent definitions, one per agent (§6.2); harness files are generated beside them
+  skills.toml                # which skill sources and skills are in scope; absent means off (§10.6)
+  skills/<id>/SKILL.md       # governed skills, delivered to the harness by sync (§10.6)
   ontology/                  # optional, §11.8: one file per class and relation type
 ```
 
@@ -878,7 +986,7 @@ Each record is one TOML file, a plain-text settings format. The file holds `sche
 
 The layout is the same in the main repo and in a linked repo. What differs is the sharing scope. Records in the main repo carry `sharing_scope = "workspace"` and apply to every run in the workspace. They may instead carry `organization` when the org allows a workspace to publish org-wide. Records in a linked repo carry `sharing_scope = "repository"` and apply only to runs whose repository binding is that repo. A linked-repo record that claims workspace scope fails the checks. Precedence at run time follows Stella's authority rule. Repository records may narrow what workspace records allow. They may never widen it.
 
-**Published** means the record file exists under `.oxagen/rules/` on the default (or context) branch of the main repo. For repository-scoped records, the file exists on that branch of the linked repo. The graph indexes every published record by `record_hash` and by the repo and commit it came from. Oxagen verifies the index against the merged commit. A mismatch is a `steering_drift` incident that blocks delivery of that record until resolved. The graph never silently outranks git for steering. Git never holds anything but steering and configuration.
+**Published** means the record file exists under `.oxagen/rules/` on the default (or context) branch of the main repo. For repository-scoped records, the file exists on that branch of the linked repo. The steering index (§10.5) stores every published record by `record_hash` and by the repo and commit it came from. Oxagen verifies the index against the merged commit. A mismatch is a `steering_drift` incident that blocks delivery of that record until resolved. The index never silently outranks git for steering. Git never holds anything but steering, skills and configuration.
 
 ### 10.3 Context PR lifecycle
 
@@ -896,13 +1004,191 @@ Oxagen honors enforcement grants only when they appear in the promotion ledger, 
 
 ### 10.4 Delivery
 
-Published records reach agents three ways, all recorded:
+> **Status of this section (2026-09-18).** This section describes the target and says plainly what is built. On oxagen `main` at `02278c913`, almost nothing reached a wrapped agent. A workspace could write a record, pass six checks, get a second-person review under a governance mode, merge a pull request and append a hash-chained ledger row, and no Claude Code or Codex run behaved differently. Phase 0 makes one record steer one agent, and it merged the same day (PR #3289, `c9db463e9`, ADR-091): active `must` and `should` records now compile into the bundle's `context.system`. Phase 1 builds the assembler of §10.5. **New governance ceremony stays frozen until a merged record is seen in a real run's `agent_start` and the proof is recorded on #2592** (ADR-091 §6, §17.2).
 
-- **Bundle context.** Compiled steering text in the signed policy bundle's `context.system` (ADR-091, `packages/handlers/src/lib/tacho-steering.ts`). `must`/`should` records sit in the stable prefix. `may`/`info` records are selected by relevance.
-- **Turn injection.** The model proxy's volatile steering message (ADR-051, superseded for delivery by ADR-091: Oxagen assembles no turn).
-- **Context frames.** Oxagen's provider serves them as `fact` and `memory` context frames. Each carries provenance to the record and the commit. Valid-from is set to the merge time, so `as_of` queries are exact.
+Everything that can influence a run competes for one finite window, so one function decides that competition: `assembleSteering(run, budget)` (§10.5). Published steering reaches an agent through the five injection points of §7.3 and no others:
 
-Oxagen measures the effect of each published record: the runs that rendered it, cited it, or violated it, and the proof rate before and after publication. Records with no effect after a window are surfaced for retirement.
+| Route | What travels | Injection point (§7.3) | Delivered in |
+|---|---|---|---|
+| **Bundle context** | The **stable prefix**: `must` and `should` items compiled to text in the signed policy bundle's `context.system`. Cached in the bundle, so it works offline | 1, `SessionStart` | Phase 0 for records: on `main` since PR #3289 (ADR-091, `packages/handlers/src/lib/tacho-steering.ts`). Phase 1 for every kind |
+| **Prompt-time selection** | The **volatile selection**: `may` and `info` items picked for this prompt under a token budget | 2, `UserPromptSubmit` | Phase 1 |
+| **Context frames** | Oxagen's provider serves published records as `fact` and `memory` context frames through its MCP tools. Each carries provenance to the record and the commit. Valid-from is the merge time, so `as_of` queries are exact | 3, MCP tool results | Built, and pull only: the model has to ask |
+| **Files** | Published records and skills as files in the checkout, loaded by the harness's own rules | 4 | Records on merge. Skills sync in Phase 2 (§10.6) |
+| **Turn injection** | The volatile selection re-landed on every model request, right after the cached system block (ADR-051, whose delivery ADR-091 superseded: Oxagen assembles no turn, so this route needs the proxy) | 5, the model request | Phase 4, with the gateway's proxy |
+
+Every route is recorded. The assembler's **manifest** says what was rendered and what was cut, and it is a frame on the run (`steering.manifest`, §10.5). Without it nobody can measure whether a record had any effect, and effect metrics, retirement and promotion stay unbuildable.
+
+**What is true today, source by source:**
+
+| Source | Where it lives | Reaches an agent? |
+|---|---|---|
+| Context records | Postgres `agent.context_records` with versions, the promotions ledger and proposals. Mirrored in git as `.oxagen/rules/*.toml` | **Active `must` and `should` records, yes**, since PR #3289 (ADR-091). `readWorkspaceSteering` (`packages/handlers/src/lib/tacho-steering.ts`) compiles them into the bundle's `context.system`, under the host's 16,384-character cap. `may` and `info` records reach nothing until Phase 1. ADR-051's injection path was removed by ADR-043, and this is its replacement; issue #2592 closes when a merged record is seen in a real run's `agent_start` |
+| Bundle `context.system` | `packages/tacho/src/wire.ts:375`, consumed at `packages/tacho/src/collector/hook-handler.ts:322` | **Yes.** `unsignedBundle` takes it from `readWorkspaceSteering` (`packages/handlers/src/lib/tacho-host.ts`), and it is `null` only for a workspace with no `must` or `should` record |
+| Bundle permissions, tools and budget | `tacho-host.ts`, `unsignedBundle` | **No.** Always empty, with `budget.mode = "observed"`. Nothing reads `session_limit_usd` |
+| Skills | `tacho.sessions.skills_available`, an inventory of what the harness reported (`packages/database/src/schema/tacho.ts:358`) | **No.** Observation only. No skills package, table or loader exists |
+| Memory | The graph, `:AgentMemory`, recalled at `packages/agent/src/runtime/assistant-recall.ts` | In-app agent only, capped at 6 items by a constant (`assistant-recall.ts:23`) |
+| `packages/engram` and `packages/context-provider` | A second memory system, and the only real token budgeter (`packWithinBudget`, `packages/context-provider/src/budget.ts:37`) | **No.** No application imports either. `@oxagen/engram` is still named by `packages/context-provider`, `tools/scripts/package.json` and `apps/app/next.config.ts`, and `@oxagen/context-provider` only by the env registry (`packages/config/src/registry.ts`). No app, handler or function calls them |
+| Decision rules, mandates, auto-approval | `workspaces.settings.decisionRules`, `tools.mandates` | They refuse calls at `kernel.invoke()`. They never produce prompt text, and they are not in the path of a wrapped agent |
+| `workspaces.promptConfig.additionalInstructions` | Postgres JSONB | In-app agent only. Appended to every prompt by `resolvePrompt`. An override cannot replace the governance prompt: `chat.system` is append-only, and only `conversation.title` is overridable (`OVERRIDABLE_PROMPT_KEYS`). What remains true is narrower: the appended text is unranked, unbudgeted, and never compared with a rule or a published `must` record (oxagen issue #3303) |
+| Operator steer commands | `tacho.control_commands`, drained at `hook-handler.ts:216` | **Yes.** This is the only live text channel from the server to a running wrapped agent |
+
+### 10.5 The assembler contract
+
+> **Status of this section (2026-09-18).** Not built. This is the contract Phase 1 implements (§17.2), decided by ADR-093 "One assembler decides what reaches the agent, and records what it cut" and ADR-097 "Steering and gating are two planes, authored on one surface and compiled twice". Phase 0 ships the smallest slice of it: active records with `force` of `must` or `should`, compiled into `context.system`. Phase 0 is on `main` (oxagen PR #3289, `c9db463e9`, ADR-091), and its `compileSteering` is the first version of the stable prefix. Phase 1 moves it behind `assembleSteering` without changing what a host receives for a workspace that has only records (ADR-093 §1). The assembler's home is `packages/context-provider`, which no application imports today.
+
+**Two planes that never merge.** *Steering* is what the model reads: advisory, ranked, budgeted, and it may be dropped. *Gating* is what the kernel refuses: deterministic, never budgeted, never ranked, and it works when Neo4j is down. A deny rule must never compete for context, because a relevance score could then drop it. So there is **one authoring surface and two compilations**:
+
+| Compilation | Input | Output | Properties |
+|---|---|---|---|
+| **To text** | Every steering item | The assembler's prefix, volatile selection and manifest | Ranked, budgeted, recorded. An item may be cut, and the cut is recorded |
+| **To gates** | Only items that carry an enforcement grant, plus the rules, mandates and kill switches authored under Policy | Bundle permissions (`permissions.allow`, `deny`, `ask`) and kernel rules | Deterministic. Never ranked, never budgeted, never cut. A gate that fails to compile fails its publication check. It is never dropped silently. Reads Postgres and the signed bundle only |
+
+The two relate in one direction. **Every gate also emits a one-line gate notice into steering**, so the agent does not spend turns walking into a denial. A gate notice is a `SteeringItem` of kind `policy` and force `must`. Removing the notice never removes the gate. Oxagen honors an enforcement grant only when it appears in the promotion ledger (§10.3). Phase 1 builds the text compilation and the gate notices. Phase 4 fills bundle permissions from the gate compilation.
+
+**One item type.** Everything that can steer is a `SteeringItem`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `id` | string | Stable and content-derived: `<kind>:<lineage>@<first 12 hex of hash>` |
+| `lineage` | string | The idea this item is a version of: a record's `lineage_id`, a skill id, a memory id, a rule or mandate id, or `instructions:<workspace>` |
+| `kind` | `record` \| `skill` \| `memory` \| `ontology` \| `policy` \| `instruction` | It names the source family. `policy` is a gate notice. `instruction` is the workspace's additional instructions. A context record keeps its own six-way classification (`rule`, `constraint`, `procedure`, `fact`, `memory`, `preference`) on its row. The two are different columns with different vocabularies, and the adapter must not conflate them (ADR-093 §2) |
+| `force` | `must` \| `should` \| `may` \| `info` | How hard the item steers. `must` and `should` go to the stable prefix. `may` and `info` compete for the volatile selection |
+| `scope` | `{ organization_id, workspace_id, repository_id?, agent_slug? }` | Where the item applies. An absent key means "every" |
+| `body` | string | The text as it will be rendered. One statement, plain prose |
+| `token_cost` | integer | Estimated tokens of `body`, computed once by the adapter |
+| `enforcement_grant?` | `{ ledger_ref, effect: require \| forbid, subject }` | Present only when the promotion ledger carries the grant. It is what sends the item to the gate compilation as well |
+| `provenance` | `{ source, ref }` | The adapter that produced it and a pointer a person can follow: commit and path, memory node id, rule id |
+| `hash` | string | SHA-256 over the canonical `body`. It is what the index verifies against git |
+| `valid_from` | timestamp | Merge time for anything published. Creation time for a memory |
+
+**The function.**
+
+```ts
+assembleSteering(run: SteeringRun, budget: SteeringBudget): Promise<SteeringAssembly>
+
+interface SteeringRun {
+  organization_id: string; workspace_id: string;
+  repository_id?: string;        // the run's repository binding
+  agent_slug: string; harness: string;
+  run_id?: string;               // absent in Preview
+  injection_point: "session_start" | "user_prompt_submit" | "model_request" | "in_app_turn" | "preview";
+  prompt?: string;               // the query for relevance. Absent at session start
+}
+interface SteeringBudget {
+  prefix_max_bytes: number;      // 16384, the wire cap on context.system
+  volatile_max_tokens: number;   // workspace setting, default 1200
+  volatile_max_items: number;    // default 12
+  deadline_ms: number;           // default 250 at the hook tier
+}
+interface SteeringAssembly {
+  prefix:   { text: string; item_ids: string[]; digest: string };
+  volatile: { text: string; item_ids: string[]; digest: string };
+  manifest: SteeringManifest;
+}
+```
+
+`run` carries the prompt because the prompt is the query. The function is pure over its ports: the same items, run and budget give the same assembly, byte for byte. That is what makes Preview (§10.7) truthful and a replay exact.
+
+**Source adapters.** Each adapter turns one source into `SteeringItem`s. An adapter never ranks and never budgets.
+
+| Adapter | Reads | Emits | Notes |
+|---|---|---|---|
+| Record registry | `agent.context_records` with status `active`, through the index port | `record` | A row with no `force` (one published through `publish_context_record` before the two publish paths collapse) is read as `info` and listed in the manifest as `unclassified` |
+| Memory | `:AgentMemory` in the graph | `memory` | Force is never above `may`, whatever the memory's class. With the graph off the adapter returns nothing and the manifest says `source_unavailable` |
+| Gate notices | `workspaces.settings.decisionRules`, `tools.mandates`, kill switches, and compiled enforcement grants | `policy`, force `must` | One line each: what will be refused or held, and for whom |
+| Skill descriptions | The published skills under `.oxagen/skills/` (§10.6) | `skill` | The description line only. The harness loads the skill body itself |
+| Ontology notes | Notes authored under the Ontology tab (§10.7) | `ontology` | A note, not the ontology engine |
+| Instructions | `workspaces.promptConfig.additionalInstructions` | `instruction`, force `should` | Today it is appended to every in-app prompt with no check against rules (`packages/ai/src/prompts/registry.ts:82`). An override cannot replace the governance prompt: `chat.system` is append-only, and only `conversation.title` is overridable. In the assembler it is one item among the others, rendered after the prefix and subject to the same precedence |
+
+**The index sits behind a port.** Adapters that read published items go through one interface, so the store can change without the assembler changing:
+
+```ts
+interface SteeringIndex {
+  prefixItems(scope): Promise<SteeringItem[]>;                            // every active must and should in scope
+  candidates(scope, query: string | null, limit: number): Promise<Array<SteeringItem & { score: number }>>;
+  verify(item: SteeringItem): Promise<"ok" | "steering_drift">;          // hash against the merged commit
+}
+```
+
+The first implementation is on the Postgres record registry. In Phase 3 a graph implementation takes the relevance stage (`:Record` nodes with `ABOUT` edges to files, repositories and entities, projected one direction from the registry and verified by hash), with the Postgres implementation kept as the fallback behind the same port. Delivery never waits for the graph.
+
+**Ranking and budgeting**, in this order:
+
+1. **Collect.** Call every adapter in parallel, each under the deadline. An adapter that fails or times out contributes nothing and is named in the manifest. It is not an error.
+2. **Scope.** Keep an item when its scope matches the run. Drop the rest with reason `out_of_scope`.
+3. **Verify.** Drop any published item whose `verify` says `steering_drift`, with that reason. Drift also raises the incident of §10.2.
+4. **Apply precedence** (below).
+5. **Build the prefix.** Gate notices first, then `must`, then `should`, then the `instruction` item. Inside each group order by `valid_from`, then `id`, so the text is stable and the bundle's etag moves only when content does. If the text would pass `prefix_max_bytes`, cut from the end (`should` before `must`, never a gate notice) with reason `prefix_overflow`. A workspace whose gate notices and `must` items alone pass the cap fails the publication check that would have caused it (§10.3), so the overflow is caught at the pull request and not at the agent.
+6. **Select the volatile items.** Score `may` and `info` candidates against the prompt through the index. With no prompt, or on a host whose retention mode is `digest_only` (the prompt may not leave the machine), the score is the force weight alone and the manifest records `query: none`. Pack best-first with `packWithinBudget` (`packages/context-provider/src/budget.ts`), which skips an item that does not fit and keeps walking, under `volatile_max_tokens` and `volatile_max_items`. Ties break on `id`. Everything not packed is cut with reason `over_budget` or `below_relevance_floor`.
+7. **Render.** The prefix opens with a line that says these items govern. The volatile block opens with a line that says its items are advisory and that the governing items win any conflict.
+8. **Write the manifest.**
+
+**Precedence, fixed in this one place (ADR-097 §4). The rule lives in the assembler's package and nowhere else:**
+
+1. **A gate beats everything.** No steering text changes what the kernel refuses. When a gate and an item disagree, the gate's notice is rendered and the item is cut with reason `overridden_by_gate`.
+2. **A published `must` beats recalled memory.** A memory never enters the prefix and is never rendered as a rule. Today a recalled memory of class `RULE` is rendered with "never violate a RULE" (`assistant-recall.ts:69`) while a published `must` record is never in the same prompt. The assembler ends that.
+3. **Repository scope may narrow workspace scope and never widen it.** A record can only `require` or `forbid` (§10.3), so a repository-scoped item can add a constraint. A repository-scoped item on the same lineage as a workspace-scoped item is cut with reason `widens_workspace_scope`.
+
+**The manifest frame.** Frame kind `steering.manifest`, one per assembly that reached an injection point:
+
+| Field | Meaning |
+|---|---|
+| `assembler_version` | The version of the contract that produced it |
+| `injection_point` | One of the five values of `SteeringRun.injection_point` |
+| `bundle_version`, `steering_version` | The bundle the prefix came from, and the promotion ledger length it was compiled at |
+| `prompt_digest` | A digest of the prompt, or `null`. Never the prompt |
+| `query` | `prompt` or `none` |
+| `budget`, `spent` | The `SteeringBudget` given, and the bytes and tokens used |
+| `rendered[]` | `{ id, lineage, kind, force, hash, token_cost, section: prefix \| volatile, score? }` |
+| `cut[]` | The same fields, plus `reason` |
+| `sources[]` | `{ adapter, status: ok \| timeout \| unavailable \| error, items, ms }` |
+| `prefix_digest`, `volatile_digest` | Digests of the exact text delivered |
+| `fail_open` | `null`, or the reason the assembly returned empty |
+
+`reason` is a closed vocabulary: `over_budget`, `below_relevance_floor`, `out_of_scope`, `superseded`, `widens_workspace_scope`, `overridden_by_gate`, `steering_drift`, `prefix_overflow`, `duplicate`, `source_unavailable`. The manifest carries ids, hashes and digests. It never carries bodies or the prompt.
+
+Today the prefix is compiled on the server when the bundle is built (`unsignedBundle`, `packages/handlers/src/lib/tacho-host.ts:255`) as one `context.system` per host, and its manifest is stored with the bundle version. That is Phase 0, and it has two limits this section removes in Phase 1. One host bundle holds one prefix, so two sessions on one host in two repositories cannot each get their own repository-scoped `must`. And the prompt at `UserPromptSubmit` exists only inside `tachod`, and ADR-093 forbids sending it to Oxagen's servers, so the volatile ranking for a wrapped run cannot run on the server.
+
+**The signed local index (Phase 1).** The server compiles into the signed bundle `steering.items`, gated the way every new bundle field is gated: `policyBundleSchema` is `.strict()` (`packages/tacho/src/wire.ts`), so a daemon built before the field rejects the whole bundle. A host advertises the fields it can read in `bundleFeatures` at enrollment and in its health report, and the control plane emits `steering.items` only to a host that named `BUNDLE_FEATURE_STEERING_ITEMS`, exactly as `gateway_tools` is emitted today (`BUNDLE_FEATURE_GATEWAY_TOOLS`, `tacho-host.ts`). A host that does not advertise it keeps `context.system` and the Phase 0 behaviour. The field becomes required, and the gate goes away, once the fleet is upgraded. `steering.items` is every active item in the host's scope, each with its `id`, `hash`, `kind`, `force`, `scope` (repository ids included), `valid_from`, `valid_to`, `body` and the terms the ranker scores on. `context.system` stays as the workspace-scope prefix, the fallback for a session that cannot run the local assembly. At `SessionStart` the hook adapter builds the prefix for that session from the items whose scope matches the session's repository binding, resolved from `cwd` to the same binding the run's `repo.bound` frame records, and seals the `steering.manifest` frame naming the bundle version and the prefix digest it delivered, beside the `oxagen.context_digest` attribute it already writes. At `UserPromptSubmit` the same core ranks the volatile candidates against the prompt on the machine, and the volatile manifest is sealed at that injection point. The assembler's pure core (scope, verify, precedence, prefix build, packing) lives in `@oxagen/tacho`, the leaf package, which compiles it into `tacho-hook`. `@oxagen/context-provider` imports that core and adds the source adapters and the Postgres index for the in-app agent and Preview. One function, two hosts. The prompt never leaves the machine, and no request from `tacho-hook` to Oxagen's servers carries it.
+
+**Failure behaviour.** The assembler call fails open: a slow or failing assembler never blocks a prompt at the hook tier, and the cost is a turn with the prefix and no volatile selection (ADR-093). That is a statement about steering, which is advisory. It is not the hook process's gate path, which fails closed against its cached bundle (§7.1).
+
+- The `UserPromptSubmit` call runs under a tight timeout (`deadline_ms`, default 250). On a timeout or any error the hook answers `{}`, the prompt proceeds with no volatile selection, and a `steering.manifest` frame is sealed with `fail_open` set. A slow assembler never holds a prompt.
+- The stable prefix does not depend on that call. It rides in the signed bundle, so it is delivered offline and when the server is slow.
+- One adapter failing degrades one source. The rest of the assembly stands.
+- The gate compilation shares none of this. A gate never fails open because steering did.
+
+**One assembler, everywhere.** The in-app agent's `packages/agent/src/runtime/assistant-turn.ts` calls the same function with `injection_point: "in_app_turn"`, in place of its own recall cap and its unconditional append. Preview calls it with `injection_point: "preview"`, which seals no frame. From Phase 4 the proxy calls it with `injection_point: "model_request"`. ADR-094 fixes the rule for that tier: no prompt body is sent to Oxagen's servers, and the proxy ships the seam for the per-turn injection before the Phase 1 assembler exists. For a wrapped run the ranking runs on the machine, in `tacho-hook`, against the signed items the bundle carries (above, and ADR-093). ADR-094 does not speak to it. `packages/engram` is deleted or folded into `packages/context-provider`, so two memory systems become one. The two publish paths (`packages/handlers/src/context.record.publish.ts` and `packages/handlers/src/context.pr.merge.ts`) collapse, so every row carries `kind` and `force`.
+
+### 10.6 Skills are steering, and they are files
+
+> **Status of this section (2026-09-18).** Not built. On oxagen `main` at `02278c913` the only skills data is `tacho.sessions.skills_available`, an inventory of the skill names a harness reported. ADR-008 describes a skills package, tables and a loader that do not exist. Governed skills delivered by sync arrive in Phase 2 (§17.2). ADR-090 (skill resolution) is checked against this section in the ADR amendments of 2026-09-18. Where that check changes ADR-090, §14 and the `skills` tables of Appendix A follow it.
+
+A skill is a harness-native artifact. The harness loads it by its own progressive disclosure: it reads the skill's description line first, and the body only when it decides the skill applies. Oxagen cannot put a skill in the prompt, and it does not run one. It can do three things, and those are the whole design:
+
+1. **Govern it like a record.** A skill is a file in the repository, under `.oxagen/skills/<id>/SKILL.md`, authored and changed through the same pull request flow as a record (§10.3): checks, review per governance mode, merge, a promotion ledger entry. The workspace's `.oxagen/skills.toml` says which sources and skills are in scope. It is off by default and is itself changed only by pull request (the W13 scenario, ADR-090).
+2. **Deliver it by sync.** Sync materializes the published skill files into the place in the checkout where the harness looks for skills, and removes what is no longer published. It is injection point 4 of §7.3. Nothing else delivers a skill.
+3. **Let its description compete.** The skill's description line is a `SteeringItem` of kind `skill`, and it competes in the assembler like any other item (§10.5). So a skill that matters for this prompt can be named to the agent even when the harness's own disclosure would not have surfaced it.
+
+Skills live under Steering (§10.7). They have no top-level navigation entry of their own.
+
+### 10.7 One screen: Steering is the hub
+
+> **Status of this section (2026-09-18).** Phase 2 (§17.2). Today Steering lists records, proposals and Context PRs, and Skills is a separate page that shows the reported inventory. The mockups depict Phase 2 complete.
+
+One screen owns everything that can steer. Its tabs, in this order:
+
+| Tab | What it holds |
+|---|---|
+| **Records** | Published context records, by kind and force, with their lineage and the pull request that published each |
+| **Skills** | Governed skills: the published files, their versions and digests, the `.oxagen/skills.toml` config and its history, sync status per agent, and the skill inventory harnesses report |
+| **Memory** | What agents remembered (`:AgentMemory`), with provenance to the frame that taught it. Read and retire. A memory becomes a rule only by being proposed as a record |
+| **Ontology** | A small home for ontology notes that steer. It is not the ontology engine, which stays cut (the scope review, amended 2026-09-18). The graph becomes the index in Phase 3 |
+| **Policy** | Gates: decision rules, mandates, kill switches and enforcement grants, each shown with the one-line gate notice it emits into steering |
+| **Proposals** | Candidates and open Context PRs with their checks. Nothing here steers until it merges |
+| **Preview** | Pick an agent and a prompt, and see exactly what would be injected, what was cut, and why. It runs the same `assembleSteering` with `injection_point: "preview"` and renders the manifest. It is the page that makes the competition visible |
+
+The route is `/{org}/{ws}/steering/{tab}`, with `records` as the default tab. A view inside a tab is one more segment: the Skills views at `/steering/skills/{view}`, and open Context PRs at `/steering/proposals/prs`. Skills and Ontology have no top-level navigation entry of their own any more. `/{org}/{ws}/skills` redirects to `/{org}/{ws}/steering/skills`.
 
 ---
 
@@ -1120,11 +1406,21 @@ Variance is recorded per key-day and per invoice line in `cost.reconciliations` 
 
 ### 12.5 Budgets
 
-Budgets live in `billing.spend_budgets`. Each budget belongs to an organization, workspace, operator, or agent, and has a period and a hard or soft mode. Hard budgets are enforced at the model proxy before the call. The proxy checks a running counter per budget in Postgres, which the recorder updates. Hard budgets are also enforced in the policy bundle for harness-tier runs. A breach is a `policy.decision` frame and, by policy, a pause.
+> **Status of this section (2026-09-18).** No budget is enforced on a wrapped run today. Every bundle carries `budget.mode = "observed"` (`packages/handlers/src/lib/tacho-host.ts:275`), and nothing reads `session_limit_usd`. Enforcement arrives with the gateway in Phase 4 (§17.2).
+
+Budgets live in `billing.spend_budgets`. Each budget belongs to an organization, workspace, operator, or agent, and has a period and a hard or soft mode. A hard budget is enforced where the money is spent: at the gateway's loopback proxy, before the model call. Who owns the counter decides how:
+
+- **A run budget has one owner.** `session_limit_usd` is spent against by one proxy, so the bundle carries the limit and the proxy enforces it locally, before the call, with no round trip. It admits a call only when the call's ceiling (below) fits what is left, and admission is one serialized step per run: the proxy holds a per-run lock across the read of what is left, the check and the WAL append, so two concurrent calls from one run cannot both see the same balance, and a run with a dollar left admits one one-dollar ceiling, not two. What is left is durable. Inside that step the proxy appends the admitted ceiling to the host WAL (`packages/tacho/src/host/wal.ts`), keyed by run, and appends the settlement when the response ends. After a `tachod` restart the proxy rebuilds each live run's spent from the WAL, and an admitted ceiling with no settlement counts as spent in full, because the usage of a call cut by the crash cannot be recovered. The recovered run therefore has no more headroom than it had, and never the full `session_limit_usd` again. The collector already resumes session chains after a restart, and the budget state resumes with them.
+- **A shared budget is reserved atomically on the control plane.** An organization, workspace, operator or agent budget is spent against by every host in that scope at once. Two proxies admitting from their own copy of one counter can both pass before either result lands, so a copy of the counter in the bundle is never the admission check for a shared scope. Before a model call the proxy asks the control plane to **reserve** the call's ceiling against the scope's counter. The reservation is one row-locked update in Postgres that succeeds only when `spent + reserved + ceiling` fits the limit, and it carries the run, the ceiling and an expiry. On success the proxy forwards the call and, when the response ends, settles the reservation to the observed usage. A refused reservation refuses the call. An expired reservation is released, so a proxy that died mid-call does not hold headroom for ever.
+- **A call is admitted by its ceiling, not by the balance before it.** A completion can cost more than what is left, so a proxy that admits any call while the total is under the limit does not enforce the limit. The amount reserved is the call's maximum possible cost across every priced class of §12.6 the request can incur: the input tokens, from the vendor's count endpoint where one exists (Anthropic's `count_tokens`) and otherwise from the body's bytes at a conservative ratio, at the higher of the uncached and the cache-write price when the request can create a cache entry; the output cap at the output price, with reasoning tokens counted inside the cap; and, for each provider-hosted tool the request enables, its per-request price times the bound on its uses, the request's own `max_uses` where the vendor takes one and otherwise a cap the proxy sets and records on the frame. A request whose cost the proxy cannot bound is refused as `budget_unbounded`. A request that sets no output cap gets one from the proxy, the largest the remaining balance affords, and the `model.request` frame records it. A request whose ceiling does not fit what is left is refused as `budget_ceiling`, a `policy.decision` frame. Settlement replaces the ceiling with the observed usage. The overrun a hard budget can suffer is bounded by the input estimator's error on calls admitted without a count endpoint, and the frame names which estimator admitted the call.
+- **Offline, a shared budget is spent from a lease.** The bundle carries, for each shared hard budget in scope, a per-host lease: a slice of the remaining headroom, refreshed on the control channel and settled like a reservation. With the control plane unreachable the proxy admits calls against the lease and refuses when it is spent. A lease's debits are as durable as a run's: each lease carries an id and the bundle version that issued it, the WAL entry for an admitted ceiling names the lease it drew on, and after a `tachod` restart the proxy rebuilds every lease's remaining amount from the WAL, unsettled ceilings counted in full, before it admits another offline call. A cached bundle cannot be spent twice across restarts, and only a fresh bundle issues a fresh lease. Routed traffic can therefore exceed a shared limit by at most the sum of outstanding leases plus the estimator error above, and the spec says so wherever the word "enforced" appears beside a shared budget.
+- **A soft budget** is a counter and a notice in steering, never a reservation and never a stop.
+
+A breach is a `policy.decision` frame and, by policy, a pause. The claim carries its scope: a budget is enforced for model traffic routed through Oxagen. At the `harness` tier a budget is a recorded number and a notice in steering, never a stop. Only at the `contained` tier can the agent not spend around it.
 
 ### 12.6 Token accounting on every model call
 
-Providers name token classes differently. The cost record normalizes them once, at the model proxy or the collector, into a fixed set. Every downstream number derives from these fields and nothing else:
+Providers name token classes differently. The cost record normalizes them once, at the gateway's proxy or the collector, into a fixed set. Every downstream number derives from these fields and nothing else:
 
 | Field | Meaning | Anthropic | OpenAI | Gemini | OpenRouter |
 |---|---|---|---|---|---|
@@ -1146,6 +1442,8 @@ Every field is an integer. Absent classes are zero, never null. When a provider 
 - **Prompt composition**: the shares of the prompt spent on tool definitions, context frames, steering, and conversation, from the measured fields.
 - **Latency**: time to first token, total duration, retries, and the provider error that caused each retry.
 - **Provider request id and concrete model id**, for reconciliation (§12.4).
+
+**Every spend number carries its basis: `observed` or `self-reported`.** Observed means the gateway's proxy counted it from the bytes that passed through it. Self-reported means the harness's own telemetry said so. Status 2026-09-18: no proxy exists, so every number for a wrapped agent is self-reported. Claude Code reports tokens and cost. Codex and Stella export none, so their spend is absent from the record, and a page must say absent, never zero. Phase 4 makes metering observed for every harness (§17.2).
 
 Client-attested model calls (harness telemetry rather than the proxy) carry the same fields where the harness reports them. The fields the harness does not report are marked as gaps. A cache hit rate over a mixed fleet is therefore never computed from missing data as if it were zero.
 
@@ -1206,7 +1504,7 @@ Each finding names the level it applies to (run, agent, operator, workspace) and
 
 **Keep everything, at full fidelity, for seven years, and make it cheap by writing it once.**
 
-- Every frame's body (prompts, completions, tool input and output, steering, context frames) is retained as an encrypted, content-addressed object from the moment it is recorded. The retention clock runs seven years from the seal by default. Organizations may set a longer period.
+- Every frame's body (prompts, completions, tool input and output, steering, context frames) is retained as an encrypted, content-addressed object from the moment it is recorded. This applies where Oxagen is in the path of the body. A wrapped agent's model calls are the exception, and §13.6 is the rule for them. The retention clock runs seven years from the seal by default. Organizations may set a longer period.
 - `digest_only` mode is an opt-down per workspace for customers who cannot store prompt content. The system records it as a completeness gap, and it lowers the replay grade. It is not the default. Replay without bodies grades `inspect`, not `view` (§8.4). That grade gives a chain that can be audited, not a run that can be read. The product's explanation promise depends on bodies.
 - The run ledger is retained forever. It holds the run, attempt, seal, attestation (a signed statement that vouches for a seal), and frame metadata with digests and costs.
 
@@ -1247,6 +1545,17 @@ Each data plane gets its own buckets with object lock, a storage setting that bl
 
 GDPR (the EU privacy law) erasure works by **crypto-shredding**, which destroys the encryption key so the data can never be read again. Bodies attributable to a natural person are encrypted under a per-subject data key. Erasure destroys the key and writes a tombstone frame in the ledger with the digests that remain. The chain stays intact and verifiable. The content is unrecoverable. Redaction detectors run before write, so most personal data never enters a body in the first place. The erasure SOP carries over.
 
+### 13.6 Bodies and the gateway (2026-09-18)
+
+§13.1 says every frame's body is retained. ADR-094 says no prompt body is sent to Oxagen's servers, and only digests and usage go up; the proxy forwards bodies to the vendor as the harness does today. Both hold, because they are about different frames. The rule:
+
+- **Model-call frames from the gateway carry digests and usage only, never bodies.** A `model.request` or `model.response` frame written by the loopback proxy (Phase 4) holds `content.digest`, sizes, the model, the token classes and the cost basis `observed`. It has no `bytes_ref`, and no prompt or completion body is sent to Oxagen's servers. The `steering.manifest` frame is the same: ids, hashes and digests only (§8.2).
+- **What hook-tier frames carry today is unchanged.** Hook payloads are digest-first: `tool_input` and `tool_response` are hashed and size-counted at the collector. Raw retention is a per-workspace policy, off by default, and when it is on the bytes pass the collector's redaction detectors before they are encrypted (the Tacho spec §5.4, ADR-058). Phase 4 adds no body to any frame and removes none.
+- **§13.1's full bodies apply where Oxagen is itself in the path of the body:** the in-app agent's model calls through Oxagen's own model layer (§4.5), and tool calls that reach the server-side tool gateway.
+- **The replay grade follows.** A wrapped run's model frames grade `inspect` (§8.4): a chain that can be audited, not a run that can be read. The record lists it as a completeness gap, the same way `digest_only` does, and no page claims more for a wrapped agent than its frames hold.
+
+ADR-094 decides the first bullet. It does not speak to the other three. They are this specification's reading of it, written so that nothing built today changes.
+
 ---
 
 ## 14. Mission Control
@@ -1261,8 +1570,8 @@ Mission Control has eleven pages: eight at workspace scope and three at organiza
 | **Agents** | Each agent's identity, run credential, roles, its toolbelt (the tools it may call, with schemas and per-tool decision rules), the mandates it holds, budgets, enrollment status, and tamper incidents | register, enroll, revoke, grant, set budget, request mandate |
 | **Tools** | The registry (servers, tools, versions, schemas, safety classification), approval rules and auto-approval conditions, connections and their owners, credential grants, the mandates ledger, policy versions with their tests and simulation, kill switches, and the last result from the assurance suite | import server, approve observed schema, add connection, grant mandate, edit and simulate policy, flip a switch |
 | **Ontology** | The workspace's model of its own business, and the page the product is known for. Tabs in order: **Model** (the live map: every class with its entity count, freshness, sources, and relations drawn, plus the consequence on hover: most cited by agents, rules that reference it, proven runs per class, drift found), **Graph** (explore instances, typed expansion, ask in plain English and see the Cypher graph query and the citations behind the answer), **Sources** (connectors, sync health, entity provenance), **Repositories** (main repo and linked repos, production branch, last indexed commit, event health, issue import, code graph, data-layer drift), **Versions** (the git history of `.oxagen/ontology/`, open proposals as pull requests with diffs, an `as_of` picker). The page also lists embedding indexes with their recall and citation rate | ask the graph, open an ontology proposal, link repo, set production branch, sync now, add source, resolve entity, upgrade an embedding index |
-| **Skills** | Which skills the workspace's `.oxagen/skills.toml` lets an agent find, which it may load, what that cost, and what was held back and why. Tabs: **Catalog**, **Search** (the `search_skills` console), **In the loop** (the interjection seat), **Reflection** (research-only, quarantined) and **Versions** (the config's git history, each version a pull request). Oxagen resolves; the harness runs. (ADR-090) | turn on, edit the config, approve a digest, add a skill — each a pull request |
-| **Steering** | Published records, proposals, open Context PRs, effect metrics, and retirement candidates | open Context PR, review, retire |
+| *(tab under Steering, 2026-09-18; its own page until Phase 2 of §17.2)* **Skills** | Which skills the workspace's `.oxagen/skills.toml` lets an agent find, which it may load, what that cost, and what was held back and why. Tabs: **Catalog**, **Search** (the `search_skills` console), **In the loop** (the interjection seat), **Reflection** (research-only, quarantined) and **Versions** (the config's git history, each version a pull request). Oxagen resolves; the harness runs. (ADR-090) | turn on, edit the config, approve a digest, add a skill, each a pull request |
+| **Steering** | The hub for everything that can steer. Tabs, in this order: **Records**, **Skills**, **Memory**, **Ontology**, **Policy**, **Proposals**, **Preview** (§10.7). Preview: pick an agent and a prompt, and see exactly what would be injected, what was cut, and why. Skills and Ontology have no top-level navigation entry of their own (2026-09-18). Status: the hub is Phase 2 of §17.2. Today the page lists records, proposals and Context PRs | open Context PR, review, add a skill, retire a memory, preview an agent's steering |
 | **Spend** | Findings ranked by the money at stake. Cost by operator, agent, model, provider key, and task. Proven spend versus unproven spend, and the productive ratio. Cache hit rate. Reconciliation status and variance. Budgets | act on a finding, set budget, open exception, export statement |
 | *(org)* **Organization** | People, roles, invitations, SSO (single sign-on), workspaces, model funding and routes, the data plane, and API keys | invite, change role, create workspace, set funding, set route |
 | *(org)* **Billing** | Governed-action usage, the retention meter, plan, and invoices | change plan |
@@ -1280,7 +1589,7 @@ One agent tool contract drives all four surfaces: the API, MCP (Model Context Pr
 
 | Area | Requirement |
 |---|---|
-| Gateway latency | The model proxy adds ≤ 30 ms at p50 (the typical request) and ≤ 100 ms at p99 (the slowest 1 in 100 requests) before the first byte. Streaming passes straight through. Tool gateway validation takes ≤ 20 ms at p99 for schemas under 64 KB |
+| Gateway latency (target, Phase 4) | The loopback model proxy adds ≤ 30 ms at p50 (the typical request) and ≤ 100 ms at p99 (the slowest 1 in 100 requests) before the first byte. Streaming passes straight through. Tool gateway validation takes ≤ 20 ms at p99 for schemas under 64 KB |
 | Fail behavior | Enforcement seams fail **closed**, meaning a missing policy blocks the call. Telemetry seams fail **open**, meaning the call proceeds and the gap is recorded. Recorder backpressure never blocks an agent. The recorder spools instead |
 | Availability | Gateway and control channel: 99.9%. Mission Control: 99.5%. The recorder delivers at-least-once (a frame may arrive more than once but is not dropped), with idempotent frame ids so a repeat is stored only once |
 | Throughput | 2,000 frames per second per organization, sustained, on the shared plane. Graph writes are batched |
@@ -1323,6 +1632,8 @@ The target Postgres schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `prices`, 
 
 Each milestone has an acceptance test that a customer could run.
 
+> **Status of this section (2026-09-18).** The milestones are the original build order. Where M1 and M2 name the model proxy, run tokens and budgets, and where M3 names steering delivery, none of that is built on oxagen `main` at `02278c913`. §17.2 is the approved path that delivers them, and it says where each of its six phases sits against these milestones.
+
 | Milestone | Delivers | Accepted when |
 |---|---|---|
 | **M0 Foundations** (weeks 1–4) | The repo, the kernel, tenancy, RLS (row-level security) with role-based system access, org and workspace creation including a Neo4j database and repo binding, IAM, and the tool registry. | A cross-tenant probe (a test that tries to reach one tenant's data from another tenant) finds nothing in either store. A workspace cannot be created without a main repo. A second repo can be linked and unlinked. |
@@ -1345,6 +1656,36 @@ The milestones above are the build order. The phases below are the business orde
 
 The wedge ends when Customer 1 is in production, not on a date. M6 produces the labeled runs that the Series A training pipeline consumes.
 
+### 17.2 The steering and gateway refactor path (2026-09-18)
+
+The review of 2026-09-18 found that the design of §4.2, §7 and §10.4 was right and the code had diverged from it: on `main`, almost nothing reaches a wrapped agent. The maintainer approved its refactor path in full on 2026-09-18. It is six phases. Each ships alone and is useful alone. The implementation plan carries each phase's scope, seam, files and dependencies. This table is the summary.
+
+| Phase | Name | What ships | Done when | Sits against the milestones |
+|---|---|---|---|---|
+| **0** | Make one record steer one agent | Active records with `force` of `must` or `should` are compiled into `context.system` in `unsignedBundle`. Issue #2592 is reopened against this seam. Merged as oxagen PR #3289 (`c9db463e9`, ADR-091). **New governance ceremony is frozen until the proof is recorded on #2592** (ADR-091 §6) | A merged record changes what a wrapped Claude Code run is told at `SessionStart`, and the run's `oxagen.context_digest` shows it | The missing half of M3's acceptance test ("merging it changes the next run's context") |
+| **1** | One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, the index port on Postgres, `UserPromptSubmit` wired with a tight timeout and fail open, precedence fixed, the two publish paths collapsed, the in-app agent on the same assembler, `packages/engram` deleted or folded in (§10.5) | Every run carries a `steering.manifest` frame, and one function produces what both the wrapped agent and the in-app agent are told | Completes M3's steering delivery |
+| **2** | One screen | Steering becomes the hub with its seven tabs: Records, Skills, Memory, Ontology, Policy, Proposals, Preview. Skills become governed files delivered by sync (§10.6, §10.7) | Preview shows, for an agent and a prompt, exactly what would be injected, what was cut, and why | §14. Replaces the separate Skills page |
+| **3** | The graph becomes the index | Every item is projected as a `:Record` node with `ABOUT` edges, one direction registry to graph, verified by hash. The assembler's relevance stage moves to the graph, with Postgres as the fallback behind the same port | With the knowledge graph on by default, the volatile selection prefers items about the files and entities a run touches, and turning Neo4j off changes ranking only, never delivery | The steering half of M4. It waits for the knowledge graph to be on by default |
+| **4** | The gateway | `tachod` gains the loopback model proxy (Anthropic Messages and OpenAI Responses passthrough with streaming, enrollment writes the base URL) and the MCP aggregator (displace-and-restore). Metering becomes observed. `session_limit_usd` is enforced. Per-turn volatile injection re-lands at the proxy. `interrupt` becomes real. Bundle permissions are filled from the gate compilation | A wrapped run earns the word `gateway`, its spend is observed for Claude Code, Codex and Stella alike, and a breached session budget stops the next model call | Delivers what M1 and M2 call the model proxy, run tokens and budgets |
+| **5** | The contained tier | `oxagen run -- <agent>` launches the agent under an OS sandbox with egress limited to the gateway. CI, headless runs, cloud runners and managed devices first, never mandatory on a developer's laptop. `contained` becomes the top word of the ladder. The witness runner (ADR-064) is built on the same launcher | A run under the launcher cannot reach a model or a tool server except through the gateway, and its tier reads `contained` | Precedes M6, whose witness runner uses the launcher |
+
+**Build order (2026-09-18).** The phase names and numbers do not change. Only the order of build does: Phase 0 merged first, Phase 4 is in build now, then Phases 1, 2, 3 and 5. The epic is oxagen issue #3295. §7.1 and §10.4 describe `main` with Phase 0 on it, and they stay that way until the Phase 4 branches merge.
+
+| Phase | Issue (macanderson/oxagen) | State at 2026-09-18 | ADR |
+|---|---|---|---|
+| **0** | #2592 (reopened, P0) | Merged: oxagen PR #3289 (`c9db463e9`, 2026-09-18). #2592 closes when a merged record is seen in a real run | ADR-091 |
+| **4** | #3299 (P0), with the desktop review #3301 | In build. Branch `gateway-model-proxy`: the loopback model proxy in `tachod`, enrollment writes the base URLs, observed metering, the enforced `session_limit_usd`, real `interrupt`, and the seam for per-turn injection. Branch `desktop-install-hardening`: a line-by-line bug review of `apps/desktop`, install and uninstall fixed and proven against a temp-HOME snapshot rig, and the installer updated for the gateway | ADR-094, ADR-095 |
+| **1** | #3296 | Next after Phase 4 | ADR-093, ADR-097 |
+| **2** | #3297 | After Phase 1 | ADR-097 §5, ADR-093 §6 |
+| **3** | #3298 | After Phase 1, and when the knowledge graph is on by default | ADR-093 §5 |
+| **5** | #3300 | After Phase 4 | ADR-096, ADR-095 |
+
+Two parts of Phase 4 wait for Phase 1, because Phase 1 writes what they carry. Per-turn volatile injection at the proxy lands when the Phase 1 assembler exists, and the proxy ships the seam for it (ADR-094). Bundle permissions are filled from the second compilation, which Phase 1 writes (ADR-097 §3).
+
+The review's defects are filed on their own: #3302 (the `publish_context_record` path leaves `kind` and `force` NULL), #3303 (`additionalInstructions` is unbudgeted and never checked against a rule), #3304 (Codex and Stella spend is absent) and #3305 (the public decks describe the removed runtime).
+
+**Decided 2026-09-18: subscription logins pass through the proxy.** Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18 (ADR-094). The review listed this as its one unverified risk. It is closed, and it does not gate Phase 4.
+
 ---
 
 ## 18. Risks and open decisions
@@ -1353,7 +1694,9 @@ The wedge ends when Customer 1 is in production, not on a date. M6 produces the 
 |---|---|---|
 | Neo4j databases per instance | Verified. Aura allows 5 databases per GB of RAM, with a ceiling of 100 per Aura instance. The setting is enabled only at creation and is in public preview (open for use, but not yet final). Sharding, which spreads organizations across instances, starts at 25 paid organizations per 32 GB instance. Free organizations are pooled (§5.3) | If Aura's preview slips or the ceiling drops, the fallback is self-managed Enterprise on Kubernetes with `dbms.max_databases`. The data plane table can point any organization at either option |
 | Graph write throughput for frames | Batched writes, a hot window, then compaction | If a customer exceeds 2,000 frames/s, add a per-org ingest partition. Never add a second store of truth |
-| Claude Code model calls | Setting the base URL to the proxy earns the `gateway` tier for model calls | If a harness cannot point at the proxy, the run gets the `harness` tier and the record says so |
+| Claude Code and Codex model calls | From Phase 4, enrollment points the harness's base URL at the loopback proxy in `tachod`, which earns the `gateway` tier for model calls. No proxy exists on `main` at 2026-09-18, and Phase 4 is in build (oxagen issue #3299) | If a harness cannot point at the proxy, the run gets the `harness` tier and the record says so |
+| **Decided 2026-09-18: subscription logins through a base URL proxy** | Closed. Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18 (ADR-094). It was the review's one unverified risk, and it does not gate Phase 4 (§17.2) | A vendor changing its terms or its login flow. A host whose harness cannot be pointed at the proxy stays at the `harness` tier and the record says so |
+| Sandbox scope | The sandbox is the top tier, not the only tier, and hooks stay. `oxagen run -- <agent>` targets CI, headless runs, cloud runners and managed devices first | It is never made mandatory on a developer's own laptop. A customer who asks for that gets managed settings and the `gateway` tier first |
 | Ontology in git | Graph-only in v1 | Regulated customers may ask for ontology changes as Context PRs. The proposal object already has a diff |
 | Approval tokens | Biscuit v2 as designed (a Biscuit token is a signed token that its holder can narrow without asking the issuer again) | If SDK support in Python or Go lags, fall back to a signed JWT (JSON Web Token) with the same claims |
 | Steering format | `.oxagen/rules`, in the context-record TOML format that Stella implements. Stella symlinks to it | The directory name is fixed. If a second agent needs its own path, it gets a symlink the same way Stella does |
@@ -1362,7 +1705,7 @@ The wedge ends when Customer 1 is in production, not on a date. M6 produces the 
 | Engine availability | `stella serve` is a required service for the in-app agent only | The gateway, recording, and every screen work with the engine down. Only the assistant panel reports the outage |
 | Billable unit | Per run, with a plan allowance. Governed actions and retention are reported as secondary meters | ADR-052 chose the governed action because runs vary a hundredfold in size. If small runs subsidize large runs in practice, price the governed action meter, which is already reported |
 | Witness disclosure grain | `L0` (pass or fail only) by default. The disclosure grain is how much detail a witness reveals about a proof. Stella's own default is `L3` for convergence speed | If `L0` measurably slows convergence for a customer, the workspace can raise the grain as a recorded policy decision. The record keeps the grain per proof, so a training set can be filtered by it |
-| Witness runner isolation | A separate execution plane (the witness runs on its own infrastructure), separate credentials, and no path from the worker's run | Any probe from a worker toward witness storage is a denied tool call and an incident. The proof frame carries the runner's attestation, so isolation is verifiable, not asserted |
+| Witness runner isolation (not built at 2026-09-18, and built on the Phase 5 launcher of §17.2) | A separate execution plane (the witness runs on its own infrastructure), separate credentials, and no path from the worker's run | Any probe from a worker toward witness storage is a denied tool call and an incident. The proof frame carries the runner's attestation, so isolation is verifiable, not asserted |
 | Behind the firewall | Same containers, a deployment mode flag, air-gapped supported (§4.6), Series A | If a customer needs it in the wedge, the single-node Compose variant is the early path. The Helm chart follows |
 | Agent messaging | Agent-to-agent messages are evidence, not instructions. Taint applies (§7.6), so their content is marked untrusted | If customers need agent messages to carry authority, that is a grant on a named sender, never a default |
 
@@ -1409,6 +1752,27 @@ Each scenario is one moment an investor or a customer should remember. The mocku
 | Audit | `/{org}/audit` | loaded, empty, error, denied, phone | [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce), [W10](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Assistant panel | every page | collapsed, open, engine down, phone | [W1 mockup](https://claude.ai/code/artifact/31579436-1abf-48f8-b320-8740c4029b0f), [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce), [W4 mockup](https://claude.ai/code/artifact/a4b69d0b-715c-434c-9f4e-80534bf2e462), [W10](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
 | Account dialog, notifications, command menu | user menu, top bar | loaded, phone | [W5 mockup](https://claude.ai/code/artifact/81725124-b936-4cbb-9e40-79089b5a1e35), [W11 mockup](https://claude.ai/code/artifact/317226a1-c2ff-43ce-a439-4a54f8b8288b), [W3 mockup](https://claude.ai/code/artifact/9a8bcd5c-c66c-462d-992a-a449679801ce), [W4 mockup](https://claude.ai/code/artifact/a4b69d0b-715c-434c-9f4e-80534bf2e462), [W10](https://claude.ai/code/artifact/403166f6-9216-4d23-86ac-bb3c2aa60b23), [W12 mockup](https://claude.ai/code/artifact/3fcf949a-c455-4efd-af36-1c2d1f13088e) |
+
+## 21. Maintainer decisions of 2026-09-18
+
+The maintainer approved the steering, graph and gateway review of 2026-09-18 in full. Nothing in this table is a proposal or an open question. Row 14 was the review's one open risk, and the maintainer closed it the same day. The ADRs are in oxagen draft PR #3294 (branch `steering-gateway-adrs`), which also amends ADR-008, 043, 051, 056, 064, 078 and 090. The epic is oxagen issue #3295. (§20, the decisions of 2026-09-15, is in the canonical copy of this specification.)
+
+| # | Decision | Where | ADR |
+|---|---|---|---|
+| 1 | **One assembler.** `assembleSteering(run, budget)` is the one function where everything competes for Oxagen's slice of the agent's context. It returns a stable prefix, a volatile selection and a manifest, recorded as a `steering.manifest` frame | §10.5 | ADR-093 "One assembler decides what reaches the agent, and records what it cut", §1 |
+| 2 | **Storage stays plural, one writer per fact.** Git for what is published. Postgres for what must be transactional or money-grade. The graph for lineage, evidence and entity links. Only the assembler and its index are single. Nothing is collapsed into Neo4j | §4.2 | ADR-097 "Steering and gating are two planes, authored on one surface and compiled twice", §1 |
+| 3 | **Two planes that never merge.** Steering is what the model reads. Gating is what the kernel refuses. One authoring surface, two compilations, and every gate emits a gate notice into steering | §10.5 | ADR-097 §2 and §3 |
+| 4 | **One item type, `SteeringItem`**, with `kind` of record, skill, memory, ontology, policy or instruction, and `force` of `must`, `should`, `may` or `info` | §10.5 | ADR-093 §2 |
+| 5 | **Precedence, fixed in one place.** A gate beats everything. A published `must` beats recalled memory. Repository scope may narrow workspace scope and never widen it | §10.5 | ADR-097 §4 |
+| 6 | **Oxagen does not own the context window. The harness does.** Oxagen's injection points are exactly five | §7.3 | ADR-093 §4 |
+| 7 | **The index sits behind a port.** First on the Postgres registry. It moves to the graph in Phase 3, with Postgres as the fallback. Delivery never waits for the graph | §4.2, §10.5 | ADR-093 §5 |
+| 8 | **Skills are steering, and they are files.** Governed through a pull request, delivered by sync, loaded by the harness. The description line competes in the assembler. Skills live under Steering | §10.6 | ADR-093 §6, which amends ADR-008 and ADR-090 |
+| 9 | **One screen: Steering is the hub.** Records, Skills, Memory, Ontology, Policy, Proposals, Preview | §10.7, §14 | ADR-097 §5 |
+| 10 | **The gateway.** `tachod` grows into it: hook adapter, loopback model proxy, MCP aggregator, control channel. No prompt body is sent to Oxagen's servers; the proxy forwards them to the vendor only. The vendor credential stays on the machine. Metering becomes observed. `session_limit_usd` is enforced. `interrupt` becomes real | §7.1 to §7.3, §12.5, §12.6, §13.6 | ADR-094 "tachod grows into the gateway: a loopback model proxy and an MCP aggregator", which amends ADR-051, ADR-056 and ADR-078 |
+| 11 | **The tier ladder is four words, computed from what was actually routed:** observe, harness, gateway, contained | §7.1 | ADR-095 "The tier ladder is four words, computed from what was routed", which amends ADR-078 §1 |
+| 12 | **The sandbox is the top tier, not the only tier. Hooks stay.** `oxagen run -- <agent>`, aimed at CI, headless runs, cloud runners and managed devices first. The witness runner is built on the same launcher. ADR-043 is revised by one sentence | §1, §7.2 | ADR-096 "Oxagen may contain the process that runs turns: the contained tier", which amends ADR-043 and ADR-064 |
+| 13 | **The refactor path is six phases, each ships alone.** Phase 0 carries a freeze on new governance ceremony until a merged record is seen in a real run (#2592). The build order is Phase 0 merged (oxagen PR #3289), Phase 4 in build, then Phases 1, 2, 3 and 5 | §17.2 | ADR-091 for Phase 0. The implementation plan §8 for the rest |
+| 14 | **Closed 2026-09-18: subscription logins through a base URL proxy.** Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18. It does not gate Phase 4 | §7.1, §17.2, §18 | ADR-094 |
 
 ---
 
@@ -2068,6 +2432,8 @@ The ten schemas are `auth`, `org`, `wrk`, `iam`, `tools`, `control`, `cost`, `bi
 
 ## Appendix B. Neo4j model (per organization database)
 
+> **Status of this appendix (2026-09-18).** §4.2 is the storage rule. The run record and the record registry are Postgres, and the graph holds lineage, evidence and entity links. The `:Record` label and its edges below are the Phase 3 projection of §17.2 (one direction registry to graph, verified by hash) and do not exist on `main`. The `:Run` and `:Frame` labels below predate the maintainer decision of 2026-09-14 that keeps the run record in Postgres. The canonical copy of this specification carries that decision, and this appendix has not been reconciled with it yet.
+
 Every organization has its own database (§5.3). Every node and relationship carries `ws` (the workspace public id), and every node carries `id` (its public id), `created_at`, `valid_from`, `valid_to`, `recorded_at`, and `is_system`. The tables below list what is specific to each label and relationship type.
 
 ### B.1 Node labels
@@ -2220,7 +2586,7 @@ Every organization has its own database (§5.3). Every node and relationship car
 | `grants[].subject` | a name or a glob with a version: `server:tool@version` |
 | `grants[].effect` | `allow`, `deny`, or `require_approval`; deny always wins |
 | `grants[].resource_scope` | the ceiling for that grant: side-effect classes, repositories, graph labels and mode, hop budget, egress classes, spend limits |
-| `budget` | spend limits per run and per day, `enforced` at the model proxy or `observed` only |
+| `budget` | spend limits per run and per day, `enforced` at the gateway's proxy (Phase 4 of §17.2) or `observed` only. Every bundle says `observed` at 2026-09-18 |
 
 How the four grants combine for this role: every GitHub tool is allowed for reads and writes on one repository, merging a pull request always waits for a human, deleting anything is denied outright, and the graph can be searched for customers and tickets two hops deep. Anything not named is denied, because the default effect is deny.
 
