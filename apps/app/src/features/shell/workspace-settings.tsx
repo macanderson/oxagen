@@ -332,6 +332,20 @@ function MainRepositoryPanel({
 }
 
 /**
+ * The sentence and the test id each acknowledgement carries.
+ *
+ * A module constant with `as const`, so the keys stay literals: widened to
+ * `string` they are not assignable to the message catalog's key type, and it is
+ * that type which catches a sentence nobody wrote.
+ */
+const ACKNOWLEDGEMENT_SENTENCES = {
+  connected: { key: "connected", testId: "workspace-github-connected" },
+  failed: { key: "installRefused", testId: "workspace-github-failed" },
+  choose: { key: "installChoose", testId: "workspace-github-choose" },
+  install: { key: "installNone", testId: "workspace-github-none" },
+} as const;
+
+/**
  * What the return leg from GitHub said, when it said anything.
  *
  * Silence is a real answer here and the default one. The panel below draws the
@@ -346,12 +360,7 @@ function Acknowledgement({
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   if (acknowledgement === null) return null;
-  const sentence = {
-    connected: { key: "connected", testId: "workspace-github-connected" },
-    failed: { key: "installRefused", testId: "workspace-github-failed" },
-    choose: { key: "installChoose", testId: "workspace-github-choose" },
-    install: { key: "installNone", testId: "workspace-github-none" },
-  }[acknowledgement];
+  const sentence = ACKNOWLEDGEMENT_SENTENCES[acknowledgement];
   return (
     <p
       role="status"
