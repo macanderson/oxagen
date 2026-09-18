@@ -158,7 +158,7 @@ export function layout(o) {
 <title>${esc(o.title)}</title>
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(url)}">
-<meta name="theme-color" content="#10100F">
+<meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="${o.type ?? "website"}">
 <meta property="og:url" content="${esc(url)}">

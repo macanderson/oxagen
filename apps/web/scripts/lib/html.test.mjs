@@ -82,10 +82,10 @@ describe("helpers", () => {
 
   it("inlines the wordmark with currentColor letters", () => {
     const svg =
-      '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="10" height="2" viewBox="0 0 10 2" role="img" aria-label="oxagen logo"><path class="letters" d="M0" fill="#ABCDEF"/><path class="accent" d="M1" fill="#D6962C"/></svg>';
+      '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="10" height="2" viewBox="0 0 10 2" role="img" aria-label="oxagen logo"><path class="letters" d="M0" fill="#ABCDEF"/><path class="accent" d="M1" fill="#D4AF37"/></svg>';
     const out = inlineWordmark(svg);
     expect(out).toBe(
-      '<svg viewBox="0 0 10 2" role="img" aria-label="oxagen"><path class="letters" d="M0" fill="currentColor"/><path class="accent" d="M1" fill="#D6962C"/></svg>',
+      '<svg viewBox="0 0 10 2" role="img" aria-label="oxagen"><path class="letters" d="M0" fill="currentColor"/><path class="accent" d="M1" fill="#D4AF37"/></svg>',
     );
   });
 
