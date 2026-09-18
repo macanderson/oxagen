@@ -636,7 +636,26 @@ export const tachoBatchSchema = z
 
 export type TachoBatch = z.output<typeof tachoBatchSchema>;
 
-/** What every machine-to-machine response carries back (spec section 7.4). */
+/**
+ * What every machine-to-machine response carries back (spec section 7.4).
+ *
+ * TOLERANT OF UNKNOWN KEYS, unlike everything this file sends. A host is
+ * installed on someone's laptop and updates when they get round to it; the
+ * control plane deploys continuously. So the server WILL at some point answer
+ * a host older than itself, and under `.strict()` every additive field it adds
+ * turns into a fleet-wide ingest outage — the response fails to parse, the
+ * batch is never acknowledged, and the host spools for ever while reporting
+ * itself healthy. That is not hypothetical: it has now happened three times
+ * (`user_email`, the bundle's new field, and `body_rejections`, which had
+ * 3,526 events stranded on one host with "last ingest never").
+ *
+ * Strictness still guards the two directions that need it — what this host
+ * SENDS, and what it accepts from producers (see envelope.ts, where drift in
+ * an agent's output must be refused rather than silently absorbed). What the
+ * control plane says back to us is not that kind of input: it is a newer
+ * version of ourselves, and the compatible move is to ignore what we do not
+ * yet understand.
+ */
 export const controlEnvelopeSchema = z
   .object({
     host_status: tachoHostStatusSchema,
@@ -644,11 +663,11 @@ export const controlEnvelopeSchema = z
     bundle_etag: z.string().min(1),
     commands: z.array(deliveredCommandSchema).max(100),
   })
-  .strict();
+  .passthrough();
 
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
 
-/** The ingest response as the host reads it. */
+/** The ingest response as the host reads it. Tolerant for the reason on `controlEnvelopeSchema`. */
 export const ingestResponseSchema = z
   .object({
     accepted: z.number().int().nonnegative(),
@@ -660,21 +679,38 @@ export const ingestResponseSchema = z
           at_seq: z.number().int().nonnegative(),
           reason: z.string(),
         })
-        .strict(),
+        .passthrough(),
     ),
+    /**
+     * Bodies the control plane refused: the event was recorded without one and
+     * the session carries a `body_missing` gap. Optional here although the
+     * server's contract always sends it, so that a host also parses the
+     * response of a control plane older than itself.
+     */
+    body_rejections: z
+      .array(
+        z
+          .object({
+            event_id_idem: z.string(),
+            reason: z.string(),
+          })
+          .passthrough(),
+      )
+      .optional(),
     control: controlEnvelopeSchema,
   })
-  .strict();
+  .passthrough();
 
 export type IngestResponse = z.output<typeof ingestResponseSchema>;
 
+/** Tolerant for the reason on `controlEnvelopeSchema` — this is a response. */
 export const bundleResponseSchema = z
   .object({
     not_modified: z.boolean(),
     etag: z.string().min(1),
     bundle: policyBundleSchema.nullable(),
   })
-  .strict();
+  .passthrough();
 
 export type BundleResponse = z.output<typeof bundleResponseSchema>;
 
@@ -692,12 +728,21 @@ export type CommandAcknowledgement = z.output<
   typeof commandAcknowledgementSchema
 >;
 
+/**
+ * Tolerant, for the reason on `controlEnvelopeSchema`: this is a response,
+ * and a host is updated when its owner gets round to it. Making only the
+ * nested `control` envelope tolerant changed nothing while this wrapper stayed
+ * strict — `createControlClient.commands()` parses the wrapper FIRST, so one
+ * additive top-level field from a newer control plane still stopped the host
+ * polling and delivering acknowledgements, the exact skew this exists to
+ * survive.
+ */
 export const commandsResponseSchema = z
   .object({
     acknowledged: z.number().int().nonnegative(),
     control: controlEnvelopeSchema,
   })
-  .strict();
+  .passthrough();
 
 export type CommandsResponse = z.output<typeof commandsResponseSchema>;
 
@@ -728,7 +773,12 @@ export const enrollmentResponseSchema = z
     bundlePublicKeyPem: z.string().min(1),
     expiresAt: z.string(),
   })
-  .strict();
+  // The outer wrapper is unsigned and tolerant, like every other response
+  // here, so a control plane that adds a field does not break enrollment on
+  // hosts older than it. The signed `enrollment` document inside stays
+  // `.strict()`: its claims are verified against a signature, and an
+  // unexpected key there is a defect in what was signed, not version skew.
+  .passthrough();
 
 export type EnrollmentResponse = z.output<typeof enrollmentResponseSchema>;
 
@@ -743,7 +793,7 @@ export const tokenEnrollmentResponseSchema = enrollmentResponseSchema
     orgSlug: z.string().min(1),
     workspaceSlug: z.string().min(1),
   })
-  .strict();
+  .passthrough();
 
 export type TokenEnrollmentResponse = z.output<
   typeof tokenEnrollmentResponseSchema
