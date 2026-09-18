@@ -390,7 +390,9 @@ describe("detector", () => {
         localToken: "t",
       },
     ).settings;
-    expect((await detector.tick()).map((e) => e.kind)).toEqual(["oxagen:hook_health"]);
+    expect((await detector.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hook_health",
+    ]);
     const unreadable = new Detector({
       registry,
       hostRecorder: () => host.recorder,
@@ -461,6 +463,38 @@ describe("detector", () => {
       verifyChain(host.recorder.sealedEvents, { expectGenesis: true })
         .violations,
     ).toEqual([]);
+  });
+
+  it("records a hook frame before the scan yields, so a call sealed during the scan appends after it", async () => {
+    const paths = scratchPaths();
+    const now = () => Date.parse("2026-09-10T10:00:00.000Z");
+    const { registry, host } = registryWithSession(now);
+    const detector = new Detector({
+      registry,
+      hostRecorder: () => host.recorder,
+      listProcesses: () => [],
+      transcriptRoots: [paths.claudeProjects],
+      readSettings: () => ({ hooks: {} }),
+      enrollmentId: TEST_ENROLLMENT,
+      now,
+    });
+    // Stands in for the WAL: frames in the order they were appended.
+    const appended: TachoEvent[] = [];
+    const record = (events: readonly TachoEvent[]) => appended.push(...events);
+    const pass = detector.tick(record);
+    // The scan has yielded. A model or gateway call lands on the host chain
+    // and is recorded off-queue before the detector's promise settles.
+    record([
+      host.recorder.sealCollectorEvent("oxagen:hook_health", { hook_count: 0 }),
+    ]);
+    const sealed = await pass;
+    expect(sealed.map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
+    expect(appended.map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+      "oxagen:hook_health",
+    ]);
+    const seqs = appended.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
   });
 });
 
