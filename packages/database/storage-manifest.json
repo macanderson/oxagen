@@ -3392,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "469f0990ccdf533c7c53990906b98cc9fe79fe6825cb241fc6e10bec159eabab",
+  "contentHash": "50c7cc8a62bc46da285a45c051d2bbfb40235831fdc56c895540da0212eb22af",
   "domains": [
     {
       "name": "agent",
@@ -15983,6 +15983,18 @@
           "nullable": false,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "base_url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "model_map",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "status",

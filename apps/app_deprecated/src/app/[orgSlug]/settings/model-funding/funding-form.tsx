@@ -50,15 +50,24 @@ export interface FundingFormProps {
   capAction: (capCents: number | null) => Promise<SpendCapActionResult>;
 }
 
+// Every provider the contract admits, so a credential stored through the API
+// with a newer provider still renders by name here.
 const PROVIDER_LABELS: Record<ModelCredentialProvider, string> = {
   openrouter: "OpenRouter",
   gateway: "Vercel AI Gateway",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  openai_compatible: "OpenAI-compatible endpoint",
 };
 
-const PROVIDER_OPTIONS = Object.entries(PROVIDER_LABELS) as [
-  ModelCredentialProvider,
-  string,
-][];
+// Only the two routed providers are OFFERED: this form has no base-URL or
+// model-map fields, which the other three require, so offering them would
+// only produce a validation error on save. This page is de-registered
+// (DEREGISTERED.md); the live settings page in apps/app offers all five.
+const PROVIDER_OPTIONS: [ModelCredentialProvider, string][] = [
+  ["openrouter", PROVIDER_LABELS.openrouter],
+  ["gateway", PROVIDER_LABELS.gateway],
+];
 
 const SELECT_CLASS =
   "w-full max-w-xs rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50";
