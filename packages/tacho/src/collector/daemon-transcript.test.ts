@@ -366,7 +366,8 @@ describe("tachod and the transcript", () => {
     expect(restarted.wal.read(uuid).length).toBe(before);
 
     // The rest lands before SessionEnd seals the chain, and the sealed
-    // session is drained once more, then forgotten by the tailer.
+    // session is drained once more. The cursor stays as a tombstone until
+    // the registry forgets the session.
     writeFileSync(transcript, `${lines.join("\n")}\n`);
     expect(
       await post(restarted.port as number, host.local_token, "/hook", {
@@ -383,7 +384,7 @@ describe("tachod and the transcript", () => {
     await restarted.tick();
     await restarted.tick();
     expect(
-      restarted.transcriptTailer.state().cursors[SESSION_ID],
-    ).toBeUndefined();
+      restarted.transcriptTailer.state().cursors[SESSION_ID]?.drained,
+    ).toBe(true);
   });
 });
