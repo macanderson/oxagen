@@ -116,12 +116,27 @@ query as accepted. The seam now refuses it.
 Every comma-separated pattern part of every `MATCH` and `OPTIONAL MATCH`
 clause, at every subquery level, must be anchored in one of three ways: its own
 pattern map binds `$orgId`, its clause's `WHERE` binds `$orgId` on a variable
-written in the part, or it names a variable an earlier anchored part bound. The
-credit resets at each top-level `UNION` branch.
+written in the part, or one of its pattern elements names a variable an
+earlier anchored part bound that is still in scope.
+
+Credit follows the variable, not the name. Review found two ways the first
+draft credited a name: `MATCH (b {x: toString(a.x)})` was credited with `a`
+because `toString(` is a paren, and `WITH count(n) AS c MATCH (n)` was
+credited with `n` because the set of anchored names reset only at a top-level
+`UNION`. Now a part's variables are the identifiers written first inside the
+brackets the scanner classified as pattern elements, and the credited set
+follows Cypher's scope: a `WITH` or `RETURN` keeps only what it projects by
+name (`*`, or a bare variable; an expression or an `AS` alias keeps nothing),
+a `CALL { … }` body sees only what it imports through a scope clause or an
+importing `WITH` and hands back what its `RETURN` kept, an expression subquery
+sees the enclosing scope and hands back nothing, and a `UNION` at any level
+restarts its scope from what it was handed.
 
 That closes the second unanchored `MATCH`, the unanchored `OPTIONAL MATCH`, the
-unanchored `UNION` branch, the `MATCH` after an anchoring `MERGE`, the comma
-Cartesian product, and the map-alias tautology ADR-087 listed under Claim B.
+unanchored `UNION` branch at any level, the `MATCH` after an anchoring `MERGE`,
+the comma Cartesian product, the name re-bound after a `WITH`, the join written
+only in a property value, the `CALL` body that never imported the anchored
+variable, and the map-alias tautology ADR-087 listed under Claim B.
 It rejects 0 of the production queries the corpus test collects, after one
 change: `ontology.query` now writes its traversal's node patterns literally
 rather than interpolating them.

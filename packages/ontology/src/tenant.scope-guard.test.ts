@@ -467,6 +467,171 @@ describe("tenancy guard — every row-selecting pattern is anchored", () => {
   }
 });
 
+// ── Credit follows the VARIABLE, not the name ───────────────────────────────
+//
+// Two review findings against the per-part rule, and they are one mistake read
+// from either end. The rule credited a part with an earlier anchor when a NAME
+// the anchored part bound appeared in it — read off every `(` and `[` in the
+// part's text, and remembered until the next top-level `UNION`. Cypher credits
+// a VARIABLE: a pattern element's own, and only while the scope still holds
+// it. Every query below has a real, seam-bound anchor on one part and a second
+// part the anchor does not reach; against the pooled database each reads rows
+// from every tenant.
+describe("tenancy guard — an anchor is credited to a variable, not a name", () => {
+  const refused: Array<[name: string, cypher: string]> = [
+    [
+      "a name re-bound after WITH dropped it (review's query)",
+      "MATCH (n {orgId: $orgId}) WITH count(n) AS c MATCH (n) RETURN n",
+    ],
+    [
+      "a name in a property value, not a pattern element (review's query)",
+      "MATCH (a {orgId: $orgId}) MATCH (b {x: toString(a.x)}) RETURN b",
+    ],
+    [
+      "a name inside a list in a property value",
+      "MATCH (a {orgId: $orgId}) MATCH (b {xs: [a.x]}) RETURN b",
+    ],
+    [
+      "a name in a relationship's property value",
+      "MATCH (a {orgId: $orgId}) MATCH (b)-[r {x: id(a)}]->(c) RETURN b, c",
+    ],
+    [
+      "a name in an inline predicate only",
+      "MATCH (a {orgId: $orgId}) MATCH (b WHERE b.x = a.x) RETURN b",
+    ],
+    [
+      "a name in a grouping paren inside an inline predicate",
+      "MATCH (a {orgId: $orgId}) MATCH (b WHERE (a.x) = b.x) RETURN b",
+    ],
+    [
+      "WITH keeps a property of the variable, not the variable",
+      "MATCH (n {orgId: $orgId}) WITH n.id AS id MATCH (n {id: id}) RETURN n",
+    ],
+    [
+      "WITH re-aliases the variable (fail-closed, as before)",
+      "MATCH (n {orgId: $orgId}) WITH n AS m MATCH (m)-->(k) RETURN k",
+    ],
+    [
+      "WITH keeps another variable and drops the anchored one",
+      "MATCH (n {orgId: $orgId})-->(m) WITH m MATCH (n)-->(k) RETURN k",
+    ],
+    [
+      "the name re-bound after a second WITH in a chain",
+      "MATCH (n {orgId: $orgId}) WITH n MATCH (n)-->(m) WITH m MATCH (n) RETURN n",
+    ],
+    [
+      "a CALL body that never imported the anchored variable",
+      "MATCH (n {orgId: $orgId}) CALL { MATCH (n) RETURN n AS x } RETURN x",
+    ],
+    [
+      "a CALL body whose importing WITH drops it before the MATCH",
+      "MATCH (n {orgId: $orgId}) CALL { WITH n MATCH (n)-->(m) WITH count(m) AS c MATCH (m) RETURN m } RETURN m",
+    ],
+    [
+      "a UNION branch inside a CALL body",
+      "MATCH (n {orgId: $orgId}) CALL { WITH n MATCH (n)-->(m) RETURN m UNION MATCH (m) RETURN m } RETURN m",
+    ],
+    [
+      "a CALL exports an alias, not the anchored variable",
+      "CALL { MATCH (n {orgId: $orgId}) RETURN n AS x } MATCH (x)-->(m) RETURN m",
+    ],
+    [
+      "a CALL exports a variable anchored in one branch only",
+      "CALL { MATCH (n {orgId: $orgId}) RETURN n UNION MATCH (n) RETURN n } MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "a scoped CALL that imports the wrong variable",
+      "MATCH (n {orgId: $orgId})-->(m) CALL (m) { MATCH (n)-->(k) RETURN k } RETURN k",
+    ],
+    [
+      "an expression subquery's binding does not survive its brace",
+      "MATCH (n) WHERE EXISTS { MATCH (n {orgId: $orgId}) } MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "a UNION inside an expression subquery",
+      "MATCH (n {orgId: $orgId}) WHERE EXISTS { MATCH (n)-->(m) RETURN m UNION MATCH (m) RETURN m } RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of refused) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+    it(`is discriminating: the query-wide anchor accepted ${name}`, () => {
+      expect(() => assertAnchorsTenant(cypher)).toThrow(/Every MATCH pattern/);
+    });
+  }
+
+  const accepted: Array<[name: string, cypher: string]> = [
+    [
+      "WITH keeps the variable by name",
+      "MATCH (n {orgId: $orgId}) WITH n MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "WITH * keeps every variable",
+      "MATCH (n {orgId: $orgId}) WITH * MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "WITH DISTINCT keeps the variable",
+      "MATCH (n {orgId: $orgId}) WITH DISTINCT n MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "WITH keeps the variable beside an aggregate, ordered and limited",
+      "MATCH (n {orgId: $orgId})-->(m) WITH n, count(m) AS c ORDER BY c DESC LIMIT 5 MATCH (n)-->(k) RETURN k",
+    ],
+    [
+      "WITH keeps the variable and filters it",
+      "MATCH (n {orgId: $orgId}) WITH n WHERE n.x = 1 MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "a CALL exports the anchored variable it returned",
+      "CALL { MATCH (n {orgId: $orgId}) RETURN n } MATCH (n)-->(m) RETURN m",
+    ],
+    [
+      "a CALL exports a variable it bound off the imported one",
+      "MATCH (n {orgId: $orgId}) CALL { WITH n MATCH (n)-->(m) RETURN m } MATCH (m)-->(k) RETURN k",
+    ],
+    [
+      "a scoped CALL imports the anchored variable",
+      "MATCH (n {orgId: $orgId}) CALL (n) { MATCH (n)-->(m) RETURN m } RETURN m",
+    ],
+    [
+      "a scoped CALL imports everything",
+      "MATCH (n {orgId: $orgId}) CALL (*) { MATCH (n)-->(m) RETURN m } RETURN m",
+    ],
+    [
+      "every UNION branch of a CALL body anchored on its own",
+      "MATCH (n {orgId: $orgId}) CALL { WITH n MATCH (n)-->(m) RETURN m UNION WITH n MATCH (n)<--(m) RETURN m } RETURN m",
+    ],
+    [
+      "an expression subquery sees the enclosing scope",
+      "MATCH (n {orgId: $orgId}) WITH n WHERE COUNT { MATCH (n)-->(m) } > 0 RETURN n",
+    ],
+    [
+      "a nested subquery sees what its enclosing subquery imported",
+      "MATCH (n {orgId: $orgId}) CALL { WITH n MATCH (n)-->(m) WHERE EXISTS { MATCH (m)-->(k) } RETURN m } RETURN m",
+    ],
+    [
+      "a name in a property value beside a real element reference",
+      "MATCH (a {orgId: $orgId}) MATCH (a)-->(b {x: toString(a.x)}) RETURN b",
+    ],
+  ];
+
+  for (const [name, cypher] of accepted) {
+    it(`accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+
+  it("names the dropped variable and the property-value case in the error", () => {
+    expect(() =>
+      assertAnchorsTenant(
+        "MATCH (n {orgId: $orgId}) WITH count(n) AS c MATCH (n) RETURN n",
+      ),
+    ).toThrow(/a variable a WITH has dropped/);
+  });
+});
+
 // ── Delimiting the anchor by Cypher's rules, not JavaScript's ────────────────
 //
 // The pattern is `orgId <: or => $orgId`, and it is only worth anything if

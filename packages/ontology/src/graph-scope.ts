@@ -545,23 +545,44 @@ function opensPattern(src: string, openIdx: number, clause: string): boolean {
   return false;
 }
 
+/** What a subquery brace declares about its own variable scope. */
+interface SubqueryOpening {
+  /**
+   * `"call"` for `CALL { … }`, whose body sees NOTHING from the enclosing
+   * scope unless it imports it; `"expression"` for `EXISTS` / `COUNT` /
+   * `COLLECT`, whose body sees every enclosing variable.
+   */
+  readonly subquery: "call" | "expression";
+  /**
+   * For the scoped form `CALL (a, b) { … }` (Neo4j 5.23), the variables the
+   * scope clause imports; `"all"` for `CALL (*) { … }`; `null` when there is
+   * no scope clause, so any import is an importing `WITH` as the body's first
+   * clause.
+   */
+  readonly imports: readonly string[] | "all" | null;
+}
+
 /**
- * True when the `{` at `openIdx` opens a SUBQUERY — a clause sequence — rather
- * than a map literal.
+ * The introducer of the subquery brace at `openIdx` — a SUBQUERY is a clause
+ * sequence rather than a map literal — or `null` when the brace is a map.
  *
  * `CALL { … }`, `EXISTS { … }`, `COUNT { … }` and `COLLECT { … }` are the only
  * four, and the word immediately before the brace is what says so. The one
  * complication is the scoped-subquery form `CALL (n) { … }` (Neo4j 5.23), where
  * the preceding character is `)`; the balanced walk back to that `(` and then to
  * the word before it is what keeps a legitimately anchored scoped subquery from
- * being read as a map literal and blanked.
+ * being read as a map literal and blanked. The walk keeps what it passed over,
+ * because the tenancy guard's per-scope rule needs to know which of the four
+ * it is and what a scope clause imports.
  */
-function opensSubquery(src: string, openIdx: number): boolean {
+function subqueryOpening(src: string, openIdx: number): SubqueryOpening | null {
   let k = openIdx - 1;
   while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
-  if (k < 0) return false;
+  if (k < 0) return null;
 
+  let imports: readonly string[] | "all" | null = null;
   if (src[k] === ")") {
+    const close = k;
     let depth = 0;
     while (k >= 0) {
       if (src[k] === ")") depth += 1;
@@ -571,16 +592,30 @@ function opensSubquery(src: string, openIdx: number): boolean {
       }
       k -= 1;
     }
-    if (k < 0) return false;
+    if (k < 0) return null;
+    const inner = src.slice(k + 1, close).trim();
+    imports =
+      inner === "*"
+        ? "all"
+        : inner === ""
+          ? []
+          : inner.split(",").map((name) => name.trim());
     k -= 1;
     while (k >= 0 && /\s/.test(src[k]!)) k -= 1;
-    if (k < 0) return false;
+    if (k < 0) return null;
   }
 
-  if (!ID_PART_CHAR.test(src[k]!)) return false;
+  if (!ID_PART_CHAR.test(src[k]!)) return null;
   let j = k;
   while (j >= 0 && ID_PART_CHAR.test(src[j]!)) j -= 1;
-  return SUBQUERY_INTRODUCERS.has(src.slice(j + 1, k + 1).toUpperCase());
+  const word = src.slice(j + 1, k + 1).toUpperCase();
+  if (!SUBQUERY_INTRODUCERS.has(word)) return null;
+  // A scope clause belongs to `CALL` alone. The three expression subqueries
+  // see the enclosing scope whole, so a paren before one of them (not Cypher
+  // today) declares nothing and is not read as an import list.
+  return word === "CALL"
+    ? { subquery: "call", imports }
+    : { subquery: "expression", imports: null };
 }
 
 // ── Position policy ──────────────────────────────────────────────────────────
@@ -687,7 +722,51 @@ interface PositionProjection {
   readonly clauseOfPart: readonly number[];
   /** For each part id, which top-level UNION branch it sits in (0-based). */
   readonly branchOfPart: readonly number[];
+  /**
+   * Per character, 1 where a `(` or `[` opens a node or relationship PATTERN
+   * ELEMENT — the bracket `opensPattern` classified as one, outside any inline
+   * predicate. The variable a pattern element binds is the identifier written
+   * first inside such a bracket and nowhere else.
+   */
+  readonly patternOpen: Uint8Array;
+  /**
+   * The query's variable-scope events in source order, with each pattern part
+   * as a `part` event — see {@link ScopeEvent}.
+   */
+  readonly events: readonly RawScopeEvent[];
 }
+
+/**
+ * One step of a query's VARIABLE SCOPE, in source order. The tenancy guard
+ * walks these to decide which variables a pattern part may inherit credit
+ * from, and Cypher's rules for that are not "everything bound so far":
+ *
+ *  - `with` — a `WITH` projection REPLACES the scope. `WITH count(n) AS c`
+ *    discards `n`, and a later `MATCH (n)` binds a fresh `n` that reads every
+ *    tenant's rows. `projection` is the text between `WITH` and the next
+ *    clause, literals blanked.
+ *  - `return` — the same shape, and inside a `CALL { … }` it is what the
+ *    subquery EXPORTS to the enclosing scope.
+ *  - `open` / `close` — a subquery's body is a scope of its own. A `CALL`
+ *    body sees nothing from outside unless it imports it (a scope clause, or
+ *    an importing `WITH` as its first clause); an expression subquery
+ *    (`EXISTS` / `COUNT` / `COLLECT`) sees everything. Nothing a body binds is
+ *    visible after `close` except what a `CALL` returns.
+ *  - `union` — a `UNION` at ANY scope level starts a branch whose scope is
+ *    what the enclosing scope handed in, and nothing the earlier branch bound.
+ */
+export type ScopeEvent =
+  | { readonly kind: "part"; readonly part: RowSelectingPart }
+  | { readonly kind: "with"; readonly projection: string }
+  | { readonly kind: "return"; readonly projection: string }
+  | ({ readonly kind: "open" } & SubqueryOpening)
+  | { readonly kind: "close" }
+  | { readonly kind: "union" };
+
+/** {@link ScopeEvent} before the part is materialised: the part by id. */
+type RawScopeEvent =
+  | { readonly kind: "part"; readonly partId: number }
+  | Exclude<ScopeEvent, { kind: "part" }>;
 
 function projectPositions(
   cypher: string,
@@ -703,6 +782,22 @@ function projectPositions(
   const whereOwner = new Int32Array(src.length).fill(-1);
   const clauseOfPart: number[] = [];
   const branchOfPart: number[] = [];
+  const patternOpen = new Uint8Array(src.length);
+  const events: RawScopeEvent[] = [];
+  // A `WITH` or `RETURN` whose projection is still being read: its kind and
+  // where the projection text starts. Flushed as one event at the next clause
+  // keyword of the same clause sequence, at the brace that closes the
+  // sequence, or at the end of the query.
+  let pendingProjection: { kind: "with" | "return"; start: number } | null =
+    null;
+  const flushProjection = (end: number) => {
+    if (pendingProjection === null) return;
+    events.push({
+      kind: pendingProjection.kind,
+      projection: src.slice(pendingProjection.start, end),
+    });
+    pendingProjection = null;
+  };
   let branch = 0;
   let nextClauseId = 0;
   let currentClause = -1;
@@ -712,6 +807,7 @@ function projectPositions(
     currentPart = clauseOfPart.length;
     clauseOfPart.push(currentClause);
     branchOfPart.push(branch);
+    events.push({ kind: "part", partId: currentPart });
   };
   const own = (k: number) => {
     if (inClauseWhere) whereOwner[k] = currentClause;
@@ -734,6 +830,8 @@ function projectPositions(
       whereOwner,
       clauseOfPart,
       branchOfPart,
+      patternOpen,
+      events,
     };
   }
 
@@ -765,7 +863,7 @@ function projectPositions(
   // Neither predicate can be false — a map literal is never null, and a COLLECT
   // over an unfiltered MATCH is non-empty whenever any node exists — so every
   // tenant's `n` comes back while the guard reads a tenant binding. Round 12's
-  // was closed by ordering `opensSubquery` first, which is correct on its own
+  // was closed by ordering `subqueryOpening` first, which is correct on its own
   // terms and is kept; it closed one brace MEANING inside the region and left
   // the REGION open, which is what round 13 then demonstrated with another.
   //
@@ -878,6 +976,7 @@ function projectPositions(
     currentClause: number;
     currentPart: number;
     inClauseWhere: boolean;
+    pendingProjection: { kind: "with" | "return"; start: number } | null;
   }> = [];
   let mapDepth = 0;
   let clause = "";
@@ -992,6 +1091,21 @@ function projectPositions(
         CLAUSE_KEYWORDS.has(word) &&
         startsAClause(src, i, j)
       ) {
+        // A clause keyword ends the projection of a `WITH` / `RETURN` before
+        // it, whatever the keyword is — `WHERE`, `ORDER`, `SKIP` and `LIMIT`
+        // are sub-clauses of the projection in Cypher, but what they filter or
+        // order is already the projected scope, so the names are decided here.
+        flushProjection(i);
+        if (word === "WITH" || word === "RETURN") {
+          pendingProjection = {
+            kind: word === "WITH" ? "with" : "return",
+            start: j,
+          };
+        }
+        // A `UNION` at any scope level starts a branch that inherits only what
+        // the enclosing scope handed in — the top-level `branch` counter below
+        // is the older, top-level-only view of the same fact.
+        if (word === "UNION") events.push({ kind: "union" });
         // Row-selecting clause bookkeeping. `OPTIONAL MATCH` is one clause
         // spelled with two keywords; `WHERE` and a `USING` planner hint belong
         // to the clause they follow; every other keyword ends it.
@@ -1083,13 +1197,16 @@ function projectPositions(
 
     if (ch === "(") {
       paren += 1;
+      // Inside an inline predicate every bracket is expression syntax, so the
+      // character test is not even asked. Without this, round 11's admission
+      // of `(` after `=`, `,`, `-`, `>`, `<`, `|`, `(` and `[` — every one of
+      // which an inline predicate can contain — would re-open the region one
+      // grouping paren deeper.
+      const isPattern =
+        !insideInlinePredicate() && opensPattern(src, i, clause);
+      if (isPattern) patternOpen[i] = 1;
       bracketFrames.push({
-        // Inside an inline predicate every bracket is expression syntax, so the
-        // character test is not even asked. Without this, round 11's admission
-        // of `(` after `=`, `,`, `-`, `>`, `<`, `|`, `(` and `[` — every one of
-        // which an inline predicate can contain — would re-open the region one
-        // grouping paren deeper.
-        isPattern: !insideInlinePredicate() && opensPattern(src, i, clause),
+        isPattern,
         braceDepth: braceKinds.length,
         inlinePredicate: false,
       });
@@ -1100,8 +1217,11 @@ function projectPositions(
       }
     } else if (ch === "[") {
       bracket += 1;
+      const isPattern =
+        !insideInlinePredicate() && opensPattern(src, i, clause);
+      if (isPattern) patternOpen[i] = 1;
       bracketFrames.push({
-        isPattern: !insideInlinePredicate() && opensPattern(src, i, clause),
+        isPattern,
         braceDepth: braceKinds.length,
         inlinePredicate: false,
       });
@@ -1115,7 +1235,7 @@ function projectPositions(
       // can be true at the same `{`, and which is asked FIRST is a fifth thing
       // this scanner decides — separately from the four questions it answers.
       //
-      // `opensSubquery` reads the token IMMEDIATELY BEFORE the brace, which is
+      // `subqueryOpening` reads the token IMMEDIATELY BEFORE the brace, which is
       // the grammar speaking directly: `COLLECT {` is a subquery expression and
       // nothing else. `opensPatternMap` reads the ENCLOSING BRACKET, which says
       // only that a brace here COULD be a property map — true of the pattern's
@@ -1137,13 +1257,11 @@ function projectPositions(
       //
       // Swapping cannot cost a genuine pattern map, and that is a property of
       // the grammar rather than a hope: a property map is never preceded by
-      // `CALL` / `EXISTS` / `COUNT` / `COLLECT`, so `opensSubquery` is false at
+      // `CALL` / `EXISTS` / `COUNT` / `COLLECT`, so `subqueryOpening` is null at
       // every brace `opensPatternMap` is meant to claim.
-      const kind = opensSubquery(src, i)
-        ? "subquery"
-        : opensPatternMap()
-          ? "pattern"
-          : "map";
+      const opening = subqueryOpening(src, i);
+      const kind =
+        opening !== null ? "subquery" : opensPatternMap() ? "pattern" : "map";
       braceKinds.push(kind);
       if (kind === "map") mapDepth += 1;
       braceClause.push({
@@ -1155,6 +1273,7 @@ function projectPositions(
         currentClause,
         currentPart,
         inClauseWhere,
+        pendingProjection,
       });
       // A subquery is a clause sequence of its own, so the enclosing pattern's
       // inline predicate does not reach into it, its clause baseline is the
@@ -1162,7 +1281,7 @@ function projectPositions(
       // starts with NO clause in force — the outer one does not carry in. Only
       // a subquery brace does any of this: a map literal is an expression, and
       // an expression stays inside whatever encloses it.
-      if (kind === "subquery") {
+      if (opening !== null) {
         inlinePredicateFrames = 0;
         clauseParenBase = paren;
         clauseBracketBase = bracket;
@@ -1174,9 +1293,23 @@ function projectPositions(
         currentClause = -1;
         currentPart = -1;
         inClauseWhere = false;
+        // A projection the brace sits inside (`WITH COUNT { … } AS c`) is
+        // still being read outside; the body's own `WITH` / `RETURN` are its
+        // own, so the pending one is parked on the frame and resumed on `}`.
+        pendingProjection = null;
+        events.push({ kind: "open", ...opening });
       }
     } else if (ch === "}") {
-      if (braceKinds.pop() === "map") mapDepth = Math.max(0, mapDepth - 1);
+      const closing = braceKinds.pop();
+      if (closing === "map") mapDepth = Math.max(0, mapDepth - 1);
+      // A subquery's last clause is its `RETURN` (or, for an existence test,
+      // whatever it ended on); the brace ends the sequence and so ends its
+      // projection. Flushed BEFORE the restore, so the event carries the
+      // body's projection and the enclosing one resumes untouched.
+      if (closing === "subquery") {
+        flushProjection(i);
+        events.push({ kind: "close" });
+      }
       // Restore BEFORE the keeping() test below, so the `}` itself is judged by
       // the clause that encloses the expression, not by the subquery's last one.
       const saved = braceClause.pop();
@@ -1189,6 +1322,7 @@ function projectPositions(
         currentClause = saved.currentClause;
         currentPart = saved.currentPart;
         inClauseWhere = saved.inClauseWhere;
+        pendingProjection = saved.pendingProjection;
       }
       // `boundAGraphVariable` deliberately does NOT restore. It only ever makes
       // a later MERGE map stop counting, so letting an inner `MATCH` set it is
@@ -1203,6 +1337,8 @@ function projectPositions(
     }
     i += 1;
   }
+  // The query's last clause is usually a `RETURN`; the end of the text ends it.
+  flushProjection(src.length);
 
   return {
     kept: out.join(""),
@@ -1211,6 +1347,8 @@ function projectPositions(
     whereOwner,
     clauseOfPart,
     branchOfPart,
+    patternOpen,
+    events,
   };
 }
 
@@ -1227,6 +1365,17 @@ export interface RowSelectingPart {
   readonly where: string;
   /** The top-level UNION branch the part sits in (0-based). */
   readonly branch: number;
+  /**
+   * The variables the part's PATTERN ELEMENTS bind or reference: the name
+   * written first inside each node `(` and relationship `[` of the part, in
+   * source order, duplicates kept. A name that appears anywhere else in the
+   * part — in a property-map value (`(b {x: toString(a.x)})`), a label
+   * expression, an inline predicate — is NOT one of them: a `(` or `[` there
+   * is a call, a list or a grouping, and the earlier variable it mentions does
+   * not make this part's rows that variable's rows. The tenancy guard credits
+   * a part with an earlier anchor only through a variable listed here.
+   */
+  readonly variables: readonly string[];
 }
 
 /**
@@ -1243,16 +1392,47 @@ export interface RowSelectingPart {
  * An unterminated input yields no parts; the query-wide check refuses it first.
  */
 export function rowSelectingParts(cypher: string): RowSelectingPart[] {
+  return rowSelectingScope(cypher).flatMap((event) =>
+    event.kind === "part" ? [event.part] : [],
+  );
+}
+
+/**
+ * Every row-selecting pattern part of `cypher` — see {@link rowSelectingParts}
+ * — interleaved with the VARIABLE-SCOPE events between them, in source order.
+ *
+ * The parts alone answer whether each pattern is anchored on its own. What
+ * they cannot answer is whether a pattern may INHERIT an earlier pattern's
+ * anchor through a shared variable, because that depends on whether the name
+ * still means the same thing: `MATCH (n {orgId: $orgId}) WITH count(n) AS c
+ * MATCH (n) RETURN n` spells `n` twice and binds it twice, and the second
+ * reads every tenant. The events carry what Cypher does to the scope between
+ * two parts, so the tenancy guard can follow it rather than assume a name,
+ * once anchored, stays anchored.
+ */
+export function rowSelectingScope(cypher: string): ScopeEvent[] {
   const p = projectPositions(cypher, "filtering");
   const n = p.src.length;
-  return p.clauseOfPart.map((clauseId, partId) => {
+  const materialise = (partId: number): RowSelectingPart => {
+    const clauseId = p.clauseOfPart[partId]!;
     const pattern = new Array<string>(n).fill(" ");
     const anchors = new Array<string>(n).fill(" ");
     const where = new Array<string>(n).fill(" ");
+    const variables: string[] = [];
     for (let k = 0; k < n; k += 1) {
       if (p.partOwner[k] === partId) {
         pattern[k] = p.src[k]!;
         anchors[k] = p.kept[k]!;
+        if (p.patternOpen[k] === 1) {
+          // `( name` / `[ name`: the element's variable, if it has one. A
+          // label-only element (`(:Label)`), an anonymous relationship
+          // (`[:REL]`, `[*1..3]`) and a bare map (`({k: v})`) bind nothing.
+          let j = k + 1;
+          while (j < n && /\s/.test(p.src[j]!)) j += 1;
+          IDENTIFIER_AT.lastIndex = j;
+          const name = IDENTIFIER_AT.exec(p.src);
+          if (name) variables.push(name[0]);
+        }
       } else if (p.whereOwner[k] === clauseId) {
         where[k] = p.kept[k]!;
       }
@@ -1262,8 +1442,65 @@ export function rowSelectingParts(cypher: string): RowSelectingPart[] {
       anchors: anchors.join(""),
       where: where.join(""),
       branch: p.branchOfPart[partId]!,
+      variables,
     };
-  });
+  };
+  return p.events.map((event) =>
+    event.kind === "part"
+      ? { kind: "part", part: materialise(event.partId) }
+      : event,
+  );
+}
+
+/** A whole unescaped symbolic name and nothing else. */
+const BARE_VARIABLE = new RegExp(`^[${ID_START_SRC}][${ID_PART_SRC}]*$`, "u");
+
+/**
+ * The variable names a `WITH` / `RETURN` projection carries forward out of
+ * `source`, by Cypher's rules for what a projection keeps:
+ *
+ *  - `*` keeps every variable in scope;
+ *  - a bare variable name keeps that variable;
+ *  - anything else — an expression, and a `<expr> AS alias` — binds a NEW
+ *    name, which is credited with nothing even when the expression is the
+ *    variable itself (`WITH n AS m` keeps no credit: fail-closed, as the
+ *    per-pattern rule has always said of a re-bound variable).
+ *
+ * `projection` is the projection text with literals blanked, so a name
+ * inside a string cannot be read as a variable. Items are split at top-level
+ * commas only: a comma inside a call, a list, a map or a subquery brace is
+ * the item's own.
+ */
+export function projectedNames(
+  projection: string,
+  source: ReadonlySet<string>,
+): Set<string> {
+  const kept = new Set<string>();
+  let depth = 0;
+  let start = 0;
+  const items: string[] = [];
+  for (let i = 0; i < projection.length; i += 1) {
+    const ch = projection[i]!;
+    if (ch === "(" || ch === "[" || ch === "{") depth += 1;
+    else if (ch === ")" || ch === "]" || ch === "}")
+      depth = Math.max(0, depth - 1);
+    else if (ch === "," && depth === 0) {
+      items.push(projection.slice(start, i));
+      start = i + 1;
+    }
+  }
+  items.push(projection.slice(start));
+  for (let i = 0; i < items.length; i += 1) {
+    let item = items[i]!.trim();
+    if (i === 0)
+      item = item.replace(/^DISTINCT(?![\p{ID_Continue}\p{Sc}])\s*/iu, "");
+    if (item === "*") {
+      for (const name of source) kept.add(name);
+    } else if (BARE_VARIABLE.test(item) && source.has(item)) {
+      kept.add(item);
+    }
+  }
+  return kept;
 }
 
 /**

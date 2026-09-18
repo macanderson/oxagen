@@ -13,9 +13,10 @@ import {
   applyGraphScope,
   GraphScopeError,
   keepFilteringPositions,
-  rowSelectingParts,
+  projectedNames,
+  rowSelectingScope,
 } from "./graph-scope";
-import type { GraphScope } from "./graph-scope";
+import type { GraphScope, RowSelectingPart, ScopeEvent } from "./graph-scope";
 
 export { GraphScopeError };
 export type { GraphScope };
@@ -139,12 +140,6 @@ const ANCHORED_VARIABLE = new RegExp(
   `(?<![${ID_PART}])([${ID_START}][${ID_PART}]*)\\s*\\.\\s*orgId\\s*=\\s*\\$orgId(?![${ID_PART}])`,
   "gu",
 );
-/** A pattern variable: the name written first inside a node `(` or relationship `[`. */
-const PATTERN_VARIABLE = new RegExp(
-  `[([]\\s*([${ID_START}][${ID_PART}]*)`,
-  "gu",
-);
-
 // EVERY ROW-SELECTING PATTERN PART IS ANCHORED (M0, spec §5.3).
 //
 // The query-wide check above answers "is the tenant bound somewhere", and the
@@ -161,48 +156,186 @@ const PATTERN_VARIABLE = new RegExp(
 //   - its own pattern property map binds the tenant (`(b {orgId: $orgId})`);
 //   - its clause's WHERE binds the tenant on a variable written in the part
 //     (`MATCH (b) WHERE b.orgId = $orgId`); or
-//   - it names a variable an EARLIER anchored part bound
+//   - one of its PATTERN ELEMENTS names a variable an earlier anchored part
+//     bound, and that variable is STILL IN SCOPE
 //     (`MATCH (c {orgId: $orgId}) OPTIONAL MATCH (e)-[:CITED]->(c)`).
 //
-// Every variable of an anchored part counts as anchored for the parts after
-// it, in the same top-level UNION branch. That closes the second unanchored
-// MATCH, the unanchored OPTIONAL MATCH, the unanchored UNION branch, the MATCH
-// after an anchoring MERGE, and the Cartesian product
-// (`MATCH (a {orgId: $orgId}), (b)`), which is the same defect spelled with a
-// comma.
+// The third way is where the two review findings this block answers both sat,
+// and they are the same mistake read from either end: crediting a NAME rather
+// than a VARIABLE.
+//
+// WHICH NAMES A PART BINDS. A pattern element's variable is the identifier
+// written first inside its `(` or `[`, and `RowSelectingPart.variables` lists
+// exactly those, from the brackets the scanner classified as pattern elements.
+// A regex over every `(` and `[` in the part's text credited
+// `MATCH (b {x: toString(a.x)})` with `a`, because `toString(` is a paren —
+// but `b` is joined to `a` by nothing, and in the pooled database another
+// tenant's `b` with the same `x` matches. A name in a property value, a label
+// expression or an inline predicate is a reference to a value, not an element
+// of the pattern, so it earns the part nothing.
+//
+// WHICH VARIABLES ARE STILL IN SCOPE. Cypher's variable scope is not
+// "everything bound so far", and `anchored` used to be exactly that, reset
+// only at a top-level `UNION`. So
+//
+//     MATCH (n {orgId: $orgId}) WITH count(n) AS c MATCH (n) RETURN n
+//
+// passed: the second `n` is a fresh variable — `WITH` discarded the first —
+// and it reads every tenant's rows, but the set still held the name. The walk
+// below follows the scope events `rowSelectingScope` interleaves with the
+// parts, and each event does to the credited set what Cypher does to the
+// scope:
+//
+//   - `with` / `return` REPLACE the set with what the projection keeps: `*`
+//     keeps all, a bare variable keeps itself, and an expression or an
+//     `AS` alias keeps nothing (`WITH n AS m` is fail-closed, as before).
+//   - `open` starts a scope of its own. A `CALL { … }` body sees only what it
+//     imports — a scope clause `CALL (n) { … }`, or an importing `WITH` as
+//     its first clause, read from the enclosing set; an expression subquery
+//     (`EXISTS` / `COUNT` / `COLLECT`) sees the enclosing set whole.
+//   - `close` discards the body's set. A `CALL` hands back what its `RETURN`
+//     projected — every branch's, intersected, if it had a `UNION` — and an
+//     expression subquery hands back nothing.
+//   - `union` at ANY level restarts the current scope from what it was handed
+//     at entry, so nothing one branch bound is visible in the next.
+//
+// That closes the second unanchored MATCH, the unanchored OPTIONAL MATCH, the
+// unanchored UNION branch at any level, the MATCH after an anchoring MERGE,
+// the Cartesian product (`MATCH (a {orgId: $orgId}), (b)`), the re-bound name
+// after a `WITH`, the expression-only join, and the CALL body that never
+// imported the anchored variable.
 //
 // It is still a syntactic rule and still not Claim B. What it accepts, and
 // `tenant.scope-guard.test.ts` records: a part is credited as a whole, so a
 // traversal leaving an anchored node (`(a {orgId: $orgId})-[*1..3]-(b)`)
 // reaches whatever the edges reach. That crosses tenants only over a
 // cross-tenant edge, and writing one through this seam needs a MATCH on the
-// other tenant's node, which this rule now refuses. A variable re-bound by
-// `WITH … AS` keeps no credit (fail-closed), and a WHERE anchor inside an `OR`
+// other tenant's node, which this rule refuses. A WHERE anchor inside an `OR`
 // is credited (the query-wide limitation, unchanged). #3199 remains the fix
 // that closes the class.
+
+/** One variable scope the walk is inside: the query, or a subquery body. */
+interface AnchorScope {
+  /** Anchored variables visible here, as of the current clause. */
+  anchored: Set<string>;
+  /** What the scope started with; a `UNION` branch restarts from it. */
+  readonly entry: ReadonlySet<string>;
+  /** The enclosing scope's set at `open`, for an importing `WITH` to read. */
+  readonly outer: ReadonlySet<string>;
+  /** `"call"` exports its `RETURN`; `"expression"` and the query export nothing. */
+  readonly kind: "query" | "call" | "expression";
+  /**
+   * A `CALL { … }` with no scope clause imports through a `WITH` written as
+   * its FIRST clause, and that `WITH` projects from the enclosing set rather
+   * than from the body's (empty) one. `importsByWith` says the body is that
+   * form; `awaitingImport` is true until its first event, and again after a
+   * `UNION`, since each branch imports for itself.
+   */
+  readonly importsByWith: boolean;
+  awaitingImport: boolean;
+  /** For `"call"`: what every branch's `RETURN` kept, or null before the first. */
+  exported: Set<string> | null;
+}
+
+function isPartAnchored(
+  part: RowSelectingPart,
+  anchored: ReadonlySet<string>,
+): boolean {
+  if (SCOPE_GUARD.test(part.anchors)) return true;
+  const whereAnchored = new Set(
+    [...part.where.matchAll(ANCHORED_VARIABLE)].map((m) => m[1]!),
+  );
+  return part.variables.some((v) => whereAnchored.has(v) || anchored.has(v));
+}
+
 function assertEveryPartAnchored(cypher: string): void {
-  let branch = -1;
-  let anchored = new Set<string>();
-  for (const part of rowSelectingParts(cypher)) {
-    if (part.branch !== branch) {
-      branch = part.branch;
-      anchored = new Set();
+  const root: AnchorScope = {
+    anchored: new Set(),
+    entry: new Set(),
+    outer: new Set(),
+    kind: "query",
+    importsByWith: false,
+    awaitingImport: false,
+    exported: null,
+  };
+  const stack: AnchorScope[] = [root];
+  const scope = () => stack[stack.length - 1]!;
+  const events: ScopeEvent[] = rowSelectingScope(cypher);
+  for (const event of events) {
+    const here = scope();
+    switch (event.kind) {
+      case "part": {
+        here.awaitingImport = false;
+        if (!isPartAnchored(event.part, here.anchored)) {
+          throw new TenantScopeError(
+            `Every MATCH pattern in a scoped query must bind the tenant — in its own pattern map (\`(b {orgId: $orgId})\`), in its clause's WHERE on one of its own variables (\`WHERE b.orgId = $orgId\`), or through a variable an earlier anchored pattern bound that is still in scope. An anchor on some other pattern, a variable a WITH has dropped, and a variable named only inside a property value do not scope this one: ${event.part.pattern.trim().slice(0, 80)}`,
+          );
+        }
+        for (const v of event.part.variables) here.anchored.add(v);
+        break;
+      }
+      case "with": {
+        const source = here.awaitingImport ? here.outer : here.anchored;
+        here.awaitingImport = false;
+        here.anchored = projectedNames(event.projection, source);
+        break;
+      }
+      case "return": {
+        here.awaitingImport = false;
+        here.anchored = projectedNames(event.projection, here.anchored);
+        if (here.kind === "call") {
+          // Every UNION branch of a CALL body returns the same columns; a
+          // column is credited only if EVERY branch's `RETURN` kept it
+          // anchored, since the rows of any one branch reach the caller.
+          here.exported =
+            here.exported === null
+              ? new Set(here.anchored)
+              : new Set([...here.exported].filter((v) => here.anchored.has(v)));
+        }
+        break;
+      }
+      case "open": {
+        here.awaitingImport = false;
+        const outer = here.anchored;
+        let entry: Set<string>;
+        if (event.subquery === "expression") {
+          entry = new Set(outer);
+        } else if (event.imports === "all") {
+          entry = new Set(outer);
+        } else if (event.imports === null) {
+          entry = new Set();
+        } else {
+          entry = new Set(event.imports.filter((v) => outer.has(v)));
+        }
+        const importsByWith =
+          event.subquery === "call" && event.imports === null;
+        stack.push({
+          anchored: new Set(entry),
+          entry,
+          outer,
+          kind: event.subquery,
+          importsByWith,
+          awaitingImport: importsByWith,
+          exported: null,
+        });
+        break;
+      }
+      case "close": {
+        // The root is never popped: a stray `}` has no scope to close, and the
+        // query-wide check refuses an unbalanced query before this runs.
+        if (stack.length === 1) break;
+        const closed = stack.pop()!;
+        if (closed.kind === "call" && closed.exported !== null) {
+          for (const v of closed.exported) scope().anchored.add(v);
+        }
+        break;
+      }
+      case "union": {
+        here.anchored = new Set(here.entry);
+        here.awaitingImport = here.importsByWith;
+        break;
+      }
     }
-    const variables = [...part.pattern.matchAll(PATTERN_VARIABLE)].map(
-      (m) => m[1]!,
-    );
-    const whereAnchored = new Set(
-      [...part.where.matchAll(ANCHORED_VARIABLE)].map((m) => m[1]!),
-    );
-    const isAnchored =
-      SCOPE_GUARD.test(part.anchors) ||
-      variables.some((v) => whereAnchored.has(v) || anchored.has(v));
-    if (!isAnchored) {
-      throw new TenantScopeError(
-        `Every MATCH pattern in a scoped query must bind the tenant — in its own pattern map (\`(b {orgId: $orgId})\`), in its clause's WHERE on one of its own variables (\`WHERE b.orgId = $orgId\`), or through a variable an earlier anchored pattern bound. An anchor on some other pattern does not scope this one: ${part.pattern.trim().slice(0, 80)}`,
-      );
-    }
-    for (const v of variables) anchored.add(v);
   }
 }
 
