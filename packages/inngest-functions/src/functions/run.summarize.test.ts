@@ -314,3 +314,43 @@ describe("run.summarize job", () => {
     expect(updates).toHaveLength(0);
   });
 });
+
+describe("a step the producer wrote in two halves", () => {
+  it("reads the RESULT, and names what the call was made with", async () => {
+    // `tool_requested` then `tool_call` is one step. Reading the frame that
+    // opens it would hand the model the tool's input and call it the result.
+    store('{"path":"README.md"}');
+    store("# Oxagen\nMission Control for an agent workforce.");
+    const frames = [
+      row(1, "tool_requested", '{"path":"README.md"}'),
+      row(2, "tool_call", "# Oxagen\nMission Control for an agent workforce."),
+    ];
+    const collected = await collectSummarySteps(scope, frames, getBody);
+    expect(collected.total).toBe(1);
+    expect(collected.steps[0]).toMatchObject({
+      seq: "1",
+      kind: "tool_call",
+      input: '{"path":"README.md"}',
+      text: "# Oxagen\nMission Control for an agent workforce.",
+    });
+    const prompt = summaryPrompt("tse_0a1b2c", collected);
+    expect(prompt).toContain('called with: {"path":"README.md"}');
+    expect(prompt).toContain("Mission Control for an agent workforce.");
+  });
+
+  it("says the result was not retained rather than showing the input in its place (negative)", async () => {
+    store('{"path":"README.md"}');
+    const frames = [
+      row(1, "tool_requested", '{"path":"README.md"}'),
+      { ...row(2, "tool_call"), body: NO_BODY },
+    ];
+    const collected = await collectSummarySteps(scope, frames, getBody);
+    expect(collected.steps[0]).toMatchObject({
+      input: '{"path":"README.md"}',
+      text: null,
+    });
+    expect(summaryPrompt("tse_0a1b2c", collected)).toContain(
+      "(body not retained)",
+    );
+  });
+});
