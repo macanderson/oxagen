@@ -663,6 +663,40 @@ describe("runTachoHook for Cursor", () => {
     ).toMatch(/^(allow|deny)$/);
   });
 
+  it("refuses a Cursor tool call when the enrollment cannot be read, and allows one on a machine that is simply not enrolled", async () => {
+    // Cursor reads a malformed answer as a block, so "no opinion" is written
+    // as an explicit allow. That is right for a machine Oxagen does not
+    // govern and wrong when the file saying whether it governs this machine
+    // is unreadable: the tool would run with no policy evaluated.
+    const unreadable = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      readHost: () => {
+        throw new Error("corrupt");
+      },
+    });
+    expect(unreadable).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unreadable.stdout)).toMatchObject({
+      permission: "deny",
+    });
+    expect(unreadable.stderr).toContain("corrupt");
+
+    // A machine that was never enrolled is not a failure to evaluate, so it
+    // still answers allow and does not block the person's own tools.
+    const unenrolled = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+    });
+    expect(unenrolled).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unenrolled.stdout)).toEqual({ permission: "allow" });
+  });
+
   it("says the payload is not a Cursor hook when it is not one", async () => {
     const result = await runTachoHook({
       paths: enrolledPaths(),

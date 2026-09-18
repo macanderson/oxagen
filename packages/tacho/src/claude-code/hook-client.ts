@@ -365,12 +365,32 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         ? cursorAnswer(response, input.hook_event_name)
         : `${JSON.stringify(response)}\n`;
   const emptyAnswer = answer({});
+  // An unreadable enrollment is not an unenrolled machine, and for Cursor the
+  // difference decides whether a tool runs unchecked. Cursor treats a
+  // malformed answer as a block, so `cursorAnswer` turns "no opinion" into an
+  // explicit `{"permission":"allow"}` — which is the right reading of silence
+  // from a machine Oxagen does not govern, and the wrong one when the file
+  // that says whether it governs this machine cannot be read. A corrupt or
+  // briefly unreadable `host.json` would run every tool with no policy
+  // evaluated at all. Refuse instead: the harness is asking permission and
+  // this process cannot tell whether permission was granted.
+  //
+  // Only the read error refuses. `host === undefined` below is the honestly
+  // unenrolled machine and still answers empty, so installing the hook
+  // without enrolling does not block the person's own tools.
+  const refusedAnswer = answer({
+    hookSpecificOutput: {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Oxagen cannot read this machine's enrollment, so it cannot say whether this call is permitted.",
+    },
+  });
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
     return {
-      stdout: emptyAnswer,
+      stdout: cursor ? refusedAnswer : emptyAnswer,
       stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
       exitCode: 0,
       path: "unenrolled",
