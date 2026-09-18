@@ -12,8 +12,8 @@ import {
 } from "./images.mjs";
 import { INK } from "./theme.mjs";
 
-const gold = (svg) => (svg.match(/fill="#D6962C"/g) ?? []).length;
-const paper = /fill="#F2EEE5"|fill="#F8F5EE"/g;
+const gold = (svg) => (svg.match(/fill="#D4AF37"/g) ?? []).length;
+const paper = /fill="#FFFFFF"|fill="#FFFFFF"/g;
 
 describe("sizes", () => {
   it("are the ones the site and the networks expect", () => {
@@ -29,8 +29,8 @@ describe("wordmark", () => {
     expect(svg).toMatch(
       /^<svg x="10" y="20" width="146\.0" height="30" viewBox="0 0 453\.868 93\.246">/,
     );
-    expect(svg).toContain('fill="#F2EEE5"');
-    expect(svg).toContain('fill="#D6962C"');
+    expect(svg).toContain('fill="#FFFFFF"');
+    expect(svg).toContain('fill="#D4AF37"');
     expect(svg).not.toContain("<style");
   });
 });

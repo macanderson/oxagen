@@ -8,22 +8,30 @@
 //   3. The repository, read through the installation's token: the numeric id
 //      a binding pins, the canonical owner/name, and the default branch. A
 //      repository the installation cannot see is a not_found.
-//   4. Exclusivity ACROSS workspaces: is this repository already the main
-//      repository of a different one? The heads table is tenant-scoped, so
-//      that read crosses the boundary through `withSystemDb` — the advisory
+//   4. Exclusivity ACROSS workspaces: does any other workspace hold a head
+//      for this repository, main or linked? The heads table is tenant-scoped,
+//      so that read crosses the boundary through `withSystemDb` — the advisory
 //      lock in step 5 never could, being keyed on this workspace alone. The
-//      guarantee is `repository_binding_heads_main_repository_uq`, a unique
-//      index on (provider, provider_repository_id) WHERE role = 'main' that
-//      carries no org or workspace in its key; this read exists so the
-//      ordinary case refuses with a sentence, and the catch around step 5 so
-//      the racing case refuses with the same one.
+//      guarantee is the store's: `repository_binding_heads_main_repository_uq`
+//      for main against main, and the trigger
+//      `repository_binding_heads_exclusive_main` for the rest, which takes a
+//      repository-keyed advisory lock so two writers for one repository
+//      serialise across workspaces. This read exists so the ordinary case
+//      refuses with a sentence (`main_repo_claimed` when the repository is
+//      main elsewhere, `repository_linked_elsewhere` when it is linked
+//      elsewhere), and the catch around step 5 so the racing case refuses
+//      with the same one.
 //   5. One transaction, holding a transaction-scoped advisory lock on the
 //      workspace so two binds IN THIS WORKSPACE read the heads one after the
-//      other: the workspace's current binding heads decide idempotent /
-//      repair (the same repository through a replacement connection, which
-//      supersedes the binding onto it) / conflict; else the version-1 binding
-//      and its head, the connection marked connected, and the gate's
-//      provisional window closed when this workspace is the gate's. No table
+//      other: the workspace's heads, of EITHER role, decide idempotent /
+//      promote (a head this workspace already holds as linked for this
+//      repository becomes main in place) / repair (the same repository through
+//      a replacement connection, which supersedes the binding onto it) /
+//      conflict; else the binding and its `role = 'main'` head through
+//      `writeRepositoryHead`, which reuses a version retained from an unlinked
+//      head instead of colliding with it; then the connection marked
+//      connected, and the gate's provisional window closed when this workspace
+//      is the gate's. No table
 //      constraint holds one head per WORKSPACE, so the lock is still what
 //      keeps this workspace to a single main repository.
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -39,6 +47,7 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { writeRepositoryHead } from "./repository.binding-write";
 import {
   GITHUB_PROVIDER,
   resolveWorkspaceGithubInstallation,
@@ -47,9 +56,33 @@ import {
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
 const PROVIDER = GITHUB_PROVIDER;
 
-/** The partial unique index that holds one main repository per repository. */
-const MAIN_REPOSITORY_CONSTRAINT =
-  "repository_binding_heads_main_repository_uq";
+/**
+ * What a 23505 from the heads table means, by constraint name. The partial
+ * unique index refuses a second main head; the trigger
+ * `repository_binding_heads_exclusive_main`
+ * (20260918200000_repository_binding_heads_exclusive_across_roles.sql) raises
+ * the same code under three names, one of them the index's own, so a handler
+ * maps the racing case and the ordinary case to one sentence.
+ */
+const HEAD_CONFLICT_BY_CONSTRAINT: Readonly<
+  Record<string, RepositoryHeadConflict>
+> = {
+  // The repository is another workspace's main. Raised by the index and by
+  // the trigger for a main head written where a main head exists elsewhere.
+  repository_binding_heads_main_repository_uq: "main_elsewhere",
+  // A linked head written where a main head exists elsewhere: the same fact,
+  // seen from the other side.
+  repository_binding_heads_linked_is_main_elsewhere: "main_elsewhere",
+  // A main head written where a linked head exists elsewhere.
+  repository_binding_heads_main_is_linked_elsewhere: "linked_elsewhere",
+};
+
+/**
+ * Which cross-workspace rule a head write broke: the repository is main in
+ * another workspace, or it is linked in another workspace and was being
+ * claimed as main.
+ */
+export type RepositoryHeadConflict = "main_elsewhere" | "linked_elsewhere";
 
 /**
  * The refusal for a repository another workspace already steers by.
@@ -60,7 +93,7 @@ const MAIN_REPOSITORY_CONSTRAINT =
  * choices of one customer to another. The operator can see the claim from the
  * GitHub side, which is the side they control.
  */
-function repositoryClaimedElsewhere(fullName: string): HandlerError {
+export function repositoryClaimedElsewhere(fullName: string): HandlerError {
   return new HandlerError({
     code: "conflict",
     reason: "main_repo_claimed",
@@ -69,7 +102,26 @@ function repositoryClaimedElsewhere(fullName: string): HandlerError {
 }
 
 /**
- * True for a violation of the main-repository index specifically.
+ * The refusal for a main claim on a repository another workspace has LINKED.
+ *
+ * A linked repository receives that workspace's repository-scoped Context PRs
+ * (spec §10.1), and a main repository holds this workspace's `.oxagen/`
+ * governance tree. Making one the other would put this workspace's governance
+ * in a repository another workspace writes to. Names neither the organisation
+ * nor the workspace holding the link, for the reason
+ * `repositoryClaimedElsewhere` gives: the read that found it crossed tenants.
+ */
+export function repositoryLinkedElsewhere(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "repository_linked_elsewhere",
+    message: `${fullName} is linked to another workspace, so it cannot be a main repository. A main repository holds a workspace's .oxagen/ governance tree, and a linked repository receives another workspace's Context PRs. Unlink it there first, or choose a different repository here.`,
+  });
+}
+
+/**
+ * The cross-workspace rule a failed head write broke, or null when the error
+ * is something else.
  *
  * Matched on the constraint NAME rather than on 23505 alone: this insert can
  * also violate `repository_binding_heads_repository_uq`, which means something
@@ -77,22 +129,87 @@ function repositoryClaimedElsewhere(fullName: string): HandlerError {
  * send the operator to look for a workspace that does not exist. Postgres
  * carries the name on the error; the driver nests it under `cause`.
  */
-function isMainRepositoryConflict(err: unknown): boolean {
+export function repositoryHeadConflict(
+  err: unknown,
+): RepositoryHeadConflict | null {
   for (let e: unknown = err, hops = 0; e != null && hops < 5; hops++) {
     const row = e as {
       code?: unknown;
       constraint_name?: unknown;
       cause?: unknown;
     };
-    if (
-      row.code === "23505" &&
-      row.constraint_name === MAIN_REPOSITORY_CONSTRAINT
-    ) {
-      return true;
+    if (row.code === "23505" && typeof row.constraint_name === "string") {
+      return HEAD_CONFLICT_BY_CONSTRAINT[row.constraint_name] ?? null;
     }
     e = row.cause;
   }
-  return false;
+  return null;
+}
+
+/**
+ * Turn a head write that lost to the store's cross-workspace rule into the
+ * sentence the pre-check would have given, or rethrow anything else.
+ */
+export function rethrowHeadConflict(err: unknown, fullName: string): never {
+  switch (repositoryHeadConflict(err)) {
+    case "main_elsewhere":
+      throw repositoryClaimedElsewhere(fullName);
+    case "linked_elsewhere":
+      throw repositoryLinkedElsewhere(fullName);
+    case null:
+      throw err;
+  }
+}
+
+/**
+ * Every head ANOTHER workspace holds for a repository, read across tenants
+ * through `withSystemDb` because the heads table is tenant-scoped. This is
+ * the pre-check every writer of a MAIN head runs for its sentence; the
+ * trigger on the table is the guarantee, and `rethrowHeadConflict` gives a
+ * lost race the same sentence.
+ *
+ * `workspaceId` is the writer's own workspace, excluded so a re-bind of the
+ * repository a workspace already steers by is the repair path and not a
+ * claim; `create_workspace` has no workspace yet and passes null.
+ */
+export async function headsHeldElsewhere(
+  providerRepositoryId: string,
+  workspaceId: string | null,
+): Promise<Array<{ role: string; workspaceId: string }>> {
+  return withSystemDb((tx) =>
+    tx
+      .select({
+        role: schema.repositoryBindingHeads.role,
+        workspaceId: schema.repositoryBindingHeads.workspaceId,
+      })
+      .from(schema.repositoryBindingHeads)
+      .where(
+        and(
+          eq(schema.repositoryBindingHeads.provider, PROVIDER),
+          eq(
+            schema.repositoryBindingHeads.providerRepositoryId,
+            providerRepositoryId,
+          ),
+          ...(workspaceId === null
+            ? []
+            : [ne(schema.repositoryBindingHeads.workspaceId, workspaceId)]),
+        ),
+      ),
+  );
+}
+
+/**
+ * Refuse a main claim on a repository another workspace holds a head for. A
+ * main head elsewhere wins the sentence over a linked one, matching the
+ * trigger.
+ */
+export function assertNotHeldElsewhere(
+  fullName: string,
+  heads: ReadonlyArray<{ role: string }>,
+): void {
+  if (heads.some((h) => h.role === "main"))
+    throw repositoryClaimedElsewhere(fullName);
+  if (heads.length > 0) throw repositoryLinkedElsewhere(fullName);
 }
 
 /**
@@ -122,7 +239,9 @@ function isMainRepositoryConflict(err: unknown): boolean {
  * cannot be stored on the plane it describes — so one `withSystemDb` read
  * answers (2) for every tenant at once.
  */
-async function assertGlobalClaimIsKnowable(orgId: string): Promise<void> {
+export async function assertGlobalClaimIsKnowable(
+  orgId: string,
+): Promise<void> {
   const plane = await resolveDataPlane(orgId, "postgres");
   // Throws DataPlaneUnavailableError for any binding that is not active.
   assertDataPlaneUsable(plane);
@@ -159,6 +278,40 @@ function planeUnsupported(): HandlerError {
   });
 }
 
+/**
+ * Re-ask which plane the organisation is on, uncached, from inside the
+ * transaction that writes a main-repository claim. The reasoning — why it is
+ * asked twice, why uncached, and the window it narrows without closing (#3288)
+ * — is at the call site in the bind below. `create_workspace` writes the same
+ * claim and asks the same question through this.
+ */
+export async function assertPlaneStillShared(scope: {
+  orgId: string;
+  workspaceId: string;
+}): Promise<void> {
+  const { loadDataPlaneBinding } = await import("@oxagen/database/data-plane");
+  const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
+  assertDataPlaneUsable(planeNow);
+  if (planeNow.mode !== "shared") {
+    logger.warn(
+      { orgId: scope.orgId, workspaceId: scope.workspaceId },
+      "repository.main.bind: refused mid-transaction — the organisation's Postgres plane moved after the pre-check",
+    );
+    throw planeUnsupported();
+  }
+}
+
+/**
+ * The transaction-scoped advisory lock every writer of a workspace's binding
+ * heads takes — `bind_main_repository`, `link_repository`,
+ * `unlink_repository` — so each reads the heads the previous one committed.
+ * The key keeps its original spelling so a deploy that mixes old and new
+ * processes still serialises on one lock.
+ */
+export function workspaceRepositoriesLock(workspaceId: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
+}
+
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
   repository(
@@ -168,7 +321,7 @@ export interface MainRepositoryDeps {
   ): Promise<GitHubRepoInfo | null>;
 }
 
-const githubMainRepositoryDeps: MainRepositoryDeps = {
+export const githubMainRepositoryDeps: MainRepositoryDeps = {
   async repository(installationId, owner, name) {
     const appId = process.env["GITHUB_APP_ID"];
     const privateKey = process.env["GITHUB_APP_PRIVATE_KEY"];
@@ -251,33 +404,24 @@ export function createMainRepositoryBindHandler(
     // workspace and theirs differ. The index is the guarantee, this read is how
     // the ordinary case gets a sentence instead of a constraint name, and the
     // catch below is how the racing case gets the same sentence.
+    //
+    // Both roles count. A repository another workspace has LINKED cannot
+    // become this workspace's main either: its `.oxagen/` tree would then sit
+    // in a repository that workspace opens Context PRs on. Not this
+    // workspace's own heads: re-binding a repository this workspace already
+    // steers is the idempotent/repair path below, not a claim.
     await assertGlobalClaimIsKnowable(ctx.orgId);
-    const claimedElsewhere = await withSystemDb((tx) =>
-      tx
-        .select({ workspaceId: schema.repositoryBindingHeads.workspaceId })
-        .from(schema.repositoryBindingHeads)
-        .where(
-          and(
-            eq(schema.repositoryBindingHeads.provider, PROVIDER),
-            eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-            eq(schema.repositoryBindingHeads.role, "main"),
-            // Not this workspace: re-binding a repository this workspace
-            // already steers is the idempotent/repair path below, not a claim.
-            ne(schema.repositoryBindingHeads.workspaceId, ctx.workspaceId),
-          ),
-        )
-        .limit(1),
-    );
-    if (claimedElsewhere.length > 0) {
+    const heldElsewhere = await headsHeldElsewhere(repo.id, ctx.workspaceId);
+    if (heldElsewhere.length > 0) {
       logger.warn(
         {
           orgId: ctx.orgId,
           workspaceId: ctx.workspaceId,
           repository: repo.fullName,
         },
-        "repository.main.bind: refused — repository is already a main repository elsewhere",
+        "repository.main.bind: refused — another workspace already holds this repository",
       );
-      throw repositoryClaimedElsewhere(repo.fullName);
+      assertNotHeldElsewhere(repo.fullName, heldElsewhere);
     }
 
     let result: {
@@ -289,9 +433,7 @@ export function createMainRepositoryBindHandler(
       result = await withTenantDb(async (tx) => {
         // A second bind in this workspace waits here until the first commits,
         // then reads the head it wrote.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${scope.workspaceId}`}::text, 0))`,
-        );
+        await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
 
         // Re-ask which plane this organisation is on, INSIDE the transaction
         // that writes.
@@ -328,21 +470,11 @@ export function createMainRepositoryBindHandler(
         // very same stale `shared` answer the pre-check already had — and
         // check nothing at all. The uncached read is the whole point of
         // asking twice.
-        const { loadDataPlaneBinding } = await import(
-          "@oxagen/database/data-plane"
-        );
-        const planeNow = await loadDataPlaneBinding(scope.orgId, "postgres");
-        assertDataPlaneUsable(planeNow);
-        if (planeNow.mode !== "shared") {
-          logger.warn(
-            { orgId: scope.orgId, workspaceId: scope.workspaceId },
-            "repository.main.bind: refused mid-transaction — the organisation's Postgres plane moved after the pre-check",
-          );
-          throw planeUnsupported();
-        }
+        await assertPlaneStillShared(scope);
         const heads = await tx
           .select({
             id: schema.repositoryBindingHeads.id,
+            role: schema.repositoryBindingHeads.role,
             connectionId: schema.repositoryBindingHeads.connectionId,
             providerRepositoryId:
               schema.repositoryBindingHeads.providerRepositoryId,
@@ -353,17 +485,32 @@ export function createMainRepositoryBindHandler(
             and(
               eq(schema.repositoryBindingHeads.orgId, scope.orgId),
               eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-              // Only a MAIN head answers "does this workspace already bind a
-              // different repository". A head the exclusivity migration
-              // demoted to 'linked' is one this workspace is no longer steered
-              // by, and counting it would refuse `main_repo_bound` to a
-              // workspace that has no main repository at all — leaving it with
-              // no way to bind one.
-              eq(schema.repositoryBindingHeads.role, "main"),
             ),
           );
+        // EVERY head of this workspace, of either role, because the two
+        // questions decided from this read need different subsets.
+        //
+        // "Does this workspace already steer by a DIFFERENT repository" is
+        // about MAIN heads only. A head the exclusivity migration demoted to
+        // 'linked' is one this workspace is no longer steered by, and counting
+        // it would refuse `main_repo_bound` to a workspace that has no main
+        // repository at all, leaving it no way to bind one.
+        //
+        // "Is there already a head for THIS repository" is about any role. A
+        // linked head for the repository being bound is promoted below, and
+        // reading only main heads would miss it and then write a second head
+        // for one (connection, repository) — refused by
+        // `repository_binding_heads_repository_uq` — and a second version-1
+        // binding, refused by `repository_bindings_repository_version_uq`.
+        // Neither is a cross-workspace claim, so `rethrowHeadConflict` passes
+        // them through and the operator gets a 500 on the only move that would
+        // have given their workspace a main repository back.
         const same = heads.find((h) => h.providerRepositoryId === repo.id);
-        if (!same && heads.length > 0) {
+        if (
+          heads.some(
+            (h) => h.role === "main" && h.providerRepositoryId !== repo.id,
+          )
+        ) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo_bound",
@@ -423,11 +570,28 @@ export function createMainRepositoryBindHandler(
             existing.providerName !== repo.name ||
             existing.providerFullName !== repo.fullName ||
             existing.configuredDefaultRef !== repo.defaultBranch;
-          if (!drifted) {
+          // A LINKED head for this repository is promoted rather than
+          // duplicated. The workspace can already see the repository; this call
+          // is the operator deciding it should steer by it, which is the same
+          // decision as a first bind. The UPDATE fires the store's exclusivity
+          // trigger (it is `BEFORE INSERT OR UPDATE OF role`), so a repository
+          // another workspace holds still loses here, with the same sentence.
+          const promote = same.role !== "main";
+          if (!drifted && !promote) {
             // Nothing has moved, so nothing is written. The first bind's identity
             // is the answer.
             bindingPublicId = existing.publicId;
             boundAt = existing.createdAt;
+          } else if (!drifted) {
+            // The binding records nothing new, so no version is written; only
+            // the role moves. `boundAt` is now, because now is when this
+            // repository became the one that steers the workspace.
+            await tx
+              .update(schema.repositoryBindingHeads)
+              .set({ role: "main", updatedAt: now })
+              .where(eq(schema.repositoryBindingHeads.id, same.id));
+            bindingPublicId = existing.publicId;
+            boundAt = now;
           } else {
             // Same repository, something the binding records has moved. The
             // successor carries every such fact forward together — owner, name,
@@ -494,6 +658,9 @@ export function createMainRepositoryBindHandler(
               .set({
                 connectionId: connection.id,
                 currentBindingId: successor.id,
+                // Carried with the rest: a linked head being promoted in the
+                // same statement that moves its binding forward.
+                role: "main",
                 updatedAt: now,
               })
               .where(eq(schema.repositoryBindingHeads.id, same.id));
@@ -502,47 +669,27 @@ export function createMainRepositoryBindHandler(
             boundAt = now;
           }
         } else {
-          const [binding] = await tx
-            .insert(schema.repositoryBindings)
-            .values({
-              orgId: scope.orgId,
-              workspaceId: scope.workspaceId,
-              connectionId: connection.id,
-              provider: PROVIDER,
-              providerRepositoryId: repo.id,
-              providerOwner: repo.owner,
-              providerName: repo.name,
-              providerFullName: repo.fullName,
-              configuredDefaultRef: repo.defaultBranch,
-              observedAt: now,
-              version: 1,
-              supersedesBindingId: null,
-              createdAt: now,
-              createdById: userId,
-            })
-            .returning({
-              id: schema.repositoryBindings.id,
-              publicId: schema.repositoryBindings.publicId,
-            });
-          if (!binding)
-            throw new Error("repository_bindings insert returned no row");
-          await tx.insert(schema.repositoryBindingHeads).values({
-            orgId: scope.orgId,
-            workspaceId: scope.workspaceId,
+          // Through the one head writer, not a local version-1 insert. This
+          // workspace may already HOLD a binding version for the repository
+          // with no head on it — a link that was unlinked keeps its versions,
+          // because admitted runs cite them — and a second version 1 for the
+          // same (connection, repository) is refused by
+          // `repository_bindings_repository_version_uq`, which reaches the
+          // operator as a 500 rather than as anything they can act on.
+          // `writeRepositoryHead` reuses that retained version, or supersedes
+          // it when something it records has moved, and writes the
+          // `role = 'main'` head. The role is written out there rather than
+          // left to the column default, because which role a head carries is
+          // the whole question the store's exclusivity rule answers.
+          const written = await writeRepositoryHead(tx, {
+            scope,
             connectionId: connection.id,
-            provider: PROVIDER,
-            providerRepositoryId: repo.id,
-            currentBindingId: binding.id,
-            // This capability binds the MAIN repository — the one whose
-            // `.oxagen/rules/` steers the workspace — so it is what the
-            // exclusivity index applies to. Written out rather than left to the
-            // column default, because which role a head carries is the whole
-            // question that index answers.
+            repo,
             role: "main",
-            createdAt: now,
-            updatedAt: now,
+            userId,
+            now,
           });
-          bindingPublicId = binding.publicId;
+          bindingPublicId = written.bindingPublicId;
           boundAt = now;
         }
 
@@ -572,13 +719,13 @@ export function createMainRepositoryBindHandler(
         };
       });
     } catch (err) {
-      // The window the pre-check above cannot close. Two workspaces binding the
-      // same repository concurrently both read no claim and both proceed; the
-      // advisory lock does not serialise them, because it is keyed on the
-      // workspace and theirs differ. One of them then loses to the unique
-      // index, and this turns that into the same sentence the ordinary path
-      // gives rather than an unhandled 23505 surfacing as `internal_error`.
-      if (isMainRepositoryConflict(err)) {
+      // The window the pre-check above cannot close. Two workspaces writing a
+      // head for the same repository concurrently both read nothing held and
+      // both proceed; the workspace lock does not serialise them, because
+      // theirs differ. The trigger's repository-keyed lock does, and the loser
+      // gets a 23505 with a constraint name. This turns it into the sentence
+      // the ordinary path gives rather than an `internal_error`.
+      if (repositoryHeadConflict(err) !== null) {
         logger.warn(
           {
             orgId: scope.orgId,
@@ -587,9 +734,8 @@ export function createMainRepositoryBindHandler(
           },
           "repository.main.bind: lost the race for a main repository claim",
         );
-        throw repositoryClaimedElsewhere(repo.fullName);
       }
-      throw err;
+      rethrowHeadConflict(err, repo.fullName);
     }
 
     logger.info(

@@ -1,6 +1,8 @@
 "use client";
-// The Workspace settings dialog, whose one panel is Main repository (MC spec
-// §10.1–§10.2, #2967).
+// The Workspace settings dialog: the Main repository panel (MC spec
+// §10.1–§10.2, #2967) and, below it, the Repositories section
+// (workspace-repositories.tsx; §10.1, §17 M0) that lists every repository the
+// workspace binds and links or unlinks a second one.
 //
 // Why it exists: the main repo is where `.oxagen/` lives — published steering
 // records, the promotion ledger, and every agent definition — and until a
@@ -49,6 +51,7 @@ import { SheetDialog } from "@/ui/sheet-dialog";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { useSidebarSections } from "./sidebar";
+import { RepositoriesPanel } from "./workspace-repositories";
 import {
   attachGithubInstallation,
   bindWorkspaceRepository,
@@ -136,6 +139,12 @@ export function WorkspaceSettingsDialog({ data }: { data: ShellData }) {
   const { ws } = useSidebarSections(data);
   const [acknowledgement, setAcknowledgement] =
     useState<InstallAcknowledgement>(null);
+  // Bumped when the main panel binds or re-binds, so the Repositories list
+  // below it re-reads: its main row is the binding the panel just moved.
+  const [version, setVersion] = useState(0);
+  const onChanged = useCallback(() => {
+    setVersion((n) => n + 1);
+  }, []);
 
   const onRequested = useCallback(
     (outcome: InstallAcknowledgement) => {
@@ -165,6 +174,13 @@ export function WorkspaceSettingsDialog({ data }: { data: ShellData }) {
           ws={ws}
           open={workspaceSettingsOpen}
           acknowledgement={acknowledgement}
+          onChanged={onChanged}
+        />
+        <RepositoriesPanel
+          org={data.org.slug}
+          ws={ws}
+          open={workspaceSettingsOpen}
+          version={version}
         />
       </SheetDialog>
     </>
@@ -176,11 +192,14 @@ function MainRepositoryPanel({
   ws,
   open,
   acknowledgement,
+  onChanged,
 }: {
   org: string;
   ws: string;
   open: boolean;
   acknowledgement: InstallAcknowledgement;
+  /** A bind, re-bind or attach settled: the record other sections read moved. */
+  onChanged: () => void;
 }) {
   const t = useTranslations("workspaceSettings.mainRepository");
   const failureText = useWorkspaceSettingsFailure();
@@ -293,6 +312,7 @@ function MainRepositoryPanel({
 
   const bound = () => {
     setReloads((n) => n + 1);
+    onChanged();
   };
 
   return (

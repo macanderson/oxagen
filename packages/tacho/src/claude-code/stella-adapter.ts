@@ -37,6 +37,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { digestJcs, type JsonValue } from "../digest";
+import { digestText } from "./context";
 
 /** What `ps` says about one process. */
 export interface ProcessInfo {
@@ -147,7 +148,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * replaced by their Claude Code names; every other member, and the parts of
  * a renamed member Claude Code has no name for (`tool.read_only`, the
  * `subagent` object), pass through so the recorder keeps them as attributes.
- * A document that is not a Stella payload (no string `event`) is returned
+ * The one exception is `subagent.instructionPreview`, which is prompt text
+ * and leaves as a digest and a length. A document that is not a Stella
+ * payload (no string `event`) is returned
  * unchanged and fails the hook schema the way any junk does.
  */
 export function translateStellaPayload(
@@ -177,9 +180,33 @@ export function translateStellaPayload(
   if (finalText !== undefined) out["last_assistant_message"] = finalText;
   if (subagentResult !== undefined) out["subagent_result"] = subagentResult;
   const subagent = rest["subagent"];
-  if (isRecord(subagent) && typeof subagent["agentId"] === "string")
-    out["agent_id"] = subagent["agentId"];
+  if (isRecord(subagent)) {
+    if (typeof subagent["agentId"] === "string")
+      out["agent_id"] = subagent["agentId"];
+    out["subagent"] = digestSubagentInstruction(subagent);
+  }
   return out;
+}
+
+/**
+ * The `subagent` object with its `instructionPreview` replaced by a digest
+ * and a length. The preview is the opening of the child's instruction, which
+ * is prompt text: the parent's task, in the parent's words, sometimes with
+ * the file it pasted. Everything else in the object passes through to the
+ * recorder's leftover attributes, and before this the preview went with it,
+ * verbatim, into `hook.subagent` on every SubagentStart and SubagentStop.
+ * The digest still lets two hooks agree they saw the same instruction.
+ */
+function digestSubagentInstruction(
+  subagent: Record<string, unknown>,
+): Record<string, unknown> {
+  const { instructionPreview, ...keep } = subagent;
+  if (typeof instructionPreview !== "string") return keep;
+  return {
+    ...keep,
+    instruction_preview_digest: digestText(instructionPreview),
+    instruction_preview_length: instructionPreview.length,
+  };
 }
 
 function reasonOf(value: unknown, fallback: string): string {

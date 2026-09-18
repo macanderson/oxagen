@@ -152,17 +152,40 @@ describe("workspace.create route", () => {
     };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await app.fetch(
-      post(PATH, { name: "Dev Workspace", slug: "dev" }),
+      post(PATH, {
+        name: "Dev Workspace",
+        slug: "dev",
+        mainRepo: { owner: "acme", name: "widgets" },
+      }),
     );
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual(invokeResult);
   });
 
   it("calls invoke with 'create_workspace'", async () => {
-    await app.fetch(post(PATH, { name: "Dev", slug: "dev" }));
+    await app.fetch(
+      post(PATH, {
+        name: "Dev",
+        slug: "dev",
+        mainRepo: { owner: "acme", name: "widgets" },
+      }),
+    );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_workspace");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.slug).toBe("dev");
+    expect(body.mainRepo).toEqual({
+      provider: "github",
+      owner: "acme",
+      name: "widgets",
+    });
+  });
+
+  // §17 M0: a workspace cannot be created without a main repo. The contract
+  // refuses the body before the kernel is reached.
+  it("no mainRepo → 400, nothing invoked (negative)", async () => {
+    const res = await app.fetch(post(PATH, { name: "Dev", slug: "dev" }));
+    expect(res.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
   it("invalid slug (spaces) → 400", async () => {
