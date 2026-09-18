@@ -15,6 +15,10 @@
  * transcript entry shows is fetched by the caller for the frames the fold
  * names, and folded in with `withText`.
  */
+import {
+  MODEL_CALL_EVENT_TYPES,
+  TOOL_CALL_EVENT_TYPES,
+} from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import type { Redaction } from "@oxagen/tacho";
@@ -372,14 +376,23 @@ export interface TranscriptFold {
   costMicros: number | null;
 }
 
+/**
+ * The frame types that open a step, in the `steps` zoom. The ledger's own
+ * names come from the registry, so both spellings of each call event are
+ * covered — the in-app assistant writes `model.engine_call_completed` and
+ * `tool.engine_call_completed`, which this list named neither of, so every
+ * ledger-recorded run folded into one `frame` entry however many calls it
+ * made. The wrapped-session names are added beside them: a tacho recording
+ * is not in the ledger's registry and never will be.
+ */
 const MODEL_TYPES: ReadonlySet<string> = new Set([
-  "model.call_completed",
+  ...MODEL_CALL_EVENT_TYPES,
   "llm_call",
   "model.request",
   "model.response",
 ]);
 const TOOL_TYPES: ReadonlySet<string> = new Set([
-  "tool.call_completed",
+  ...TOOL_CALL_EVENT_TYPES,
   "tool_call",
   "tool_requested",
 ]);
