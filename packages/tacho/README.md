@@ -104,23 +104,39 @@ Approved on 2026-09-18 (`docs/audits/2026-09-18-steering-graph-gateway-review.md
 the design is in `docs/specs/mission-control/spec.md` §7 and §10.5, the phases in
 `docs/specs/mission-control/plan.md` §8):
 
-- **Phase 0.** The server compiles active `must` and `should` records into the
-  bundle's `context.system`, which `SessionStart` already delivers.
-- **Phase 1.** `UserPromptSubmit` calls `assembleSteering` with the prompt as the
+- **Phase 0**, in review as PR #3289 (ADR-091, issue #2592). The server compiles
+  active `must` and `should` records into the bundle's `context.system`, which
+  `SessionStart` already delivers.
+- **Phase 1** (issue #3296, ADR-093 and ADR-097). `UserPromptSubmit` calls `assembleSteering` with the prompt as the
   query, under a tight timeout, and fails open. Every assembly seals a
   `steering.manifest` frame.
-- **Phase 4.** `tachod` grows into the gateway: a loopback model proxy (Anthropic
+- **Phase 4**, in build now on branches `gateway-model-proxy` and
+  `desktop-install-hardening` (issues #3299 and #3301, ADR-094). `tachod` grows
+  into the gateway: a loopback model proxy (Anthropic
   Messages and OpenAI Responses passthrough with streaming, enrollment writes the
   base URL) and an MCP aggregator that re-serves the harness's existing MCP servers
   with the displace-and-restore logic in `src/host/mcp-config-writer.ts`. Prompt
   bodies never leave the machine, and the vendor credential stays on it. Metering
   becomes observed, `session_limit_usd` is enforced, and `interrupt` becomes real.
-- **Phase 5.** `oxagen run -- <agent>` launches an agent under an OS sandbox whose
+  Enrollment writes a base URL only after the daemon is confirmed listening, and
+  unenroll restores every file it touched before it stops the daemon. Both OpenAI
+  and Anthropic work through a base URL proxy, subscription logins included, and
+  neither vendor's terms explicitly forbid it: validated by the maintainer on
+  2026-09-18.
+- **Phase 5** (issue #3300, ADR-096). `oxagen run -- <agent>` launches an agent under an OS sandbox whose
   only egress is the gateway. `contained` becomes the top word of the tier ladder:
-  observe, harness, gateway, contained.
+  observe, harness, gateway, contained (ADR-095).
 
-Until Phase 4 the words for this tier are "delivered", "recorded",
-"client-attested" and "fail-open". Never "enforced".
+The order of build is Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3 and
+5. The epic is issue #3295. Nothing above is on `main` until those branches merge.
+
+The words for the `harness` tier are "delivered", "recorded", "client-attested"
+and "fail-open". Never "enforced". "Fail-open" describes the tier: the person at
+the keyboard can remove the hook entry or disable hooks, and the action proceeds.
+It does not describe the hook process, which fails closed against its cached
+bundle: in enforce mode a stale or unverified bundle denies non-read-only tools.
+Five events run as command hooks (`COMMAND_HOOK_EVENTS`), and four of them can
+refuse. `Stop` is the fifth.
 
 ## Modules
 

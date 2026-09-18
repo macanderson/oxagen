@@ -194,7 +194,7 @@ enforce or record it:
   tool, or content generator as a product surface (ADR-043): Oxagen is the control
   plane, not the agent. Engine work belongs in Stella; removing or extracting runtime
   code in service of the refocus is advancing, not drift. One sentence of revision,
-  approved on 2026-09-18: Oxagen does not run turns, but it may contain the process
+  approved on 2026-09-18 (ADR-096): Oxagen does not run turns, but it may contain the process
   that does. A launcher that confines a process is not an agent runtime. The
   contained tier (`oxagen run -- <agent>`, an OS sandbox whose only egress is the
   gateway) is that launcher, aimed at CI, headless runs, cloud runners and managed
