@@ -31,7 +31,7 @@ export const runFrameBodyGet = registerCapability({
     "Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
