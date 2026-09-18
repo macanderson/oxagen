@@ -74,13 +74,20 @@ describe("readGatePolicy", () => {
   });
 });
 
+/** The predicate each `where` received, in call order, so a test can read it. */
+const wheres: unknown[] = [];
+
 /** The three `withTenantDb` reads the handler makes, in call order. */
 function stubReads(binding: unknown, settings: unknown): void {
   const chain = (rows: unknown[]) => {
     const self: Record<string, unknown> = {};
-    for (const key of ["from", "innerJoin", "where", "orderBy"]) {
+    for (const key of ["from", "innerJoin", "orderBy"]) {
       self[key] = () => self;
     }
+    self.where = (predicate: unknown) => {
+      wheres.push(predicate);
+      return self;
+    };
     self.limit = async () => rows;
     return self;
   };
@@ -89,8 +96,26 @@ function stubReads(binding: unknown, settings: unknown): void {
     .mockReturnValueOnce(chain([{ settings }]));
 }
 
+/** Every column a drizzle predicate tree names, by its column name. */
+function columnsIn(predicate: unknown, out = new Set<string>()): Set<string> {
+  if (predicate === null || typeof predicate !== "object") return out;
+  const node = predicate as Record<string, unknown>;
+  if (typeof node["name"] === "string" && "table" in node) {
+    out.add(node["name"]);
+    return out;
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) for (const v of value) columnsIn(v, out);
+    else if (value && typeof value === "object") columnsIn(value, out);
+  }
+  return out;
+}
+
 describe("get_steering_freshness handler", () => {
-  beforeEach(() => mocks.select.mockReset());
+  beforeEach(() => {
+    mocks.select.mockReset();
+    wheres.length = 0;
+  });
 
   const store = {
     ledgerLength: vi.fn(async () => 12),
@@ -121,6 +146,22 @@ describe("get_steering_freshness handler", () => {
 
   // Steering is off for a workspace until a repository is bound, and the
   // read has to say so rather than invent a branch.
+  // A `linked` head, or one the exclusivity migration demoted, is a
+  // repository the workspace can see but is not steered by. Without this
+  // filter an unordered `limit(1)` could report it as the steering
+  // repository, and the CLI would compare and auto-sync against it.
+  it("reads only the main repository head", async () => {
+    stubReads(
+      { fullName: "acme/platform", defaultRef: "main" },
+      { steering: {} },
+    );
+    const handler = createGetSteeringFreshnessHandler({
+      store: store as never,
+    });
+    await handler({}, CTX);
+    expect(columnsIn(wheres[0]).has("role")).toBe(true);
+  });
+
   it("reports nulls, not guesses, when no repository is bound", async () => {
     stubReads(null, null);
     const handler = createGetSteeringFreshnessHandler({

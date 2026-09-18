@@ -141,6 +141,19 @@ interface PlatformFreshness {
  * every time the API was unreachable. The whole point of this call is that
  * it is optional.
  */
+/**
+ * How long the optional platform read may take on the path of a prompt.
+ *
+ * The hook has 20 seconds. A connection that hangs rather than failing (a
+ * blackholed API, a half-up VPN) spent all of it here, before the git check
+ * had run; both harnesses read the timeout as a hook failure and allowed the
+ * prompt, so every prompt during such an outage paused for 20 seconds and
+ * then ran without the workspace's gates. Three seconds is longer than the
+ * call takes and short enough that the git check, which is the primary
+ * signal, still runs inside the budget.
+ */
+const PLATFORM_READ_TIMEOUT_MS = 3_000;
+
 async function readPlatform(
   scope: { org: string; ws: string } | undefined,
 ): Promise<PlatformFreshness | null> {
@@ -149,6 +162,7 @@ async function readPlatform(
       "context/steering/freshness",
       {},
       scope,
+      { timeoutMs: PLATFORM_READ_TIMEOUT_MS },
     );
   } catch {
     return null;

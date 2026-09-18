@@ -169,6 +169,31 @@ describe("evaluateGate with auto-sync", () => {
     expect(d.action).toBe("block");
   });
 
+  // A sync that throws is a sync that did not happen. Letting the rejection
+  // escape reached the CLI's catch-all, which exits 0, so turning `autoSync`
+  // on let a checkout known to be stale walk past `blockStaleRuns`.
+  it("still blocks when the sync itself throws", async () => {
+    const { run } = stubRepo({ behind: true });
+    const locked: GitRunner = async (args, opts) => {
+      if (args[0] === "restore")
+        throw new Error("fatal: Unable to create '.git/index.lock'");
+      return run(args, opts);
+    };
+    const d = await evaluateGate({
+      cwd: "/repo",
+      policy: resolveSteeringPolicy([
+        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
+      ]),
+      run: locked,
+      cacheIo: noCache,
+      now: () => 1,
+    });
+    expect(d.sync?.applied).toBe(false);
+    expect(d.sync?.message).toContain("index.lock");
+    expect(d.action).toBe("block");
+    expect(d.exitCode).toBe(2);
+  });
+
   it("does not sync when the caller asked to look only", async () => {
     const { run, state } = stubRepo({ behind: true });
     const d = await evaluateGate({

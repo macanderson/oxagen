@@ -60,14 +60,34 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
   let sync: SyncResult | null = null;
 
   if (isStale(verdict) && autoSyncActive(policy) && !readOnly) {
-    sync = await syncSteering({
-      cwd: opts.cwd,
-      verdict,
-      run: opts.run,
-      // A sync only ever refuses when it is not safe, so it is never forced
-      // from the automatic path however the developer configured things.
-      force: false,
-    });
+    try {
+      sync = await syncSteering({
+        cwd: opts.cwd,
+        verdict,
+        run: opts.run,
+        // A sync only ever refuses when it is not safe, so it is never forced
+        // from the automatic path however the developer configured things.
+        force: false,
+      });
+    } catch (error) {
+      // A sync that throws (a locked index, a permission error, a `restore`
+      // that failed) is a sync that did not happen. Letting the rejection
+      // escape reached the CLI's catch-all, which exits 0, so turning
+      // `autoSync` on let a checkout known to be stale walk past
+      // `blockStaleRuns`. The verdict was already decided and stands; the
+      // failure is reported as a refusal so the banner can say what happened.
+      sync = {
+        applied: false,
+        refusal: "unknown_state",
+        message: `Auto-sync failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        updated: [],
+        removed: [],
+        fromCommit: null,
+        committed: false,
+      };
+    }
     if (sync.applied) {
       // Re-ask rather than assume. The sync wrote files; the cheapest way to
       // be sure the gate is judging the post-sync state is to look at it,

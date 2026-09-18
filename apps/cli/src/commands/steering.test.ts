@@ -265,6 +265,7 @@ describe("resolveContext", () => {
       "context/steering/freshness",
       {},
       { org: "acme", ws: "payments" },
+      expect.anything(),
     );
   });
 
@@ -276,7 +277,19 @@ describe("resolveContext", () => {
       "context/steering/freshness",
       {},
       undefined,
+      expect.anything(),
     );
+  });
+
+  // The hook has 20 seconds. A hung connection spent all of it here and the
+  // harness then allowed the prompt with no gate at all.
+  it("bounds the platform read, so a hung API cannot eat the hook budget", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await resolveContext(tmp);
+    const [, , , options] = apiPostOrThrow.mock.calls[0] ?? [];
+    expect(options).toMatchObject({ timeoutMs: expect.any(Number) });
+    expect((options as { timeoutMs: number }).timeoutMs).toBeLessThan(10_000);
   });
 
   // Validating a hard-coded `origin` while a settings file pointed `remote`

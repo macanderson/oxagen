@@ -76,6 +76,13 @@ export function createGetSteeringFreshnessHandler(
                   schema.repositoryBindingHeads.workspaceId,
                   scope.workspaceId,
                 ),
+                // Only the MAIN repository steers. A `linked` head (or one the
+                // exclusivity migration demoted) is one the workspace can see
+                // but is not steered by, and an unordered `limit(1)` over both
+                // could hand the CLI a linked repository as the one to compare
+                // and auto-sync against. Same filter as
+                // context.steering.github.ts.
+                eq(schema.repositoryBindingHeads.role, "main"),
               ),
             )
             .limit(1);

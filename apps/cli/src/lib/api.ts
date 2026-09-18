@@ -332,6 +332,13 @@ export async function apiPostOrThrow<T>(
    * selection applies as before.
    */
   scope?: { org: string; ws: string },
+  /**
+   * Give up after this many milliseconds. For a call that sits on the path of
+   * a prompt and is optional there: a hung connection must cost the caller a
+   * bounded wait, not the whole hook budget. Omitted, the call waits as long
+   * as the connection does.
+   */
+  options: { timeoutMs?: number } = {},
 ): Promise<T> {
   const resolved = resolveApiContext();
   if (!resolved) throw new ApiError(NOT_LOGGED_IN);
@@ -354,6 +361,9 @@ export async function apiPostOrThrow<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body ?? {}),
+      ...(options.timeoutMs === undefined
+        ? {}
+        : { signal: AbortSignal.timeout(options.timeoutMs) }),
     });
   } catch (err) {
     throw await buildNetworkError(
