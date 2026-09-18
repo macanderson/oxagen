@@ -1,5 +1,8 @@
 // toRunPage over sample list_runs outputs: every recorded field carried as the
-// contract wrote it, and a null operator, agent, cost or basis kept null.
+// contract wrote it, and a null operator, agent, cost, basis, name, summary or
+// replay grade kept null. A field the contract carries and the view drops is
+// how the Fleet table ends up listing runs nobody can tell apart, so the
+// recorded case asserts the whole row rather than a subset of it.
 import type { runList } from "@oxagen/oxagen/contracts/run.list";
 import { describe, expect, it } from "vitest";
 import { RunPage } from "@/data/contracts/runs";
@@ -21,10 +24,14 @@ const ledgerRun: Run = {
   taskRef: "ENG-4121",
   startedAt: "2026-09-15T08:00:00.000Z",
   sealedAt: "2026-09-15T08:40:00.000Z",
-  replayGrade: null,
+  replayGrade: "fork",
   verdict: null,
-  name: null,
-  summary: null,
+  name: "Cut the 3.2 release branch",
+  summary: {
+    text: "Cut release/3.2 from main and opened the release pull request.",
+    generatedAt: "2026-09-15T08:58:00.000Z",
+    model: "z-ai/glm-flash-latest",
+  },
 };
 
 const unpricedSession: Run = {
@@ -57,6 +64,8 @@ describe("toRunPage", () => {
           agentKey: "acme.core.release-bot",
           operatorId: "usr_marcusbell",
           status: "sealed",
+          turns: 12,
+          steps: 40,
           frames: 1204,
           cost: {
             micros: "4131265",
@@ -64,7 +73,15 @@ describe("toRunPage", () => {
             basis: "gateway_observed",
           },
           taskRef: "ENG-4121",
+          name: "Cut the 3.2 release branch",
+          summary: {
+            text: "Cut release/3.2 from main and opened the release pull request.",
+            generatedAt: "2026-09-15T08:58:00.000Z",
+            model: "z-ai/glm-flash-latest",
+          },
+          replayGrade: "fork",
           startedAt: "2026-09-15T08:00:00.000Z",
+          sealedAt: "2026-09-15T08:40:00.000Z",
         },
       ],
       nextCursor: "c2",
@@ -79,6 +96,11 @@ describe("toRunPage", () => {
       operatorId: null,
       cost: null,
       taskRef: null,
+      turns: null,
+      name: null,
+      summary: null,
+      replayGrade: null,
+      sealedAt: null,
     });
     expect(page.nextCursor).toBeNull();
     expect(RunPage.safeParse(page).success).toBe(true);

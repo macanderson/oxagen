@@ -220,22 +220,50 @@ describe("approvals panel", () => {
 });
 
 describe("runs table", () => {
-  it("draws a row per run: a link to the run, the agent identity, operator, status, cost with its basis, frames and start", async () => {
+  it("draws a row per run: the generated name over the id, the agent identity, operator, status, replay grade, cost with its basis, frames and start", async () => {
     await renderFleet({
       runs: runPage([runRow()]),
       approvals: NO_APPROVALS,
     });
     const [row] = within(runsSection()).getAllByTestId("run-row");
     const cells = within(row ?? runsSection()).getAllByRole("cell");
-    expect(cells.map((c) => c.textContent)).toEqual([
-      "arun_7k2m9qENG-4121 cut the 3.2 release",
+    expect(cells.map((c) => c.textContent).slice(1)).toEqual([
       "reacme.core.release-botevidence ledger",
       "usr_marcusbell",
       "live",
+      "fork",
       "$4.13gateway_observed",
       "1,204",
       "Sep 15, 2026, 8:00 AM",
     ]);
+    // The run cell leads with what the run was, keeps the id under it, and
+    // labels the model's sentence so it cannot read as the record.
+    expect(cells[0]).toHaveTextContent("Cut the 3.2 release branch");
+    expect(cells[0]).toHaveTextContent("arun_7k2m9q");
+    expect(cells[0]).toHaveTextContent("ENG-4121 cut the 3.2 release");
+    expect(cells[0]).toHaveTextContent("Cut release/3.2 from main");
+    expect(cells[0]).toHaveTextContent("generated");
+    expect(cells[0]).toHaveTextContent("Written by z-ai/glm-flash-latest on");
+    expect(
+      within(runsSection()).getByRole("link", {
+        name: "Cut the 3.2 release branch",
+      }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
+  });
+
+  it("heads a run with no generated name by its id, and says no summary was written", async () => {
+    await renderFleet({
+      runs: runPage([runRow({ name: null, summary: null })]),
+      approvals: NO_APPROVALS,
+    });
+    const [row] = within(runsSection()).getAllByTestId("run-row");
+    const cells = within(row ?? runsSection()).getAllByRole("cell");
+    expect(cells[0]).toHaveTextContent(
+      "No summary yet. Open the run to read its frames.",
+    );
+    expect(
+      within(row ?? runsSection()).queryByTestId("generated-summary"),
+    ).toBeNull();
     expect(
       within(runsSection()).getByRole("link", { name: "arun_7k2m9q" }),
     ).toHaveAttribute("href", "/acme/core-platform/runs/arun_7k2m9q");
@@ -264,7 +292,7 @@ describe("runs table", () => {
     const cells = within(unrecorded ?? runsSection()).getAllByRole("cell");
     expect(cells[1]).toHaveTextContent(/^not recordedwrapped agent$/);
     expect(cells[2]).toHaveTextContent(/^not recorded$/);
-    expect(cells[4]).toHaveTextContent(/^not recorded$/);
+    expect(cells[5]).toHaveTextContent(/^not recorded$/);
     expect(noBasis).toHaveTextContent("$0.00basis not recorded");
     expect(runsSection()).not.toHaveTextContent(/trust/i);
   });

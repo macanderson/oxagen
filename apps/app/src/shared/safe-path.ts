@@ -154,9 +154,23 @@ export const routes = {
     org: string,
     q: Readonly<Record<string, string | undefined>>,
   ): SafePath => withQuery(pathOf(org, "audit", "export"), q),
-  /** A run opened from a list (a run id is a public id, never a raw row id). */
-  run: (org: string, ws: string, run: string): SafePath =>
-    pathOf(org, ws, "runs", run),
+  /**
+   * A run opened from a list (a run id is a public id, never a raw row id).
+   * `tab` picks the section, `zoom` the transcript's level and `frames` a
+   * later page of the frames; all three are query values, so the run keeps one
+   * route (§1.2).
+   */
+  run: (
+    org: string,
+    ws: string,
+    run: string,
+    q?: { tab?: string; zoom?: string; frames?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "runs", run), {
+      tab: q?.tab,
+      zoom: q?.zoom,
+      frames: q?.frames,
+    }),
   /** Spend on one tab, with one key's drill or one finding's evidence open; a tab is a query, not a route (§1.2). */
   spend: (
     org: string,

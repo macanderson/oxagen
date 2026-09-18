@@ -98,7 +98,12 @@ export function onboardingSource(reads: Reads): {
     },
     mandates: { list: refuse("mandates.list") },
     shell: { context: refuse("shell.context") },
-    runs: { list: refuse("runs.list") },
+    runs: {
+      list: refuse("runs.list"),
+      get: refuse("runs.get"),
+      cost: refuse("runs.cost"),
+      transcript: refuse("runs.transcript"),
+    },
     approvals: { pending: refuse("approvals.pending") },
     billing: {
       plan: refuse("billing.plan"),

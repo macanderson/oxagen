@@ -9,7 +9,28 @@ import { Cost } from "./money";
 export const RunStatus = z.enum(["live", "sealed", "halted"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
-const RunRow = z.object({
+/**
+ * The replay grade the seal recorded (spec §8.4), weakest first. The page
+ * renders the recorded word and never a stronger one; null while the run is
+ * live or its seal predates the recorder.
+ */
+export const ReplayGrade = z.enum(["inspect", "view", "fork", "retry"]);
+export type ReplayGrade = z.infer<typeof ReplayGrade>;
+
+/**
+ * What `summarize_run` wrote: a light-tier model's account of what the run
+ * changed. Labelled generated wherever it renders. The record is the frames,
+ * never this sentence (ADR-058).
+ */
+export const RunSummary = z.object({
+  text: z.string().min(1),
+  generatedAt: z.iso.datetime({ offset: true }),
+  /** The model that wrote it, named beside the text so the reader can weigh it. */
+  model: z.string().min(1),
+});
+export type RunSummary = z.infer<typeof RunSummary>;
+
+export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
   source: z.enum(["ledger", "tacho"]),
@@ -17,11 +38,21 @@ const RunRow = z.object({
   agentKey: z.string().min(1).nullable(),
   operatorId: PublicId.nullable(),
   status: RunStatus,
+  /** Distinct turns; null for a ledger run whose model-call payloads are encrypted. */
+  turns: z.number().int().nonnegative().nullable(),
+  /** Model calls plus tool calls. */
+  steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
   taskRef: z.string().nullable(),
+  /** The generated name; null until `summarize_run` wrote one. */
+  name: z.string().min(1).nullable(),
+  summary: RunSummary.nullable(),
+  replayGrade: ReplayGrade.nullable(),
   startedAt: z.iso.datetime({ offset: true }),
+  sealedAt: z.iso.datetime({ offset: true }).nullable(),
 });
+export type RunRow = z.infer<typeof RunRow>;
 
 export const RunPage = z.object({
   runs: z.array(RunRow),

@@ -88,7 +88,12 @@ export function toolsSource(reads: ToolsReads) {
       contractRate: refuse,
       invoices: refuse,
     },
-    runs: { list: refuse },
+    runs: {
+      list: refuse,
+      get: refuse,
+      cost: refuse,
+      transcript: refuse,
+    },
     approvals: { pending: refuse },
     agents: {
       list: refuse,

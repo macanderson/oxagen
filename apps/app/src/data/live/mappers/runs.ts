@@ -8,26 +8,49 @@ import type { RunPage } from "@/data/contracts/runs";
 import type { ContractOutput } from "@/server/kernel";
 
 type RunListOutput = ContractOutput<typeof runList>;
+type RunListItem = RunListOutput["runs"][number];
+
+/**
+ * One row of `list_runs` as the tables and the Run header read it. The Run
+ * page reads the same row `list_runs` returns (`get_run`'s `run`), so both
+ * map through here and no field can be carried on one page and dropped on the
+ * other.
+ */
+export function toRunRow(
+  run: RunListItem,
+): z.input<typeof RunPage>["runs"][number] {
+  return {
+    id: run.id,
+    source: run.source,
+    agentKey: run.agentKey,
+    operatorId: run.operatorId,
+    status: run.status,
+    turns: run.turns,
+    steps: run.steps,
+    frames: run.frames,
+    cost:
+      run.cost === null
+        ? null
+        : {
+            ...moneyFromMicros(run.cost.micros, run.cost.currency),
+            basis: run.cost.basis,
+          },
+    taskRef: run.taskRef,
+    name: run.name,
+    summary:
+      run.summary === null
+        ? null
+        : {
+            text: run.summary.text,
+            generatedAt: run.summary.generatedAt,
+            model: run.summary.model,
+          },
+    replayGrade: run.replayGrade,
+    startedAt: run.startedAt,
+    sealedAt: run.sealedAt,
+  };
+}
 
 export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
-  return {
-    runs: out.runs.map((run) => ({
-      id: run.id,
-      source: run.source,
-      agentKey: run.agentKey,
-      operatorId: run.operatorId,
-      status: run.status,
-      frames: run.frames,
-      cost:
-        run.cost === null
-          ? null
-          : {
-              ...moneyFromMicros(run.cost.micros, run.cost.currency),
-              basis: run.cost.basis,
-            },
-      taskRef: run.taskRef,
-      startedAt: run.startedAt,
-    })),
-    nextCursor: out.nextCursor,
-  };
+  return { runs: out.runs.map(toRunRow), nextCursor: out.nextCursor };
 }

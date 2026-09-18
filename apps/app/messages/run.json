@@ -1,0 +1,191 @@
+{
+  "run": {
+    "eyebrow": "Run",
+    "notRecorded": "not recorded",
+    "basisNotRecorded": "basis not recorded",
+    "noSummary": "No summary yet. A sealed run can be summarized from its frames; until then the frames are the only account of what happened.",
+    "witnessed": "This run witnessed another run. Its ladder, its verdicts and the spend it proved are not drawn here yet.",
+    "source": {
+      "ledger": "recorded in the evidence ledger",
+      "tacho": "recorded by a wrapped agent"
+    },
+    "figures": {
+      "cost": "Cost",
+      "turns": "Turns",
+      "steps": "Steps",
+      "frames": "Frames",
+      "started": "Started",
+      "sealed": "Sealed"
+    },
+    "tabs": {
+      "label": "Run sections",
+      "transcript": "Transcript",
+      "frames": "Frames",
+      "cost": "Cost",
+      "policy": "Policy"
+    },
+    "transcript": {
+      "title": "Transcript",
+      "zoomLabel": "Zoom level",
+      "zoom": {
+        "turns": "Turns",
+        "steps": "Steps",
+        "everything": "Everything"
+      },
+      "kind": {
+        "turn": "Turn",
+        "model_call": "Model call",
+        "tool_call": "Tool call",
+        "frame": "Frame"
+      },
+      "frame": "frame {seq}",
+      "frames": "frames {from} to {to}",
+      "folded": "{count} frames",
+      "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
+      "noBody": "No body was retained for this entry, or the bytes are not text.",
+      "truncated": "Cut at the length one entry carries. Open the frame to read the whole body.",
+      "empty": "This run has no frames yet. A run with no frames has cost nothing.",
+      "complete": "{count} entries. This is the whole run.",
+      "cut": "{count} entries. The run has more frames than one transcript carries, so this stops short of the end."
+    },
+    "frames": {
+      "title": "Frames",
+      "onThisPage": "{count} on this page",
+      "columns": {
+        "seq": "Seq",
+        "type": "Event",
+        "observed": "Observed",
+        "body": "Body",
+        "cost": "Cost"
+      },
+      "stage": "stage {stage}",
+      "fidelity": {
+        "full": "bytes retained",
+        "digest_only": "digest only"
+      },
+      "noContent": "no content",
+      "redacted": "removed {path}: {reason}",
+      "pager": "Frame pages",
+      "first": "First frames",
+      "next": "Later frames",
+      "empty": "This run has no frames yet. A run with no frames has cost nothing.",
+      "emptyPage": "Nothing lies past the frame this page starts from."
+    },
+    "cost": {
+      "title": "Cost",
+      "notRolledUp": "The rollup has not rebuilt this run yet. It runs after a run seals, and until it has there is no figure to show. A zero here would be a measurement, and nothing has measured one.",
+      "total": "Total",
+      "basisNotRecorded": "basis not recorded",
+      "cacheHitRate": "Cache hit rate",
+      "turns": "Turns",
+      "steps": "Steps",
+      "modelCalls": "Model calls",
+      "toolCalls": "Tool calls",
+      "retries": "Retries",
+      "productiveRatio": "Productive ratio",
+      "rolledUpAt": "Rolled up",
+      "priceEntries": "Priced with",
+      "tokensTitle": "Tokens",
+      "tokens": {
+        "inputUncached": "input",
+        "cacheRead": "cache read",
+        "cacheWrite5m": "cache write 5m",
+        "cacheWrite1h": "cache write 1h",
+        "output": "output",
+        "reasoning": "reasoning"
+      },
+      "byModel": "By model",
+      "byTool": "By tool",
+      "noModelCalls": "No model call in this run was priced.",
+      "noToolCalls": "This run called no tool.",
+      "columns": {
+        "model": "Model",
+        "tool": "Tool",
+        "calls": "Calls",
+        "cost": "Cost",
+        "tokens": "Tokens"
+      }
+    },
+    "policy": {
+      "basis": "These are the calls this run parked for a person. The rules that decided each call, and the auto-approvals in force, are not drawn here yet."
+    },
+    "commands": {
+      "reasonLabel": "Reason",
+      "reasonHelp": "The model reads this on resume, and it is recorded with the command.",
+      "steerLabel": "What to tell the agent",
+      "steerHelp": "Oxagen records this, quotes it, and hands it to the model as content. It is never executed.",
+      "noRecipient": "No live run took this command.",
+      "reread": "Re-read the run",
+      "ledgerReason": "This run's evidence comes from an external engine. Oxagen holds no run token it can revoke, so there is nothing here to pause, steer or cancel.",
+      "pause": {
+        "open": "Pause",
+        "title": "Pause {run}",
+        "body": "The agent stops at the next boundary it reaches. Work already in flight finishes first.",
+        "confirm": "Queue the pause",
+        "pending": "Queueing",
+        "queued": "The pause is queued. It takes effect at the next boundary; the run's status says when it has."
+      },
+      "resume": {
+        "open": "Resume",
+        "title": "Resume {run}",
+        "body": "The agent carries on from where it paused. Your reason reaches the model as a control frame.",
+        "confirm": "Queue the resume",
+        "pending": "Queueing",
+        "queued": "The resume is queued. The run's status says when the agent has picked it up."
+      },
+      "steer": {
+        "open": "Steer",
+        "title": "Steer {run}",
+        "body": "Your text reaches the model as a control frame, at the strongest delivery the run's connection point can carry.",
+        "confirm": "Send it",
+        "pending": "Sending",
+        "queued": "The steer is queued. It reaches the model at the next delivery point."
+      },
+      "cancel": {
+        "open": "Cancel",
+        "title": "Cancel {run}",
+        "body": "Oxagen revokes the run token, so no further governed call succeeds. Killing the process itself is best effort, and either way it is recorded.",
+        "confirm": "Cancel the run",
+        "pending": "Cancelling",
+        "queued": "The cancel is queued. The run token is revoked; the process kill is best effort."
+      },
+      "failure": {
+        "orgRoleRequired": "This needs an organization Owner or Admin role.",
+        "noPrincipal": "This call carries no principal Oxagen can act as.",
+        "runNotFound": "This run is not in this workspace.",
+        "noConnectionPoint": "A ledger run has no connection point to carry a command.",
+        "runSealed": "This run has ended, so nothing can receive the command.",
+        "observeTier": "An observe-tier run has no connection point, so the command was refused.",
+        "runNotSealed": "This run is still live. Both of these need a complete record, so they run after the seal.",
+        "digestOnly": "This recording kept digests and no bodies, so there is nothing for a model to read.",
+        "steerText": "Steering text is required, and it has a length limit.",
+        "refused": "The control plane refused this: {code}. Nothing was queued.",
+        "invalid": "The control plane refused these values. Nothing was queued.",
+        "pendingApproval": "This is waiting for approval, request {accessRequestId}.",
+        "unavailable": "The control plane answered {code}. Nothing was queued, and the run kept recording."
+      }
+    },
+    "record": {
+      "reread": "Re-read the run",
+      "summarize": {
+        "open": "Summarize",
+        "title": "Summarize {run}",
+        "body": "A fast model reads this run's transcript and writes its name and what changed. The result is labelled generated wherever it shows, and the frames stay the record. The call is metered like any other.",
+        "confirm": "Queue the summary",
+        "pending": "Queueing",
+        "queued": "The summary is queued. It appears on this run once the model has written it."
+      },
+      "resummarize": {
+        "open": "Summarize again"
+      },
+      "export": {
+        "open": "Export",
+        "title": "Export {run}",
+        "body": "Oxagen queues a signed bundle: the frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id, and a script that verifies all of it offline.",
+        "confirm": "Queue the bundle",
+        "pending": "Queueing",
+        "queued": "The bundle is queued."
+      }
+    }
+  }
+}

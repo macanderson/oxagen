@@ -10,6 +10,8 @@ import { linkText, mono, panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { GeneratedSummary } from "@/ui/generated-summary";
+import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, numericCell, Table } from "@/ui/table";
 import { ReadFailure } from "@/ui/read-failure";
@@ -50,6 +52,7 @@ function RunsPageView({
     { label: t("columns.agent") },
     { label: t("columns.operator") },
     { label: t("columns.status") },
+    { label: t("columns.replay") },
     { label: t("columns.cost"), numeric: true },
     { label: t("columns.frames"), numeric: true },
     { label: t("columns.started") },
@@ -59,17 +62,35 @@ function RunsPageView({
       <Table label={t("title")} columns={columns}>
         {page.runs.map((run) => (
           <tr key={run.id} data-testid="run-row">
-            <td className={cell}>
+            <td className={`${cell} max-w-sm`}>
               <SafeLink
                 to={routes.run(org, ws, run.id)}
-                className={`${linkText} ${mono}`}
+                className={
+                  run.name === null
+                    ? `${linkText} ${mono}`
+                    : `${linkText} font-medium`
+                }
               >
-                {run.id}
+                {run.name ?? run.id}
               </SafeLink>
+              {run.name === null ? null : (
+                <span className={`block text-xs text-muted-foreground ${mono}`}>
+                  {run.id}
+                </span>
+              )}
               {run.taskRef === null ? null : (
                 <span className="block text-xs text-muted-foreground">
                   {run.taskRef}
                 </span>
+              )}
+              {run.summary === null ? (
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("noSummary")}
+                </span>
+              ) : (
+                <div className="mt-1">
+                  <GeneratedSummary summary={run.summary} />
+                </div>
               )}
             </td>
             <td className={cell}>
@@ -88,6 +109,13 @@ function RunsPageView({
             </td>
             <td className={cell}>
               <StatusBadge status={run.status} />
+            </td>
+            <td className={cell}>
+              {run.replayGrade === null ? (
+                notRecorded
+              ) : (
+                <ReplayGradeBadge grade={run.replayGrade} />
+              )}
             </td>
             <td className={numericCell}>
               {run.cost === null ? (

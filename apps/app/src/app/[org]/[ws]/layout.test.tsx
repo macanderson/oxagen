@@ -50,6 +50,9 @@ describe("WorkspaceLayout", () => {
     const { html, errors } = await render("acme", "finops");
     expect(errors).toHaveLength(1);
     expect(errors[0]).toBeInstanceOf(NotFound);
-    expect(html).not.toContain("page");
+    // The child is named by its test id, not by its text: React puts the
+    // component stack in the error template, and that stack carries absolute
+    // file paths, so a bare substring matches whatever the checkout is called.
+    expect(html).not.toContain('data-testid="page"');
   });
 });
