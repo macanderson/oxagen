@@ -310,17 +310,19 @@ describe("Pricing › The price book", () => {
     const [negotiated, listed] = [...rows].filter(
       (row): row is HTMLElement => row instanceof HTMLElement,
     );
+    if (negotiated === undefined || listed === undefined)
+      throw new Error("expected two price-book rows");
     // The organization's own row reads before the list row it beats.
     expect(negotiated).toHaveAttribute("data-negotiated", "true");
     expect(negotiated).toHaveTextContent("Your negotiated rate");
     expect(listed).toHaveAttribute("data-negotiated", "false");
     expect(listed).toHaveTextContent("List price");
     expect(
-      within(negotiated!).getByRole("button", {
+      within(negotiated).getByRole("button", {
         name: "Remove the negotiated rate for claude-sonnet-5, Input",
       }),
     ).toBeInTheDocument();
-    expect(within(listed!).queryByRole("button")).toBeNull();
+    expect(within(listed).queryByRole("button")).toBeNull();
     expect(listed).toHaveTextContent("The platform sets this one");
   });
 

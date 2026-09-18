@@ -117,6 +117,84 @@ describe("syncPriceBookFromSources", () => {
     expect(report.retired).toBe(0);
   });
 
+  // With OpenRouter down and models.dev up, a model OpenRouter owns would
+  // fall to models.dev's price and be written as a NEW row from this run's
+  // instant — which the resolver then prefers over the still-valid OpenRouter
+  // row. Runs during the outage would be priced at the lower catalog's rate
+  // and switch back when OpenRouter recovered. So the chain stops at the
+  // first failed catalog: the ones below it are held, and named as held.
+  it("holds a lower-priority catalog while a higher one is down, so its prices cannot supersede rows the failed one still has in force", async () => {
+    const fetchImpl: FetchLike = (url) =>
+      Promise.resolve(
+        url === OPENROUTER_MODELS_URL
+          ? {
+              ok: false,
+              status: 503,
+              json: () => Promise.reject(new Error("never read")),
+            }
+          : {
+              ok: true,
+              status: 200,
+              json: () =>
+                Promise.resolve({
+                  moonshot: {
+                    id: "moonshot",
+                    models: {
+                      "kimi-k3": {
+                        id: "kimi-k3",
+                        cost: { input: 9, output: 45 },
+                      },
+                    },
+                  },
+                }),
+            },
+      );
+    const write = recorder();
+    const report = await syncPriceBookFromSources({
+      effectiveFrom: FROM,
+      overrides: NO_OVERRIDES,
+      fetchImpl,
+      write: write.write,
+    });
+
+    expect(report.failures.map((f) => f.source)).toEqual(["openrouter"]);
+    expect(report.held).toEqual(["models_dev"]);
+    expect(report.counts.models_dev).toBe(0);
+    // Nothing models.dev priced reached the write; the card still did.
+    expect(
+      seedFor(write.seeds, "moonshot/kimi-k3", "input_uncached"),
+    ).toBeUndefined();
+    expect(seedFor(write.seeds, "kimi-k3", "input_uncached")).toBeUndefined();
+    expect(
+      seedFor(write.seeds, "claude-sonnet-5", "input_uncached"),
+    ).toBeDefined();
+    expect(write.calls[0]!.retireAbsent).toBe(false);
+  });
+
+  it("holds nothing when the failed catalog is the lowest in precedence", async () => {
+    const { fetchImpl } = fakeFetch({
+      [OPENROUTER_MODELS_URL]: {
+        data: [
+          {
+            id: "moonshot/kimi-k3",
+            pricing: { prompt: "0.000002", completion: "0.00001" },
+          },
+        ],
+      },
+      [MODELS_DEV_URL]: {},
+    });
+    const write = recorder();
+    const report = await syncPriceBookFromSources({
+      effectiveFrom: FROM,
+      overrides: NO_OVERRIDES,
+      fetchImpl,
+      write: write.write,
+    });
+    expect(report.failures.map((f) => f.source)).toEqual(["models_dev"]);
+    expect(report.held).toEqual([]);
+    expect(report.counts.openrouter).toBe(1);
+  });
+
   it("vouches for the seeds as complete only when every catalog answered", async () => {
     const { fetchImpl } = fakeFetch({
       [OPENROUTER_MODELS_URL]: {

@@ -96,6 +96,12 @@ describe("readModelCallFrames", () => {
       rootSessionUuid: RUN,
       sources: ["otel_log", "collector", "hook"],
     });
+    // One token-bearing source per session, or a call the harness reports
+    // through the OTel log and a collector or hook event is priced twice.
+    expect(query).toContain(
+      "argMin(source, indexOf({sources:Array(String)}, source))",
+    );
+    expect(query).toContain("GROUP BY session_uuid");
 
     expect(frames).toEqual([
       {
@@ -297,6 +303,15 @@ describe("readObservedModels", () => {
     expect(query).toContain("UNION ALL");
     expect(query).toContain("kind = 'llm_call'");
     expect(query).toContain("source IN {sources:Array(String)}");
+    // One token-bearing source per session: a session that reports a call
+    // through the OTel log AND a collector or hook event holds two rows for
+    // it under different `seq`s, which FINAL does not collapse, so a plain
+    // count over the admitted sources would bill the call twice and rank the
+    // model above ones that need pricing more.
+    expect(query).toContain(
+      "(session_uuid, source) IN (\n          SELECT session_uuid,\n                 argMin(source, indexOf({sources:Array(String)}, source))",
+    );
+    expect(query).toContain("GROUP BY session_uuid");
     expect(query).toContain("GROUP BY model");
     expect(query).toContain("ORDER BY tokens DESC, model");
     expect(query).toContain("LIMIT {limit:UInt32}");
@@ -344,8 +359,10 @@ describe("readObservedModels", () => {
     answer([]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
     const { query, query_params } = lastQuery();
-    // Once per store — a fence on only one of them would leak the other.
-    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
+    // Once per store, plus once in the tacho branch's per-session source
+    // pick: a fence on only one of them would leak the other, and a pick made
+    // over every workspace could name a source the fenced rows never used.
+    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(3);
     expect(query_params).toMatchObject({ workspaceId: WS });
   });
 

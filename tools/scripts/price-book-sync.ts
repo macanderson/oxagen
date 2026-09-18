@@ -110,6 +110,12 @@ async function main(): Promise<void> {
         `  ! ${failure.source} contributed nothing: ${failure.error}`,
       ),
     );
+  for (const source of report.held)
+    console.log(
+      kleur.yellow(
+        `  ! ${source} answered but was held: a catalog above it failed, and its prices must not supersede rows that catalog still has in force`,
+      ),
+    );
 
   if (!flags.apply) {
     console.log(kleur.dim("\n  Rows this would write:\n"));

@@ -173,13 +173,11 @@ describe("Set a negotiated rate", () => {
     );
     expect(new Set(instants).size).toBe(1);
     const [instant] = instants;
-    expect(typeof instant).toBe("string");
+    if (typeof instant !== "string") throw new Error("no instant was sent");
     // An instant, not a UTC day: a day would backdate the rate to midnight and
     // reprice every frame the organization ran earlier today.
     expect(instant).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-    expect(new Date(instant as string).getTime()).toBeGreaterThanOrEqual(
-      before - 1_000,
-    );
+    expect(new Date(instant).getTime()).toBeGreaterThanOrEqual(before - 1_000);
   });
 
   it("names the classes written and the classes not written when a call is refused halfway (negative)", async () => {

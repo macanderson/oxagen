@@ -67,6 +67,12 @@ export interface PriceBookSyncReport {
   /** Every catalog read that contributed nothing, and why. */
   failures: { source: PriceSourceId; error: string }[];
   /**
+   * Catalogs that answered but were not merged because a catalog above them
+   * in precedence failed: merging them would let a lower-priority price
+   * supersede rows the failed source still has in force.
+   */
+  held: PriceSourceId[];
+  /**
    * The rows the merge produced — what was written, or on a dry run what
    * would have been. Carried so an operator can see the price book before
    * agreeing to it; the scheduled job never logs it.
@@ -120,10 +126,32 @@ export async function syncPriceBookFromSources(
   // reconciles against invoices, then whatever the catalogs know about every
   // other model. OpenRouter before models.dev: it is the one that actually
   // serves the call and publishes cache-read and cache-write rates per model.
+  //
+  // The chain stops at the first catalog that failed. A catalog below a
+  // failed one is HELD, not merged: with OpenRouter down and models.dev up,
+  // every model OpenRouter owned would otherwise be absent from its group
+  // and fall to models.dev's price — written as a new row from this run's
+  // instant, which the resolver then prefers over the still-valid OpenRouter
+  // row (the two catalogs commonly spell one model as canonical and alias
+  // inverses, so the new row matches). Runs during the outage would be priced
+  // at the lower catalog's rate and switch back when OpenRouter recovered. A
+  // failed source keeps its existing rows in force instead, and the sources
+  // above it still write; the ones below wait for the next run.
   const ordered: PublishedModelPrice[][] = [overrides, inCodeCardPrices()];
+  const held: PriceSourceId[] = [];
+  let chainBroken = false;
   for (const id of ["openrouter", "models_dev"] as const) {
     const hit = catalogs.find((c) => c.source === id);
-    if (hit) ordered.push(hit.prices);
+    if (!hit) continue;
+    if (hit.error !== null) {
+      chainBroken = true;
+      continue;
+    }
+    if (chainBroken) {
+      held.push(id);
+      continue;
+    }
+    ordered.push(hit.prices);
   }
 
   const merged = mergePublishedPrices(ordered);
@@ -162,6 +190,7 @@ export async function syncPriceBookFromSources(
       models: merged.prices.length,
       counts: merged.counts,
       failures,
+      held,
       seeds,
     };
 
@@ -192,6 +221,7 @@ export async function syncPriceBookFromSources(
     models: merged.prices.length,
     counts: merged.counts,
     failures,
+    held,
     seeds,
   };
 }

@@ -60,6 +60,7 @@ export const [costPriceBookSync] = createFunction(
         models: result.models,
         counts: result.counts,
         failures: result.failures,
+        held: result.held,
       };
     });
 
@@ -74,8 +75,9 @@ export const [costPriceBookSync] = createFunction(
           models: report.models,
           counts: report.counts,
           failures: report.failures,
+          held: report.held,
         },
-        "cost.price-book-sync completed with catalog failures — models only those catalogs price may be unpriced",
+        "cost.price-book-sync completed with catalog failures — models only those catalogs price may be unpriced; catalogs below a failed one were held so a lower-priority price could not supersede rows the failed catalog still has in force",
       );
     else
       logger.info(

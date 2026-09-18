@@ -37,7 +37,7 @@ A model:
 |---|---|---|
 | `model` | string | the model id as the frames report it; a gateway call and a wrapped agent's call of the same model are one row, because they need one price |
 | `provider` | string or null | the vendor the frames name; null when they name none |
-| `calls` | number | model calls seen in the window |
+| `calls` | number | model calls seen in the window. A wrapped agent's call is counted once whichever token-bearing sources (OTel log, collector, hook) recorded it: per session, only the highest-authority source that reported any model call is admitted |
 | `tokens` | number | total tokens across every class, the figure the list is ranked by |
 | `firstSeen`, `lastSeen` | string | RFC 3339; when the model first and last ran in the window |
 | `missingClasses` | enum[] | the token classes with no effective price entry, out of `input_uncached`, `cache_read`, `cache_write_5m` and `output`. `cache_write_1h` and `reasoning` are not required: a provider with no one-hour cache tier and no separately-metered reasoning tokens is not missing a price |

@@ -54,6 +54,19 @@ const ALL_CLASSES: readonly PriceTokenClass[] = [
   "video_second",
 ];
 
+/** The fields every class of a card shares, whose refusal is shown once, on the field. */
+const SHARED_FIELDS = [
+  "provider",
+  "model",
+  "region",
+  "modelAliases",
+  "effectiveFrom",
+  "tokenClass",
+] as const satisfies readonly Exclude<
+  keyof PriceFieldErrors,
+  "usdPerMillion"
+>[];
+
 /** The classes a published rate card almost always names; the rest are one click away. */
 const COMMON_CLASSES: readonly PriceTokenClass[] = [
   "input_uncached",
@@ -229,7 +242,7 @@ export function PriceDialog({
       // of `PriceFieldErrors` except the per-class rate, which `perClass`
       // above already carries.
       const { usdPerMillion: _rate, ...rest } = found;
-      for (const key of Object.keys(rest) as (keyof typeof rest)[]) {
+      for (const key of SHARED_FIELDS) {
         const message = rest[key];
         if (message !== undefined) fieldErrors[key] = message;
       }
