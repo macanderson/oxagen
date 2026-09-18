@@ -212,6 +212,11 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
         `--source=${fromCommit}`,
         "--staged",
         "--worktree",
+        // A sparse checkout keeps governed records in the index with the
+        // skip-worktree bit set and no file on disk, and `restore` then
+        // refuses their pathspecs. The check reports those records as
+        // missing so that a sync puts them on disk; this is what lets it.
+        "--ignore-skip-worktree-bits",
         "--",
         ...batch,
       );

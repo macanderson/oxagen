@@ -177,13 +177,20 @@ const PLATFORM_READ_TIMEOUT_MS = 3_000;
 async function readPlatform(
   projectRoot: string,
   link: CheckoutLink | undefined,
+  now: () => number = Date.now,
 ): Promise<PlatformFreshness | null> {
+  // One deadline for everything this function does on the network: the
+  // read, and on a 404 the two list calls that recover renamed slugs and the
+  // retried read. Each call gets what is left, so a hung API costs the hook
+  // at most PLATFORM_READ_TIMEOUT_MS however many calls it takes.
+  const deadline = now() + PLATFORM_READ_TIMEOUT_MS;
+  const remaining = () => Math.max(250, deadline - now());
   const ask = (scope: { org: string; ws: string } | undefined) =>
     apiPostOrThrow<PlatformFreshness>(
       "context/steering/freshness",
       {},
       scope,
-      { timeoutMs: PLATFORM_READ_TIMEOUT_MS },
+      { timeoutMs: remaining() },
     );
   try {
     return await ask(link?.scope);
@@ -198,7 +205,7 @@ async function readPlatform(
     if (!link || !(error instanceof ApiError) || error.status !== 404)
       return null;
     try {
-      const current = await currentSlugsFor(link);
+      const current = await currentSlugsFor(link, remaining);
       if (!current) return null;
       const answer = await ask(current);
       rewriteLinkSlugs(projectRoot, current);
@@ -222,16 +229,17 @@ interface CheckoutLink {
  */
 async function currentSlugsFor(
   link: CheckoutLink,
+  remainingMs: () => number,
 ): Promise<{ org: string; ws: string } | null> {
   const { userApiPostOrThrow } = await import("../lib/api.js");
   const { organizations } = await userApiPostOrThrow<{
     organizations: { id: string; slug: string }[];
-  }>("organizations", {});
+  }>("organizations", {}, { timeoutMs: remainingMs() });
   const org = organizations.find((o) => o.id === link.orgId);
   if (!org) return null;
   const { workspaces } = await userApiPostOrThrow<{
     workspaces: { id: string; slug: string }[];
-  }>("workspaces", { orgSlug: org.slug });
+  }>("workspaces", { orgSlug: org.slug }, { timeoutMs: remainingMs() });
   const ws = workspaces.find((w) => w.id === link.workspaceId);
   if (!ws) return null;
   return { org: org.slug, ws: ws.slug };

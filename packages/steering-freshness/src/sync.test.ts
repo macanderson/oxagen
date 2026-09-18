@@ -162,6 +162,7 @@ describe("syncSteering applying", () => {
         `--source=${REMOTE_SHA}`,
         "--staged",
         "--worktree",
+        "--ignore-skip-worktree-bits",
         "--",
         ".oxagen/rules/a.toml",
         ".oxagen/rules/b.toml",

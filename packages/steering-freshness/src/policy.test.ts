@@ -75,6 +75,7 @@ describe("resolveSteeringPolicy", () => {
     expect(policy.exclude).toEqual([
       ".oxagen/settings.local.json",
       ".oxagen/vendor",
+      ".oxagen/workspace.json",
     ]);
   });
 
@@ -86,7 +87,10 @@ describe("resolveSteeringPolicy", () => {
       { scope: "workspace", policy: { blockStaleRuns: true } },
       { scope: "project", policy: { exclude: [".oxagen/rules"] } },
     ]);
-    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.exclude).toEqual([
+      ".oxagen/settings.local.json",
+      ".oxagen/workspace.json",
+    ]);
     expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
   });
 
@@ -97,7 +101,10 @@ describe("resolveSteeringPolicy", () => {
       { scope: "workspace", policy: { blockStaleRuns: true } },
       { scope: "user", policy: { exclude: [".oxagen/rules"] } },
     ]);
-    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.exclude).toEqual([
+      ".oxagen/settings.local.json",
+      ".oxagen/workspace.json",
+    ]);
     expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
   });
 
@@ -111,7 +118,10 @@ describe("resolveSteeringPolicy", () => {
       { scope: "workspace", policy: { blockStaleRuns: true } },
       { scope: "local", policy: { exclude: [".oxagen/rules"] } },
     ]);
-    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.exclude).toEqual([
+      ".oxagen/settings.local.json",
+      ".oxagen/workspace.json",
+    ]);
     expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
     expect(policy.blockStaleRuns).toBe(true);
   });
@@ -122,7 +132,10 @@ describe("resolveSteeringPolicy", () => {
     const policy = resolveSteeringPolicy([
       { scope: "local", policy: { exclude: [".oxagen/rules"] } },
     ]);
-    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.exclude).toEqual([
+      ".oxagen/settings.local.json",
+      ".oxagen/workspace.json",
+    ]);
     expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
   });
 

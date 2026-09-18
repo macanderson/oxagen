@@ -115,11 +115,20 @@ export interface SteeringPolicy {
 }
 
 /**
- * `.oxagen/settings.local.json` is personal by definition and is the one file
- * a sync must never overwrite. It is excluded before any caller can choose
- * otherwise.
+ * The two files under `.oxagen/` that belong to this machine, not to the
+ * production branch. Excluded before any caller can choose otherwise.
+ *
+ *   - `settings.local.json` is personal by definition and a sync must never
+ *     overwrite it.
+ *   - `workspace.json` is the link `oxagen init` writes and gitignores. Once
+ *     the dirt check began counting ignored files, every linked checkout
+ *     carried this one in `dirty`, `isSyncSafe` was never true, and auto-sync
+ *     refused with `dirty` on every prompt.
  */
-export const ALWAYS_EXCLUDED = [".oxagen/settings.local.json"] as const;
+export const ALWAYS_EXCLUDED = [
+  ".oxagen/settings.local.json",
+  ".oxagen/workspace.json",
+] as const;
 
 /**
  * The scopes whose exclusions are honoured: the workspace, and nothing below

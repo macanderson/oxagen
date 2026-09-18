@@ -266,6 +266,8 @@ export async function apiGetOrThrow<T>(
 export async function userApiPostOrThrow<T>(
   path: string,
   body: unknown,
+  /** See `apiPostOrThrow`. Omitted, the call waits as long as the connection does. */
+  options: { timeoutMs?: number } = {},
 ): Promise<T> {
   const token = getToken();
   if (!token) throw new ApiError(NOT_LOGGED_IN);
@@ -287,6 +289,9 @@ export async function userApiPostOrThrow<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body ?? {}),
+      ...(options.timeoutMs === undefined
+        ? {}
+        : { signal: AbortSignal.timeout(options.timeoutMs) }),
     });
   } catch (err) {
     throw await buildNetworkError(

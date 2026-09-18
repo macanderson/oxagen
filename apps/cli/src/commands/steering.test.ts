@@ -42,7 +42,13 @@ const { userApiPostOrThrow, MockApiError } = vi.hoisted(() => {
   }
   return {
     userApiPostOrThrow:
-      vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+      vi.fn<
+        (
+          path: string,
+          body: unknown,
+          options?: { timeoutMs?: number },
+        ) => Promise<unknown>
+      >(),
     MockApiError,
   };
 });
@@ -360,6 +366,30 @@ describe("resolveContext", () => {
       await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
     ) as { orgSlug: string; workspaceSlug: string };
     expect(rewritten).toMatchObject({ orgSlug: "acme", workspaceSlug: "payments" });
+  });
+
+  // The recovery calls run inside the same deadline as the read, so a hung
+  // list endpoint cannot spend the hook's budget either.
+  it("bounds the slug-recovery calls by the same deadline", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "workspace.json"),
+      JSON.stringify({
+        orgSlug: "acme-old",
+        orgId: "org_1",
+        workspaceSlug: "payments-old",
+        workspaceId: "ws_1",
+      }),
+      "utf8",
+    );
+    apiPostOrThrow.mockRejectedValue(new MockApiError("not found", 404));
+    userApiPostOrThrow.mockResolvedValue({ organizations: [] });
+    await resolveContext(tmp);
+    const [, , options] = userApiPostOrThrow.mock.calls[0] ?? [];
+    expect((options as { timeoutMs?: number } | undefined)?.timeoutMs).toEqual(
+      expect.any(Number),
+    );
   });
 
   it("falls back to the global selection when the checkout is not linked", async () => {

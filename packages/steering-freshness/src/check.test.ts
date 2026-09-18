@@ -35,11 +35,11 @@ function table(
       "",
     "rev-parse --verify --quiet origin/main^{commit}": REMOTE,
     [`merge-base ${HEAD} ${REMOTE}`]: BASE,
-    [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+    [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
       "",
-    [`diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+    [`diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
       "",
-    "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
+    "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
       "",
     [`rev-list --count ${BASE}..${REMOTE} -- .oxagen`]: "0",
     [`rev-parse ${HEAD}:.oxagen`]: "aaaa",
@@ -94,12 +94,12 @@ const REMOTE_ADDED = `A\0.oxagen/rules/ctx.release.pin.toml\0`;
 const LOCAL_ADDED = `A\0.oxagen/rules/ctx.mine.draft.toml\0`;
 const remoteDiff = (t: Record<string, string | Error>, value: string) => ({
   ...t,
-  [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+  [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
     value,
 });
 const localDiff = (t: Record<string, string | Error>, value: string) => ({
   ...t,
-  [`diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+  [`diff --name-status --no-renames -z ${BASE} ${HEAD} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
     value,
 });
 
@@ -120,8 +120,11 @@ function check(
 describe("steeringPathspec", () => {
   it("puts the positive pathspec first, so the excludes subtract from it", () => {
     const { pathspecs } = steeringPathspec(policy());
-    expect(pathspecs[0]).toBe(".oxagen");
-    expect(pathspecs[1]).toBe(":(exclude).oxagen/settings.local.json");
+    expect(pathspecs).toEqual([
+      ".oxagen",
+      ":(exclude).oxagen/settings.local.json",
+      ":(exclude).oxagen/workspace.json",
+    ]);
   });
 });
 
@@ -173,7 +176,7 @@ describe("checkSteeringFreshness", () => {
     const v = await check(
       remoteDiff(
         table({
-          "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
+          "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
             " M .oxagen/rules/ctx.mine.toml\0",
         }),
         REMOTE_ADDED,
@@ -214,7 +217,7 @@ describe("checkSteeringFreshness", () => {
   it("stays current when .oxagen is merely dirty", async () => {
     const v = await check(
       table({
-        "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
+        "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
           "?? .oxagen/rules/ctx.new.toml\0",
       }),
     );
@@ -467,7 +470,7 @@ describe("checkSteeringFreshness, a comparison that cannot run", () => {
   it("is unknown, not a throw, when the diff fails", async () => {
     const v = await check({
       ...table(),
-      [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+      [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
         new Error("fatal: unable to read object"),
     });
     expect(v.status).toBe("unknown");
@@ -477,7 +480,7 @@ describe("checkSteeringFreshness, a comparison that cannot run", () => {
   it("is unknown, not a throw, when status fails", async () => {
     const v = await check({
       ...table(),
-      "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json":
+      "status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
         new Error("fatal: not a git repository"),
     });
     expect(v.status).toBe("unknown");
@@ -635,7 +638,7 @@ describe("checkSteeringFreshness, governed files excluded from the working tree"
   it("is behind, naming the excluded files, when the index matches but the disk does not", async () => {
     const v = await check({
       ...table(),
-      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json":
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
         "S .oxagen/rules/ctx.a.toml\0H .oxagen/workspace.json\0",
     });
     expect(v.status).toBe("behind");

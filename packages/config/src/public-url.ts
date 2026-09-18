@@ -1,0 +1,233 @@
+/**
+ * The guard every outbound URL a CUSTOMER supplied must pass before this
+ * process connects to it carrying a secret.
+ *
+ * Two surfaces hand us a URL an authenticated org admin typed and then attach
+ * credentials to a request against it: registering an MCP server
+ * (`agent.mcp.register`, bearer/header auth) and bringing a model key for an
+ * OpenAI-compatible endpoint (ADR-053 §2, the `Authorization` header). Without
+ * this guard either one points the server at an internal-only host — loopback,
+ * RFC1918, link-local, and above all `169.254.169.254`, the cloud metadata
+ * service — and reads back whatever the instance role can see, or uses us as a
+ * probe of the private network.
+ *
+ * It lives here, in the package all three of `@oxagen/agent`, `@oxagen/ai` and
+ * `@oxagen/handlers` already depend on, because the alternative is a second
+ * copy: this logic is subtle enough (see `normalizeIPv4`) that two copies
+ * means one of them is eventually wrong, and it would be the newer one.
+ *
+ * What this guard is NOT: it does not re-check after DNS resolves, so a name
+ * that resolves to a private address at connect time still gets through
+ * (a DNS-rebinding window). Closing that needs a pinned-IP dialer, which is a
+ * transport change rather than a validation one. This rejects the direct
+ * forms, which is what an admin-typed URL actually does.
+ */
+
+/** A URL was refused before any connection was attempted. */
+export class UnsafeOutboundUrlError extends Error {
+  override readonly name = "UnsafeOutboundUrlError";
+  readonly code = "unsafe_outbound_url" as const;
+  constructor(readonly reason: string) {
+    super(reason);
+  }
+}
+
+export interface AssertPublicHttpUrlOptions {
+  /**
+   * Prefixed to every refusal so the message names the thing being refused —
+   * "Refusing to register MCP server", "Refusing to store model credential".
+   * A bare range complaint does not tell an operator which form to fix.
+   */
+  readonly refusing: string;
+  /**
+   * When true, `http:` is refused as well as the non-HTTP schemes. A URL that
+   * carries an API key in a header must be `https:`; the MCP registration
+   * predates this guard and still admits `http:`, so it is opt-in rather than
+   * the default.
+   */
+  readonly requireTls?: boolean;
+}
+
+/**
+ * Throw unless `raw` is an http(s) URL whose host is not a literal in a
+ * non-routable range. Returns the parsed URL so a caller that needs it does
+ * not parse twice.
+ */
+export function assertPublicHttpUrl(
+  raw: string,
+  options: AssertPublicHttpUrlOptions,
+): URL {
+  const refuse = (reason: string): never => {
+    throw new UnsafeOutboundUrlError(`${options.refusing}: ${reason}`);
+  };
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return refuse(`invalid URL "${raw}"`);
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return refuse(`scheme "${parsed.protocol}" is not allowed`);
+  }
+  if (options.requireTls === true && parsed.protocol !== "https:") {
+    return refuse("the URL must use https");
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host === "metadata.google.internal") {
+    return refuse(`hostname "${host}" is not allowed`);
+  }
+
+  if (host.startsWith("[")) {
+    const ipv6 = host.slice(1, -1);
+    if (isPrivateIPv6(ipv6)) {
+      return refuse(`IPv6 address "${ipv6}" is in a non-routable range`);
+    }
+    return parsed;
+  }
+
+  // Normalize BEFORE the range check: "127.0.0.1" is only the canonical
+  // spelling. `http://2130706433/`, `http://0x7f.1/` and `http://0177.0.0.1/`
+  // all reach loopback because the resolver accepts the legacy inet_aton
+  // forms, so a dotted-quad-only regex would wave every one of them through.
+  const ipv4 = normalizeIPv4(host);
+  if (ipv4 && isPrivateIPv4(ipv4)) {
+    return refuse(`IPv4 address "${host}" is in a non-routable range`);
+  }
+  return parsed;
+}
+
+/**
+ * Canonicalize a hostname that is an IPv4 literal in any of the four inet_aton
+ * forms (a, a.b, a.b.c, a.b.c.d) with decimal / octal (0…) / hex (0x…) parts,
+ * to dotted-quad. Returns null when the host is not an IPv4 literal at all
+ * (a real DNS name), which the caller treats as "not a literal to range-check".
+ */
+function normalizeIPv4(host: string): string | null {
+  const parts = host.split(".");
+  if (parts.length === 0 || parts.length > 4) return null;
+  const nums: number[] = [];
+  for (const part of parts) {
+    let value: number;
+    if (/^0[xX][0-9a-fA-F]+$/.test(part)) value = Number.parseInt(part, 16);
+    else if (/^0[0-7]+$/.test(part)) value = Number.parseInt(part, 8);
+    else if (/^\d+$/.test(part)) value = Number.parseInt(part, 10);
+    else return null;
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    nums.push(value);
+  }
+  // The LAST part absorbs the remaining low-order bytes (inet_aton semantics):
+  // "127.1" is 127.0.0.1, "2130706433" is 127.0.0.1.
+  const last = nums.pop() as number;
+  const maxLast = 2 ** (8 * (4 - nums.length));
+  if (last >= maxLast) return null;
+  if (nums.some((n) => n > 255)) return null;
+  const octets = [...nums, ...Array<number>(4 - nums.length).fill(0)];
+  for (let i = 3; i >= nums.length; i--) {
+    octets[i] = (last >>> (8 * (3 - i))) & 0xff;
+  }
+  return octets.join(".");
+}
+
+function isPrivateIPv4(host: string): boolean {
+  const parts = host.split(".").map((s) => {
+    const n = Number.parseInt(s, 10);
+    return Number.isNaN(n) ? -1 : n;
+  });
+  if (parts.length !== 4 || parts.some((p) => p < 0 || p > 255)) return false;
+  const [a, b] = parts as [number, number, number, number];
+  return (
+    a === 0 || // 0.0.0.0/8 — unspecified
+    a === 10 || // 10.0.0.0/8
+    a === 127 || // 127.0.0.0/8
+    (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12
+    (a === 192 && b === 168) || // 192.168.0.0/16
+    (a === 169 && b === 254) // 169.254.0.0/16 (incl. 169.254.169.254 IMDS)
+  );
+}
+
+/**
+ * Expand an IPv6 literal to its eight 16-bit groups, or null when it is not
+ * one. Handles `::` compression and a trailing dotted-quad.
+ *
+ * Why expand at all, rather than pattern-match: the WHATWG URL parser has
+ * ALREADY rewritten the literal by the time `parsed.hostname` is read, and it
+ * rewrites an embedded IPv4 into hex. `https://[::ffff:169.254.169.254]/`
+ * arrives here as `::ffff:a9fe:a9fe`. The previous version of this function
+ * matched only the dotted-decimal spelling — which the parser never produces —
+ * so every IPv4-mapped and IPv4-compatible address passed as a public IPv6
+ * host, including loopback and the metadata address. Its comment described
+ * the intent; the regex could not reach it. Working on the numeric value makes
+ * the spelling irrelevant, which is the only durable answer to a parser that
+ * normalises.
+ */
+function expandIPv6(ip: string): number[] | null {
+  let text = ip.toLowerCase();
+  // A trailing dotted-quad (still possible if a caller passes an unparsed
+  // literal) becomes two hex groups so the rest of this is uniform.
+  const quad = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text);
+  if (quad) {
+    const b = quad.slice(1).map(Number);
+    if (b.some((n) => n > 255)) return null;
+    const hi = ((b[0]! << 8) | b[1]!).toString(16);
+    const lo = ((b[2]! << 8) | b[3]!).toString(16);
+    text = `${text.slice(0, quad.index)}${hi}:${lo}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string): number[] | null => {
+    if (part === "") return [];
+    const groups = part.split(":");
+    const out: number[] = [];
+    for (const g of groups) {
+      if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+      out.push(Number.parseInt(g, 16));
+    }
+    return out;
+  };
+  const head = parse(halves[0]!);
+  const tail = halves.length === 2 ? parse(halves[1]!) : [];
+  if (!head || !tail) return null;
+  if (halves.length === 1) return head.length === 8 ? head : null;
+  const fill = 8 - head.length - tail.length;
+  if (fill < 1) return null;
+  return [...head, ...Array<number>(fill).fill(0), ...tail];
+}
+
+/** The IPv4 address in the low 32 bits of an expanded IPv6, as dotted-quad. */
+function embeddedIPv4(groups: number[]): string {
+  const hi = groups[6]!;
+  const lo = groups[7]!;
+  return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff].join(".");
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const g = expandIPv6(ip);
+  // Not a parseable IPv6 literal. The URL parser would not have produced one,
+  // so refusing is the safe answer to input this function does not understand.
+  if (!g) return true;
+
+  const zeroTo = (n: number) => g.slice(0, n).every((x) => x === 0);
+
+  if (zeroTo(7) && g[7] === 1) return true; // ::1 loopback
+  if (zeroTo(8)) return true; // :: unspecified
+  if ((g[0]! & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+
+  // Addresses that carry an IPv4 address in their low 32 bits and that the OS
+  // or the network delivers TO that IPv4 address. Range-check the embedded
+  // address; treating the whole literal as a public IPv6 host is the bypass.
+  //   ::ffff:a.b.c.d      IPv4-mapped (dual-stack sockets dial the IPv4)
+  //   ::a.b.c.d           IPv4-compatible (deprecated, still routed)
+  //   64:ff9b::a.b.c.d    NAT64 well-known prefix (reaches the IPv4 via NAT64)
+  const mapped = zeroTo(5) && g[5] === 0xffff;
+  const compatible = zeroTo(6);
+  const nat64 =
+    g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0);
+  if (mapped || compatible || nat64) {
+    return isPrivateIPv4(embeddedIPv4(g));
+  }
+  return false;
+}

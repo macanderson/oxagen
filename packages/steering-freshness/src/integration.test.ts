@@ -513,6 +513,14 @@ describe("a sparse checkout that excludes .oxagen", () => {
     expect(verdict.missing.map((c) => c.path)).toContain(
       ".oxagen/rules/ctx.base.always.toml",
     );
+
+    // And the sync the banner recommends actually puts them on disk, rather
+    // than failing on a pathspec the sparse boundary refuses.
+    const result = await syncSteering({ cwd: sparse, verdict, force: false });
+    expect(result.applied, result.message).toBe(true);
+    expect(
+      existsSync(join(sparse, ".oxagen/rules/ctx.base.always.toml")),
+    ).toBe(true);
   });
 });
 
@@ -547,5 +555,26 @@ describe("a forced sync over an untracked copy of a retired record", () => {
     const result = await syncSteering({ cwd: forced, verdict, force: true });
     expect(result.applied).toBe(true);
     expect(existsSync(path)).toBe(false);
+  });
+});
+
+// `oxagen init` writes `.oxagen/workspace.json` and gitignores it. Once the
+// dirt check counted ignored files, every linked checkout carried the link in
+// `dirty`, and auto-sync refused with `dirty` on every prompt.
+describe("a linked checkout", () => {
+  it("does not count its own gitignored link as dirt", async () => {
+    const linked = join(tmp, "linked");
+    await g(tmp, "clone", "--quiet", origin, linked);
+    await write(linked, ".gitignore", ".oxagen/workspace.json\n");
+    await write(
+      linked,
+      ".oxagen/workspace.json",
+      '{"orgSlug":"acme","workspaceSlug":"core"}\n',
+    );
+    const verdict = await checkSteeringFreshness({
+      cwd: linked,
+      policy: policy(),
+    });
+    expect(verdict.dirty).toEqual([]);
   });
 });

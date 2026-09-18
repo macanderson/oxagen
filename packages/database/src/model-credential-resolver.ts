@@ -26,6 +26,11 @@ import type { KmsAdapter } from "@oxagen/crypto";
 import { schema } from "./index";
 import { withTenantDb } from "./tenant";
 import { logger } from "./logger";
+import {
+  parseModelMap,
+  type ModelCredentialModelMap,
+  type ModelCredentialProvider,
+} from "./model-credential-shape";
 
 /**
  * Stable per-row key-version label for the model-credential envelope. Mirrors
@@ -56,8 +61,17 @@ export function resolveModelCredentialKms(): ResolvedModelCredentialKms | null {
   };
 }
 
-/** The vendors `org.model_credentials.provider` admits (its CHECK). */
-export type ModelCredentialProvider = "openrouter" | "gateway";
+// The row's non-secret shape lives in its own pure module so handler tests
+// that mock this resolver wholesale still get the real parser; re-exported
+// here so existing importers of `@oxagen/database/model-credential` are
+// unaffected.
+export {
+  MODEL_CREDENTIAL_PROVIDERS,
+  MODEL_MAP_TIERS,
+  parseModelMap,
+  type ModelCredentialModelMap,
+  type ModelCredentialProvider,
+} from "./model-credential-shape";
 
 /** A live, decrypted credential. Handed to the provider factory and nowhere else. */
 export interface ModelCredential {
@@ -69,6 +83,10 @@ export interface ModelCredential {
   readonly digest: string;
   /** Last four characters of the key, for a log line or a UI row. */
   readonly keyHint: string;
+  /** The customer's endpoint (`openai_compatible` only); null otherwise. */
+  readonly baseUrl: string | null;
+  /** Per-tier model ids on this key; `{}` for a routed provider. */
+  readonly modelMap: ModelCredentialModelMap;
 }
 
 /**
@@ -148,6 +166,8 @@ export async function loadModelCredential(
           apiKey: plaintext.toString("utf8"),
           digest: row.keyDigest,
           keyHint: row.keyHint,
+          baseUrl: row.baseUrl ?? null,
+          modelMap: parseModelMap(row.modelMap),
         };
       } catch (err) {
         // Never the ciphertext, never the error's own payload: the envelope

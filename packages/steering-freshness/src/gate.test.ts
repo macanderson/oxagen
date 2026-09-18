@@ -7,7 +7,7 @@ import type { GitRunner } from "./git";
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
 const BASE = "3333333333333333333333333333333333333333";
-const EXCL = ":(exclude).oxagen/settings.local.json";
+const EXCL = ":(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
 
 /**
  * A runner whose remote-side diff can be emptied, which is how a sync is
