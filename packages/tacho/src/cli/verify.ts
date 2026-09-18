@@ -25,6 +25,9 @@ const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
+  // Cursor's CLI binary is `agent` (verified 2026-09-18 against
+  // https://cursor.com/docs/cli/installation, fetched that day).
+  cursor: "agent",
   stella: "stella",
 };
 
@@ -36,6 +39,7 @@ const BINARY: Record<WrappedHarness, string> = {
 const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
   "claude-code": 15_000,
   codex: 15_000,
+  cursor: 15_000,
   stella: 45_000,
 };
 
@@ -57,6 +61,15 @@ function headlessTurn(
   }
   if (harness === "stella") {
     return { args: ["run", prompt], parsesSession: false };
+  }
+  if (harness === "cursor") {
+    // `--print` runs one non-interactive turn and `--trust` takes the
+    // workspace prompt out of a headless run (verified 2026-09-18 against
+    // https://cursor.com/docs/cli/reference/parameters, fetched that day).
+    // The output is prose, so the session is matched the way Codex's and
+    // Stella's are: a chain the daemon did not have before the turn ran,
+    // carrying the harness label.
+    return { args: ["--print", "--trust", prompt], parsesSession: false };
   }
   return {
     args: ["-p", prompt, "--max-turns", "1", "--output-format", "json"],
@@ -83,12 +96,14 @@ interface DaemonSession {
 
 function factsFor(harness: TachoHarness, deps: CliDeps) {
   if (harness === "codex") return deps.codex();
+  if (harness === "cursor") return deps.cursor();
   if (harness === "stella") return deps.stella();
   return deps.claude();
 }
 
 function configPathFor(harness: TachoHarness, deps: CliDeps): string {
   if (harness === "codex") return deps.paths.codexHooks;
+  if (harness === "cursor") return deps.paths.cursorHooks.join(" or ");
   if (harness === "stella") return deps.readStellaHooks().path;
   return deps.paths.claudeSettings;
 }

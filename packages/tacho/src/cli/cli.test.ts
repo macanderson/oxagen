@@ -266,11 +266,15 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         paths.codexHooks,
         JSON.stringify(document, null, 2),
       ),
+    readCursorHooks: (path) => readJsonFileIfExists(path),
+    writeCursorHooks: (path, document) =>
+      writeSensitiveFileAtomic(path, JSON.stringify(document, null, 2)),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
       writeSensitiveFileAtomic(file.path, file.text ?? ""),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
+    cursor: () => ({ path: "/usr/local/bin/agent", version: "2026.09.10" }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
     claudeDesktop: () => ({
       installed: true,

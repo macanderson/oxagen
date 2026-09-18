@@ -20,6 +20,7 @@ import {
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
+import { stripCursorHooks } from "../host/cursor-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
 import {
   type HostFile,
@@ -135,7 +136,7 @@ export async function revokeAndMark(
 
 /**
  * Remove one enrollment's hook entries from every harness file, keeping
- * every foreign entry. Codex and Stella are stripped whether or not
+ * every foreign entry. Codex, Cursor and Stella are stripped whether or not
  * host.json lists them: a host.json lost mid-way must not leave hooks
  * behind. Both of Stella's files are stripped, because a `stella.toml`
  * created after enrollment makes Stella ignore the `settings.json` Tacho
@@ -198,6 +199,8 @@ export function stripEnrollmentHooks(
 ): {
   settingsChanged: boolean;
   codexChanged: boolean;
+  /** The Cursor hooks files Tacho's entries were removed from. */
+  cursorChanged: string[];
   /** The Stella files Tacho's hooks were removed from. */
   stellaChanged: string[];
   /** Claude Desktop's config, when our MCP server entry was removed from it. */
@@ -233,6 +236,18 @@ export function stripEnrollmentHooks(
       settingsChanged = true;
     }
   });
+  const cursorChanged: string[] = [];
+  for (const path of deps.paths.cursorHooks) {
+    attempt(path, () => {
+      const current = deps.readCursorHooks(path);
+      if (current === undefined) return;
+      const stripped = stripCursorHooks(current, host?.host_enrollment_id);
+      if (stripped.changed) {
+        deps.writeCursorHooks(path, stripped.document);
+        cursorChanged.push(path);
+      }
+    });
+  }
   let codexChanged = false;
   attempt(deps.paths.codexHooks, () => {
     const codexCurrent = deps.readCodexHooks();
@@ -300,6 +315,7 @@ export function stripEnrollmentHooks(
   return {
     settingsChanged,
     codexChanged,
+    cursorChanged,
     stellaChanged,
     claudeDesktopChanged,
     failed,
@@ -390,6 +406,9 @@ async function unenrollLocked(
   }
   if (stripped.codexChanged) {
     deps.out(`      removed from ${deps.paths.codexHooks} too`);
+  }
+  for (const path of stripped.cursorChanged) {
+    deps.out(`      removed from ${path} too`);
   }
   for (const path of stripped.stellaChanged) {
     deps.out(`      removed from ${path} too`);

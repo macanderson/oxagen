@@ -9,6 +9,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { claudeDesktopConfigPath } from "./claude-desktop-writer";
+import { cursorHooksPaths } from "./cursor-writer";
 
 export interface TachoPaths {
   /** `~/.config/oxagen/tacho` unless `TACHO_HOME` overrides it. */
@@ -39,6 +40,14 @@ export interface TachoPaths {
   claudeProjects: string;
   /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
   codexHooks: string;
+  /**
+   * Cursor's user hooks files, most likely first. Normally one
+   * (`~/.cursor/hooks.json`); two when `CURSOR_CONFIG_DIR` or, on Linux and
+   * BSD, `XDG_CONFIG_HOME` moves the config directory, because Cursor
+   * documents those variables for the CLI config directory and not for the
+   * hooks loader. See `cursor-writer.ts`.
+   */
+  cursorHooks: string[];
   /**
    * Stella's user config (`$STELLA_HOME/stella.toml`, `~/.stella` by
    * default). When it exists it wins whole over `stellaSettingsJson`.
@@ -83,6 +92,7 @@ export function tachoPaths(
     claudeSettings: join(claudeConfigDir, "settings.json"),
     claudeProjects: join(claudeConfigDir, "projects"),
     codexHooks: join(codexHome, "hooks.json"),
+    cursorHooks: cursorHooksPaths(home, platform, env),
     stellaToml: join(stellaHome, "stella.toml"),
     stellaSettingsJson: join(stellaHome, "settings.json"),
     daemonLauncher: join(root, "tachod.cmd"),

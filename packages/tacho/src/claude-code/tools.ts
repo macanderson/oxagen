@@ -1,7 +1,16 @@
 /**
- * What a Claude Code tool call touches, classified from its name and input.
- * Drives `effect_kind`, `tool_target`, `tool_targets`, `tool_is_mutating`,
- * and the MCP server/tool split.
+ * What a tool call touches, classified from its name and input. Drives
+ * `effect_kind`, `tool_target`, `tool_targets`, `tool_is_mutating`, and the
+ * MCP server/tool split.
+ *
+ * Two vocabularies arrive here, and neither is rewritten before it does: a
+ * record that renamed the tool would no longer say what the harness reported.
+ * Claude Code (and Codex, and Stella) send `Bash`, `Edit`, `Glob`; Cursor
+ * sends `Shell`, `Write`, `Delete` and `MCP:<tool_name>` (verified 2026-09-18
+ * against https://cursor.com/docs/agent/hooks, fetched that day). `Shell` is
+ * Claude Code's `Bash`, so it takes the same branch and still reaches the
+ * git-effect classification; Cursor's `Write` covers both `Edit` and `Write`;
+ * `Glob` has no Cursor equivalent, and `Delete` has no Claude Code one.
  */
 import type { TachoEventBody } from "../envelope";
 
@@ -245,12 +254,16 @@ export function classifyTool(
 ): ToolClassification {
   const input = toolInput ?? {};
   const mcp = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(toolName);
-  if (mcp) {
-    const [, server, tool] = mcp;
+  // Cursor spells an MCP call `MCP:<tool_name>` and names no server, so this
+  // one carries `mcp_tool_name` without an `mcp_server_name`. Inventing a
+  // server would put a name in the record that no harness reported.
+  const cursorMcp = mcp === null ? /^MCP:(.+)$/.exec(toolName) : null;
+  if (mcp || cursorMcp) {
+    const [, server, tool] = mcp ?? [undefined, undefined, cursorMcp?.[1]];
     return {
       tool_source: "mcp",
-      mcp_server_name: server,
-      mcp_tool_name: tool,
+      ...(server !== undefined ? { mcp_server_name: server } : {}),
+      mcp_tool_name: tool as string,
       // Keyed off the tool name rather than the whole `mcp__…` string, so the
       // same capability on a second server classifies the same way.
       effect_kind: PR_OPEN_MCP_TOOLS.has(tool ?? "") ? "pr_open" : "network",
@@ -301,7 +314,16 @@ export function classifyTool(
       ...(targets.length > 1 ? { tool_targets: [...new Set(targets)] } : {}),
     };
   }
-  if (toolName === "Bash") {
+  if (toolName === "Delete") {
+    const target = head(input["file_path"] ?? input["path"]);
+    return {
+      tool_source: "builtin",
+      effect_kind: "file_delete",
+      tool_is_mutating: true,
+      ...(target !== undefined ? { tool_target: target } : {}),
+    };
+  }
+  if (toolName === "Bash" || toolName === "Shell") {
     const raw = input["command"];
     const command = head(raw);
     const effect =

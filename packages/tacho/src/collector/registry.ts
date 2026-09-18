@@ -43,6 +43,7 @@ import {
 const RUNTIME_FOR_HARNESS: Record<WrappedHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
+  cursor: "cursor",
   stella: "stella",
 };
 

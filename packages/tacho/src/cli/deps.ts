@@ -298,6 +298,13 @@ export interface CliDeps {
   readCodexHooks: () => unknown;
   writeCodexHooks: (document: unknown) => void;
   /**
+   * One of Cursor's `hooks.json` files (`paths.cursorHooks`), undefined when
+   * absent. Keyed by path rather than fixed to one, because a moved config
+   * directory means Oxagen writes two: see `host/cursor-writer.ts`.
+   */
+  readCursorHooks: (path: string) => unknown;
+  writeCursorHooks: (path: string, document: unknown) => void;
+  /**
    * Stella's user-scope hooks file: `stella.toml` when it exists, else the
    * legacy `settings.json` when that exists, else a new `stella.toml`.
    * `format` reads that one file instead (unenroll strips both).
@@ -338,6 +345,7 @@ export interface CliDeps {
   };
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
+  cursor: () => HarnessFacts;
   stella: () => HarnessFacts;
   /**
    * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
@@ -496,6 +504,42 @@ export function claudeDesktopFacts(
   return { installed: false };
 }
 
+/**
+ * Cursor's CLI, verified 2026-09-18 against
+ * https://cursor.com/docs/cli/installation (fetched that day): the binary is
+ * `agent`, the installer puts it in `~/.local/bin`, and `agent --version`
+ * reports the version. Two caveats the caller has to live with.
+ *
+ * `agent` is a generic name. Another program of that name earlier on PATH
+ * would be found instead, so the version string is sanity-checked before this
+ * counts as Cursor: a `--version` that carries no dotted number is treated as
+ * "not Cursor" rather than as Cursor of unknown version.
+ *
+ * No primary source documents where Cursor's GUI installs itself on any
+ * platform. So a person who runs Cursor only as an editor and never installed
+ * the CLI is reported here as not installed, even though the hooks Oxagen
+ * writes to `~/.cursor/hooks.json` would still govern that GUI. Enrollment
+ * says so rather than refusing: unlike Claude Desktop on Linux, where no
+ * build exists and the file would be read by nothing, here the file is read
+ * and only the probe is blind.
+ */
+export function cursorFacts(
+  exec: Exec,
+  platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+  home?: string,
+  exists?: (candidate: string) => boolean,
+): HarnessFacts {
+  const facts =
+    exists === undefined
+      ? harnessFacts(exec, "agent", platform, env, home)
+      : harnessFacts(exec, "agent", platform, env, home, exists);
+  // `harnessFacts` sets `version` only when `--version` printed a dotted
+  // number, so an unrelated `agent` on PATH answers with no version and is
+  // not reported as an install.
+  return facts.version === undefined ? {} : facts;
+}
+
 export function claudeFacts(
   exec: Exec,
   platform: NodeJS.Platform = process.platform,
@@ -591,6 +635,9 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         paths.codexHooks,
         `${JSON.stringify(document, null, 2)}\n`,
       ),
+    readCursorHooks: (path) => harnessFiles.readJson(path),
+    writeCursorHooks: (path, document) =>
+      harnessFiles.write(path, `${JSON.stringify(document, null, 2)}\n`),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) => harnessFiles.write(file.path, file.text ?? ""),
     readClaudeDesktopConfig: () =>
@@ -616,6 +663,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
+    cursor: () => cursorFacts(exec, platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
     claudeDesktop: () => claudeDesktopFacts(platform, home, env),
     runtime: runtimeCommands(undefined, env, undefined, platform),

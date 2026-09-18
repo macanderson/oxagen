@@ -203,16 +203,20 @@ function invocationToolUseId(
  * Claude Code takes `additionalContext` at SessionStart and at
  * UserPromptSubmit; Stella reads only SessionStart stdout as prompt text and
  * answers every other event with a decision document that has nowhere to put
- * prose (`stellaAnswer`). Draining at Stella's UserPromptSubmit would seal
- * `message_delivered` and tell the fleet the command applied while Stella
- * never saw a word, so the message stays queued for a boundary that carries
- * it.
+ * prose (`stellaAnswer`). Cursor is the same shape for a different reason:
+ * `additional_context` is a field of its sessionStart answer alone, and its
+ * beforeSubmitPrompt answer carries only `continue` and a `user_message`
+ * shown to the person, not to the agent. Draining at either harness's
+ * UserPromptSubmit would seal `message_delivered` and tell the fleet the
+ * command applied while the agent never saw a word, so the message stays
+ * queued for a boundary that carries it.
  */
 function deliversMessages(
   harness: TachoHarness | undefined,
   hookEventName: string,
 ): boolean {
-  return harness !== "stella" || hookEventName === "SessionStart";
+  if (harness !== "stella" && harness !== "cursor") return true;
+  return hookEventName === "SessionStart";
 }
 
 /**
