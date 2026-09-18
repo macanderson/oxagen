@@ -72,7 +72,7 @@ import {
 import { PROJECT_DIR_NAME } from "./settings";
 import type { SteeringPolicy } from "./policy";
 import { access } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 /**
  * - `current`  — nothing merged here that this checkout lacks.
@@ -313,11 +313,15 @@ export async function checkSteeringFreshness(
     ? await gitOrNull(repoCtx, "rev-parse", "--git-common-dir")
     : null;
   // `--git-common-dir` can answer relatively (".git"); resolve it against
-  // the root so the stamp lands in one place from every worktree.
+  // the root so the stamp lands in one place from every worktree. Absolute
+  // is decided by `isAbsolute`, not a leading slash: on Git for Windows a
+  // linked worktree answers `C:/repo/.git`, and treating that as relative
+  // built `C:/repo/C:/repo/.git`, so the stamp never read or wrote and every
+  // prompt contacted the remote regardless of the interval.
   const stampDir = commonDir
-    ? commonDir.startsWith("/")
+    ? isAbsolute(commonDir)
       ? commonDir
-      : `${root}/${commonDir}`
+      : resolve(root, commonDir)
     : null;
   const stamp = stampDir ? await readFetchStamp(stampDir, cacheIo) : null;
   const remoteContactDue =

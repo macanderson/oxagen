@@ -113,15 +113,36 @@ interface HookConfig {
  */
 export const HOOK_TIMEOUT_SECONDS = 20;
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+/**
+ * Parse a hook config, or return null for one this code cannot edit safely.
+ *
+ * Valid JSON is not enough. A file whose `hooks` is a string, or whose
+ * `hooks.UserPromptSubmit` is an object rather than an array, was accepted
+ * by the cast and then hit array methods in the install, remove, and status
+ * paths, which threw instead of refusing and leaving the file alone. Every
+ * level the writers touch is checked here: `hooks` is an object, each event
+ * is an array of objects, and each group's `hooks` (when present) is an
+ * array of objects.
+ */
 function readConfig(text: string): HookConfig | null {
   try {
     const parsed: unknown = JSON.parse(text);
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return null;
+    if (!isRecord(parsed)) return null;
+    if (parsed["hooks"] === undefined) return parsed as HookConfig;
+    const hooks = parsed["hooks"];
+    if (!isRecord(hooks)) return null;
+    for (const groups of Object.values(hooks)) {
+      if (!Array.isArray(groups)) return null;
+      for (const group of groups) {
+        if (!isRecord(group)) return null;
+        if (group["hooks"] === undefined) continue;
+        if (!Array.isArray(group["hooks"])) return null;
+        if (!group["hooks"].every(isRecord)) return null;
+      }
     }
     return parsed as HookConfig;
   } catch {

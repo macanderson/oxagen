@@ -167,6 +167,31 @@ describe("installHook", () => {
     const result = await installHook(ROOT, "claude-code", store);
     expect(result.outcome).toBe("installed");
   });
+
+  // Valid JSON with the wrong shape reached the array methods and threw
+  // instead of refusing.
+  it("refuses a config whose hook shape is wrong, and leaves it alone", async () => {
+    const shapes = [
+      '{"hooks":"nope"}',
+      '{"hooks":{"UserPromptSubmit":{"hooks":[]}}}',
+      '{"hooks":{"UserPromptSubmit":["nope"]}}',
+      '{"hooks":{"UserPromptSubmit":[{"hooks":{}}]}}',
+      '{"hooks":{"UserPromptSubmit":[{"hooks":["nope"]}]}}',
+    ];
+    for (const text of shapes) {
+      const store = io({ [CLAUDE]: text });
+      expect((await installHook(ROOT, "claude-code", store)).outcome).toBe(
+        "refused",
+      );
+      expect((await removeHook(ROOT, "claude-code", store)).outcome).toBe(
+        "refused",
+      );
+      expect((await hookStatus(ROOT, "claude-code", store)).installed).toBe(
+        false,
+      );
+      expect(store.files[CLAUDE]).toBe(text);
+    }
+  });
 });
 
 describe("removeHook", () => {
