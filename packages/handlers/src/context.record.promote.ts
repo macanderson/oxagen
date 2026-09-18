@@ -17,6 +17,9 @@ const STATUS_BY_ACTION = {
  * line to Stella's .stella/rules/promotions.jsonl. The chain digest commits
  * to the predecessor: chain_digest = sha256(prev_chain_digest + canonical
  * row), so a rewritten or reordered ledger fails re-verification.
+ *
+ * A promote also refreshes the record row's classification from the version
+ * it pins, so the bundle's steering text says what the pinned version says.
  */
 export const contextRecordPromoteHandler: CapabilityHandler<
   typeof contextRecordPromote
@@ -50,10 +53,27 @@ export const contextRecordPromoteHandler: CapabilityHandler<
 
   // promote pins a version; the other actions may name one for the ledger.
   let versionUuid: string | null = null;
+  // The pinned version's classification, copied onto the record row by a
+  // promote so the row (and the steering text compiled from it) describes
+  // the version in service, not the one merged last (#3312). Empty for a
+  // version the legacy publish path wrote without one: the row keeps what it
+  // has, which is the only classification that version ever had.
+  let classification: Partial<
+    Pick<
+      typeof schema.contextRecords.$inferInsert,
+      "kind" | "force" | "constraintEffect" | "statement"
+    >
+  > = {};
   if (input.version_id) {
     const [version] = await withTenantDb((tx) =>
       tx
-        .select({ id: schema.contextRecordVersions.id })
+        .select({
+          id: schema.contextRecordVersions.id,
+          kind: schema.contextRecordVersions.kind,
+          force: schema.contextRecordVersions.force,
+          constraintEffect: schema.contextRecordVersions.constraintEffect,
+          statement: schema.contextRecordVersions.statement,
+        })
         .from(schema.contextRecordVersions)
         .where(
           and(
@@ -69,6 +89,18 @@ export const contextRecordPromoteHandler: CapabilityHandler<
       );
     }
     versionUuid = version.id;
+    // A merge writes all four together, so `kind` alone tells a classified
+    // version from a legacy one. `constraintEffect` is copied even when NULL:
+    // a rule version promoted over a constraint must clear it, or the row's
+    // check constraint refuses the update.
+    if (version.kind != null) {
+      classification = {
+        kind: version.kind,
+        force: version.force,
+        constraintEffect: version.constraintEffect,
+        statement: version.statement,
+      };
+    }
   } else if (input.action === "promote") {
     throw new Error(
       "[context.record.promote] `version_id` is required for a promote.",
@@ -128,6 +160,7 @@ export const contextRecordPromoteHandler: CapabilityHandler<
               activeVersionId: versionUuid,
               activatedByUserId: ctx.userId ?? undefined,
               activatedAt: sql`now()`,
+              ...classification,
             }
           : {}),
         updatedById: ctx.userId ?? undefined,

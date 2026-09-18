@@ -143,6 +143,83 @@ describe("context.record.promote handler", () => {
       status: "active",
       activeVersionId: "version-uuid",
     });
+    // A legacy version carries no classification, so the row keeps its own.
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
+    expect(mocks.updateSets[0]).not.toHaveProperty("force");
+    expect(mocks.updateSets[0]).not.toHaveProperty("statement");
+  });
+
+  // The witness for #3312: with v2 in service, promoting v1 must leave the
+  // row saying what v1 says, in the same update that moves the pin.
+  it("copies the pinned version's classification onto the record row, clearing a constraint effect the row no longer earns", async () => {
+    const v1 = {
+      id: "version-1",
+      kind: "rule",
+      force: "should",
+      constraintEffect: null,
+      statement: "Prefer the narrowest test that proves the change.",
+    };
+    // The chain head is v2's promote: the row currently carries v2's
+    // classification (a must constraint), which is what the bug left behind.
+    queueSelects([RECORD], [v1], [{ seq: 2, chainDigest: "d".repeat(64) }]);
+
+    const out = await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(out).toMatchObject({ action: "promote", seq: 3, status: "active" });
+    expect(mocks.updateSets).toHaveLength(1);
+    expect(mocks.updateSets[0]).toMatchObject({
+      status: "active",
+      activeVersionId: "version-1",
+      kind: "rule",
+      force: "should",
+      constraintEffect: null,
+      statement: "Prefer the narrowest test that proves the change.",
+    });
+    // A promote is one more ledger row, which is what moves the steering
+    // version the bundle cache is keyed on.
+    expect(mocks.insertedValues[0]).toMatchObject({
+      action: "promote",
+      versionId: "version-1",
+      seq: 3,
+    });
+  });
+
+  it("leaves the row's classification alone when a supersede names a classified version", async () => {
+    queueSelects(
+      [RECORD],
+      [
+        {
+          id: "version-2",
+          kind: "constraint",
+          force: "must",
+          constraintEffect: "forbid",
+          statement: "Never A.",
+        },
+      ],
+      [{ seq: 1, chainDigest: "e".repeat(64) }],
+    );
+
+    await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "supersede",
+        version_id: "crv_2",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(mocks.updateSets[0]).toMatchObject({ status: "superseded" });
+    expect(mocks.updateSets[0]).not.toHaveProperty("activeVersionId");
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
   });
 
   it("chains a later entry off the head's digest", async () => {

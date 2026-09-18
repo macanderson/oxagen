@@ -1390,6 +1390,16 @@ export const contextRecordVersions = agentSchema.table(
     // ContextProvenanceV1 vocabulary (packages/run-evidence contextgraph.ts):
     // [{ type, uri?, range?, digest?, method?, by? }].
     provenance: jsonb("provenance").notNull().default(sql`'[]'::jsonb`),
+    // The classification this version's body carries, written by
+    // merge_context_pr alongside the record row's copy. It belongs here
+    // because it describes the body: promoting an older version back into
+    // service must compile what that version says, not what the record row
+    // was last told (#3312). NULL in all four on a version the legacy
+    // publish_context_record path wrote; the record row is the fallback then.
+    kind: text("kind"),
+    force: text("force"),
+    constraintEffect: text("constraint_effect"),
+    statement: text("statement"),
   },
   (t) => ({
     recordIdx: index("context_record_versions_record_idx").on(t.recordId),
@@ -1403,6 +1413,18 @@ export const contextRecordVersions = agentSchema.table(
     checksumCheck: check(
       "context_record_versions_checksum_check",
       sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
+    ),
+    kindCheck: check(
+      "context_record_versions_kind_check",
+      sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_record_versions_force_check",
+      sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_record_versions_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
     ),
   }),
 );

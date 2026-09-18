@@ -723,6 +723,12 @@ export const postgresSteeringStore: SteeringStore = {
           publishedAt: input.mergedAt,
           body: input.body,
           checksum: input.checksum,
+          // The version carries what its body says. A later promote of this
+          // version copies these four back onto the record row (#3312).
+          kind: proposal.kind,
+          force: proposal.force,
+          constraintEffect: proposal.constraintEffect,
+          statement: proposal.statement,
           provenance: [
             {
               type: "commit",

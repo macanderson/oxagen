@@ -8,7 +8,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import {
   postgresSteeringStore as store,
   type ProposalRow,
@@ -239,6 +239,37 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     expect(versions.map((v) => [v.version, v.isLatest])).toEqual([
       [2, true],
       [1, false],
+    ]);
+    // Each version carries the classification its own merge published, so a
+    // promote back to version 1 can restore what version 1 says (#3312).
+    const classified = await withSystemDb((tx) =>
+      tx
+        .select({
+          version: schema.contextRecordVersions.versionNumber,
+          kind: schema.contextRecordVersions.kind,
+          force: schema.contextRecordVersions.force,
+          constraintEffect: schema.contextRecordVersions.constraintEffect,
+          statement: schema.contextRecordVersions.statement,
+        })
+        .from(schema.contextRecordVersions)
+        .where(eq(schema.contextRecordVersions.recordId, first.recordId))
+        .orderBy(asc(schema.contextRecordVersions.versionNumber)),
+    );
+    expect(classified).toEqual([
+      {
+        version: 1,
+        kind: "rule",
+        force: "should",
+        constraintEffect: null,
+        statement: "Do not re-read CHANGELOG.md more than once in a run.",
+      },
+      {
+        version: 2,
+        kind: "rule",
+        force: "should",
+        constraintEffect: null,
+        statement: "Cache the first read.",
+      },
     ]);
   });
 

@@ -36,7 +36,7 @@ import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
 import { hostReadColumns } from "./tacho-gateway-columns";
-import { readWorkspaceSteering } from "./tacho-steering";
+import { readWorkspaceSteering, type SteeringTx } from "./tacho-steering";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -51,8 +51,10 @@ interface TachoTx {
     };
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
-    contextRecords: { findMany: (args: unknown) => Promise<unknown> };
   };
+  // The steering read (`readWorkspaceSteering`): the ledger count and the
+  // records joined to their pinned versions.
+  select: SteeringTx["select"];
   update: (table: unknown) => {
     set: (values: Record<string, unknown>) => {
       where: (condition: unknown) => Promise<unknown>;
