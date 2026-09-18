@@ -1236,16 +1236,61 @@ export async function changeOrgPlan(
     await recordPlanUpgradeIntent(activeSub.stripeSubscriptionId, originPlanId);
   }
 
-  await upgradeSubscription(
-    activeSub.stripeSubscriptionId,
-    newPriceId,
-    prorationBehavior,
-    opts?.requestId,
-    // Binds the mutation to the state the decision was made against. Null when
-    // no preview was taken, in which case `prorationBehavior` is already
-    // `always_invoice` and there is nothing for a stale `none` to drop.
-    preview?.billingPriceId ?? undefined,
-  );
+  // Binds the mutation to the state the origin information came from.
+  //
+  // With a preview, that is the subscription the preview priced. WITHOUT one it
+  // is the provider-state read above — and that case was left unbound in the
+  // round that introduced this, on the reasoning that an unpriceable change
+  // settles as `always_invoice`, which bills the true difference either way, so
+  // refusing would trade a safe outcome for an outage.
+  //
+  // That reasoning was wrong, and specifically it conflated a failed PREVIEW
+  // with an unavailable PROVIDER. This path is only reachable when
+  // `getSubscription` SUCCEEDED — a failure there raises
+  // SubscriptionStateUnavailableError long before the preview — and only
+  // `previewPlanChange` failed. In a real outage execution never arrives here,
+  // so binding costs nothing to an outage; it refuses only when the
+  // subscription has genuinely moved.
+  //
+  // And the charge being safe was never the whole story. `always_invoice` bills
+  // the true difference for whatever transition actually happens, but the
+  // CREDIT GRANT is sized from `activeProductId`, read before the preview. A
+  // plan change landing in between meant the swap correctly invoiced B→C while
+  // the grant was sized A→C, over- or under-granting included credits
+  // (#3157, PR #3171 review, r4042603495).
+  //
+  // Binding here settles that without a second source: a Stripe price belongs
+  // immutably to one product, so a mutation that confirms the price is
+  // unchanged confirms the product is too. The origin is bound by construction
+  // rather than re-read.
+  //
+  // `activePriceId` null leaves it unbound, but `activeProductId` is then null
+  // as well, so the origin cannot be established at all and the grant is
+  // skipped by the branch below. No new hole.
+  const expectedCurrentPriceId =
+    preview?.billingPriceId ?? activePriceId ?? undefined;
+  try {
+    await upgradeSubscription(
+      activeSub.stripeSubscriptionId,
+      newPriceId,
+      prorationBehavior,
+      opts?.requestId,
+      expectedCurrentPriceId,
+    );
+  } catch (err) {
+    // The intent was written a moment ago for a swap that then did not happen.
+    // This one error is raised BEFORE the provider is mutated, so it is the
+    // only failure here where nothing having been applied is certain — every
+    // other one may have landed, and clearing on those would destroy a real
+    // intent whose grant is still owed.
+    if (
+      err instanceof Error &&
+      (err as { code?: string }).code === "SUBSCRIPTION_MOVED_SINCE_PREVIEW"
+    ) {
+      await clearPlanUpgradeIntent(activeSub.stripeSubscriptionId);
+    }
+    throw err;
+  }
 
   // SOC2 audit: an org's plan tier changed on an active subscription (upgrade
   // OR downgrade) — a privileged billing mutation. The no-active-sub branch

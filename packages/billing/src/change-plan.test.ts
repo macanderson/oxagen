@@ -1229,11 +1229,25 @@ describe("a plan update landing between the preview and the swap (r4042477836)",
     );
   });
 
-  it("binds nothing when there was no preview, because there is no 'none' to protect", async () => {
-    // An unpriceable change settles as always_invoice, which bills the true
-    // difference whichever way it falls. Refusing it on a precondition would
-    // trade a safe outcome for an outage, which is the trade this file has
-    // already rejected once.
+  it("binds the unpriceable swap to the provider state its ORIGIN came from", async () => {
+    // This asserted `expectedCurrentPriceId: undefined` when it was written,
+    // on the reasoning that an unpriceable change settles as always_invoice —
+    // which bills the true difference either way — so binding it would trade a
+    // safe outcome for an outage.
+    //
+    // That was wrong twice over, and it is recorded here rather than quietly
+    // flipped (r4042603495).
+    //
+    // It conflated a failed PREVIEW with an unavailable PROVIDER. This path is
+    // only reached when `getSubscription` succeeded and only the preview
+    // failed; a provider that cannot be read raises
+    // SubscriptionStateUnavailableError long before here. So no outage is
+    // traded away — binding refuses only on genuine movement.
+    //
+    // And the charge being safe was never the whole story. always_invoice
+    // bills the true difference for whatever transition happens, but the
+    // credit grant is sized from the product read BEFORE the preview. A plan
+    // change landing in between invoiced B→C correctly and granted A→C.
     previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
     stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
     onPrice("price_build_m", { planId: "plan-build-id" });
@@ -1243,8 +1257,10 @@ describe("a plan update landing between the preview and the swap (r4042477836)",
     expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
       "sub_active_001",
       expect.objectContaining({
+        // Still always_invoice: binding constrains WHICH subscription may be
+        // mutated, never how the money is settled.
         prorationBehavior: "always_invoice",
-        expectedCurrentPriceId: undefined,
+        expectedCurrentPriceId: "price_build_m",
       }),
     );
   });
@@ -1507,6 +1523,128 @@ describe("a charge larger than the customer approved (r4042477860)", () => {
     expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
       "sub_active_001",
       expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The grant origin on the NO-PREVIEW path (#3157, PR #3171 review,
+// r4042603495).
+//
+// Two choices that were each right on their own. The origin falls back to the
+// product read before the preview, because an earlier round established that a
+// failed preview must still grant the credits an upgrade earns. The mutation
+// was left unbound on that path, because always_invoice bills the true
+// difference either way. Together they sized a grant from a snapshot the
+// mutation never confirmed: the swap correctly invoices B→C while the credits
+// are computed A→C.
+//
+// THE FIXTURE CAN REPRESENT A PLAN CHANGE LANDING BETWEEN THE PROVIDER READ AND
+// THE SWAP, ON THIS PATH SPECIFICALLY. `getSubscriptionMock` is an
+// implementation reading a mutable `providerActivePriceId`, so a test moves the
+// provider between the read that feeds the origin and the swap that follows —
+// with the preview failing, which is what puts execution on this path at all.
+// No provider-versus-provider disagreement is needed to set it up, only a
+// change of state between two calls.
+// ---------------------------------------------------------------------------
+
+describe("the origin of an unpriceable swap (r4042603495)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_build");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("still grants from the provider's product when nothing moved", async () => {
+    // The invariant an earlier round won, asserted first so the fix below
+    // cannot be read as permission to withhold credits again.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-scale-id",
+      ENTERPRISE_PLAN.id,
+    );
+  });
+
+  it("refuses rather than granting from a product the swap never confirmed", async () => {
+    // The provider read that feeds the origin sees Scale. A concurrent plan
+    // change then moves the subscription to Enterprise, so the swap would
+    // invoice Enterprise→Enterprise while the grant was sized Scale→Enterprise.
+    // A Stripe price belongs immutably to one product, so refusing on the price
+    // is what establishes the product.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    upgradeSubscriptionMock.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("moved"), {
+        code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW",
+      });
+    });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW" });
+
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("clears the intent it wrote for a swap the provider refused to apply", async () => {
+    // The intent is written before the provider is touched, so a refusal
+    // leaves one standing for a mutation that never happened — which a later
+    // same-plan submission would read as unfinished work and act on.
+    //
+    // Safe to clear for THIS error alone: it is raised before the update call,
+    // so nothing having been applied is certain. Every other failure here may
+    // have landed, and clearing on those would destroy a real intent whose
+    // grant is still owed.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    upgradeSubscriptionMock.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("moved"), {
+        code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW",
+      });
+    });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW" });
+
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
+    );
+  });
+
+  it("leaves the intent standing when the swap fails for any other reason", async () => {
+    // The paired negative. A swap that may have reached the provider must keep
+    // its intent, or the grant it owes becomes unrecoverable — which is the
+    // failure the intent was introduced for.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    upgradeSubscriptionMock.mockImplementationOnce(async () => {
+      throw new Error("network died mid-flight");
+    });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month"),
+    ).rejects.toThrow("network died mid-flight");
+
+    expect(subscriptionUpdates).not.toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: null }),
     );
   });
 });
