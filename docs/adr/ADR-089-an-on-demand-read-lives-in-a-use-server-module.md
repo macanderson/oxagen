@@ -1,4 +1,4 @@
-# ADR-087: An on-demand read lives in a `"use server"` module, beside the write
+# ADR-089: An on-demand read lives in a `"use server"` module, beside the write
 
 - **Status:** Accepted
 - **Date:** 2026-09-17
