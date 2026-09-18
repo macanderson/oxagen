@@ -64,7 +64,16 @@
 // hears the key. Above `md` it sits beside the page, which stays usable,
 // because the page is what it is being asked about. The breakpoint is read as
 // a store, so crossing it with the panel open takes and gives back the
-// application.
+// application — and takes focus with it. Above `md` focus is allowed to be out
+// on the page; a resize that makes the panel modal would otherwise inert the
+// very control focus is sitting on, leaving a keyboard user on something they
+// can neither see nor escape from.
+//
+// The same asymmetry runs the other way on the way out. Closing restores focus
+// to the launcher the open was captured from, but a launcher can be connected
+// and still unfocusable — a resize below `md` hides the sidebar that holds it
+// without unmounting it — so the restore checks that focus actually moved
+// rather than that the element is still there.
 //
 // The transcript is the live region. A refusal carries `role="alert"`, which
 // interrupts; an answer is an ordinary paragraph, so `role="log"` on the
@@ -179,6 +188,11 @@ function inertOutside(node: HTMLElement): () => void {
 const QUERY_RECORD: Readonly<Record<string, readonly string[]>> = {
   spend: ["finding", "drill"],
   steering: ["proposal"],
+  // Register an agent keeps the identity it minted on the name step in the
+  // query, so the path segment after the route is the step (`wrap`, `run`) and
+  // the record on screen is the agent (`shared/safe-path.ts`, `routes.register`).
+  // Without this row "why has this agent not enrolled?" sends `entityId: "wrap"`.
+  register: ["agent"],
 };
 
 /**
@@ -326,16 +340,23 @@ export function AssistantFlyout() {
     // On a phone this is `document.body`: the drawer had already unmounted the
     // launcher that was tapped by the time the open ran, so there is no control
     // to go back to and focusing the body is the drop, not a restore.
+    //
+    // `isConnected` is not enough to know the restore worked. A launcher opened
+    // on a desktop is still connected after a resize below `md`, but its
+    // sidebar ancestor is `hidden` by then, so `focus()` is a no-op and returning
+    // here would leave focus on the panel that has just gone `inert`. What the
+    // restore promised is that focus *moved*, so that is what is checked.
     if (openedFrom !== null && openedFrom.isConnected) {
       openedFrom.focus();
-      return;
+      if (document.activeElement === openedFrom) return;
     }
-    // Nothing to give it back to — the control that opened this is gone, which
-    // is the phone case: the drawer's launcher unmounted with the drawer. Take
-    // focus off the panel that has just gone `inert` anyway, so the next Tab
-    // starts from the top of the document instead of from a control no one can
-    // reach. A browser blurs an inert subtree by itself; doing it here is what
-    // makes that true in a test too.
+    // Nothing took it. Either the control that opened this is gone — the phone
+    // case, where the drawer's launcher unmounted with the drawer — or it is
+    // present but unfocusable, the resized-desktop case. Take focus off the
+    // panel that has just gone `inert` anyway, so the next Tab starts from the
+    // top of the document instead of from a control no one can reach. A browser
+    // blurs an inert subtree by itself; doing it here is what makes that true in
+    // a test too.
     const active = document.activeElement;
     if (active instanceof HTMLElement && panelRef.current?.contains(active))
       active.blur();
@@ -349,7 +370,17 @@ export function AssistantFlyout() {
   useEffect(() => {
     const panel = panelRef.current;
     if (!modal || panel === null) return;
-    return inertOutside(panel);
+    const release = inertOutside(panel);
+    // Becoming modal is not only an open. Above `md` the page behind stays
+    // interactive on purpose, so focus can be sitting on a page control when a
+    // resize or a rotation crosses below the breakpoint — and `inertOutside`
+    // has just made that control inert under it. The open effect does not re-run
+    // on a resize, so nothing else would move focus back in, and an Escape from
+    // outside the panel never reaches its handler.
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !panel.contains(active))
+      closeRef.current?.focus();
+    return release;
   }, [modal]);
 
   // Keep the newest turn in view. Guarded because scrollTo is a browser
