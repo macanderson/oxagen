@@ -13,6 +13,7 @@ import en from "../../messages/en.json";
 import fleet from "../../messages/fleet.json";
 import onboarding from "../../messages/onboarding.json";
 import organization from "../../messages/organization.json";
+import run from "../../messages/run.json";
 import shell from "../../messages/shell.json";
 import skills from "../../messages/skills.json";
 import steering from "../../messages/steering.json";
@@ -29,6 +30,7 @@ export const messages = {
   ...fleet,
   ...onboarding,
   ...organization,
+  ...run,
   ...shell,
   ...skills,
   ...steering,

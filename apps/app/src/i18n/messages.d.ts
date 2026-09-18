@@ -935,10 +935,12 @@ type Messages = {
         agent: string;
         operator: string;
         status: string;
+        replay: string;
         cost: string;
         frames: string;
         started: string;
       };
+      noSummary: string;
       notRecorded: string;
       basisNotRecorded: string;
       source: {
@@ -1348,6 +1350,19 @@ type Messages = {
         title: string;
         body: string;
       };
+      filter: {
+        label: string;
+        active: string;
+        all: string;
+        allWithCount: string;
+      };
+      pager: {
+        label: string;
+        range: string;
+        previous: string;
+        next: string;
+      };
+      emptyFiltered: string;
     };
     denied: {
       title: string;
@@ -1414,6 +1429,207 @@ type Messages = {
       };
       noRole: string;
       empty: string;
+    };
+  };
+  run: {
+    eyebrow: string;
+    notRecorded: string;
+    basisNotRecorded: string;
+    noSummary: string;
+    witnessed: string;
+    source: {
+      ledger: string;
+      tacho: string;
+    };
+    figures: {
+      cost: string;
+      turns: string;
+      steps: string;
+      frames: string;
+      started: string;
+      sealed: string;
+    };
+    tabs: {
+      label: string;
+      transcript: string;
+      frames: string;
+      cost: string;
+    };
+    transcript: {
+      title: string;
+      zoomLabel: string;
+      zoom: {
+        turns: string;
+        steps: string;
+        everything: string;
+      };
+      kind: {
+        turn: string;
+        model_call: string;
+        tool_call: string;
+        frame: string;
+      };
+      frame: string;
+      frames: string;
+      folded: string;
+      digestOnly: string;
+      noBody: string;
+      truncated: string;
+      openFrame: string;
+      empty: string;
+      complete: string;
+      cut: string;
+    };
+    frames: {
+      title: string;
+      onThisPage: string;
+      columns: {
+        seq: string;
+        type: string;
+        observed: string;
+        body: string;
+        cost: string;
+      };
+      stage: string;
+      fidelity: {
+        full: string;
+        digest_only: string;
+      };
+      noContent: string;
+      redacted: string;
+      openBody: string;
+      pager: string;
+      first: string;
+      next: string;
+      empty: string;
+      emptyPage: string;
+      body: {
+        title: string;
+        close: string;
+        digest: string;
+        contentType: string;
+        size: string;
+        bytes: string;
+        noBytes: string;
+        digestOnly: string;
+        notText: string;
+      };
+    };
+    cost: {
+      title: string;
+      notRolledUp: string;
+      total: string;
+      basisNotRecorded: string;
+      cacheHitRate: string;
+      turns: string;
+      steps: string;
+      modelCalls: string;
+      toolCalls: string;
+      retries: string;
+      productiveRatio: string;
+      rolledUpAt: string;
+      priceEntries: string;
+      tokensTitle: string;
+      tokens: {
+        inputUncached: string;
+        cacheRead: string;
+        cacheWrite5m: string;
+        cacheWrite1h: string;
+        output: string;
+        reasoning: string;
+      };
+      byModel: string;
+      byTool: string;
+      noModelCalls: string;
+      noToolCalls: string;
+      columns: {
+        model: string;
+        tool: string;
+        calls: string;
+        cost: string;
+        tokens: string;
+      };
+    };
+    commands: {
+      reasonLabel: string;
+      reasonHelp: string;
+      steerLabel: string;
+      steerHelp: string;
+      noRecipient: string;
+      reread: string;
+      ledgerReason: string;
+      roleReason: string;
+      pause: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+      };
+      resume: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+      };
+      steer: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+      };
+      cancel: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        runNotFound: string;
+        noConnectionPoint: string;
+        runSealed: string;
+        observeTier: string;
+        runNotSealed: string;
+        digestOnly: string;
+        steerText: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    record: {
+      reread: string;
+      summarize: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+        needsRole: string;
+      };
+      resummarize: {
+        open: string;
+      };
+      export: {
+        open: string;
+        title: string;
+        body: string;
+        confirm: string;
+        pending: string;
+        queued: string;
+        needsRole: string;
+      };
     };
   };
   shell: {
@@ -2352,6 +2568,28 @@ type Messages = {
       live: string;
       sealed: string;
       halted: string;
+    };
+    generated: {
+      label: string;
+      provenance: string;
+    };
+    replayGrade: {
+      inspect: {
+        label: string;
+        help: string;
+      };
+      view: {
+        label: string;
+        help: string;
+      };
+      fork: {
+        label: string;
+        help: string;
+      };
+      retry: {
+        label: string;
+        help: string;
+      };
     };
     readFailure: {
       denied: string;

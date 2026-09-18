@@ -12,12 +12,43 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { createGitHubClient, type GitHubClient } from "@oxagen/github";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
 
 export interface SteeringRepository {
   owner: string;
   repo: string;
+  /**
+   * `owner/name` as the BINDING recorded it — an identifier, not a label.
+   *
+   * `open_context_pr` dots this into the `set_id` at the top of every Context
+   * record file and stores it as the proposal row's `repository`, so it is
+   * what groups a workspace's records into one set. Taking it from live
+   * GitHub meant a repository rename silently re-stamped every subsequent
+   * record with a different set id while the existing ones kept the old one:
+   * two sets, no error, nothing said. It moves only when a new binding
+   * version is written, exactly like `defaultBranch`.
+   *
+   * For a LEGACY connection there is no binding and so nothing approved to
+   * freeze; the live value is the only one there is. Same reasoning as
+   * `defaultBranch` below.
+   */
   fullName: string;
+  /**
+   * `owner/name` as GitHub reports it RIGHT NOW — a label, never an
+   * identifier.
+   *
+   * Equal to `fullName` until someone renames the repository, and the whole
+   * point of keeping it is that the two can differ: a difference means the
+   * repository has been renamed since it was bound, which is worth saying out
+   * loud rather than discovering from records that no longer match their repo.
+   * `resolveRepository` logs it, and it is what diagnostics name, because when
+   * a GitHub call fails the useful name is the one GitHub would answer to.
+   *
+   * Never put this in a `set_id`, a stored key, or anything else that has to
+   * mean the same thing next month.
+   */
+  currentFullName: string;
   /**
    * The production branch: the only ref a Context PR is opened against,
    * compared against, checked on and merged into.
@@ -136,6 +167,14 @@ export type SteeringConnection =
       source: "binding";
       owner: string;
       repo: string;
+      /**
+       * That binding's `provider_full_name` — `owner/name` as it was when the
+       * binding version was written. Like `approvedDefaultRef` it moves only
+       * on a new binding version, never because the repository was renamed on
+       * GitHub, because it is dotted into the `set_id` every Context record
+       * file carries and that id has to keep naming one set.
+       */
+      approvedFullName: string;
       approvedDefaultRef: string;
     }
   | {
@@ -205,6 +244,7 @@ export async function readGitHubConnection(scope: {
       .select({
         owner: schema.repositoryBindings.providerOwner,
         repo: schema.repositoryBindings.providerName,
+        approvedFullName: schema.repositoryBindings.providerFullName,
         approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
       })
       .from(schema.repositoryBindingHeads)
@@ -247,6 +287,7 @@ export async function readGitHubConnection(scope: {
         source: "binding",
         owner: bound.owner,
         repo: bound.repo,
+        approvedFullName: bound.approvedFullName,
         approvedDefaultRef: bound.approvedDefaultRef,
       };
 
@@ -340,6 +381,10 @@ export function createSteeringGitHub(
   const clientFor = (repo: SteeringRepository): GitHubClient => {
     const gh = clients.get(repo);
     if (!gh)
+      // The APPROVED name, not the current one. This fires on a handle that
+      // did not come from `resolveRepository` — which is the one thing that
+      // sets `currentFullName` — so naming it here prints `undefined` exactly
+      // when the message matters. The identifier is always present.
       throw new Error(`[context.steering] no client for ${repo.fullName}`);
     return gh;
   };
@@ -382,10 +427,40 @@ export function createSteeringGitHub(
         connection.source === "binding"
           ? connection.approvedDefaultRef
           : info.defaultBranch;
+      // The same argument as the ref, one field over. `fullName` is dotted
+      // into the `set_id` of every Context record file and stored as the
+      // proposal row's `repository`, so it is an IDENTIFIER: taking it from
+      // live GitHub meant a rename re-stamped every later record with a new
+      // set id while the existing ones kept the old one — two sets for one
+      // workspace, silently. The binding froze the name for exactly this, and
+      // `get_main_repository` already answers the frozen one, so live GitHub
+      // here also disagreed with the settings page.
+      const fullName =
+        connection.source === "binding"
+          ? connection.approvedFullName
+          : info.fullName;
+      if (fullName !== info.fullName) {
+        // Said out loud rather than absorbed. The two differing means the
+        // repository was renamed after it was bound; records stay correctly
+        // grouped under the approved name, but an operator comparing a record
+        // to GitHub sees two names and no explanation unless something logs
+        // it. Re-approving through `bind_main_repository` writes the new name
+        // into a successor binding and ends the divergence.
+        logger.warn(
+          {
+            approvedFullName: fullName,
+            currentFullName: info.fullName,
+            owner: connection.owner,
+            repo: connection.repo,
+          },
+          "context.steering: the repository was renamed since it was bound; records stay stamped with the approved name",
+        );
+      }
       const repo: SteeringRepository = {
         owner: connection.owner,
         repo: connection.repo,
-        fullName: info.fullName,
+        fullName,
+        currentFullName: info.fullName,
         defaultBranch,
       };
       clients.set(repo, gh);
