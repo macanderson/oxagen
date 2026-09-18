@@ -77,6 +77,7 @@ import { promisify } from "node:util";
 import { captureWriter, type CommandWriter } from "../lib/capture-writer";
 import {
   findProjectRoot,
+  toSignal,
   parseRemoteUrl,
   resolveContext,
   steeringGate,
@@ -216,6 +217,60 @@ describe("findProjectRoot", () => {
     const deep = join(tmp, "packages", "deep");
     await mkdir(deep, { recursive: true });
     expect(findProjectRoot(deep)).toBe(tmp);
+  });
+});
+
+// Each ancestry call had its own five seconds, so two commits published in
+// one second could spend ten before the freshness check began its own budget,
+// past the twenty the harness gives the hook: it killed the gate and the
+// prompt ran with blockStaleRuns on.
+describe("toSignal ancestry budget", () => {
+  it("shares one deadline across every published commit", async () => {
+    let clock = 0;
+    const timeouts: number[] = [];
+    execGit.mockImplementation((async (
+      _args: readonly string[],
+      opts: { timeoutMs: number },
+    ) => {
+      timeouts.push(opts.timeoutMs);
+      // Each call burns three seconds of the five-second budget.
+      clock += 3_000;
+      return "";
+    }) as never);
+    const signal = await toSignal(
+      {
+        steeringVersion: 4,
+        headCommit: "c1",
+        headCommits: ["c1", "c2", "c3"],
+        repository: "acme/platform",
+        defaultBranch: "main",
+        policy: null,
+      } as never,
+      "/repo",
+      () => clock,
+    );
+    // The first call gets the whole budget, the second what is left, and the
+    // third never runs because there is none.
+    expect(timeouts).toEqual([5_000, 2_000]);
+    // A commit the gate could not check is not one the checkout reaches.
+    expect(signal?.aheadOfCheckout).toBe(true);
+  });
+
+  it("reports current when every commit is reachable inside the budget", async () => {
+    execGit.mockImplementation((async () => "") as never);
+    const signal = await toSignal(
+      {
+        steeringVersion: 4,
+        headCommit: "c1",
+        headCommits: ["c1", "c2"],
+        repository: "acme/platform",
+        defaultBranch: "main",
+        policy: null,
+      } as never,
+      "/repo",
+      () => 0,
+    );
+    expect(signal?.aheadOfCheckout).toBe(false);
   });
 });
 

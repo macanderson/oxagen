@@ -192,6 +192,19 @@ interface PlatformFreshness {
  */
 const PLATFORM_READ_TIMEOUT_MS = 3_000;
 
+/**
+ * One budget for every ancestry call `toSignal` makes, however many commits
+ * the platform names.
+ *
+ * Each call had its own five seconds. Two merges in one second meant two
+ * commits and ten seconds, on top of the platform read's three, before the
+ * freshness check started its own eight: past the twenty the harness gives
+ * the hook, which kills the gate and lets the prompt run with
+ * `blockStaleRuns` on. The budget is shared, each call gets what is left,
+ * and a commit that runs out is treated the way an unreachable one is.
+ */
+const ANCESTRY_TIMEOUT_MS = 5_000;
+
 async function readPlatform(
   projectRoot: string,
   link: CheckoutLink | undefined,
@@ -411,9 +424,10 @@ async function checkoutRepository(
  * platform knows which commit published the newest promotion, and only this
  * machine can say whether its HEAD can reach it.
  */
-async function toSignal(
+export async function toSignal(
   platform: PlatformFreshness | null,
   projectRoot: string,
+  now: () => number = Date.now,
 ): Promise<PlatformSignal | null> {
   if (!platform) return null;
   let aheadOfCheckout = false;
@@ -422,11 +436,20 @@ async function toSignal(
   const commits = publishedCommits(platform);
   if (commits.length > 0) {
     const { execGit } = await import("@oxagen/steering-freshness");
+    const deadline = now() + ANCESTRY_TIMEOUT_MS;
     for (const commit of commits) {
+      const remaining = deadline - now();
+      // Out of budget. The checkout has not been shown to reach this commit,
+      // and saying it has would let the prompt run past the gate; the check
+      // that follows still has its own budget and reports the staleness.
+      if (remaining <= 0) {
+        aheadOfCheckout = true;
+        break;
+      }
       try {
         await execGit(["merge-base", "--is-ancestor", commit, "HEAD"], {
           cwd: projectRoot,
-          timeoutMs: 5_000,
+          timeoutMs: remaining,
         });
       } catch {
         // A non-zero exit means "not an ancestor", which is the answer we
