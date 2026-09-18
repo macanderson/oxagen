@@ -62,7 +62,7 @@
     },
     "repositories": {
       "heading": "Repositories",
-      "about": "The main repository is where this workspace keeps .oxagen/. A linked repository is one its agents work on: Context PRs open on it, and its default ref is the one approved here. A repository that is another workspace’s main repository cannot be linked.",
+      "about": "The main repository is where this workspace keeps .oxagen/. A linked repository is one its agents work on, and its default ref is the one approved here. A repository that is another workspace’s main repository cannot be linked.",
       "loading": "Reading this workspace’s repositories…",
       "listLabel": "Repositories this workspace binds",
       "none": "This workspace binds no repository yet. Bind its main repository above first.",
