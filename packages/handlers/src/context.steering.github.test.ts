@@ -19,6 +19,21 @@ import {
 
 const SCOPE = { orgId: "org", workspaceId: "ws" };
 
+/** Every column a drizzle predicate tree names, by its column name. */
+function columnsIn(predicate: unknown, out = new Set<string>()): Set<string> {
+  if (predicate === null || typeof predicate !== "object") return out;
+  const node = predicate as Record<string, unknown>;
+  if (typeof node["name"] === "string" && "table" in node) {
+    out.add(node["name"]);
+    return out;
+  }
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) for (const v of value) columnsIn(v, out);
+    else if (value && typeof value === "object") columnsIn(value, out);
+  }
+  return out;
+}
+
 function fakeClient(over: Partial<GitHubClient> = {}): GitHubClient {
   return {
     getRepoInfo: async () => ({
@@ -474,14 +489,24 @@ describe("the workspace's main repository", () => {
    * projection.
    *
    * Returns a counter of the unjoined reads so a test can assert a read was
-   * never reached at all, not merely that its rows went unused.
+   * never reached at all, not merely that its rows went unused. It also keeps
+   * the joined read's predicate, so a test can assert which COLUMNS it names.
+   * That shows a filter is present. It does not show what the filter matches.
    */
   function db(opts: {
     bound?: unknown[];
     heads?: unknown[];
     connections?: unknown[];
-  }): { readonly headReads: number; readonly connectionReads: number } {
-    const counts = { headReads: 0, connectionReads: 0 };
+  }): {
+    readonly headReads: number;
+    readonly connectionReads: number;
+    readonly boundWhere: unknown;
+  } {
+    const counts = {
+      headReads: 0,
+      connectionReads: 0,
+      boundWhere: undefined as unknown,
+    };
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
         fn({
@@ -506,9 +531,12 @@ describe("the workspace's main repository", () => {
               from: (table: unknown) => ({
                 innerJoin: () => ({
                   innerJoin: () => ({
-                    where: () => ({
-                      limit: async () => project(opts.bound ?? []),
-                    }),
+                    where: (predicate: unknown) => {
+                      counts.boundWhere = predicate;
+                      return {
+                        limit: async () => project(opts.bound ?? []),
+                      };
+                    },
                   }),
                 }),
                 where: () => ({
@@ -548,6 +576,16 @@ describe("the workspace's main repository", () => {
       approvedFullName: "Acme/Widgets",
       approvedDefaultRef: "release",
     });
+  });
+
+  // A `linked` head, or one the exclusivity migration demoted, is a
+  // repository the workspace can see and is not steered by. Context PRs and
+  // `get_steering_freshness` both resolve through this read, so an unordered
+  // `limit(1)` without the filter could steer either one by a linked head.
+  it("names the head's role in the joined read, so only a main head steers", async () => {
+    const counts = db({ bound: [] });
+    await readGitHubConnection(SELECT_SCOPE);
+    expect(columnsIn(counts.boundWhere).has("role")).toBe(true);
   });
 
   it("prefers the binding over a legacy connection's ingestion sync target", async () => {
