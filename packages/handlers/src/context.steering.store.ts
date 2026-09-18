@@ -578,6 +578,8 @@ export const postgresSteeringStore: SteeringStore = {
         )
         // Newest publication wins. A checkout that can reach it can reach
         // every earlier one too, because they are all on one branch.
+        // `published_at` is GitHub's merge instant (see `merge_context_pr`),
+        // so a publication retried after a later merge still sorts earlier.
         .orderBy(desc(schema.contextRecords.publishedAt))
         .limit(1),
     );

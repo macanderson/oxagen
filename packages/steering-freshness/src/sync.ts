@@ -35,6 +35,7 @@ import {
   execGit,
   git,
   isSafeRefName,
+  pathsInTree,
   revParse,
   type GitContext,
   type GitRunner,
@@ -167,6 +168,28 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
   const updated = verdict.missing
     .filter((c) => c.status !== "removed")
     .map((c) => c.path);
+
+  // `force` is the caller's word that local `.oxagen/` changes may be
+  // overwritten, so a forced sync reconciles the whole governed tree to
+  // production, not only what production changed. `missing` names the
+  // paths production moved; a record this branch added on its own, or a
+  // dirty file, is in `local` or `dirty` and nowhere in `missing`. Restoring
+  // only `missing` (which this once did) left that local-only rule on disk
+  // and reported `applied: true`, so the agent went on reading a record
+  // production never held. Each such path takes production's copy when
+  // production has it and is removed when it does not.
+  if (force) {
+    const listed = new Set([...updated, ...removed]);
+    const extra = [
+      ...verdict.local.map((c) => c.path),
+      ...verdict.dirty,
+    ].filter((path, i, all) => !listed.has(path) && all.indexOf(path) === i);
+    const inProduction = new Set(await pathsInTree(ctx, fromCommit, extra));
+    for (const path of extra) {
+      if (inProduction.has(path)) updated.push(path);
+      else removed.push(path);
+    }
+  }
 
   // Behind, but with nothing git can copy.
   //

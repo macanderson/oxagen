@@ -94,9 +94,9 @@ export interface SteeringGitHub {
   ): Promise<{ number: number; htmlUrl: string; body: string } | null>;
   /**
    * The branch the PR merges into, its head commit and, once GitHub merged
-   * it, the merge commit and when GitHub merged it. The merge time is what a
-   * resumed publication is stamped with: it is the order the commits landed
-   * on the production branch, which the time of a retry is not.
+   * it, the merge commit and the instant GitHub merged it. That instant is
+   * what a resumed publication is stamped with: it is the order the commits
+   * landed on the production branch, which the time of a retry is not.
    */
   getPullRequest(
     repo: SteeringRepository,

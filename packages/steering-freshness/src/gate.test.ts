@@ -40,12 +40,6 @@ function stubRepo({ behind }: { behind: boolean }) {
         return "";
       case `status --porcelain=v1 -z --untracked-files=all --ignored=matching -- .oxagen ${EXCL}`:
         return "";
-      // The skip-worktree probe. It throws rather than answering "none" on
-      // a failure, and the check turns that into `unknown`, which the gate
-      // allows — so a stub that does not answer it makes every test below
-      // pass through the gate whatever the checkout's state.
-      case `ls-files -t -z -- .oxagen ${EXCL}`:
-        return "";
       case `rev-list --count ${BASE}..${REMOTE} -- .oxagen`:
         return state.behind ? "1" : "0";
       case `rev-parse ${HEAD}:.oxagen`:
@@ -63,6 +57,10 @@ function stubRepo({ behind }: { behind: boolean }) {
         .join("");
     }
     if (args[0] === "fetch") return "";
+    // Nothing untracked under the governed tree, and no index entry left out
+    // of the working tree. The skip-worktree probe fails loudly now, so the
+    // stub has to answer it rather than fall through to the throw below.
+    if (args[0] === "ls-files") return "";
     if (args[0] === "restore") {
       // The sync landed, so the checkout is no longer behind.
       state.behind = false;

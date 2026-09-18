@@ -451,8 +451,6 @@ export const REPO: SteeringRepository = {
  * deleted.
  */
 export class FakeGitHub implements SteeringGitHub {
-  /** GitHub's clock: what a merge is stamped `mergedAt` with. */
-  now: () => Date = () => new Date();
   /** `${sha}:${path}` → content. */
   files = new Map<string, string>();
   /** branch → head sha. */
@@ -487,6 +485,8 @@ export class FakeGitHub implements SteeringGitHub {
   /** Set to make the merge refused by GitHub (a required review). */
   mergeRefusedWith: string | null = null;
   repository: SteeringRepository | null = REPO;
+  /** What GitHub stamps `merged_at` with; the harness shares its clock. */
+  clock: () => Date = () => new Date();
   private prNumber = 518;
   private commitNo = 0;
 
@@ -672,7 +672,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "closed",
       merged: true,
       mergeCommitSha: mergeSha,
-      mergedAt: this.now(),
+      mergedAt: this.clock(),
       headSha: head,
     });
     return { sha: mergeSha };
@@ -703,11 +703,10 @@ export function harness(files: Record<string, string> = {}): Harness {
   roleOf.set(REVIEWER, { org: "Admin", workspace: null });
   const events: SecurityEventInput[] = [];
   let tick = Date.parse("2026-09-15T09:16:40.000Z");
-  const now = () => new Date((tick += 1000));
   const github = new FakeGitHub(files);
   // One clock for GitHub and the platform, so a test can tell a merge's
   // time apart from the time of the call that published it.
-  github.now = now;
+  github.clock = () => new Date((tick += 1000));
   return {
     store: new MemoryStore(),
     github,
@@ -716,7 +715,7 @@ export function harness(files: Record<string, string> = {}): Harness {
       workspaceRole: async (_org, _ws, userId) =>
         roleOf.get(userId)?.workspace ?? null,
     },
-    now,
+    now: () => new Date((tick += 1000)),
     emit: (e) => {
       events.push(e);
     },
