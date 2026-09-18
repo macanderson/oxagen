@@ -13,6 +13,7 @@ import {
 } from "../claude-code/hooks";
 import { digestText } from "../claude-code/context";
 import type { TachoEvent } from "../envelope";
+import type { FrameBody } from "../evidence/frame-body";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   customAgentNameProblem,
@@ -60,11 +61,20 @@ export interface HookReplay {
 
 export interface HookOutcome {
   events: TachoEvent[];
+  /**
+   * The bodies of the events above that carry one, drained from the session
+   * chain and its children. They travel with the events to the WAL so a body
+   * is never written to a session file whose event is still in memory.
+   */
+  bodies: FrameBody[];
   /** The JSON document the hook prints on stdout (empty object = continue). */
   response: Record<string, unknown>;
   record?: SessionRecord;
   evaluation?: Evaluation;
 }
+
+/** `HookOutcome` before the bodies are drained; `routeHook` returns this. */
+type RoutedOutcome = Omit<HookOutcome, "bodies">;
 
 function policyFacts(
   evaluation: Evaluation,
@@ -281,6 +291,21 @@ export async function handleHookEvent(
   harness?: TachoHarness,
   agent?: string,
 ): Promise<HookOutcome> {
+  const outcome = await routeHook(raw, env, deps, replay, harness, agent);
+  // Drained after the route, whichever branch returned: every event the
+  // route sealed is in `events` by now, so every body is pending on the
+  // recorder, and taking them here is what keeps the two lists paired.
+  return { ...outcome, bodies: outcome.record?.recorder.takeBodies() ?? [] };
+}
+
+async function routeHook(
+  raw: unknown,
+  env: Record<string, string | undefined>,
+  deps: HookHandlerDeps,
+  replay?: HookReplay,
+  harness?: TachoHarness,
+  agent?: string,
+): Promise<RoutedOutcome> {
   const input = hookInputSchema.parse(raw);
   // The daemon checks again: anything holding the local token can post an
   // envelope without going through `tacho-hook`.

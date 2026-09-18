@@ -10,7 +10,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import { TACHO_EVENT_COLUMNS, flattenEvent } from "../columns";
+import { digestBytes } from "../digest";
 import type { TachoEvent } from "../envelope";
+import { redactionMarker } from "../evidence/redaction";
+import { TACHO_MAX_BODY_BYTES } from "../wire";
 import { journalToNdjson } from "../trace/journal";
 import { runOracles } from "../trace/oracles";
 import { projectToTrace } from "../trace/project";
@@ -150,6 +153,8 @@ function replay(): { recorder: SessionRecorder; all: TachoEvent[] } {
 describe("replaying the captured Claude Code session", () => {
   const { recorder, all } = replay();
   const snapshot = recorder.snapshot();
+  // Taken once, before the tests run: a second take is empty by design.
+  const bodies = recorder.takeBodies();
 
   it("routes the subagent into a child chain linked to the parent", () => {
     expect(snapshot.children).toHaveLength(1);
@@ -267,6 +272,42 @@ describe("replaying the captured Claude Code session", () => {
     );
   });
 
+  it("holds a body for every content frame, digested as the chain digests it", () => {
+    const events = new Map(
+      [snapshot, ...snapshot.children]
+        .flatMap((chain) => chain.events)
+        .map((event) => [event.event_id_idem, event] as const),
+    );
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies) {
+      const event = events.get(body.event_id_idem);
+      expect(event, body.event_id_idem).toBeDefined();
+      expect(event?.session_uuid).toBe(body.session_uuid);
+      expect(event?.seq).toBe(body.seq);
+      expect(event?.content?.digest).toBe(digestBytes(body.bytes));
+    }
+    // The prompt the events never spell out is in its body, in full.
+    const turnStart = snapshot.events.find((e) => e.kind === "turn_start");
+    const prompt = bodies.find(
+      (b) => b.event_id_idem === turnStart?.event_id_idem,
+    );
+    expect(prompt?.content_type).toBe("text/plain; charset=utf-8");
+    expect(new TextDecoder().decode(prompt?.bytes)).toContain(
+      "Read README.md, then run",
+    );
+    // Tool bodies come from both chains: the subagent's are its own.
+    const child = snapshot.children[0];
+    expect(
+      bodies.some(
+        (b) =>
+          b.session_uuid === child?.sessionUuid &&
+          b.content_class === "tool_call",
+      ),
+    ).toBe(true);
+    // Drained means drained.
+    expect(recorder.takeBodies()).toEqual([]);
+  });
+
   it("flattens every event onto known columns only", () => {
     const known = new Set<string>(TACHO_EVENT_COLUMNS);
     for (const chain of [snapshot, ...snapshot.children]) {
@@ -294,5 +335,97 @@ describe("replaying the captured Claude Code session", () => {
         "session_end",
       );
     }
+  });
+});
+
+describe("the recorder's frame bodies", () => {
+  const SESSION = "00000000-0000-4000-8000-00000000abcd";
+  const dec = new TextDecoder();
+  function recorder(): SessionRecorder {
+    return new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: HOST,
+        },
+        now: () => Date.parse("2026-09-18T10:00:00.000Z"),
+      },
+      harnessSessionId: SESSION,
+      scope: HOST,
+    });
+  }
+
+  it("redacts a secret before digesting and records the cut on the event", () => {
+    const r = recorder();
+    const key = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcd";
+    const [event] = r.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        prompt: `push with ${key} please`,
+      },
+      {},
+    );
+    const [body] = r.takeBodies();
+    const shipped = `push with ${redactionMarker("github_token")} please`;
+    expect(dec.decode(body?.bytes)).toBe(shipped);
+    expect(event?.content?.digest).toBe(digestBytes(shipped));
+    expect(event?.content?.redactions).toEqual([
+      {
+        path: `bytes:10-${10 + key.length}`,
+        reason: "github_token",
+        original_digest: digestBytes(key),
+      },
+    ]);
+    // The raw prompt's digest is still the column; the chain names the bytes.
+    expect((event?.body as Record<string, unknown>)["prompt_digest"]).not.toBe(
+      event?.content?.digest,
+    );
+    expect(JSON.stringify(event)).not.toContain(key);
+    expect(verifyChain(r.sealedEvents).ok).toBe(true);
+  });
+
+  it("keeps the digest and says why when a body is too large to ship", () => {
+    const r = recorder();
+    const huge = "x".repeat(TACHO_MAX_BODY_BYTES + 1);
+    const [event] = r.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "Stop",
+        last_assistant_message: huge,
+      },
+      {},
+    );
+    expect(event?.kind).toBe("turn_end");
+    expect(event?.content?.digest).toBe(digestBytes(huge));
+    expect(event?.attrs["body_omitted"]).toBe("too_large");
+    expect(r.takeBodies()).toEqual([]);
+  });
+
+  it("holds a body for a collector-sealed frame that carries content", () => {
+    const r = recorder();
+    const event = r.sealCollectorEvent(
+      "tool_call",
+      { tool_name: "Bash", tool_source: "builtin", tool_status: "ok" },
+      {
+        content: {
+          content_type: "application/json",
+          bytes: new TextEncoder().encode('{"input":{"command":"ls"}}'),
+        },
+      },
+    );
+    const [body] = r.takeBodies();
+    expect(body).toMatchObject({
+      event_id_idem: event.event_id_idem,
+      session_uuid: event.session_uuid,
+      seq: event.seq,
+      content_type: "application/json",
+      content_class: "tool_call",
+    });
+    expect(event.content?.digest).toBe(digestBytes(body?.bytes as Uint8Array));
   });
 });
