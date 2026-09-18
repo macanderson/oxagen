@@ -59,7 +59,9 @@ const CHECKOUT =
 
 const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
-const { purchaseCredits, purchaseGau } = await import("./actions");
+const { purchaseCredits, purchaseGau, startPlanChange } = await import(
+  "./actions"
+);
 
 function quantity(value: string): FormData {
   const form = new FormData();
@@ -347,6 +349,180 @@ describe("purchaseCredits", () => {
       expect.objectContaining({
         amountUsd: 200,
         successUrl: "https://app.test/acme/billing?checkout=credits",
+      }),
+      expect.anything(),
+    );
+  });
+});
+
+function plan(planSlug: string, interval: "month" | "year"): FormData {
+  const form = new FormData();
+  form.set("planSlug", planSlug);
+  form.set("interval", interval);
+  return form;
+}
+
+/** What start_subscription_upgrade answers: a Checkout URL and the plan it started. */
+const planSession = (
+  checkoutUrl = CHECKOUT,
+  planSlug = "build-v2",
+  interval: "month" | "year" = "month",
+) => ({ checkoutUrl, planSlug, interval });
+
+describe("startPlanChange", () => {
+  it("sends a signed-out visitor to log in, changing nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(
+      startPlanChange("acme", null, plan("build-v2", "month")),
+    ).rejects.toThrow("NEXT_REDIRECT /login");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["not one of the offered plans", "enterprise-v2"],
+    ["empty", ""],
+    ["missing", null],
+  ])(
+    "refuses a plan slug %s on the planSlug field, calling no capability (negative)",
+    async (_case, planSlug) => {
+      const form = new FormData();
+      if (planSlug !== null) form.set("planSlug", planSlug);
+      form.set("interval", "month");
+      expect(await startPlanChange("acme", null, form)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "planSlug",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["neither month nor year", "annually"],
+    ["empty", ""],
+    ["missing", null],
+  ])(
+    "refuses an interval %s on the interval field, calling no capability (negative)",
+    async (_case, interval) => {
+      const form = new FormData();
+      form.set("planSlug", "build-v2");
+      if (interval !== null) form.set("interval", interval);
+      expect(await startPlanChange("acme", null, form)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "interval",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+      expect(redirect).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses to guess the return origin when NEXT_PUBLIC_APP_URL is unset (negative)", async () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    expect(
+      await startPlanChange("acme", null, plan("build-v2", "month")),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "app_url_missing",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+
+  it("returns the handler's role refusal to an admin as denied, with no redirect (negative)", async () => {
+    orgRole.mockResolvedValue("admin");
+    // The refusal assertOrgRole throws for a role outside Owner and Billing.
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      }),
+    );
+    expect(
+      await startPlanChange("acme", null, plan("build-v2", "month")),
+    ).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org_role_required",
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  // createCheckoutSession's ActiveSubscriptionError is reclassified by the
+  // handler into a HandlerError with code "conflict", which the kernel seam
+  // passes through with the handler's reason as the ActionResult's code.
+  it("returns an organization's existing-subscription refusal as conflict, with no redirect (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "active_subscription_exists",
+      }),
+    );
+    expect(
+      await startPlanChange("acme", null, plan("build-v2", "month")),
+    ).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "active_subscription_exists",
+    });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["another host", "https://checkout.stripe.com.evil/c/pay/cs_test_1"],
+    ["plain http", "http://checkout.stripe.com/c/pay/cs_test_1"],
+  ])(
+    "refuses a Checkout URL on %s as unavailable, reports it and sends the browser nowhere (negative)",
+    async (_case, checkoutUrl) => {
+      invoke.mockResolvedValue(planSession(checkoutUrl));
+      expect(
+        await startPlanChange("acme", null, plan("build-v2", "month")),
+      ).toEqual({
+        ok: false,
+        reason: "unavailable",
+        code: "checkout_url_refused",
+      });
+      expect(redirect).not.toHaveBeenCalled();
+      expect(captureError).toHaveBeenCalledOnce();
+      expect(captureError).toHaveBeenCalledWith(
+        expect.objectContaining({ orgId: ORG_ID }),
+      );
+    },
+  );
+
+  it("starts the plan change for the viewer's organization with returns to the checkout banner, and sends the browser to Checkout", async () => {
+    invoke.mockResolvedValue(planSession());
+    await expect(
+      startPlanChange("acme", null, plan("scale-v2", "year")),
+    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    expect(invoke).toHaveBeenCalledWith(
+      "start_subscription_upgrade",
+      {
+        planSlug: "scale-v2",
+        interval: "year",
+        successUrl: "https://app.test/acme/billing?checkout=plan",
+        cancelUrl: "https://app.test/acme/billing?checkout=cancel",
+      },
+      expect.objectContaining({ orgId: ORG_ID, userId: "u-owner" }),
+    );
+    expect(redirect).toHaveBeenCalledExactlyOnceWith(CHECKOUT);
+  });
+
+  it("builds the return URLs whatever trailing slash the origin carries", async () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://app.test/";
+    invoke.mockResolvedValue(planSession());
+    await expect(
+      startPlanChange("acme", null, plan("build-v2", "month")),
+    ).rejects.toThrow(`NEXT_REDIRECT ${CHECKOUT}`);
+    expect(invoke).toHaveBeenCalledWith(
+      "start_subscription_upgrade",
+      expect.objectContaining({
+        successUrl: "https://app.test/acme/billing?checkout=plan",
+        cancelUrl: "https://app.test/acme/billing?checkout=cancel",
       }),
       expect.anything(),
     );
