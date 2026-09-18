@@ -227,10 +227,10 @@ describe("TranscriptTailer", () => {
     // A session that left the registry loses its cursor too.
     const other = fakeSession("s2", path);
     const second = tailer([other]);
-    second.await instance.tick();
+    await second.instance.tick();
     expect(second.instance.state().cursors["s2"]).toBeDefined();
     other.sealed = false;
-    second.await instance.tick();
+    await second.instance.tick();
   });
 
   it("persists cursors so a restart does not re-read the transcript", async () => {
@@ -240,7 +240,7 @@ describe("TranscriptTailer", () => {
     const session = fakeSession("s1", path);
     writeFileSync(path, "one\ntwo\n");
     const first = tailer([session], { statePath });
-    first.await instance.tick();
+    await first.instance.tick();
     expect(session.lines).toHaveLength(2);
     const persisted = JSON.parse(readFileSync(statePath, "utf8")) as {
       schema: string;
@@ -252,7 +252,7 @@ describe("TranscriptTailer", () => {
     const again = fakeSession("s1", path);
     appendFileSync(path, "three\n");
     const restarted = tailer([again], { statePath });
-    restarted.await instance.tick();
+    await restarted.instance.tick();
     expect(again.lines.map((l) => l.line)).toEqual(["three"]);
   });
 
