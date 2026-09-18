@@ -219,3 +219,33 @@ Decisions 1–3 of #2968, each the issue's recommendation, adopted:
    ADR-055 §13, `apps/app/ARCHITECTURE.md` §9). `set_org_billing_terms`
    stays an idempotent terms upsert and carries no grant.
 
+## Amendment, 2026-09-18: `consume_assistant_tokens` bills at cost, no margin
+
+The maintainer decided the in-app agent should carry no margin for a
+customer on the `platform` funding source, at the same time BYOK widened
+from two routed vendors to any OpenAI-compatible endpoint (#3290). §3's "at
+the rate card's vendor cost plus a published markup" is amended for this one
+ledger reason: the markup is fixed at `ASSISTANT_TOKEN_MARKUP` (1, in
+`packages/billing/src/metering.ts`), never the solved blended markup
+`resolveMeterMarkup()` returns for everything else on the same chokepoint.
+
+**What does not change.** The funding-source resolution (§2), the ledger
+reason and its cap (§3's other two bullets), and `resolveMeterMarkup()` and
+the blended-margin target it solves for. `consume_embedding`
+(platform-paid ingestion and recall embeddings) is a separate ledger reason
+this amendment did not touch and keeps the solved markup. It is a different
+product line, priced on its own, not part of "the assistant."
+
+**Where it is enforced.** `chargeCostUsd`, the one function every metered
+text/image/video call funnels through, branches on `params.reason` before
+falling back to `resolveMeterMarkup()`: `consume_assistant_tokens` gets
+`ASSISTANT_TOKEN_MARKUP` and everything else gets the blended markup, unless
+a caller passes an explicit `markup` (tests, dry-run), which still wins over
+both. One branch, one chokepoint, so no caller of `chargeUsageCredits` can
+reach the assistant reason with the old markup by omission.
+
+**Consequence for the platform-funded spend cap (§3, third bullet).** The
+cap sums whatever was actually charged under `consume_assistant_tokens`. It
+was never a margin figure, so it needs no change. An organisation on the
+platform key now reaches it more slowly at the same usage. The cap bounds
+Oxagen's real exposure, and that exposure is now smaller.
