@@ -3392,7 +3392,7 @@
       "writes": []
     }
   ],
-  "contentHash": "9b953e4936d41e12b684262f587248ab4cc2358a3308d886991a5afde8a789dc",
+  "contentHash": "5092d16049cc328646c3c5ecfcc6c2fedb9117fb5f019d05f28b1e2c4d16f066",
   "domains": [
     {
       "name": "agent",
@@ -10224,6 +10224,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "meter_carry_micro_credits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "low_balance_threshold_cents",

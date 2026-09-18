@@ -554,6 +554,22 @@ export const orgBillingSettings = billingSchema.table(
       .$type<Record<string, number>>()
       .notNull()
       .default(sql`'{}'::jsonb`),
+    // The pooled carry this map replaced. Nothing in this tree reads or writes
+    // it: it is kept for the expand-and-contract rollout, because production
+    // applies migrations by hand and deploys code separately, so code from
+    // before the per-reason carry keeps writing this column until the last
+    // node is replaced. Dropping it in the same migration that added the map
+    // would leave one of the two deploy orders writing to a column that is not
+    // there, and the AI callers swallow metering failures, so every
+    // platform-funded call in that gap would run with no credit debit. The
+    // contract migration folds whatever accrued here into the
+    // `consume_embedding` bucket and drops the column and its CHECK; it runs
+    // once no node writes here.
+    meterCarryMicroCredits: bigint("meter_carry_micro_credits", {
+      mode: "bigint",
+    })
+      .notNull()
+      .default(sql`0`),
 
     // ── Low-balance warning ─────────────────────────────────────────────────────
     // Surface a dismissible re-up banner when balance drops below this.
@@ -640,6 +656,12 @@ export const orgBillingSettings = billingSchema.table(
     meterCarryByReasonNonNegativeCheck: check(
       "org_billing_settings_meter_carry_by_reason_non_negative",
       sql`jsonb_typeof(${t.meterCarryMicroCreditsByReason}) = 'object' AND NOT jsonb_path_exists(${t.meterCarryMicroCreditsByReason}, '$.* ? (@ < 0)')`,
+    ),
+    // Guards the retained pooled column for the code that still writes it
+    // during the rollout. Leaves with that column in the contract migration.
+    meterCarryNonNegativeCheck: check(
+      "org_billing_settings_meter_carry_non_negative",
+      sql`${t.meterCarryMicroCredits} >= 0`,
     ),
     stripeCustomerIdx: uniqueIndex(
       "org_billing_settings_stripe_customer_idx",
