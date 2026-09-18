@@ -445,12 +445,116 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     expect(idOf(model)).toBe("anthropic/claude-sonnet-5");
   });
 
-  it("never rewrites an explicit model id — a caller that named one has decided", () => {
-    const model = selectModel({
-      model: "explicit/model-id",
-      credential: compat(),
+  describe("an explicit model id on a direct-vendor key (never sent untranslated)", () => {
+    // `prepareAssistantTurn` passes the workspace's stored `defaultTextModel`
+    // as `selector.model`. That is a gateway id chosen before the key existed;
+    // `api.openai.com` answers 404 to it, on every turn, on a key whose
+    // balanced mapping was configured exactly as the form asked.
+    const openai = (
+      modelMap: ModelCredential["modelMap"] = { balanced: "gpt-5.2" },
+    ): ModelCredential => ({
+      provider: "openai",
+      apiKey: "sk-openai-0123456789",
+      digest: "d-openai",
+      modelMap,
     });
-    expect(idOf(model)).toBe("explicit/model-id");
+
+    it("a stored platform tier id runs on the tier's mapping, not on the platform id", () => {
+      // The workspace default is the precise tier's gateway id; the key maps
+      // precise, so that is what runs.
+      const model = selectModel({
+        model: "anthropic/claude-fable-5",
+        credential: openai({ balanced: "gpt-5.2", precise: "o3-pro" }),
+      });
+      expect(idOf(model)).toBe("o3-pro");
+    });
+
+    it("a stored platform tier id with no mapping of its own falls to balanced", () => {
+      const model = selectModel({
+        model: "anthropic/claude-haiku-4.5",
+        credential: openai(),
+      });
+      expect(idOf(model)).toBe("gpt-5.2");
+    });
+
+    it("one of the customer's own models passes through", () => {
+      const model = selectModel({
+        model: "o3-pro",
+        credential: openai({ balanced: "gpt-5.2", precise: "o3-pro" }),
+      });
+      expect(idOf(model)).toBe("o3-pro");
+    });
+
+    it("a same-vendor gateway id is sent in the vendor's spelling", () => {
+      expect(
+        idOf(
+          selectModel({ model: "openai/gpt-5.2-mini", credential: openai() }),
+        ),
+      ).toBe("gpt-5.2-mini");
+      expect(
+        idOf(
+          selectModel({
+            model: "anthropic/claude-sonnet-4-6",
+            credential: {
+              provider: "anthropic",
+              apiKey: "sk-ant-0123456789",
+              digest: "d-anthropic",
+              modelMap: { balanced: "claude-opus-4-1" },
+            },
+          }),
+        ),
+      ).toBe("claude-sonnet-4-6");
+    });
+
+    it("a catalog id from another vendor runs on the selected tier's mapping", () => {
+      // An `openai` key cannot reach `anthropic/claude-opus-4.8`. The tier
+      // the caller selected (default balanced) is the closest thing the key
+      // can serve; the assistant-turn log names what actually ran.
+      expect(
+        idOf(
+          selectModel({
+            model: "anthropic/claude-opus-4.8",
+            credential: openai(),
+          }),
+        ),
+      ).toBe("gpt-5.2");
+      expect(
+        idOf(
+          selectModel({
+            model: "google/gemini-3-pro",
+            tier: "fast",
+            credential: openai({ balanced: "gpt-5.2", fast: "gpt-5.2-mini" }),
+          }),
+        ),
+      ).toBe("gpt-5.2-mini");
+    });
+
+    it("an openai_compatible key never strips a prefix — its namespace is the customer's server's", () => {
+      // `explicit/model-id` is not a map value, not a tier id, and the
+      // `openai_compatible` arm has no vendor prefix to strip. Balanced runs.
+      const model = selectModel({
+        model: "openai/gpt-5.2",
+        credential: compat(),
+      });
+      expect(idOf(model)).toBe("meta-llama/Llama-3.3-70B-Instruct-Turbo");
+    });
+
+    it("the routed keys and the platform key still send an explicit id untouched", () => {
+      expect(
+        idOf(
+          selectModel({
+            model: "openai/gpt-5.2",
+            credential: {
+              provider: "openrouter",
+              apiKey: "sk-or-v1-0123456789",
+              digest: "d-or",
+            },
+          }),
+        ),
+      ).toBe("openai/gpt-5.2");
+      selectModel({ model: "openai/gpt-5.2" });
+      expect(mocks.languageModel).toHaveBeenLastCalledWith("openai/gpt-5.2");
+    });
   });
 
   it("rebuilds the client when the endpoint moves but the key does not", () => {

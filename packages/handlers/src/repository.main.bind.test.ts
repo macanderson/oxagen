@@ -890,9 +890,7 @@ describe("bind_main_repository", () => {
         reason: "main_repo_plane_unsupported",
       });
       expect(
-        writes.inserts.filter(
-          (w) => w.table === schema.repositoryBindingHeads,
-        ),
+        writes.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
       ).toHaveLength(0);
     });
   });

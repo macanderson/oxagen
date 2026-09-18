@@ -62,6 +62,15 @@ falling through to a platform id there would fail the turn halfway through.
 The cost is that with only `balanced` mapped, a verdict runs on the same model
 as the worker.
 
+**A stored model choice on a direct key.** A workspace or a person may have a
+default model saved from before the key existed, and a request may name one.
+Those are catalog ids. On a direct key one is read as: one of the map's own
+values, passed through; a platform tier id, run on that tier's mapping; a
+gateway id for the same vendor (`openai/gpt-5.2` on an `openai` key), sent in
+the vendor's spelling; anything else, run on the selected tier's mapping. The
+assistant-turn log names the model that ran. Nothing sends a platform id to a
+vendor that does not know it.
+
 **Anthropic caveat.** `anthropic` is reached through Anthropic's
 OpenAI-compatible endpoint, which does not carry prompt caching. An
 organisation that wants cached Claude should use an `openrouter` or `gateway`

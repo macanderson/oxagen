@@ -55,8 +55,8 @@ export const setConnectionInputObject = z.object({
    * Appendix A `tools.connections.provider` is free text because a connection
    * can point at any vendor. The closed `modelCredentialProviderSchema`
    * (`openrouter`, `gateway`, `openai`, `anthropic`, `openai_compatible`)
-   * still governs which values are legal when `kind` is `model_provider` —
-   * enforced in the handler rather than as a
+   * still governs which values are legal when
+   * `kind` is `model_provider` — enforced in the handler rather than as a
    * refinement here, so `.shape` stays reachable for the MCP parameter
    * builder (the same reason `verify_model_credential` exported its base
    * object separately).
@@ -74,24 +74,24 @@ export const setConnectionInputObject = z.object({
   secret: modelCredentialApiKeySchema.optional(),
 
   /**
-   * Carried from `set_model_credential` and `verify_model_credential`: the
-   * customer's own endpoint for a `model_provider` connection whose provider
-   * is `openai_compatible`. Not a secret, so it is stored in the clear and
-   * returned by every read — an endpoint an operator cannot see is one they
-   * cannot correct. The imported schema keeps the https-only rule and the
-   * 2048 bound; the loopback and RFC1918 range check still runs in the
-   * handler, for the reason the source gives (`http://2130706433/` is
-   * loopback too, and no regex knows it).
+   * Carried from `set_model_credential` and from `verify_model_credential`'s
+   * candidate mode. The endpoint of a `model_provider` connection whose
+   * provider is `openai_compatible` — Together, Fireworks, Groq, Azure, a
+   * self-hosted vLLM. Free-text `provider` is what makes it necessary: a
+   * connection can point at any vendor, and for the one whose URL Oxagen does
+   * not spell, the URL is the connection. Null or absent for every provider
+   * whose URL Oxagen spells. The handler runs the same range check as the
+   * source (`assertPublicHttpUrl`: https, off loopback, RFC1918 and the cloud
+   * metadata address) before the row is written.
    */
   baseUrl: modelCredentialBaseUrlSchema.nullish(),
 
   /**
-   * Carried from `set_model_credential`: which concrete model each
-   * white-labeled tier means on THIS credential. A routed provider
-   * (`openrouter`, `gateway`) understands the platform's tier ids and needs no
-   * map; a direct vendor does not, and the source's rule that a direct-vendor
-   * key must map `balanced` is enforced in the handler where `provider` is
-   * read against `kind` (`.shape` must stay reachable, see `provider`).
+   * Carried from `set_model_credential`. What each white-labeled tier means
+   * on THIS key. A direct-vendor `model_provider` connection must map
+   * `balanced` and a routed one must not map anything — the handler enforces
+   * the pairing, as the source's `superRefine` did, so `.shape` stays
+   * reachable for the MCP parameter builder.
    */
   modelMap: modelCredentialModelMapSchema.optional(),
 
@@ -258,14 +258,14 @@ export const setConnection = defineTool({
       why: "same collapse; re-auth is now `set_connection` on an existing connectionId with no new secret, which returns a fresh authorizeUrl when the kind is oauth",
     },
     {
-      field: "toolProbeModel",
-      from: "verify_model_credential",
-      why: "verify asked the tool-calling question of a model named separately from the one about to be stored, because it ran as its own call before save. Here the test is unconditional and runs on the candidate itself, so the probe model IS `modelMap.balanced` — the assistant's worker tier, the model the source told operators to name here anyway. A separate field would let the tested model differ from the stored one, which is the gap the test exists to close",
-    },
-    {
       field: "authKind",
       from: "set_plugin_secret",
       why: "the two-value oauth/secret discriminator widens into Appendix A's five-value `kind`, which also has to describe cloud roles, GitHub App installations and model providers",
+    },
+    {
+      field: "toolProbeModel",
+      from: "verify_model_credential",
+      why: "verify had to be told which model to send its forced tool call to, because a candidate was tested before its model map existed. Here the test and the save are one call and the map arrives with the secret, so the model the connection will actually run on — `modelMap.balanced` — is the one the probe asks, and a second field naming it could only disagree",
     },
   ],
 

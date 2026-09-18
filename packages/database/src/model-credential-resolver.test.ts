@@ -191,11 +191,35 @@ describe("loadModelCredential — an active row", () => {
       apiKey: PLAINTEXT_KEY,
       digest: "sha256:deadbeef",
       keyHint: "-key",
+      // A routed key has no endpoint of its own and no map: the platform's
+      // tier ids are what it runs.
       baseUrl: null,
       modelMap: {},
     });
     expect(mocks.warn).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
+  });
+
+  it("carries an openai_compatible row's endpoint and model map to the provider factory", async () => {
+    mocks.findFirst.mockResolvedValue(
+      await activeRow({
+        provider: "openai_compatible",
+        baseUrl: "https://api.together.xyz/v1",
+        modelMap: {
+          balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+          // A stray key and an empty value are not tiers; the parser drops
+          // them rather than handing the model factory something it would
+          // send to the endpoint.
+          embedding: "not-a-tier",
+          fast: "",
+        },
+      }),
+    );
+    await expect(loadModelCredential(ORG)).resolves.toMatchObject({
+      provider: "openai_compatible",
+      baseUrl: "https://api.together.xyz/v1",
+      modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+    });
   });
 
   it("carries a gateway provider through", async () => {
