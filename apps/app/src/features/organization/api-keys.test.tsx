@@ -47,7 +47,7 @@ const { API_KEYS_PAGE, pageOfKeys, parseApiKeysView } = await import(
 const PAGE = String(API_KEYS_PAGE);
 const nth = (n: number) => String(API_KEYS_PAGE + n);
 
-/** The view a request with no query asks for: the active keys, the first page. */
+/** The view a request with no query asks for: the unrevoked keys, first page. */
 const ACTIVE = parseApiKeysView({});
 /** The same page with the revoked keys on it. */
 const ALL = parseApiKeysView({ show: "all" });
@@ -321,7 +321,9 @@ describe("the revoked keys the page hides", () => {
 
   it("marks Active as the current filter and offers All, counting what it holds back", async () => {
     const view = await renderApiKeys(readOk([live, revoked]));
-    const active = within(filterNav()).getByRole("link", { name: "Active" });
+    const active = within(filterNav()).getByRole("link", {
+      name: "Not revoked",
+    });
     const all = within(filterNav()).getByRole("link", {
       name: "All (1 revoked)",
     });
@@ -356,6 +358,22 @@ describe("the revoked keys the page hides", () => {
     ).toHaveAttribute("data-status", "revoked");
   });
 
+  it("names the filter for the predicate it has, not for a state it cannot see (negative)", async () => {
+    // `filterKeys` keeps a row on `revokedAt` alone, so an expired key stays.
+    // A filter called "Active" over a row whose own status chip reads
+    // "expired" is the page contradicting itself in two places at once.
+    await renderApiKeys(readOk([live, expired, revoked]));
+    expect(
+      within(filterNav()).queryByRole("link", { name: "Active" }),
+    ).toBeNull();
+    expect(
+      within(filterNav()).getByRole("link", { name: "Not revoked" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      within(rowFor(expired)).getByText("expired").closest("[data-status]"),
+    ).toHaveAttribute("data-status", "expired");
+  });
+
   it("falls back to the active keys for a filter it does not understand (negative)", () => {
     // A query value the page cannot read falls back rather than failing the
     // page, and the fallback is the one that hides revoked keys.
@@ -381,16 +399,18 @@ describe("empty", () => {
     // "This workspace has no API keys" over a workspace holding three revoked
     // ones is a lie the filter would be telling on the page's behalf.
     const view = await renderApiKeys(readOk(manyRevoked(3)));
-    const line = screen.getByText(/No key in this workspace is still active/);
-    expect(line).toHaveAttribute("data-state", "empty-active");
-    expect(line).toHaveTextContent("3 revoked keys are hidden");
+    const line = screen.getByText(
+      /Every key in this workspace has been revoked/,
+    );
+    expect(line).toHaveAttribute("data-state", "empty-filtered");
+    expect(line).toHaveTextContent("Choose All to see them");
     expect(screen.queryByRole("table")).toBeNull();
     await expectNoAxe(view.container);
   });
 
-  it("counts one hidden key in the singular", async () => {
+  it("asks for the one hidden key in the singular", async () => {
     await renderApiKeys(readOk([revoked]));
-    expect(screen.getByText(/One revoked key is hidden/)).toBeInTheDocument();
+    expect(screen.getByText(/Choose All to see it\./)).toBeInTheDocument();
   });
 
   it("says the workspace has no keys when All is asked for and there are none", async () => {
@@ -472,6 +492,28 @@ describe("paging a roster larger than a page", () => {
     });
     expect(rowIds()).toEqual(keys.slice(API_KEYS_PAGE).map((k) => k.id));
     expect(pagerNav()).toHaveTextContent(`${nth(1)}–${nth(5)} of ${nth(5)}`);
+  });
+
+  it("starts a page on a page boundary, so no two pages repeat a row (negative)", async () => {
+    // The query string is shareable and hand-editable. `?offset=1` would show
+    // rows 2 to 21 while Previous, at offset 0, shows rows 1 to 20 -- the two
+    // pages repeating 19 rows, with no sequence of clicks ever reaching a
+    // boundary again.
+    const keys = manyKeys(API_KEYS_PAGE + 5);
+    await renderApiKeys(readOk(keys), "owner", { ...ACTIVE, offset: 1 });
+    expect(rowIds()).toEqual(keys.slice(0, API_KEYS_PAGE).map((k) => k.id));
+    expect(pagerNav()).toHaveTextContent(`1\u2013${PAGE} of ${nth(5)}`);
+    expect(
+      within(pagerNav()).queryByRole("link", { name: "Previous" }),
+    ).toBeNull();
+  });
+
+  it("aligns an unaligned offset down, never up, so no row is skipped", () => {
+    const keys = manyKeys(API_KEYS_PAGE * 3);
+    expect(pageOfKeys(keys, 1).offset).toBe(0);
+    expect(pageOfKeys(keys, API_KEYS_PAGE - 1).offset).toBe(0);
+    expect(pageOfKeys(keys, API_KEYS_PAGE).offset).toBe(API_KEYS_PAGE);
+    expect(pageOfKeys(keys, API_KEYS_PAGE + 1).offset).toBe(API_KEYS_PAGE);
   });
 
   it("falls back to the first page for an offset it does not understand (negative)", () => {

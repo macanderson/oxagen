@@ -1360,7 +1360,7 @@ type Messages = {
         previous: string;
         next: string;
       };
-      emptyActive: string;
+      emptyFiltered: string;
     };
     denied: {
       title: string;

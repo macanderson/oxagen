@@ -354,12 +354,12 @@ function Keys({
         <p
           className={emptyLine}
           data-state={
-            show === "all" || revoked === 0 ? "empty" : "empty-active"
+            show === "all" || revoked === 0 ? "empty" : "empty-filtered"
           }
         >
           {show === "all" || revoked === 0
             ? t("empty")
-            : t("emptyActive", { revoked })}
+            : t("emptyFiltered", { revoked })}
         </p>
       ) : (
         <>

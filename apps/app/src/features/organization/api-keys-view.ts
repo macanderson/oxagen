@@ -100,11 +100,21 @@ export type ApiKeysPage = {
 };
 
 /**
- * One page of a filtered roster. The offset is clamped to a page that exists:
- * revoking the last key on the last page, or narrowing the filter from a deep
- * page, otherwise answers an out-of-range offset with an empty table and no way
- * back except editing the URL. Clamping lands on the last page instead, and the
- * pager it is handed then agrees with the rows beside it.
+ * One page of a filtered roster, starting at a page boundary that exists.
+ *
+ * Two corrections, both on an offset the page did not mint. **Clamped**,
+ * because revoking the last key on the last page, or narrowing the filter from
+ * a deep page, otherwise answers an out-of-range offset with an empty table and
+ * no way back except editing the URL; clamping lands on the last page instead.
+ * **Aligned down to a multiple of `API_KEYS_PAGE`**, because the query string is
+ * shareable and hand-editable: `?offset=1` would show rows 2 to 21 and put
+ * Previous at offset 0, which shows rows 1 to 20, so the two pages would repeat
+ * 19 rows between them and no sequence of clicks would ever reach a page
+ * boundary again. Pages here partition the roster; they do not slide along it.
+ *
+ * The corrected offset is what the caller reads back, so the pager and the
+ * links beside the rows are built from where the rows actually start rather
+ * than from what the URL asked for.
  */
 export function pageOfKeys(
   kept: readonly ApiKey[],
@@ -113,7 +123,8 @@ export function pageOfKeys(
   const total = kept.length;
   const lastPageStart =
     total === 0 ? 0 : Math.floor((total - 1) / API_KEYS_PAGE) * API_KEYS_PAGE;
-  const start = Math.min(Math.max(offset, 0), lastPageStart);
+  const wanted = Math.min(Math.max(offset, 0), lastPageStart);
+  const start = Math.floor(wanted / API_KEYS_PAGE) * API_KEYS_PAGE;
   return {
     rows: kept.slice(start, start + API_KEYS_PAGE),
     offset: start,
