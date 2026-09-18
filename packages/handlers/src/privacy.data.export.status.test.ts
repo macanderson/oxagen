@@ -35,14 +35,39 @@ import { privacyDataExportStatusHandler } from "./privacy.data.export.status";
 
 const EXPORT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
+const ORG_ID = "22222222-2222-4222-8222-222222222222";
 
 function ctx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
   return {
-    orgId: "22222222-2222-4222-8222-222222222222",
+    orgId: ORG_ID,
     workspaceId: "33333333-3333-4333-8333-333333333333",
     userId: USER_ID,
     ...overrides,
   } as CapabilityContext;
+}
+
+/**
+ * Every literal drizzle bound into the captured `where`, found by walking the
+ * clause. Reading the values that reach Postgres rather than stringifying the
+ * SQL, so the assertion is about what is actually matched.
+ */
+function boundValues(): unknown[] {
+  const found: unknown[] = [];
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): void => {
+    if (node === null || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (key === "value" && typeof value === "string") found.push(value);
+      else walk(value);
+    }
+  };
+  walk(mocks.where);
+  return found;
 }
 
 beforeEach(() => {
@@ -71,8 +96,21 @@ describe("get_export_status", () => {
     ).rejects.toSatisfy(
       (error: unknown) => isHandlerError(error) && error.code === "not_found",
     );
-    // The row was looked for under a two-part match, not by id alone.
     expect(mocks.where).not.toBeNull();
+  });
+
+  // Three predicates, not one. IAM resolves this capability against
+  // ctx.orgId, so a row matched on the id and the person alone stays readable
+  // through a membership in another organisation after the caller has lost
+  // the one that governed the export.
+  it("matches the export id, the person AND the governed organisation", async () => {
+    mocks.rows = [];
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
+      () => undefined,
+    );
+    expect(boundValues()).toEqual(
+      expect.arrayContaining([EXPORT_ID, USER_ID, ORG_ID]),
+    );
   });
 
   it("hands back the storage key once the bundle is ready", async () => {

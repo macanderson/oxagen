@@ -35,6 +35,14 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
         and(
           eq(schema.privacyExportRequests.id, input.exportId),
           eq(schema.privacyExportRequests.userId, userId),
+          // The governed organisation as well as the person. IAM resolves
+          // this capability against ctx.orgId, so without this an export
+          // queued in org A stays readable through a membership in org B
+          // after the caller has lost A — the read would answer for a
+          // tenant whose rules never governed it. This is the rule the
+          // org-scope branch of `export_data` applies at dispatch, arriving
+          // where the row is actually read.
+          eq(schema.privacyExportRequests.orgId, ctx.orgId),
         ),
       )
       .limit(1),
