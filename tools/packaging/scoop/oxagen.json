@@ -9,7 +9,7 @@
     "release .sha256 files (tools/packaging/README.md)."
   ],
   "version": "{{version}}",
-  "description": "Tacho wrapper for Claude Code and Codex, with the oxagen CLI",
+  "description": "Tacho wrapper for Claude Code, Codex, Cursor, and Stella, with the oxagen CLI",
   "homepage": "https://oxagen.sh/",
   "license": {
     "identifier": "Proprietary",
@@ -54,9 +54,9 @@
   "notes": [
     "Sign in, then enroll this machine (a per-user Task Scheduler service and the hooks for the harnesses you name):",
     "  oxagen login",
-    "  tacho enroll --harness claude-code,codex,stella",
+    "  tacho enroll --harness claude-code,codex,cursor,stella",
     "Managed machines enroll without a browser:",
-    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,stella",
+    "  tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella",
     "SmartScreen warns while builds are unsigned; signing runs only when the Azure secrets exist in CI."
   ]
 }
