@@ -93,6 +93,13 @@ describe("assertPublicHttpUrl", () => {
     ["IPv6 documentation", "https://[2001:db8::1]/v1"],
     ["IPv6 discard-only", "https://[100::1]/v1"],
     ["6to4 wrapping RFC1918", "https://[2002:a00:1::1]/v1"],
+    ["IPv6 benchmarking (2001:2::/48)", "https://[2001:2::1]/v1"],
+    ["ORCHIDv2 (2001:20::/28)", "https://[2001:20::1]/v1"],
+    ["DRIP (2001:30::/28)", "https://[2001:30::1]/v1"],
+    ["IETF block, unassigned (2001:1ff::)", "https://[2001:1ff::1]/v1"],
+    ["documentation (3fff::/20)", "https://[3fff::1]/v1"],
+    ["documentation, top of /20 (3fff:fff::)", "https://[3fff:fff::1]/v1"],
+    ["SRv6 SIDs (5f00::/16)", "https://[5f00::1]/v1"],
     ["Teredo wrapping loopback", "https://[2001:0:7f00:1::1]/v1"],
   ])("refuses the special-use range %s", (_name, raw) => {
     expect(() => assertPublicHttpUrl(raw, TLS)).toThrow(/non-routable/);
@@ -103,6 +110,16 @@ describe("assertPublicHttpUrl", () => {
     ["the address just above the shared space", "https://100.128.0.0/v1"],
     ["the address beside the benchmarking range", "https://198.20.0.1/v1"],
     ["6to4 wrapping a public address", "https://[2002:808:808::1]/v1"],
+    ["Teredo wrapping a public server", "https://[2001:0:808:808::1]/v1"],
+    ["PCP anycast (2001:1::1)", "https://[2001:1::1]/v1"],
+    ["TURN anycast (2001:1::2)", "https://[2001:1::2]/v1"],
+    ["AMT (2001:3::/32)", "https://[2001:3::1]/v1"],
+    ["AS112 (2001:4:112::/48)", "https://[2001:4:112::1]/v1"],
+    [
+      "the address just past the IETF block (2001:200::)",
+      "https://[2001:200::1]/v1",
+    ],
+    ["the address just past 3fff::/20 (4000::)", "https://[4000::1]/v1"],
   ])("still admits %s — the ranges are exact", (_name, raw) => {
     expect(() => assertPublicHttpUrl(raw, TLS)).not.toThrow();
   });

@@ -280,21 +280,41 @@ function isPrivateIPv6(ip: string): boolean {
   if ((g[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
   if ((g[0]! & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   if (g[0] === 0x2001 && g[1] === 0xdb8) return true; // 2001:db8::/32 documentation
+  if ((g[0]! & 0xfff0) === 0x3ff0) return true; // 3fff::/20 documentation (RFC 9637)
+  if (g[0] === 0x5f00) return true; // 5f00::/16 segment-routing SIDs (RFC 9602)
   if (g[0] === 0x100 && g.slice(1, 4).every((x) => x === 0)) return true; // 100::/64 discard-only
 
-  // Transition addresses that carry an IPv4 address in their high bits and
-  // reach it through a relay: 6to4 (`2002:a.b.c.d::/48`) and Teredo
-  // (`2001:0::/32`, the server's IPv4 in groups 2–3). Range-check the embedded
-  // IPv4 the same way the low-bits forms below are checked.
+  // 6to4 (`2002:a.b.c.d::/48`) carries an IPv4 address in its high bits and
+  // reaches it through a relay. Range-check the embedded IPv4 the same way
+  // the low-bits forms below are checked.
   if (g[0] === 0x2002) {
     return isPrivateIPv4(
       [g[1]! >> 8, g[1]! & 0xff, g[2]! >> 8, g[2]! & 0xff].join("."),
     );
   }
-  if (g[0] === 0x2001 && g[1] === 0) {
-    return isPrivateIPv4(
-      [g[2]! >> 8, g[2]! & 0xff, g[3]! >> 8, g[3]! & 0xff].join("."),
-    );
+
+  // `2001::/23`, the IETF protocol-assignments block. The IANA special-purpose
+  // registry marks the block itself as not globally reachable and lists four
+  // exceptions inside it that are: the PCP and TURN anycast addresses
+  // (`2001:1::1`, `2001:1::2`), AMT (`2001:3::/32`) and AS112 (`2001:4:112::/48`).
+  // Teredo (`2001::/32`) reaches the IPv4 server in groups 2–3, so it is
+  // range-checked like 6to4. Everything else in the block — benchmarking
+  // (`2001:2::/48`), the ORCHID ranges, DRIP, and whatever the registry adds
+  // next — is refused, because listing the refusals one prefix at a time is
+  // how the last two rounds of this function each missed one.
+  if (g[0] === 0x2001 && (g[1]! & 0xfe00) === 0) {
+    if (g[1] === 0) {
+      return isPrivateIPv4(
+        [g[2]! >> 8, g[2]! & 0xff, g[3]! >> 8, g[3]! & 0xff].join("."),
+      );
+    }
+    const anycast =
+      g[1] === 1 &&
+      g.slice(2, 7).every((x) => x === 0) &&
+      (g[7] === 1 || g[7] === 2);
+    const amt = g[1] === 3;
+    const as112 = g[1] === 4 && g[2] === 0x112;
+    return !(anycast || amt || as112);
   }
 
   // Addresses that carry an IPv4 address in their low 32 bits and that the OS
