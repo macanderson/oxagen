@@ -6,7 +6,8 @@
 // Vercel Blob.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StorageAdapter } from "@oxagen/storage";
-import type { RouteViewer } from "@/server/viewer";
+import { OrgCtx, type RouteViewer } from "@/server/viewer";
+import { unsafeMint } from "@/server/viewer.testing";
 import { handleExportDownload } from "./export-download";
 
 const EXPORT_ID = "7a000000-0000-4000-8000-0000000000e1";
@@ -14,14 +15,36 @@ const KEY = "privacy-exports/org-1/7a000000.zip";
 
 const resolveViewer = vi.fn<(org: string) => Promise<RouteViewer>>();
 const readStatus = vi.fn();
-const get = vi.fn();
+const get = vi.fn<StorageAdapter["get"]>();
+
+/** A signed-in viewer of acme. The handler switches on `kind` and never reads
+ *  `ctx`, but the type asks for one, so it is minted rather than asserted. */
+const OK_VIEWER: RouteViewer = {
+  kind: "ok",
+  ctx: unsafeMint(OrgCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+  }),
+};
+
+/** The download route reads one object and writes none, so the two writers
+ *  throw rather than returning a value nobody should be relying on. */
+const storageStub: StorageAdapter = {
+  driver: "test",
+  get,
+  put: () => {
+    throw new Error("the download route never writes");
+  },
+  delete: () => {
+    throw new Error("the download route never deletes");
+  },
+};
 
 function deps() {
-  return {
-    resolveViewer,
-    readStatus,
-    storage: () => ({ get }) as unknown as StorageAdapter,
-  };
+  return { resolveViewer, readStatus, storage: () => storageStub };
 }
 
 function call() {
@@ -43,7 +66,7 @@ function bodyOf(text: string): ReadableStream<Uint8Array> {
 
 beforeEach(() => {
   resolveViewer.mockReset();
-  resolveViewer.mockResolvedValue({ kind: "ok" } as RouteViewer);
+  resolveViewer.mockResolvedValue(OK_VIEWER);
   readStatus.mockReset();
   readStatus.mockResolvedValue({
     ok: true,
@@ -59,7 +82,7 @@ beforeEach(() => {
 
 describe("the gates", () => {
   it("refuses a signed-out visitor and reads nothing (negative)", async () => {
-    resolveViewer.mockResolvedValue({ kind: "unauthenticated" } as RouteViewer);
+    resolveViewer.mockResolvedValue({ kind: "unauthenticated" });
     const response = await call();
     expect(response.status).toBe(401);
     expect(readStatus).not.toHaveBeenCalled();
@@ -67,13 +90,13 @@ describe("the gates", () => {
   });
 
   it("refuses someone who is not in the organization (negative)", async () => {
-    resolveViewer.mockResolvedValue({ kind: "not_found" } as RouteViewer);
+    resolveViewer.mockResolvedValue({ kind: "not_found" });
     expect((await call()).status).toBe(404);
     expect(get).not.toHaveBeenCalled();
   });
 
   it("refuses when two-factor enrolment is owed (negative)", async () => {
-    resolveViewer.mockResolvedValue({ kind: "mfa_enroll" } as RouteViewer);
+    resolveViewer.mockResolvedValue({ kind: "mfa_enroll" });
     expect((await call()).status).toBe(403);
     expect(get).not.toHaveBeenCalled();
   });

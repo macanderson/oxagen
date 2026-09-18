@@ -873,20 +873,23 @@ function PrivacyTab({ data }: { data: ShellData }) {
   const orgSlug = data.org.slug;
   useEffect(() => {
     if (queuedId === null || queuedScope === null) return;
+    // Bound after the guard so `look` closes over the narrowed values. It
+    // cannot narrow them itself: they are nullable state read from an outer
+    // scope, and the check that rules out null is out here, not in there.
+    const exportId = queuedId;
+    const scope = queuedScope;
     let live = true;
     async function look() {
       // The catch is the point, not a formality: a server action whose request
       // loses its connection rejects, and an uncaught rejection here would
       // repeat every tick until the tab closes. A throw is the same as a
-      // refusal — leave the state alone and try again on the next tick.
+      // refusal: leave the state alone and try again on the next tick.
       try {
-        const read = await readExportStatus(orgSlug, queuedId as string);
+        const read = await readExportStatus(orgSlug, exportId);
         if (!live || !read.ok) return;
-        const scope = queuedScope as "user" | "org";
-        const id = queuedId as string;
-        if (read.value.ready) setState({ kind: "ready", scope, exportId: id });
+        if (read.value.ready) setState({ kind: "ready", scope, exportId });
         else if (read.value.status === "failed")
-          setState({ kind: "expired", scope, exportId: id });
+          setState({ kind: "expired", scope, exportId });
       } catch {
         return;
       }

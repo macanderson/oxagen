@@ -278,8 +278,7 @@ describe("Save", () => {
     await user.click(within(dialog).getByTestId("avatar-icon-satellite"));
     await user.click(screen.getByTestId("avatar-save"));
     expect(updateProfile).toHaveBeenCalledTimes(1);
-    const [, draft] = updateProfile.mock.calls[0] as [string, object];
-    expect(draft).not.toHaveProperty("displayName");
+    expect(updateProfile.mock.calls[0]?.[1]).not.toHaveProperty("displayName");
     expect(await screen.findByTestId("which")).toHaveTextContent("account");
   });
 
