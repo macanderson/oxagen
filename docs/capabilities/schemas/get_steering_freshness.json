@@ -1,7 +1,7 @@
 {
-  "name": "get_workspace_settings",
-  "domain": "workspace",
-  "description": "Read the active workspace's general settings: name, slug, description, and the effective consequence-role map for mandates.",
+  "name": "get_steering_freshness",
+  "domain": "context",
+  "description": "The workspace's steering version, the commit its newest record was published at, its production branch, and whether the workspace requires agents to auto-sync .oxagen/ or refuses prompts on stale steering.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -12,7 +12,7 @@
   "agent": {
     "requiresApproval": false,
     "riskLevel": "low",
-    "category": "workspace"
+    "category": "context"
   },
   "chain": {
     "produces": [],
@@ -30,13 +30,11 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "name": {
-        "type": "string"
+      "steeringVersion": {
+        "type": "integer",
+        "minimum": 0
       },
-      "slug": {
-        "type": "string"
-      },
-      "description": {
+      "headCommit": {
         "anyOf": [
           {
             "type": "string"
@@ -46,7 +44,7 @@
           }
         ]
       },
-      "avatarUrl": {
+      "publishedAt": {
         "anyOf": [
           {
             "type": "string"
@@ -56,22 +54,27 @@
           }
         ]
       },
-      "consequenceRoles": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "Owner",
-              "Admin",
-              "Compliance",
-              "Billing"
-            ]
+      "repository": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
           }
-        }
+        ]
       },
-      "steering": {
+      "defaultBranch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "policy": {
         "type": "object",
         "properties": {
           "autoSync": {
@@ -91,12 +94,12 @@
       }
     },
     "required": [
-      "name",
-      "slug",
-      "description",
-      "avatarUrl",
-      "consequenceRoles",
-      "steering"
+      "steeringVersion",
+      "headCommit",
+      "publishedAt",
+      "repository",
+      "defaultBranch",
+      "policy"
     ],
     "additionalProperties": false
   }

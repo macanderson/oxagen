@@ -130,3 +130,68 @@ a failure.
 
 Truth probes (spec §10.3) are not declared by the files this lane writes and
 are not a check here.
+
+## Freshness: the other half of the lifecycle
+
+Everything above publishes a record. This section is about the checkout that
+has to read it.
+
+A Context PR merges onto the production branch. A developer on a feature
+branch keeps whatever `.oxagen/` their branch point had, so the longer the
+branch lives the more likely the agent running in it is steering on records
+nobody uses any more. Nothing in the lifecycle above notices that, because
+from the platform's side the record was published and the story ended.
+
+`@oxagen/steering-freshness` is the answer, and the `oxagen steering`
+commands are its surface.
+
+### What "stale" means
+
+From the merge base of the checkout's HEAD and the remote production branch:
+
+- changes on the **remote** side are records that merged without this
+  checkout. That is staleness, and it is the only thing that may block a run.
+- changes on the **local** side are records being authored here. That is
+  never staleness.
+
+Both lists are narrowed to the paths whose working copy differs from the
+production branch, so a record already on disk stops counting whether it
+arrived by sync, cherry-pick or hand. Every failure to answer is `unknown`,
+and `unknown` never blocks.
+
+### The two gates
+
+`autoSync` takes the merged records into the checkout before the prompt runs.
+`blockStaleRuns` refuses the prompt while records are missing. Both live in
+the `steering` block of the Oxagen settings files, and both are also
+workspace policy in Mission Control (Steering → Steering freshness), stored
+in `workspace.workspaces.settings` and read by `get_steering_freshness`.
+
+The scopes combine with OR: a later scope may switch a gate on, and may never
+switch one off. Otherwise `.oxagen/settings.local.json`, which a developer
+owns and which is not committed, could switch off the gate the organisation
+set. `OXAGEN_STEERING_FRESHNESS=off` suspends both for one shell.
+
+### What a sync refuses
+
+`oxagen steering sync` takes `.oxagen/` from the production branch and leaves
+it staged. It refuses when the verdict is `unknown` (acting on a non-answer
+is how a record gets deleted over a failed fetch), when the branch has its
+own `.oxagen/` changes, and when anything under `.oxagen/` is uncommitted,
+including a file this sync would not have written. `--force` covers the first
+two and never the `unknown` case.
+
+### Reaching the agent
+
+Oxagen wraps whatever agent a team runs, so the gate is one command with a
+contract every harness can call: exit 0 allows, exit 2 refuses with the
+reason on stderr, and `--harness` picks the JSON on stdout. Claude Code and
+Codex CLI both take it as a `UserPromptSubmit` hook, which
+`oxagen steering hooks install` writes for them; the warning goes into the
+turn as `additionalContext`, so it reaches the transcript and not only a
+terminal nobody is watching.
+
+For an agent with no pre-prompt hook, the `get_steering_freshness` MCP tool
+is the reach that is guaranteed. It answers later, at the first tool call
+rather than before the prompt, which is why the hook is still the better path
+where a harness supports one.

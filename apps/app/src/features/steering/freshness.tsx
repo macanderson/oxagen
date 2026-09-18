@@ -107,14 +107,18 @@ export function Freshness({
           checked={gates.autoSync}
           label={t("autoSync")}
           hint={t("autoSyncHint")}
-          onChange={(next) => toggle("autoSync", next)}
+          onChange={(next) => {
+            toggle("autoSync", next);
+          }}
         />
         <GateBox
           name="blockStaleRuns"
           checked={gates.blockStaleRuns}
           label={t("blockStaleRuns")}
           hint={t("blockStaleRunsHint")}
-          onChange={(next) => toggle("blockStaleRuns", next)}
+          onChange={(next) => {
+            toggle("blockStaleRuns", next);
+          }}
         />
       </fieldset>
 

@@ -30,8 +30,15 @@ function show(
   return { user };
 }
 
-const box = (gate: "autoSync" | "blockStaleRuns"): HTMLInputElement =>
-  document.querySelector(`[data-gate="${gate}"]`) as HTMLInputElement;
+function box(gate: "autoSync" | "blockStaleRuns"): HTMLInputElement {
+  // `data-gate` rather than a label lookup: the two hints are long, and a
+  // name match would break every time the copy is reworded.
+  const found = document.querySelector(`[data-gate="${gate}"]`);
+  if (!(found instanceof HTMLInputElement)) {
+    throw new Error(`no checkbox for gate ${gate}`);
+  }
+  return found;
+}
 
 afterEach(async () => {
   setSteeringGate.mockReset();
