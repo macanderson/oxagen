@@ -983,6 +983,34 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "",
   },
+  CURSOR_CONFIG_DIR: {
+    group: "Inngest",
+    description:
+      "Overrides where the Tacho host writes Cursor's `hooks.json` and `mcp.json`. Read on " +
+      "the operator's machine, not the server, and never a deployment value: it exists " +
+      "because Cursor can be installed against a non-default config directory, and enrolling " +
+      "the wrong one leaves the session unwrapped and silently unrecorded.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
+  XDG_CONFIG_HOME: {
+    group: "Inngest",
+    description:
+      "The XDG base directory the Tacho host falls back to when locating Cursor's config on " +
+      "Linux, after CURSOR_CONFIG_DIR and before ~/.cursor. Set by the operator's own " +
+      "environment rather than by Oxagen, and ignored on macOS and Windows, which do not " +
+      "follow the XDG layout.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
   TACHO_MCP_ENDPOINT: {
     group: "Inngest",
     description:
