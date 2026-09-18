@@ -19,7 +19,7 @@ import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { orgMemberRoleChange } from "@oxagen/oxagen/contracts/org.member_role.change";
 import { schema, withOrgDb, type Tx } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { resolveMemberUserId } from "./lib/org-member";
 import { logger } from "./logger";
 
@@ -184,6 +184,14 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
     }
 
     // ── Resolve new role row ────────────────────────────────────────────────────
+    // ORDERED, because `iam.roles` is not unique on (org, scope_kind, name) and
+    // at least one production organisation carries two 'Owner' rows seeded in
+    // the same transaction. An unordered `limit(1)` picks between them by
+    // whatever the plan returns first, so the same request can resolve to a
+    // different role id on two runs — and an assignment written against one
+    // duplicate is invisible to a reader that resolved the other. Oldest wins:
+    // it is the row every earlier assignment was written against, so this
+    // agrees with the existing grants rather than stranding them.
     const [newRoleRow] = await tx
       .select({ id: schema.roles.id, name: schema.roles.name })
       .from(schema.roles)
@@ -194,6 +202,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           eq(schema.roles.name, input.newRole),
         ),
       )
+      .orderBy(asc(schema.roles.createdAt), asc(schema.roles.id))
       .limit(1);
 
     if (!newRoleRow) {
@@ -214,6 +223,9 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
     // ── Last-owner guard ──────────────────────────────────────────────────────
     // Block demoting the last Owner to prevent org lockout.
     if (input.newRole !== OWNER_ROLE_NAME) {
+      // Same ordering as the resolve above, for the same reason: the guard has
+      // to count owners against the SAME 'Owner' row an assignment would be
+      // written against, or a duplicate makes the last owner look like none.
       const [ownerRoleRow] = await tx
         .select({ id: schema.roles.id })
         .from(schema.roles)
@@ -224,6 +236,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
             eq(schema.roles.name, OWNER_ROLE_NAME),
           ),
         )
+        .orderBy(asc(schema.roles.createdAt), asc(schema.roles.id))
         .limit(1);
 
       if (ownerRoleRow) {
@@ -348,7 +361,26 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           ),
         );
 
-      // (b) Insert new role assignment.
+      // (b) Grant the new role.
+      //
+      // RESURRECT, never `onConflictDoNothing`. `pra_principal_role_org_null_
+      // workspace_uniq` is UNIQUE (principal_id, role_id, org_id) WHERE
+      // workspace_id IS NULL, and `deleted_at` is in neither the key nor the
+      // predicate — so the row (a) has just soft-deleted STILL OCCUPIES this
+      // insert's unique slot. When the new role is one the principal already
+      // held, the insert therefore conflicts with the row it is meant to
+      // replace, and `onConflictDoNothing` swallowed that as success: the
+      // revocation committed, the grant did not, and the member was left
+      // holding no org role at all.
+      //
+      // That is not a theoretical ordering: re-granting the role a member
+      // already has is the ordinary no-op an operator performs, and the org's
+      // casing drift (`org_users.role` is written 'owner' by the create path
+      // and 'Owner' by this one) makes the UI offer it as a real change. On
+      // 2026-09-18 it cost the sole Owner of an organisation every grant they
+      // had, with no path back through the product — the last-owner guard
+      // above cannot catch it, because it only runs when the new role is NOT
+      // Owner and here the intent was to stay Owner.
       await tx
         .insert(schema.principalRoleAssignments)
         .values({
@@ -359,7 +391,49 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
           createdById: actorId,
           updatedById: actorId,
         })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: [
+            schema.principalRoleAssignments.principalId,
+            schema.principalRoleAssignments.roleId,
+            schema.principalRoleAssignments.orgId,
+          ],
+          targetWhere: isNull(schema.principalRoleAssignments.workspaceId),
+          set: {
+            deletedAt: null,
+            deletedById: null,
+            assignedBy: actorId,
+            assignedAt: new Date(),
+            updatedAt: new Date(),
+            updatedById: actorId,
+          },
+        });
+
+      // (b2) The operation's post-condition, asserted rather than assumed.
+      //
+      // Every branch above is meant to leave the member holding exactly the
+      // role just granted. The failure this guards is the one that actually
+      // happened: a revocation that commits while its replacement grant does
+      // not, which reads as success and is discovered later as an account that
+      // can no longer do anything. Inside the transaction a refusal rolls the
+      // revocation back, so the member keeps the role they had — strictly
+      // better than committing a member into having none.
+      const [granted] = await tx
+        .select({ id: schema.principalRoleAssignments.id })
+        .from(schema.principalRoleAssignments)
+        .where(
+          and(
+            eq(schema.principalRoleAssignments.principalId, targetPrincipalId),
+            eq(schema.principalRoleAssignments.orgId, ctx.orgId),
+            isNull(schema.principalRoleAssignments.workspaceId),
+            isNull(schema.principalRoleAssignments.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!granted) {
+        throw new Error(
+          `org.member.role.change: refusing to commit — the role change would leave the member with no org role (org ${ctx.orgId}, role '${input.newRole}')`,
+        );
+      }
     }
 
     // (c) Update legacy org_users.role to stay consistent with the IAM layer.

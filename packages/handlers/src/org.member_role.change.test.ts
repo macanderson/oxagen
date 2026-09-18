@@ -91,7 +91,12 @@ function buildSelectMock(calls: unknown[][]) {
     const result = calls[callCount] ?? [];
     callCount++;
     const limit = vi.fn().mockResolvedValue(result);
-    const where = vi.fn().mockReturnValue({ limit });
+    // The role lookups order before limiting, so `.where()` has to offer
+    // `.orderBy()` as well as `.limit()`, and `.orderBy()` has to land back on
+    // the same `.limit()`. Without this the ordered reads resolve to undefined
+    // and every role in the file reads as "does not exist in this org".
+    const orderBy = vi.fn().mockReturnValue({ limit });
+    const where = vi.fn().mockReturnValue({ limit, orderBy });
     const innerJoin = vi.fn().mockReturnValue({ where });
     const from = vi.fn().mockReturnValue({ where, innerJoin });
     return { from };
@@ -198,11 +203,15 @@ describe("orgMemberRoleChangeHandler", () => {
       const idx = callCount++;
       const result = callResults[idx] ?? [];
 
-      // Allow both `await chain.where()` and `await chain.where().limit(n)`.
+      // Allow `await chain.where()`, `await chain.where().limit(n)` and
+      // `await chain.where().orderBy(...).limit(n)` — the role lookups order
+      // before limiting so that a duplicate role name resolves deterministically.
       const limitOnWhere = vi.fn().mockResolvedValue(result);
+      const orderByOnWhere = vi.fn().mockReturnValue({ limit: limitOnWhere });
       const whereWithLimit = vi.fn().mockReturnValue(
         Object.assign(Promise.resolve(result), {
           limit: limitOnWhere,
+          orderBy: orderByOnWhere,
         }),
       );
       const innerJoin = vi.fn().mockReturnValue({ where: whereWithLimit });
@@ -242,14 +251,15 @@ describe("orgMemberRoleChangeHandler", () => {
       [{ id: "target-principal-id" }], // 6: target principal
       [], // 7: target does NOT hold Owner PRA → skip guard
       [{ id: "target-principal-id" }], // 8: mutation existing principal
+      [{ id: "new-pra-id" }], // 9: post-condition — the grant is live
     ]);
 
     const txUpdateWhere = vi.fn().mockResolvedValue([]);
     const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
     mockTx.update = vi.fn().mockReturnValue({ set: txUpdateSet });
 
-    const onConflictDoNothing = vi.fn().mockResolvedValue([]);
-    const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+    const onConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
     mockTx.insert = vi.fn().mockReturnValue({ values });
 
     const ctx = makeCtx();
@@ -288,13 +298,14 @@ describe("orgMemberRoleChangeHandler", () => {
       [{ id: "target-principal-id" }], // 7: target principal
       [], // 8: target does NOT hold Owner PRA → skip guard
       [{ id: "target-principal-id" }], // 9: mutation existing principal
+      [{ id: "new-pra-id" }], // 10: post-condition — the grant is live
     ]);
 
     const txUpdateWhere = vi.fn().mockResolvedValue([]);
     const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
     mockTx.update = vi.fn().mockReturnValue({ set: txUpdateSet });
-    const onConflictDoNothing = vi.fn().mockResolvedValue([]);
-    const values = vi.fn().mockReturnValue({ onConflictDoNothing });
+    const onConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
     mockTx.insert = vi.fn().mockReturnValue({ values });
 
     const result = await orgMemberRoleChangeHandler(
@@ -330,5 +341,83 @@ describe("orgMemberRoleChangeHandler", () => {
     );
     expect(mockTx.update).not.toHaveBeenCalled();
     expect(mockTx.insert).not.toHaveBeenCalled();
+  });
+
+  // ── The self-lockout regression (2026-09-18) ───────────────────────────────
+  // `pra_principal_role_org_null_workspace_uniq` is UNIQUE (principal_id,
+  // role_id, org_id) WHERE workspace_id IS NULL, and carries `deleted_at`
+  // neither in the key nor in the predicate. So the row the revocation step
+  // soft-deletes still occupies the slot the grant step inserts into, and the
+  // grant MUST resurrect it. `onConflictDoNothing` there discarded the grant
+  // while the revocation committed, leaving the member with no org role — which
+  // is how the sole Owner of a production organisation lost every grant by
+  // re-applying the role they already held.
+  it("re-granting the role the member already holds resurrects the assignment, never drops it", async () => {
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser, lowercase 'owner'
+      [{ id: "owner-role-id", name: "Owner" }], // 4: new role 'Owner' resolves
+      // newRole IS Owner → the last-owner guard is skipped entirely, which is
+      // exactly why it could not catch this.
+      [{ id: "target-principal-id" }], // 5: mutation existing principal
+      [{ id: "resurrected-pra-id" }], // 6: post-condition — a live grant remains
+    ]);
+
+    const txUpdateWhere = vi.fn().mockResolvedValue([]);
+    const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
+    mockTx.update = vi.fn().mockReturnValue({ set: txUpdateSet });
+
+    const onConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    mockTx.insert = vi.fn().mockReturnValue({ values });
+
+    await orgMemberRoleChangeHandler(
+      { targetUserId: "target-user", newRole: "Owner" },
+      makeCtx(),
+    );
+
+    // The grant upserts rather than silently doing nothing on conflict...
+    expect(onConflictDoUpdate).toHaveBeenCalledOnce();
+    // ...and what it writes on conflict is the un-deletion of the row the
+    // revocation step just tombstoned.
+    const [conflictArg] = onConflictDoUpdate.mock.calls[0] as [
+      { set: Record<string, unknown> },
+    ];
+    expect(conflictArg.set).toMatchObject({
+      deletedAt: null,
+      deletedById: null,
+    });
+  });
+
+  it("a role change that would leave the member with no org role refuses instead of committing", async () => {
+    mockTx.select = buildSelectMock([
+      [{ id: "actor-principal-id" }], // 1: actor principal
+      [{ roleName: "Owner" }], // 2: actor PRA = Owner
+      [{ id: "target-ou-id", role: "owner" }], // 3: target orgUser
+      [{ id: "owner-role-id", name: "Owner" }], // 4: new role 'Owner' resolves
+      [{ id: "target-principal-id" }], // 5: mutation existing principal
+      [], // 6: post-condition — NO live grant survived
+    ]);
+
+    const txUpdateWhere = vi.fn().mockResolvedValue([]);
+    const txUpdateSet = vi.fn().mockReturnValue({ where: txUpdateWhere });
+    mockTx.update = vi.fn().mockReturnValue({ set: txUpdateSet });
+    const onConflictDoUpdate = vi.fn().mockResolvedValue([]);
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    mockTx.insert = vi.fn().mockReturnValue({ values });
+
+    const err = await orgMemberRoleChangeHandler(
+      { targetUserId: "target-user", newRole: "Owner" },
+      makeCtx(),
+    ).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("no org role");
+    // Refused before the audit event, so nothing claims a change happened.
+    expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
   });
 });
