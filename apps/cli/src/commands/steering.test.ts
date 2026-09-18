@@ -6,13 +6,22 @@
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { apiPostOrThrow, evaluateGate, checkSteeringFreshness, syncSteering } =
-  vi.hoisted(() => ({
-    apiPostOrThrow: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
-    evaluateGate: vi.fn(),
-    checkSteeringFreshness: vi.fn(),
-    syncSteering: vi.fn(),
-  }));
+const {
+  apiPostOrThrow,
+  evaluateGate,
+  checkSteeringFreshness,
+  syncSteering,
+  execGit,
+} = vi.hoisted(() => ({
+  apiPostOrThrow: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+  evaluateGate: vi.fn(),
+  checkSteeringFreshness: vi.fn(),
+  syncSteering: vi.fn(),
+  // The CLI must never reach a real git in a unit test. Hoisted so a test can
+  // say what `git remote get-url` answered, which is how the checkout's own
+  // repository is identified.
+  execGit: vi.fn<(args: readonly string[]) => Promise<string>>(),
+}));
 
 vi.mock("../lib/api.js", () => ({ apiPostOrThrow }));
 
@@ -25,8 +34,7 @@ vi.mock("@oxagen/steering-freshness", async () => {
     evaluateGate,
     checkSteeringFreshness,
     syncSteering,
-    // The CLI must never reach a real git in a unit test.
-    execGit: vi.fn(async () => ""),
+    execGit,
   };
 });
 
@@ -92,6 +100,8 @@ beforeEach(() => {
   checkSteeringFreshness.mockResolvedValue(verdict);
   evaluateGate.mockReset();
   syncSteering.mockReset();
+  execGit.mockReset();
+  execGit.mockResolvedValue("");
 });
 
 describe("findProjectRoot", () => {
@@ -144,6 +154,80 @@ describe("resolveContext", () => {
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
     await resolveContext(tmp, { offline: true });
     expect(apiPostOrThrow).not.toHaveBeenCalled();
+  });
+
+  // The call is scoped by the CLI's globally selected workspace, not by the
+  // directory the prompt came from, and a developer with several checkouts
+  // routinely has one selected while working in another. Inheriting that
+  // workspace's blocking policy refused prompts over records belonging to a
+  // repository this checkout has nothing to do with.
+  it("ignores a platform answer about a different repository", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    execGit.mockResolvedValue("git@github.com:acme/this-one.git");
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/some-other",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform).toBeNull();
+    expect(ctx.policy.blockStaleRuns).toBe(false);
+    expect(ctx.warnings.join(" ")).toContain("acme/some-other");
+  });
+
+  it("keeps the answer when the repository matches, whatever the URL shape", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    execGit.mockResolvedValue("https://github.com/Acme/This-One.git");
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/this-one",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform?.steeringVersion).toBe(7);
+    expect(ctx.policy.blockStaleRuns).toBe(true);
+  });
+
+  // The workspace approved `release`; the remote's own default is still
+  // `main`. Comparing against `main` left an enforced checkout reported as
+  // `current` while Context PRs merged into `release`.
+  it("compares against the workspace's approved branch, not the remote's default", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.local.json"),
+      JSON.stringify({ steering: { branch: "main" } }),
+      "utf8",
+    );
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: null,
+      defaultBranch: "release",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    // `workspace` is the last scope, so it outranks the personal file too.
+    expect(ctx.policy.branch).toBe("release");
+  });
+
+  it("says so when a personal exclusion was refused", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.local.json"),
+      JSON.stringify({ steering: { exclude: [".oxagen/rules"] } }),
+      "utf8",
+    );
+    const ctx = await resolveContext(tmp);
+    expect(ctx.policy.exclude).not.toContain(".oxagen/rules");
+    expect(ctx.warnings.join(" ")).toContain(".oxagen/rules");
   });
 
   it("reports a settings file it could not parse", async () => {

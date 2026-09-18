@@ -70,14 +70,52 @@ describe("resolveSteeringPolicy", () => {
 
   it("unions the excludes rather than replacing them", () => {
     const policy = resolveSteeringPolicy([
+      { scope: "user", policy: { exclude: [".oxagen/notes"] } },
       { scope: "project", policy: { exclude: [".oxagen/scratch"] } },
-      { scope: "local", policy: { exclude: [".oxagen/notes"] } },
+      { scope: "workspace", policy: { exclude: [".oxagen/vendor"] } },
     ]);
     expect(policy.exclude).toEqual([
       ".oxagen/notes",
       ".oxagen/scratch",
       ".oxagen/settings.local.json",
+      ".oxagen/vendor",
     ]);
+  });
+
+  // `.oxagen/settings.local.json` is personal and gitignored. An exclusion
+  // written there filters records out of the comparison, so one line nobody
+  // else can read — `.oxagen/rules` — makes every missing record vanish and
+  // the verdict come back `current` with `blockStaleRuns` still on. That is
+  // the gate's off switch, held by the one scope the workspace cannot see.
+  it("refuses an exclusion written in the personal settings file", () => {
+    const policy = resolveSteeringPolicy([
+      { scope: "workspace", policy: { blockStaleRuns: true } },
+      { scope: "local", policy: { exclude: [".oxagen/rules"] } },
+    ]);
+    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
+    expect(policy.blockStaleRuns).toBe(true);
+  });
+
+  // Refused whatever the workspace has switched on, so the setting means the
+  // same thing on every machine rather than changing meaning with the gates.
+  it("refuses a personal exclusion even with no gate active", () => {
+    const policy = resolveSteeringPolicy([
+      { scope: "local", policy: { exclude: [".oxagen/rules"] } },
+    ]);
+    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
+  });
+
+  // Nothing to report when a reviewed scope already excludes the same path:
+  // the personal file is then redundant, not defeated.
+  it("reports nothing when a reviewed scope already excludes the path", () => {
+    const policy = resolveSteeringPolicy([
+      { scope: "project", policy: { exclude: [".oxagen/scratch"] } },
+      { scope: "local", policy: { exclude: [".oxagen/scratch"] } },
+    ]);
+    expect(policy.exclude).toContain(".oxagen/scratch");
+    expect(policy.refusedExcludes).toEqual([]);
   });
 
   it("always excludes the personal settings file", () => {

@@ -84,6 +84,34 @@ describe("syncSteering refusals", () => {
     expect(result.refusal).toBe("remote_ref_missing");
   });
 
+  // The platform fallback's own case: Oxagen knows a promotion was published
+  // at a commit this checkout cannot reach, so the verdict is `behind` and
+  // `missing` is empty, because the remote-tracking ref on disk has nothing
+  // for git to diff against. Falling through wrote no files and returned
+  // `applied: true` with "0 file(s) synced", so an enforced gate re-checked,
+  // refused again, and recommended the same command — a loop whose every step
+  // reported success.
+  it("refuses when it is behind but has nothing on disk to copy", async () => {
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({ missing: [] }),
+      run: okRunner,
+    });
+    expect(result.refusal).toBe("remote_ref_stale");
+    expect(result.applied).toBe(false);
+    expect(result.message).toContain("git fetch origin");
+  });
+
+  it("refuses the same way on a dry run, rather than offering 0 files", async () => {
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({ missing: [] }),
+      run: okRunner,
+      dryRun: true,
+    });
+    expect(result.refusal).toBe("remote_ref_stale");
+  });
+
   it("still refuses unknown even with --force", async () => {
     const result = await syncSteering({
       cwd: "/repo",

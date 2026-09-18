@@ -23,6 +23,7 @@
  *    including the file itself when nothing else is left in it.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 /** The substring that identifies an entry as this feature's. */
@@ -57,14 +58,32 @@ export function hookCommand(harness: InstallableHarness): string {
   return `oxagen steering gate --harness ${harness}`;
 }
 
-/** Where each harness keeps its project-scoped hook config. */
+/**
+ * Where each harness reads its hook config.
+ *
+ * The two are NOT symmetric, and writing them as if they were left the Codex
+ * installer reporting success over a file Codex never opens — the gate
+ * inactive for every prompt, on a harness the command advertises.
+ *
+ *   - Claude Code reads `<project>/.claude/settings.json`, a project-scoped
+ *     file, so the hook lands beside the repository it governs.
+ *   - Codex has no project-scoped hook file. It reads `$CODEX_HOME/hooks.json`
+ *     (`~/.codex/hooks.json` by default) and nothing else — the same path
+ *     `packages/tacho/src/host/paths.ts` resolves for its own Codex writer,
+ *     verified there against developers.openai.com/codex/hooks.
+ *
+ * `env` and `home` are parameters so a test can pin both without touching the
+ * developer's real home directory.
+ */
 export function hookConfigPath(
   projectRoot: string,
   harness: InstallableHarness,
+  env: Record<string, string | undefined> = process.env,
+  home: string = homedir(),
 ): string {
-  return harness === "claude-code"
-    ? join(projectRoot, ".claude", "settings.json")
-    : join(projectRoot, ".codex", "hooks.json");
+  if (harness === "claude-code")
+    return join(projectRoot, ".claude", "settings.json");
+  return join(env["CODEX_HOME"] ?? join(home, ".codex"), "hooks.json");
 }
 
 interface HookCommandEntry {

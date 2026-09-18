@@ -56,6 +56,7 @@ import {
 import {
   readFetchStamp,
   shouldFetch,
+  shouldContactRemote,
   writeFetchStamp,
   type CacheIo,
 } from "./cache";
@@ -220,9 +221,40 @@ export async function checkSteeringFreshness(
     return unknown(base, "this repository has no commits yet");
   }
 
+  // The stamp is read BEFORE the branch is resolved, because resolving the
+  // branch can itself touch the network.
+  //
+  // `defaultBranch` refreshes the cached `refs/remotes/<remote>/HEAD` with
+  // `git remote set-head --auto`, which is a round trip. Left unthrottled it
+  // ran on EVERY prompt — ahead of the fetch throttle below, which is the
+  // thing that is supposed to bound how often a prompt talks to a server — so
+  // the advertised interval bounded nothing and an unreachable remote spent
+  // the whole git timeout before each prompt.
+  //
+  // The throttle here is on the stamp's age alone rather than on its target:
+  // the question is "have we contacted this remote recently", and the target
+  // is not known yet. A miss costs one extra local read of the cached ref.
+  const commonDir = allowNetwork
+    ? await gitOrNull(repoCtx, "rev-parse", "--git-common-dir")
+    : null;
+  // `--git-common-dir` can answer relatively (".git"); resolve it against
+  // the root so the stamp lands in one place from every worktree.
+  const stampDir = commonDir
+    ? commonDir.startsWith("/")
+      ? commonDir
+      : `${root}/${commonDir}`
+    : null;
+  const stamp = stampDir ? await readFetchStamp(stampDir, cacheIo) : null;
+  const remoteContactDue =
+    allowNetwork &&
+    shouldContactRemote(stamp, policy.fetchIntervalSeconds, now());
+
   const branch =
     policy.branch ??
-    (await defaultBranch(repoCtx, policy.remote, { allowNetwork }));
+    (await defaultBranch(repoCtx, policy.remote, {
+      allowNetwork,
+      refreshCachedHead: remoteContactDue,
+    }));
   base.branch = branch;
   if (!branch) {
     return unknown(
@@ -234,15 +266,6 @@ export async function checkSteeringFreshness(
   const target = `${policy.remote}/${branch}`;
 
   if (allowNetwork) {
-    const commonDir = await gitOrNull(repoCtx, "rev-parse", "--git-common-dir");
-    // `--git-common-dir` can answer relatively (".git"); resolve it against
-    // the root so the stamp lands in one place from every worktree.
-    const stampDir = commonDir
-      ? commonDir.startsWith("/")
-        ? commonDir
-        : `${root}/${commonDir}`
-      : null;
-    const stamp = stampDir ? await readFetchStamp(stampDir, cacheIo) : null;
     if (shouldFetch(stamp, target, policy.fetchIntervalSeconds, now())) {
       const result = await fetchBranch(repoCtx, policy.remote, branch);
       base.fetch = {
@@ -338,10 +361,27 @@ export async function checkSteeringFreshness(
   //
   // What survives is the honest pair: records in force that this checkout
   // would not read, and this checkout's own work that a sync would destroy.
-  const [outstanding, authored] = await Promise.all([
-    differingFromRemote(repoCtx, remoteHead, missing),
-    differingFromRemote(repoCtx, remoteHead, local),
-  ]);
+  // Inside the same conversion as the comparison above: `differingFromRemote`
+  // runs `git diff` directly too, so an object that vanished, a worktree that
+  // changed under us or a timeout rejected here and escaped a function
+  // documented never to throw — crashing `steering status` and `steering
+  // sync`, and being swallowed by the prompt hook, which then allowed the run
+  // with none of the diagnostic an `unknown` carries.
+  let outstanding: PathChange[];
+  let authored: PathChange[];
+  try {
+    [outstanding, authored] = await Promise.all([
+      differingFromRemote(repoCtx, remoteHead, missing),
+      differingFromRemote(repoCtx, remoteHead, local),
+    ]);
+  } catch (error) {
+    return unknown(
+      base,
+      `could not compare this checkout with ${target}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
   base.missing = outstanding;
   base.local = authored;

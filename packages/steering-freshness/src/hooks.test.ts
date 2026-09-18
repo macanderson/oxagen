@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   HOOK_MARKER,
   hookCommand,
@@ -11,7 +11,21 @@ import {
 
 const ROOT = "/repo";
 const CLAUDE = "/repo/.claude/settings.json";
-const CODEX = "/repo/.codex/hooks.json";
+// Codex has no project-scoped hook file: it reads `$CODEX_HOME/hooks.json`
+// and nothing else, so the path is pinned through the environment rather than
+// derived from the project root.
+const CODEX_HOME = "/home/dev/.codex";
+const CODEX = "/home/dev/.codex/hooks.json";
+
+let previousCodexHome: string | undefined;
+beforeEach(() => {
+  previousCodexHome = process.env["CODEX_HOME"];
+  process.env["CODEX_HOME"] = CODEX_HOME;
+});
+afterEach(() => {
+  if (previousCodexHome === undefined) delete process.env["CODEX_HOME"];
+  else process.env["CODEX_HOME"] = previousCodexHome;
+});
 
 function io(files: Record<string, string> = {}): HookIo & {
   files: Record<string, string>;
@@ -38,9 +52,22 @@ const parse = (store: { files: Record<string, string> }, path: string) =>
   JSON.parse(store.files[path]!) as Record<string, unknown>;
 
 describe("hookConfigPath", () => {
-  it("writes each harness to its own project-scoped file", () => {
+  it("writes Claude Code beside the project and Codex where Codex reads", () => {
     expect(hookConfigPath(ROOT, "claude-code")).toBe(CLAUDE);
     expect(hookConfigPath(ROOT, "codex")).toBe(CODEX);
+  });
+
+  // Writing `<project>/.codex/hooks.json` reported a successful install over
+  // a file Codex never opens, leaving the gate inactive on a harness the
+  // command advertises.
+  it("never puts the Codex hook under the project root", () => {
+    expect(hookConfigPath(ROOT, "codex")).not.toContain(ROOT);
+  });
+
+  it("falls back to ~/.codex when CODEX_HOME is unset", () => {
+    expect(hookConfigPath(ROOT, "codex", {}, "/home/dev")).toBe(
+      "/home/dev/.codex/hooks.json",
+    );
   });
 });
 

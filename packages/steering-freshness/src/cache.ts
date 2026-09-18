@@ -111,3 +111,28 @@ export function shouldFetch(
   if (stamp.attemptedAt > now) return true;
   return now - stamp.attemptedAt >= intervalSeconds * 1000;
 }
+
+/**
+ * Whether ANY call to this remote is due, ignoring which branch was last
+ * fetched.
+ *
+ * `shouldFetch` answers "should I fetch THIS target", and a stamp for another
+ * branch never suppresses it, because that is an answer to a different
+ * question. Resolving the default branch asks a different question again —
+ * "may I contact the remote at all right now" — and it has to be answered
+ * BEFORE the target is known, since the target is what the answer produces.
+ *
+ * The same interval governs both, so a checkout that fetched a moment ago does
+ * not also re-ask the server which branch is default before every prompt.
+ */
+export function shouldContactRemote(
+  stamp: FetchStamp | null,
+  intervalSeconds: number,
+  now: number,
+): boolean {
+  if (intervalSeconds <= 0) return true;
+  if (!stamp) return true;
+  // A clock that moved backwards must not lock the throttle shut.
+  if (stamp.attemptedAt > now) return true;
+  return now - stamp.attemptedAt >= intervalSeconds * 1000;
+}

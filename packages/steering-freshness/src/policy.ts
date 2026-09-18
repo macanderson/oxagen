@@ -105,6 +105,12 @@ export interface SteeringPolicy {
   /** True when an escape hatch disabled the gates for this process only. */
   suspended: boolean;
   suspendedReason: string | null;
+  /**
+   * Exclusions named by `.oxagen/settings.local.json` and refused. Reported so
+   * the developer is told their setting did nothing, rather than discovering
+   * it by being blocked over a record they thought they had excluded.
+   */
+  refusedExcludes: string[];
 }
 
 /**
@@ -122,6 +128,7 @@ export const DEFAULT_POLICY: SteeringPolicy = {
   fetchIntervalSeconds: 300,
   exclude: [...ALWAYS_EXCLUDED],
   sources: { autoSync: null, blockStaleRuns: null },
+  refusedExcludes: [],
   suspended: false,
   suspendedReason: null,
 };
@@ -166,8 +173,10 @@ export function resolveSteeringPolicy(
     ...DEFAULT_POLICY,
     exclude: [...ALWAYS_EXCLUDED],
     sources: { autoSync: null, blockStaleRuns: null },
+    refusedExcludes: [],
   };
   const excluded = new Set<string>(ALWAYS_EXCLUDED);
+  const refused = new Set<string>();
 
   const ordered = [...layers].sort(
     (a, b) => POLICY_SCOPES.indexOf(a.scope) - POLICY_SCOPES.indexOf(b.scope),
@@ -188,9 +197,33 @@ export function resolveSteeringPolicy(
     if (policy.fetchIntervalSeconds !== undefined) {
       out.fetchIntervalSeconds = policy.fetchIntervalSeconds;
     }
-    for (const path of policy.exclude ?? []) excluded.add(path);
+    for (const path of policy.exclude ?? []) {
+      // `local` is `.oxagen/settings.local.json`: personal, gitignored, and
+      // reviewed by nobody. An exclusion from there removes records from the
+      // comparison, so a single line in a file the workspace cannot see —
+      // `.oxagen/rules`, say — filters away everything that is missing and the
+      // verdict comes back `current` with `blockStaleRuns` still nominally on.
+      // That is not a preference, it is the gate's off switch, and the one
+      // scope that must not hold it is the one nobody else can read.
+      //
+      // The gates themselves already ratchet — a lower scope may turn one ON
+      // and may never turn one OFF — and this is the same rule for the other
+      // half of the control. It is refused unconditionally rather than only
+      // while a gate is active, so the setting means the same thing whatever
+      // the workspace has switched on today.
+      //
+      // `.oxagen/settings.local.json` itself stays excluded for everyone:
+      // ALWAYS_EXCLUDED puts it there before any layer is read.
+      if (scope === "local") {
+        refused.add(path);
+        continue;
+      }
+      excluded.add(path);
+    }
   }
 
+  for (const path of refused) if (!excluded.has(path)) out.refusedExcludes.push(path);
+  out.refusedExcludes.sort();
   out.exclude = [...excluded].sort();
   if (emergency.suspended) {
     out.suspended = true;

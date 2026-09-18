@@ -39,7 +39,8 @@ export type SyncRefusal =
   | "diverged"
   | "dirty"
   | "unknown_state"
-  | "remote_ref_missing";
+  | "remote_ref_missing"
+  | "remote_ref_stale";
 
 export interface SyncResult {
   applied: boolean;
@@ -145,6 +146,26 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
   const updated = verdict.missing
     .filter((c) => c.status !== "removed")
     .map((c) => c.path);
+
+  // Behind, but with nothing git can copy.
+  //
+  // This is exactly the case the platform fallback was added for: Oxagen knows
+  // a promotion was published at a commit this checkout cannot reach, so the
+  // verdict is `behind` — and `missing` is empty, because the remote-tracking
+  // ref on disk does not contain that promotion for git to diff against. Every
+  // filter above therefore yields nothing.
+  //
+  // Falling through wrote no files and still returned `applied: true` with
+  // "0 file(s) synced". The gate then re-checked, found the same staleness,
+  // refused the prompt again, and recommended the same command — a loop whose
+  // every step reported success. The honest answer is that the remote copy on
+  // disk is too old, and the repair is a fetch.
+  if (updated.length === 0 && removed.length === 0) {
+    return refuse(
+      "remote_ref_stale",
+      `Oxagen reports steering published at a commit ${target} does not contain, so there is nothing on disk to sync from. Run \`git fetch ${verdict.remote}\` and try again.`,
+    );
+  }
 
   if (dryRun) {
     return {

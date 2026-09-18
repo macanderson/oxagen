@@ -132,7 +132,10 @@ export async function repoRoot(ctx: GitContext): Promise<string | null> {
 export async function defaultBranch(
   ctx: GitContext,
   remote: string,
-  { allowNetwork }: { allowNetwork: boolean },
+  {
+    allowNetwork,
+    refreshCachedHead = allowNetwork,
+  }: { allowNetwork: boolean; refreshCachedHead?: boolean },
 ): Promise<string | null> {
   // The cached ref answers first because it is local and free — but only
   // after it has been given the chance to be right. `refs/remotes/<remote>/HEAD`
@@ -149,7 +152,13 @@ export async function defaultBranch(
   // repository better than it found it, so the next offline run is right too.
   // A failure is ignored: offline, or a remote that will not answer, is
   // exactly the case the cached ref exists to cover.
-  if (allowNetwork) {
+  // Throttled by the caller. This is a network round trip, and it happens
+  // before the fetch throttle that is supposed to bound how often a prompt
+  // talks to a server, so running it unconditionally made that interval
+  // bound nothing and let an unreachable remote spend the whole git timeout
+  // ahead of every prompt. Default is the old behaviour, for callers with no
+  // throttle of their own.
+  if (refreshCachedHead) {
     await gitOrNull(ctx, "remote", "set-head", remote, "--auto");
   }
   const head = await gitOrNull(

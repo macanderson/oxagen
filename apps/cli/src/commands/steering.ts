@@ -90,6 +90,8 @@ export function findProjectRoot(start: string): string {
 interface PlatformFreshness {
   steeringVersion: number;
   headCommit: string | null;
+  /** `owner/repo` of the workspace's main repository, or null if none is bound. */
+  repository: string | null;
   defaultBranch: string | null;
   policy: SteeringPolicyFile | null;
 }
@@ -121,6 +123,44 @@ async function readPlatform(): Promise<PlatformFreshness | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * `owner/repo` for a checkout's remote, or null when it cannot be read.
+ *
+ * Normalised across the three shapes a remote URL takes — `git@host:o/r.git`,
+ * `https://host/o/r.git`, `ssh://git@host/o/r` — because the comparison below
+ * is against a platform value that is always the bare `owner/repo`. Case is
+ * folded: GitHub treats `Acme/App` and `acme/app` as the same repository and a
+ * false mismatch would discard a perfectly good platform answer.
+ */
+async function checkoutRepository(
+  projectRoot: string,
+  remote: string,
+): Promise<string | null> {
+  const { execGit } = await import("@oxagen/steering-freshness");
+  let url: string;
+  try {
+    url = (
+      await execGit(["remote", "get-url", remote], {
+        cwd: projectRoot,
+        timeoutMs: 5_000,
+      })
+    ).trim();
+  } catch {
+    return null;
+  }
+  if (url.length === 0) return null;
+  const withoutSuffix = url.replace(/\.git$/, "");
+  // Everything after the host: the last two path segments are owner and repo.
+  const parts = withoutSuffix
+    .replace(/^[a-z+]+:\/\//i, "")
+    .replace(/^[^@/]+@/, "")
+    .replace(":", "/")
+    .split("/")
+    .filter((part) => part.length > 0);
+  if (parts.length < 3) return null;
+  return parts.slice(-2).join("/").toLowerCase();
 }
 
 /**
@@ -177,10 +217,70 @@ export async function resolveContext(
   { offline = false }: { offline?: boolean } = {},
 ): Promise<ResolvedContext> {
   const projectRoot = findProjectRoot(cwd);
-  const platformFreshness = offline ? null : await readPlatform();
+  const fromPlatform = offline ? null : await readPlatform();
+  const mismatch: string[] = [];
+
+  // ── Is the platform answering about THIS checkout? ──────────────────────
+  //
+  // The call is scoped by the CLI's globally selected org and workspace, not
+  // by the directory the prompt came from, and a developer with several
+  // checkouts routinely has one selected while working in another. Nothing
+  // reconciled the two: the answer's policy became this checkout's policy and
+  // its publication commit became the thing this checkout was compared
+  // against, so a workspace's blocking gate applied to an unrelated
+  // repository and refused prompts over records that had nothing to do with
+  // it.
+  //
+  // The platform names the repository it is answering about, so the check is
+  // simply to ask. On a mismatch the whole answer is discarded — policy and
+  // signal together, since neither half is about this repository — and the
+  // developer is told which workspace they have selected. Discarding is safe
+  // in the direction that matters: git remains the primary signal, and the
+  // worst case is the local gates rather than the workspace's.
+  //
+  // A platform with no repository bound (`repository: null`) is not a
+  // mismatch: steering is simply off for that workspace, and its policy still
+  // legitimately applies.
+  const localRepo = await checkoutRepository(
+    projectRoot,
+    // Before the policy is resolved, so the default remote. A workspace that
+    // renames its remote is the rare case, and it only loses the check.
+    "origin",
+  );
+  const platformRepo = fromPlatform?.repository?.toLowerCase() ?? null;
+  const belongsHere =
+    fromPlatform !== null &&
+    (platformRepo === null || localRepo === null || platformRepo === localRepo);
+  if (fromPlatform !== null && !belongsHere) {
+    mismatch.push(
+      `the selected workspace steers ${String(fromPlatform.repository)} and this checkout is ${String(localRepo)}, so Oxagen's answer was ignored — run \`oxagen workspace use\` to select the workspace this repository belongs to`,
+    );
+  }
+  const platformFreshness = belongsHere ? fromPlatform : null;
+
   const { layers, warnings } = await loadSteeringSettings({
     projectRoot,
-    workspacePolicy: platformFreshness?.policy ?? null,
+    // The workspace's APPROVED production branch travels with its policy.
+    //
+    // The gates were imported and `defaultBranch` was dropped, so the checker
+    // fell back to resolving the remote's own default — and a workspace that
+    // approved `release` while `origin/HEAD` still says `main` was compared
+    // against the wrong branch entirely. A Context PR merged into `release`
+    // left an enforced checkout reported as `current`, which is the failure
+    // this feature exists to prevent, arriving silently.
+    //
+    // It rides in the `workspace` layer, which is last in POLICY_SCOPES, so it
+    // also outranks a `branch` or `remote` a lower scope set — exactly the
+    // redirection a personal settings file could otherwise perform.
+    workspacePolicy:
+      platformFreshness?.policy == null
+        ? null
+        : {
+            ...platformFreshness.policy,
+            ...(platformFreshness.defaultBranch === null
+              ? {}
+              : { branch: platformFreshness.defaultBranch }),
+          },
   });
   const policy = resolveSteeringPolicy(
     layers,
@@ -190,7 +290,17 @@ export async function resolveContext(
     projectRoot,
     policy,
     platform: await toSignal(platformFreshness, projectRoot),
-    warnings: warnings.map((w) => `${w.path} ${w.message}`),
+    warnings: [
+      ...warnings.map((w) => `${w.path} ${w.message}`),
+      ...mismatch,
+      // A personal exclusion that was refused did nothing; say so, rather than
+      // letting the developer discover it by being blocked over a record they
+      // believe they excluded.
+      ...policy.refusedExcludes.map(
+        (path) =>
+          `\`${path}\` is excluded in .oxagen/settings.local.json and was ignored: a personal file cannot remove records from the freshness check`,
+      ),
+    ],
   };
 }
 
