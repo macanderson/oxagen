@@ -9,8 +9,9 @@ import {
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 
-/** Runs re-rolled per backdated sync; the rest wait for the next one. */
+/** Runs listed per query while draining, and the most one sync re-rolls. */
 const REPRICE_BATCH = 500;
+const REPRICE_CEILING = 10_000;
 
 type WorkspaceDay = { orgId: string; workspaceId: string; day: string };
 
@@ -89,40 +90,60 @@ export const [costPriceBookSync] = createFunction(
       };
     });
 
-    // Only after a backdated write: a row effective from the next boundary
-    // prices nothing that has already run, so there is nothing to re-roll.
+    // While the book is cold. Not "on a sync that wrote a row": the next
+    // hourly sync of an unchanged book writes nothing, so tying the pass to
+    // a write left every run beyond the first batch, and every run a
+    // transient failure skipped, with its blank cost for good. Cold start
+    // ends on its own (the window since the book's first row), and the
+    // batches drain within it.
     let repriced = 0;
-    if (report.coldStart && report.written > 0) {
-      const pending = await step.run("list-incomplete-runs", () =>
-        listRunsWithIncompleteCost({ limit: REPRICE_BATCH }),
-      );
+    let drained = false;
+    if (report.coldStart) {
       const days = new Map<string, WorkspaceDay>();
-      for (const runId of pending) {
-        const day = await step.run(
-          `run-${runId}`,
-          async (): Promise<WorkspaceDay | null> => {
-            try {
-              const record = await rebuildRunTotals(runId);
-              if (!record) return null;
-              return {
-                orgId: record.orgId,
-                workspaceId: record.workspaceId,
-                day: utcDay(record.startedAt),
-              };
-            } catch (err) {
-              // One run's degraded frame read must not stop the pass; the
-              // run stays incomplete and the next backdated sync retries it.
-              logger.warn(
-                { runId, err },
-                "cost.price-book-sync: run rollup failed",
-              );
-              return null;
-            }
-          },
+      let seen = 0;
+      for (let batch = 0; batch * REPRICE_BATCH < REPRICE_CEILING; batch += 1) {
+        const pending = await step.run(`list-incomplete-runs-${batch}`, () =>
+          listRunsWithIncompleteCost({
+            limit: REPRICE_BATCH,
+            offset: batch * REPRICE_BATCH,
+          }),
         );
-        if (day) {
-          repriced += 1;
-          days.set(`${day.workspaceId}:${day.day}`, day);
+        if (pending.length === 0) {
+          drained = true;
+          break;
+        }
+        seen += pending.length;
+        for (const runId of pending) {
+          const day = await step.run(
+            `run-${runId}`,
+            async (): Promise<WorkspaceDay | null> => {
+              try {
+                const record = await rebuildRunTotals(runId);
+                if (!record) return null;
+                return {
+                  orgId: record.orgId,
+                  workspaceId: record.workspaceId,
+                  day: utcDay(record.startedAt),
+                };
+              } catch (err) {
+                // One run's degraded frame read must not stop the pass; the
+                // run stays incomplete and the next hourly sync retries it.
+                logger.warn(
+                  { runId, err },
+                  "cost.price-book-sync: run rollup failed",
+                );
+                return null;
+              }
+            },
+          );
+          if (day) {
+            repriced += 1;
+            days.set(`${day.workspaceId}:${day.day}`, day);
+          }
+        }
+        if (pending.length < REPRICE_BATCH) {
+          drained = true;
+          break;
         }
       }
       for (const target of days.values()) {
@@ -131,8 +152,10 @@ export const [costPriceBookSync] = createFunction(
         );
       }
       logger.info(
-        { pending: pending.length, repriced, workspaceDays: days.size },
-        "cost.price-book-sync: re-rolled runs the backdated prices can price",
+        { seen, repriced, drained, workspaceDays: days.size },
+        drained
+          ? "cost.price-book-sync: re-rolled every run the book can now price"
+          : "cost.price-book-sync: re-rolled runs up to the per-sync ceiling; the next sync continues",
       );
     }
 
@@ -169,6 +192,6 @@ export const [costPriceBookSync] = createFunction(
         "cost.price-book-sync complete",
       );
 
-    return { ...report, repriced };
+    return { ...report, repriced, drained };
   },
 );

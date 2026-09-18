@@ -669,16 +669,20 @@ export async function listRunsAwaitingRollup(args: {
  */
 export async function listRunsWithIncompleteCost(args: {
   limit: number;
+  /** Rows to skip, so a caller can walk past a batch it has already read. */
+  offset?: number;
 }): Promise<string[]> {
   return withSystemDb(async (tx) => {
     const rows = await tx
       .select({ runId: totals.runId })
       .from(totals)
-      .where(
-        or(isNull(totals.costBasis), eq(totals.costBasis, "estimated")),
-      )
-      .orderBy(asc(totals.startedAt))
-      .limit(args.limit);
+      .where(or(isNull(totals.costBasis), eq(totals.costBasis, "estimated")))
+      // Ordered by a column the pass does not write, so a run rebuilt into
+      // a complete cost leaves the result set without shifting the rows
+      // behind it past an offset that has already been read.
+      .orderBy(asc(totals.startedAt), asc(totals.runId))
+      .limit(args.limit)
+      .offset(args.offset ?? 0);
     return rows.map((r) => r.runId);
   });
 }
