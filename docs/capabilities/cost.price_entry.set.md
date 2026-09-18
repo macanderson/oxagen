@@ -10,7 +10,7 @@ The row a new rate supersedes is **closed, never overwritten**: `effective_to` i
 
 ## Surface
 
-- API: `PUT /v1/:org_slug/:workspace_slug/cost/price-entries`
+- API: `POST /v1/:org_slug/:workspace_slug/cost/price-entries/set` (not `PUT`: a body that omits `effectiveFrom` takes the write instant, so a blind retry opens a second window rather than repeating the first write)
 - MCP: `set_price_entry`
 - CLI: `oxagen price set --provider <p> --model <m> --token-class <c> --usd-per-million <usd>`
 - Authentication: session or API key (org Owner, Admin or Billing only; an API key acts as its creator)

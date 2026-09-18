@@ -578,7 +578,7 @@ orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/runs/proof", runProofGetRoute);
 orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
-orgScoped.route("/cost/price-entries", costPriceEntrySetRoute);
+orgScoped.route("/cost/price-entries/set", costPriceEntrySetRoute);
 orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
 orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);

@@ -871,7 +871,10 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Negotiated model rates as inline JSON, in USD per one million tokens: " +
       '{"claude-sonnet-5":{"inputPer1M":2.40,"outputPer1M":12.00,"cachedInputPer1M":0.24,"cacheWrite5mPer1M":3.00}}. ' +
       "Leave unset unless you have negotiated rates with a model provider.",
-    secret: false,
+    // Contract terms. The env manager maps this flag straight to Vercel's
+    // `plain` vs `encrypted`, so `false` would leave negotiated rates readable
+    // to anyone with project-environment access and unmasked in build logs.
+    secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],

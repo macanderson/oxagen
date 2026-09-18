@@ -777,15 +777,52 @@ describe("the negotiated write path", () => {
     expect(fake.rows).toHaveLength(2);
   });
 
-  it("refuses to end a rate at or before it starts", async () => {
+  it("refuses to end a rate at or before it starts once it is in force", async () => {
     await setNegotiatedPriceEntry({
       ...SET,
       microsPerMillion: 2_400_000n,
       effectiveFrom: T2,
     });
-    await expect(closeNegotiatedPriceEntry({ ...SET, at: T2 })).rejects.toThrow(
-      /cannot end at or before it starts/,
+    await expect(
+      closeNegotiatedPriceEntry({
+        ...SET,
+        at: T2,
+        now: new Date("2026-10-15T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/before it starts/);
+  });
+
+  // The current row already ends at the correction's start, so ending the
+  // rate AT that instant means list pricing from the transition on: the
+  // unshipped correction is cancelled, exactly as one scheduled after `at`.
+  it("cancels an unshipped correction when the rate is ended at its exact start", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const scheduled = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+    const result = await closeNegotiatedPriceEntry({
+      ...SET,
+      at: T2,
+      now: new Date("2026-09-20T00:00:00.000Z"),
+    });
+    // Nothing was in effect at T2 to close: the first row already ended there.
+    expect(result.closed).toBeNull();
+    expect(result.cancelled.map((e) => e.id)).toEqual([scheduled.entry.id]);
+    expect(fake.rows.map((r) => r.id)).toEqual([
+      expect.any(String),
+      first.entry.id,
+    ]);
+    expect(priceAt(new Date("2026-09-20T00:00:00.000Z"))?.id).toBe(
+      first.entry.id,
     );
+    expect(priceAt(T2)?.source).toBe("list");
   });
 });
 

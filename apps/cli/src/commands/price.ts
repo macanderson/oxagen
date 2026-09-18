@@ -11,8 +11,9 @@
  *                       [--region <r>] [--at <rfc3339>]
  *
  * Both calls go through the shared org-scoped API client in lib/api.ts. `set`
- * (PUT /cost/price-entries) uses apiPutOrThrow — the write is idempotent on
- * the row key, so repeating the same body repeats the same row. `remove`
+ * (POST /cost/price-entries/set) uses apiPostOrThrow: not PUT, because a body
+ * that omits --effective-from takes the write instant, so a blind retry would
+ * open a second window rather than repeat the first write. `remove`
  * (POST /cost/price-entries/remove) uses apiPostOrThrow: nothing is deleted,
  * the row is closed at an instant and kept, because a run priced before it
  * still names the entry it was priced with.
@@ -30,7 +31,7 @@
  * one line on stdout; pretty mode renders a table; failures are uniform
  * stderr error lines (exit 2 for a bad flag, exit 1 for an API failure).
  */
-import { apiPostOrThrow, apiPutOrThrow, printTable } from "../lib/api.js";
+import { apiPostOrThrow, printTable } from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -192,18 +193,21 @@ export async function priceSet(
 
   let result: PriceEntrySetResult;
   try {
-    result = await apiPutOrThrow<PriceEntrySetResult>("cost/price-entries", {
-      provider: opts.provider,
-      model: opts.model,
-      tokenClass: opts.tokenClass,
-      // Always the region-agnostic row. A regional rate would win outside its
-      // region because nothing on the pricing path reads `region`, so
-      // `set_price_entry` refuses one and the flag is not offered.
-      region: null,
-      modelAliases: opts.alias?.length ? opts.alias : undefined,
-      usdPerMillion,
-      effectiveFrom,
-    });
+    result = await apiPostOrThrow<PriceEntrySetResult>(
+      "cost/price-entries/set",
+      {
+        provider: opts.provider,
+        model: opts.model,
+        tokenClass: opts.tokenClass,
+        // Always the region-agnostic row. A regional rate would win outside its
+        // region because nothing on the pricing path reads `region`, so
+        // `set_price_entry` refuses one and the flag is not offered.
+        region: null,
+        modelAliases: opts.alias?.length ? opts.alias : undefined,
+        usdPerMillion,
+        effectiveFrom,
+      },
+    );
   } catch (err) {
     out.error(err, "api");
     return;

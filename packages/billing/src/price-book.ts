@@ -1028,20 +1028,19 @@ export async function closeNegotiatedPriceEntry(args: {
     // correction the current row is already closed at that future instant and
     // the scheduled row is the only open one, so "the open row" is the wrong
     // row and ending the visible rate becomes impossible.
+    // Strictly before `at`: a row that starts AT `at` has no window to close
+    // there, so it is treated with the scheduled rows below — cancelled if it
+    // has not begun (the current row already ends at that instant, and list
+    // pricing from the transition on is exactly what was asked for), refused
+    // if it has.
     const active =
       own.find(
         (r) =>
-          r.effectiveFrom.getTime() <= at &&
+          r.effectiveFrom.getTime() < at &&
           (r.effectiveTo === null || r.effectiveTo.getTime() > at),
       ) ?? null;
-    if (active && active.effectiveFrom.getTime() >= at)
-      throw new HandlerError({
-        code: "conflict",
-        reason: "price_entry_ends_before_it_starts",
-        message: `the negotiated price for ${key} is effective from ${active.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
-      });
 
-    const scheduled = own.filter((r) => r.effectiveFrom.getTime() > at);
+    const scheduled = own.filter((r) => r.effectiveFrom.getTime() >= at);
     const begun = scheduled.find(
       (r) => r.effectiveFrom.getTime() <= now.getTime(),
     );

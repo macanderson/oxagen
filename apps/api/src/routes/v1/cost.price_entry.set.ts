@@ -10,13 +10,18 @@ import type { AppEnv } from "../../app";
  * Mounted on the org-scoped router at the same URL the price book is read
  * from, behind session auth.
  *
- * PUT rather than POST: the write is idempotent on the row key (provider,
- * model, token class, region, effectiveFrom), so repeating the same body
- * repeats the same row.
+ * `POST /set`, not `PUT`. The write is idempotent on its row key, but the key
+ * includes `effectiveFrom` and the field is optional: a body that omits it
+ * takes the write instant, so a client or proxy that retries after a lost
+ * response does not repeat the first write — it closes the row that write
+ * created and opens another window, with a second audit event. That is not
+ * what `PUT` promises, and a proxy is entitled to retry a `PUT` on its own.
+ * A caller that wants a safe retry states `effectiveFrom` once and reuses it.
+ * Mounted beside `POST /remove`, since `POST /` on this path is the list read.
  */
 export const costPriceEntrySetRoute = new Hono<AppEnv>();
 
-costPriceEntrySetRoute.put("/", async (c) => {
+costPriceEntrySetRoute.post("/", async (c) => {
   let rawInput: unknown;
   try {
     rawInput = await c.req.json();
