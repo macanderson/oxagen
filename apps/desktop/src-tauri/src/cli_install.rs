@@ -15,6 +15,7 @@
 //! `remove_path_block`, `profile_path_for`, `fish_file_is_ours`,
 //! `detect_shell_kind`, `path_var_contains`, `auto_link_cli_enabled`.
 
+use crate::machine::Roots;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::fs;
@@ -67,10 +68,7 @@ pub fn sidecar_dir_is_transient() -> bool {
 /// `~/.local/share/oxagen/bin` on Linux. Windows installs are never
 /// transient (the shims embed the Program Files path).
 pub fn durable_bin_dir() -> PathBuf {
-    dirs::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("oxagen")
-        .join("bin")
+    Roots::real().durable_bin_dir()
 }
 
 pub fn has_both_sidecars(dir: &Path) -> bool {
@@ -89,6 +87,38 @@ pub fn bin_dir() -> Option<PathBuf> {
     }
     let durable = durable_bin_dir();
     has_both_sidecars(&durable).then_some(durable)
+}
+
+/// What one install or uninstall pass runs against: the machine's roots, the
+/// directory the sidecars are in, whether that directory outlives this
+/// launch, and the two PATH values the decisions read. `real()` reads the
+/// process. A test builds one over a scratch directory.
+pub struct InstallEnv {
+    pub roots: Roots,
+    pub sidecars: Option<PathBuf>,
+    pub transient: bool,
+    /// This process's own PATH.
+    pub process_path: String,
+    /// What a new terminal's PATH would be. `None` asks the login shell,
+    /// which can take seconds, so it is only asked when it is needed.
+    pub login_path: Option<String>,
+    /// Export `TACHO_BIN_DIR` to this process when a durable copy is made, so
+    /// the sidecars spawned next write the durable path into hooks. Off in a
+    /// test: the environment is process-wide and tests run in parallel.
+    pub export_bin_dir: bool,
+}
+
+impl InstallEnv {
+    pub fn real() -> Self {
+        Self {
+            roots: Roots::real(),
+            sidecars: sidecar_dir(),
+            transient: sidecar_dir_is_transient(),
+            process_path: std::env::var("PATH").unwrap_or_default(),
+            login_path: None,
+            export_bin_dir: true,
+        }
+    }
 }
 
 /// Point every sidecar the app spawns at the durable copy (they inherit the
@@ -130,22 +160,7 @@ pub fn on_path(name: &str) -> Option<String> {
 
 /// Where the PATH links go: a directory the user owns on every platform.
 pub fn cli_install_dir() -> PathBuf {
-    if cfg!(windows) {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Oxagen")
-            .join("bin")
-    } else {
-        dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".local")
-            .join("bin")
-    }
-}
-
-/// `~/.config/oxagen/desktop.json`: the one preference this module owns.
-fn desktop_config_path() -> PathBuf {
-    crate::oxagen_dir().join("desktop.json")
+    Roots::real().cli_install_dir()
 }
 
 fn read_json_object(path: &Path) -> Map<String, Value> {
@@ -159,7 +174,7 @@ fn write_json_object(path: &Path, obj: &Map<String, Value>) -> Result<(), String
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let text = serde_json::to_string_pretty(&Value::Object(obj.clone())).unwrap_or_else(|_| "{}".to_string());
-    fs::write(path, text).map_err(|e| e.to_string())
+    crate::machine::write_atomic(path, &text)
 }
 
 /// Pure: whether automatic linking is enabled, given an explicit setting and,
@@ -222,8 +237,14 @@ pub fn developer_harness_in(
 /// from Finder with the bare system PATH, and Claude Code's PATH line lives
 /// in `.zshrc`, which no non-interactive shell reads — so this is a disk
 /// check, not a PATH check.
+#[cfg(test)]
 pub fn well_known_harness_dirs() -> Vec<PathBuf> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    well_known_harness_dirs_in(&Roots::real().home)
+}
+
+/// `well_known_harness_dirs` for a given home directory.
+pub fn well_known_harness_dirs_in(home: &Path) -> Vec<PathBuf> {
+    let home = home.to_path_buf();
     if cfg!(windows) {
         let app_data = std::env::var_os("APPDATA")
             .map(PathBuf::from)
@@ -253,11 +274,6 @@ pub fn well_known_harness_dirs() -> Vec<PathBuf> {
     }
 }
 
-/// Whether this machine has a coding agent installed.
-pub fn developer_harness_present() -> bool {
-    developer_harness_in(&well_known_harness_dirs(), &|p: &Path| p.exists())
-}
-
 /// Pure: merge `autoLinkCli` into an existing config map, keeping every
 /// other key untouched.
 pub fn set_auto_link_cli(mut config: Map<String, Value>, enabled: bool) -> Map<String, Value> {
@@ -265,18 +281,17 @@ pub fn set_auto_link_cli(mut config: Map<String, Value>, enabled: bool) -> Map<S
     config
 }
 
-pub(crate) fn write_auto_link_cli(enabled: bool) -> Result<(), String> {
-    let path = desktop_config_path();
+pub(crate) fn write_auto_link_cli(roots: &Roots, enabled: bool) -> Result<(), String> {
+    let path = roots.desktop_config_path();
     let config = set_auto_link_cli(read_json_object(&path), enabled);
     write_json_object(&path, &config)
 }
 
-/// The persisted `autoLinkCli` preference. `remove_local_data` reads it
-/// before it deletes the directory the file lives in.
-pub(crate) fn read_auto_link_cli() -> bool {
+/// The persisted `autoLinkCli` preference.
+pub(crate) fn read_auto_link_cli(roots: &Roots) -> bool {
     auto_link_cli_enabled_with(
-        &read_json_object(&desktop_config_path()),
-        developer_harness_present(),
+        &read_json_object(&roots.desktop_config_path()),
+        developer_harness_in(&well_known_harness_dirs_in(&roots.home), &|p: &Path| p.exists()),
     )
 }
 
@@ -303,6 +318,7 @@ pub fn path_var_contains(path_var: &str, dir: &Path) -> bool {
 /// (`~/src/oxagen/bin/oxagen`), a Homebrew Cellar path, another user's data
 /// directory or a volume that merely has "oxagen" in its name is someone
 /// else's.
+#[cfg(test)]
 pub fn is_oxagen_managed_path(path: &Path) -> bool {
     is_oxagen_managed_path_in(path, &durable_bin_dir())
 }
@@ -342,14 +358,20 @@ pub enum LinkAction {
 }
 
 /// Decide what to do with a would-be symlink given what's already there.
+#[cfg(test)]
 pub fn decide_symlink_action(existing: &ExistingLink, target: &Path) -> LinkAction {
+    decide_symlink_action_in(existing, target, &durable_bin_dir())
+}
+
+/// `decide_symlink_action` with the durable directory passed in.
+pub fn decide_symlink_action_in(existing: &ExistingLink, target: &Path, durable: &Path) -> LinkAction {
     match existing {
         ExistingLink::Absent => LinkAction::Create,
         ExistingLink::Other => LinkAction::Skip,
         ExistingLink::Symlink(current) => {
             if current == target {
                 LinkAction::AlreadyCorrect
-            } else if is_oxagen_managed_path(current) {
+            } else if is_oxagen_managed_path_in(current, durable) {
                 LinkAction::Replace
             } else {
                 LinkAction::Skip
@@ -375,12 +397,19 @@ pub enum UnlinkAction {
 /// into a Homebrew prefix or a developer checkout that happens to share the
 /// name, survives "Remove links" the same way it survives an install.
 #[allow(dead_code)]
+#[cfg(test)]
 pub fn decide_unlink_action(existing: &ExistingLink, ours: &[PathBuf]) -> UnlinkAction {
+    decide_unlink_action_in(existing, ours, &durable_bin_dir())
+}
+
+/// `decide_unlink_action` with the durable directory passed in.
+#[allow(dead_code)]
+pub fn decide_unlink_action_in(existing: &ExistingLink, ours: &[PathBuf], durable: &Path) -> UnlinkAction {
     match existing {
         ExistingLink::Absent => UnlinkAction::Absent,
         ExistingLink::Other => UnlinkAction::Keep,
         ExistingLink::Symlink(current) => {
-            if ours.iter().any(|t| t == current) || is_oxagen_managed_path(current) {
+            if ours.iter().any(|t| t == current) || is_oxagen_managed_path_in(current, durable) {
                 UnlinkAction::Remove
             } else {
                 UnlinkAction::Keep
@@ -409,11 +438,17 @@ pub enum PathPrecedence {
 /// path a PATH lookup for `name` found, if any — canonicalizing is what lets
 /// a `~/.local/bin/oxagen` symlink that ultimately points at the app bundle
 /// read as `Ours` even though canonicalizing walks it outside `install_dir`.
+#[cfg(test)]
 pub fn decide_path_precedence(resolved: Option<&Path>, install_dir: &Path) -> PathPrecedence {
+    decide_path_precedence_in(resolved, install_dir, &durable_bin_dir())
+}
+
+/// `decide_path_precedence` with the durable directory passed in.
+pub fn decide_path_precedence_in(resolved: Option<&Path>, install_dir: &Path, durable: &Path) -> PathPrecedence {
     match resolved {
         None => PathPrecedence::Clear,
         Some(p) if p.starts_with(install_dir) => PathPrecedence::Ours,
-        Some(p) if is_oxagen_managed_path(p) => PathPrecedence::Ours,
+        Some(p) if is_oxagen_managed_path_in(p, durable) => PathPrecedence::Ours,
         Some(_) => PathPrecedence::Shadowed,
     }
 }
@@ -703,10 +738,10 @@ enum LinkOutcome {
 }
 
 #[cfg(not(windows))]
-fn link_one(dir: &Path, name: &str, target: &Path) -> LinkOutcome {
+fn link_one(dir: &Path, name: &str, target: &Path, durable: &Path) -> LinkOutcome {
     let link = dir.join(name);
     let existing = read_existing_link(&link);
-    match decide_symlink_action(&existing, target) {
+    match decide_symlink_action_in(&existing, target, durable) {
         LinkAction::AlreadyCorrect => LinkOutcome::AlreadyCorrect,
         LinkAction::Skip => {
             LinkOutcome::Skipped(format!("{name}: {} was not created by Oxagen, left alone", link.display()))
@@ -722,7 +757,7 @@ fn link_one(dir: &Path, name: &str, target: &Path) -> LinkOutcome {
 }
 
 #[cfg(windows)]
-fn link_one(dir: &Path, name: &str, target: &Path) -> LinkOutcome {
+fn link_one(dir: &Path, name: &str, target: &Path, _durable: &Path) -> LinkOutcome {
     let shim = dir.join(format!("{name}.cmd"));
     let desired = windows_shim_content(target);
     let existing = fs::read_to_string(&shim).ok();
@@ -742,9 +777,9 @@ fn link_one(dir: &Path, name: &str, target: &Path) -> LinkOutcome {
 /// so links, hooks and the service unit have a path that outlives this
 /// launch. Returns the directory the links should target.
 #[cfg(not(windows))]
-fn keep_sidecars(sidecars: &Path) -> Result<PathBuf, String> {
+fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
     use std::os::unix::fs::PermissionsExt;
-    let durable = durable_bin_dir();
+    let durable = durable.to_path_buf();
     fs::create_dir_all(&durable).map_err(|e| format!("cannot create {}: {e}", durable.display()))?;
     for name in ["oxagen", "tacho"] {
         let from = sidecars.join(exe(name));
@@ -793,6 +828,27 @@ fn add_to_user_path_windows(_dir: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// The inverse of `ADD_TO_USER_PATH_PS`: drop every entry equal to the
+/// directory from the user PATH. "Remove links" used to leave the entry
+/// behind, pointing at a directory with nothing in it. Same out-of-band
+/// `$env:OXAGEN_BIN` and the same `$null` guard.
+#[allow(dead_code)]
+const REMOVE_FROM_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $p=[Environment]::GetEnvironmentVariable('Path','User'); if($null -ne $p){ $k=@(($p -split ';') | Where-Object { $_ -ne '' -and $_ -ne $d }); $n=($k -join ';'); if($n -ne $p.TrimEnd(';')){ [Environment]::SetEnvironmentVariable('Path', $n, 'User') } }";
+
+#[cfg(windows)]
+fn remove_from_user_path_windows(dir: &str) -> Result<(), String> {
+    let status = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", REMOVE_FROM_USER_PATH_PS])
+        .env("OXAGEN_BIN", dir)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("powershell exited {status}"))
+    }
+}
+
 /// Wait up to `timeout` for `child`, killing it if it outlives the deadline.
 /// Returns the collected stdout on a clean, zero-status exit.
 #[cfg(not(windows))]
@@ -826,9 +882,11 @@ fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Optio
 /// without sourcing shell profiles at all on macOS/Linux). Falls back to the
 /// process's own PATH when the probe fails or times out.
 #[cfg(not(windows))]
-fn login_shell_path() -> Option<String> {
-    let shell = std::env::var("SHELL").ok()?;
-    let child = std::process::Command::new(&shell)
+fn login_shell_path(shell: &str) -> Option<String> {
+    if shell.is_empty() {
+        return None;
+    }
+    let child = std::process::Command::new(shell)
         .args(["-lc", "printf %s \"$PATH\""])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -852,77 +910,202 @@ fn login_shell_path() -> Option<String> {
 /// equivalent login-shell/process split. Computed once per install pass —
 /// `login_shell_path` spawns a shell and waits up to 5s, so callers share
 /// this rather than each probing separately.
-fn effective_path_var() -> String {
+fn effective_path_var(env: &InstallEnv) -> String {
+    if let Some(path) = &env.login_path {
+        return path.clone();
+    }
     #[cfg(not(windows))]
     {
-        login_shell_path().unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+        login_shell_path(&env.roots.shell).unwrap_or_else(|| env.process_path.clone())
     }
     #[cfg(windows)]
     {
-        std::env::var("PATH").unwrap_or_default()
+        env.process_path.clone()
     }
+}
+
+/// The profile bash reads at login on macOS. bash reads the FIRST of
+/// `.bash_profile`, `.bash_login` and `.profile` that exists and stops, so
+/// creating `.bash_profile` on a machine whose environment lives in
+/// `.profile` switched that environment off: the user's own PATH, their
+/// `nvm` and their aliases were gone from every new terminal, and removing
+/// our block left the empty file still shadowing theirs. The block goes into
+/// the file bash already reads. `.bash_profile` is created only when none of
+/// the three exists.
+pub fn bash_login_profile(home: &Path, exists: &dyn Fn(&Path) -> bool) -> PathBuf {
+    for name in [".bash_profile", ".bash_login", ".profile"] {
+        let candidate = home.join(name);
+        if exists(&candidate) {
+            return candidate;
+        }
+    }
+    home.join(".bash_profile")
+}
+
+/// `desktop.json`'s `created` list: the files and directories an install had
+/// to make, so removing the links can remove those too and leave the machine
+/// as it found it. Anything the user has since put content in stays.
+fn read_created(roots: &Roots) -> Vec<String> {
+    read_json_object(&roots.desktop_config_path())
+        .get("created")
+        .and_then(Value::as_array)
+        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+        .unwrap_or_default()
+}
+
+fn record_created(roots: &Roots, paths: &[PathBuf]) -> Result<(), String> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+    let path = roots.desktop_config_path();
+    let mut config = read_json_object(&path);
+    let mut created = read_created(roots);
+    for item in paths {
+        let text = item.display().to_string();
+        if !created.contains(&text) {
+            created.push(text);
+        }
+    }
+    config.insert("created".to_string(), Value::Array(created.into_iter().map(Value::String).collect()));
+    write_json_object(&path, &config)
+}
+
+/// Create `dir` and every missing parent, returning the ones that were made,
+/// outermost first.
+fn create_dir_tracking(dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut missing = Vec::new();
+    let mut cursor = Some(dir);
+    while let Some(current) = cursor {
+        if current.exists() {
+            break;
+        }
+        missing.push(current.to_path_buf());
+        cursor = current.parent();
+    }
+    missing.reverse();
+    fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(missing)
 }
 
 /// Add (or move) the marker block into the right profile file for the
 /// user's login shell, unless `dir` is already on `path_var`. Returns the
 /// profile file touched, or an error note when the shell isn't one we know
-/// how to edit.
+/// how to edit. Anything created on the way is pushed onto `created`.
 #[cfg(not(windows))]
-fn ensure_profile_block(dir: &Path, path_var: &str) -> Result<Option<String>, String> {
+fn ensure_profile_block(
+    roots: &Roots,
+    dir: &Path,
+    path_var: &str,
+    created: &mut Vec<PathBuf>,
+) -> Result<Option<String>, String> {
     if path_var_contains(path_var, dir) {
         return Ok(None);
     }
-    let shell = std::env::var("SHELL").unwrap_or_default();
-    let kind = detect_shell_kind(&shell);
-    let home = dirs::home_dir().ok_or_else(|| "no home directory".to_string())?;
-    let platform = std::env::consts::OS;
-    let Some(profile_path) = profile_path_for(kind, &home, platform) else {
-        return Err(format!(
-            "{}: not on PATH for new terminals; add it to your shell's profile manually",
-            dir.display()
-        ));
+    let kind = detect_shell_kind(&roots.shell);
+    let profile_path = if kind == ShellKind::Bash && roots.os == "macos" {
+        bash_login_profile(&roots.home, &|p: &Path| p.exists())
+    } else {
+        let Some(path) = profile_path_for(kind, &roots.home, roots.os) else {
+            return Err(format!(
+                "{}: not on PATH for new terminals; add it to your shell's profile manually",
+                dir.display()
+            ));
+        };
+        path
     };
-    if let Some(parent) = profile_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
+    // Read before anything is created or written. A profile that cannot be
+    // read as text is left alone: see `machine::read_text`.
+    let existing = crate::machine::read_text(&profile_path)?;
     let dir_text = dir.display().to_string();
-    if kind == ShellKind::Fish {
-        // Read before writing: this file is whole-file ours, so a file of
-        // the same name we did not write is never replaced.
-        if matches!(fs::read_to_string(&profile_path), Ok(text) if !fish_file_is_ours(&text)) {
+    let updated = if kind == ShellKind::Fish {
+        // This file is whole-file ours, so a file of the same name we did
+        // not write is never replaced.
+        if matches!(&existing, Some(text) if !fish_file_is_ours(text)) {
             return Err(format!("{}: not written by Oxagen, left alone", profile_path.display()));
         }
-        fs::write(&profile_path, fish_add_path_content(&dir_text)).map_err(|e| e.to_string())?;
+        fish_add_path_content(&dir_text)
     } else {
-        let existing = fs::read_to_string(&profile_path).unwrap_or_default();
-        let updated = upsert_path_block(&existing, &dir_text);
-        fs::write(&profile_path, updated).map_err(|e| e.to_string())?;
+        upsert_path_block(existing.as_deref().unwrap_or(""), &dir_text)
+    };
+    if existing.as_deref() == Some(updated.as_str()) {
+        return Ok(Some(profile_path.display().to_string()));
     }
+    if let Some(parent) = profile_path.parent() {
+        created.extend(create_dir_tracking(parent)?);
+    }
+    if existing.is_none() {
+        created.push(profile_path.clone());
+    }
+    crate::machine::write_atomic(&profile_path, &updated)?;
     Ok(Some(profile_path.display().to_string()))
 }
 
 /// Remove the marker block (or, for fish, the whole ours-only file) from
 /// every profile file we might have written it to. Safe to call whichever
-/// shell is current now, since we don't know which one wrote it.
+/// shell is current now, since we don't know which one wrote it. Returns the
+/// files changed and, separately, the ones that could not be: a block left
+/// behind used to be reported as removed.
 #[cfg(not(windows))]
-fn remove_all_profile_blocks() -> Vec<String> {
+fn remove_all_profile_blocks(roots: &Roots) -> (Vec<String>, Vec<String>) {
     let mut touched = Vec::new();
-    let Some(home) = dirs::home_dir() else {
-        return touched;
-    };
-    for candidate in [home.join(".zprofile"), home.join(".bash_profile"), home.join(".bashrc")] {
-        if let Ok(existing) = fs::read_to_string(&candidate) {
-            let updated = remove_path_block(&existing);
-            if updated != existing && fs::write(&candidate, &updated).is_ok() {
-                touched.push(candidate.display().to_string());
+    let mut failed = Vec::new();
+    let home = &roots.home;
+    for name in [".zprofile", ".bash_profile", ".bash_login", ".profile", ".bashrc"] {
+        let candidate = home.join(name);
+        match crate::machine::read_text(&candidate) {
+            Ok(Some(existing)) => {
+                let updated = remove_path_block(&existing);
+                if updated != existing {
+                    match crate::machine::write_atomic(&candidate, &updated) {
+                        Ok(()) => touched.push(candidate.display().to_string()),
+                        Err(e) => failed.push(e),
+                    }
+                }
             }
+            Ok(None) => {}
+            // Not text we could have written a block into.
+            Err(_) => {}
         }
     }
     let fish = home.join(".config").join("fish").join("conf.d").join("oxagen.fish");
-    if matches!(fs::read_to_string(&fish), Ok(text) if fish_file_is_ours(&text)) && fs::remove_file(&fish).is_ok() {
-        touched.push(fish.display().to_string());
+    if matches!(crate::machine::read_text(&fish), Ok(Some(text)) if fish_file_is_ours(&text)) {
+        match fs::remove_file(&fish) {
+            Ok(()) => touched.push(fish.display().to_string()),
+            Err(e) => failed.push(format!("cannot remove {}: {e}", fish.display())),
+        }
     }
-    touched
+    (touched, failed)
+}
+
+/// Undo what `record_created` remembers: a file an install created is
+/// removed once it is empty again, a directory once nothing is in it. What
+/// could not be removed because the user now uses it stays, silently: it is
+/// theirs.
+fn remove_created(roots: &Roots) -> Vec<String> {
+    let mut removed = Vec::new();
+    let mut created = read_created(roots);
+    // Deepest first, so a directory is looked at after what was in it.
+    created.sort_by_key(|p| std::cmp::Reverse(p.len()));
+    for item in &created {
+        let path = PathBuf::from(item);
+        let Ok(meta) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        let gone = if meta.is_dir() {
+            crate::machine::remove_dir_if_empty(&path)
+        } else {
+            meta.len() == 0 && fs::remove_file(&path).is_ok()
+        };
+        if gone {
+            removed.push(item.clone());
+        }
+    }
+    let config_path = roots.desktop_config_path();
+    let mut config = read_json_object(&config_path);
+    if config.remove("created").is_some() {
+        let _ = write_json_object(&config_path, &config);
+    }
+    removed
 }
 
 fn note_for(state: &str, view: &CliInstallView) -> String {
@@ -955,15 +1138,17 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
 /// The install itself, regardless of the opt-out flag: copy sidecars out of
 /// a transient directory if needed, link or shim each one, and (Unix) make
 /// sure the directory is on PATH for new terminals.
-fn install_cli_core() -> CliInstallView {
+fn install_cli_core(env: &InstallEnv) -> CliInstallView {
     let _guard = install_guard();
-    install_cli_locked()
+    install_cli_locked(env)
 }
 
 /// `install_cli_core`'s body, for callers that already hold `INSTALL_LOCK`.
 /// `INSTALL_LOCK` is not reentrant, so nothing here may take it again.
-fn install_cli_locked() -> CliInstallView {
-    let dir = cli_install_dir();
+pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
+    let roots = &env.roots;
+    let dir = roots.cli_install_dir();
+    let durable = roots.durable_bin_dir();
     let mut view = CliInstallView {
         state: "pending".to_string(),
         dir: dir.display().to_string(),
@@ -974,7 +1159,7 @@ fn install_cli_locked() -> CliInstallView {
         note: String::new(),
     };
 
-    let Some(bundled) = sidecar_dir() else {
+    let Some(bundled) = env.sidecars.clone() else {
         view.state = "failed".to_string();
         view.note = "cannot locate the bundled binaries".to_string();
         return view;
@@ -993,22 +1178,25 @@ fn install_cli_locked() -> CliInstallView {
     // an App Translocation directory can be on PATH for this launch and be
     // gone by the next one, so that case falls through to the durable copy
     // and the links below rather than reporting itself installed.
-    let bundled_is_durable_on_path = !sidecar_dir_is_transient()
-        && std::env::var_os("PATH")
-            .map(|p| path_var_contains(&p.to_string_lossy(), &bundled))
-            .unwrap_or(false);
-    if bundled_is_durable_on_path {
+    if !env.transient && path_var_contains(&env.process_path, &bundled) {
         view.state = "already".to_string();
         view.dir = bundled.display().to_string();
         view.note = note_for("already", &view);
         return view;
     }
 
+    let mut created: Vec<PathBuf> = Vec::new();
+
     #[cfg(not(windows))]
-    let sidecars = if sidecar_dir_is_transient() {
-        match keep_sidecars(&bundled) {
+    let sidecars = if env.transient {
+        match create_dir_tracking(&durable).and_then(|made| {
+            created.extend(made);
+            keep_sidecars(&bundled, &durable)
+        }) {
             Ok(kept) => {
-                std::env::set_var("TACHO_BIN_DIR", &kept);
+                if env.export_bin_dir {
+                    std::env::set_var("TACHO_BIN_DIR", &kept);
+                }
                 kept
             }
             Err(e) => {
@@ -1023,12 +1211,6 @@ fn install_cli_locked() -> CliInstallView {
     #[cfg(windows)]
     let sidecars = bundled;
 
-    if let Err(e) = fs::create_dir_all(&dir) {
-        view.state = "failed".to_string();
-        view.note = format!("cannot create {}: {e}", dir.display());
-        return view;
-    }
-
     // What a *new terminal* would resolve each name to, computed once
     // (login_shell_path spawns a shell). Linking into `dir` and then
     // prepending `dir` to PATH would silently shadow anything else that
@@ -1037,12 +1219,12 @@ fn install_cli_locked() -> CliInstallView {
     // itself never overwrites a file. So a name that already resolves to
     // something that isn't ours is left alone entirely: not linked, and
     // (below) not allowed to trigger the profile-PATH edit on its own.
-    let path_var = effective_path_var();
+    let path_var = effective_path_var(env);
 
     // The probe above can take seconds, and the caller read the opt-out
     // before it. Re-read it here, with the lock held and nothing linked yet,
     // so a "Remove links" that landed in between is not undone.
-    if !read_auto_link_cli() {
+    if !read_auto_link_cli(roots) {
         view.state = "opted_out".to_string();
         view.note = note_for("opted_out", &view);
         return view;
@@ -1054,9 +1236,22 @@ fn install_cli_locked() -> CliInstallView {
             continue;
         };
         let canonical = fs::canonicalize(&found).unwrap_or_else(|_| found.clone());
-        if decide_path_precedence(Some(&canonical), &dir) == PathPrecedence::Shadowed {
+        if decide_path_precedence_in(Some(&canonical), &dir, &durable) == PathPrecedence::Shadowed {
             view.skipped.push(format!("{name} already on PATH at {}; left in place", found.display()));
             shadowed.push(name);
+        }
+    }
+
+    // Nothing to link means nothing to create: a machine whose own `oxagen`
+    // and `tacho` both win is left without a new `~/.local/bin`.
+    if shadowed.len() < 2 {
+        match create_dir_tracking(&dir) {
+            Ok(made) => created.extend(made),
+            Err(e) => {
+                view.state = "failed".to_string();
+                view.note = e;
+                return view;
+            }
         }
     }
 
@@ -1066,7 +1261,7 @@ fn install_cli_locked() -> CliInstallView {
             continue;
         }
         let target = sidecars.join(exe(name));
-        match link_one(&dir, name, &target) {
+        match link_one(&dir, name, &target, &durable) {
             LinkOutcome::Linked(path) => {
                 view.files.push(path);
                 any_ours = true;
@@ -1074,6 +1269,7 @@ fn install_cli_locked() -> CliInstallView {
             LinkOutcome::AlreadyCorrect => any_ours = true,
             LinkOutcome::Skipped(note) => view.skipped.push(note),
             LinkOutcome::Failed(err) => {
+                let _ = record_created(roots, &created);
                 view.state = "failed".to_string();
                 view.note = err;
                 return view;
@@ -1088,9 +1284,7 @@ fn install_cli_locked() -> CliInstallView {
     if any_ours {
         #[cfg(windows)]
         {
-            let already = std::env::var_os("PATH")
-                .map(|p| path_var_contains(&p.to_string_lossy(), &dir))
-                .unwrap_or(false);
+            let already = path_var_contains(&env.process_path, &dir);
             view.path_updated = already;
             if !already {
                 match add_to_user_path_windows(&dir.display().to_string()) {
@@ -1101,11 +1295,19 @@ fn install_cli_locked() -> CliInstallView {
         }
         #[cfg(not(windows))]
         {
-            match ensure_profile_block(&dir, &path_var) {
-                Ok(profile) => view.profile = profile,
+            match ensure_profile_block(roots, &dir, &path_var, &mut created) {
+                Ok(profile) => {
+                    // On PATH for new terminals either way: it already was,
+                    // or the profile now puts it there.
+                    view.path_updated = true;
+                    view.profile = profile;
+                }
                 Err(note) => view.skipped.push(note),
             }
         }
+    }
+    if let Err(e) = record_created(roots, &created) {
+        view.skipped.push(format!("could not record what was created: {e}"));
     }
 
     view.state = if view.files.is_empty() && view.skipped.is_empty() {
@@ -1124,8 +1326,12 @@ fn install_cli_locked() -> CliInstallView {
 /// main thread. Honours the `autoLinkCli` opt-out and never overwrites
 /// anything the user or another tool put on PATH.
 pub fn ensure_cli_installed() -> CliInstallView {
-    if !read_auto_link_cli() {
-        let dir = cli_install_dir();
+    ensure_cli_installed_in(&InstallEnv::real())
+}
+
+pub(crate) fn ensure_cli_installed_in(env: &InstallEnv) -> CliInstallView {
+    if !read_auto_link_cli(&env.roots) {
+        let dir = env.roots.cli_install_dir();
         let mut view = CliInstallView {
             state: "opted_out".to_string(),
             dir: dir.display().to_string(),
@@ -1138,7 +1344,7 @@ pub fn ensure_cli_installed() -> CliInstallView {
         view.note = note_for("opted_out", &view);
         return view;
     }
-    install_cli_core()
+    install_cli_core(env)
 }
 
 // ---------------------------------------------------------------------
@@ -1147,42 +1353,51 @@ pub fn ensure_cli_installed() -> CliInstallView {
 
 #[derive(Serialize)]
 pub struct InstallResult {
+    /// `CliInstallView::state`: "linked", "already" or "skipped". A caller
+    /// that read only `files` could not tell "both already linked" from
+    /// "both left alone because a Homebrew `oxagen` wins".
+    pub state: String,
     pub dir: String,
     pub files: Vec<String>,
+    pub skipped: Vec<String>,
     pub on_path: bool,
     pub note: String,
     pub profile: Option<String>,
 }
 
-/// "Link into PATH": always runs (it re-enables `autoLinkCli` first, so an
-/// opted-out user clicking it explicitly gets what they asked for), and
-/// updates the managed state `desktop_state` reports.
-#[tauri::command]
-pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+/// "Link into PATH" against an explicit environment: re-enables
+/// `autoLinkCli` first, so an opted-out user clicking it explicitly gets
+/// what they asked for.
+pub(crate) fn link_cli_in(env: &InstallEnv) -> Result<CliInstallView, String> {
     // Re-enable inside the lock, so a concurrent "Remove links" cannot turn
     // the flag back off between this write and the re-read in
     // `install_cli_locked` and make an explicit click do nothing.
-    let view = {
-        let _guard = install_guard();
-        write_auto_link_cli(true)?;
-        install_cli_locked()
-    };
+    let _guard = install_guard();
+    write_auto_link_cli(&env.roots, true)?;
+    Ok(install_cli_locked(env))
+}
+
+/// "Link into PATH": always runs, and updates the managed state
+/// `desktop_state` reports.
+#[tauri::command]
+pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+    let view = link_cli_in(&InstallEnv::real())?;
     if view.state == "failed" {
-        *state.0.lock().unwrap() = view.clone();
+        *state.0.lock().unwrap_or_else(|e| e.into_inner()) = view.clone();
         return Err(view.note);
     }
-    // On Windows the shims only answer once their directory is on the user
-    // PATH, so the edit has to have landed; `cfg!(windows)` alone reported
-    // success for an install whose PowerShell edit failed.
-    let on_path = view.state == "already" || view.path_updated;
     let result = InstallResult {
+        state: view.state.clone(),
         dir: view.dir.clone(),
         files: view.files.clone(),
-        on_path,
+        skipped: view.skipped.clone(),
+        // "already" with nothing skipped, or the PATH edit landed (Windows)
+        // or was not needed or was made (Unix).
+        on_path: view.state == "already" || view.path_updated,
         note: view.note.clone(),
         profile: view.profile.clone(),
     };
-    *state.0.lock().unwrap() = view;
+    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = view;
     Ok(result)
 }
 
@@ -1191,10 +1406,10 @@ pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult
 /// moved, which is what `is_oxagen_managed_path` alone cannot tell us about
 /// an unbundled (Linux tarball, developer) sidecar directory.
 #[cfg(not(windows))]
-fn our_link_targets() -> Vec<PathBuf> {
-    let durable = durable_bin_dir();
+fn our_link_targets(env: &InstallEnv) -> Vec<PathBuf> {
+    let durable = env.roots.durable_bin_dir();
     let mut targets: Vec<PathBuf> = ["oxagen", "tacho"].iter().map(|name| durable.join(exe(name))).collect();
-    if let Some(sidecars) = sidecar_dir() {
+    if let Some(sidecars) = &env.sidecars {
         targets.extend(["oxagen", "tacho"].iter().map(|name| sidecars.join(exe(name))));
     }
     targets
@@ -1205,16 +1420,17 @@ fn our_link_targets() -> Vec<PathBuf> {
 /// the `.cmd` shim per name on Windows (the only platform that ever gets
 /// one). `uninstall_cli` acts on this; `cli_links_present` only counts it,
 /// so what the button says and what it does cannot disagree.
-fn unlink_plan() -> Vec<(&'static str, PathBuf, UnlinkAction)> {
-    let dir = cli_install_dir();
+fn unlink_plan(env: &InstallEnv) -> Vec<(&'static str, PathBuf, UnlinkAction)> {
+    let dir = env.roots.cli_install_dir();
     #[cfg(not(windows))]
     {
-        let ours = our_link_targets();
+        let ours = our_link_targets(env);
+        let durable = env.roots.durable_bin_dir();
         ["oxagen", "tacho"]
             .iter()
             .map(|name| {
                 let link = dir.join(name);
-                let action = decide_unlink_action(&read_existing_link(&link), &ours);
+                let action = decide_unlink_action_in(&read_existing_link(&link), &ours, &durable);
                 (*name, link, action)
             })
             .collect()
@@ -1241,7 +1457,49 @@ fn unlink_plan() -> Vec<(&'static str, PathBuf, UnlinkAction)> {
 /// sources a shell profile, so the process's own PATH is missing the
 /// install directory even in the second after we linked into it.
 pub fn cli_links_present() -> bool {
-    unlink_plan().iter().any(|(_, _, action)| *action == UnlinkAction::Remove)
+    unlink_plan(&InstallEnv::real()).iter().any(|(_, _, action)| *action == UnlinkAction::Remove)
+}
+
+/// What removing the links did.
+#[derive(Debug, Default, Serialize)]
+pub struct UnlinkOutcome {
+    pub removed: Vec<String>,
+    /// Left alone because Oxagen did not write it.
+    pub skipped: Vec<String>,
+    /// Ours, and still there: the reason for each.
+    pub failed: Vec<String>,
+}
+
+/// Remove the links, the profile block, and whatever an install had to
+/// create for them. Every step runs even when an earlier one failed: one
+/// link that would not unlink used to return early, leaving the profile
+/// block in place and the opt-out unwritten, so the next launch relinked.
+pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
+    let mut outcome = UnlinkOutcome::default();
+    for (name, candidate, action) in unlink_plan(env) {
+        match action {
+            UnlinkAction::Absent => {}
+            UnlinkAction::Remove => match fs::remove_file(&candidate) {
+                Ok(()) => outcome.removed.push(candidate.display().to_string()),
+                Err(e) => outcome.failed.push(format!("cannot remove {}: {e}", candidate.display())),
+            },
+            UnlinkAction::Keep => outcome
+                .skipped
+                .push(format!("{name}: {} was not created by Oxagen, left alone", candidate.display())),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let (touched, failed) = remove_all_profile_blocks(&env.roots);
+        outcome.removed.extend(touched);
+        outcome.failed.extend(failed);
+    }
+    #[cfg(windows)]
+    if let Err(e) = remove_from_user_path_windows(&env.roots.cli_install_dir().display().to_string()) {
+        outcome.failed.push(format!("user PATH: {e}"));
+    }
+    outcome.removed.extend(remove_created(&env.roots));
+    outcome
 }
 
 /// "Remove links": removes the symlinks/shims this installer wrote, strips
@@ -1252,34 +1510,81 @@ pub fn cli_links_present() -> bool {
 #[tauri::command]
 pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
     let _guard = install_guard();
-    let dir = cli_install_dir();
-    let mut removed = Vec::new();
-    let mut skipped = Vec::new();
-    for (name, candidate, action) in unlink_plan() {
-        match action {
-            UnlinkAction::Absent => {}
-            UnlinkAction::Remove => {
-                fs::remove_file(&candidate).map_err(|e| e.to_string())?;
-                removed.push(candidate.display().to_string());
-            }
-            UnlinkAction::Keep => {
-                skipped.push(format!("{name}: {} was not created by Oxagen, left alone", candidate.display()))
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    removed.extend(remove_all_profile_blocks());
-    write_auto_link_cli(false)?;
-    *state.0.lock().unwrap() = CliInstallView {
+    let env = InstallEnv::real();
+    let outcome = unlink_cli_in(&env);
+    write_auto_link_cli(&env.roots, false)?;
+    *state.0.lock().unwrap_or_else(|e| e.into_inner()) = CliInstallView {
         state: "opted_out".to_string(),
-        dir: dir.display().to_string(),
+        dir: env.roots.cli_install_dir().display().to_string(),
         files: Vec::new(),
-        skipped,
+        skipped: outcome.skipped,
         profile: None,
         path_updated: false,
         note: note_for("opted_out", &CliInstallView::default()),
     };
-    Ok(removed)
+    if !outcome.failed.is_empty() {
+        return Err(outcome.failed.join("; "));
+    }
+    Ok(outcome.removed)
+}
+
+/// What "Uninstall" took off the machine, and what it could not.
+#[derive(Debug, Default, Serialize)]
+pub struct RemovalReport {
+    pub removed: Vec<String>,
+    /// Still on the machine, each with why.
+    pub left: Vec<String>,
+}
+
+/// Everything the app itself put on this machine, after `tacho unenroll` has
+/// taken out the hooks and the service: the PATH links and the profile block,
+/// the durable copy of the sidecars, and `~/.config/oxagen`. Refused while
+/// the machine is still enrolled. A host `tacho unenroll` has retired (the
+/// revoke could not reach the control plane) is not enrolled: refusing it
+/// made an offline uninstall impossible, forever.
+pub(crate) fn remove_everything_in(env: &InstallEnv) -> Result<RemovalReport, String> {
+    use crate::machine::Enrollment;
+    let _guard = install_guard();
+    let roots = &env.roots;
+    if crate::machine::enrollment(roots) == Enrollment::Live {
+        return Err("this machine is still enrolled; unenroll first".into());
+    }
+    let mut report = RemovalReport::default();
+    // The durable copy: two ~120 MB binaries that nothing removed. Only when
+    // the app is not running from it (it never is: the app runs its bundled
+    // sidecars), and only the two files we copied plus the directories made
+    // for them.
+    let durable = roots.durable_bin_dir();
+    for name in ["oxagen", "tacho"] {
+        let file = durable.join(exe(name));
+        if file.is_file() {
+            match fs::remove_file(&file) {
+                Ok(()) => report.removed.push(file.display().to_string()),
+                Err(e) => report.left.push(format!("cannot remove {}: {e}", file.display())),
+            }
+        }
+    }
+    // The directories made for it go with `remove_created`, below.
+
+    let links = unlink_cli_in(env);
+    report.removed.extend(links.removed);
+    report.left.extend(links.failed);
+    report.left.extend(links.skipped);
+
+    for dir in [roots.tacho_root(), roots.oxagen_dir()] {
+        if fs::symlink_metadata(&dir).is_ok() {
+            match fs::remove_dir_all(&dir) {
+                Ok(()) => report.removed.push(dir.display().to_string()),
+                Err(e) => report.left.push(format!("cannot remove {}: {e}", dir.display())),
+            }
+        }
+    }
+    // `~/.config` itself, when creating `~/.config/oxagen` is the only reason
+    // it exists.
+    if let Some(parent) = roots.oxagen_dir().parent() {
+        crate::machine::remove_dir_if_empty(parent);
+    }
+    Ok(report)
 }
 
 // ---------------------------------------------------------------------
@@ -1734,24 +2039,24 @@ mod tests {
         fs::write(&current_target, b"current").unwrap();
 
         // Absent -> Created.
-        assert!(matches!(link_one(&dir, "oxagen", &current_target), LinkOutcome::Linked(_)));
+        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Linked(_)));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), current_target);
 
         // Same target again -> AlreadyCorrect, no error, link unchanged.
-        assert!(matches!(link_one(&dir, "oxagen", &current_target), LinkOutcome::AlreadyCorrect));
+        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::AlreadyCorrect));
 
         // Points at a recognizably Oxagen-owned path that isn't the current
         // target (an older app location, or the durable copy) -> Replace.
         let _ = fs::remove_file(dir.join("oxagen"));
         std::os::unix::fs::symlink(&stale_target, dir.join("oxagen")).unwrap();
-        assert!(matches!(link_one(&dir, "oxagen", &current_target), LinkOutcome::Linked(_)));
+        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Linked(_)));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), current_target);
 
         // Points somewhere we don't recognize (a third-party install) ->
         // Skip, left untouched.
         let _ = fs::remove_file(dir.join("oxagen"));
         std::os::unix::fs::symlink(&foreign_target, dir.join("oxagen")).unwrap();
-        assert!(matches!(link_one(&dir, "oxagen", &current_target), LinkOutcome::Skipped(_)));
+        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Skipped(_)));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), foreign_target);
 
         let _ = fs::remove_dir_all(&dir);
