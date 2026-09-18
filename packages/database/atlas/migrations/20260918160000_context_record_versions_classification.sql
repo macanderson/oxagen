@@ -20,14 +20,28 @@
 -- vocabulary.
 --
 -- The backfill reads each version's own classification from the proposal that
--- merged it, which its provenance names: a `context_pr` entry carries the
--- proposal's public id in `by`. Copying the record row's four columns instead
--- would only be right for one version -- whichever the row was last written
--- for -- and would leave every other version NULL, so promoting an older one
--- would fall back to that same stale row and reproduce #3312. A version whose
--- proposal is gone, and every version the legacy `publish_context_record` path
--- wrote, stays NULL and keeps the record-row fallback `classificationOf`
--- already applies.
+-- merged it. Copying the record row's four columns instead would only be right
+-- for one version -- whichever the row was last written for -- and would leave
+-- every other version NULL, so promoting an older one would fall back to that
+-- same stale row and reproduce #3312. A version whose proposal is gone, and
+-- every version the legacy `publish_context_record` path wrote, stays NULL and
+-- keeps the record-row fallback `classificationOf` already applies.
+--
+-- The proposal is found through the promotion ledger, NOT through the version's
+-- `provenance`. `publish_context_record` takes provenance from the caller with
+-- `method` and `by` as free strings, so a version can claim
+-- `{"method":"context_pr","by":"<any proposal public id>"}` and public ids are
+-- unique across the platform, not per tenant. Matching on that string would let
+-- a caller copy another workspace's -- or another ORGANISATION's -- proposal
+-- classification onto their own version, and the reconciliation below would
+-- then push that statement onto the record row and into the steering bundle
+-- their agents run under (discussion_r4050657642).
+--
+-- `proposals.promotion_event_id` and `promotions.version_id` are both written
+-- by `publishMerge` and by nothing a caller controls, so the chain
+-- version <- promotion <- proposal names the one proposal that actually emitted
+-- this version. Both hops are fenced on org and workspace as well, so a forged
+-- id cannot cross a tenant boundary even if the ledger were wrong.
 ALTER TABLE "agent"."context_record_versions"
   ADD COLUMN IF NOT EXISTS "kind" text NULL,
   ADD COLUMN IF NOT EXISTS "force" text NULL,
@@ -46,14 +60,13 @@ SET
   "constraint_effect" = p."constraint_effect",
   "statement" = p."statement"
 FROM "agent"."context_proposals" p
+JOIN "agent"."context_promotions" pr ON pr."id" = p."promotion_event_id"
 WHERE v."kind" IS NULL
-  AND p."public_id" = (
-    SELECT e."value" ->> 'by'
-    FROM jsonb_array_elements(v."provenance") AS e("value")
-    WHERE e."value" ->> 'method' = 'context_pr'
-      AND e."value" ->> 'by' IS NOT NULL
-    LIMIT 1
-  );
+  AND pr."version_id" = v."id"
+  AND pr."org_id" = v."org_id"
+  AND pr."workspace_id" = v."workspace_id"
+  AND p."org_id" = v."org_id"
+  AND p."workspace_id" = v."workspace_id";
 
 -- Then reconcile the record rows with the versions they pin.
 --
