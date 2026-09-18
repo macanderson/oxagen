@@ -90,6 +90,8 @@ const CONFIGURED_VIEW = {
   provider: "openrouter",
   status: "active",
   keyHint: "cdef",
+  baseUrl: null,
+  modelMap: {},
   lastVerifiedAt: null,
   rotatedAt: "2026-09-09T10:00:00.000Z",
 };
@@ -99,6 +101,8 @@ const EMPTY_VIEW = {
   provider: null,
   status: null,
   keyHint: null,
+  baseUrl: null,
+  modelMap: {},
   lastVerifiedAt: null,
   rotatedAt: null,
 };
@@ -225,6 +229,7 @@ describe("model-funding actions", () => {
         provider: "openrouter",
         latencyMs: 210,
         error: "Invalid API key",
+        toolCalling: null,
       };
       mockInvoke.mockResolvedValue(verification);
 
@@ -248,6 +253,7 @@ describe("model-funding actions", () => {
         provider: "gateway",
         latencyMs: 90,
         error: null,
+        toolCalling: true,
       });
       const result = await verifyModelCredentialAction("acme");
       expect(result.ok).toBe(true);

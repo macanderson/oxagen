@@ -53,6 +53,8 @@ export async function resolveModelFundingSource(
       provider: stored.provider,
       apiKey: stored.apiKey,
       digest: stored.digest,
+      baseUrl: stored.baseUrl,
+      modelMap: stored.modelMap,
     },
     keyHint: stored.keyHint,
   };
