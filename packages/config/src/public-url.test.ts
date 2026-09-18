@@ -84,6 +84,29 @@ describe("assertPublicHttpUrl", () => {
     ).not.toThrow();
   });
 
+  it("refuses a URL that carries a credential in its userinfo", () => {
+    // Stored in the clear and returned by every read, so a key typed here
+    // would leak through the redacted view (P1 on #3308).
+    for (const raw of [
+      "https://user:pass@api.example.com/v1",
+      "https://sk-live-secret@api.example.com/v1",
+      "https://:pass@api.example.com/v1",
+    ]) {
+      expect(() => assertPublicHttpUrl(raw, TLS)).toThrow(
+        /username or password/,
+      );
+    }
+  });
+
+  it("still admits an @ that is not userinfo — in a path or a query", () => {
+    expect(() =>
+      assertPublicHttpUrl("https://api.example.com/v1/@acme/models", TLS),
+    ).not.toThrow();
+    expect(() =>
+      assertPublicHttpUrl("https://api.example.com/v1?owner=a@b.example", TLS),
+    ).not.toThrow();
+  });
+
   it("refuses non-http schemes", () => {
     expect(() => assertPublicHttpUrl("file:///etc/passwd", OPTS)).toThrow(
       /scheme/,

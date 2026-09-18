@@ -75,6 +75,19 @@ export function assertPublicHttpUrl(
     return refuse("the URL must use https");
   }
 
+  // Userinfo is a credential in the URL, and the URL is stored in the clear
+  // and returned by every read: `https://user:pass@host/v1` would put a
+  // secret into `base_url` and hand it back as part of the redacted view.
+  // Node's fetch refuses such a URL anyway, so nothing is lost by refusing it
+  // here, where the message says what to remove. The check is on the parsed
+  // fields rather than on the raw string, because `@` is legal in a path or
+  // a query and only the authority's userinfo carries a secret.
+  if (parsed.username !== "" || parsed.password !== "") {
+    return refuse(
+      "the URL must not carry a username or password; send the credential in the request, not in the URL",
+    );
+  }
+
   const host = parsed.hostname.toLowerCase();
   if (host === "localhost" || host === "metadata.google.internal") {
     return refuse(`hostname "${host}" is not allowed`);

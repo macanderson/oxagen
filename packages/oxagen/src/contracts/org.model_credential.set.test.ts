@@ -94,6 +94,10 @@ describe("org.model_credential.set capability", () => {
     "https://127.0.0.1/v1",
     "https://[::ffff:169.254.169.254]/v1",
     "https://10.0.0.5/v1",
+    // A credential in the URL would be stored in the clear and returned by
+    // every read, which the view's redaction promise forbids.
+    "https://user:s3cret@api.together.xyz/v1",
+    "https://sk-live-secret@api.together.xyz/v1",
   ])(
     "refuses the internal endpoint %s as invalid input, not a 500",
     (baseUrl) => {
