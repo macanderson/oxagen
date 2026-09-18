@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  ambientPlaneKey,
   hasColumn,
+  runOnPlane,
   NEGATIVE_PROBE_TTL_MS,
   resetColumnProbesForTests,
   type ColumnRef,
@@ -125,5 +127,70 @@ describe("hasColumn", () => {
     expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(true);
     expect(await hasColumn(tx, SESSIONS, SHARED, 1_000)).toBe(false);
     expect(tx.probes).toBe(2);
+  });
+});
+
+/**
+ * The probe files its answer under the plane the TRANSACTION was opened on.
+ *
+ * `ambientPlaneKey` used to resolve the organisation's plane a second time,
+ * separately from the resolution that had already chosen the connection. Two
+ * resolutions of the same question can disagree: `set_data_plane` repointing
+ * the organisation between them left `tx` on the old plane while the answer
+ * was cached under the new plane's key. A positive answer is kept for the life
+ * of the process, so the new database was then told indefinitely that it has a
+ * column it does not have, the compatibility projection was dropped, and the
+ * read raised the 42703 the probe exists to prevent (#3223).
+ */
+describe("ambientPlaneKey", () => {
+  beforeEach(() => {
+    resetColumnProbesForTests();
+  });
+
+  it("answers with the plane the seam opened, not one resolved later", async () => {
+    // `runOnPlane` is what `withTenantDb` and `withOrgPlaneSystemDb` call with
+    // the key their own `resolveDataPlane` returned. Nothing inside re-asks.
+    expect(await runOnPlane(DEDICATED, () => ambientPlaneKey())).toBe(
+      DEDICATED,
+    );
+  });
+
+  it("does not follow a repoint that lands mid-transaction", async () => {
+    // The race, played out. The organisation is repointed while the callback
+    // is running — the resolver would now answer differently — and the answer
+    // still belongs to the database the statement is actually on.
+    //
+    // This is the discriminating case: a version that re-resolves returns the
+    // NEW plane here, which is precisely the wrong-database caching that made
+    // the defect permanent for the life of the process.
+    let repointed = false;
+    const answer = await runOnPlane(DEDICATED, async () => {
+      repointed = true;
+      return ambientPlaneKey();
+    });
+    expect(repointed).toBe(true);
+    expect(answer).toBe(DEDICATED);
+  });
+
+  it("keeps the two planes' answers apart across nested seams", async () => {
+    const tx = fakeTx(["gateway_last_seen_at"]);
+    const onShared = await runOnPlane(SHARED, () =>
+      hasColumn(tx, HOSTS, SHARED, 1_000),
+    );
+    const behind = fakeTx([]);
+    const onDedicated = await runOnPlane(DEDICATED, () =>
+      hasColumn(behind, HOSTS, DEDICATED, 1_000),
+    );
+    expect(onShared).toBe(true);
+    expect(onDedicated).toBe(false);
+    expect(behind.probes).toBe(1);
+  });
+
+  it("is the shared plane when no seam bound one", async () => {
+    // A caller with no binding is not inside a plane-resolving seam, so it
+    // holds the process singleton — the shared plane — because that is the
+    // only database reachable without one. Nothing is re-resolved to find
+    // that out.
+    expect(await ambientPlaneKey()).toBe("shared");
   });
 });

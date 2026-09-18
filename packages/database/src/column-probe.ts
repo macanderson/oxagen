@@ -28,12 +28,8 @@
  * third time becomes the defect.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { sql, type SQL } from "drizzle-orm";
-import {
-  assertDataPlaneUsable,
-  getScope,
-  resolveDataPlane,
-} from "@oxagen/tenancy";
 
 /**
  * The least a caller must hand over: something that can run a statement.
@@ -97,28 +93,61 @@ const answers = new Map<string, Probed>();
  * `shared` is a stable name for the platform singleton; a dedicated plane is
  * identified by its config digest, which is what the pool keys its connections
  * on, so two orgs on the same dedicated plane share an answer and two planes
- * never do.
+ * never do. `tenant.ts` builds the key at the moment it resolves the plane —
+ * there is deliberately no exported "resolve the plane key for this org"
+ * helper, because calling one is how an answer ends up filed under a database
+ * the statement did not run on (#3223).
  */
-export async function planeKeyFor(orgId: string): Promise<string> {
-  const plane = await resolveDataPlane(orgId, "postgres");
-  assertDataPlaneUsable(plane);
-  return plane.mode === "shared" ? "shared" : `dedicated:${plane.configDigest}`;
-}
-
 /**
- * The plane of the organisation whose scope is active, for callers already
- * inside `withTenantDb`.
+ * The plane the transaction currently open was actually opened against.
  *
- * Falls back to `shared` with no scope, which is the plane `withSystemDb`
- * uses — so the answer is still filed under the database it actually came
- * from rather than under a guess.
+ * ## Why this is a binding and not a second lookup
+ *
+ * This used to re-resolve: read the ambient tenancy scope, call
+ * `resolveDataPlane` again, and file the probe's answer under whatever came
+ * back. Two resolutions of the same question can disagree. `set_data_plane`
+ * repointing the organisation between them left `tx` on the OLD plane while
+ * the answer was cached under the NEW plane's key — and a positive answer is
+ * kept for the life of the process, so the new database was then told
+ * indefinitely that it has a column it does not have, the compatibility
+ * projection was dropped, and the read raised the very 42703 the probe exists
+ * to prevent (#3223, discussion_r4040685685).
+ *
+ * The seams that open a transaction have already resolved the plane — that
+ * resolution is what selected the connection — so they publish it here and
+ * this reads it back. The invariant becomes structural rather than an
+ * agreement between two callers: **an answer is filed under the database it
+ * was asked of, because the thing that chose the database is the thing that
+ * named it.**
+ *
+ * ## No binding
+ *
+ * `shared`, and nothing is re-resolved. A caller with no binding is not inside
+ * a plane-resolving seam, which means it holds the process singleton — the
+ * shared plane — because that is the only database reachable without one.
+ * Guessing by resolving a second time is exactly the defect above.
  */
 export async function ambientPlaneKey(): Promise<string> {
-  // Nullish rather than `=== undefined`: `getScope()` answers `null` outside a
-  // scope, and a strict identity check would have treated that as a scope and
-  // read `orgId` off it.
-  const scope = getScope();
-  return scope == null ? "shared" : planeKeyFor(scope.orgId);
+  return boundPlaneKey.getStore() ?? "shared";
+}
+
+const boundPlaneKey = new AsyncLocalStorage<string>();
+
+/**
+ * Publish the plane a transaction is being opened on, for the probes that run
+ * inside it. Called by the seams in `tenant.ts`, which are the only places
+ * that resolve a plane and open a connection to it.
+ */
+export function runOnPlane<T>(
+  planeKey: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return boundPlaneKey.run(planeKey, fn);
+}
+
+/** The plane key a caller would file an answer under right now. Tests only. */
+export function boundPlaneKeyForTests(): string | undefined {
+  return boundPlaneKey.getStore();
 }
 
 const keyOf = (planeKey: string, ref: ColumnRef): string =>
@@ -135,7 +164,8 @@ export function resetColumnProbesForTests(): void {
  * while it is no.
  *
  * `planeKey` names the physical database `tx` is connected to
- * ({@link planeKeyFor} / {@link ambientPlaneKey}). It is a parameter rather
+ * ({@link ambientPlaneKey}, or the key `tenant.ts` resolved). It is a
+ * parameter rather
  * than something read off `tx` because a transaction handle does not carry its
  * plane, and an answer filed under the wrong database is worse than no cache.
  *

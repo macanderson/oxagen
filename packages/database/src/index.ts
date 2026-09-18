@@ -50,11 +50,14 @@ export {
 } from "./namespace";
 export {
   hasColumn,
-  planeKeyFor,
   ambientPlaneKey,
   resetColumnProbesForTests,
   NEGATIVE_PROBE_TTL_MS,
   type ColumnRef,
   type ProbeTx,
 } from "./column-probe";
-export { HOST_GATEWAY_COLUMN, SESSION_GATEWAY_COLUMN } from "./schema/tacho";
+export {
+  GATEWAY_CHAIN_COLUMN,
+  HOST_GATEWAY_COLUMN,
+  SESSION_GATEWAY_COLUMN,
+} from "./schema/tacho";

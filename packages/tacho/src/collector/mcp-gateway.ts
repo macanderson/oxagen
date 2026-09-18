@@ -49,7 +49,11 @@
  * The browser guard lives in `loopback-guard.ts` and runs for every request on
  * the TCP listener, not only these.
  */
-import type { PolicyBundle } from "../wire";
+import {
+  TACHO_GATEWAY_GENESIS_HEADER,
+  TACHO_GATEWAY_SESSION_HEADER,
+  type PolicyBundle,
+} from "../wire";
 
 /** JSON-RPC 2.0, the subset MCP uses. */
 export interface JsonRpcRequest {
@@ -97,6 +101,28 @@ export interface GatewayAttribution {
    */
   apiKey: string;
   hostEnrollmentId: string;
+  /**
+   * The daemon's own chain — the `tachod-*` session every gateway call is
+   * sealed onto — named on the forwarded request so the control plane can
+   * file its record of the call against it (#3221).
+   *
+   * Undefined when the daemon has no chain yet, and then the call is
+   * forwarded without the header. That is the honest answer: the control
+   * plane records an invocation it cannot attribute to a chain rather than
+   * one attributed to a guess, and the tier stays on the host's own mode.
+   */
+  chainSessionUuid?: string;
+  /**
+   * The hash of the daemon chain's first sealed event — the one thing about
+   * the chain a forger holding only the host's ingest key cannot produce,
+   * because a different chain has a different genesis hash and matching one
+   * would be a preimage attack.
+   *
+   * Undefined until the chain has a genesis, and then the call is forwarded
+   * without the header and the session stays on the host's own mode. That is
+   * the startup window only, and the honest answer for it.
+   */
+  chainGenesisHash?: string;
 }
 
 /**
@@ -423,6 +449,22 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
           Accept: "application/json",
           "User-Agent": "oxagen-local-gateway",
           "X-Tacho-Host": attribution.hostEnrollmentId,
+          // Which chain this call belongs to. The control plane takes the
+          // org, the workspace and the HOST from the gateway key's own scope
+          // and never from a header; this names the one thing the key cannot,
+          // and it is trusted only because the key it arrives with is.
+          ...(attribution.chainSessionUuid === undefined
+            ? {}
+            : {
+                [TACHO_GATEWAY_SESSION_HEADER]: attribution.chainSessionUuid,
+              }),
+          // The chain's genesis hash, which is what makes the name above
+          // evidence rather than a claim.
+          ...(attribution.chainGenesisHash === undefined
+            ? {}
+            : {
+                [TACHO_GATEWAY_GENESIS_HEADER]: attribution.chainGenesisHash,
+              }),
         },
         body: JSON.stringify(request),
         signal: controller.signal,

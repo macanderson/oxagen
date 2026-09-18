@@ -386,6 +386,89 @@ export function subscriptionAllowanceRefusal(
   );
 }
 
+/** The entitled subscription, as the two guards below need to see it. */
+export interface EntitledSubscription {
+  status: string;
+  planSlug: string;
+  planTier: string;
+}
+
+/** What an entitled subscription means for this run. */
+export interface SubscriptionGuardDecision {
+  /** Set when the run must refuse this organisation outright. */
+  refusal?: string;
+  /**
+   * The subscription keeps winning over `organizations.plan_type`, so the tier
+   * write is inert and the organisation stays non-enterprise.
+   */
+  subscriptionWins: boolean;
+  /**
+   * Whether this run writes `organizations.plan_type = 'enterprise'` — which
+   * is the same question as whether the Owner preflight has anything to
+   * protect, and is deliberately ONE field so the two cannot drift.
+   *
+   * They drifted once already. Skipping the preflight while still storing the
+   * enterprise fallback leaves a value that does nothing today and locks the
+   * organisation out the day the subscription is cancelled: tier resolution
+   * falls through to the column, enterprise runs the full default-deny IAM
+   * resolver, and the org this run explicitly allowed to have no usable Owner
+   * has none.
+   */
+  writesEnterpriseTier: boolean;
+}
+
+/**
+ * The two guards that turn on "is this organisation enterprise", decided in
+ * one place and from the EFFECTIVE tier rather than the `plan_type` column.
+ *
+ * The script has two notions of enterprise: the column, and what
+ * `resolveOrgActionEntitlement` computes, where an entitled subscription wins
+ * over the column. Both guards were written against the column and both were
+ * wrong in the same way (#3225) — which is why they are now one function with
+ * one set of tests, rather than two conditions eighty lines apart that happen
+ * to agree.
+ *
+ *  - `--actions-annual` is refused for ANY entitled subscription. The
+ *    subscribed plan's monthly allowance is read first and the negotiated
+ *    figure is never consulted, whatever tier that plan is on. Nested in the
+ *    enterprise-plan branch, an org on an entitled Build or Scale subscription
+ *    skipped the refusal: the figure was written, reported as set, and
+ *    ignored.
+ *  - Owner readiness is required exactly when this run writes the enterprise
+ *    tier, which is the only thing that can cause a lockout. Unconditionally,
+ *    a target with an entitled non-enterprise subscription and no usable
+ *    org-wide Owner had its whole run refused for a lockout that cannot happen
+ *    — and lost the credit-floor and billing-setting updates the
+ *    `subscriptionOverrides` path applies deliberately even while exiting 2.
+ *    The converse matters as much: while the subscription wins, the tier write
+ *    is inert TODAY and a trap TOMORROW, so it is skipped rather than stored
+ *    unverified.
+ *
+ * Both guards are checkable and both checked the wrong thing, which is worse
+ * than absent: one refused work that was safe, the other permitted a write
+ * that did nothing and said it worked.
+ */
+export function subscriptionGuard(
+  entitledSub: EntitledSubscription | undefined,
+  actionsAnnualGiven: boolean,
+  actionsAnnual: number,
+): SubscriptionGuardDecision {
+  const subscriptionWins =
+    entitledSub !== undefined && entitledSub.planTier !== "enterprise";
+  if (entitledSub !== undefined && actionsAnnualGiven) {
+    return {
+      refusal: subscriptionAllowanceRefusal(
+        entitledSub.planSlug,
+        actionsAnnual,
+      ),
+      subscriptionWins,
+      // A refused organisation is never written to, so nothing downstream asks.
+      writesEnterpriseTier: false,
+    };
+  }
+  return { subscriptionWins, writesEnterpriseTier: !subscriptionWins };
+}
+
 export function isLocalHost(host: string): boolean {
   return /^(localhost|127\.0\.0\.1|::1)(:\d+)?$/.test(host);
 }
@@ -717,105 +800,10 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Enterprise runs the full IAM resolver, whose default effect is deny. An
-      // org with no usable Owner therefore loses every governed action the
-      // moment the tier lands, and the operator finds out from the customer.
-      // Check before the write, and refuse rather than warn.
-      //
-      // The SQL below proposes candidates; `fetchAuthz` decides. See
-      // `orgWideSystemOwnerWhere` for why the prediction stopped being the
-      // answer.
-      const [ownerWs] = await withSystemDb((tx) =>
-        tx
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(eq(schema.workspaces.orgId, org.id))
-          .limit(1),
-      );
-      // Any workspace resolves an ORG-WIDE assignment: fetchAuthz matches
-      // `workspace_id IS NULL OR workspace_id = $ws`, and the org-wide arm
-      // carries it whichever workspace is named. An org with none yet uses its
-      // own id, the same stand-in the credit write below uses, because
-      // runInTenantScope asserts a uuid rather than reading this one.
-      const ownerScope = { orgId: org.id, workspaceId: ownerWs?.id ?? org.id };
-
-      const readiness = await ownerReadiness({
-        loadCandidates: () =>
-          withSystemDb((tx) =>
-            tx
-              .select({
-                principalId: schema.principals.id,
-                userId: schema.principals.parentUserId,
-              })
-              .from(schema.principals)
-              .innerJoin(
-                schema.principalRoleAssignments,
-                eq(
-                  schema.principalRoleAssignments.principalId,
-                  schema.principals.id,
-                ),
-              )
-              .innerJoin(
-                schema.roles,
-                eq(schema.roles.id, schema.principalRoleAssignments.roleId),
-              )
-              // The user the principal points at must EXIST. An inner join is
-              // the check: an orphaned `parent_user_id` drops the row here, and
-              // no clause on `principals` alone can tell it from a good one.
-              .innerJoin(
-                schema.users,
-                eq(schema.users.id, schema.principals.parentUserId),
-              )
-              // And still be in the organisation. Membership has no soft
-              // delete — leaving removes the row — so the join IS the liveness
-              // check, and a departed Owner stops counting as lockout cover.
-              .innerJoin(
-                schema.orgUsers,
-                and(
-                  eq(schema.orgUsers.userId, schema.users.id),
-                  eq(schema.orgUsers.orgId, org.id),
-                ),
-              )
-              .where(orgWideSystemOwnerWhere(org.id, new Date())),
-          ).then((rows) =>
-            rows.flatMap((r) =>
-              r.userId
-                ? [{ principalId: r.principalId, userId: r.userId }]
-                : [],
-            ),
-          ),
-        fetchAuthzFor: (userId) =>
-          runInTenantScope(ownerScope, () =>
-            fetchAuthz({
-              userId,
-              apiKeyId: null,
-              orgId: org.id,
-              workspaceId: ownerScope.workspaceId,
-              // Rule 7.5 is evaluated per capability, but the answer this
-              // preflight needs is about the ROLE rather than any one
-              // capability. `grantsOrgOwnerSuperUser` reads the roles the
-              // resolver loaded, so the capability named here only has to be
-              // real.
-              capability: "get_org",
-            }),
-          ),
-      });
-
-      if (!readiness.ready) {
-        console.log(
-          kleur.red(
-            `      refused         : the IAM resolver confirms no org-owner super-user for this organisation (${readiness.considered} candidate(s) considered). Enterprise runs the full resolver (default deny), so the tier would lock it out. A workspace-scoped Owner, a workspace-scoped Owner ROLE, and an Owner principal with no live user behind it all read as Owner and none of them is one. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
-          ),
-        );
-        failures += 1;
-        console.log();
-        continue;
-      }
-      console.log(
-        `      iam             : resolver confirms an org-owner super-user`,
-      );
-
       // ── 2a. Does a subscription already answer the tier question? ──────────
+      //
+      // Asked FIRST, before the Owner preflight, because the answer decides
+      // whether that preflight has anything to protect (#3225).
       //
       // `resolveOrgTierDetailed` reads the subscription leg FIRST and only then
       // `organizations.plan_type`. So for an org with an entitled subscription
@@ -850,93 +838,231 @@ async function main(): Promise<void> {
           .limit(1),
       );
 
-      if (entitledSub && entitledSub.planTier !== "enterprise") {
+      // Both guards, from the effective tier, decided in one place
+      // (`subscriptionGuard`).
+      const guard = subscriptionGuard(
+        entitledSub,
+        actionsAnnualGiven,
+        actionsAnnual,
+      );
+      if (guard.refusal !== undefined) {
+        console.log(kleur.red(`      refused         : ${guard.refusal}`));
+        failures += 1;
+        console.log();
+        continue;
+      }
+      const subscriptionWins = guard.subscriptionWins;
+
+      // `entitledSub` rather than `subscriptionWins` alone: the decision comes
+      // from `subscriptionGuard` now, so the narrowing has to be restated here
+      // for the message that reads the subscription's own fields.
+      if (entitledSub !== undefined && subscriptionWins) {
         console.log(
           kleur.yellow(
             `      subscription    : entitled '${entitledSub.status}' subscription on plan '${entitledSub.planSlug}' (tier '${entitledSub.planTier}') WINS over plan_type — the tier write below will not take effect. Move the subscription to an enterprise plan in Stripe, or cancel it, then re-run.`,
           ),
         );
         subscriptionOverrides += 1;
-      } else if (entitledSub) {
+      } else if (entitledSub !== undefined) {
         console.log(
           `      subscription    : entitled '${entitledSub.status}' subscription already on an enterprise plan ('${entitledSub.planSlug}')`,
         );
-        // `resolveOrgActionEntitlement` takes the subscription plan's allowance
-        // before it looks at `negotiated_actions_annual`, so a figure written
-        // here would be recorded and never read. The script used to write it
-        // and report success, which is how a 25,000,000 commitment kept billing
-        // overage above the plan's seed.
-        if (actionsAnnualGiven) {
+      }
+
+      // ── 2b. The lockout preflight, when this run can cause a lockout ──────
+      //
+      // Skipped when an entitled non-enterprise subscription is winning. The
+      // check used to run unconditionally, so a target with an entitled Build
+      // or Scale subscription and no usable org-wide Owner had its whole run
+      // refused — for a lockout that cannot happen, because the tier is not
+      // changing and the human IAM resolver stays bypassed. The cost was not
+      // only a spurious refusal: it also blocked the credit-floor and
+      // billing-setting updates the `subscriptionOverrides` path below applies
+      // deliberately, even while returning exit 2 (#3225). So the run did less
+      // than it was designed to, in the one case where it was safe all along.
+      if (guard.writesEnterpriseTier) {
+        // Enterprise runs the full IAM resolver, whose default effect is deny. An
+        // org with no usable Owner therefore loses every governed action the
+        // moment the tier lands, and the operator finds out from the customer.
+        // Check before the write, and refuse rather than warn.
+        //
+        // The SQL below proposes candidates; `fetchAuthz` decides. See
+        // `orgWideSystemOwnerWhere` for why the prediction stopped being the
+        // answer.
+        const [ownerWs] = await withSystemDb((tx) =>
+          tx
+            .select({ id: schema.workspaces.id })
+            .from(schema.workspaces)
+            .where(eq(schema.workspaces.orgId, org.id))
+            .limit(1),
+        );
+        // Any workspace resolves an ORG-WIDE assignment: fetchAuthz matches
+        // `workspace_id IS NULL OR workspace_id = $ws`, and the org-wide arm
+        // carries it whichever workspace is named. An org with none yet uses its
+        // own id, the same stand-in the credit write below uses, because
+        // runInTenantScope asserts a uuid rather than reading this one.
+        const ownerScope = {
+          orgId: org.id,
+          workspaceId: ownerWs?.id ?? org.id,
+        };
+
+        const readiness = await ownerReadiness({
+          loadCandidates: () =>
+            withSystemDb((tx) =>
+              tx
+                .select({
+                  principalId: schema.principals.id,
+                  userId: schema.principals.parentUserId,
+                })
+                .from(schema.principals)
+                .innerJoin(
+                  schema.principalRoleAssignments,
+                  eq(
+                    schema.principalRoleAssignments.principalId,
+                    schema.principals.id,
+                  ),
+                )
+                .innerJoin(
+                  schema.roles,
+                  eq(schema.roles.id, schema.principalRoleAssignments.roleId),
+                )
+                // The user the principal points at must EXIST. An inner join is
+                // the check: an orphaned `parent_user_id` drops the row here, and
+                // no clause on `principals` alone can tell it from a good one.
+                .innerJoin(
+                  schema.users,
+                  eq(schema.users.id, schema.principals.parentUserId),
+                )
+                // And still be in the organisation. Membership has no soft
+                // delete — leaving removes the row — so the join IS the liveness
+                // check, and a departed Owner stops counting as lockout cover.
+                .innerJoin(
+                  schema.orgUsers,
+                  and(
+                    eq(schema.orgUsers.userId, schema.users.id),
+                    eq(schema.orgUsers.orgId, org.id),
+                  ),
+                )
+                .where(orgWideSystemOwnerWhere(org.id, new Date())),
+            ).then((rows) =>
+              rows.flatMap((r) =>
+                r.userId
+                  ? [{ principalId: r.principalId, userId: r.userId }]
+                  : [],
+              ),
+            ),
+          fetchAuthzFor: (userId) =>
+            runInTenantScope(ownerScope, () =>
+              fetchAuthz({
+                userId,
+                apiKeyId: null,
+                orgId: org.id,
+                workspaceId: ownerScope.workspaceId,
+                // Rule 7.5 is evaluated per capability, but the answer this
+                // preflight needs is about the ROLE rather than any one
+                // capability. `grantsOrgOwnerSuperUser` reads the roles the
+                // resolver loaded, so the capability named here only has to be
+                // real.
+                capability: "get_org",
+              }),
+            ),
+        });
+
+        if (!readiness.ready) {
           console.log(
             kleur.red(
-              `      refused         : ${subscriptionAllowanceRefusal(entitledSub.planSlug, actionsAnnual)}`,
+              `      refused         : the IAM resolver confirms no org-owner super-user for this organisation (${readiness.considered} candidate(s) considered). Enterprise runs the full resolver (default deny), so the tier would lock it out. A workspace-scoped Owner, a workspace-scoped Owner ROLE, and an Owner principal with no live user behind it all read as Owner and none of them is one. Run: pnpm db:backfill-iam -- --apply, then re-run.`,
             ),
           );
           failures += 1;
           console.log();
           continue;
         }
+        console.log(
+          `      iam             : resolver confirms an org-owner super-user`,
+        );
       }
-
-      // ── 2b. Tier + recorded action commitment ──────────────────────────────
+      // ── 2c. Tier + recorded action commitment ──────────────────────────────
       // These move together because enterprise is the tier whose allowance the
       // meter refuses to infer: setting the tier without recording a figure is
       // exactly the mis-provisioned state `billing_enterprise_allowance_missing`
       // alerts on, and it would alert on every governed action from here on.
-      const tierIsSet =
-        org.planType === "enterprise" && org.status === "active";
-      // On a database behind 20260916120000 there is no column to compare or to
-      // write, so the allowance half is satisfied by definition and the org
-      // keeps `resolveActionAllowance`'s bounded enterprise fallback.
-      // A stored figure the operator did not ask to change is a signed
-      // commitment, not a difference to reconcile. Writing the default over it
-      // on the documented recurring top-up run is how a negotiated allowance
-      // silently shrank and the org began paying overage.
-      const writeAllowance =
-        canRecordAllowance &&
-        shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
-      const allowanceIsSet =
-        !writeAllowance ||
-        Number(org.negotiatedActionsAnnual) === actionsAnnual;
-      const recorded = !canRecordAllowance
-        ? " (allowance column absent — bounded fallback applies)"
-        : writeAllowance
-          ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
-          : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
-
-      if (tierIsSet && allowanceIsSet) {
+      //
+      // Skipped entirely while an entitled non-enterprise subscription wins,
+      // on the SAME flag that decided the Owner preflight above — so the
+      // invariant is structural: the enterprise tier is stored only by a run
+      // that verified the organisation still has a usable org-wide Owner.
+      //
+      // Storing it anyway would be inert today and a lockout tomorrow. Tier
+      // resolution reads the subscription first, so nothing changes while the
+      // subscription is entitled; the day it is cancelled, resolution falls
+      // through to the column, enterprise runs the full default-deny IAM
+      // resolver, and an organisation this run explicitly allowed to have no
+      // usable Owner has none. The run still applies the credit floor and the
+      // billing settings below, which is what the `subscriptionOverrides`
+      // path is for, and still exits 2.
+      if (!guard.writesEnterpriseTier) {
         console.log(
-          `      tier            : already enterprise/active${recorded}`,
-        );
-      } else if (DRY_RUN) {
-        console.log(
-          kleur.blue(
-            `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
-              writeAllowance
-                ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
-                : canRecordAllowance
-                  ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
-                  : " (allowance column absent — skipped)"
-            }`,
+          kleur.yellow(
+            `      tier            : not written while the subscription wins — a stored 'enterprise' would do nothing now and lock the org out when the subscription ends, and this run did not verify an Owner. Credit floor and billing settings below still apply.`,
           ),
         );
       } else {
-        await withSystemDb((tx) =>
-          tx
-            .update(schema.organizations)
-            .set({
-              planType: "enterprise",
-              status: "active",
-              ...(writeAllowance
-                ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
-                : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(schema.organizations.id, org.id)),
-        );
-        console.log(
-          kleur.green(`      tier            : enterprise/active${recorded}`),
-        );
+        const tierIsSet =
+          org.planType === "enterprise" && org.status === "active";
+        // On a database behind 20260916120000 there is no column to compare or to
+        // write, so the allowance half is satisfied by definition and the org
+        // keeps `resolveActionAllowance`'s bounded enterprise fallback.
+        // A stored figure the operator did not ask to change is a signed
+        // commitment, not a difference to reconcile. Writing the default over it
+        // on the documented recurring top-up run is how a negotiated allowance
+        // silently shrank and the org began paying overage.
+        const writeAllowance =
+          canRecordAllowance &&
+          shouldWriteAllowance(org.negotiatedActionsAnnual, actionsAnnualGiven);
+        const allowanceIsSet =
+          !writeAllowance ||
+          Number(org.negotiatedActionsAnnual) === actionsAnnual;
+        const recorded = !canRecordAllowance
+          ? " (allowance column absent — bounded fallback applies)"
+          : writeAllowance
+            ? `, ${actionsAnnual.toLocaleString("en-US")} actions/yr recorded`
+            : `, ${Number(org.negotiatedActionsAnnual).toLocaleString("en-US")} actions/yr left as recorded (pass --actions-annual to change it)`;
+
+        if (tierIsSet && allowanceIsSet) {
+          console.log(
+            `      tier            : already enterprise/active${recorded}`,
+          );
+        } else if (DRY_RUN) {
+          console.log(
+            kleur.blue(
+              `      tier            : would set plan_type '${org.planType}' → 'enterprise', status '${org.status}' → 'active'${
+                writeAllowance
+                  ? `, negotiated_actions_annual ${org.negotiatedActionsAnnual ?? "NULL"} → ${actionsAnnual}`
+                  : canRecordAllowance
+                    ? `, negotiated_actions_annual left at ${org.negotiatedActionsAnnual}`
+                    : " (allowance column absent — skipped)"
+              }`,
+            ),
+          );
+        } else {
+          await withSystemDb((tx) =>
+            tx
+              .update(schema.organizations)
+              .set({
+                planType: "enterprise",
+                status: "active",
+                ...(writeAllowance
+                  ? { negotiatedActionsAnnual: BigInt(actionsAnnual) }
+                  : {}),
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.organizations.id, org.id)),
+          );
+          console.log(
+            kleur.green(`      tier            : enterprise/active${recorded}`),
+          );
+        }
       }
 
       // ── 3. Billing settings: no assistant cap, no dunning hold ─────────────

@@ -216,6 +216,51 @@ describe("bootstrapIAMRuntime()", () => {
       apiKeyId: "aky_cli",
       userId: "usr_alice",
       capabilityName: "set_model_credential",
+      // Carried for every caller and read back only for a `tacho_gateway_v1`
+      // key (#3221). Null here: this context is a CLI session, not a gateway,
+      // and the adapter passes what the surface resolved rather than omitting
+      // the field — so the gate sees "no chain" rather than "not asked".
+      gatewaySessionUuid: null,
+      gatewayChainGenesisHash: null,
+    });
+  });
+
+  it("passes the gateway chain the MCP surface resolved, when there is one", async () => {
+    // The other half of the same rule: what the surface read off the request
+    // reaches the gate unchanged. `machineKeyDenial` decides whether it means
+    // anything, by the key's scope purpose; this adapter only has to not lose
+    // it.
+    mocks.checkIAM.mockResolvedValue({
+      result: { outcome: "allow", trace: { steps: [], decidedBy: undefined } },
+      principal: null,
+    });
+
+    bootstrapIAMRuntime();
+    const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
+    await (kernelFn as (args: unknown) => Promise<unknown>)({
+      capability: "query_ontology",
+      ctx: {
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        userId: null,
+        apiKeyId: "aky_gw",
+        requestId: "req_2",
+        surface: "mcp",
+        messageId: null,
+        gatewaySessionUuid: "tachod-abc",
+        gatewayChainGenesisHash: `sha256:${"a".repeat(64)}`,
+      },
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect(mocks.machineKeyDenial).toHaveBeenCalledWith({
+      orgId: "org_1",
+      apiKeyId: "aky_gw",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+      gatewayChainGenesisHash: `sha256:${"a".repeat(64)}`,
     });
   });
 

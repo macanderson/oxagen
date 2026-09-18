@@ -3353,7 +3353,7 @@
       "writes": []
     }
   ],
-  "contentHash": "1852eb5f866583ad42d111847a97886aa8abb88a3ac2720e31eaffe355a82c16",
+  "contentHash": "610e25394f8f4ec99131ed51ad390f860ccd2c6322c48c6f840ae4cf6fa172fb",
   "domains": [
     {
       "name": "agent",
@@ -3690,6 +3690,7 @@
         "postgres:tacho.checkpoints",
         "postgres:tacho.control_commands",
         "postgres:tacho.enrollment_tokens",
+        "postgres:tacho.gateway_chains",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
         "postgres:tacho.session_commands",
@@ -3775,7 +3776,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 130
+      "tableCount": 131
     },
     {
       "domains": [
@@ -17914,6 +17915,70 @@
       "domain": "tacho",
       "id": "postgres:tacho.enrollment_tokens",
       "name": "enrollment_tokens",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "chain_session_uuid",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "chain_genesis_hash",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "first_seen_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "last_seen_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.gateway_chains",
+      "name": "gateway_chains",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

@@ -34,6 +34,7 @@
 
 import {
   ambientPlaneKey,
+  GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
   SESSION_GATEWAY_COLUMN,
@@ -80,4 +81,21 @@ export async function sessionReadColumns(
   return (await sessionGatewayColumnReady(tx))
     ? undefined
     : { gatewayObservedAt: false };
+}
+
+/**
+ * Whether `tacho.gateway_chains` exists yet (#3221).
+ *
+ * A TABLE, not a column — but asked the same way, because
+ * `information_schema.columns` has no row for a column of a table that does
+ * not exist. One probe answers both "table missing" and "migration ran
+ * halfway", and the stakes are higher than for a plain added column: naming
+ * an absent table raises 42P01, which aborts the transaction exactly as 42703
+ * does. Ingest would then fail for every host on the deploy-before-migrate
+ * window, over a table it consults only to decide an enforcement tier.
+ */
+export async function gatewayInvocationColumnReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(tx, GATEWAY_CHAIN_COLUMN, await ambientPlaneKey());
 }

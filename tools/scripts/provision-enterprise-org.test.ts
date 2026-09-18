@@ -27,6 +27,8 @@ import {
   ownerReadiness,
   PLAN_ALLOWANCE_COLUMN,
   subscriptionAllowanceRefusal,
+  subscriptionGuard,
+  type EntitledSubscription,
   sanitizeUrl,
   shouldWriteAllowance,
   topUpCents,
@@ -525,5 +527,128 @@ describe("subscriptionAllowanceRefusal", () => {
     expect(subscriptionAllowanceRefusal("enterprise-v2", 12)).toContain(
       "'enterprise-v2'",
     );
+  });
+});
+
+// ── the two guards that turn on "is this organisation enterprise" (#3225) ────
+//
+// The script has two notions of enterprise: `organizations.plan_type`, and the
+// EFFECTIVE tier, which `resolveOrgActionEntitlement` computes with an entitled
+// subscription winning over the column. Both guards were written against the
+// column. Both were the same mistake, eighty lines apart.
+describe("subscriptionGuard", () => {
+  const enterpriseSub = {
+    status: "active",
+    planSlug: "enterprise",
+    planTier: "enterprise",
+  };
+  const scaleSub = { status: "active", planSlug: "scale", planTier: "scale" };
+
+  it("lets an unsubscribed org through, and checks it for lockout", () => {
+    // The ordinary case: nothing wins over `plan_type`, so this run really can
+    // make the org enterprise and the Owner preflight has something to protect.
+    expect(subscriptionGuard(undefined, false, 0)).toEqual({
+      subscriptionWins: false,
+      writesEnterpriseTier: true,
+    });
+  });
+
+  it("does not check Owner readiness when the tier cannot change", () => {
+    // The first defect. The preflight ran unconditionally, so a target with an
+    // entitled Scale subscription and no usable org-wide Owner had its WHOLE
+    // run refused — for a lockout that cannot happen, since the subscription
+    // keeps winning and the human resolver stays bypassed. The refusal also
+    // cost the credit-floor and billing-setting updates that the
+    // `subscriptionOverrides` path applies deliberately while exiting 2.
+    expect(subscriptionGuard(scaleSub, false, 0)).toEqual({
+      subscriptionWins: true,
+      writesEnterpriseTier: false,
+    });
+  });
+
+  it("still checks it for an org already on an enterprise subscription", () => {
+    // The tier write is not inert here — the subscription agrees with it — so
+    // a lockout IS reachable and the preflight still applies.
+    expect(subscriptionGuard(enterpriseSub, false, 0)).toEqual({
+      subscriptionWins: false,
+      writesEnterpriseTier: true,
+    });
+  });
+
+  it("refuses --actions-annual for a NON-enterprise entitled subscription", () => {
+    // The second defect, and the discriminating case. The refusal sat inside
+    // the enterprise-plan branch, so this org skipped it: the script wrote
+    // `negotiated_actions_annual`, reported it as set, and
+    // `resolveOrgActionEntitlement` never read it — because it takes the
+    // SUBSCRIBED plan's monthly allowance first, whatever tier that plan is on.
+    const decision = subscriptionGuard(scaleSub, true, 24_000_000);
+    expect(decision.refusal).toBeDefined();
+    expect(decision.writesEnterpriseTier).toBe(false);
+  });
+
+  it("gives it the same message an enterprise-plan org gets", () => {
+    // Same defect, same remediation, named for the plan the allowance actually
+    // comes from. An operator who follows the enterprise message and moves the
+    // subscription would otherwise re-run without the flag and have the
+    // retained figure ignored, with nothing on screen to suggest it would be.
+    const onScale = subscriptionGuard(scaleSub, true, 24_000_000).refusal;
+    const onEnterprise = subscriptionGuard(
+      enterpriseSub,
+      true,
+      24_000_000,
+    ).refusal;
+    expect(onScale).toBe(subscriptionAllowanceRefusal("scale", 24_000_000));
+    expect(onEnterprise).toBe(
+      subscriptionAllowanceRefusal("enterprise", 24_000_000),
+    );
+    // The same sentence modulo the plan it names, rather than two messages
+    // that drifted apart.
+    expect(onScale?.replace("'scale'", "'X'")).toBe(
+      onEnterprise?.replace("'enterprise'", "'X'"),
+    );
+  });
+
+  it("never writes the enterprise tier for a winning subscription", () => {
+    // The invariant that makes skipping the Owner preflight safe. The same
+    // field gates the preflight and the `plan_type = 'enterprise'` write, so a
+    // run cannot store the fallback without having checked — there is one
+    // field, not two that must agree.
+    //
+    // Storing it unchecked is inert today and a lockout tomorrow: resolution
+    // reads the subscription first, so nothing changes while it is entitled,
+    // and the day it is cancelled resolution falls through to the column,
+    // enterprise runs the full default-deny IAM resolver, and an organisation
+    // this run explicitly allowed to have no usable Owner has none.
+    const table: Array<{
+      sub: EntitledSubscription | undefined;
+      flag: boolean;
+      writes: boolean;
+    }> = [
+      { sub: undefined, flag: false, writes: true },
+      { sub: undefined, flag: true, writes: true },
+      { sub: enterpriseSub, flag: false, writes: true },
+      // Refused before anything is written.
+      { sub: enterpriseSub, flag: true, writes: false },
+      // The case this is all about: the write would be inert and unverified.
+      { sub: scaleSub, flag: false, writes: false },
+      { sub: scaleSub, flag: true, writes: false },
+    ];
+    for (const { sub, flag, writes } of table) {
+      const decision = subscriptionGuard(sub, flag, 24_000_000);
+      expect({
+        plan: sub?.planSlug ?? "none",
+        flag,
+        writes: decision.writesEnterpriseTier,
+      }).toEqual({ plan: sub?.planSlug ?? "none", flag, writes });
+    }
+  });
+
+  it("does not refuse --actions-annual for an org with no subscription", () => {
+    // The figure is read for an unsubscribed enterprise org, which is the case
+    // the flag exists for. Refusing here would be the mirror-image bug.
+    expect(subscriptionGuard(undefined, true, 24_000_000)).toEqual({
+      subscriptionWins: false,
+      writesEnterpriseTier: true,
+    });
   });
 });
