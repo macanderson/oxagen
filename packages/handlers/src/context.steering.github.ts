@@ -308,6 +308,11 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           eq(schema.repositoryBindingHeads.provider, "github"),
+          // Only a MAIN head declares a main repository. A linked head
+          // (`link_repository`) declares nothing about steering, and counting
+          // it would report "bound but retired" for a workspace whose linked
+          // repository is all it has.
+          eq(schema.repositoryBindingHeads.role, "main"),
         ),
       )
       .limit(1);

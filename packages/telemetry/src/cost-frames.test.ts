@@ -93,8 +93,12 @@ describe("readModelCallFrames", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       rootSessionUuid: RUN,
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
+    // A call seen twice (OTel and transcript) is priced once: the host
+    // stamps the later sighting and the rollup skips stamped rows.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
 
     expect(frames).toEqual([
       {

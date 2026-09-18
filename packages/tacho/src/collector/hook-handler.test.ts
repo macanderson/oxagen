@@ -6,6 +6,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { digestBytes } from "../digest";
 import { verifyChain } from "../chain";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { hookInputSchema } from "../claude-code/hooks";
@@ -685,5 +686,78 @@ describe("handleHookEvent over the recorded session", () => {
     expect(blocked.response).toMatchObject({ continue: false });
     expect(acks).toEqual([]);
     expect(record.control.messages).toHaveLength(1);
+  });
+
+  it("pairs each body with the event it belongs to, across the parent and its subagent", async () => {
+    const { deps } = harness();
+    const session = "sess-bodies";
+    await handleHookEvent(
+      { session_id: session, hook_event_name: "SessionStart", cwd: "/repo" },
+      {},
+      deps,
+    );
+    const prompt = await handleHookEvent(
+      {
+        session_id: session,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "hi",
+      },
+      {},
+      deps,
+    );
+    const turnStart = prompt.events.find((e) => e.kind === "turn_start");
+    expect(prompt.bodies).toHaveLength(1);
+    expect(prompt.bodies[0]).toMatchObject({
+      event_id_idem: turnStart?.event_id_idem,
+      session_uuid: turnStart?.session_uuid,
+      content_class: "model_call",
+    });
+    expect(turnStart?.content?.digest).toBe(
+      digestBytes(prompt.bodies[0]?.bytes as Uint8Array),
+    );
+    // A PreToolUse seals a collector policy_decision and the tool_requested
+    // frame; only the frame with bytes has a body.
+    const tool = await handleHookEvent(
+      {
+        session_id: session,
+        hook_event_name: "PreToolUse",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/README.md" },
+        tool_use_id: "toolu_b1",
+      },
+      {},
+      deps,
+    );
+    const requested = tool.events.find((e) => e.kind === "tool_requested");
+    expect(tool.bodies.map((b) => b.event_id_idem)).toEqual([
+      requested?.event_id_idem,
+    ]);
+    // A subagent's frames seal on the child chain, and their bodies are
+    // drained through the parent with everything else.
+    const sub = await handleHookEvent(
+      {
+        session_id: session,
+        hook_event_name: "SubagentStop",
+        agent_id: "agent-b1",
+        agent_type: "Explore",
+        last_assistant_message: "Found it.",
+      },
+      {},
+      deps,
+    );
+    const childStop = sub.events.find(
+      (e) => e.kind === "subagent_stop" && e.parent_session_uuid !== undefined,
+    );
+    expect(sub.bodies.map((b) => b.event_id_idem)).toEqual([
+      childStop?.event_id_idem,
+    ]);
+    expect(sub.bodies[0]?.session_uuid).toBe(childStop?.session_uuid);
+    // A frame with nothing to ship leaves the list empty.
+    const end = await handleHookEvent(
+      { session_id: session, hook_event_name: "SessionEnd", reason: "other" },
+      {},
+      deps,
+    );
+    expect(end.bodies).toEqual([]);
   });
 });

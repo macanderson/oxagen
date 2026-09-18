@@ -70,6 +70,7 @@ import { describe, expect, it } from "vitest";
 import { ENV_REGISTRY, type ServiceName } from "@oxagen/config";
 import type { CapabilityDeclaration } from "@oxagen/oxagen";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { REQUIRED_GITHUB_APP_ENV } from "./repository.main.get";
@@ -164,6 +165,16 @@ const FLOW: readonly FlowEntry[] = [
   {
     capability: repositoryInstallationAttach,
     handlerFile: "repository.installation.attach.ts",
+    reads: GITHUB_TOKEN_DECRYPT_ENV,
+    via: "resolveWorkspaceGithubUserToken, via githubUserInstallationsDeps",
+  },
+  // `create_workspace` resolves the installation from the org's GitHub
+  // authorization by the repository's owner (ADR-099), through the same
+  // candidates read as `list_github_installations`. It runs on the api and
+  // mcp surfaces and in the app.
+  {
+    capability: workspaceCreate,
+    handlerFile: "workspace.create.ts",
     reads: GITHUB_TOKEN_DECRYPT_ENV,
     via: "resolveWorkspaceGithubUserToken, via githubUserInstallationsDeps",
   },

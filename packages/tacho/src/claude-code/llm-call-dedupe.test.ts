@@ -1,0 +1,133 @@
+/**
+ * The ledger's verdicts: first sighting, a duplicate from another source,
+ * a repeat from the same source, the tuple fallback and its limits, the
+ * capacity, and the state a restart continues from.
+ */
+import { describe, expect, it } from "vitest";
+import {
+  LLM_CALL_LEDGER_CAPACITY,
+  LlmCallLedger,
+  llmCallKeys,
+  withoutUsage,
+} from "./llm-call-dedupe";
+
+const call = (over: Record<string, unknown> = {}) => ({
+  model: "claude-haiku-4-5-20251001",
+  request_id: "req_1",
+  message_id: "msg_1",
+  input_tokens: 10,
+  output_tokens: 5,
+  cache_read_tokens: 0,
+  cache_creation_tokens: 100,
+  ...over,
+});
+
+describe("llmCallKeys", () => {
+  it("keys by request id, then message id, then the token tuple", () => {
+    expect(llmCallKeys(call())).toEqual({
+      ids: ["request:req_1", "message:msg_1"],
+      tuple: "tuple:claude-haiku-4-5-20251001|10|5|0|100",
+    });
+    expect(llmCallKeys({ model: "m" })).toEqual({ ids: [], tuple: undefined });
+    expect(llmCallKeys({ request_id: "", output_tokens: 1 })).toEqual({
+      ids: [],
+      tuple: "tuple:||1||",
+    });
+  });
+});
+
+describe("withoutUsage", () => {
+  it("removes every counted member and keeps the rest", () => {
+    expect(
+      withoutUsage(call({ thinking_tokens: 3, stop_reason: "end" })),
+    ).toEqual({
+      model: "claude-haiku-4-5-20251001",
+      request_id: "req_1",
+      message_id: "msg_1",
+      stop_reason: "end",
+    });
+  });
+});
+
+describe("LlmCallLedger", () => {
+  it("names the first source on a duplicate and drops a repeat", () => {
+    const ledger = new LlmCallLedger();
+    expect(ledger.note(call(), "transcript")).toEqual({ kind: "first" });
+    expect(ledger.note(call(), "otel_log")).toEqual({
+      kind: "duplicate",
+      of: "transcript",
+    });
+    // The third source is a duplicate of the first, not the second.
+    expect(ledger.note(call(), "collector")).toEqual({
+      kind: "duplicate",
+      of: "transcript",
+    });
+    expect(ledger.note(call(), "otel_log")).toEqual({ kind: "repeat" });
+    expect(ledger.note(call(), "transcript")).toEqual({ kind: "repeat" });
+    // Another call is another first sighting.
+    expect(
+      ledger.note(
+        call({ request_id: "req_2", message_id: "msg_2" }),
+        "transcript",
+      ),
+    ).toEqual({ kind: "first" });
+  });
+
+  it("joins an id-less sighting by its tuple, but never two identified calls", () => {
+    const ledger = new LlmCallLedger();
+    expect(ledger.note(call(), "transcript")).toEqual({ kind: "first" });
+    // OTel from a harness that reports no request id.
+    const idless = call({ request_id: undefined, message_id: undefined });
+    expect(ledger.note(idless, "otel_log")).toEqual({
+      kind: "duplicate",
+      of: "transcript",
+    });
+    // A second identified call with the same tuple is its own call.
+    expect(
+      ledger.note(
+        call({ request_id: "req_2", message_id: "msg_2" }),
+        "transcript",
+      ),
+    ).toEqual({ kind: "first" });
+    // Two id-less sightings from one source cannot be told apart: both count.
+    const fresh = new LlmCallLedger();
+    expect(fresh.note(idless, "otel_log")).toEqual({ kind: "first" });
+    expect(fresh.note(idless, "otel_log")).toEqual({ kind: "first" });
+    // But an identified sighting after an id-less one joins it.
+    expect(fresh.note(call(), "transcript")).toEqual({
+      kind: "duplicate",
+      of: "otel_log",
+    });
+  });
+
+  it("forgets the oldest calls past its capacity", () => {
+    const ledger = new LlmCallLedger();
+    for (let i = 0; i < LLM_CALL_LEDGER_CAPACITY + 10; i += 1) {
+      ledger.note({ request_id: `req_${i}` }, "transcript");
+    }
+    expect(ledger.note({ request_id: "req_0" }, "otel_log")).toEqual({
+      kind: "first",
+    });
+    expect(
+      ledger.note(
+        { request_id: `req_${LLM_CALL_LEDGER_CAPACITY + 9}` },
+        "otel_log",
+      ),
+    ).toEqual({ kind: "duplicate", of: "transcript" });
+  });
+
+  it("continues from its state after a restart", () => {
+    const ledger = new LlmCallLedger();
+    ledger.note(call(), "transcript");
+    ledger.note(call(), "otel_log");
+    const restored = new LlmCallLedger(ledger.state());
+    expect(restored.note(call(), "otel_log")).toEqual({ kind: "repeat" });
+    expect(restored.note(call(), "collector")).toEqual({
+      kind: "duplicate",
+      of: "transcript",
+    });
+    expect(new LlmCallLedger(undefined).note(call(), "otel_log")).toEqual({
+      kind: "first",
+    });
+  });
+});

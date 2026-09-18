@@ -1,0 +1,54 @@
+{
+  "name": "unlink_repository",
+  "domain": "repository",
+  "description": "Unlink a linked repository from the workspace. The main repository cannot be unlinked; binding history is kept.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "unlinkedAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "fullName",
+      "unlinkedAt"
+    ],
+    "additionalProperties": false
+  }
+}
