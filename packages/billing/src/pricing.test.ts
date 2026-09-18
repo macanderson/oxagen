@@ -8,6 +8,10 @@
 import { describe, it, expect } from "vitest";
 import { CREDIT_TOPUP_PRESETS_USD } from "@oxagen/oxagen/contracts/billing.credits.purchase";
 import {
+  PUBLISHED_TERMS,
+  UPGRADE_PLANS,
+} from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
+import {
   CREDIT_VALUE_USD,
   DEFAULT_TARGET_MARGIN,
   PROVIDER_RATE_CARD,
@@ -20,9 +24,11 @@ import {
   derivePricing,
 } from "./pricing";
 import {
+  ACTION_RATE_BANDS,
   TIER_ACTION_ALLOWANCES,
   ENTERPRISE_FALLBACK_ALLOWANCE,
 } from "./action-metering";
+import { FREE_SIGNUP_CREDITS } from "./grants";
 
 describe("resolveRate", () => {
   it("returns the exact rate for a known model id", () => {
@@ -353,5 +359,49 @@ describe("SUBSCRIPTION_PLANS — governed-action allowances", () => {
     for (let i = 1; i < figures.length; i += 1) {
       expect(figures[i]).toBeGreaterThanOrEqual(figures[i - 1] as number);
     }
+  });
+});
+
+describe("the Billing page's published price list (contract copy)", () => {
+  // apps/app reads these from the start_subscription_upgrade contract, since it
+  // cannot import this package (INV-03) and the contract package cannot either
+  // (billing depends on oxagen). This test keeps the copy from becoming a
+  // second price schedule.
+  it("offers Build and Scale at the SUBSCRIPTION_PLANS prices and allowances", () => {
+    for (const offered of UPGRADE_PLANS) {
+      const plan = SUBSCRIPTION_PLANS.find((p) => p.slug === offered.slug);
+      expect(plan, offered.slug).toBeDefined();
+      expect(plan?.tier).toBe(offered.tier);
+      expect(plan?.monthlyCents).toBe(offered.monthlyCents);
+      expect(plan?.annualCents).toBe(offered.annualCents);
+      expect(plan?.gauTerms.includedGauPerMonth).toBe(
+        offered.includedGauPerMonth,
+      );
+    }
+  });
+
+  it("does not offer Enterprise, which is negotiated per contract", () => {
+    expect(UPGRADE_PLANS.map((p) => p.tier)).not.toContain("enterprise");
+  });
+
+  it("prints the published list rate and block size every plan carries", () => {
+    for (const plan of SUBSCRIPTION_PLANS) {
+      expect(plan.gauTerms.ratePerGauMicros).toBe(
+        BigInt(PUBLISHED_TERMS.ratePerGauMicros),
+      );
+      expect(plan.gauTerms.blockSizeGau).toBe(PUBLISHED_TERMS.blockSizeGau);
+    }
+  });
+
+  it("prints the ACTION_RATE_BANDS prices, in order", () => {
+    expect([...PUBLISHED_TERMS.volumeBandsUsdPer1000]).toEqual(
+      ACTION_RATE_BANDS.map((band) => band.usdPer1000),
+    );
+  });
+
+  it("prints the signup grant create_org writes", () => {
+    expect(BigInt(PUBLISHED_TERMS.signupGrantCredits)).toBe(
+      FREE_SIGNUP_CREDITS,
+    );
   });
 });

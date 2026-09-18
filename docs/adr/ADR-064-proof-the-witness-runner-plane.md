@@ -1,6 +1,6 @@
 # ADR-064: Proof: the witness runner plane
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-18 by ADR-096 (the witness runner is built on the Phase 5 launcher)
 - **Date:** 2026-09-15
 - **Owners:** platform
 - **Related:** issue #2955 (proof: witness runs, the flip, verdicts, proven
@@ -120,3 +120,14 @@ connect to, and its context carries no signed-in user.
   that denies a probe.
 - The runner plane is approved under a $200-a-month AWS budget cap; its
   infrastructure is built in its own lane.
+
+## Amendment 2026-09-18: the witness runner is built on the Phase 5 launcher
+
+Maintainer decision of 2026-09-18, recorded in ADR-096.
+
+The witness runner is not built at `main` `02278c913`: the proof tables and
+`packages/run-evidence/src/proof.ts` exist, and no runner does. The changed
+sentence: **the witness runner is built on the same launcher as
+`oxagen run -- <agent>`**, the Phase 5 supervisor that starts a process under an
+OS sandbox with egress limited to the gateway. It stays the one Oxagen-operated
+execution plane this ADR names. It stops being a separate plane to design.

@@ -1,9 +1,13 @@
 // INV-25 (ARCHITECTURE.md §3.9, §4): on the Billing page money renders only in
-// the contracted rate, the invoices, the purchase form's total and — from
-// WL-67, the second meter — the usage credit balance and its top-up. Every
-// other figure is a GAU count. Three readings of the tree:
-//   - `<Money` JSX under src/features/billing/** appears in contract-rate.tsx,
-//     invoices.tsx, purchase-form.tsx and usage-credits.tsx alone;
+// the summary tiles (the contracted rate per 1,000 GAU and the open invoice
+// total), This month's rollup of the invoices, the invoices, the price list,
+// the Change plan dialog's plan prices, the purchase form's total and — from
+// WL-67, the second meter — the usage credit balance and its top-up. The
+// bucket meter and the auto top-up control print GAU counts only. Three
+// readings of the tree:
+//   - `<Money` JSX under src/features/billing/** appears in summary.tsx,
+//     this-month.tsx, invoices.tsx, price-list.tsx, change-plan.tsx,
+//     purchase-form.tsx and usage-credits.tsx alone;
 //   - of the zod view models src/data/contracts/billing.ts exports, only
 //     ContractRate, InvoicePage and UsageCredits reach `Money`, directly or
 //     through a local schema;
@@ -33,8 +37,11 @@ const MAPPER_FILE = "src/data/live/mappers/billing.ts";
 const PROBES = "src/test/arch/probes/billing-units";
 
 const MONEY_COMPONENTS: ReadonlySet<string> = new Set([
-  "contract-rate.tsx",
+  "summary.tsx",
+  "this-month.tsx",
   "invoices.tsx",
+  "price-list.tsx",
+  "change-plan.tsx",
   "purchase-form.tsx",
   "usage-credits.tsx",
 ]);
@@ -156,11 +163,11 @@ function mapperViolations(source: SourceText): string[] {
 const probe = (name: string): SourceText => readSource(`${PROBES}/${name}`);
 
 describe("billing units", () => {
-  it("renders <Money> under src/features/billing only in the rate block and the invoices", () => {
+  it("renders <Money> under src/features/billing only in the files INV-25 names", () => {
     const files = listFiles(FEATURE_DIR).filter(
       (file) => file.endsWith(".tsx") && !isTestOnly(file),
     );
-    expect(files).toContain("src/features/billing/bucket-meter.tsx");
+    expect(files).toContain("src/features/billing/meters.tsx");
     expect(files).toContain("src/features/billing/auto-topup.tsx");
     expect(
       files.flatMap((file) => moneyJsxViolations(readSource(file))),
@@ -175,17 +182,17 @@ describe("billing units", () => {
     expect(mapperViolations(readSource(MAPPER_FILE))).toEqual([]);
   });
 
-  it("fails a <Money> in the bucket meter or the auto top-up control", () => {
-    expect(moneyJsxViolations(probe("bucket-meter.tsx"))).toEqual([
-      `${RULE} ${PROBES}/bucket-meter.tsx:4 money-outside-rate-and-invoices`,
+  it("fails a <Money> in the meters or the auto top-up control", () => {
+    expect(moneyJsxViolations(probe("meters.tsx"))).toEqual([
+      `${RULE} ${PROBES}/meters.tsx:4 money-outside-rate-and-invoices`,
     ]);
     expect(moneyJsxViolations(probe("auto-topup.tsx"))).toEqual([
       `${RULE} ${PROBES}/auto-topup.tsx:4 money-outside-rate-and-invoices`,
     ]);
   });
 
-  it("passes a <Money> in the rate block (negative)", () => {
-    expect(moneyJsxViolations(probe("contract-rate.tsx"))).toEqual([]);
+  it("passes a <Money> in the summary tiles (negative)", () => {
+    expect(moneyJsxViolations(probe("summary.tsx"))).toEqual([]);
   });
 
   it("fails a view model other than the two that reaches Money through a local schema", () => {

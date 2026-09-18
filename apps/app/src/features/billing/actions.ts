@@ -23,6 +23,10 @@ import {
   billingGauBucketPurchase,
   PURCHASE_GAU_MAX,
 } from "@oxagen/oxagen/contracts/billing.gau_bucket.purchase";
+import {
+  billingSubscriptionUpgradeStart,
+  UPGRADE_PLANS,
+} from "@oxagen/oxagen/contracts/billing.subscription_upgrade.start";
 import { captureError } from "@oxagen/telemetry";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -38,6 +42,8 @@ const MAX_BLOCKS = 100;
 export type PurchaseState = ActionResult<never> | null;
 
 export type CreditTopupState = ActionResult<never> | null;
+
+export type PlanChangeState = ActionResult<never> | null;
 
 /** A whole number with no sign, no leading zero, no exponent and no separator. */
 const WHOLE_NUMBER = /^[1-9]\d*$/;
@@ -146,8 +152,8 @@ export async function purchaseCredits(
     };
   }
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
-  if (!origin) {
+  const origin = appOrigin();
+  if (origin === null) {
     captureError({
       error: new Error("app_url_missing"),
       source: "app",
@@ -170,6 +176,77 @@ export async function purchaseCredits(
       source: "app",
       orgId: ctx.orgId,
       context: "billing.credits checkout_url_refused",
+    });
+    return { ok: false, reason: "unavailable", code: "checkout_url_refused" };
+  }
+  return redirectToCheckout(url);
+}
+
+/** The app's origin with no trailing slash, or null when the deploy did not set it. */
+function appOrigin(): string | null {
+  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "") || null;
+}
+
+/**
+ * Change plan (pages/billing.md, the plan dialog): start a Stripe Checkout
+ * for Build or Scale through `start_subscription_upgrade`. The plan must be one
+ * the contract offers and the interval `month` or `year`; anything else is
+ * `invalid` on its field and no capability runs. The handler checks the role
+ * (Owner or Billing) and refuses an organization that already has an active
+ * subscription as a `conflict`. Checkout returns to `?checkout=plan`, and the
+ * browser is sent on only to a URL parseCheckoutUrl accepts.
+ */
+export async function startPlanChange(
+  org: string,
+  _prev: PlanChangeState,
+  form: FormData,
+): Promise<ActionResult<never>> {
+  const ctx = await requireViewer(org);
+  const planSlug = form.get("planSlug");
+  if (
+    typeof planSlug !== "string" ||
+    !UPGRADE_PLANS.some((plan) => plan.slug === planSlug)
+  ) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "planSlug",
+    };
+  }
+  const interval = form.get("interval");
+  if (interval !== "month" && interval !== "year") {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "interval",
+    };
+  }
+  const origin = appOrigin();
+  if (origin === null) {
+    captureError({
+      error: new Error("app_url_missing"),
+      source: "app",
+      orgId: ctx.orgId,
+      context: "billing.plan app_url_missing",
+    });
+    return { ok: false, reason: "unavailable", code: "app_url_missing" };
+  }
+  const result = await kernelWrite(ctx, billingSubscriptionUpgradeStart, {
+    planSlug,
+    interval,
+    successUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "plan" })}`,
+    cancelUrl: `${origin}${routes.billing(ctx.orgSlug, { checkout: "cancel" })}`,
+  });
+  if (!result.ok) return result;
+  const url = parseCheckoutUrl(result.value.checkoutUrl);
+  if (url === null) {
+    captureError({
+      error: new Error("checkout_url_refused"),
+      source: "app",
+      orgId: ctx.orgId,
+      context: "billing.plan checkout_url_refused",
     });
     return { ok: false, reason: "unavailable", code: "checkout_url_refused" };
   }

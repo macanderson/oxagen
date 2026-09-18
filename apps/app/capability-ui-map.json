@@ -520,6 +520,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "start_subscription_upgrade": {
+      "route": "/[org]/billing",
+      "page": "apps/app/src/app/[org]/billing/page.tsx",
+      "entry": "/[org]/billing — Change plan, the page's one gold action (features/billing/change-plan.tsx, features/billing/actions.ts)",
+      "proof": "apps/app/src/features/billing/change-plan.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-9de6756e-billing-layout"
+    },
     "purchase_credits": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",

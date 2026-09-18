@@ -168,7 +168,7 @@ export function NavDrawer({ data }: { data: ShellData }) {
               <X aria-hidden="true" className="size-4" />
             </Dialog.Close>
           </div>
-          <SidebarHeader data={data} onNavigate={close} />
+          <SidebarHeader data={data} />
           <SidebarNav data={data} onNavigate={close} />
           <div className="mt-auto px-2.5">
             <AssistantLauncher onNavigate={close} />
