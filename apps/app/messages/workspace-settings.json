@@ -40,7 +40,10 @@
         "retired": "The GitHub connection this repository was bound through has been removed, so Oxagen can no longer read .oxagen/ from it: steering and Context PRs are off until it is bound again. The repository itself has not changed, and neither has anything else about this workspace — it has to be bound again through a live GitHub connection.",
         "reconnect": "Reconnect this repository",
         "reconnecting": "Reconnecting…",
-        "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an org owner's decision and is recorded as a security event, so it is done with the people accountable for this workspace rather than from a settings panel."
+        "fixed": "Which repository is main cannot be changed here. Moving a workspace to another repository is an org owner's decision and is recorded as a security event, so it is done with the people accountable for this workspace rather than from a settings panel.",
+        "refDrift": "Context PRs are opened against, checked against and merged into the branch approved here — never whatever GitHub currently calls the default. So if this repository's default branch has been renamed, they will be refused until the new branch is approved.",
+        "reapprove": "Re-approve the default branch",
+        "reapproving": "Re-approving…"
       },
       "manage": "Change which repositories the App reaches",
       "installChoose": "Returned from GitHub. This account reaches more than one installation of the Oxagen App, so pick the one this workspace should act through.",

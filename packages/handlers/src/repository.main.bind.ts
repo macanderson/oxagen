@@ -277,6 +277,12 @@ export function createMainRepositoryBindHandler(
               publicId: schema.repositoryBindings.publicId,
               createdAt: schema.repositoryBindings.createdAt,
               version: schema.repositoryBindings.version,
+              connectionId: schema.repositoryBindings.connectionId,
+              providerOwner: schema.repositoryBindings.providerOwner,
+              providerName: schema.repositoryBindings.providerName,
+              providerFullName: schema.repositoryBindings.providerFullName,
+              configuredDefaultRef:
+                schema.repositoryBindings.configuredDefaultRef,
             })
             .from(schema.repositoryBindings)
             .where(eq(schema.repositoryBindings.id, same.currentBindingId))
@@ -286,14 +292,49 @@ export function createMainRepositoryBindHandler(
               "repository_binding_heads names a binding that does not exist",
             );
           }
-          if (same.connectionId === connection.id) {
-            // Same repository, same connection: nothing has moved, so nothing is
-            // written. The first bind's identity is the answer.
+          // What a binding version MEANS, from the table's own header comment:
+          // "a rename or a reconfigured default ref". So a re-bind of the same
+          // repository writes a successor whenever any fact the binding records
+          // has moved — not only when the connection has.
+          //
+          // Comparing only the connection (which is all this did) left the
+          // approved ref with no way to change. Steering resolves
+          // `defaultBranch` from `configuredDefaultRef` and `assertProductionBase`
+          // refuses any Context PR whose base is not it, so once GitHub's default
+          // branch was renamed the workspace could open nothing — and the repair
+          // the UI offers, binding the same repository again, wrote nothing and
+          // changed nothing. A silent retarget was traded for a hard stop with no
+          // exit. `set_main_repository`, which the repository-binding spec names
+          // for this, is a spec entry with no contract and no handler.
+          //
+          // Re-approving the SAME repository stays inside this capability's
+          // authority for the reason the connection-repair case already argues:
+          // the `main_repo_bound` conflict above governs moving to a DIFFERENT
+          // repository and still fires for one. And the ref still only ever moves
+          // on a deliberate operator re-bind, never from live GitHub state, which
+          // is the invariant steering was fixed to hold.
+          const drifted =
+            same.connectionId !== connection.id ||
+            existing.connectionId !== connection.id ||
+            existing.providerOwner !== repo.owner ||
+            existing.providerName !== repo.name ||
+            existing.providerFullName !== repo.fullName ||
+            existing.configuredDefaultRef !== repo.defaultBranch;
+          if (!drifted) {
+            // Nothing has moved, so nothing is written. The first bind's identity
+            // is the answer.
             bindingPublicId = existing.publicId;
             boundAt = existing.createdAt;
           } else {
-            // Same repository, DIFFERENT connection — the head still points at a
-            // connection this workspace no longer acts through. That is the
+            // Same repository, something the binding records has moved. The
+            // successor carries every such fact forward together — owner, name,
+            // full name, approved ref and connection — because they are read as
+            // one record and a version that updated only some of them would put
+            // the binding into a state no single observation ever produced.
+            //
+            // The connection case is the subtlest of them, so it keeps its
+            // reasoning here. A DIFFERENT connection means the head still points
+            // at one this workspace no longer acts through. That is the
             // reconnect state: `delete_connection` leaves the old row at
             // `status = 'deleting'` with a null `deleted_at`, and the install
             // callback's attach then inserts a fresh connection because the
@@ -306,8 +347,8 @@ export function createMainRepositoryBindHandler(
             // replacement connection is a REPAIR, not a change of main repo. The
             // `main_repo_bound` conflict above (spec §10.1, an org owner's
             // decision) governs moving to a DIFFERENT repository and still fires
-            // for one, unchanged. Only the connection behind the same repository
-            // moves here.
+            // for one, unchanged. Which repository is main never moves here; only
+            // what this workspace records about it does.
             //
             // Safe because `deps.repository` already refused
             // `repository_not_installed` unless this installation can reach this
