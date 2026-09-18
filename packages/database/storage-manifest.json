@@ -2118,6 +2118,16 @@
       "writes": []
     },
     {
+      "domain": "cost",
+      "name": "list_unpriced_models",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "list_waste",
       "reads": [],
@@ -2476,6 +2486,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "remove_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2895,6 +2916,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "set_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -3392,7 +3424,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d6f7405445c415fcec4a30d6fe296d95d32b83428f80fd4d3b535d2c5ab1bca5",
+  "contentHash": "5d190fd79ac935c5034f51b3e9916bb966e4fdc71d60327bd3418a68d941bc5a",
   "domains": [
     {
       "name": "agent",
