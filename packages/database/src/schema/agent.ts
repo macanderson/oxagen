@@ -1390,6 +1390,16 @@ export const contextRecordVersions = agentSchema.table(
     // ContextProvenanceV1 vocabulary (packages/run-evidence contextgraph.ts):
     // [{ type, uri?, range?, digest?, method?, by? }].
     provenance: jsonb("provenance").notNull().default(sql`'[]'::jsonb`),
+    // The classification this version's body carries, written by
+    // merge_context_pr alongside the record row's copy. It belongs here
+    // because it describes the body: promoting an older version back into
+    // service must compile what that version says, not what the record row
+    // was last told (#3312). NULL in all four on a version the legacy
+    // publish_context_record path wrote; the record row is the fallback then.
+    kind: text("kind"),
+    force: text("force"),
+    constraintEffect: text("constraint_effect"),
+    statement: text("statement"),
   },
   (t) => ({
     recordIdx: index("context_record_versions_record_idx").on(t.recordId),
@@ -1404,8 +1414,42 @@ export const contextRecordVersions = agentSchema.table(
       "context_record_versions_checksum_check",
       sql`${t.checksum} ~ '^[0-9a-f]{64}$'`,
     ),
+    kindCheck: check(
+      "context_record_versions_kind_check",
+      sql`${t.kind} IS NULL OR ${t.kind} IN ('rule', 'constraint', 'procedure', 'fact', 'memory', 'preference')`,
+    ),
+    forceCheck: check(
+      "context_record_versions_force_check",
+      sql`${t.force} IS NULL OR ${t.force} IN ('must', 'should', 'may', 'info')`,
+    ),
+    constraintEffectCheck: check(
+      "context_record_versions_constraint_effect_check",
+      sql`(${t.constraintEffect} IS NULL AND ${t.kind} IS DISTINCT FROM 'constraint') OR (${t.constraintEffect} IN ('require', 'forbid') AND ${t.kind} = 'constraint')`,
+    ),
   }),
 );
+
+/**
+ * A classification column of {@link contextRecordVersions}, for the
+ * deploy-before-migrate probe.
+ *
+ * Migration `20260918160000` adds `kind`, `force`, `constraint_effect` and
+ * `statement` to the version table. Production applies migrations by hand from
+ * the app node while `deploy-node` ships on merge without waiting, so between
+ * the two there is a window in which the code that reads and writes these four
+ * is live and the columns are not. Naming one then raises 42703 and aborts the
+ * transaction, which would take out every bundle fetch, control poll, event
+ * ingest and enrollment in the workspace -- none of which are about a version's
+ * classification at all.
+ *
+ * One ref answers for all four: they are added by a single `ALTER TABLE`, so
+ * either all four are there or none is.
+ */
+export const CONTEXT_VERSION_CLASSIFICATION_COLUMN = {
+  schema: "agent",
+  table: "context_record_versions",
+  column: "kind",
+} as const;
 
 // Append-only hash-chained ledger of context-record lifecycle actions,
 // mirroring Stella's promotions.jsonl: chain_digest = sha256(prev_digest +

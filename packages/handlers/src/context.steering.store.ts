@@ -4,7 +4,14 @@
 // handler takes a `SteeringStore`; this file is the one that runs SQL, inside
 // the tenant scope the kernel entered. The tests run the handlers against the
 // in-memory store in context.steering.test-support.ts.
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  hasColumnFresh,
+  isUniqueViolation,
+  schema,
+  withTenantDb,
+} from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type {
   CheckResult,
@@ -706,6 +713,37 @@ export const postgresSteeringStore: SteeringStore = {
   async publishMerge(input) {
     const { scope, proposal } = input;
     return withTenantDb(async (tx) => {
+      // Take the lock the INSERT below will take anyway, BEFORE probing.
+      //
+      // `information_schema` is an ordinary catalog read and locks nothing, so
+      // without this the migration's `ALTER TABLE` -- which holds ACCESS
+      // EXCLUSIVE -- can commit, and its one-time backfill run, in the window
+      // between a `false` answer here and the insert. The insert would then
+      // succeed against a migrated table while omitting the four columns from
+      // its statement, writing a version that is unclassified for good and that
+      // the backfill has already passed by (discussion_r4050518857).
+      //
+      // ROW EXCLUSIVE is exactly what an INSERT acquires, and it does not
+      // conflict with itself, so concurrent merges are unaffected; it conflicts
+      // only with the DDL, which is the one thing that must not interleave
+      // here. Taking it early moves the acquisition, it does not add one.
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+      );
+
+      // `hasColumnFresh`, not `hasColumn`: a cached MISS must not reach a
+      // write. The read path can spend the negative TTL compiling from the
+      // record row and be right again on the next call, but a merge that omits
+      // the four writes a version that carries NULL for good -- the migration's
+      // one-time backfill has already run, and nothing afterwards fills it in.
+      // A later merge would then update the record row, and promoting the
+      // unclassified version would fall back to that newer row: #3312 again,
+      // permanently, for that version (discussion_r4050451667).
+      const versionClassificationReady = await hasColumnFresh(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
       const [existing] = await tx
         .select({
           id: schema.contextRecords.id,
@@ -800,6 +838,22 @@ export const postgresSteeringStore: SteeringStore = {
           publishedAt: input.mergedAt,
           body: input.body,
           checksum: input.checksum,
+          // The version carries what its body says. A later promote of this
+          // version copies these four back onto the record row (#3312).
+          //
+          // Omitted entirely while migration `20260918160000` is pending:
+          // naming a column the database does not have raises 42703 and would
+          // fail the merge outright. The record row still gets them, so the
+          // merge is not lossy, and the version reads through
+          // `classificationOf`'s record-row fallback until the migration lands.
+          ...(versionClassificationReady
+            ? {
+                kind: proposal.kind,
+                force: proposal.force,
+                constraintEffect: proposal.constraintEffect,
+                statement: proposal.statement,
+              }
+            : {}),
           provenance: [
             {
               type: "commit",

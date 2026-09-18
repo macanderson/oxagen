@@ -8,7 +8,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import {
   postgresSteeringStore as store,
   type ProposalRow,
@@ -20,7 +20,13 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
   const orgId = crypto.randomUUID();
   const workspaceId = crypto.randomUUID();
   const otherWorkspace = crypto.randomUUID();
+  // The concurrency test merges twice, and the promotions ledger is counted
+  // per workspace: run it in a workspace of its own so its two rows do not
+  // move the ledger the publish test asserts from zero. Cleaned up with the
+  // rest below.
+  const concurrentWorkspace = crypto.randomUUID();
   const scope = { orgId, workspaceId };
+  const concurrentScope = { orgId, workspaceId: concurrentWorkspace };
   const userId = crypto.randomUUID();
   const tag = workspaceId.slice(0, 8);
   const lineage = `ctx.g2961.${tag}`;
@@ -35,6 +41,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextRecords.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
       const ids = records.map((r) => r.id);
@@ -59,6 +66,7 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextAppends.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
       await tx
@@ -67,17 +75,21 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
           inArray(schema.contextProposals.workspaceId, [
             workspaceId,
             otherWorkspace,
+            concurrentWorkspace,
           ]),
         );
     });
     await closeDatabase();
   });
 
-  const propose = (over: Partial<ProposalRow> = {}) =>
-    inScope(() =>
+  const proposeIn = (
+    where: { orgId: string; workspaceId: string },
+    over: Partial<ProposalRow> = {},
+  ) =>
+    runInTenantScope(where, () =>
       store.insertProposal({
-        orgId,
-        workspaceId,
+        orgId: where.orgId,
+        workspaceId: where.workspaceId,
         lineageId: lineage,
         kind: "rule",
         force: "should",
@@ -94,6 +106,67 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
         ...over,
       }),
     );
+
+  const propose = (over: Partial<ProposalRow> = {}) => proposeIn(scope, over);
+
+  // `publishMerge` takes ROW EXCLUSIVE on the version table before probing for
+  // the classification columns, so the migration's ACCESS EXCLUSIVE cannot
+  // commit between the probe and the insert. ROW EXCLUSIVE does not conflict
+  // with itself, so the lock must NOT serialize merges against each other --
+  // that is the regression the fix could have introduced, and it is what this
+  // asserts: two merges on different lineages, started together, both complete.
+  // A self-conflicting lock mode would deadlock or block here, not just slow
+  // down, because each holds its lock to commit.
+  it("does not serialize concurrent merges on different lineages", async () => {
+    const inConcurrentScope = <T>(fn: () => Promise<T>) =>
+      runInTenantScope(concurrentScope, fn);
+    const merge = async (suffix: string) => {
+      const proposal = await proposeIn(concurrentScope, {
+        lineageId: `${lineage}.${suffix}`,
+      });
+      const opened = await inConcurrentScope(() =>
+        store.updateProposal(
+          proposal.id,
+          {
+            status: "checks_passed",
+            repository: "a-intel/platform",
+            baseRef: "main",
+            branch: `context/${lineage}.${suffix}`,
+            path: `.oxagen/rules/${lineage}.${suffix}.toml`,
+            prNumber: 900,
+            prUrl: "https://github.com/a-intel/platform/pull/900",
+            headSha: "dee9001",
+            stampedRecordId: `rec_${suffix}`,
+            recordHash: `sha256:${suffix.repeat(64).slice(0, 64)}`,
+          },
+          ["proposed"],
+        ),
+      );
+      return inConcurrentScope(() =>
+        store.publishMerge({
+          scope: concurrentScope,
+          proposal: opened,
+          body: 'schema = "context-record/v0.1"\n',
+          checksum: suffix.repeat(64).slice(0, 64),
+          commitSha: `c0ffee${suffix}`,
+          path: opened.path!,
+          mergedAt: new Date("2026-09-18T12:00:00.000Z"),
+          mergedByUserId: userId,
+          policyVersion: "governance:team",
+        }),
+      );
+    };
+
+    const [a, b] = await Promise.all([merge("a"), merge("b")]);
+    expect(a.version).toBe(1);
+    expect(b.version).toBe(1);
+    // Both wrote their own record and their own ledger row.
+    expect(a.recordId).not.toBe(b.recordId);
+    expect(new Set([a.promotion.seq, b.promotion.seq])).toEqual(new Set([1]));
+    expect(
+      await inConcurrentScope(() => store.ledgerLength(concurrentScope)),
+    ).toBe(2);
+  });
 
   it("publishes a merge in one transaction: record, version, promotion event, proposal merged; a repeat rolls back; a second merge is version 2 and chain seq 2", async () => {
     const proposal = await propose();
@@ -239,6 +312,37 @@ describe.skipIf(!enabled)("steering store against Postgres", () => {
     expect(versions.map((v) => [v.version, v.isLatest])).toEqual([
       [2, true],
       [1, false],
+    ]);
+    // Each version carries the classification its own merge published, so a
+    // promote back to version 1 can restore what version 1 says (#3312).
+    const classified = await withSystemDb((tx) =>
+      tx
+        .select({
+          version: schema.contextRecordVersions.versionNumber,
+          kind: schema.contextRecordVersions.kind,
+          force: schema.contextRecordVersions.force,
+          constraintEffect: schema.contextRecordVersions.constraintEffect,
+          statement: schema.contextRecordVersions.statement,
+        })
+        .from(schema.contextRecordVersions)
+        .where(eq(schema.contextRecordVersions.recordId, first.recordId))
+        .orderBy(asc(schema.contextRecordVersions.versionNumber)),
+    );
+    expect(classified).toEqual([
+      {
+        version: 1,
+        kind: "rule",
+        force: "should",
+        constraintEffect: null,
+        statement: "Do not re-read CHANGELOG.md more than once in a run.",
+      },
+      {
+        version: 2,
+        kind: "rule",
+        force: "should",
+        constraintEffect: null,
+        statement: "Cache the first read.",
+      },
     ]);
   });
 

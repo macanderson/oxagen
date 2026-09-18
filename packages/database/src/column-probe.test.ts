@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ambientPlaneKey,
   hasColumn,
+  hasColumnFresh,
   runOnPlane,
   NEGATIVE_PROBE_TTL_MS,
   resetColumnProbesForTests,
@@ -93,6 +94,55 @@ describe("hasColumn", () => {
       await hasColumn(tx, HOSTS, SHARED, 1_000 + NEGATIVE_PROBE_TTL_MS),
     ).toBe(false);
     expect(tx.probes).toBe(2);
+  });
+
+  // A read that projects a column away for one more request is right again on
+  // the next call. A WRITE that omits one is not: the row carries NULL for
+  // good, the migration's one-time backfill has already run, and nothing
+  // afterwards fills it in. So a write path asks every time.
+  describe("hasColumnFresh", () => {
+    it("does not trust a cached miss", async () => {
+      const tx = fakeTx([]);
+      expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(false);
+      expect(await hasColumnFresh(tx, HOSTS, SHARED, 1_100)).toBe(false);
+      // Well inside the TTL, and it asked anyway.
+      expect(tx.probes).toBe(2);
+    });
+
+    it("sees the migration inside the window a cached miss would have covered", async () => {
+      const before = fakeTx([]);
+      expect(await hasColumn(before, HOSTS, SHARED, 1_000)).toBe(false);
+      // `hasColumn` would still answer false here, and the merge would write a
+      // permanently unclassified version.
+      const after = fakeTx(["gateway_last_seen_at"]);
+      expect(await hasColumn(after, HOSTS, SHARED, 1_100)).toBe(false);
+      expect(await hasColumnFresh(after, HOSTS, SHARED, 1_100)).toBe(true);
+    });
+
+    it("still trusts a cached positive, so the cost is paid only while pending", async () => {
+      const tx = fakeTx(["gateway_last_seen_at"]);
+      expect(await hasColumnFresh(tx, HOSTS, SHARED, 1_000)).toBe(true);
+      expect(await hasColumnFresh(tx, HOSTS, SHARED, 9_000_000)).toBe(true);
+      // A column that exists does not stop existing: one probe, ever.
+      expect(tx.probes).toBe(1);
+    });
+
+    it("records its answer for the readers, so a fresh yes ends their window too", async () => {
+      const tx = fakeTx([]);
+      expect(await hasColumn(tx, HOSTS, SHARED, 1_000)).toBe(false);
+      const migrated = fakeTx(["gateway_last_seen_at"]);
+      expect(await hasColumnFresh(migrated, HOSTS, SHARED, 1_100)).toBe(true);
+      // The read path now answers true from the cache, without its own probe.
+      expect(await hasColumn(migrated, HOSTS, SHARED, 1_200)).toBe(true);
+      expect(migrated.probes).toBe(1);
+    });
+
+    it("answers per plane, like hasColumn", async () => {
+      const migrated = fakeTx(["gateway_last_seen_at"]);
+      expect(await hasColumnFresh(migrated, HOSTS, SHARED, 1_000)).toBe(true);
+      const behind = fakeTx([]);
+      expect(await hasColumnFresh(behind, HOSTS, DEDICATED, 1_000)).toBe(false);
+    });
   });
 
   it("sees a migration applied after a negative answer", async () => {
