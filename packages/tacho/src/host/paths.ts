@@ -25,13 +25,10 @@ export interface TachoPaths {
   spool: string;
   /** Batches the control plane refused, kept for inspection. */
   quarantine: string;
-  /**
-   * Redacted frame bodies awaiting shipment, one file per event. Written only
-   * while the workspace's retention mode is `content_exact`.
-   */
-  bodies: string;
   /** Recorder state the daemon persists so a restart continues each chain. */
   daemonState: string;
+  /** Transcript byte cursors, so a restart does not re-read every transcript. */
+  transcriptTailState: string;
   /** The daemon's pid file. */
   pid: string;
   /** Daemon stdout/stderr when run as a service. */
@@ -79,8 +76,8 @@ export function tachoPaths(
     wal: join(root, "wal"),
     spool: join(root, "spool"),
     quarantine: join(root, "quarantine"),
-    bodies: join(root, "bodies"),
     daemonState: join(root, "daemon.json"),
+    transcriptTailState: join(root, "transcript-tail.json"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),

@@ -8,11 +8,14 @@
  * here (data-model.md section 6, "Name drift the adapter tolerates").
  */
 import { z } from "zod";
-import { digestJcs, jsonByteLength, type JsonValue } from "../digest";
-import { contentFrameOf, type Redaction } from "../evidence/redaction";
+import { digestJcs, jcs, jsonByteLength, type JsonValue } from "../digest";
 import { effectId } from "../ids";
-import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import type { BodyOf, TachoKind } from "../envelope";
+import {
+  type DraftContent,
+  jsonContent,
+  textContent,
+} from "../evidence/frame-body";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
 import { classifyTool, type EffectKind } from "./tools";
 
@@ -55,14 +58,15 @@ export interface HookDraft {
   context: Record<string, unknown>;
   host: Record<string, unknown>;
   content_digest?: `sha256:${string}`;
-  /** What redaction cut from the content the digest covers. */
-  content_redactions?: Redaction[];
   /**
-   * The redacted bytes the digest is over, for a host whose workspace retains
-   * this class. Held only as long as the draft: whether they reach disk is
-   * the collector's decision, not this module's.
+   * The bytes the event's digest names, before redaction: the prompt, the
+   * tool input, the tool result, the assistant message. The recorder redacts
+   * them, digests what is left, and holds the body for the batch the event
+   * ships in. When this is set it is the recorder's digest that reaches the
+   * chain, not `content_digest`, which is the digest of the raw text and only
+   * agrees with it when nothing was redacted.
    */
-  content_bytes?: Uint8Array;
+  content?: DraftContent;
   raw_source_digest: `sha256:${string}`;
 }
 
@@ -124,43 +128,6 @@ const PROMOTED = new Set([
   "teammate_name",
   "subagent_result",
 ]);
-
-/**
- * The content fields of a draft for a frame whose content is `text`.
- *
- * `content.digest` is over the redacted bytes, because the control plane
- * verifies a shipped body against it and refuses bytes that still carry a
- * credential. `prompt_digest` and the other body members keep digesting the
- * text as the harness reported it: they correlate frames, they are never
- * verified against bytes, and changing them would break correlation with
- * every row already recorded.
- */
-function contentDraft(text: string): {
-  content_digest: `sha256:${string}`;
-  content_redactions?: Redaction[];
-  content_bytes: Uint8Array;
-  attrs?: Record<string, string>;
-} {
-  const frame = contentFrameOf(text);
-  // Every matched byte is redacted. What is bounded is the record of them:
-  // `contentSchema` caps `content.redactions`, and a prompt that pastes more
-  // credential-shaped strings than that would otherwise fail to seal, 500 the
-  // daemon, and lose the frame the turn was supposed to leave behind. The
-  // count is exact even when the list is a sample.
-  const total = frame.redactions.length;
-  return {
-    content_digest: frame.digest,
-    content_bytes: frame.bytes,
-    ...(total > 0
-      ? {
-          content_redactions: frame.redactions.slice(0, MAX_CONTENT_REDACTIONS),
-        }
-      : {}),
-    ...(total > MAX_CONTENT_REDACTIONS
-      ? { attrs: { "oxagen.content_redactions_total": String(total) } }
-      : {}),
-  };
-}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -257,6 +224,35 @@ function toolFacts(
   return facts;
 }
 
+/**
+ * The tool input as the body of a `tool_requested` or `approval_request`
+ * frame: the JCS text the `tool_input_digest` column already names, so the
+ * body and the column agree byte for byte.
+ */
+function toolInputContent(input: HookInput): Partial<HookDraft> {
+  if (input.tool_input === undefined) return {};
+  return { content: jsonContent(jcs(input.tool_input as JsonValue)) };
+}
+
+/**
+ * A `tool_call` frame's body holds the input and the output together, so a
+ * step replays from one body without reaching back to its `tool_requested`
+ * frame. JCS drops an absent member, so a failed call that produced no
+ * response ships `{"input":...}` alone.
+ */
+function toolCallContent(input: HookInput): Partial<HookDraft> {
+  if (input.tool_input === undefined && input.tool_response === undefined)
+    return {};
+  return {
+    content: jsonContent(
+      jcs({
+        input: input.tool_input as JsonValue | undefined,
+        output: input.tool_response as JsonValue | undefined,
+      }),
+    ),
+  };
+}
+
 export interface NormalizeHookOptions {
   /** The Tacho session uuid of the chain this hook lands in (parent or child). */
   sessionUuid: string;
@@ -310,9 +306,6 @@ export function normalizeHook(
     body,
     ...base,
     ...extra,
-    // Merged, not replaced: `base.attrs` carries every unpromoted hook field,
-    // and an extra that named `attrs` would otherwise drop the lot.
-    attrs: { ...base.attrs, ...(extra.attrs ?? {}) },
   });
 
   switch (input.hook_event_name) {
@@ -380,19 +373,38 @@ export function normalizeHook(
           ? "turn_start"
           : "oxagen:message";
       return [
-        draft(kind, body, prompt !== undefined ? contentDraft(prompt) : {}),
+        draft(
+          kind,
+          body,
+          prompt !== undefined
+            ? {
+                content_digest: digestText(prompt),
+                content: textContent(prompt),
+              }
+            : {},
+        ),
       ];
     }
     case "PreToolUse": {
-      return [draft("tool_requested", toolFacts(input, options.sessionUuid))];
+      return [
+        draft(
+          "tool_requested",
+          toolFacts(input, options.sessionUuid),
+          toolInputContent(input),
+        ),
+      ];
     }
     case "PermissionRequest": {
       return [
-        draft("approval_request", {
-          ...toolFacts(input, options.sessionUuid),
-          policy_decision: "ask",
-          policy_source: "harness",
-        }),
+        draft(
+          "approval_request",
+          {
+            ...toolFacts(input, options.sessionUuid),
+            policy_decision: "ask",
+            policy_source: "harness",
+          },
+          toolInputContent(input),
+        ),
       ];
     }
     case "PermissionDenied": {
@@ -432,7 +444,7 @@ export function normalizeHook(
           body["tool_error_message_digest"] = digestText(text);
         }
       }
-      const drafts = [draft("tool_call", body)];
+      const drafts = [draft("tool_call", body, toolCallContent(input))];
       const effectFrame =
         failed || facts["effect_id"] === undefined
           ? undefined
@@ -490,7 +502,9 @@ export function normalizeHook(
           draft(
             "turn_end",
             common,
-            last !== undefined ? contentDraft(last) : {},
+            last !== undefined
+              ? { content_digest: digestText(last), content: textContent(last) }
+              : {},
           ),
         ];
       }
@@ -503,7 +517,13 @@ export function normalizeHook(
           : {}),
         tool_status: "ok",
       };
-      return [draft("subagent_stop", body)];
+      return [
+        draft(
+          "subagent_stop",
+          body,
+          last !== undefined ? { content: textContent(last) } : {},
+        ),
+      ];
     }
     case "StopFailure": {
       const error = str(input["error_type"]) ?? str(input.error);
@@ -530,23 +550,27 @@ export function normalizeHook(
     case "MessageDisplay": {
       const delta = str(input["delta"]);
       return [
-        draft("oxagen:message", {
-          ...(delta !== undefined
-            ? {
-                response_digest: digestText(delta),
-                response_length: delta.length,
-              }
-            : {}),
-          ...(num(input["index"]) !== undefined
-            ? { message_index: num(input["index"]) }
-            : {}),
-          ...(bool(input["final"]) !== undefined
-            ? { message_final: bool(input["final"]) }
-            : {}),
-          ...(str(input["message_id"]) !== undefined
-            ? { message_uuid: str(input["message_id"]) }
-            : {}),
-        }),
+        draft(
+          "oxagen:message",
+          {
+            ...(delta !== undefined
+              ? {
+                  response_digest: digestText(delta),
+                  response_length: delta.length,
+                }
+              : {}),
+            ...(num(input["index"]) !== undefined
+              ? { message_index: num(input["index"]) }
+              : {}),
+            ...(bool(input["final"]) !== undefined
+              ? { message_final: bool(input["final"]) }
+              : {}),
+            ...(str(input["message_id"]) !== undefined
+              ? { message_uuid: str(input["message_id"]) }
+              : {}),
+          },
+          delta !== undefined ? { content: textContent(delta) } : {},
+        ),
       ];
     }
     case "PreCompact":

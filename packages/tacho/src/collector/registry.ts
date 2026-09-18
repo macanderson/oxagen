@@ -214,17 +214,6 @@ export interface RegistryOptions {
   context: ClaudeCodeContext;
   scope: string;
   now: () => number;
-  /**
-   * Passed to every recorder this registry makes: where a frame's redacted
-   * content bytes go when the workspace retains them. Absent under
-   * `digest_only`, which is how nothing reaches disk in that mode.
-   */
-  onContentBody?: (
-    eventIdIdem: string,
-    kind: string,
-    contentType: string,
-    bytes: Uint8Array,
-  ) => void;
 }
 
 export class SessionRegistry {
@@ -432,9 +421,6 @@ export class SessionRegistry {
         ),
         harnessSessionId,
         scope: this.options.scope,
-        ...(this.options.onContentBody === undefined
-          ? {}
-          : { onContentBody: this.options.onContentBody }),
         ...(facts.customAgent === undefined
           ? {}
           : { customAgent: facts.customAgent }),
@@ -552,9 +538,6 @@ export class SessionRegistry {
           ),
           harnessSessionId: persisted.harnessSessionId,
           scope: this.options.scope,
-          ...(this.options.onContentBody === undefined
-            ? {}
-            : { onContentBody: this.options.onContentBody }),
           ...(persisted.customAgent === undefined
             ? {}
             : { customAgent: persisted.customAgent }),

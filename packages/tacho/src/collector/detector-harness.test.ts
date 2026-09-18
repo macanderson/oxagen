@@ -40,26 +40,24 @@ function detector(claudeCodeEnrolled?: () => boolean): Detector {
 }
 
 describe("the hook-removal detector", () => {
-  it("reports missing Claude Code hooks on a host that hooks Claude Code", () => {
-    expect(
-      detector()
-        .tick()
-        .map((e) => e.kind),
-    ).toEqual(["oxagen:hooks_removed"]);
-    expect(
-      detector(() => true)
-        .tick()
-        .map((e) => e.kind),
-    ).toEqual(["oxagen:hooks_removed"]);
+  it("reports missing Claude Code hooks on a host that hooks Claude Code", async () => {
+    expect((await detector().tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+    ]);
+    expect((await detector(() => true).tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+    ]);
   });
 
-  it("says nothing on a host that never hooked Claude Code, and notices when that changes", () => {
+  it("says nothing on a host that never hooked Claude Code, and notices when that changes", async () => {
     let enrolled = false;
     const d = detector(() => enrolled);
-    expect(d.tick()).toEqual([]);
+    expect(await d.tick()).toEqual([]);
     expect(d.hooksHealthy).toBeUndefined();
     expect(d.presence).toBeUndefined();
     enrolled = true;
-    expect(d.tick().map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
+    expect((await d.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+    ]);
   });
 });

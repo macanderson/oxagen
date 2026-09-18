@@ -15,9 +15,20 @@ import type {
   TachoKind,
   UnsealedTachoEvent,
 } from "../envelope";
-import type { Redaction } from "../evidence/redaction";
 import { withoutAddressMembers } from "../envelope";
+import {
+  contentClassOf,
+  type DraftContent,
+  type FrameBody,
+  prepareContent,
+} from "../evidence/frame-body";
 import { newEventId, sessionUuid } from "../ids";
+import {
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  LlmCallLedger,
+  type LlmCallLedgerState,
+  withoutUsage,
+} from "./llm-call-dedupe";
 import { toProtocolTimestamp } from "../timestamp";
 import {
   type ClaudeCodeContext,
@@ -38,9 +49,6 @@ import { normalizeTranscriptLine, type TranscriptTotals } from "./transcript";
 type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
-
-/** What a frame's content bytes are, for every kind the hook path digests. */
-const CONTENT_TYPE_TEXT = "text/plain; charset=utf-8";
 
 export interface RecorderOptions {
   context: ClaudeCodeContext;
@@ -67,19 +75,6 @@ export interface RecorderOptions {
   };
   /** Continue a chain the collector persisted before a restart. */
   restore?: RecorderState;
-  /**
-   * Called with the redacted bytes a frame's `content.digest` covers, once
-   * the frame is sealed and has an id to file them under. The collector wires
-   * this to the body store under `content_exact` and leaves it unset under
-   * `digest_only`, so retention is decided in one place and this class stays
-   * a sealer.
-   */
-  onContentBody?: (
-    eventIdIdem: string,
-    kind: string,
-    contentType: string,
-    bytes: Uint8Array,
-  ) => void;
 }
 
 interface SubagentLink {
@@ -102,6 +97,8 @@ export interface RecorderState {
   harnessVersion?: string;
   envSnapshot?: Record<string, string>;
   totals: Partial<TranscriptTotals>;
+  /** Model calls already sealed, keyed as `llm-call-dedupe.ts` keys them. */
+  llmCalls?: LlmCallLedgerState;
   children: Record<
     string,
     {
@@ -140,6 +137,12 @@ export class SessionRecorder {
   private readonly children = new Map<string, SubagentLink>();
   /** Genesis events sealed by child creation, drained by the ingest that caused it. */
   private pendingChildGenesis: TachoEvent[] = [];
+  /**
+   * Bodies of events sealed since the last `takeBodies`. The chain hash
+   * covers the digest, never the bytes, so the bytes cannot live on the
+   * event; they wait here for the daemon to write them next to it.
+   */
+  private pendingBodies: FrameBody[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -152,6 +155,7 @@ export class SessionRecorder {
   private envSnapshot: Record<string, string> | undefined;
   readonly totals: Partial<TranscriptTotals> = {};
   readonly metrics: OtelMetricPoint[] = [];
+  private llmCalls = new LlmCallLedger();
 
   constructor(options: RecorderOptions) {
     this.options = options;
@@ -189,14 +193,12 @@ export class SessionRecorder {
     this.harnessVersion = state.harnessVersion ?? this.harnessVersion;
     this.envSnapshot = state.envSnapshot;
     Object.assign(this.totals, state.totals);
+    this.llmCalls = new LlmCallLedger(state.llmCalls);
     for (const [subagentId, link] of Object.entries(state.children)) {
       const recorder = new SessionRecorder({
         context: this.options.context,
         harnessSessionId: this.harnessSessionId,
         scope: this.options.scope,
-        ...(this.options.onContentBody === undefined
-          ? {}
-          : { onContentBody: this.options.onContentBody }),
         ...(this.options.customAgent === undefined
           ? {}
           : { customAgent: this.options.customAgent }),
@@ -250,6 +252,7 @@ export class SessionRecorder {
         ? { envSnapshot: this.envSnapshot }
         : {}),
       totals: { ...this.totals },
+      llmCalls: this.llmCalls.state(),
       children,
     };
   }
@@ -283,6 +286,19 @@ export class SessionRecorder {
     return this.cursor;
   }
 
+  /**
+   * Drain the bodies of every event sealed on this chain and its children
+   * since the last drain. The caller that took the events takes these in the
+   * same breath, so a body is written next to its event and never to a WAL
+   * whose event is still in memory.
+   */
+  takeBodies(): FrameBody[] {
+    const out = this.pendingBodies.splice(0);
+    for (const link of this.children.values())
+      out.push(...link.recorder.takeBodies());
+    return out;
+  }
+
   /** Open child recorders, for routing and status. */
   get openChildren(): ReadonlyMap<string, SessionRecorder> {
     const out = new Map<string, SessionRecorder>();
@@ -310,6 +326,8 @@ export class SessionRecorder {
        * Everything else the collector seals is `sdk`, the default.
        */
       fidelity?: TachoEvent["fidelity"];
+      /** The bytes this frame's `content.digest` names; see `HookDraft.content`. */
+      content?: DraftContent;
     } = {},
   ): TachoEvent {
     if (kind === "agent_start") this.started = true;
@@ -317,14 +335,23 @@ export class SessionRecorder {
       this.stopped = true;
       this.turnOpen = false;
     }
+    // A proxy frame is the first sighting of its call by construction (it
+    // is sealed as the response ends); noting it is what lets the transcript
+    // and OTel sightings that follow be stamped as its duplicates.
+    const duplicate =
+      kind === "llm_call"
+        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ??
+          {})
+        : {};
     return this.seal(kind, body, {
       ts: fields.ts ?? this.now(),
       source: fields.source ?? "collector",
       ...(fields.hook_event_name !== undefined
         ? { hook_event_name: fields.hook_event_name }
         : {}),
-      attrs: fields.attrs ?? {},
+      attrs: { ...fields.attrs, ...duplicate },
       ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
+      ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
     });
   }
@@ -361,9 +388,6 @@ export class SessionRecorder {
       context: this.options.context,
       harnessSessionId: this.harnessSessionId,
       scope: this.options.scope,
-      ...(this.options.onContentBody === undefined
-        ? {}
-        : { onContentBody: this.options.onContentBody }),
       ...(this.options.customAgent === undefined
         ? {}
         : { customAgent: this.options.customAgent }),
@@ -430,13 +454,30 @@ export class SessionRecorder {
       fidelity?: TachoEvent["fidelity"];
       span?: TachoEvent["span"];
       content_digest?: `sha256:${string}`;
-      content_redactions?: Redaction[];
-      content_bytes?: Uint8Array;
+      content?: DraftContent;
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
   ): TachoEvent {
     const parent = this.options.parent;
+    // Redacted and digested here, before the seal, so the digest the chain
+    // hash covers is the digest of the bytes that ship. A frame with bytes
+    // chains that digest; one with only a `content_digest` (an OTel record,
+    // whose bytes the harness never handed over) chains the digest as given.
+    const prepared =
+      fields.content !== undefined ? prepareContent(fields.content) : undefined;
+    const content =
+      prepared !== undefined
+        ? prepared.digest !== undefined
+          ? { digest: prepared.digest, redactions: prepared.redactions }
+          : undefined
+        : fields.content_digest !== undefined
+          ? { digest: fields.content_digest, redactions: [] }
+          : undefined;
+    const attrs =
+      prepared?.omitted !== undefined
+        ? { ...fields.attrs, body_omitted: prepared.omitted }
+        : (fields.attrs ?? {});
     const unsealed = compact({
       v: "tacho/1.0",
       event_id: newEventId(Date.parse(fields.ts)),
@@ -479,14 +520,8 @@ export class SessionRecorder {
           ? { ...this.anthropic }
           : undefined,
       span: fields.span,
-      attrs: fields.attrs ?? {},
-      content:
-        fields.content_digest !== undefined
-          ? {
-              digest: fields.content_digest,
-              redactions: fields.content_redactions ?? [],
-            }
-          : undefined,
+      attrs,
+      content,
       raw_source_digest: fields.raw_source_digest,
       kind,
       body,
@@ -494,24 +529,16 @@ export class SessionRecorder {
     const sealed = sealEvent(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
-    if (fields.content_bytes !== undefined) {
-      // The cursor has already advanced and the caller has not appended the
-      // event yet. A sink that throws here, on a full or unwritable disk,
-      // would take the event with it and leave the next one holding a
-      // sequence number nothing explains, which the control plane reports as
-      // a broken chain for the rest of the session. A body that cannot be
-      // kept is a missing body, which the seal already knows how to record.
-      try {
-        this.options.onContentBody?.(
-          sealed.event.event_id_idem,
-          sealed.event.kind,
-          CONTENT_TYPE_TEXT,
-          fields.content_bytes,
-        );
-      } catch {
-        // Nothing to report from here: the recorder owns no log, and the
-        // frame is complete without its body.
-      }
+    const contentClass = contentClassOf(kind);
+    if (prepared?.body !== undefined && contentClass !== undefined) {
+      this.pendingBodies.push({
+        event_id_idem: sealed.event.event_id_idem,
+        session_uuid: sealed.event.session_uuid,
+        seq: sealed.event.seq,
+        content_type: prepared.body.content_type,
+        bytes: prepared.body.bytes,
+        content_class: contentClass,
+      });
     }
     return sealed.event;
   }
@@ -527,6 +554,22 @@ export class SessionRecorder {
         this.host.claude_execpath,
       );
     }
+  }
+
+  /**
+   * The attrs an `llm_call` carries when another source already sealed the
+   * same call, or undefined when this sighting is a repeat from the same
+   * source and must not be sealed at all. See `llm-call-dedupe.ts`.
+   */
+  private llmCallDuplicateAttrs(
+    body: Record<string, unknown>,
+    source: string,
+  ): Record<string, string> | undefined {
+    const verdict = this.llmCalls.note(body, source);
+    if (verdict.kind === "repeat") return undefined;
+    if (verdict.kind === "duplicate")
+      return { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of };
+    return {};
   }
 
   /** Ingest one hook payload with the hook process environment. */
@@ -665,12 +708,7 @@ export class SessionRecorder {
       ...(draft.content_digest !== undefined
         ? { content_digest: draft.content_digest }
         : {}),
-      ...(draft.content_redactions !== undefined
-        ? { content_redactions: draft.content_redactions }
-        : {}),
-      ...(draft.content_bytes !== undefined
-        ? { content_bytes: draft.content_bytes }
-        : {}),
+      ...(draft.content !== undefined ? { content: draft.content } : {}),
       raw_source_digest: draft.raw_source_digest,
       turn: draft.turn ?? {},
     });
@@ -705,7 +743,8 @@ export class SessionRecorder {
         continue;
       const target = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
-      out.push(target.sealOtelDraft(draft));
+      const sealed = target.sealOtelDraft(draft);
+      if (sealed !== undefined) out.push(sealed);
     }
     return out;
   }
@@ -744,8 +783,16 @@ export class SessionRecorder {
       this.harnessVersion = standard.resource.harness_version;
   }
 
-  private sealOtelDraft(draft: OtelDraft): TachoEvent {
+  private sealOtelDraft(draft: OtelDraft): TachoEvent | undefined {
     this.absorbStandard(draft.standard);
+    // Only the log record takes part: the control plane counts tokens from
+    // `otel_log`, never from a span, so a span sealed first must not turn the
+    // log record that follows into the duplicate.
+    const duplicate =
+      draft.kind === "llm_call" && draft.source === "otel_log"
+        ? this.llmCallDuplicateAttrs(draft.body, draft.source)
+        : {};
+    if (duplicate === undefined) return undefined;
     return this.seal(draft.kind, draft.body, {
       ts: draft.ts,
       source: draft.source,
@@ -753,7 +800,7 @@ export class SessionRecorder {
       ...(draft.standard.harness_event_sequence !== undefined
         ? { harness_event_sequence: draft.standard.harness_event_sequence }
         : {}),
-      attrs: draft.attrs,
+      attrs: { ...draft.attrs, ...duplicate },
       ...(draft.span !== undefined ? { span: draft.span } : {}),
       ...(draft.content_digest !== undefined
         ? { content_digest: draft.content_digest }
@@ -782,11 +829,23 @@ export class SessionRecorder {
     const out: TachoEvent[] = [];
     for (const draft of drafts) {
       this.absorbContext(draft.context);
+      let body = draft.body;
+      let duplicate =
+        draft.kind === "llm_call"
+          ? this.llmCallDuplicateAttrs(draft.body, "transcript")
+          : {};
+      if (duplicate === undefined) {
+        // A later content block of a message the chain already holds: its
+        // text still ships as a body, its usage does not count again.
+        body = withoutUsage(body);
+        duplicate = { [LLM_CALL_DUPLICATE_OF_ATTR]: "transcript" };
+      }
       out.push(
-        this.seal(draft.kind, draft.body, {
+        this.seal(draft.kind, body, {
           ts: draft.ts,
           source: "transcript",
-          attrs: draft.attrs,
+          attrs: { ...draft.attrs, ...duplicate },
+          ...(draft.content !== undefined ? { content: draft.content } : {}),
           raw_source_digest: draft.raw_source_digest,
           turn: draft.turn ?? {},
         }),

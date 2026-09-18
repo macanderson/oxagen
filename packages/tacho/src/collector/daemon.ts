@@ -13,8 +13,10 @@ import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
+import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { verifyBundle } from "../host/bundle";
 import {
+  ControlError,
   createControlClient,
   type ControlClient,
   type FetchLike,
@@ -37,12 +39,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec } from "../host/service";
-import {
-  NO_RETENTION,
-  retainsBody,
-  type RetentionMandate,
-} from "../evidence/retention";
-import { BodyStore } from "../host/body-store";
+import { NO_RETENTION, type RetentionMandate } from "../evidence/retention";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -85,6 +82,7 @@ import {
   type HookEnvelope,
 } from "./server";
 import { Shipper } from "./spool";
+import { TranscriptTailer } from "./transcript-tailer";
 
 export const TACHO_WRAPPER_VERSION = "2.1.1";
 
@@ -146,6 +144,7 @@ export interface DaemonHandle {
   wal: Wal;
   shipper: Shipper;
   detector: Detector;
+  transcriptTailer: TranscriptTailer;
   hostRecorder: SessionRecorder;
   host: () => HostFile;
   port: number | undefined;
@@ -234,24 +233,10 @@ export async function startDaemon(
     now,
   };
   const wal = new Wal(paths.wal);
-  // Frame bodies, kept only while the mandate says `content_exact`. The mode
-  // is read at the moment a frame is sealed, not captured here, so a bundle
-  // that narrows retention stops the writing on the next frame rather than on
-  // the next restart. Nothing reaches this store under `digest_only`, which is
-  // what makes the mode readable off the disk.
-  const bodyStore = new BodyStore(paths.bodies);
   const registry = new SessionRegistry({
     context,
     scope: host.host_enrollment_id,
     now,
-    onContentBody: (eventIdIdem, kind, contentType, bytes) => {
-      // Both halves of the mandate bind: the mode says exact bytes may be
-      // kept at all, the classes say which content the workspace authorised.
-      // `retentionInForce` adds the third condition, that the mandate is one
-      // the control plane actually signed.
-      if (!retainsBody(kind, retentionInForce())) return;
-      bodyStore.put(eventIdIdem, kind, contentType, bytes);
-    },
   });
   const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
   if (persisted !== undefined) registry.restore(persisted);
@@ -300,13 +285,6 @@ export async function startDaemon(
     if (expires <= issued) return false;
     return now() - mandateConfirmedAt > expires - issued;
   }
-  if (!bundleVerified) {
-    const held = bodyStore.dropDisallowed(NO_RETENTION);
-    if (held > 0)
-      log(
-        `dropped ${held} held body file(s): the cached mandate does not verify`,
-      );
-  }
   let lastControlAt: number | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
@@ -326,9 +304,20 @@ export async function startDaemon(
   // that cannot reach its control plane must get quieter, not louder.
   const COMMAND_POLL_MIN_BACKOFF_MS = 2_000;
   const COMMAND_POLL_MAX_BACKOFF_MS = 60_000;
+  // A 400 or 422 from the commands endpoint is not an outage, and doubling
+  // toward 60 s treats it as one. It means the daemon and the control plane
+  // disagree on the wire: on 2026-09-18 a daemon still sending
+  // `tacho.commands.v1` polled a control plane that requires v2 and collected
+  // 3,683 HTTP 400s in two and a half hours, which tripped the per-host
+  // limiter and throttled `/v1/tacho/events` with it. No retry fixes a
+  // schema, only an upgrade does, so the poll parks at a 15 minute floor,
+  // says so once with the server's own words, and leaves ingest (a separate
+  // path with its own budget) shipping.
+  const COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS = 15 * 60_000;
   let commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
   let commandPollNextAttemptAt = 0;
   let commandPollFailures = 0;
+  let commandPollProtocolMismatchLogged = false;
 
   // The client is built before the Shipper but must deliver rate-limit hints
   // to it, so the callback is indirected through a sink that the Shipper fills
@@ -357,9 +346,28 @@ export async function startDaemon(
     stateDirty = false;
   }
 
-  function record(events: readonly TachoEvent[]): void {
+  /**
+   * Write sealed events, and the bodies of those the bundle lets this host
+   * retain, to the WAL. The retention clause is read from the bundle the
+   * host holds right now: enrollment writes one, so there is always a
+   * clause to read, and a body the workspace has since stopped retaining is
+   * dropped here rather than shipped for the control plane to refuse.
+   */
+  function record(
+    events: readonly TachoEvent[],
+    bodies: readonly FrameBody[] = [],
+  ): void {
     if (events.length === 0) return;
-    wal.append(events);
+    // Not `host.bundle.retention`: `host.json` is a file on the operator's
+    // machine, and reading its clause unchecked would let an edit from
+    // `digest_only` to `content_exact` write prompt bodies until the next
+    // refresh replaced the bundle. `retentionInForce` keeps nothing unless
+    // the cached mandate verifies and is still current.
+    const retention = retentionInForce();
+    wal.append(
+      events,
+      bodies.filter((body) => retentionAllows(retention, body.content_class)),
+    );
     stateDirty = true;
   }
 
@@ -426,15 +434,6 @@ export async function startDaemon(
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
-      // A mandate that narrows retention binds what is already on disk, not
-      // only what is sealed next. Bodies kept under the old one are dropped
-      // here, or a batch still waiting to drain would carry prompt bytes the
-      // operator has just said to stop keeping.
-      const stranded = bodyStore.dropDisallowed(retentionInForce());
-      if (stranded > 0)
-        log(
-          `dropped ${stranded} stored body file(s) the new mandate does not retain`,
-        );
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
       return true;
     } catch (error) {
@@ -478,10 +477,6 @@ export async function startDaemon(
   const shipper = new Shipper({
     wal,
     client,
-    bodies: bodyStore,
-    // Read at ship time, not captured: a mandate that narrows between the
-    // refresh and the drain must still be the one that decides.
-    retention: retentionInForce,
     quarantineDir: paths.quarantine,
     // Re-enrolling leaves the WAL holding events stamped with the old id; the
     // control plane 403s a batch containing any of them, and a 403 is
@@ -496,6 +491,16 @@ export async function startDaemon(
       for (const brk of breaks) {
         log(
           `control plane reports chain break ${brk.session_uuid}#${brk.at_seq}: ${brk.reason}`,
+        );
+      }
+    },
+    // The event was accepted and the session carries a `body_missing` gap;
+    // the log line is the only trace on this host of why the bytes are not
+    // in the record.
+    onBodyRejection: (rejections) => {
+      for (const rejection of rejections) {
+        log(
+          `control plane refused body for ${rejection.event_id_idem}: ${rejection.reason}`,
         );
       }
     },
@@ -516,6 +521,57 @@ export async function startDaemon(
     enrollmentId: host.host_enrollment_id,
     now,
   });
+
+  // --- transcript tailer -------------------------------------------------
+  // The detector above only stats a transcript's mtime. The tailer reads it:
+  // every session that reported a `transcript_path` has its file tailed on
+  // the tick, and a subagent's finished transcript is fed once when its
+  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
+  const transcriptTailer = new TranscriptTailer({
+    sessions: () => registry.list(),
+    session: (id) => registry.get(id),
+    record,
+    statePath: paths.transcriptTailState,
+    log,
+  });
+
+  /**
+   * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
+   * drains the session's transcript so the turn's model calls sit on the
+   * chain before the frame that closes it, and a `SubagentStop` feeds the
+   * subagent's transcript to the child chain before that chain is finalized.
+   */
+  async function tailBeforeHook(payload: unknown): Promise<void> {
+    if (payload === null || typeof payload !== "object") return;
+    const input = payload as Record<string, unknown>;
+    const sessionId = input["session_id"];
+    const hookName = input["hook_event_name"];
+    if (typeof sessionId !== "string") return;
+    try {
+      if (hookName === "SubagentStop") {
+        const agentId = input["agent_id"];
+        const path = input["agent_transcript_path"];
+        if (typeof agentId === "string" && typeof path === "string") {
+          const fed = await transcriptTailer.ingestSubagentTranscript(
+            sessionId,
+            agentId,
+            path,
+          );
+          if (fed === undefined)
+            log(`subagent transcript ${path} was not there to read`);
+        }
+      }
+      if (hookName === "Stop" || hookName === "SessionEnd")
+        await transcriptTailer.drain(sessionId);
+    } catch (error) {
+      // The hook must still be answered; a transcript that cannot be read
+      // is a gap in the record, not a reason to stall the agent.
+      log(
+        `transcript tail before ${String(hookName)} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  // --- end transcript tailer ---------------------------------------------
 
   async function sendAcks(): Promise<void> {
     if (
@@ -541,9 +597,29 @@ export async function startDaemon(
       commandPollFailures = 0;
       commandPollBackoffMs = COMMAND_POLL_MIN_BACKOFF_MS;
       commandPollNextAttemptAt = 0;
+      commandPollProtocolMismatchLogged = false;
     } catch (error) {
       pendingAcks.unshift(...acks);
       commandPollFailures += 1;
+      if (
+        error instanceof ControlError &&
+        (error.status === 400 || error.status === 422)
+      ) {
+        commandPollBackoffMs = COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
+        commandPollNextAttemptAt =
+          now() + COMMAND_POLL_PROTOCOL_MISMATCH_BACKOFF_MS;
+        // Once, not every 15 minutes: the line is the same until someone
+        // upgrades, and repeating it is the log growth this guards against.
+        // The health report the host row shows cannot carry it yet, so the
+        // log is where the fact lives.
+        if (!commandPollProtocolMismatchLogged) {
+          commandPollProtocolMismatchLogged = true;
+          log(
+            `command poll refused with ${error.status}: this tachod (${host.wrapper_version}) and the control plane disagree on the wire, so the poll waits 15 minutes between attempts until tachod is upgraded; the server said: ${error.body.slice(0, 256)}`,
+          );
+        }
+        return;
+      }
       const retryInMs = commandPollBackoffMs;
       commandPollNextAttemptAt = now() + retryInMs;
       commandPollBackoffMs = Math.min(
@@ -670,6 +746,8 @@ export async function startDaemon(
     refreshGitContext(
       hookName !== undefined && TURN_BOUNDARY_HOOKS.has(hookName),
     );
+    // After the git facts, so the frames the tailer emits carry them too.
+    await tailBeforeHook(envelope.payload); // transcript tailer
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},
@@ -688,7 +766,7 @@ export async function startDaemon(
       envelope.harness,
       envelope.agent,
     );
-    record(outcome.events);
+    record(outcome.events, outcome.bodies);
     return outcome.response;
   }
 
@@ -1187,13 +1265,19 @@ export async function startDaemon(
 
   async function tick(): Promise<void> {
     if (stopped) return;
+    // The detector runs off the serial queue: its scan is asynchronous file
+    // I/O over every project directory, and a hook that arrived while it
+    // ran would otherwise wait on it. Its seals are synchronous once the scan
+    // returns, the same property the gateway relies on to record off-queue.
+    if (now() - lastDetect >= timers.detectorMs) {
+      lastDetect = now();
+      record(await detector.tick());
+    }
     await serial.run(async () => {
       const t = now();
       await drainSpool();
-      if (t - lastDetect >= timers.detectorMs) {
-        lastDetect = t;
-        record(detector.tick());
-      }
+      // transcript tailer: bounded per file per tick, asynchronous reads
+      await transcriptTailer.tick();
       if (t - lastSweep >= timers.sweepMs) {
         lastSweep = t;
         record(registry.sweep(isProcessAlive, timers.idleSessionMs));
@@ -1216,12 +1300,6 @@ export async function startDaemon(
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);
       sweepQuarantine(now(), timers.walRetainMs);
-      // A body whose event was quarantined, or whose batch never shipped, has
-      // nothing left to drop it. Prompt text is not something to keep on a
-      // machine because a batch failed a week ago.
-      const staleBodies = bodyStore.compact(now(), timers.walRetainMs);
-      if (staleBodies.length > 0)
-        log(`dropped ${staleBodies.length} unshipped body file(s) past retention`);
     }
   }
 
@@ -1253,6 +1331,7 @@ export async function startDaemon(
     wal,
     shipper,
     detector,
+    transcriptTailer,
     hostRecorder,
     host: () => host,
     port,

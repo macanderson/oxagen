@@ -102,15 +102,57 @@ export async function deleteRole(
 
 export type WorkspaceDraft = { name: string; slug: string };
 
-/** A workspace in this organization: the in-app path to a second one (#2964). */
+/**
+ * A new workspace's draft: its name and slug, and its main repository as the
+ * one `owner/name` text the form collects. `create_workspace` requires the main
+ * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one), so
+ * the rename draft above stays two fields and this one is three.
+ */
+export type NewWorkspaceDraft = WorkspaceDraft & { mainRepo: string };
+
+/**
+ * `owner/name`, as a person types it or pastes it from GitHub: surrounding
+ * space and a trailing `.git` are dropped, and anything that is not exactly two
+ * non-empty segments is not a repository. The segments' own spelling is the
+ * contract's to judge — `kernelWrite` pre-parses them with
+ * `bind_main_repository`'s GitHub-shaped schema — so this only splits.
+ */
+function parseRepository(text: string): { owner: string; name: string } | null {
+  const trimmed = text.trim().replace(/\.git$/, "");
+  const parts = trimmed.split("/");
+  if (parts.length !== 2) return null;
+  const [owner, name] = parts;
+  if (owner === undefined || name === undefined) return null;
+  if (owner === "" || name === "") return null;
+  return { owner, name };
+}
+
+/**
+ * A workspace in this organization, created with its main repository: the
+ * in-app path to a second one (#2964). The installation is never named here —
+ * the handler resolves it from the org's GitHub authorization by the
+ * repository's owner — so the draft carries only `owner/name`, and a value
+ * that does not split into the two is refused as `invalid` on `mainRepo` with
+ * no capability run.
+ */
 export async function createWorkspace(
   org: string,
-  draft: WorkspaceDraft,
+  draft: NewWorkspaceDraft,
 ): Promise<ActionResult<{ slug: string }>> {
   const ctx = await requireViewer(org);
+  const mainRepo = parseRepository(draft.mainRepo);
+  if (mainRepo === null) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "repository_unparsable",
+      field: "mainRepo",
+    };
+  }
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
     slug: draft.slug.trim(),
+    mainRepo: { provider: "github", ...mainRepo },
   });
   return result.ok ? { ok: true, value: { slug: result.value.slug } } : result;
 }

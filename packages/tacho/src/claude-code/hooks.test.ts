@@ -1,9 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { digestBytes } from "../digest";
+import { digestBytes, jcs } from "../digest";
 import { redactionMarker } from "../evidence/redaction";
-import { MAX_CONTENT_REDACTIONS } from "../envelope";
+import { TACHO_MAX_REDACTIONS } from "../evidence/frame-body";
 import { normalizeHook } from "./hooks";
-import { type RecorderOptions, SessionRecorder } from "./recorder";
+import { SessionRecorder } from "./recorder";
+
+/** A recorder on its own chain, for the assertions that need a sealed event. */
+function testRecorder(): SessionRecorder {
+  return new SessionRecorder({
+    context: {
+      agent: {
+        agent_key: "acme.core.cc-laptop",
+        fleet_id: "wrk_test",
+        runtime: "claude-code",
+        harness: "claude-code",
+        wrapper_version: "2.1.1",
+        host_enrollment_id: "he_0000000000000000000000000000",
+      },
+    },
+    harnessSessionId: SESSION,
+    scope: "he_0000000000000000000000000000",
+  });
+}
+
+const dec = new TextDecoder();
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
 const ENV = {
@@ -370,6 +390,84 @@ describe("hook normalization", () => {
     });
   });
 
+  it("hands the recorder the bytes each digest names", () => {
+    // The prompt, as UTF-8: its digest is the `content_digest` the draft
+    // already carried, so the chain does not move for a prompt with no secret.
+    const [prompt] = hook("UserPromptSubmit", { prompt: "Read README.md" });
+    expect(prompt?.content?.content_type).toBe("text/plain; charset=utf-8");
+    expect(dec.decode(prompt?.content?.bytes)).toBe("Read README.md");
+    expect(digestBytes(prompt?.content?.bytes as Uint8Array)).toBe(
+      prompt?.content_digest,
+    );
+    const [expansion] = hook("UserPromptExpansion", { user_input: "go" });
+    expect(expansion?.kind).toBe("oxagen:message");
+    expect(dec.decode(expansion?.content?.bytes)).toBe("go");
+
+    // A tool request carries the JCS text `tool_input_digest` already names.
+    const toolInput = { command: "ls", z: 1, a: [true, null] };
+    const [requested] = hook("PreToolUse", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c1",
+    });
+    expect(requested?.content?.content_type).toBe("application/json");
+    expect(dec.decode(requested?.content?.bytes)).toBe(jcs(toolInput));
+    expect(digestBytes(requested?.content?.bytes as Uint8Array)).toBe(
+      requested?.body["tool_input_digest"],
+    );
+    const [approval] = hook("PermissionRequest", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c2",
+    });
+    expect(dec.decode(approval?.content?.bytes)).toBe(jcs(toolInput));
+
+    // A tool call holds input and output together; a failure with no
+    // response ships the input alone.
+    const [call] = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c1",
+      tool_response: { stdout: "README.md\n" },
+    });
+    expect(dec.decode(call?.content?.bytes)).toBe(
+      jcs({ input: toolInput, output: { stdout: "README.md\n" } }),
+    );
+    const [failed] = hook("PostToolUseFailure", {
+      tool_name: "Bash",
+      tool_input: toolInput,
+      tool_use_id: "toolu_c3",
+      error: "boom",
+    });
+    expect(dec.decode(failed?.content?.bytes)).toBe(jcs({ input: toolInput }));
+    expect(
+      hook("PostToolUse", { tool_name: "Bash", tool_use_id: "toolu_c4" })[0]
+        ?.content,
+    ).toBeUndefined();
+
+    // The assistant's last message closes the turn, and a subagent's result
+    // closes its chain.
+    const [stop] = hook("Stop", { last_assistant_message: "Done." });
+    expect(dec.decode(stop?.content?.bytes)).toBe("Done.");
+    expect(digestBytes(stop?.content?.bytes as Uint8Array)).toBe(
+      stop?.content_digest,
+    );
+    const [sub] = hook("SubagentStop", {
+      agent_id: "agent-1",
+      last_assistant_message: "Found it.",
+    });
+    expect(sub?.kind).toBe("subagent_stop");
+    expect(dec.decode(sub?.content?.bytes)).toBe("Found it.");
+    const [display] = hook("MessageDisplay", { delta: "streamed", index: 0 });
+    expect(dec.decode(display?.content?.bytes)).toBe("streamed");
+
+    // Frames with nothing to ship carry no content.
+    expect(
+      hook("SessionStart", { source: "startup" })[0]?.content,
+    ).toBeUndefined();
+    expect(hook("Stop", {})[0]?.content).toBeUndefined();
+  });
+
   it("refuses a payload without a session id", () => {
     expect(() =>
       normalizeHook({ hook_event_name: "Stop" }, {}, { sessionUuid: "x" }),
@@ -380,115 +478,111 @@ describe("hook normalization", () => {
 describe("content on a prompt frame", () => {
   const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
 
-  it("chains a digest of the redacted prompt and names what was cut", () => {
+  it("hands the recorder the prompt as it arrived, redacted by nobody yet", () => {
+    // The seam: the hook normalizer reports, the recorder redacts. Its
+    // `content_digest` is therefore the digest of the raw text, and only the
+    // digest the recorder chains names the bytes that ship.
     const draft = hook("UserPromptSubmit", {
       prompt: `ship it with ${secret}`,
     })[0];
 
-    // What a body would carry, and what the control plane verifies it
-    // against. The two have to agree or no body can ever be accepted.
-    expect(draft?.content_digest).toBe(
-      digestBytes(`ship it with ${redactionMarker("github_token")}`),
-    );
-    expect(draft?.content_redactions?.map((r) => r.reason)).toEqual([
-      "github_token",
-    ]);
+    expect(dec.decode(draft?.content?.bytes)).toBe(`ship it with ${secret}`);
+    expect(draft?.content_digest).toBe(digestBytes(`ship it with ${secret}`));
     // The body member keeps digesting the prompt as the harness reported it:
     // it correlates frames and is never verified against bytes.
-    expect(draft?.body["prompt_digest"]).not.toBe(draft?.content_digest);
+    expect(draft?.body["prompt_digest"]).not.toBe(
+      digestBytes(`ship it with ${redactionMarker("github_token")}`),
+    );
+  });
+
+  it("redacts once the recorder seals it", () => {
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: `ship it with ${secret}`,
+      },
+      ENV,
+    );
+    const shipped = `ship it with ${redactionMarker("github_token")}`;
+    expect(event?.content?.digest).toBe(digestBytes(shipped));
+    expect(event?.content?.redactions.map((r) => r.reason)).toEqual([
+      "github_token",
+    ]);
+    expect(dec.decode(recorder.takeBodies()[0]?.bytes)).toBe(shipped);
   });
 
   it("records no redaction for a clean prompt", () => {
-    const draft = hook("UserPromptSubmit", { prompt: "ship it" })[0];
-    expect(draft?.content_digest).toBe(digestBytes("ship it"));
-    expect(draft?.content_redactions).toBeUndefined();
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "ship it",
+      },
+      ENV,
+    );
+    expect(event?.content?.digest).toBe(digestBytes("ship it"));
+    expect(event?.content?.redactions).toEqual([]);
   });
 });
 
-describe("a prompt with more credentials than the envelope records", () => {
+describe("a prompt with more credentials than one event can record", () => {
   // Redaction removes every match. The record of the matches is what is
-  // bounded: `contentSchema` caps `content.redactions`, and before this the
-  // draft handed over all of them, so a prompt pasting a long list of tokens
-  // failed to seal. The daemon answered 500, the hook fell back to a local
-  // decision, and the turn lost the frame it was supposed to leave behind.
+  // bounded: `contentSchema` caps `content.redactions`, and a draft that
+  // handed over all of them would fail to seal, so the daemon answered 500,
+  // the hook fell back to a local decision, and the turn lost the frame it
+  // was supposed to leave behind. `prepareContent` ships no body and no
+  // digest instead, and says why on the event.
   const many = Array.from(
-    { length: MAX_CONTENT_REDACTIONS + 44 },
+    { length: TACHO_MAX_REDACTIONS + 44 },
     (_, i) => `ghp_${String(i).padStart(36, "a")}`,
   );
 
-  it("redacts every one, records the cap, and says how many there were", () => {
-    const draft = hook("UserPromptSubmit", { prompt: many.join(" ") })[0];
-
-    expect(draft?.content_redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
-    expect(draft?.attrs["oxagen.content_redactions_total"]).toBe(
-      String(many.length),
-    );
-    // Not one token survives in the bytes a body would carry.
-    const carried = new TextDecoder().decode(
-      draft?.content_bytes ?? new Uint8Array(),
-    );
-    expect(carried).not.toContain("ghp_");
-    expect(draft?.content_digest).toBe(digestBytes(carried));
-  });
-
-  it("seals, which is the whole point", () => {
-    const recorder = new SessionRecorder({
-      context: {
-        agent: {
-          agent_key: "acme.core.cc-laptop",
-          fleet_id: "wrk_test",
-          runtime: "claude-code",
-          harness: "claude-code",
-          wrapper_version: "2.1.1",
-          host_enrollment_id: "he_0000000000000000000000000000",
-        },
-      },
-      harnessSessionId: SESSION,
-      scope: "he_0000000000000000000000000000",
-    });
-    const events = recorder.ingestHook(
+  const sealPrompt = (extra: Record<string, unknown> = {}) => {
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
       {
         session_id: SESSION,
         hook_event_name: "UserPromptSubmit",
         cwd: "/home/dev/proj",
         transcript_path: "/t.jsonl",
         prompt: many.join(" "),
+        ...extra,
       },
       ENV,
     );
-    expect(events.map((e) => e.kind)).toContain("turn_start");
+    return { event, recorder };
+  };
+
+  it("ships no body, chains no digest, and says why", () => {
+    const { event, recorder } = sealPrompt();
+
+    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
+    expect(event?.content).toBeUndefined();
+    expect(recorder.takeBodies()).toEqual([]);
+    // Not one token reaches the chain.
+    expect(JSON.stringify(event)).not.toContain("ghp_");
   });
 
-  it("keeps the unpromoted hook fields next to the count", () => {
-    const draft = hook("UserPromptSubmit", {
-      prompt: many.join(" "),
-      some_new_upstream_field: "kept",
-    })[0];
-    expect(draft?.attrs["hook.some_new_upstream_field"]).toBe("kept");
-    expect(draft?.attrs["oxagen.content_redactions_total"]).toBeDefined();
+  it("seals, which is the whole point", () => {
+    const { event } = sealPrompt();
+    expect(event?.kind).toBe("turn_start");
+  });
+
+  it("keeps the unpromoted hook fields next to the reason", () => {
+    const { event } = sealPrompt({ some_new_upstream_field: "kept" });
+    expect(event?.attrs["hook.some_new_upstream_field"]).toBe("kept");
+    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
   });
 });
 
-describe("a body sink that cannot write", () => {
-  const recorderWith = (
-    onContentBody?: RecorderOptions["onContentBody"],
-  ): SessionRecorder =>
-    new SessionRecorder({
-      context: {
-        agent: {
-          agent_key: "acme.core.cc-laptop",
-          fleet_id: "wrk_test",
-          runtime: "claude-code",
-          harness: "claude-code",
-          wrapper_version: "2.1.1",
-          host_enrollment_id: "he_0000000000000000000000000000",
-        },
-      },
-      harnessSessionId: SESSION,
-      scope: "he_0000000000000000000000000000",
-      ...(onContentBody !== undefined ? { onContentBody } : {}),
-    });
-
+describe("holding bodies beside the chain", () => {
   const twoPrompts = (recorder: SessionRecorder) => {
     const go = () =>
       recorder.ingestHook(
@@ -504,26 +598,47 @@ describe("a body sink that cannot write", () => {
     return [...go(), ...go()];
   };
 
-  it("leaves the chain exactly as it would be with no sink at all", () => {
-    // `seal` advances the cursor before the caller appends the event. A sink
-    // that threw here would take the event with it, and the next hook would
-    // record a sequence number nothing explains: a chain break the control
-    // plane reports for the rest of the session, caused by a full disk.
-    const quiet = twoPrompts(recorderWith());
-    const failing = twoPrompts(
-      recorderWith(() => {
-        throw Object.assign(new Error("no space left on device"), {
-          code: "ENOSPC",
-        });
-      }),
+  it("leaves the chain exactly as it would be with the bodies left alone", () => {
+    // The chain hash covers the digest, never the bytes, so draining the
+    // bodies between two frames must not move a sequence number. A chain that
+    // depended on when the daemon drained would break on a slow disk.
+    const undrained = twoPrompts(testRecorder());
+    const drainedRecorder = testRecorder();
+    const first = drainedRecorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      },
+      ENV,
+    );
+    drainedRecorder.takeBodies();
+    const second = drainedRecorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      },
+      ENV,
     );
 
-    expect(failing.map((e) => `${e.kind}#${e.seq}`)).toEqual(
-      quiet.map((e) => `${e.kind}#${e.seq}`),
+    expect([...first, ...second].map((e) => `${e.kind}#${e.seq}`)).toEqual(
+      undrained.map((e) => `${e.kind}#${e.seq}`),
     );
-    // The frame still carries its digest, so the missing body is a gap the
-    // seal records rather than an event that never existed.
-    expect(failing[0]?.content?.digest).toBe(quiet[0]?.content?.digest);
-    expect(failing[0]?.content?.digest).toBeDefined();
+  });
+
+  it("hands each body to one drain only", () => {
+    const recorder = testRecorder();
+    const events = twoPrompts(recorder);
+    const bodies = recorder.takeBodies();
+
+    expect(bodies.map((b) => b.event_id_idem)).toEqual(
+      events.filter((e) => e.content !== undefined).map((e) => e.event_id_idem),
+    );
+    expect(recorder.takeBodies()).toEqual([]);
   });
 });

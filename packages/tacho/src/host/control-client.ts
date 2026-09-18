@@ -137,6 +137,11 @@ export interface ControlClientOptions {
 }
 
 export interface ControlClient {
+  /**
+   * Ship one batch. `bodies` are the frame bodies of events IN THIS BATCH:
+   * the control plane refuses a body naming an event it did not receive in
+   * the same request (`unknown_event`), so a body never rides a later one.
+   */
   ingest: (
     events: TachoBatch["events"],
     daemon?: DaemonHealth,
