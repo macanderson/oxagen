@@ -5,6 +5,7 @@ import {
   ingestResponseSchema,
   commandsResponseSchema,
   tachoBatchSchema,
+  TACHO_MAX_BODY_BYTES,
   TACHO_BATCH_SCHEMA,
 } from "./wire";
 import { minimalSession } from "./test-helpers";
@@ -124,6 +125,53 @@ describe("what this host sends", () => {
     expect(() => tachoBatchSchema.parse(batch)).not.toThrow();
     expect(() =>
       tachoBatchSchema.parse({ ...batch, unexpected: true }),
+    ).toThrow();
+  });
+
+  it("carries frame bodies next to their events, and no more than the wire allows", () => {
+    // What the shipper actually sends: a body per content frame, base64 on
+    // the wire, naming the event by its idempotency id. The server verifies
+    // each body against the event's `content.digest`; this proves the batch
+    // that carries them parses at all.
+    const events = minimalSession();
+    const prompt = events[1];
+    const batch = {
+      schema: TACHO_BATCH_SCHEMA,
+      host_enrollment_id: "tch_0123456789abcdefghijkl",
+      events,
+      bodies: [
+        {
+          event_id_idem: prompt?.event_id_idem,
+          content_type: "text/plain; charset=utf-8",
+          bytes_base64: Buffer.from("Read README.md").toString("base64"),
+        },
+      ],
+    };
+    expect(() => tachoBatchSchema.parse(batch)).not.toThrow();
+    // A body is strict too: a member the server does not know is drift.
+    expect(() =>
+      tachoBatchSchema.parse({
+        ...batch,
+        bodies: [{ ...batch.bodies[0], digest: "sha256:00" }],
+      }),
+    ).toThrow();
+    // The base64 cap is the byte cap the recorder enforces, so a body the
+    // recorder let through is never one the wire refuses.
+    const atCap = Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString("base64");
+    expect(() =>
+      tachoBatchSchema.parse({
+        ...batch,
+        bodies: [{ ...batch.bodies[0], bytes_base64: atCap }],
+      }),
+    ).not.toThrow();
+    const overCap = Buffer.alloc(TACHO_MAX_BODY_BYTES + 3, 0x61).toString(
+      "base64",
+    );
+    expect(() =>
+      tachoBatchSchema.parse({
+        ...batch,
+        bodies: [{ ...batch.bodies[0], bytes_base64: overCap }],
+      }),
     ).toThrow();
   });
 });
