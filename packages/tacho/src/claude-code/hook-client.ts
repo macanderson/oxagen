@@ -26,11 +26,11 @@ import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import { cursorAnswer, translateCursorPayload } from "./cursor-adapter";
 import { hookInputSchema } from "./hooks";
 import {
-  parseAnswerBody,
   psStartInstance,
   stellaAnswer,
   stellaHarnessPid,
   translateStellaPayload,
+  tryParseAnswerBody,
 } from "./stella-adapter";
 
 /** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
@@ -408,9 +408,18 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
     });
     if (result.status === 200) {
+      // A 200 whose body is not a JSON object is a fault, not a decision. It
+      // falls through to the local evaluator rather than being read as an
+      // empty answer, because a translated harness turns an empty answer into
+      // an explicit allow and a truncated response would permit the call.
+      const document = tryParseAnswerBody(result.body);
+      if (document === undefined)
+        throw new Error(
+          `daemon answered 200 with a body that is not a JSON object: ${result.body.slice(0, 200)}`,
+        );
       return {
         stdout: translated
-          ? answer(parseAnswerBody(result.body))
+          ? answer(document)
           : `${result.body.trim() || "{}"}\n`,
         stderr: "",
         exitCode: 0,

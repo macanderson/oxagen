@@ -8,6 +8,7 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
+import { RESERVED_AGENT_NAMES } from "../wire";
 import {
   agentFromArgv,
   decideLocally,
@@ -130,7 +131,8 @@ describe("runTachoHook", () => {
       "codex",
     );
     expect(harnessFromArgv(["--harness", "claude-code"])).toBe("claude-code");
-    expect(harnessFromArgv(["--harness", "cursor"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness", "cursor"])).toBe("cursor");
+    expect(harnessFromArgv(["--harness", "windsurf"])).toBe("claude-code");
     expect(harnessFromArgv(["--harness"])).toBe("claude-code");
     expect(harnessFromArgv([])).toBe("claude-code");
   });
@@ -364,14 +366,15 @@ describe("runTachoHook for Stella and custom agents", () => {
     // HOME is not a harness variable; the Stella pid is added for the sweep.
     expect(body.env).toEqual({ TACHO_HARNESS_PID: "4242" });
     expect(seen[0]?.responseTimeoutMs).toBe(10_000);
-    // A body that is not JSON is no decision, never a malformed one (which
-    // Stella treats as a deny).
+    // A body that is not a JSON object is a fault, not a decision, so the
+    // local evaluator answers instead of the daemon.
     const junk = await runTachoHook({
       ...base,
       stdin: STELLA_PRE,
       post: async () => ({ status: 200, body: "oops" }),
     });
-    expect(junk.stdout).toBe("{}\n");
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
     // SessionStart context reaches Stella as prompt text.
     const started = await runTachoHook({
       ...base,
@@ -559,14 +562,21 @@ describe("runTachoHook for Stella and custom agents", () => {
     }
     // Every built-in harness and runtime name is reserved, so a custom
     // agent can never be listed as one of them.
-    for (const reserved of [
+    const reservedNames = [
       "claude-code",
       "codex",
+      "cursor",
       "stella",
+      "claude-desktop",
       "claude-agent-sdk",
       "custom",
       "proxy",
-    ]) {
+    ];
+    // Every harness and runtime is reserved, so the list here is the whole
+    // set: a harness added without updating this test would drift the
+    // diagnostic every caller reads.
+    expect([...RESERVED_AGENT_NAMES]).toEqual(reservedNames);
+    for (const reserved of reservedNames) {
       const refused = await runTachoHook({
         paths,
         env: {},
@@ -582,7 +592,7 @@ describe("runTachoHook for Stella and custom agents", () => {
         exitCode: 0,
       });
       expect(refused.stderr).toBe(
-        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: ${reservedNames.join(", ")})\n`,
       );
     }
   });
@@ -635,8 +645,9 @@ describe("runTachoHook for Cursor", () => {
       cwd: "/repo",
     });
     expect(seen[0]?.responseTimeoutMs).toBe(10_000);
-    // A body that is not JSON is no decision, and Cursor still gets a
-    // conforming allow rather than a malformed answer it would read as a block.
+    // A body that is not a JSON object is a fault, not an empty decision: it
+    // takes the local evaluator rather than becoming the explicit allow that
+    // an empty answer translates to. Cursor still reads a conforming answer.
     const junk = await runTachoHook({
       paths,
       env: {},
@@ -645,7 +656,11 @@ describe("runTachoHook for Cursor", () => {
       platform: "linux",
       post: async () => ({ status: 200, body: "oops" }),
     });
-    expect(JSON.parse(junk.stdout)).toEqual({ permission: "allow" });
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
+    expect(
+      (JSON.parse(junk.stdout) as { permission?: string }).permission,
+    ).toMatch(/^(allow|deny)$/);
   });
 
   it("says the payload is not a Cursor hook when it is not one", async () => {

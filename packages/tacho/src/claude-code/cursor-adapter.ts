@@ -126,7 +126,7 @@ export function translateCursorPayload(raw: unknown): unknown {
   if (cursorSessionId !== undefined) out["cursor_session_id"] = cursorSessionId;
   if (workspaceRoots !== undefined) out["workspace_roots"] = workspaceRoots;
   if (out["cwd"] === undefined && Array.isArray(workspaceRoots)) {
-    const root = workspaceRoots[0];
+    const root: unknown = workspaceRoots[0];
     if (typeof root === "string") out["cwd"] = root;
   }
   if (typeof toolName === "string") {

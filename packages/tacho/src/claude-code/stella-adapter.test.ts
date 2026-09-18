@@ -16,6 +16,7 @@ import {
   stellaSessionId,
   stellaToolUseId,
   translateStellaPayload,
+  tryParseAnswerBody,
 } from "./stella-adapter";
 
 describe("stella pid", () => {
@@ -340,5 +341,11 @@ describe("stella answer", () => {
     expect(parseAnswerBody("")).toEqual({});
     expect(parseAnswerBody("not json")).toEqual({});
     expect(parseAnswerBody("[1,2]")).toEqual({});
+    // A caller that must not read an allow out of a fault gets the two cases
+    // apart: an empty object parses, a truncated or non-object body does not.
+    expect(tryParseAnswerBody("{}")).toEqual({});
+    expect(tryParseAnswerBody('{"decision":"bl')).toBeUndefined();
+    expect(tryParseAnswerBody("not json")).toBeUndefined();
+    expect(tryParseAnswerBody("[1,2]")).toBeUndefined();
   });
 });
