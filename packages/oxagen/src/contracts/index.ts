@@ -88,6 +88,9 @@ import { spendWasteList } from "./spend.waste";
 import { skillList } from "./skill.list";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
+import { costUnpricedModelList } from "./cost.unpriced_model.list";
+import { costPriceEntrySet } from "./cost.price_entry.set";
+import { costPriceEntryRemove } from "./cost.price_entry.remove";
 import { findingList } from "./finding.list";
 import { findingEvidenceGet } from "./finding.evidence.get";
 import { findingFixRecord } from "./finding.fix.record";
@@ -638,6 +641,9 @@ export {
   skillList,
   spendStatementExport,
   costPriceEntryList,
+  costUnpricedModelList,
+  costPriceEntrySet,
+  costPriceEntryRemove,
   findingList,
   findingEvidenceGet,
   findingFixRecord,
@@ -969,6 +975,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   skillList,
   spendStatementExport,
   costPriceEntryList,
+  costUnpricedModelList,
+  costPriceEntrySet,
+  costPriceEntryRemove,
   findingList,
   findingEvidenceGet,
   findingFixRecord,

@@ -49,6 +49,12 @@ export interface PriceBookSyncReport {
   counts: Record<PriceSourceId, number>;
   /** Every catalog read that contributed nothing, and why. */
   failures: { source: PriceSourceId; error: string }[];
+  /**
+   * The rows the merge produced — what was written, or on a dry run what
+   * would have been. Carried so an operator can see the price book before
+   * agreeing to it; the scheduled job never logs it.
+   */
+  seeds: PriceEntrySeed[];
 }
 
 export interface SyncPriceBookFromSourcesArgs {
@@ -56,8 +62,12 @@ export interface SyncPriceBookFromSourcesArgs {
   effectiveFrom: Date;
   /** Injected for tests; the global fetch in production. */
   fetchImpl?: FetchLike;
-  /** Injected for tests; `process.env` in production. */
-  env?: NodeJS.ProcessEnv;
+  /** Injected for tests; the environment's own values in production. */
+  overrides?: {
+    filePath?: string;
+    inline?: string;
+    readFile?: (path: string) => string;
+  };
   /** Skip the network entirely — the card and the operator's overrides alone. */
   offline?: boolean;
   /** Write nothing; report what would have been written. */
@@ -76,7 +86,7 @@ export interface SyncPriceBookFromSourcesArgs {
 export async function syncPriceBookFromSources(
   args: SyncPriceBookFromSourcesArgs,
 ): Promise<PriceBookSyncReport> {
-  const overrides = loadPriceOverrides(args.env ?? process.env);
+  const overrides = loadPriceOverrides(args.overrides ?? {});
 
   const catalogs: PriceSourceResult[] = args.offline
     ? []
@@ -115,6 +125,7 @@ export async function syncPriceBookFromSources(
       models: merged.prices.length,
       counts: merged.counts,
       failures,
+      seeds,
     };
 
   const write =
@@ -129,5 +140,6 @@ export async function syncPriceBookFromSources(
     models: merged.prices.length,
     counts: merged.counts,
     failures,
+    seeds,
   };
 }

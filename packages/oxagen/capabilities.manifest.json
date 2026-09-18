@@ -2281,6 +2281,59 @@
       }
     },
     {
+      "name": "remove_price_entry",
+      "file": "cost.price_entry.remove.ts",
+      "domain": "cost",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "set_price_entry",
+      "file": "cost.price_entry.set.ts",
+      "domain": "cost",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_unpriced_models",
+      "file": "cost.unpriced_model.list.ts",
+      "domain": "cost",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": false,
+        "docs": true
+      }
+    },
+    {
       "name": "list_credential_grants",
       "file": "credential.grant.list.ts",
       "domain": "credential",

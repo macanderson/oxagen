@@ -18,6 +18,7 @@ vi.mock("./clickhouse", async (importOriginal) => {
 
 import {
   readModelCallFrames,
+  readObservedModels,
   readTachoToolCallFrames,
   readTachoToolCallObservations,
 } from "./cost-frames";
@@ -261,6 +262,97 @@ describe("readTachoToolCallObservations", () => {
         to: new Date(1),
         limit: 1,
       }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("readObservedModels", () => {
+  const WS = "00000000-0000-4000-8000-000000000002";
+  const SINCE = new Date("2026-08-15T00:00:00.000Z");
+
+  it("folds both frame stores by model id, heaviest first, and caps the list", async () => {
+    answer([
+      {
+        model: "vendor/brand-new",
+        provider: "vendor",
+        calls: "12",
+        tokens: "480000",
+        first_seen: "2026-09-02T09:00:00.000Z",
+        last_seen: "2026-09-13T21:30:00.000Z",
+      },
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "3",
+        tokens: "1500",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-11T00:00:00.000Z",
+      },
+    ]);
+    const rows = await readObservedModels({ orgId: ORG, since: SINCE });
+
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("FROM token_usage");
+    expect(query).toContain("FROM tacho_events FINAL");
+    expect(query).toContain("UNION ALL");
+    expect(query).toContain("kind = 'llm_call'");
+    expect(query).toContain("source IN {sources:Array(String)}");
+    expect(query).toContain("GROUP BY model");
+    expect(query).toContain("ORDER BY tokens DESC, model");
+    expect(query).toContain("LIMIT {limit:UInt32}");
+    // A gateway row's input_tokens is the inclusive input total, so adding it
+    // to cache reads and writes again would double-count them.
+    expect(query).toContain(
+      "greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - toInt64(cache_write_tokens))",
+    );
+    expect(query_params).toEqual({
+      orgId: ORG,
+      since: "2026-08-15 00:00:00.000",
+      sources: ["otel_log", "collector", "hook"],
+      limit: 500,
+    });
+
+    expect(rows).toEqual([
+      {
+        model: "vendor/brand-new",
+        provider: "vendor",
+        calls: 12,
+        tokens: 480_000,
+        firstSeen: "2026-09-02T09:00:00.000Z",
+        lastSeen: "2026-09-13T21:30:00.000Z",
+      },
+      {
+        model: "claude-sonnet-5",
+        provider: null,
+        calls: 3,
+        tokens: 1_500,
+        firstSeen: "2026-09-10T00:00:00.000Z",
+        lastSeen: "2026-09-11T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("reads the whole organization when no workspace is named", async () => {
+    answer([]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const { query, query_params } = lastQuery();
+    expect(query).not.toContain("workspace_id");
+    expect(query_params).not.toHaveProperty("workspaceId");
+  });
+
+  it("fences both stores on the workspace when one is named", async () => {
+    answer([]);
+    await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
+    const { query, query_params } = lastQuery();
+    // Once per store — a fence on only one of them would leak the other.
+    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
+    expect(query_params).toMatchObject({ workspaceId: WS });
+  });
+
+  it("lets a degraded store throw", async () => {
+    queryMock.mockRejectedValueOnce(new Error("clickhouse down"));
+    await expect(
+      readObservedModels({ orgId: ORG, since: SINCE }),
     ).rejects.toThrow();
   });
 });

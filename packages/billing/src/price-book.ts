@@ -21,7 +21,7 @@
  * card is the price book's seed and the recorder's rate until the rollup is
  * the only reader (ADR-060 §1).
  */
-import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import {
@@ -405,5 +405,275 @@ export async function syncPriceBook(args: {
       written += 1;
     }
     return { written, unchanged };
+  });
+}
+
+/**
+ * The unit a token class is metered in. A negotiated rate card names the class
+ * ("output"), never the unit, so the write derives the unit rather than asking
+ * a customer for it; the list rows ./pricing.ts seeds carry the same pairing.
+ */
+export const PRICE_UNIT_BY_TOKEN_CLASS: Record<PriceTokenClass, PriceUnit> = {
+  input_uncached: "token",
+  cache_read: "token",
+  cache_write_5m: "token",
+  cache_write_1h: "token",
+  output: "token",
+  reasoning: "token",
+  embedding_input: "token",
+  server_tool_request: "request",
+  rerank: "request",
+  image: "image",
+  video_second: "second",
+};
+
+/** The row key the unique index arbitrates on, for a message a person can act on. */
+function entryKey(e: {
+  provider: string;
+  model: string;
+  tokenClass: string;
+  region: string | null;
+}): string {
+  return `${e.provider}|${e.model}|${e.tokenClass}|${e.region ?? ""}`;
+}
+
+/** The (provider, model, token class, region) one negotiated row prices. */
+export interface NegotiatedPriceKey {
+  orgId: string;
+  provider: string;
+  model: string;
+  tokenClass: PriceTokenClass;
+  /** Null (the default) is the region-agnostic row. */
+  region?: string | null;
+}
+
+export interface SetNegotiatedPriceEntryArgs extends NegotiatedPriceKey {
+  /** Extra names the frame's model id may arrive under; replaces the stored list. */
+  modelAliases?: readonly string[];
+  /** Integer micro-USD per one million units. Use {@link usdPerMillionToMicros}. */
+  microsPerMillion: bigint;
+  /** ISO 4217; the store records micro-USD, so anything but USD is a different store. */
+  currency?: string;
+  /** Derived from the token class when omitted. */
+  unit?: PriceUnit;
+  /** The instant the rate starts applying. */
+  effectiveFrom: Date;
+}
+
+/** What one negotiated write changed. */
+export interface NegotiatedPriceWrite {
+  /** The row now in effect for the key. */
+  entry: PriceEntry;
+  /**
+   * The row this write closed at `effectiveFrom`, or null when nothing was
+   * open for the key or the write corrected a row that had not shipped yet.
+   */
+  closed: PriceEntry | null;
+}
+
+/**
+ * The organization's rows for one key, newest first. Runs in the tenant's
+ * scope with the org written into the predicate as well as the policy, since a
+ * stack with RLS enforcement off runs the query under `app.rls_bypass`.
+ */
+async function readKeyRows(
+  tx: Tx,
+  key: NegotiatedPriceKey,
+  options: { includeList: boolean },
+): Promise<Row[]> {
+  const region = key.region ?? null;
+  const rows = await tx
+    .select()
+    .from(schema.priceEntries)
+    .where(
+      and(
+        options.includeList
+          ? or(
+              isNull(schema.priceEntries.orgId),
+              eq(schema.priceEntries.orgId, key.orgId),
+            )
+          : eq(schema.priceEntries.orgId, key.orgId),
+        eq(schema.priceEntries.provider, key.provider),
+        eq(schema.priceEntries.model, key.model),
+        eq(schema.priceEntries.tokenClass, key.tokenClass),
+        region === null
+          ? isNull(schema.priceEntries.region)
+          : eq(schema.priceEntries.region, region),
+      ),
+    );
+  return [...rows].sort(
+    (a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime(),
+  );
+}
+
+/**
+ * Write one organization's negotiated rate for a (provider, model, token
+ * class, region), effective from `effectiveFrom`.
+ *
+ * The row key is the unique index's: a re-run with the same `effectiveFrom`
+ * updates that row's price, currency, unit and aliases in place, so the call
+ * is idempotent. A run with a LATER `effectiveFrom` never touches the shipped
+ * row — it closes it at the new instant and inserts a new one, so a run priced
+ * before the change keeps the entry it was priced with and a recomputed cost
+ * record still resolves that id. A backdated write under an open row is
+ * refused for the same reason {@link syncPriceBook} refuses one: it would
+ * leave two rows open for one key, and it would reprice runs that already
+ * settled.
+ *
+ * `source` is always `negotiated` and `org_id` is always the organization's:
+ * `price_entries_org_source_check` is `(source = 'list') = (org_id IS NULL)`,
+ * so a negotiated row with a null org is refused by the table itself.
+ *
+ * Unlike {@link syncPriceBook}, which is the platform's own write over every
+ * organization's list rows and therefore runs on `withSystemDb`, this is a
+ * tenant write: it runs in the caller's scope through `withTenantDb`, with the
+ * org in the predicate as well as in the RLS policy.
+ */
+export async function setNegotiatedPriceEntry(
+  args: SetNegotiatedPriceEntryArgs,
+): Promise<NegotiatedPriceWrite> {
+  if (args.microsPerMillion < 0n)
+    throw new RangeError(`a price must be a non-negative integer of micros`);
+  const region = args.region ?? null;
+  const unit = args.unit ?? PRICE_UNIT_BY_TOKEN_CLASS[args.tokenClass];
+  const currency = args.currency ?? "USD";
+  const modelAliases = args.modelAliases ?? [];
+  const from = args.effectiveFrom;
+  const key = entryKey({ ...args, region });
+
+  return withTenantDb(async (tx) => {
+    const rows = await readKeyRows(tx, args, { includeList: false });
+
+    // A correction is always a later row. A row already effective from an
+    // instant after this one — open or since superseded — means this write
+    // would either leave two rows open for the key or reprice a window that
+    // has already settled.
+    const later = rows.filter(
+      (r) => r.effectiveFrom.getTime() > from.getTime(),
+    );
+    const earliestLater = later[later.length - 1];
+    if (earliestLater)
+      throw new RangeError(
+        `a negotiated price for ${key} is already effective from ${earliestLater.effectiveFrom.toISOString()}; a correction must not start earlier`,
+      );
+
+    // The upsert clears `effective_to`, so a row at exactly this instant that
+    // has already been closed would be reopened and the window between its
+    // close and now would silently become negotiated again.
+    const atInstant = rows.find(
+      (r) => r.effectiveFrom.getTime() === from.getTime(),
+    );
+    if (atInstant && atInstant.effectiveTo !== null)
+      throw new RangeError(
+        `the negotiated price for ${key} effective from ${from.toISOString()} was ended at ${atInstant.effectiveTo.toISOString()}; re-establish it as a new row with a later effectiveFrom`,
+      );
+
+    const open = rows.find((r) => r.effectiveTo === null) ?? null;
+    let closed: Row | null = null;
+    if (open && open.effectiveFrom.getTime() < from.getTime()) {
+      await tx
+        .update(schema.priceEntries)
+        .set({ effectiveTo: from, updatedAt: new Date() })
+        .where(eq(schema.priceEntries.id, open.id));
+      closed = { ...open, effectiveTo: from };
+    }
+
+    // Raw params reach the driver untyped: a JS array renders as a value
+    // list, so the text[] is spelled as an array constructor
+    // (`array[]::text[]` when empty), and the bigint and the instant travel
+    // as strings under an explicit cast. The ON CONFLICT target restates
+    // `price_entries_key_idx`'s own expressions, or Postgres finds no index
+    // to arbitrate on.
+    const aliases = sql.join(
+      modelAliases.map((a) => sql`${a}`),
+      sql`, `,
+    );
+    await tx.execute(sql`
+      INSERT INTO ${schema.priceEntries}
+        (org_id, provider, model, model_aliases, region, token_class, unit,
+         currency, micros_per_million, effective_from, effective_to, source)
+      VALUES
+        (${args.orgId}::uuid, ${args.provider}, ${args.model},
+         array[${aliases}]::text[], ${region}, ${args.tokenClass}, ${unit},
+         ${currency}, ${args.microsPerMillion.toString()}::bigint,
+         ${from.toISOString()}::timestamptz, NULL, 'negotiated')
+      ON CONFLICT (coalesce(org_id, '${sql.raw(NIL_UUID)}'::uuid),
+                   provider, model, token_class, coalesce(region, ''), effective_from)
+      DO UPDATE SET
+        micros_per_million = EXCLUDED.micros_per_million,
+        currency = EXCLUDED.currency,
+        unit = EXCLUDED.unit,
+        model_aliases = EXCLUDED.model_aliases,
+        effective_to = NULL,
+        updated_at = now()
+    `);
+
+    const after = await readKeyRows(tx, args, { includeList: false });
+    const stored = after.find(
+      (r) => r.effectiveFrom.getTime() === from.getTime(),
+    );
+    if (!stored)
+      throw new Error(
+        `negotiated price for ${key} was not readable after the write`,
+      );
+    return {
+      entry: rowToEntry(stored),
+      closed: closed === null ? null : rowToEntry(closed),
+    };
+  });
+}
+
+/**
+ * End an organization's negotiated row for one key at `at`, so every frame
+ * from that instant on resolves to the list price again.
+ *
+ * It closes the row — `effective_to = at` — and never deletes it: a cost
+ * record priced before `at` still names the entry, and the rollup can still
+ * read it. Re-closing a key the organization has already ended is a no-op that
+ * answers null, so a retry is safe.
+ *
+ * A list row is not an organization's to change. The read admits the list rows
+ * (the same set the RLS policy shows a tenant session) precisely so this case
+ * is distinguishable: a key priced only by the list is refused rather than
+ * silently reported as closed, which would leave the customer believing the
+ * platform's own price had moved.
+ */
+export async function closeNegotiatedPriceEntry(args: {
+  orgId: string;
+  provider: string;
+  model: string;
+  tokenClass: PriceTokenClass;
+  region?: string | null;
+  /** The instant the negotiated rate stops applying. */
+  at: Date;
+}): Promise<PriceEntry | null> {
+  const region = args.region ?? null;
+  const key = entryKey({ ...args, region });
+
+  return withTenantDb(async (tx) => {
+    const rows = await readKeyRows(tx, args, { includeList: true });
+    const own = rows.filter(
+      (r) => r.orgId === args.orgId && r.source !== "list",
+    );
+    if (own.length === 0)
+      throw new RangeError(
+        `${key} has no negotiated price for this organization to end` +
+          (rows.length > 0
+            ? `; it is priced by the platform list, which is not an organization's to change`
+            : ``),
+      );
+
+    const open = own.find((r) => r.effectiveTo === null);
+    if (!open) return null;
+    if (open.effectiveFrom.getTime() >= args.at.getTime())
+      throw new RangeError(
+        `the negotiated price for ${key} is effective from ${open.effectiveFrom.toISOString()}; it cannot end at or before it starts`,
+      );
+
+    await tx
+      .update(schema.priceEntries)
+      .set({ effectiveTo: args.at, updatedAt: new Date() })
+      .where(eq(schema.priceEntries.id, open.id));
+    return rowToEntry({ ...open, effectiveTo: args.at });
   });
 }

@@ -858,6 +858,38 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "250" },
   },
 
+  // ── Model price overrides (negotiated provider rates) ──
+  // An installation with no negotiated rates sets NEITHER of these and never
+  // thinks about pricing: the hourly cost.price-book-sync job fills the price
+  // book from Oxagen's in-code rate card and the published catalogs. An
+  // installation that HAS negotiated rates with a model provider states them
+  // here once, in USD per one million tokens, and they beat every published
+  // rate for every run. See packages/billing/src/price-overrides.ts.
+  OXAGEN_PRICE_OVERRIDES: {
+    group: "Billing",
+    description:
+      "Negotiated model rates as inline JSON, in USD per one million tokens: " +
+      '{"claude-sonnet-5":{"inputPer1M":2.40,"outputPer1M":12.00,"cachedInputPer1M":0.24,"cacheWrite5mPer1M":3.00}}. ' +
+      "Leave unset unless you have negotiated rates with a model provider.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_PRICE_OVERRIDES_FILE: {
+    group: "Billing",
+    description:
+      "Path to a JSON file of negotiated model rates, same shape as " +
+      "OXAGEN_PRICE_OVERRIDES. Wins over the inline value when both are set, " +
+      "so a mounted secret does not need the variable cleared.",
+    secret: false,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Inngest (set on app.inngest.com → Keys) ─────────────────────────────────
   INNGEST_EVENT_KEY: {
     group: "Inngest",

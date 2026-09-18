@@ -143,17 +143,27 @@ export function parsePriceOverrides(body: unknown): PublishedModelPrice[] {
 }
 
 /**
- * The deployment's price overrides, or an empty list when none are set. The
- * file wins over the inline value so a container can mount a secret without
- * also having to clear the variable it was rolled out with.
+ * The deployment's price overrides, or an empty list when none are set.
+ *
+ * Both values default to the environment and are arguments so a test can
+ * supply them without mutating `process.env`. The file wins over the inline
+ * value so a container can mount a secret without also having to clear the
+ * variable it was rolled out with.
  */
 export function loadPriceOverrides(
-  env: NodeJS.ProcessEnv = process.env,
-  readFile: (path: string) => string = (p) => readFileSync(p, "utf8"),
+  args: {
+    /** Defaults to `OXAGEN_PRICE_OVERRIDES_FILE`. */
+    filePath?: string | undefined;
+    /** Defaults to `OXAGEN_PRICE_OVERRIDES`. */
+    inline?: string | undefined;
+    readFile?: (path: string) => string;
+  } = {},
 ): PublishedModelPrice[] {
-  const path = env[PRICE_OVERRIDES_FILE_ENV]?.trim();
-  const inline = env[PRICE_OVERRIDES_ENV]?.trim();
-  let raw: string | undefined;
+  const path = (args.filePath ?? process.env[PRICE_OVERRIDES_FILE_ENV])?.trim();
+  const inline = (args.inline ?? process.env[PRICE_OVERRIDES_ENV])?.trim();
+  const readFile = args.readFile ?? ((p: string) => readFileSync(p, "utf8"));
+
+  let raw: string;
   let origin: string;
   if (path !== undefined && path.length > 0) {
     origin = `${PRICE_OVERRIDES_FILE_ENV}=${path}`;

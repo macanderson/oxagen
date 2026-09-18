@@ -1,5 +1,5 @@
 {
-  "generatedCount": 319,
+  "generatedCount": 322,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2327,6 +2327,17 @@
       "consumes": []
     },
     {
+      "name": "list_unpriced_models",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_waste",
       "domain": "spend",
       "surfaces": [
@@ -2718,6 +2729,18 @@
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remove_price_entry",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -3181,6 +3204,18 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_price_entry",
+      "domain": "cost",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

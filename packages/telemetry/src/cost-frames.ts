@@ -312,3 +312,134 @@ export async function readTachoToolCallObservations(args: {
     resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
   }));
 }
+
+/** One model an organization has actually run, folded across both frame stores. */
+export interface ObservedModelRow {
+  model: string;
+  /** Null when the frames name no vendor. */
+  provider: string | null;
+  /** Model calls seen in the window. */
+  calls: number;
+  /** Total tokens across every class, for ranking by how much the model matters. */
+  tokens: number;
+  /** RFC 3339. */
+  firstSeen: string;
+  /** RFC 3339. */
+  lastSeen: string;
+}
+
+/**
+ * At most this many models. An organization running more distinct model ids
+ * than this has a naming problem, not a pricing one, and an unbounded list
+ * would be neither readable nor cheap.
+ */
+const OBSERVED_MODEL_LIMIT = 500;
+
+/**
+ * The distinct models an organization has run since `since`, heaviest first
+ * (Mission Control spec §12.2; ADR-060 §1). Both frame stores are read and
+ * folded by model id: a model reached through the gateway and the same model
+ * reached by a wrapped agent are one row, because they need one price.
+ *
+ * Token totals are the sum over the classes the book prices, so the two
+ * stores add up the same way. `token_usage.input_tokens` is the inclusive
+ * input total (fresh + cache reads + cache writes, see schema.sql), so its
+ * classes are split the way {@link readModelCallFrames} splits them; the
+ * tacho sources carry each class separately and are simply added.
+ *
+ * Throws on a degraded store: a short list read off half the frames would
+ * say a model is priced when nobody has priced it.
+ */
+export async function readObservedModels(args: {
+  orgId: string;
+  workspaceId?: string;
+  since: Date;
+}): Promise<ObservedModelRow[]> {
+  const ch = clickhouse();
+  const workspace =
+    args.workspaceId === undefined
+      ? ""
+      : "AND workspace_id = {workspaceId:UUID}";
+  const result = await breaker().exec(() =>
+    ch.query({
+      query: `
+      SELECT
+        model,
+        anyIf(provider, provider != '')                                  AS provider,
+        sum(calls)                                                       AS calls,
+        sum(tokens)                                                      AS tokens,
+        formatDateTime(min(first_seen), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')  AS first_seen,
+        formatDateTime(max(last_seen), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')   AS last_seen
+      FROM (
+        SELECT
+          toString(model)                     AS model,
+          toString(provider)                  AS provider,
+          count()                             AS calls,
+          sum(
+            greatest(0, toInt64(input_tokens) - toInt64(cached_tokens) - toInt64(cache_write_tokens))
+            + toInt64(cached_tokens) + toInt64(cache_write_tokens) + toInt64(output_tokens)
+          )                                   AS tokens,
+          min(toDateTime64(created_at, 3, 'UTC')) AS first_seen,
+          max(toDateTime64(created_at, 3, 'UTC')) AS last_seen
+        FROM token_usage
+        WHERE org_id = {orgId:UUID}
+          AND created_at >= {since:DateTime64(3)}
+          AND model != ''
+          ${workspace}
+        GROUP BY toString(model), toString(provider)
+
+        UNION ALL
+
+        SELECT
+          toString(model)                     AS model,
+          toString(provider)                  AS provider,
+          count()                             AS calls,
+          sum(
+            toInt64(coalesce(input_tokens, 0)) + toInt64(coalesce(cache_read_tokens, 0))
+            + toInt64(coalesce(cache_creation_tokens, 0)) + toInt64(coalesce(output_tokens, 0))
+          )                                   AS tokens,
+          min(toDateTime64(ts, 3, 'UTC'))     AS first_seen,
+          max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND ts >= {since:DateTime64(3)}
+          AND kind = 'llm_call'
+          AND source IN {sources:Array(String)}
+          AND model != ''
+          ${workspace}
+        GROUP BY toString(model), toString(provider)
+      )
+      GROUP BY model
+      ORDER BY tokens DESC, model
+      LIMIT {limit:UInt32}
+    `,
+      query_params: {
+        orgId: args.orgId,
+        ...(args.workspaceId === undefined
+          ? {}
+          : { workspaceId: args.workspaceId }),
+        since: chDateTime(args.since),
+        sources: TACHO_TOKEN_SOURCES,
+        limit: OBSERVED_MODEL_LIMIT,
+      },
+      format: "JSONEachRow",
+    }),
+  );
+  type Row = {
+    model: string;
+    provider: string;
+    calls: string | number;
+    tokens: string | number;
+    first_seen: string;
+    last_seen: string;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    model: r.model,
+    provider: r.provider === "" ? null : r.provider,
+    calls: Number(r.calls),
+    tokens: Number(r.tokens),
+    firstSeen: r.first_seen,
+    lastSeen: r.last_seen,
+  }));
+}

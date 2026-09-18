@@ -1,12 +1,20 @@
 #!/usr/bin/env tsx
 /**
  * price-book-sync — write the list price book (`cost.price_entries`,
- * org_id NULL, source 'list') from the in-code rate cards in
- * `packages/billing/src/pricing.ts` (ADR-060 §1).
+ * org_id NULL, source 'list') from every price source (ADR-060 §1): the
+ * operator's environment overrides, the in-code rate cards in
+ * `packages/billing/src/pricing.ts`, and the published catalogs.
  *
  *   pnpm billing:price-book-sync                         # report + DRY-RUN
  *   pnpm billing:price-book-sync --apply                 # write the rows
+ *   pnpm billing:price-book-sync --offline               # skip the catalogs
  *   pnpm billing:price-book-sync --effective-from=<RFC 3339>
+ *
+ * **Nothing depends on anyone running this.** The `cost.price-book-sync` job
+ * runs the same merge hourly, which is what keeps a fresh installation from
+ * pricing nothing at all. This remains for a targeted correction, for
+ * checking what the merge would write before it writes it, and for an
+ * air-gapped installation where the catalogs are unreachable (`--offline`).
  *
  * A price is effective over [effective_from, effective_to). With no
  * `--effective-from` the run is effective from the top of the current UTC
@@ -20,15 +28,12 @@
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
  */
 import kleur from "kleur";
-import {
-  priceEntriesFromRateCards,
-  syncPriceBook,
-  type PriceEntrySeed,
-} from "@oxagen/billing";
+import { syncPriceBookFromSources, type PriceEntrySeed } from "@oxagen/billing";
 import { closeDatabase } from "@oxagen/database";
 
 export interface Flags {
   apply: boolean;
+  offline: boolean;
   effectiveFrom: Date;
 }
 
@@ -40,9 +45,14 @@ export function topOfHour(now: Date): Date {
 }
 
 export function parseFlags(argv: string[], now: Date): Flags {
-  const flags: Flags = { apply: false, effectiveFrom: topOfHour(now) };
+  const flags: Flags = {
+    apply: false,
+    offline: false,
+    effectiveFrom: topOfHour(now),
+  };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;
+    else if (arg === "--offline") flags.offline = true;
     else if (arg.startsWith("--effective-from=")) {
       const at = new Date(arg.slice("--effective-from=".length));
       if (Number.isNaN(at.getTime()))
@@ -74,33 +84,47 @@ export function describeTarget(databaseUrl: string | undefined): string {
 
 async function main(): Promise<void> {
   const flags = parseFlags(process.argv.slice(2), new Date());
-  const seeds = priceEntriesFromRateCards(flags.effectiveFrom);
 
-  console.log(
-    kleur
-      .bold()
-      .cyan("\n══ Price book from packages/billing/src/pricing.ts ══\n"),
-  );
-  for (const line of reportLines(seeds)) console.log(`  ${line}`);
-  console.log(
-    `\n  ${seeds.length} list rows, effective from ${flags.effectiveFrom.toISOString()}`,
-  );
+  console.log(kleur.bold().cyan("\n══ Price book ══\n"));
   console.log(
     `  Target database: ${describeTarget(process.env["DATABASE_URL"])}`,
   );
+  console.log(`  Effective from:  ${flags.effectiveFrom.toISOString()}`);
+  console.log(
+    `  Catalogs:        ${flags.offline ? "skipped (--offline)" : "OpenRouter, models.dev"}\n`,
+  );
+
+  const report = await syncPriceBookFromSources({
+    effectiveFrom: flags.effectiveFrom,
+    offline: flags.offline,
+    dryRun: !flags.apply,
+  });
+
+  for (const [source, count] of Object.entries(report.counts))
+    if (count > 0) console.log(`  ${source.padEnd(18)} ${count} models`);
+  console.log(`\n  ${report.models} models priced in total.`);
+
+  for (const failure of report.failures)
+    console.log(
+      kleur.yellow(
+        `  ! ${failure.source} contributed nothing: ${failure.error}`,
+      ),
+    );
 
   if (!flags.apply) {
-    console.log(kleur.dim("  (dry-run — pass --apply to write.)\n"));
+    console.log(kleur.dim("\n  Rows this would write:\n"));
+    for (const line of reportLines(report.seeds)) console.log(`  ${line}`);
+    console.log(
+      kleur.dim(
+        `\n  ${report.seeds.length} rows (dry-run — pass --apply to write.)\n`,
+      ),
+    );
     return;
   }
 
-  const result = await syncPriceBook({
-    effectiveFrom: flags.effectiveFrom,
-    seeds,
-  });
   console.log(
     kleur.bold().cyan("\n══ Done ══\n") +
-      `  ${result.written} rows written, ${result.unchanged} unchanged.\n`,
+      `  ${report.written} rows written, ${report.unchanged} unchanged.\n`,
   );
 }
 

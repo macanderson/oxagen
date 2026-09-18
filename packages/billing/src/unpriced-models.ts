@@ -21,7 +21,8 @@
  * ./price-book.ts; this module is the diff between them, so the tests can
  * exercise it without either store.
  */
-import { resolvePriceEntry, type PriceBook } from "./price-book";
+import { loadPriceBook, resolvePriceEntry, type PriceBook } from "./price-book";
+import { readObservedModels } from "@oxagen/telemetry";
 import type { PriceTokenClass } from "@oxagen/database/schema";
 
 /** One model seen in an organization's frames, as the frame stores report it. */
@@ -95,5 +96,50 @@ export function findUnpricedModels(args: {
     if (a.fullyUnpriced !== b.fullyUnpriced) return a.fullyUnpriced ? -1 : 1;
     if (a.tokens !== b.tokens) return b.tokens - a.tokens;
     return a.model.localeCompare(b.model);
+  });
+}
+
+// ── Store ─────────────────────────────────────────────────────────────────────
+
+/**
+ * The models this organization has run since `since` that the book cannot
+ * fully price at `at`, worst first.
+ *
+ * Reads the book through the system connection with an explicit org
+ * predicate, the same way {@link loadPriceBook}'s other callers do: this is a
+ * derived read over the list rows plus the organization's own, not a read of
+ * a tenant's rows, and it must answer the same way whether or not a tenant
+ * scope happens to be open.
+ *
+ * The frame read is a ClickHouse read that throws on a degraded store rather
+ * than answering off half the frames — a model missing from the observation
+ * would read as a model nobody needs a price for.
+ */
+export async function readUnpricedModels(args: {
+  orgId: string;
+  workspaceId?: string;
+  since: Date;
+  at: Date;
+}): Promise<UnpricedModel[]> {
+  const [book, observed] = await Promise.all([
+    loadPriceBook({ orgId: args.orgId }),
+    readObservedModels({
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      since: args.since,
+    }),
+  ]);
+  return findUnpricedModels({
+    observed: observed.map((row) => ({
+      model: row.model,
+      provider: row.provider,
+      calls: row.calls,
+      tokens: row.tokens,
+      firstSeen: new Date(row.firstSeen),
+      lastSeen: new Date(row.lastSeen),
+    })),
+    book,
+    orgId: args.orgId,
+    at: args.at,
   });
 }

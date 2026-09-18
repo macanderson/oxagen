@@ -170,9 +170,15 @@ const openRouterSchema = z.object({
   ),
 });
 
-/** A catalog's price string → USD per 1M, or null when it is absent, unparseable or zero-as-unknown. */
+/**
+ * A catalog's price string → USD per 1M, or null when the catalog says
+ * nothing usable. An empty string is *absent*, not free: `Number("")` is 0,
+ * so parsing it as a number would publish a zero price for a model whose rate
+ * the catalog simply did not state, which is the one thing this module exists
+ * to prevent.
+ */
 function perTokenToPerMillion(value: string | undefined): number | null {
-  if (value === undefined) return null;
+  if (value === undefined || value.trim() === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return null;
   return n * 1_000_000;
@@ -388,6 +394,19 @@ export function mergePublishedPrices(
 ): MergedPrices {
   const byModel = new Map<string, PublishedModelPrice>();
   const provenance: PriceProvenance = new Map();
+  // Every name a winning price has claimed — its own id and its aliases.
+  // Claiming the aliases too is what makes an override actually bind.
+  //
+  // A model reaches billing under two ids: the bare family (`claude-sonnet-5`)
+  // and the gateway form (`anthropic/claude-sonnet-5`), and the in-code card
+  // carries BOTH as separate keys. Keyed on the model id alone, an operator
+  // who overrides `claude-sonnet-5` would win that row while the card still
+  // wrote `anthropic/claude-sonnet-5` at list price — and `resolvePriceEntry`
+  // matches a gateway-form id against the longer `anthropic/…` row before it
+  // falls back to the bare family, so every gateway call would quietly bill at
+  // list price and the negotiated rate would apply to nothing. One name per
+  // model, and the row that wins carries the aliases that serve the other form.
+  const claimed = new Set<string>();
   const counts: Record<PriceSourceId, number> = {
     operator_override: 0,
     in_code_card: 0,
@@ -396,7 +415,9 @@ export function mergePublishedPrices(
   };
   for (const group of groups) {
     for (const price of group) {
-      if (byModel.has(price.model)) continue;
+      const names = [price.model, ...price.aliases];
+      if (names.some((n) => claimed.has(n))) continue;
+      for (const name of names) claimed.add(name);
       byModel.set(price.model, price);
       provenance.set(price.model, price.source);
       counts[price.source] += 1;

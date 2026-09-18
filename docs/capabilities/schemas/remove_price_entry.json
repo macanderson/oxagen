@@ -1,0 +1,203 @@
+{
+  "name": "remove_price_entry",
+  "domain": "cost",
+  "description": "End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again. The row is closed, not deleted: a run priced before the instant still names the entry it was priced with. Owner / Admin / Billing only.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "model": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "tokenClass": {
+        "type": "string",
+        "enum": [
+          "input_uncached",
+          "cache_read",
+          "cache_write_5m",
+          "cache_write_1h",
+          "output",
+          "reasoning",
+          "server_tool_request",
+          "embedding_input",
+          "rerank",
+          "image",
+          "video_second"
+        ]
+      },
+      "region": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "at": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider",
+      "model",
+      "tokenClass"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "at": {
+        "type": "string"
+      },
+      "closed": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "orgId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "modelAliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "region": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tokenClass": {
+                "type": "string",
+                "enum": [
+                  "input_uncached",
+                  "cache_read",
+                  "cache_write_5m",
+                  "cache_write_1h",
+                  "output",
+                  "reasoning",
+                  "server_tool_request",
+                  "embedding_input",
+                  "rerank",
+                  "image",
+                  "video_second"
+                ]
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "token",
+                  "request",
+                  "image",
+                  "second"
+                ]
+              },
+              "currency": {
+                "type": "string"
+              },
+              "microsPerMillion": {
+                "type": "string"
+              },
+              "effectiveFrom": {
+                "type": "string"
+              },
+              "effectiveTo": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "negotiated",
+                  "override"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "provider",
+              "model",
+              "modelAliases",
+              "region",
+              "tokenClass",
+              "unit",
+              "currency",
+              "microsPerMillion",
+              "effectiveFrom",
+              "effectiveTo",
+              "source"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "at",
+      "closed"
+    ],
+    "additionalProperties": false
+  }
+}

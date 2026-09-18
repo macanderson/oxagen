@@ -48,6 +48,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "get_auto_eligibility",
   "update_workspace_settings",
   "set_spend_budget",
+  "set_price_entry",
+  "remove_price_entry",
   "append_record",
   "propose_record",
   "dismiss_proposal",

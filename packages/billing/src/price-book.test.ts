@@ -1,11 +1,45 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// The store half of this file exercises real statements against an in-memory
+// `cost.price_entries` (test-utils/price-book-fake-tx.ts), which evaluates the
+// conditions the mocked `eq`/`and`/`or`/`isNull` build and interprets the raw
+// upsert. `sql` stays real: the INSERT's casts and its ON CONFLICT arbiter are
+// what the fake reads, and a mocked template would prove nothing about them.
+const store = vi.hoisted(() => ({ tx: null as unknown }));
+
+vi.mock("drizzle-orm", async (importOriginal) => {
+  const real = await importOriginal<typeof import("drizzle-orm")>();
+  const { priceConditionMocks } = await import(
+    "./test-utils/price-book-conditions"
+  );
+  return { ...real, ...priceConditionMocks };
+});
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const dbMock = {
+    ...real,
+    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(store.tx),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => fn(store.tx),
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
+
 import {
+  closeNegotiatedPriceEntry,
   priceEntriesFromRateCards,
   resolvePriceEntry,
+  setNegotiatedPriceEntry,
   usdPerMillionToMicros,
   usdPerUnitToMicrosPerMillion,
   type PriceEntry,
 } from "./price-book";
+import {
+  makeFakePriceStore,
+  makeFakePriceTx,
+  priceRow,
+  type FakePriceStore,
+} from "./test-utils/price-book-fake-tx";
 import {
   IMAGE_RATE_CARD,
   PROVIDER_RATE_CARD,
@@ -175,5 +209,228 @@ describe("resolvePriceEntry", () => {
         at,
       }),
     ).toBe(null);
+  });
+});
+
+// ── The write path ───────────────────────────────────────────────────────────
+//
+// `setNegotiatedPriceEntry` / `closeNegotiatedPriceEntry` run against the
+// in-memory `cost.price_entries` above. What they are proving is the
+// effective-dating rule the whole table exists for: a correction is a new row,
+// never an edit to a row a run has already been priced against.
+
+const SET = {
+  orgId: ORG,
+  provider: "anthropic",
+  model: "claude-sonnet-5",
+  tokenClass: "input_uncached",
+} as const;
+
+const T1 = new Date("2026-09-10T00:00:00.000Z");
+const T2 = new Date("2026-10-01T00:00:00.000Z");
+
+describe("the negotiated write path", () => {
+  let fake: FakePriceStore;
+
+  beforeEach(() => {
+    fake = makeFakePriceStore();
+    store.tx = makeFakePriceTx(fake);
+  });
+
+  /** Every stored row as the resolver reads it. */
+  const book = (): PriceEntry[] =>
+    fake.rows.map((r) => ({
+      id: r.id as string,
+      orgId: r.orgId as string | null,
+      provider: r.provider as string,
+      model: r.model as string,
+      modelAliases: r.modelAliases as string[],
+      region: r.region as string | null,
+      tokenClass: r.tokenClass as PriceEntry["tokenClass"],
+      unit: r.unit as PriceEntry["unit"],
+      currency: r.currency as string,
+      microsPerMillion: r.microsPerMillion as bigint,
+      effectiveFrom: r.effectiveFrom as Date,
+      effectiveTo: r.effectiveTo as Date | null,
+      source: r.source as PriceEntry["source"],
+    }));
+
+  const priceAt = (at: Date) =>
+    resolvePriceEntry(book(), {
+      orgId: ORG,
+      modelId: "claude-sonnet-5",
+      tokenClass: "input_uncached",
+      at,
+    });
+
+  it("writes a negotiated row that wins over the list row for the same model and class", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+
+    const written = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: usdPerMillionToMicros(2.4),
+      effectiveFrom: T1,
+    });
+
+    // The table's own check is `(source = 'list') = (org_id IS NULL)`: a
+    // negotiated row with a null org is refused outright, so the org id and
+    // the source travel together or not at all.
+    expect(written.entry).toMatchObject({
+      orgId: ORG,
+      source: "negotiated",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_400_000n,
+    });
+    expect(written.closed).toBeNull();
+    expect(priceAt(T1)?.microsPerMillion).toBe(2_400_000n);
+    // The list row is untouched — another organization still reads 3.00.
+    expect(
+      resolvePriceEntry(book(), {
+        orgId: "00000000-0000-4000-8000-0000000000ff",
+        modelId: "claude-sonnet-5",
+        tokenClass: "input_uncached",
+        at: T1,
+      })?.microsPerMillion,
+    ).toBe(3_000_000n);
+  });
+
+  it("is idempotent on the row key, and a re-set at the same instant corrects in place", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    expect(fake.rows).toHaveLength(1);
+
+    // Same key, corrected before it shipped: the row is updated, not doubled.
+    const again = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T1,
+    });
+    expect(fake.rows).toHaveLength(1);
+    expect(again.entry.microsPerMillion).toBe(2_000_000n);
+    expect(again.closed).toBeNull();
+  });
+
+  it("closes the prior row at the new instant instead of mutating its price", async () => {
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const second = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: T2,
+    });
+
+    expect(fake.rows).toHaveLength(2);
+    expect(second.closed?.id).toBe(first.entry.id);
+
+    // The shipped row is still readable, still at the price it charged, now
+    // with a window that ends where the new one begins — which is the whole
+    // point: a run priced in September keeps the entry it was priced with.
+    const shipped = fake.rows.find((r) => r.id === first.entry.id)!;
+    expect(shipped.microsPerMillion).toBe(2_400_000n);
+    expect(shipped.effectiveTo).toEqual(T2);
+
+    expect(priceAt(new Date("2026-09-20T00:00:00.000Z"))?.id).toBe(
+      first.entry.id,
+    );
+    expect(priceAt(T2)?.id).toBe(second.entry.id);
+  });
+
+  it("refuses a backdated write under an open row", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T2,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 1_000_000n,
+        effectiveFrom: T1,
+      }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 1_000_000n,
+        effectiveFrom: T1,
+      }),
+    ).rejects.toThrow(/must not start earlier/);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.microsPerMillion).toBe(2_400_000n);
+  });
+
+  it("refuses to reopen a row it has already ended at that instant", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+
+    // The upsert clears effective_to, so re-setting the same instant would
+    // silently un-end the rate over a window that has already been billed.
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        microsPerMillion: 2_400_000n,
+        effectiveFrom: T1,
+      }),
+    ).rejects.toThrow(/later effectiveFrom/);
+    expect(fake.rows[0]!.effectiveTo).toEqual(T2);
+  });
+
+  it("ends a negotiated rate so the organization falls back to the list price", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+
+    const closed = await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+    expect(closed?.effectiveTo).toEqual(T2);
+    // Closed, not deleted: the row and its price are still there.
+    expect(fake.rows).toHaveLength(2);
+    expect(
+      priceAt(new Date("2026-09-20T00:00:00.000Z"))?.microsPerMillion,
+    ).toBe(2_400_000n);
+    expect(priceAt(T2)?.microsPerMillion).toBe(3_000_000n);
+    expect(priceAt(T2)?.source).toBe("list");
+
+    // Re-ending what is already ended is a no-op, so a retry is safe.
+    expect(await closeNegotiatedPriceEntry({ ...SET, at: T2 })).toBeNull();
+  });
+
+  it("refuses to touch the list row", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+
+    await expect(closeNegotiatedPriceEntry({ ...SET, at: T2 })).rejects.toThrow(
+      /not an organization's to change/,
+    );
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+    expect(fake.rows[0]!.source).toBe("list");
+  });
+
+  it("refuses to end a rate at or before it starts", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T2,
+    });
+    await expect(closeNegotiatedPriceEntry({ ...SET, at: T2 })).rejects.toThrow(
+      /cannot end at or before it starts/,
+    );
   });
 });
