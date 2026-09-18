@@ -36,6 +36,7 @@ import {
   diffTrees,
   EMPTY_DIFF,
   type KillPoint,
+  RIG_GATEWAY_PORT,
   RigKill,
   seedHome,
   snapshotTree,
@@ -247,6 +248,84 @@ describe("install rig: macOS, every harness", () => {
     expect(parsed).toEqual({ ...original, model: "sonnet" });
     // The user's mode comes back even when their bytes cannot.
     expect(lstatSync(rig.deps.paths.claudeSettings).mode & 0o777).toBe(0o644);
+  });
+});
+
+describe("install rig: the gateway's model base URLs", () => {
+  const CLAUDE_URL = `http://127.0.0.1:${RIG_GATEWAY_PORT}/anthropic`;
+  const CODEX_URL = `http://127.0.0.1:${RIG_GATEWAY_PORT}/backend-api/codex`;
+
+  it("are written once the model proxy is listening, and come back out byte for byte", async () => {
+    const seed = seedHome();
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    const settings = rig.deps.readSettings() as { env: Record<string, string> };
+    expect(settings.env["ANTHROPIC_BASE_URL"]).toBe(CLAUDE_URL);
+    expect(text(seed.home, ".codex", "config.toml")).toContain(CODEX_URL);
+    // The user's own Codex config is otherwise as they wrote it.
+    expect(text(seed.home, ".codex", "config.toml")).toContain(
+      "# my codex config",
+    );
+    // Again: nothing moves.
+    const enrolled = snapshotTree(seed.home);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(enrolled, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+    const report = await status({ json: true }, rig.deps);
+    expect(report.modelBaseUrls?.map((h) => [h.harness, h.ours])).toEqual([
+      ["claude-code", true],
+      ["codex", true],
+    ]);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("are never written while the proxy is not listening: a base URL on a dead port stops the agent", async () => {
+    const seed = seedHome();
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed, { gatewayListening: false });
+    const result = await enroll({ harnesses: ALL }, rig.deps);
+    expect(result.ok).toBe(true);
+    expect(result.warnings.join("\n")).toMatch(/model proxy is not listening/);
+    expect(text(seed.home, ".claude", "settings.json")).not.toContain(
+      "ANTHROPIC_BASE_URL",
+    );
+    expect(text(seed.home, ".codex", "config.toml")).not.toContain(
+      "openai_base_url",
+    );
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("are restored before the daemon is stopped", async () => {
+    const seed = seedHome();
+    let urlPresentAtBootout: boolean | undefined;
+    const rig = buildRig(seed, {
+      onExec: (command, args) => {
+        if (command === "launchctl" && args[0] === "bootout")
+          urlPresentAtBootout = text(
+            seed.home,
+            ".claude",
+            "settings.json",
+          ).includes("ANTHROPIC_BASE_URL");
+      },
+    });
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    urlPresentAtBootout = undefined;
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(urlPresentAtBootout).toBe(false);
+  });
+
+  it("survive a reassign-style strip and still restore the first original", async () => {
+    const seed = seedHome({ symlinkedClaudeSettings: true });
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect((await enroll({ harnesses: ALL, force: true }, rig.deps)).ok).toBe(
+      true,
+    );
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 });
 

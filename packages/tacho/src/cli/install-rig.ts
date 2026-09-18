@@ -341,7 +341,14 @@ export interface RigOptions {
    * "nothing after this line touched the disk".
    */
   killAt?: KillPoint;
+  /** Whether the daemon's model proxy reports itself listening (default true). */
+  gatewayListening?: boolean;
+  /** Called with every exec before it runs, to observe ordering. */
+  onExec?: (command: string, args: string[]) => void;
 }
+
+/** The port the rig's fake model proxy reports. */
+export const RIG_GATEWAY_PORT = 47124;
 
 /**
  * The real `defaultCliDeps` — real path resolution, real file writers, the
@@ -368,6 +375,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
   };
   const exec: Exec = (command, args) => {
     pulse(`${command} ${args[0] ?? ""}`.trim());
+    options.onExec?.(command, args);
     execs.push({ command, args });
     if (command === "launchctl") {
       if (args[0] === "bootstrap") loaded = true;
@@ -444,7 +452,17 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       binDir: bin,
     },
     daemonGet: async (path) =>
-      loaded && path === "/health" ? { ok: true } : undefined,
+      loaded && path === "/health"
+        ? {
+            ok: true,
+            gateway: {
+              listening: options.gatewayListening !== false,
+              port: RIG_GATEWAY_PORT,
+              routes: ["/anthropic", "/backend-api/codex"],
+              calls_observed: 0,
+            },
+          }
+        : undefined,
     findFreePort: async () => 47123,
     randomToken: () => "local-token-0123456789abcdef",
     sleep: async () => undefined,

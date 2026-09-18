@@ -5,7 +5,11 @@
  */
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
-import { readHostFileLenient } from "../host/host-file";
+import { modelProxyPortFor, readHostFileLenient } from "../host/host-file";
+import type {
+  ModelBaseUrlHarness,
+  ModelBaseUrlHarnessState,
+} from "../host/model-base-url";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
@@ -24,6 +28,24 @@ export interface StatusReport {
   retired?: boolean;
   /** Files that could not be read, each with why. */
   problems?: string[];
+  /**
+   * The daemon's loopback model proxy, as the daemon reports it (ADR-094).
+   * Absent when the daemon is not answering or predates the proxy.
+   */
+  gateway?: {
+    listening: boolean;
+    port: number;
+    routes: string[];
+    calls_observed: number;
+  };
+  /** Whether each harness's model base URL points at the proxy. */
+  modelBaseUrls?: ModelBaseUrlHarnessState[];
+  /**
+   * The tier each harness's runs earned since the collector started, from
+   * what was routed (ADR-095): `observe`, `harness` or `gateway`. A harness
+   * with no run yet has no entry. A base URL in a file is intent, not a tier.
+   */
+  tiers?: Record<string, "observe" | "harness" | "gateway">;
   host?: {
     host_enrollment_id: string;
     agent_key: string;
@@ -73,6 +95,55 @@ export interface StatusReport {
    */
   claudeDesktop?: ReturnType<typeof claudeDesktopPresence>;
   wal?: { sessions: number; unshipped: number; oldest_unshipped_at?: string };
+}
+
+const TIER_RANK = { observe: 0, harness: 1, gateway: 2 } as const;
+type ObservedTier = keyof typeof TIER_RANK;
+
+/** The daemon's `gateway` block, when it reports a well-formed one. */
+export function gatewayOf(
+  daemon: Record<string, unknown> | null,
+): StatusReport["gateway"] {
+  const raw = daemon?.["gateway"];
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const g = raw as Record<string, unknown>;
+  if (typeof g["listening"] !== "boolean" || typeof g["port"] !== "number")
+    return undefined;
+  return {
+    listening: g["listening"],
+    port: g["port"],
+    routes: Array.isArray(g["routes"])
+      ? g["routes"].filter((r): r is string => typeof r === "string")
+      : [],
+    calls_observed:
+      typeof g["calls_observed"] === "number" ? g["calls_observed"] : 0,
+  };
+}
+
+/**
+ * The highest tier each harness's sessions earned this boot, from the
+ * daemon's own per-session `enforcement_tier`, which it computes from what
+ * was routed. Nothing here is inferred from what is installed.
+ */
+export function observedTiers(
+  daemon: Record<string, unknown> | null,
+): Record<string, ObservedTier> {
+  const out: Record<string, ObservedTier> = {};
+  const sessions = daemon?.["sessions"];
+  if (!Array.isArray(sessions)) return out;
+  for (const session of sessions as Array<Record<string, unknown>>) {
+    const harness = session["harness"];
+    const tier = session["enforcement_tier"];
+    if (typeof harness !== "string" || typeof tier !== "string") continue;
+    if (!(tier in TIER_RANK)) continue;
+    const current = out[harness];
+    if (
+      current === undefined ||
+      TIER_RANK[tier as ObservedTier] > TIER_RANK[current]
+    )
+      out[harness] = tier as ObservedTier;
+  }
+  return out;
 }
 
 export async function status(
@@ -133,6 +204,26 @@ export async function status(
       )
     : undefined;
   const walStats = new Wal(deps.paths.wal).stats();
+  const gateway = gatewayOf(daemon);
+  const routedHarnesses = host.harnesses.filter(
+    (harness): harness is ModelBaseUrlHarness =>
+      harness === "claude-code" || harness === "codex",
+  );
+  let modelBaseUrls: ModelBaseUrlHarnessState[] | undefined;
+  if (deps.modelBaseUrls !== undefined && routedHarnesses.length > 0) {
+    try {
+      modelBaseUrls = (
+        await deps.modelBaseUrls.read({
+          home: deps.home,
+          port: gateway?.port ?? modelProxyPortFor(host),
+          harnesses: routedHarnesses,
+        })
+      ).harnesses;
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  const tiers = observedTiers(daemon);
   // `revoked_at` means unenrolled on this machine: the hooks and the service
   // are gone and only the server-side revoke is pending. Reporting that as
   // enrolled (exit 0) disagreed with `tacho detect` about the same file and
@@ -142,6 +233,9 @@ export async function status(
     enrolled: !retired,
     ...(retired ? { retired: true } : {}),
     ...(problems.length > 0 ? { problems } : {}),
+    ...(gateway !== undefined ? { gateway } : {}),
+    ...(modelBaseUrls !== undefined ? { modelBaseUrls } : {}),
+    ...(Object.keys(tiers).length > 0 ? { tiers } : {}),
     host: {
       host_enrollment_id: host.host_enrollment_id,
       agent_key: host.agent_key,
@@ -198,6 +292,20 @@ export async function status(
       `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`tacho unenroll\` again while signed in, or revoke it from the fleet page.`,
     );
   for (const problem of problems) deps.out(`Unreadable  ${problem}`);
+  if (gateway !== undefined)
+    deps.out(
+      `Gateway     model proxy ${gateway.listening ? `listening on 127.0.0.1:${gateway.port}` : "NOT LISTENING"}, ${gateway.calls_observed} model call${gateway.calls_observed === 1 ? "" : "s"} observed since the collector started`,
+    );
+  for (const entry of modelBaseUrls ?? [])
+    deps.out(
+      `            ${entry.harness}: ${entry.ours ? (entry.shadowedBy !== undefined ? `base URL set, but ${entry.shadowedBy.file} overrides it, so calls are not routed` : "model calls are pointed at the proxy") : "model calls are not pointed at the proxy (run `tacho enroll` to set the base URL)"}`,
+    );
+  // The tier is what runs earned, not what is installed (ADR-095). `contained`
+  // is the fourth word and is not available yet.
+  for (const harness of host.harnesses)
+    deps.out(
+      `Tier        ${harness}: ${tiers[harness] ?? "no run since the collector started"}`,
+    );
   deps.out(
     `Enrollment  ${h.agent_key} (${h.host_enrollment_id}) in ${h.organization_id}/${h.workspace_id}`,
   );

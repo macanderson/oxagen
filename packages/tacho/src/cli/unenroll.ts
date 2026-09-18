@@ -23,9 +23,11 @@ import { stripCodexHooks } from "../host/codex-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
 import {
   type HostFile,
+  modelProxyPortFor,
   readHostFileLenient,
   writeHostFile,
 } from "../host/host-file";
+import type { ModelBaseUrlHarness } from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
@@ -139,6 +141,44 @@ export async function revokeAndMark(
  * created after enrollment makes Stella ignore the `settings.json` Tacho
  * wrote to, without removing the hooks from it.
  */
+/** The harnesses the model base URL contract covers. */
+export const MODEL_BASE_URL_HARNESSES: ModelBaseUrlHarness[] = [
+  "claude-code",
+  "codex",
+];
+
+/**
+ * Take the model base URLs back out of every harness that can carry one.
+ * Always both harnesses, whatever host.json lists, for the reason
+ * `stripEnrollmentHooks` strips every file: a lost host.json must not leave a
+ * harness pointed at a port nothing listens on, which stops that agent
+ * making any model call at all. Returns the files changed and the failures.
+ */
+export async function restoreModelBaseUrlsFor(
+  host: Pick<HostFile, "port"> | undefined,
+  deps: CliDeps,
+): Promise<{ restored: string[]; failed: string[] }> {
+  const restored: string[] = [];
+  const failed: string[] = [];
+  if (deps.modelBaseUrls === undefined) return { restored, failed };
+  for (const harness of MODEL_BASE_URL_HARNESSES) {
+    try {
+      const state = await deps.modelBaseUrls.restore({
+        home: deps.home,
+        // Restore recognises the proxy's URL on any port; the port only
+        // labels the report.
+        port: host !== undefined ? modelProxyPortFor(host) : 1024,
+        harnesses: [harness],
+      });
+      for (const entry of state.harnesses)
+        if (entry.changed) restored.push(entry.file);
+    } catch (error) {
+      failed.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return { restored, failed };
+}
+
 export function stripEnrollmentHooks(
   host:
     | Pick<
@@ -147,6 +187,14 @@ export function stripEnrollmentHooks(
       >
     | undefined,
   deps: CliDeps,
+  /**
+   * Also give the files back (`settleHarnessFiles`). Only `unenroll` does:
+   * `reassign` and a re-enroll strip and then merge again, and settling in
+   * between would drop the receipt of the user's original while the file
+   * still carries other Oxagen values, so the final unenroll could no longer
+   * restore it byte for byte.
+   */
+  settle = false,
 ): {
   settingsChanged: boolean;
   codexChanged: boolean;
@@ -240,7 +288,7 @@ export function stripEnrollmentHooks(
   // back: the user's own bytes, mode and symlink, and nothing where enroll
   // had to create something (`host/harness-file.ts`). Skipped while any file
   // failed, so its receipt and its backup survive for the retry.
-  if (failed.length === 0) {
+  if (settle && failed.length === 0) {
     try {
       deps.settleHarnessFiles?.();
     } catch (error) {
@@ -315,8 +363,26 @@ async function unenrollLocked(
     incomplete = true;
   }
 
+  // First, and before the daemon is stopped below: a base URL that names a
+  // port nothing listens on stops the agent making any model call.
+  const baseUrls = await restoreModelBaseUrlsFor(host, deps);
+  for (const file of baseUrls.restored)
+    deps.out(`      model base URL taken out of ${file}`);
+  for (const failure of baseUrls.failed) {
+    incomplete = true;
+    warnings.push(
+      `could not take the model base URL out: ${failure}. While it is there the agent sends its model calls to a port nothing listens on. Remove it by hand, or fix the file and run \`tacho unenroll\` again`,
+    );
+  }
+
   deps.out(`[1/4] Removing Tacho hooks from ${deps.paths.claudeSettings}`);
-  const stripped = stripEnrollmentHooks(host ?? read.salvaged, deps);
+  // Not settled while a base URL is still in a file: the receipt is what the
+  // retry needs to put the original back.
+  const stripped = stripEnrollmentHooks(
+    host ?? read.salvaged,
+    deps,
+    baseUrls.failed.length === 0,
+  );
   if (stripped.settingsChanged) {
     deps.out("      removed; every non-Tacho entry kept");
   } else {

@@ -2,7 +2,8 @@
  * `tacho enroll` (spec section 5.1): the one command that puts a machine
  * under Oxagen control. Each step is idempotent and printed as it runs.
  */
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
+import { join } from "node:path";
 import { verifyBundle } from "../host/bundle";
 import {
   CLAUDE_DESKTOP_RESTART_NOTE,
@@ -18,6 +19,7 @@ import { ControlError } from "../host/control-client";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
+import type { ModelBaseUrlHarness } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
@@ -653,13 +655,20 @@ export async function enrollLocked(
       wrapper_version: deps.wrapperVersion,
       hook_command: deps.runtime.hookCommand,
       daemon_command: deps.runtime.daemonCommand,
-      // Empty, not carried: the previous enrollment's hooks are stripped
-      // just below, and that strip is what puts the displaced values back
-      // into the user's files. Carrying them as well recorded a value that
-      // was no longer displaced, and a later unenroll "restored" it over
-      // whatever the user had set since.
-      displaced_env: {},
-      displaced_mcp_servers: {},
+      // Not carried from a different enrollment: that enrollment's hooks are
+      // stripped just below, and the strip is what puts the displaced values
+      // back into the user's files. Carrying them as well recorded a value
+      // that was no longer displaced, and a later unenroll "restored" it over
+      // whatever the user had set since. The same enrollment id answered
+      // again means nothing is stripped, so what it displaced still is.
+      displaced_env:
+        existing?.host_enrollment_id === response.hostEnrollmentId
+          ? existing.displaced_env
+          : {},
+      displaced_mcp_servers:
+        existing?.host_enrollment_id === response.hostEnrollmentId
+          ? existing.displaced_mcp_servers
+          : {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       enrolled_at: now,
       expires_at: response.expiresAt,
@@ -920,12 +929,81 @@ export async function enrollLocked(
   }
   if (options.service !== false) {
     let healthy = false;
+    let gateway: { listening?: boolean; port?: number } | undefined;
     for (let attempt = 0; attempt < 20 && !healthy; attempt += 1) {
       const health = (await deps.daemonGet("/health")) as
-        | { ok?: boolean }
+        | { ok?: boolean; gateway?: { listening?: boolean; port?: number } }
         | undefined;
       healthy = health?.ok === true;
+      gateway = health?.gateway;
       if (!healthy) await deps.sleep(250);
+    }
+    // The gateway (ADR-094): point Claude Code and Codex at the daemon's
+    // loopback model proxy. Only here, after the daemon has said the proxy
+    // is listening and on which port, and never before: a base URL that
+    // names a dead port stops the agent making any model call, which is a
+    // worse machine than one whose model calls are not routed.
+    const routed = harnesses.filter(
+      (harness): harness is ModelBaseUrlHarness =>
+        harness === "claude-code" || harness === "codex",
+    );
+    if (
+      deps.modelBaseUrls !== undefined &&
+      options.printManaged !== true &&
+      routed.length > 0
+    ) {
+      if (
+        healthy &&
+        gateway?.listening === true &&
+        typeof gateway.port === "number"
+      ) {
+        // The base URL writer replaces the file with a rename, which turns a
+        // symlink into a regular file. A settings file linked into a dotfiles
+        // checkout is left alone until that writer follows links, and the
+        // operator is told the calls are not routed.
+        const writable = routed.filter((harness) => {
+          if (unhooked.includes(harness)) return false;
+          const file =
+            harness === "claude-code"
+              ? join(deps.home, ".claude", "settings.json")
+              : join(deps.home, ".codex", "config.toml");
+          let linked = false;
+          try {
+            linked = lstatSync(file).isSymbolicLink();
+          } catch {
+            linked = false;
+          }
+          if (linked)
+            warnings.push(
+              `${file} is a symbolic link, so the model base URL was not written to it and ${TACHO_HARNESS_LABELS[harness]} model calls are not routed through Oxagen`,
+            );
+          return !linked;
+        });
+        try {
+          const state = await deps.modelBaseUrls.apply({
+            home: deps.home,
+            port: gateway.port,
+            harnesses: writable,
+          });
+          for (const entry of state.harnesses) {
+            deps.out(
+              `      ${TACHO_HARNESS_LABELS[entry.harness]} model calls go through 127.0.0.1:${gateway.port} (${entry.key} in ${entry.file})`,
+            );
+            if (entry.shadowedBy !== undefined)
+              warnings.push(
+                `${entry.shadowedBy.file} also sets ${entry.key}, and managed settings win, so ${TACHO_HARNESS_LABELS[entry.harness]} model calls are not routed through Oxagen`,
+              );
+          }
+        } catch (error) {
+          warnings.push(
+            `model calls are not routed through Oxagen: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      } else {
+        warnings.push(
+          "the model proxy is not listening, so no model base URL was written and model calls are not routed through Oxagen. Run `tacho enroll` again once tachod is up",
+        );
+      }
     }
     if (healthy)
       deps.out(

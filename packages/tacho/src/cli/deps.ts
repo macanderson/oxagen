@@ -22,6 +22,13 @@ import { readJsonFileIfExists } from "../host/fs";
 import { HarnessFiles, type SettleOutcome } from "../host/harness-file";
 import { readHostFile } from "../host/host-file";
 import {
+  applyModelBaseUrls,
+  type ModelBaseUrlOptions,
+  type ModelBaseUrlState,
+  readModelBaseUrlState,
+  restoreModelBaseUrls,
+} from "../host/model-base-url";
+import {
   readStellaHooksFile,
   type StellaHooksFile,
   type StellaHooksFormat,
@@ -318,6 +325,17 @@ export interface CliDeps {
    * supply it.
    */
   settleHarnessFiles?: () => SettleOutcome[];
+  /**
+   * The model base URL contract (`host/model-base-url.ts`): point a harness
+   * at the daemon's loopback model proxy, take that back out, or report it.
+   * Optional so a test's in-memory ports need not supply it, in which case
+   * no base URL is ever written.
+   */
+  modelBaseUrls?: {
+    apply: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
+    restore: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
+    read: (options: ModelBaseUrlOptions) => Promise<ModelBaseUrlState>;
+  };
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   stella: () => HarnessFacts;
@@ -591,6 +609,11 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     },
     harnessWriteProblem: (path) => harnessFiles.writeProblem(path),
     settleHarnessFiles: () => harnessFiles.settle(),
+    modelBaseUrls: {
+      apply: (options) => applyModelBaseUrls(options),
+      restore: (options) => restoreModelBaseUrls(options),
+      read: (options) => readModelBaseUrlState(options),
+    },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
