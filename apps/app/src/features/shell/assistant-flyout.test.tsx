@@ -513,66 +513,84 @@ describe("AssistantFlyout", () => {
     ]);
   });
 
-  it("drops a reply that lands after the person has left the workspace it was asked in (negative)", async () => {
+  /** A turn the test resolves by hand, so it can still be in flight when the person moves. */
+  function heldTurn() {
     let settle: (turn: unknown) => void = () => undefined;
-    askAssistant.mockReturnValue(
+    askAssistant.mockReturnValueOnce(
       new Promise((resolve) => {
         settle = resolve;
       }),
     );
+    return (over: Record<string, unknown> = {}) => {
+      settle(turn(over));
+    };
+  }
+
+  /** Let a settled action's continuation run and its state updates commit. */
+  async function flush() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  // ADR-092: a turn the person walks away from is owned to completion. It used
+  // to be discarded, which threw away an answer the person had asked for and
+  // the budget already spent on it. Its reply goes to the thread of the
+  // workspace it was asked in, never to the one the person moved to.
+  it("keeps a reply that lands after the person left, in the workspace it was asked in", async () => {
+    const settle = heldTurn();
     const { user, renavigate } = await openFlyout();
     await ask(user, "what is live?");
     expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
 
     renavigate("/acme/payments");
-    settle(turn({ reply: "core-platform is live." }));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    settle({ reply: "core-platform is live." });
+    await flush();
 
-    expect(screen.queryByTestId("assistant-answer")).toBeNull();
+    // Payments is handed nothing, and its own composer is not held up by a
+    // turn that belongs to another workspace.
     expect(screen.queryByText("core-platform is live.")).toBeNull();
-    // …and the composer is not left waiting on a turn that will never show.
     expect(screen.queryByTestId("assistant-thinking")).toBeNull();
     expect(screen.getByTestId("assistant-composer")).not.toBeDisabled();
+
+    renavigate("/acme/core-platform");
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "core-platform is live.",
+    );
+    // The conversation survived the trip, not only its last line: a turn that
+    // resolves into a thread cleared on leaving would recreate it holding the
+    // answer alone, with the question that prompted it gone.
+    expect(screen.getByText("what is live?")).toBeTruthy();
   });
 
-  // "acme/core-platform" names a place; two visits to it are two occasions.
-  // A guard that compares the place lets a turn from the first visit land in
-  // the transcript the second visit just cleared, so the reply, the run link
-  // and the conversation id all belong to a conversation that is gone.
-  it("does not resurrect a turn from an earlier visit when the person goes away and comes back (negative)", async () => {
-    let settle: (turn: unknown) => void = () => undefined;
-    askAssistant.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+  // Away and back before the turn resolves. The old guard counted visits so a
+  // reply from the first could not land in the transcript the second had just
+  // cleared. Nothing is cleared now, so the reply belongs where it lands, and
+  // the conversation it opened is the one the next question continues.
+  it("keeps the turn from an earlier visit, and its conversation, when the person goes away and comes back", async () => {
+    const settle = heldTurn();
     const { user, renavigate } = await openFlyout();
     await ask(user, "what is live?");
 
     renavigate("/acme/payments");
     renavigate("/acme/core-platform");
-    settle(turn({ reply: "an answer from the first visit." }));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    settle({ reply: "an answer from the first visit." });
+    await flush();
 
-    expect(screen.queryByTestId("assistant-answer")).toBeNull();
-    expect(screen.queryByText("an answer from the first visit.")).toBeNull();
-    expect(screen.getByTestId("assistant-intro")).toBeTruthy();
-
-    // …and the conversation it would have opened is not carried either.
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "an answer from the first visit.",
+    );
+    expect(screen.getByText("what is live?")).toBeTruthy();
     askAssistant.mockResolvedValue(turn());
     await ask(user, "second");
     expect(askAssistant.mock.calls[1]?.[2]).toMatchObject({
-      conversationId: null,
+      conversationId: "6f1f5a8e-0000-4000-8000-00000000c0de",
     });
   });
 
-  // The guard above is a generation and nothing more, which is only sound
-  // because one generation holds at most one turn in flight. This is that
-  // premise: drop the `pending` gate and the conversation id has two writers.
+  // One thread holds at most one turn in flight, which is what makes a single
+  // writer of `conversationId` true. Drop the `pending` gate and a thread's
+  // conversation id has two.
   it("refuses a second question while a turn is in flight (negative)", async () => {
     askAssistant.mockReturnValue(new Promise(() => undefined));
     const { user } = await openFlyout();
@@ -584,62 +602,112 @@ describe("AssistantFlyout", () => {
     expect(askAssistant).toHaveBeenCalledTimes(1);
   });
 
-  // A workspace change clears `pending`, so a person who comes back can ask
-  // again before the first turn resolves. The newest owns the transcript; the
-  // older belongs to an earlier generation and is discarded.
-  it("lets the newest turn own the conversation when an older one is still in flight (negative)", async () => {
-    let settleFirst: (turn: unknown) => void = () => undefined;
-    askAssistant.mockReturnValueOnce(
-      new Promise((resolve) => {
-        settleFirst = resolve;
-      }),
-    );
+  // Leaving used to clear `pending`, so a person who came back could ask again
+  // while the first turn was still running, and two turns then raced for the
+  // one conversation id. Leaving no longer touches the thread, so the gate
+  // above holds across the round trip and the race has nothing to race.
+  it("still refuses a second question after leaving and coming back while the first is in flight (negative)", async () => {
+    const settle = heldTurn();
     const { user, renavigate } = await openFlyout();
     await ask(user, "first");
 
-    // Away and back: the transcript is cleared and the composer is live again.
     renavigate("/acme/payments");
     renavigate("/acme/core-platform");
-    askAssistant.mockResolvedValue(
-      turn({
-        conversationId: "6f1f5a8e-0000-4000-8000-00000000c0df",
-        reply: "the second answer.",
-      }),
-    );
-    await ask(user, "second");
-    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
-      "the second answer.",
-    );
 
-    settleFirst(turn({ reply: "the first answer." }));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
+    expect(screen.getByTestId("assistant-composer")).toBeDisabled();
+    await user.type(screen.getByTestId("assistant-composer"), "second");
+    await user.click(screen.getByTestId("assistant-send"));
+    expect(askAssistant).toHaveBeenCalledTimes(1);
 
-    expect(screen.queryByText("the first answer.")).toBeNull();
+    settle({ reply: "the first answer." });
+    await flush();
     expect(screen.getAllByTestId("assistant-answer")).toHaveLength(1);
-    await ask(user, "third");
-    expect(askAssistant.mock.calls[2]?.[2]).toMatchObject({
-      conversationId: "6f1f5a8e-0000-4000-8000-00000000c0df",
+    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
+      "the first answer.",
+    );
+  });
+
+  // Two workspaces are two conversations. A turn running in one does not stop
+  // the person asking something in another.
+  it("lets another workspace ask while this one's turn is in flight", async () => {
+    heldTurn();
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "first");
+
+    renavigate("/acme/payments");
+    askAssistant.mockResolvedValue(turn({ reply: "payments is quiet." }));
+    await ask(user, "and here?");
+
+    expect(askAssistant.mock.calls[1]).toEqual([
+      "acme",
+      "payments",
+      {
+        conversationId: null,
+        content: "and here?",
+        route: "fleet",
+        entityId: null,
+      },
+    ]);
+    expect(await screen.findByTestId("assistant-answer")).toHaveTextContent(
+      "payments is quiet.",
+    );
+  });
+
+  // A half-typed question belongs to the workspace it was typed in, the same
+  // way a half-typed message already survives closing the flyout.
+  it("keeps each workspace's half-typed question to itself", async () => {
+    const { user, renavigate } = await openFlyout();
+    await user.type(screen.getByTestId("assistant-composer"), "half a thought");
+
+    renavigate("/acme/payments");
+    expect(screen.getByTestId("assistant-composer")).toHaveValue("");
+
+    renavigate("/acme/core-platform");
+    expect(screen.getByTestId("assistant-composer")).toHaveValue(
+      "half a thought",
+    );
+  });
+
+  // The hazard the abandoned turn actually carried: governed writes parked and
+  // waiting on a person who has moved on. The notice waits in the turn's own
+  // thread, and the refresh runs wherever the person is standing, because the
+  // shell's waiting count spans the organization.
+  it("keeps the parked writes of a turn the person walked away from, and still refreshes the waiting count", async () => {
+    const settle = heldTurn();
+    const { user, renavigate } = await openFlyout();
+    await ask(user, "rotate the key");
+
+    renavigate("/acme/payments");
+    settle({
+      reply: "I have asked for approval to rotate it.",
+      parkedCards: [
+        {
+          approvalId: "apr_01",
+          capability: "rotate_api_key",
+          expiresAt: "2026-09-19T00:00:00.000Z",
+        },
+      ],
     });
+    await flush();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("assistant-parked")).toBeNull();
+
+    renavigate("/acme/core-platform");
+    expect(await screen.findByTestId("assistant-parked")).toBeTruthy();
+    expect(screen.getByText("rotate the key")).toBeTruthy();
   });
 
   // The window between two moments React does not make adjacent: the
-  // workspace-change render commits — the transcript is already gone from the
-  // screen — and React flushes that render's passive effects a task later. A
-  // turn that resolves in between reads whatever the request guard holds, so a
-  // guard carried by `useEffect` still names the workspace the person left,
-  // and the reply, the run and the conversation id land in the transcript the
-  // switch had just cleared. Reproducing it needs the real scheduler: `act`,
-  // which every other test here runs inside, flushes passive effects with the
-  // commit and closes the window by hand, so this one drives its own root.
-  it("drops a reply that resolves after the workspace-change render commits but before its effects run (negative)", async () => {
-    let settle: (turn: unknown) => void = () => undefined;
-    askAssistant.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+  // workspace-change render commits, and React flushes that render's passive
+  // effects a task later. The discarding guard this replaced could be read
+  // stale in that gap, which is why it had to be written during render. The
+  // ownership routing has no such gap to lose: whatever the timing, the reply
+  // goes to the thread it was asked in. This drives its own root, out of
+  // `act`, so the scheduler opens the window the way a browser does.
+  it("never hands a reply to the workspace the person moved to, even when it resolves between the switch and its effects (negative)", async () => {
+    const settle = heldTurn();
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
@@ -652,22 +720,26 @@ describe("AssistantFlyout", () => {
       await ask(user, "what is live?");
       expect(screen.getByTestId("assistant-thinking")).toBeTruthy();
 
-      // Out of `act`, so React schedules the passive effects the way a browser
-      // does rather than flushing them as part of the commit.
       IS_REACT_ACT_ENVIRONMENT = false;
       pathname.mockReturnValue("/acme/payments");
       root.render(tree());
       await tick();
-      // Committed: payments is on screen and core-platform's transcript is gone…
+      // Committed: payments is on screen, its own thread empty…
       expect(screen.queryByTestId("assistant-log")).toBeNull();
-      // …and this is the window, before the effect that used to be the only
-      // thing carrying the new generation into the request guard.
-      settle(turn({ reply: "core-platform is live." }));
+      // …and this is the window.
+      settle({ reply: "core-platform is live." });
       await tick();
       await tick();
 
       expect(screen.queryByTestId("assistant-answer")).toBeNull();
       expect(screen.queryByText("core-platform is live.")).toBeNull();
+
+      pathname.mockReturnValue("/acme/core-platform");
+      root.render(tree());
+      await tick();
+      expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
+        "core-platform is live.",
+      );
     } finally {
       IS_REACT_ACT_ENVIRONMENT = true;
       act(() => {

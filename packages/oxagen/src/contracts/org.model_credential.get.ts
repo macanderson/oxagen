@@ -21,7 +21,7 @@ export const orgModelCredentialGet = registerCapability({
     "Read whether the organisation has stored its own model-vendor API key, and if so which provider, its status, the last four characters of the key, and when it was last verified and last rotated. Never returns the key.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   agent: {
     requiresApproval: false,
@@ -34,6 +34,10 @@ export const orgModelCredentialGet = registerCapability({
   // Reading who pays for tokens is governance, not AI usage — it consumes no
   // credits.
   noBillingGate: true,
+  // A pure read. Declared so the app's `kernelRead` accepts it — without the
+  // flag it refuses with `contract_mutates`, and the settings page could not
+  // show an organisation which key it has.
+  mutates: false,
   input: z.object({}),
   output: modelCredentialViewSchema,
 });

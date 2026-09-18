@@ -283,10 +283,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
                   schema.principalRoleAssignments.principalId,
                   targetPrincipalRow.id,
                 ),
-                inArray(
-                  schema.principalRoleAssignments.roleId,
-                  ownerRoleIds,
-                ),
+                inArray(schema.principalRoleAssignments.roleId, ownerRoleIds),
                 isNull(schema.principalRoleAssignments.workspaceId),
                 isNull(schema.principalRoleAssignments.deletedAt),
               ),
@@ -318,10 +315,7 @@ export const orgMemberRoleChangeHandler: CapabilityHandler<
               .where(
                 and(
                   eq(schema.principalRoleAssignments.orgId, ctx.orgId),
-                  inArray(
-                    schema.principalRoleAssignments.roleId,
-                    ownerRoleIds,
-                  ),
+                  inArray(schema.principalRoleAssignments.roleId, ownerRoleIds),
                   isNull(schema.principalRoleAssignments.workspaceId),
                   isNull(schema.principalRoleAssignments.deletedAt),
                 ),

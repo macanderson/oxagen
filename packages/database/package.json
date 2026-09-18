@@ -13,7 +13,8 @@
     "./seed": "./src/seed.ts",
     "./tenant": "./src/tenant.ts",
     "./data-plane": "./src/data-plane-resolver.ts",
-    "./model-credential": "./src/model-credential-resolver.ts"
+    "./model-credential": "./src/model-credential-resolver.ts",
+    "./model-credential-shape": "./src/model-credential-shape.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

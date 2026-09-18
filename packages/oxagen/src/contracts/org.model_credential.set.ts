@@ -1,10 +1,32 @@
 import { z } from "zod";
+import {
+  assertPublicHttpUrl,
+  UnsafeOutboundUrlError,
+} from "@oxagen/config/public-url";
 import { registerCapability } from "../registry";
 import {
   modelCredentialApiKeySchema,
+  modelCredentialBaseUrlSchema,
+  modelCredentialModelMapSchema,
   modelCredentialProviderSchema,
   modelCredentialViewSchema,
+  requiresCustomerBaseUrl,
+  requiresModelMap,
 } from "./org.model_credential.shared";
+
+/**
+ * The BASE object of the input, exported separately because the registered
+ * `input` is a ZodEffects (superRefine) and therefore has no `.shape` — the
+ * same reason and the same shape as `orgModelCredentialVerifyInputObject`.
+ * The MCP tool builds its parameter schema from this; `invoke()` re-parses
+ * the full refined input, so the cross-field rules apply on every surface.
+ */
+export const orgModelCredentialSetInputObject = z.object({
+  provider: modelCredentialProviderSchema,
+  apiKey: modelCredentialApiKeySchema,
+  baseUrl: modelCredentialBaseUrlSchema.nullish(),
+  modelMap: modelCredentialModelMapSchema.optional(),
+});
 
 /**
  * set_model_credential — store the organisation's own model-vendor API key
@@ -34,10 +56,10 @@ export const orgModelCredentialSet = registerCapability({
   name: "set_model_credential",
   domain: "org",
   description:
-    "Store the organisation's own model-vendor API key (OpenRouter or Vercel AI Gateway). While a key is stored, the in-app agent's completions run on it and Oxagen bills nothing for those tokens. The key is envelope-encrypted at rest and never readable back. Replaces any key already stored. Returns the redacted credential view.",
+    "Store the organisation's own model-vendor API key — OpenRouter, Vercel AI Gateway, OpenAI, Anthropic, or any OpenAI-compatible endpoint given by base URL. Direct-vendor keys also take a model id per tier. While a key is stored, the in-app agent's completions run on it and Oxagen bills nothing for those tokens. The key is envelope-encrypted at rest and never readable back. Replaces any key already stored. Returns the redacted credential view.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: false,
   sensitivity: "high",
   defaultEffect: "deny",
@@ -48,9 +70,57 @@ export const orgModelCredentialSet = registerCapability({
   // Deciding who pays for tokens is governance, not AI usage — it consumes no
   // credits.
   noBillingGate: true,
-  input: z.object({
-    provider: modelCredentialProviderSchema,
-    apiKey: modelCredentialApiKeySchema,
+  // The cross-field rules live on the schema, not only in the handler, so
+  // every surface (API, MCP, the settings page's Server Action) refuses the
+  // same malformed input with the same message before anything is encrypted.
+  // The database CHECKs hold the same two pairings as a backstop.
+  input: orgModelCredentialSetInputObject.superRefine((value, issues) => {
+    const needsUrl = requiresCustomerBaseUrl(value.provider);
+    if (needsUrl && !value.baseUrl) {
+      issues.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["baseUrl"],
+        message: "an OpenAI-compatible endpoint needs its base URL",
+      });
+    }
+    // The range check lives here, not only in the handler, because a
+    // refusal from the schema is `invalid_input` on every surface — a 400
+    // with the reason — where the same throw from a handler is an
+    // unclassified 500. `https://169.254.169.254/` passes the https check
+    // on the field; this is what stops it.
+    if (needsUrl && value.baseUrl) {
+      try {
+        assertPublicHttpUrl(value.baseUrl, {
+          refusing: "Refusing to store model credential",
+          requireTls: true,
+        });
+      } catch (err) {
+        if (!(err instanceof UnsafeOutboundUrlError)) throw err;
+        issues.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["baseUrl"],
+          message: err.message,
+        });
+      }
+    }
+    if (!needsUrl && value.baseUrl) {
+      issues.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["baseUrl"],
+        message: `a ${value.provider} key uses the vendor's own endpoint; remove the base URL`,
+      });
+    }
+    // The balanced tier is what the assistant runs on, so it is the one a
+    // direct-vendor key cannot work without. The other two fall back to
+    // the platform id and fail loudly at the vendor if they are ever used.
+    if (requiresModelMap(value.provider) && !value.modelMap?.balanced) {
+      issues.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["modelMap", "balanced"],
+        message:
+          "a direct-vendor key needs the model it should use for the balanced tier",
+      });
+    }
   }),
   output: modelCredentialViewSchema,
 });

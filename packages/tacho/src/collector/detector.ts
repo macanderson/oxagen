@@ -22,6 +22,15 @@ export interface DetectorDeps {
   transcriptRoots: string[];
   readSettings: () => unknown;
   enrollmentId: string;
+  /**
+   * Whether this host hooks Claude Code at all, read each tick. Absent means
+   * yes. A Codex-only, Stella-only or Claude Desktop-only host has no Claude
+   * Code hooks to lose, and without this the detector chained a severity-3
+   * `oxagen:hooks_removed` incident fifteen seconds after every start. It is
+   * a function so a `reassign` that drops the harness is seen without a
+   * restart.
+   */
+  claudeCodeEnrolled?: () => boolean;
   now: () => number;
   /** How long a transcript may advance unhooked before it is an incident. */
   graceMs?: number;
@@ -101,6 +110,11 @@ export class Detector {
   }
 
   private checkHooks(): TachoEvent[] {
+    if (this.deps.claudeCodeEnrolled?.() === false) {
+      this.hooksOk = undefined;
+      this.lastPresence = undefined;
+      return [];
+    }
     let presence: HookPresence;
     try {
       presence = tachoHookPresence(

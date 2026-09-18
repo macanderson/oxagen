@@ -33,6 +33,7 @@ type Messages = {
     apiKeys: string;
     billing: string;
     audit: string;
+    modelFunding: string;
   };
   unrecorded: {
     run: {
@@ -747,25 +748,93 @@ type Messages = {
       gau: string;
     };
     range: string;
+    notRecorded: string;
+    header: {
+      eyebrow: string;
+      description: string;
+    };
     checkout: {
       success: string;
       cancel: string;
       credits: string;
-    };
-    plan: {
-      title: string;
-      none: string;
       plan: string;
-      status: string;
-      interval: string;
-      intervals: {
-        month: string;
-        year: string;
+    };
+    tiers: {
+      free: string;
+      build: string;
+      scale: string;
+      enterprise: string;
+    };
+    intervals: {
+      month: string;
+      year: string;
+    };
+    tiles: {
+      label: string;
+      plan: string;
+      planMonth: string;
+      planYear: string;
+      planNone: string;
+      gau: string;
+      gauNote: string;
+      overdrawn: string;
+      rate: string;
+      perThousand: string;
+      due: string;
+      dueNote: string;
+      nothingDue: string;
+      nextInvoice: string;
+      mixedCurrency: string;
+    };
+    thisMonth: {
+      title: string;
+      columns: {
+        line: string;
+        basis: string;
+        amount: string;
       };
-      period: string;
+      lines: {
+        plan: string;
+        blocks: string;
+        topups: string;
+        overage: string;
+        tax: string;
+        total: string;
+      };
+      basis: {
+        plan: string;
+        planNone: string;
+        invoices: string;
+        tax: string;
+        total: string;
+      };
+      none: string;
+      empty: string;
+      partial: string;
+      mixedCurrency: string;
+    };
+    meters: {
+      title: string;
+      columns: {
+        meter: string;
+        thisMonth: string;
+        note: string;
+      };
+      gau: string;
+      gauValue: string;
+      gauNote: string;
+      remaining: string;
+      overdrawn: string;
+      other: string;
+      otherNote: string;
+      held: string;
+      heldNote: string;
+      credits: string;
+      creditsValue: string;
+      creditsNote: string;
+      exhaustedNoCard: string;
     };
     mode: {
-      title: string;
       prepaid: string;
       prepaidNoCard: string;
       invoice: string;
@@ -773,16 +842,60 @@ type Messages = {
       invoiced: string;
       pastDue: string;
     };
-    bucket: {
+    invoices: {
       title: string;
-      period: string;
-      included: string;
-      purchased: string;
-      carried: string;
-      used: string;
-      remaining: string;
-      overdrawn: string;
-      exhaustedNoCard: string;
+      empty: string;
+      columns: {
+        invoice: string;
+        period: string;
+        kind: string;
+        amount: string;
+        status: string;
+        paid: string;
+        link: string;
+      };
+      unnumbered: string;
+      view: string;
+      unpublished: string;
+      kinds: {
+        subscription: string;
+        gau_purchase: string;
+        gau_auto_topup: string;
+        gau_interim: string;
+        gau_period_close: string;
+      };
+      statuses: {
+        open: string;
+        paid: string;
+        uncollectible: string;
+        void: string;
+      };
+      pager: string;
+      older: string;
+      newest: string;
+    };
+    priceList: {
+      title: string;
+      governed: string;
+      inApp: string;
+      free: string;
+      freeTerms: string;
+      perMonth: string;
+      enterprise: string;
+      enterpriseTerms: string;
+      list: string;
+      perThousand: string;
+      blocks: string;
+      blockTerms: string;
+      bands: string;
+      credit: string;
+      creditTerms: string;
+      calls: string;
+      callsTerms: string;
+      grant: string;
+      packs: string;
+      packsTerms: string;
+      everyFeature: string;
     };
     autoTopup: {
       title: string;
@@ -805,26 +918,6 @@ type Messages = {
         failed: string;
       };
     };
-    rate: {
-      title: string;
-      perGau: string;
-      perBlock: string;
-      blockSize: string;
-      currency: string;
-      included: string;
-      effective: string;
-      openEnded: string;
-      source: string;
-      published: string;
-      negotiated: string;
-      negotiatedNoRef: string;
-      tiers: {
-        free: string;
-        build: string;
-        scale: string;
-        enterprise: string;
-      };
-    };
     purchase: {
       title: string;
       quantity: string;
@@ -842,38 +935,6 @@ type Messages = {
         conflict: string;
         unavailable: string;
       };
-    };
-    invoices: {
-      title: string;
-      empty: string;
-      columns: {
-        number: string;
-        kind: string;
-        status: string;
-        period: string;
-        amountDue: string;
-        amountPaid: string;
-        invoice: string;
-      };
-      unnumbered: string;
-      view: string;
-      unpublished: string;
-      kinds: {
-        subscription: string;
-        gau_purchase: string;
-        gau_auto_topup: string;
-        gau_interim: string;
-        gau_period_close: string;
-      };
-      statuses: {
-        open: string;
-        paid: string;
-        uncollectible: string;
-        void: string;
-      };
-      pager: string;
-      older: string;
-      newest: string;
     };
     usageCredits: {
       title: string;
@@ -894,6 +955,43 @@ type Messages = {
         denied: string;
         unavailable: string;
       };
+    };
+    whatCounts: {
+      title: string;
+      gau: string;
+      gauBody: string;
+      credits: string;
+      creditsBody: string;
+      free: string;
+      freeBody: string;
+      reported: string;
+      reportedBody: string;
+    };
+    changePlan: {
+      open: string;
+      title: string;
+      lede: string;
+      plan: string;
+      interval: string;
+      perMonth: string;
+      perYear: string;
+      includes: string;
+      enterprise: string;
+      submit: string;
+      submitting: string;
+      denied: string;
+      subscribed: string;
+      errors: {
+        invalid: string;
+        denied: string;
+        conflict: string;
+        unavailable: string;
+      };
+    };
+    rate: {
+      published: string;
+      negotiated: string;
+      negotiatedNoRef: string;
     };
     failure: {
       denied: string;
@@ -1151,6 +1249,7 @@ type Messages = {
       people: string;
       roles: string;
       apiKeys: string;
+      modelFunding: string;
     };
     roles: {
       owner: string;
@@ -1430,6 +1529,103 @@ type Messages = {
       noRole: string;
       empty: string;
     };
+    modelFunding: {
+      title: string;
+      intro: string;
+      explain: {
+        platform: string;
+        byok: string;
+      };
+      current: {
+        title: string;
+        none: string;
+        provider: string;
+        key: string;
+        keyEnding: string;
+        endpoint: string;
+        status: string;
+        active: string;
+        disabled: string;
+        tested: string;
+        at: string;
+        never: string;
+      };
+      tiers: {
+        balanced: string;
+        fast: string;
+        precise: string;
+      };
+      providers: {
+        openrouter: {
+          name: string;
+          hint: string;
+        };
+        gateway: {
+          name: string;
+          hint: string;
+        };
+        openai: {
+          name: string;
+          hint: string;
+        };
+        anthropic: {
+          name: string;
+          hint: string;
+          caching: string;
+        };
+        openai_compatible: {
+          name: string;
+          hint: string;
+        };
+      };
+      form: {
+        title: string;
+        replaceTitle: string;
+        provider: string;
+        key: string;
+        show: string;
+        hide: string;
+        baseUrl: string;
+        baseUrlHint: string;
+        baseUrlPlaceholder: string;
+        models: string;
+        balancedHint: string;
+        unmappedNote: string;
+        test: string;
+        testing: string;
+        save: string;
+        saving: string;
+        saved: string;
+      };
+      verdict: {
+        ok: string;
+        okWithTools: string;
+        refused: string;
+        noTools: string;
+        noReason: string;
+      };
+      remove: {
+        label: string;
+        confirm: string;
+        yes: string;
+        pending: string;
+        cancel: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+      };
+      failure: {
+        denied: string;
+        keyRequired: string;
+        baseUrlRequired: string;
+        balancedRequired: string;
+        invalid: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
   };
   run: {
     eyebrow: string;
@@ -1655,6 +1851,7 @@ type Messages = {
       audit: string;
       roles: string;
       apiKeys: string;
+      modelFunding: string;
     };
     switcher: {
       org: string;

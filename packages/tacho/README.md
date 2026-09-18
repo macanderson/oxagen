@@ -81,6 +81,85 @@ Telemetry-only events (`PostToolUse`, `SubagentStart`, `SessionEnd`, and the
 rest of the 28 http events) post straight to the daemon; a failure there is
 recorded as a chained `telemetry_gap`, never as a blocked action.
 
+## The gateway: the loopback model proxy
+
+`tachod` also stands between a wrapped harness and its model vendor (ADR-094).
+It serves a second loopback listener, on the port after the collector's unless
+`host.json` pins `model_proxy_port`, and forwards each request to the vendor
+unchanged. The prompt goes from your machine to the vendor you chose. Oxagen
+receives a frame: digests, token counts, latency and status, never a body. The
+vendor credential crosses in memory and is never written or logged.
+
+| Harness | File and key | Value written | Logins covered |
+|---|---|---|---|
+| Claude Code | `~/.claude/settings.json`, `env.ANTHROPIC_BASE_URL` | `http://127.0.0.1:<port>/anthropic` | API key (`X-Api-Key`) and claude.ai subscription (`Authorization: Bearer`) |
+| Codex | `~/.codex/config.toml`, top-level `openai_base_url` | `http://127.0.0.1:<port>/backend-api/codex` | API key (forwarded to `api.openai.com/v1`) and ChatGPT login (a request carrying `ChatGPT-Account-ID` is forwarded to `chatgpt.com/backend-api/codex`) |
+
+`src/host/model-base-url.ts` writes and restores both, and is the contract the
+CLI and the desktop app call:
+
+```ts
+applyModelBaseUrls({ home, port, harnesses });   // idempotent
+restoreModelBaseUrls({ home, port, harnesses }); // byte-exact when untouched
+readModelBaseUrlState({ home, port, harnesses });
+```
+
+A value you already had is displaced into a sidecar beside the file
+(`.settings.json.oxagen-model-base-url.json`), restored on unenroll, and used
+as the proxy's upstream meanwhile, so a harness already pointed at a corporate
+gateway still reaches it. A managed settings file that sets
+`ANTHROPIC_BASE_URL` wins over yours, and the state reports it as `shadowedBy`.
+
+What standing in the path gives you:
+
+- **Observed metering.** One `llm_call` frame per model call, `fidelity: proxy`,
+  `oxagen.metering: observed`, with the vendor's own usage for Anthropic
+  Messages, OpenAI Responses and Chat Completions, streamed or not. The control
+  plane counts the observed frame and drops the harness's self-reported one for
+  the same calls, so a routed session is counted once. Codex reports no spend
+  of its own. Routed through the proxy, it has one.
+- **An enforced session budget.** With `budget.mode: enforced`, a session whose
+  observed spend reached `budget.session_limit_usd` has its next call refused
+  with a 403 in the vendor's error shape, and the refusal is sealed as a
+  `policy_decision`. Prices arrive in the signed bundle as `model_prices`.
+- **A real interrupt.** `pause`, `cancel`, `kill` and a steer delivered as
+  `interrupt` abort the session's in-flight model calls. A paused session's new
+  calls are refused until `resume`.
+- **The injection seam.** `beforeForward(request) -> request` sees each request
+  before it leaves. Nothing uses it until the Phase 1 assembler exists.
+
+A session is on the `gateway` tier only when the proxy saw a model call for it
+(ADR-095). A base URL written into a config file is intent, not traffic.
+
+**Which session a call belongs to.** In order: the `x-oxagen-session` header
+(read and removed, never forwarded), the harness's own header
+(`X-Claude-Code-Session-Id`, Codex's `session-id`), the session id inside an
+Anthropic `metadata.user_id`, then the one live session of that harness when
+there is exactly one. A call that matches none is sealed on the daemon's chain
+and marked `unattributed`.
+
+**What fails open and what fails closed.** A fault of Oxagen's never stops a
+call: an unpriced model costs the budget nothing (`observed_unpriced`), an
+unreachable control plane leaves the cached bundle deciding, an unreadable
+response is forwarded and recorded without usage, and a `beforeForward` that
+throws or takes over 250 ms sends the original request. A decision of the
+operator's always stops one: a budget at its limit, a paused or cancelled
+session, a suspended or revoked host. This is separate from the hook, which
+fails closed against its cached bundle. It is the `harness` tier as a whole
+that is fail-open against the person at the keyboard. If the daemon is down the
+harness gets a refused connection. It does not fall through to the vendor.
+
+**Compression.** The proxy asks the vendor for `Accept-Encoding: identity` and
+meters plain bytes. A response that arrives compressed anyway is passed through
+as it came and metered from a decoded copy. A request body is forwarded as it
+came, zstd included.
+
+**Websockets.** An upgrade is answered `426`, which is the status Codex falls
+back to HTTP on for the rest of the run.
+
+`GET /healthz` on the proxy port and `gateway` in `tacho status` report
+`{ listening, port, routes, calls_observed }`.
+
 ## Honesty
 
 Hook-based control is `client_attested` (ADR-040 §4): the hook returns a
@@ -88,6 +167,31 @@ decision that Claude Code honours; nothing here prevents a process that
 bypasses the hooks. That is why the detector exists and why the session record
 carries `enforcement_tier`. Managed settings (`enroll --print-managed`) lock the
 hooks for MDM-managed machines; the record is still labelled `client_attested`.
+
+## What the daemon is today, and what it grows into
+
+Today `tachod` is a recorder plus a kill switch. The policy bundle it verifies
+carries empty permissions, `budget.mode = "observed"` and, until ADR-091 lands
+(PR #3289), `context.system = null`. No model proxy exists: there is no
+`ANTHROPIC_BASE_URL` or `OPENAI_BASE_URL` handling anywhere in this package.
+Token and cost numbers for Claude Code are the harness's own OpenTelemetry
+export, which is self-reported. Codex and Stella export none, so their spend is
+absent from the record. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+and server-enforced, and it is registered only into Claude Desktop.
+
+The target is ADR-094: `tachod` grows into the gateway, with a loopback model
+proxy (Anthropic Messages and OpenAI Responses passthrough with streaming;
+enrollment writes the base URL) and an MCP aggregator that re-serves the
+harness's existing MCP servers through loopback, displace-and-restore. Prompt
+bodies never leave the machine; only digests and usage go up. The vendor
+credential stays on the machine. Metering becomes observed for every harness,
+`session_limit_usd` is enforced, and `interrupt` becomes real. That is Phase 4,
+in build now. The leaf constraint stays: the proxy imports no `@oxagen/*`
+runtime package.
+
+The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
+`contained`, computed from what was actually routed. Nothing at the `harness`
+tier is ever called "enforced".
 
 ## Modules
 
@@ -97,7 +201,7 @@ hooks for MDM-managed machines; the record is still labelled `client_attested`.
 | `wire.ts` | The documents that cross between host and control plane: policy bundle, enrollment claims, batch, control envelope, commands. `packages/oxagen` re-exports these for its contracts |
 | `host/` | Host primitives: paths, `host.json`, the device key, offline bundle verification and the ordered `PreToolUse` evaluation over Claude Code rule syntax, the WAL, the Claude Code settings writer and the Codex hooks writer, launchd / systemd / Task Scheduler units, process scan, the control-plane client |
 | `claude-code/` | Pure normalizers for hook payloads, the OpenTelemetry export, transcripts, and the headless result stream; the recorder that seals them into parent and subagent chains (restorable across restarts); the `tacho-hook` client |
-| `collector/` | `handleHookEvent`, the session registry, the listener, the shipper, the command inbox, the detector, the exporters, and `startDaemon` that composes them |
+| `collector/` | `handleHookEvent`, the session registry, the listener, the shipper, the command inbox, the detector, the exporters, the loopback model proxy (`model-proxy.ts`, `model-usage.ts`, `model-pricing.ts`, `model-routes.ts`), and `startDaemon` that composes them |
 | `cli/` | The `tacho` commands behind an injectable `CliDeps` port; `native.ts` is the compiled binary's multi-call entry |
 | `trace/` | The `contextgraph-trace` journal vocabulary, its strict parser, a port of the eight replay oracles, and the projection from Tacho events |
 

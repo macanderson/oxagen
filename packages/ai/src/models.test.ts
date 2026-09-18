@@ -341,3 +341,261 @@ describe("tier resolution (@oxagen/ai)", () => {
     });
   });
 });
+
+describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
+  beforeEach(() => {
+    resetMocks();
+    envValues = {
+      OXAGEN_LLM_FAST: "anthropic/claude-haiku-4.5",
+      OXAGEN_LLM_BALANCED: "anthropic/claude-sonnet-5",
+      OXAGEN_LLM_PRECISE: "anthropic/claude-fable-5",
+      OXAGEN_MODEL_PROVIDER: "gateway",
+    };
+  });
+
+  const compat = (over: Partial<ModelCredential> = {}): ModelCredential => ({
+    provider: "openai_compatible",
+    apiKey: "sk-together-0123456789",
+    digest: "digest-compat",
+    baseUrl: "https://api.together.xyz/v1",
+    modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+    ...over,
+  });
+
+  const idOf = (m: unknown) => (m as { modelId: string }).modelId;
+
+  it("builds an openai_compatible client on the CUSTOMER's endpoint", () => {
+    selectModel({ tier: "balanced", credential: compat() });
+    expect(mocks.createOpenAICompatible).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: "https://api.together.xyz/v1",
+        apiKey: "sk-together-0123456789",
+      }),
+    );
+  });
+
+  it("sends the customer endpoint's requests through a fetch that refuses redirects", () => {
+    // The URL was checked when the row was written; a redirect target was
+    // not. The probe refuses redirects, and the runtime client must too, or
+    // the check holds for the test and not for the turn.
+    selectModel({ tier: "balanced", credential: compat() });
+    const call = mocks.createOpenAICompatible.mock.calls[0]?.[0] as {
+      fetch?: unknown;
+    };
+    expect(typeof call.fetch).toBe("function");
+  });
+
+  it("spells the endpoint for openai and anthropic, so the customer pastes only a key", () => {
+    selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "openai",
+        apiKey: "sk-openai-0123456789",
+        digest: "d-openai",
+        modelMap: { balanced: "gpt-5.2" },
+      },
+    });
+    selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "anthropic",
+        apiKey: "sk-ant-0123456789",
+        digest: "d-anthropic",
+        modelMap: { balanced: "claude-sonnet-4-6" },
+      },
+    });
+    const urls = mocks.createOpenAICompatible.mock.calls.map(
+      (c) => (c[0] as { baseURL: string }).baseURL,
+    );
+    expect(urls).toEqual([
+      "https://api.openai.com/v1",
+      "https://api.anthropic.com/v1",
+    ]);
+  });
+
+  it("asks a direct-vendor key for the CUSTOMER's model id, not the platform's", () => {
+    // `api.openai.com` has no `anthropic/claude-sonnet-5`. Sending it would
+    // 404 on the customer's first question.
+    expect(idOf(selectModel({ tier: "balanced", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+  });
+
+  it("runs an unmapped tier on the BALANCED model — never on a platform id the vendor does not know", () => {
+    // The engine asks for fast (summarisation) and precise (verdicts), not
+    // just the worker tier. Falling through to `anthropic/claude-haiku-4.5`
+    // would fail the turn halfway through on a correctly configured key.
+    expect(idOf(selectModel({ tier: "fast", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+    expect(idOf(selectModel({ tier: "precise", credential: compat() }))).toBe(
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    );
+  });
+
+  it("uses a tier's own mapping when the customer gave one", () => {
+    const model = selectModel({
+      tier: "fast",
+      credential: compat({
+        modelMap: { balanced: "big-model", fast: "small-model" },
+      }),
+    });
+    expect(idOf(model)).toBe("small-model");
+  });
+
+  it("leaves a routed key on the platform id — OpenRouter understands it, and a stray map is ignored", () => {
+    const model = selectModel({
+      tier: "balanced",
+      credential: {
+        provider: "openrouter",
+        apiKey: "sk-or-v1-0123456789",
+        digest: "d-or",
+        modelMap: { balanced: "should-be-ignored" },
+      },
+    });
+    expect(idOf(model)).toBe("anthropic/claude-sonnet-5");
+  });
+
+  describe("an explicit model id on a direct-vendor key (never sent untranslated)", () => {
+    // `prepareAssistantTurn` passes the workspace's stored `defaultTextModel`
+    // as `selector.model`. That is a gateway id chosen before the key existed;
+    // `api.openai.com` answers 404 to it, on every turn, on a key whose
+    // balanced mapping was configured exactly as the form asked.
+    const openai = (
+      modelMap: ModelCredential["modelMap"] = { balanced: "gpt-5.2" },
+    ): ModelCredential => ({
+      provider: "openai",
+      apiKey: "sk-openai-0123456789",
+      digest: "d-openai",
+      modelMap,
+    });
+
+    it("a stored platform tier id runs on the tier's mapping, not on the platform id", () => {
+      // The workspace default is the precise tier's gateway id; the key maps
+      // precise, so that is what runs.
+      const model = selectModel({
+        model: "anthropic/claude-fable-5",
+        credential: openai({ balanced: "gpt-5.2", precise: "o3-pro" }),
+      });
+      expect(idOf(model)).toBe("o3-pro");
+    });
+
+    it("a stored platform tier id with no mapping of its own falls to balanced", () => {
+      const model = selectModel({
+        model: "anthropic/claude-haiku-4.5",
+        credential: openai(),
+      });
+      expect(idOf(model)).toBe("gpt-5.2");
+    });
+
+    it("one of the customer's own models passes through", () => {
+      const model = selectModel({
+        model: "o3-pro",
+        credential: openai({ balanced: "gpt-5.2", precise: "o3-pro" }),
+      });
+      expect(idOf(model)).toBe("o3-pro");
+    });
+
+    it("a same-vendor gateway id is sent in the vendor's spelling", () => {
+      expect(
+        idOf(
+          selectModel({ model: "openai/gpt-5.2-mini", credential: openai() }),
+        ),
+      ).toBe("gpt-5.2-mini");
+      expect(
+        idOf(
+          selectModel({
+            model: "anthropic/claude-sonnet-4-6",
+            credential: {
+              provider: "anthropic",
+              apiKey: "sk-ant-0123456789",
+              digest: "d-anthropic",
+              modelMap: { balanced: "claude-opus-4-1" },
+            },
+          }),
+        ),
+      ).toBe("claude-sonnet-4-6");
+    });
+
+    it("a catalog id from another vendor runs on the selected tier's mapping", () => {
+      // An `openai` key cannot reach `anthropic/claude-opus-4.8`. The tier
+      // the caller selected (default balanced) is the closest thing the key
+      // can serve; the assistant-turn log names what actually ran.
+      expect(
+        idOf(
+          selectModel({
+            model: "anthropic/claude-opus-4.8",
+            credential: openai(),
+          }),
+        ),
+      ).toBe("gpt-5.2");
+      expect(
+        idOf(
+          selectModel({
+            model: "google/gemini-3-pro",
+            tier: "fast",
+            credential: openai({ balanced: "gpt-5.2", fast: "gpt-5.2-mini" }),
+          }),
+        ),
+      ).toBe("gpt-5.2-mini");
+    });
+
+    it("an openai_compatible key never strips a prefix — its namespace is the customer's server's", () => {
+      // `explicit/model-id` is not a map value, not a tier id, and the
+      // `openai_compatible` arm has no vendor prefix to strip. Balanced runs.
+      const model = selectModel({
+        model: "openai/gpt-5.2",
+        credential: compat(),
+      });
+      expect(idOf(model)).toBe("meta-llama/Llama-3.3-70B-Instruct-Turbo");
+    });
+
+    it("the routed keys and the platform key still send an explicit id untouched", () => {
+      expect(
+        idOf(
+          selectModel({
+            model: "openai/gpt-5.2",
+            credential: {
+              provider: "openrouter",
+              apiKey: "sk-or-v1-0123456789",
+              digest: "d-or",
+            },
+          }),
+        ),
+      ).toBe("openai/gpt-5.2");
+      selectModel({ model: "openai/gpt-5.2" });
+      expect(mocks.languageModel).toHaveBeenLastCalledWith("openai/gpt-5.2");
+    });
+  });
+
+  it("rebuilds the client when the endpoint moves but the key does not", () => {
+    // Same key, same digest, new URL. Keyed on the digest alone, the cache
+    // would keep serving the client built on the OLD endpoint.
+    selectModel({ tier: "balanced", credential: compat() });
+    selectModel({
+      tier: "balanced",
+      credential: compat({ baseUrl: "https://api.fireworks.ai/inference/v1" }),
+    });
+    expect(mocks.createOpenAICompatible).toHaveBeenCalledTimes(2);
+    expect(
+      (mocks.createOpenAICompatible.mock.calls[1]?.[0] as { baseURL: string })
+        .baseURL,
+    ).toBe("https://api.fireworks.ai/inference/v1");
+  });
+
+  it("refuses an openai_compatible credential with no endpoint rather than guessing one", () => {
+    expect(() =>
+      selectModel({ tier: "balanced", credential: compat({ baseUrl: null }) }),
+    ).toThrow(/no baseUrl/);
+  });
+
+  it("keeps embeddings on the platform key for every direct vendor, and says so for billing", () => {
+    for (const provider of [
+      "openai",
+      "anthropic",
+      "openai_compatible",
+    ] as const) {
+      expect(embeddingProvider(compat({ provider })).fundedBy).toBe("platform");
+    }
+  });
+});

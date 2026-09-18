@@ -82,6 +82,35 @@ export const TACHO_GATEWAY_SESSION_HEADER = "x-tacho-gateway-session" as const;
 export const TACHO_GATEWAY_GENESIS_HEADER = "x-tacho-gateway-genesis" as const;
 
 /**
+ * How a model call's usage was learned, on the `llm_call` frame that carries
+ * it (`attrs[TACHO_METERING_ATTR]`).
+ *
+ * `observed` is written by the loopback model proxy, which read the vendor's
+ * own usage block off the response as it passed. Every other `llm_call` is the
+ * harness's own telemetry, self-reported. The control plane counts the
+ * observed frame and not the self-reported one when a session has both for
+ * the same calls, so a session routed through the proxy is never counted
+ * twice. A wire constant for the same reason the tier attribute is one: the
+ * two ends live in different packages and only the spelling joins them.
+ */
+export const TACHO_METERING_ATTR = "oxagen.metering" as const;
+export const TACHO_METERING_OBSERVED = "observed" as const;
+
+/**
+ * The request header a caller may name its session on when it talks to the
+ * loopback model proxy. The value is the harness session id, the same one the
+ * harness reports to its hooks. The proxy reads it and removes it; it is never
+ * forwarded to the vendor.
+ *
+ * It is the explicit form of a correlation the proxy otherwise derives: from
+ * `X-Claude-Code-Session-Id` and `metadata.user_id` for Claude Code, and from
+ * the `session-id` header for Codex. A harness that sends none of those can
+ * set this one (Claude Code reads extra headers from
+ * `ANTHROPIC_CUSTOM_HEADERS`).
+ */
+export const TACHO_MODEL_SESSION_HEADER = "x-oxagen-session" as const;
+
+/**
  * A bundle field this host's parser understands, named on the wire so the
  * control plane can withhold fields the host would choke on.
  *
@@ -108,12 +137,23 @@ export const TACHO_GATEWAY_GENESIS_HEADER = "x-tacho-gateway-genesis" as const;
 export const BUNDLE_FEATURE_GATEWAY_TOOLS = "gateway_tools" as const;
 
 /**
+ * The host can parse `model_prices`, the price rows the loopback model proxy
+ * prices an observed call with (story sheet item 10). Gated for the same
+ * reason `gateway_tools` is: the bundle schema is strict, so a host built
+ * before the field would reject the whole mandate.
+ */
+export const BUNDLE_FEATURE_MODEL_PRICES = "model_prices" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
  * that also declares it.
  */
-export const TACHO_BUNDLE_FEATURES = [BUNDLE_FEATURE_GATEWAY_TOOLS] as const;
+export const TACHO_BUNDLE_FEATURES = [
+  BUNDLE_FEATURE_GATEWAY_TOOLS,
+  BUNDLE_FEATURE_MODEL_PRICES,
+] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
 
@@ -443,6 +483,35 @@ export const policyBundleSchema = z
      * dead weight before the fleet is there.
      */
     gateway_tools: z.array(z.string().max(256)).max(4096).optional(),
+    /**
+     * The price rows the loopback model proxy prices an observed call with, so
+     * `budget.session_limit_usd` can be enforced on the machine without the
+     * host holding a price of its own (the leaf package cannot read the price
+     * book). Each figure is integer micro-USD per one million tokens, the
+     * price book's own unit. `model` is matched by longest prefix within the
+     * provider, the way the price book resolves a dated model id.
+     *
+     * Optional, and absent means *no prices this host has been told about*: a
+     * call it cannot price costs the session budget nothing and is recorded as
+     * `observed_unpriced`. Emitted only to a host that advertised
+     * `BUNDLE_FEATURE_MODEL_PRICES`.
+     */
+    model_prices: z
+      .array(
+        z
+          .object({
+            provider: z.enum(["anthropic", "openai"]),
+            model: z.string().min(1).max(256),
+            input: z.number().int().nonnegative(),
+            output: z.number().int().nonnegative(),
+            cache_read: z.number().int().nonnegative(),
+            cache_write: z.number().int().nonnegative(),
+            cache_write_1h: z.number().int().nonnegative().optional(),
+          })
+          .strict(),
+      )
+      .max(1024)
+      .optional(),
     signature: z
       .object({
         key_id: z.string().min(1),

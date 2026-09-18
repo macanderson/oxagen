@@ -5,6 +5,7 @@ import { isDirectRunEntry } from "@oxagen/telemetry";
 import type { Session } from "neo4j-driver";
 import { closeDriver, session } from "./client";
 import { sanitizeLabel } from "./labels";
+import { listOrgGraphDatabases } from "./org-graph";
 
 // Each Cypher statement runs in its own transaction so a single bad DDL
 // doesn't roll back the whole schema.
@@ -198,12 +199,18 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
   }
 }
 
-export async function migrate(): Promise<void> {
+/**
+ * Apply `schema.cypher` (and the legacy clean-up passes) to one database. With
+ * no argument that is the POOLED database; an organisation provisioned into its
+ * own database (ADR-098) is migrated by name — by the provisioner right after
+ * `CREATE DATABASE`, and by the direct-run entry below on every deploy.
+ */
+export async function migrate(database?: string | null): Promise<void> {
   const here = dirname(fileURLToPath(import.meta.url));
   const source = readFileSync(join(here, "schema.cypher"), "utf8");
   const statements = splitStatements(source);
 
-  const s = session();
+  const s = session(database);
   try {
     // Resolve duplicate legacy publicIds first, so the schema.cypher relabel can
     // promote :KnowledgeNode -> :GraphNode without hitting the uniqueness
@@ -220,9 +227,40 @@ export async function migrate(): Promise<void> {
   }
 }
 
+/**
+ * Bring every provisioned organisation database (`org-<namespace>`, ADR-098)
+ * to the same schema as the pooled one. The list comes from the engine itself
+ * (`SHOW DATABASES` on `system`), so an organisation whose binding row was
+ * written but whose migration never ran is still reached. On Community
+ * Edition the list is empty and this is a no-op. Returns the names migrated.
+ */
+export async function migrateOrgGraphDatabases(): Promise<string[]> {
+  const names = await listOrgGraphDatabases();
+  for (const name of names) await migrate(name);
+  return names;
+}
+
+/**
+ * Migrate the pooled database and then every provisioned organisation
+ * database. This is THE deploy-time entry, and there is one on purpose: the
+ * aggregate migrator (`tools/scripts/db-migrate.ts`, behind `pnpm db:migrate`,
+ * `store-migrate.yml` and every pipeline migrate step) imports this module
+ * rather than running it, so a per-organisation pass that lived only in the
+ * direct-run branch below never ran on a deploy, and a `schema.cypher` change
+ * would have advanced the pooled database while every `org-<namespace>`
+ * database stayed behind. Both paths now call this one function.
+ */
+export async function migrateEveryGraphDatabase(): Promise<{
+  orgDatabases: string[];
+}> {
+  await migrate();
+  const orgDatabases = await migrateOrgGraphDatabases();
+  return { orgDatabases };
+}
+
 // Bundle-safe direct-run guard — see @oxagen/telemetry is-direct-run.ts.
 if (isDirectRunEntry(import.meta.url, process.argv[1], "migrate")) {
-  migrate()
+  migrateEveryGraphDatabase()
     .then(() => closeDriver())
     .then(() => {
       process.stdout.write(

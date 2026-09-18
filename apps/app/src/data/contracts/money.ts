@@ -66,6 +66,22 @@ export function mulMicros(value: Money, quantity: number): Money {
   };
 }
 
+/**
+ * The sum of `values`, exact at any magnitude, or null when there is nothing
+ * to sum or the values carry more than one currency: a total across currencies
+ * is not a figure anyone was charged.
+ */
+export function sumMoney(values: readonly Money[]): Money | null {
+  const [first] = values;
+  if (first === undefined) return null;
+  let total = BigInt(0);
+  for (const value of values) {
+    if (value.currency !== first.currency) return null;
+    total += toBigInt(value.micros);
+  }
+  return { micros: total.toString(), currency: first.currency };
+}
+
 /** The precision `ratioOfMicros` divides at: a ratio carries six decimal places. */
 const RATIO_SCALE = 1_000_000;
 

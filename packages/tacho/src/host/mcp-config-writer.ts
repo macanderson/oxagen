@@ -29,6 +29,8 @@
  * ungoverned over a name clash the operator never chose.
  */
 
+import { documentShapeProblem } from "./settings-writer";
+
 /**
  * The key our server takes in `mcpServers`. It becomes the tool-name prefix
  * the user sees in the app (`oxagen__…` in Claude Desktop), so it is a name,
@@ -171,6 +173,15 @@ function documentOf(existing: unknown): McpConfigDocument {
 }
 
 /**
+ * Why a parsed MCP client config cannot be merged into, or undefined when it
+ * can: `mcpServers` as a list or a string was spread into index keys and the
+ * user's value lost.
+ */
+export function mcpConfigShapeProblem(document: unknown): string | undefined {
+  return documentShapeProblem(document, ["mcpServers"]);
+}
+
+/**
  * Merge the Oxagen gateway into an MCP client config. Idempotent. Every
  * other server survives untouched; a foreign server already under our key is
  * returned in `displaced` and restored by `stripOxagenMcpServer`.
@@ -213,6 +224,9 @@ export function stripOxagenMcpServer(
   enrollmentId?: string,
   restore: Record<string, McpServerEntry> = {},
 ): McpStripResult {
+  // Not an MCP client config: nothing of ours is in it, and it goes back as it is.
+  if (mcpConfigShapeProblem(existing) !== undefined)
+    return { config: existing as McpConfigDocument, changed: false };
   const document = documentOf(existing);
   const before = JSON.stringify(document);
   if (document.mcpServers !== undefined) {

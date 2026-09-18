@@ -89,6 +89,11 @@ export interface QueuedPrompt {
   deliveryMode: TachoDeliveryMode | null;
   degradedReason: string | null;
   expiresAt: string | null;
+  /**
+   * The model proxy cut an in-flight call to deliver this sooner (a steer
+   * delivered as `interrupt` on a session whose model traffic is routed).
+   */
+  interrupted?: boolean;
 }
 
 /** The daemon's own chain (`tachod-<ulid>`) is host bookkeeping, not an agent. */

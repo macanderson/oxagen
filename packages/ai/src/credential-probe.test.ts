@@ -46,6 +46,34 @@ describe("probeModelCredential — the request", () => {
     expect(url).toBe(CREDENTIAL_PROBE_URL.gateway);
   });
 
+  it("does not follow a redirect — the target is a URL the guard never saw", async () => {
+    // The handler checked the URL the admin typed. A public endpoint answering
+    // 302 to a private host would carry the key past that check, so the probe
+    // sends redirect: manual and reports the 3xx as the vendor's answer.
+    const fetchMock = stubFetch(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "http://10.0.0.5/v1/models" },
+        }),
+    );
+    const result = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1",
+      toolProbeModel: "m",
+    });
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.redirect).toBe("manual");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(false);
+    expect(result.toolCalling).toBeNull();
+    expect(result.error).toContain(
+      'redirecting to "http://10.0.0.5/v1/models"',
+    );
+    expect(result.error).not.toContain(KEY);
+  });
+
   it("bounds the request with a timeout signal", async () => {
     const fetchMock = stubFetch(async () => jsonResponse(200, {}));
     await probeModelCredential({ provider: "openrouter", apiKey: KEY });
@@ -179,5 +207,146 @@ describe("probeModelCredential — the key never leaves", () => {
       apiKey: KEY,
     });
     expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+});
+
+describe("probeModelCredential — direct vendors and custom endpoints", () => {
+  it("authenticates Anthropic with x-api-key, not a bearer token", async () => {
+    // A bearer token on Anthropic's native route is a 401 that would tell an
+    // operator their perfectly good key is wrong.
+    const fetchMock = stubFetch(async () => jsonResponse(200, { data: [] }));
+    await probeModelCredential({ provider: "anthropic", apiKey: KEY });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(CREDENTIAL_PROBE_URL.anthropic);
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-api-key"]).toBe(KEY);
+    expect(headers["anthropic-version"]).toBeDefined();
+    expect(headers.Authorization).toBeUndefined();
+  });
+
+  it("does not spend a completion asking a known vendor whether it can call tools", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, { data: [] }));
+    const out = await probeModelCredential({ provider: "openai", apiKey: KEY });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ ok: true, toolCalling: true });
+  });
+
+  it("probes an openai_compatible key at <baseUrl>/models, with no doubled slash", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, { data: [] }));
+    await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1/",
+    });
+    expect((fetchMock.mock.calls[0] as [string])[0]).toBe(
+      "https://api.together.xyz/v1/models",
+    );
+  });
+
+  it("reports toolCalling: true when the endpoint returns a forced tool call", async () => {
+    const fetchMock = stubFetch(async (url) =>
+      String(url).endsWith("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(200, {
+            choices: [
+              { message: { tool_calls: [{ function: { name: "ping" } }] } },
+            ],
+          }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1",
+      toolProbeModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    });
+    expect(out).toMatchObject({ ok: true, toolCalling: true, error: null });
+    // The second request forced the tool, on the model the assistant will use.
+    const body = JSON.parse(
+      (fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string,
+    ) as { model: string; tool_choice: unknown };
+    expect(body.model).toBe("meta-llama/Llama-3.3-70B-Instruct-Turbo");
+    expect(body.tool_choice).toEqual({
+      type: "function",
+      function: { name: "ping" },
+    });
+  });
+
+  it("reports toolCalling: false — with ok still true — when the endpoint answers in prose", async () => {
+    // The key works. The endpoint simply cannot drive the assistant, and the
+    // operator needs to hear that distinction, not "your key is wrong".
+    stubFetch(async (url) =>
+      String(url).endsWith("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(200, {
+            choices: [{ message: { content: "pong" } }],
+          }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://vllm.example.com/v1",
+      toolProbeModel: "some-model",
+    });
+    expect(out).toMatchObject({ ok: true, toolCalling: false });
+  });
+
+  it("reports the vendor's reason when it refuses the tools parameter", async () => {
+    stubFetch(async (url) =>
+      String(url).endsWith("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(400, {
+            error: { message: "tools are not supported for this model" },
+          }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://vllm.example.com/v1",
+      toolProbeModel: "some-model",
+    });
+    expect(out).toMatchObject({
+      ok: true,
+      toolCalling: false,
+      error: "tools are not supported for this model",
+    });
+  });
+
+  it("does not ask the tool question when the key itself was refused", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(401, { error: { message: "bad key" } }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1",
+      toolProbeModel: "m",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ ok: false, toolCalling: null });
+  });
+
+  it("refuses an openai_compatible probe with no endpoint instead of calling anything", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, {}));
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(out.ok).toBe(false);
+  });
+
+  it("scrubs the key from a tool-probe refusal that echoes it", async () => {
+    stubFetch(async (url) =>
+      String(url).endsWith("/models")
+        ? jsonResponse(200, { data: [] })
+        : jsonResponse(400, { error: { message: `rejected key ${KEY}` } }),
+    );
+    const out = await probeModelCredential({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://vllm.example.com/v1",
+      toolProbeModel: "m",
+    });
+    expect(JSON.stringify(out)).not.toContain(KEY);
   });
 });

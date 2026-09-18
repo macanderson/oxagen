@@ -125,10 +125,14 @@ describe("oxagen tacho", () => {
       token: "session-token",
       org: "acme",
       workspace: "core",
-      apiUrl: "https://api.test",
       service: false,
       force: true,
     });
+    // No apiUrl: an explicit one outranks the enrolled host's own API in
+    // `enroll`, so `oxagen tacho enroll --harness codex` on a live host posted
+    // the new enrollment to the CLI's default deployment while the revoke
+    // went to the host's. tacho resolves the same config when there is no host.
+    expect(calls[0]?.args[0]).not.toHaveProperty("apiUrl");
     expect((calls[0]?.args[1] as { fake: boolean }).fake).toBe(true);
     expect(output()).toContain("Verified: chained");
     // --harness reaches enroll as a parsed list; absent, it is not passed.

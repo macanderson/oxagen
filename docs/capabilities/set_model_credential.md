@@ -38,19 +38,53 @@ organisation's.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| provider | `"openrouter" \| "gateway"` | Which vendor issued the key |
+| provider | `"openrouter" \| "gateway" \| "openai" \| "anthropic" \| "openai_compatible"` | Which vendor issued the key |
 | apiKey | string (8–512 chars) | The plaintext key, as pasted |
+| baseUrl | https URL, ≤2048 chars? | `openai_compatible` only, and required there; refused on every other provider |
+| modelMap | `{ fast?, balanced?, precise? }`? | The key's own model id per tier. `balanced` required for `openai`, `anthropic`, `openai_compatible`; ignored for the routed two |
 
-Two providers today, because each reaches every model in the catalog through
-one key, so one credential makes the whole tier table work:
+| provider | Endpoint | Needs | Serves embeddings? |
+| --- | --- | --- | --- |
+| openrouter | OpenRouter (routed: every catalog model) | key | **No.** Platform key, billed |
+| gateway | Vercel AI Gateway (routed: every catalog model) | key | Yes, on the customer's key |
+| openai | `api.openai.com/v1` | key + `modelMap.balanced` | No. Platform key, billed |
+| anthropic | `api.anthropic.com/v1` (its OpenAI-compatible endpoint) | key + `modelMap.balanced` | No (Anthropic has no embeddings API) |
+| openai_compatible | **the customer's `baseUrl`** — Together, Fireworks, Groq, Azure, self-hosted vLLM, … | key + `baseUrl` + `modelMap.balanced` | No. Platform key, billed |
 
-| provider | Vendor | Serves embeddings? |
-| --- | --- | --- |
-| openrouter | OpenRouter | **No.** Embeddings stay on the platform key and are billed |
-| gateway | Vercel AI Gateway | Yes |
+**Routed vs direct.** A routed key reaches every model in the catalog and
+understands Oxagen's tier ids (`anthropic/claude-sonnet-5`) as they are. A
+direct key is a different namespace — `api.openai.com` has no model by that
+name — so it must say which of its own models each tier means. `balanced` is
+required, because it is the tier the assistant runs on. Any tier left unmapped
+runs on the balanced model rather than on a platform id the vendor does not
+know: the engine sends summarisation to `fast` and verdicts to `precise`, and
+falling through to a platform id there would fail the turn halfway through.
+The cost is that with only `balanced` mapped, a verdict runs on the same model
+as the worker.
 
-Direct vendor keys (Anthropic, OpenAI) are a later addition: a new value in
-the provider enum plus a provider client in `packages/ai/src/models.ts`.
+**A stored model choice on a direct key.** A workspace or a person may have a
+default model saved from before the key existed, and a request may name one.
+Those are catalog ids. On a direct key one is read as: one of the map's own
+values, passed through; a platform tier id, run on that tier's mapping; a
+gateway id for the same vendor (`openai/gpt-5.2` on an `openai` key), sent in
+the vendor's spelling; anything else, run on the selected tier's mapping. The
+assistant-turn log names the model that ran. Nothing sends a platform id to a
+vendor that does not know it.
+
+**Anthropic caveat.** `anthropic` is reached through Anthropic's
+OpenAI-compatible endpoint, which does not carry prompt caching. An
+organisation that wants cached Claude should use an `openrouter` or `gateway`
+key instead; both cache. (A native Anthropic client needs the AI SDK core
+upgraded across the repo first — `@ai-sdk/anthropic` pulls a
+`@ai-sdk/provider` that is not type-compatible with the pinned one.)
+
+**The endpoint is refused before anything is stored** unless it is `https` and
+publicly routable. The check rejects loopback, RFC1918, link-local and the
+cloud metadata address in every spelling — including the IPv4-mapped forms
+(`[::ffff:169.254.169.254]`) that the URL parser rewrites to hex — and it runs
+in the contract, so a bad endpoint is a 400 on every surface. The database
+additionally holds `base_url` to `https://` and to exactly the
+`openai_compatible` rows.
 
 Call `verify_model_credential` with the same `provider` and `apiKey` first if
 you want the vendor's answer before anything is stored. Setting does not
@@ -60,7 +94,8 @@ verify on its own.
 
 The same **redacted** view `get_model_credential` returns: `configured`,
 `provider`, `status`, `keyHint` (the last four characters of the key),
-`lastVerifiedAt`, and `rotatedAt`. Setting a key never echoes it back, and
+`baseUrl`, `modelMap`, `lastVerifiedAt`, and `rotatedAt`. The endpoint and the
+model map are returned in full because neither is a secret. Setting a key never echoes it back, and
 there is no read-back path anywhere.
 
 ## Side effects
@@ -86,14 +121,17 @@ there is no read-back path anywhere.
 ## Errors
 
 - `AUTH_TOKEN_ENCRYPTION_KEY` unset — refused rather than stored in plaintext.
-- Contract validation: an unknown `provider`, or an `apiKey` shorter than 8
-  or longer than 512 characters.
+- Contract validation (`invalid_input`): an unknown `provider`; an `apiKey`
+  shorter than 8 or longer than 512 characters; a `baseUrl` missing on
+  `openai_compatible` or present on any other provider; a `baseUrl` that is
+  not `https` or resolves to a non-routable literal; a direct-vendor key with
+  no `modelMap.balanced`.
 - The key is **not** checked against the vendor here. A bad key is stored as
   given and fails on the first completion; use `verify_model_credential`
   first to avoid that.
 
 ## Not in this slice
 
-Direct Anthropic and OpenAI keys. Per-workspace keys (the credential is
+A native Anthropic client (see the caveat above). Per-workspace keys (the credential is
 organisation-wide by design). Automatic verification on set: the settings
 page's "Test key" button calls `verify_model_credential` before it calls this.

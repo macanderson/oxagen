@@ -9,7 +9,7 @@ describe("org.model_credential.set capability", () => {
     expect(getCapability("set_model_credential")).toBe(orgModelCredentialSet);
   });
 
-  it("accepts each supported provider with a key", () => {
+  it("accepts a routed provider with a key and nothing else", () => {
     for (const provider of ["openrouter", "gateway"] as const) {
       const parsed = orgModelCredentialSet.input.parse({
         provider,
@@ -20,11 +20,103 @@ describe("org.model_credential.set capability", () => {
     }
   });
 
+  it("accepts a direct vendor key with its balanced-tier model", () => {
+    for (const provider of ["openai", "anthropic"] as const) {
+      const parsed = orgModelCredentialSet.input.parse({
+        provider,
+        apiKey: KEY,
+        modelMap: { balanced: "some-model" },
+      });
+      expect(parsed.provider).toBe(provider);
+    }
+  });
+
+  it("accepts an openai_compatible key with a public https endpoint and a model", () => {
+    const parsed = orgModelCredentialSet.input.parse({
+      provider: "openai_compatible",
+      apiKey: KEY,
+      baseUrl: "https://api.together.xyz/v1",
+      modelMap: { balanced: "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
+    });
+    expect(parsed.baseUrl).toBe("https://api.together.xyz/v1");
+  });
+
   it("rejects a vendor there is no provider client for", () => {
     expect(() =>
-      orgModelCredentialSet.input.parse({ provider: "anthropic", apiKey: KEY }),
+      orgModelCredentialSet.input.parse({
+        provider: "not-a-vendor",
+        apiKey: KEY,
+      }),
     ).toThrow();
   });
+
+  it("rejects a direct vendor key with no balanced model — it would 404 on the first question", () => {
+    // `api.openai.com` has no model called `anthropic/claude-sonnet-5`. The
+    // failure belongs at save time, not on the customer's first question.
+    expect(() =>
+      orgModelCredentialSet.input.parse({ provider: "openai", apiKey: KEY }),
+    ).toThrow(/balanced tier/);
+  });
+
+  it("rejects an openai_compatible key with no endpoint", () => {
+    expect(() =>
+      orgModelCredentialSet.input.parse({
+        provider: "openai_compatible",
+        apiKey: KEY,
+        modelMap: { balanced: "m" },
+      }),
+    ).toThrow(/base URL/);
+  });
+
+  it("rejects an endpoint on a provider whose URL Oxagen spells — it would be silently ignored", () => {
+    expect(() =>
+      orgModelCredentialSet.input.parse({
+        provider: "openrouter",
+        apiKey: KEY,
+        baseUrl: "https://example.com/v1",
+      }),
+    ).toThrow(/remove the base URL/);
+  });
+
+  it("rejects an http endpoint — the key would cross the wire in clear", () => {
+    expect(() =>
+      orgModelCredentialSet.input.parse({
+        provider: "openai_compatible",
+        apiKey: KEY,
+        baseUrl: "http://api.together.xyz/v1",
+        modelMap: { balanced: "m" },
+      }),
+    ).toThrow();
+  });
+
+  it.each([
+    "https://169.254.169.254/v1",
+    "https://127.0.0.1/v1",
+    "https://[::ffff:169.254.169.254]/v1",
+    "https://10.0.0.5/v1",
+    // A credential in the URL would be stored in the clear and returned by
+    // every read, which the view's redaction promise forbids.
+    "https://user:s3cret@api.together.xyz/v1",
+    "https://sk-live-secret@api.together.xyz/v1",
+  ])(
+    "refuses the internal endpoint %s as invalid input, not a 500",
+    (baseUrl) => {
+      // From the schema, a refusal is `invalid_input` on every surface. The same
+      // throw from the handler would be an unclassified server error.
+      const result = orgModelCredentialSet.input.safeParse({
+        provider: "openai_compatible",
+        apiKey: KEY,
+        baseUrl,
+        modelMap: { balanced: "m" },
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.path[0] === "baseUrl")).toBe(
+          true,
+        );
+      }
+    },
+  );
 
   it("requires both a provider and a key", () => {
     expect(() =>
@@ -66,6 +158,8 @@ describe("org.model_credential.set capability", () => {
       provider: "openrouter",
       status: "active",
       keyHint: "cdef",
+      baseUrl: null,
+      modelMap: {},
       lastVerifiedAt: null,
       rotatedAt: "2026-09-09T00:00:00.000Z",
       // A handler bug that echoed the input — the schema is the last line of
@@ -92,6 +186,7 @@ describe("org.model_credential.set capability", () => {
       "mcp",
       "unit",
       "docs",
+      "app",
     ]);
   });
 

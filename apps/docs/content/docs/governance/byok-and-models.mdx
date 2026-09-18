@@ -81,27 +81,30 @@ Two branches are easy to miss:
 - **A stored key that cannot be used falls back to Oxagen's key.** If an operator has disabled the key, or the server cannot decrypt it, the turn runs on Oxagen's key and is billed as assistant usage rather than failing on your key. A failure to *read* the credential is the opposite case. The turn fails, so an outage never quietly moves you onto Oxagen's billed key.
 - **Your own key still needs a positive credit balance.** Tool calls and other governed actions consume credits whoever pays for tokens, so the credit check runs on every turn.
 
-**Two providers today:**
+**Which keys you can bring:**
 
 - **OpenRouter.** One key reaches every model in the catalog. OpenRouter does not serve embeddings, so under an OpenRouter key, embeddings stay on Oxagen's key and are billed as assistant usage.
 - **Vercel AI Gateway.** One key reaches every model and serves embeddings too.
+- **OpenAI.** Your own OpenAI key. Tell Oxagen which of your models to use for the `balanced` tier, which is the one the assistant runs on.
+- **Anthropic.** Your own Anthropic key, with the same `balanced` model setting. Oxagen reaches Anthropic through its OpenAI-compatible endpoint, which does not offer prompt caching. If you want caching on Claude models, use an OpenRouter or Vercel AI Gateway key.
+- **Any other OpenAI-compatible server.** Together, Fireworks, Groq, Azure, or your own vLLM. Give its `baseUrl` and your `balanced` model. The URL must use `https` and must be reachable on the public internet; Oxagen refuses internal addresses.
 
-Direct Anthropic and OpenAI keys are not supported yet.
+For OpenAI, Anthropic, and custom servers, any tier you leave unmapped uses your `balanced` model, so the assistant never asks your vendor for a model it does not have.
 
-**To set your key:**
+**The model must be able to use tools.** The assistant answers questions by calling tools, so a model that cannot call them cannot answer anything about your workspace. When you test a custom server's key, Oxagen asks your `balanced` model for one tool call (at most 16 tokens) and tells you whether it worked. Keys for the four named providers are not asked, because they all support tools.
 
-1. Go to **Organisation settings → Model funding**. You need the org Owner or Admin role.
-2. Choose the provider and paste the key.
-3. Test the key. Oxagen asks the vendor whether it accepts the key. This check spends no tokens.
-4. Save. Oxagen encrypts the key before storing it. Nobody can read it back, not even an Owner. The page shows only its last four characters, when it was last tested, and when it was last changed.
+**To set your key**, you need the org Owner or Admin role. In the app, open **Organization › Model funding** at `/{org}/model-funding`, choose the vendor, paste the key, and for OpenAI, Anthropic, or a custom server name the `balanced` model (and the server's URL). The same two steps are available from the API and the MCP tools below:
+
+1. Test the key. In the app, **Test key**; from the API, `POST .../verify`. Oxagen asks the vendor whether it accepts the key, and for a custom server whether the model can call tools.
+2. Store it. In the app, **Save key**; from the API, `PUT`. Oxagen encrypts the key before storing it. Nobody can read it back, not even an Owner. Reads return only its last four characters, the endpoint and model settings, when it was last tested, and when it was last changed.
 
 Setting a new key replaces the old one. Clearing the key returns your organisation to Oxagen's key.
 
-**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). Once the month's platform-paid usage reaches the cap, Oxagen refuses the next turn before it starts, and the message names the cap. The check runs when a turn starts, so the turn that crosses the cap is allowed to finish. An Owner or Admin can raise the cap, or remove it, on the same page. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
+**The monthly spend cap.** While your organisation is on Oxagen's key, its assistant usage is capped each month. The default cap is 2000 credits ($20). Once the month's platform-paid usage reaches the cap, Oxagen refuses the next turn before it starts, and the message names the cap. The check runs when a turn starts, so the turn that crosses the cap is allowed to finish. The cap cannot be changed from the app yet. The cap does not apply while your own key is stored, because Oxagen is not paying for those tokens.
 
 **From the API.** The same settings are available at `/v1/:org/:workspace/org/model-credential`:
 
-- `PUT /v1/:org/:workspace/org/model-credential` with `{ "provider": "openrouter" | "gateway", "apiKey": "..." }` stores or replaces the key.
+- `PUT /v1/:org/:workspace/org/model-credential` stores or replaces the key. The body is `{ "provider", "apiKey" }`, plus `"modelMap": { "balanced": "..." }` for `openai`, `anthropic` and `openai_compatible`, plus `"baseUrl"` for `openai_compatible`.
 - `GET` returns the redacted view. `DELETE` clears the key. `POST .../verify` tests a key before you store it, or tests the stored key when the body is `{}`.
 
 Test a key, then store it:
@@ -167,7 +170,7 @@ stored = requests.put(base, headers=headers, json=body).json()
 }
 ```
 
-The verify call returns `ok`, `provider`, `latencyMs`, and `error`, where `error` is the vendor's own reason when it refuses the key. The store call returns the redacted view above. `lastVerifiedAt` is `null` on a freshly stored key, because storing does not verify. Send `POST .../verify` with `{}` afterwards to verify the stored key and record the time.
+The verify call returns `ok`, `provider`, `latencyMs`, `error`, and `toolCalling`. `error` is the vendor's own reason when it refuses the key, or when a custom server refuses the tool call. `toolCalling` is `false` when the key works but the model cannot use tools. The store call returns the redacted view above. `lastVerifiedAt` is `null` on a freshly stored key, because storing does not verify. Send `POST .../verify` with `{}` afterwards to verify the stored key and record the time.
 
 The audit log records every set and clear. The key itself never appears there.
 
