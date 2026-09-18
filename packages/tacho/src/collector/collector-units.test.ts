@@ -650,6 +650,41 @@ describe("shipper", () => {
     expect(sent).toBeUndefined();
   });
 
+  it("quarantines an event no request could ever carry, instead of retrying it for ever", async () => {
+    // `fitRequest` bounds what is sent, but one sealed event can exceed the
+    // limit on its own: the host never validates an event against
+    // `tachoEventSchema`, and the hook path stringifies every unpromoted
+    // field into `attrs` uncapped. A retry can never make that event
+    // smaller, so a 413 that is merely retried stops every later event on
+    // the host from shipping, not only the session that produced it.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const tooBig = events[1]?.seq;
+
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.seq === tooBig))
+            throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+
+    expect(result.quarantined).toBe(1);
+    expect(result.shipped).toBe(events.length - 1);
+    // The head advanced, which is the whole point: everything behind the
+    // oversized event got through.
+    expect(wal.stats().unshipped).toBe(0);
+    expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
   it("trims a request to what the route will accept, and ships the rest next time", async () => {
     // The wedge this avoids: the ingest route refuses anything over 1 MiB
     // with a 413, and a 413 is not a refusal the shipper can bisect. It

@@ -34,6 +34,12 @@ export interface PolicyView {
   hostStatus: PolicyBundle["host_status"];
   denyGeneration: DenyGeneration;
   controlReachable: boolean;
+  /**
+   * When the control plane last confirmed this mandate's etag, as epoch ms.
+   * Freshness is measured from here rather than from `expires_at`; see
+   * `isStale` in host/bundle.ts for why the two are not the same thing.
+   */
+  mandateConfirmedAt?: number;
 }
 
 export interface HookHandlerDeps {
@@ -440,6 +446,9 @@ export async function handleHookEvent(
           session: record.control,
           latestDenyGeneration: currentView.denyGeneration,
           controlReachable: currentView.controlReachable,
+          ...(currentView.mandateConfirmedAt !== undefined
+            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
+            : {}),
           now: deps.now(),
           context: {
             ...deps.match,
@@ -458,6 +467,9 @@ export async function handleHookEvent(
           session: record.control,
           latestDenyGeneration: currentView.denyGeneration,
           controlReachable: currentView.controlReachable,
+          ...(currentView.mandateConfirmedAt !== undefined
+            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
+            : {}),
           now: deps.now(),
           context: {
             ...deps.match,

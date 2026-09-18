@@ -239,6 +239,56 @@ describe("PreToolUse evaluation", () => {
     });
   });
 
+  it("keeps a confirmed mandate fresh past its own expires_at", () => {
+    // The defect this covers, and it is a live one in enforce mode. The etag
+    // covers policy content only, so an unchanged mandate answers
+    // `not_modified` on every poll and the host keeps the bundle it has.
+    // `expires_at` is inside the signature and cannot be renewed locally. So
+    // judging freshness by `expires_at` declares a healthy host stale 24
+    // hours after the last policy edit, and it stays stale until someone
+    // edits the policy again: every mutating tool call denied, fleet wide.
+    const issued = Date.parse("2026-09-10T00:00:00.000Z");
+    const expires = Date.parse("2026-09-11T00:00:00.000Z");
+    const dayOld = {
+      ...base,
+      bundle: signer.sign(
+        unsignedBundle({
+          issued_at: new Date(issued).toISOString(),
+          expires_at: new Date(expires).toISOString(),
+        }),
+      ),
+      // Two days after it was issued, so `expires_at` is well past.
+      now: issued + 2 * 24 * 60 * 60_000,
+    };
+    // Allowed by rule, and not read-only, so the freshness gate is what
+    // decides it rather than a permission miss.
+    const write = { toolName: "Bash", toolInput: { command: "git status" } };
+
+    // Confirmed an hour ago: the mandate is current, whatever the clock says
+    // about a timestamp the host cannot renew.
+    expect(
+      evaluatePreToolUse({
+        ...dayOld,
+        ...write,
+        mandateConfirmedAt: dayOld.now - 60 * 60_000,
+      }).decision,
+    ).toBe("allow");
+
+    // Not confirmed for longer than the bundle's own signed window: stale,
+    // which is what the window is for.
+    expect(
+      evaluatePreToolUse({
+        ...dayOld,
+        ...write,
+        mandateConfirmedAt: dayOld.now - 25 * 60 * 60_000,
+      }),
+    ).toMatchObject({ decision: "defer", reason_code: "bundle_stale" });
+
+    // No confirmation recorded reads exactly as it did before, measuring
+    // from `issued_at`, so a caller that predates this changes nothing.
+    expect(evaluatePreToolUse({ ...dayOld, ...write }).decision).toBe("defer");
+  });
+
   it("treats a newer deny generation or an expired bundle as stale", () => {
     const stale = { ...base, latestDenyGeneration: { org: 2, workspace: 1 } };
     expect(evaluatePreToolUse({ ...stale, toolName: "Read" })).toMatchObject({

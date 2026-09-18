@@ -263,6 +263,18 @@ export async function startDaemon(
 
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
   /**
+   * When the control plane last confirmed the cached mandate, as epoch ms.
+   *
+   * A poll that answers `not_modified` is a confirmation: it says the etag in
+   * force is still this one. Freshness has to be measured from here, because
+   * the etag covers policy content only, so an unchanged mandate is never
+   * re-sent and its signed `expires_at` cannot be renewed on the host. See
+   * `isStale` in host/bundle.ts. Seeded from the last fetch, so a daemon that
+   * restarts does not declare a mandate it just cached stale.
+   */
+  let mandateConfirmedAt =
+    Date.parse(host.bundle_fetched_at) || startedAt;
+  /**
    * The retention clause the host may act on: the cached one while its
    * signature holds, and nothing otherwise.
    *
@@ -273,7 +285,20 @@ export async function startDaemon(
    * there to prevent.
    */
   const retentionInForce = (): RetentionMandate =>
-    bundleVerified ? host.bundle.retention : NO_RETENTION;
+    bundleVerified && !mandateLapsed() ? host.bundle.retention : NO_RETENTION;
+  /**
+   * Whether the cached mandate has outlived its own signed window since the
+   * control plane last confirmed it. The same rule `isStale` applies to tool
+   * decisions: a grant is authority for as long as the mandate is current,
+   * and no longer.
+   */
+  function mandateLapsed(): boolean {
+    const issued = Date.parse(host.bundle.issued_at);
+    const expires = Date.parse(host.bundle.expires_at);
+    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return false;
+    if (expires <= issued) return false;
+    return now() - mandateConfirmedAt > expires - issued;
+  }
   if (!bundleVerified) {
     const held = bodyStore.dropDisallowed(NO_RETENTION);
     if (held > 0)
@@ -367,6 +392,7 @@ export async function startDaemon(
     return {
       bundle: current.bundle,
       verified: bundleVerified,
+      mandateConfirmedAt,
       hostStatus: current.host_status,
       denyGeneration: current.deny_generation,
       controlReachable:
@@ -379,6 +405,10 @@ export async function startDaemon(
     try {
       const response = await client.bundle(host.bundle.etag);
       lastControlAt = now();
+      // The answer confirms the etag in force either way. `not_modified`
+      // means "still this one", which is exactly the confirmation freshness
+      // is measured from.
+      mandateConfirmedAt = now();
       if (response.not_modified || response.bundle === null) return false;
       const verification = verifyBundle(
         response.bundle,
@@ -420,7 +450,8 @@ export async function startDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
-    if (control.bundle_etag !== host.bundle.etag) await refreshBundle();
+    if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
+    else await refreshBundle();
     if (control.commands.length > 0) {
       const result = await applyCommands(control.commands, {
         registry,

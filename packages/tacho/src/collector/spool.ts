@@ -341,10 +341,18 @@ export class Shipper {
       }
       if (
         error instanceof ControlError &&
-        (error.status === 400 || error.status === 422)
+        (error.status === 400 || error.status === 422 || error.status === 413)
       ) {
-        // The control plane refused the batch as malformed. Bisect to the
-        // event it objects to; a single refused event is quarantined.
+        // The control plane refused the batch: malformed (400, 422), or too
+        // large for one request (413). Bisect to the event it objects to; a
+        // single refused event is quarantined.
+        //
+        // 413 belongs here even though `fitRequest` bounds what is sent. One
+        // sealed event can exceed the limit on its own, because the host
+        // never validates an event against `tachoEventSchema` and the hook
+        // path stringifies every unpromoted field into `attrs` uncapped. A
+        // retry could never make that event smaller, so retrying it forever
+        // stops every later event on the host from shipping.
         if (batch.length === 1) {
           this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
           this.succeed();

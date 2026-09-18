@@ -216,6 +216,13 @@ export interface EvaluationInput {
   latestDenyGeneration?: DenyGeneration;
   /** Whether the control plane answered recently; decides how staleness resolves. */
   controlReachable: boolean;
+  /**
+   * When the control plane last confirmed this mandate, as epoch ms. A poll
+   * that answers `not_modified` is a confirmation: it says the etag in force
+   * is still this one. Absent reproduces the old reading, which judged
+   * freshness by `expires_at` alone.
+   */
+  mandateConfirmedAt?: number;
   now: number;
   context?: MatchContext;
 }
@@ -237,13 +244,39 @@ export interface Evaluation {
   bundle_mode: PolicyBundle["mode"];
 }
 
+/**
+ * Whether the cached mandate has gone stale.
+ *
+ * Freshness is how long since the control plane last CONFIRMED this mandate,
+ * not whether `expires_at` has passed. The etag covers policy content only
+ * (`unsignedBundle` in packages/handlers/src/lib/tacho-host.ts), so an
+ * unchanged mandate answers `not_modified` on every poll and the host keeps
+ * the bundle it has. `expires_at` sits inside the signature, so the host
+ * cannot renew it. Judging by `expires_at` therefore declares a perfectly
+ * healthy host stale 24 hours after the last mandate content change, and it
+ * stays stale until someone edits the policy: in enforce mode that denies
+ * every mutating tool call on every host in the fleet.
+ *
+ * The window is the bundle's own signed lifetime, `expires_at - issued_at`,
+ * measured from the last confirmation. With no confirmation recorded it
+ * measures from `issued_at`, which is exactly the old reading.
+ */
 function isStale(
   bundle: PolicyBundle,
   latest: DenyGeneration | undefined,
   now: number,
+  mandateConfirmedAt?: number,
 ): boolean {
+  const issued = Date.parse(bundle.issued_at);
   const expires = Date.parse(bundle.expires_at);
-  if (Number.isFinite(expires) && expires < now) return true;
+  if (Number.isFinite(issued) && Number.isFinite(expires) && expires > issued) {
+    const confirmedAt = mandateConfirmedAt ?? issued;
+    if (now - confirmedAt > expires - issued) return true;
+  } else if (Number.isFinite(expires) && expires < now) {
+    // A bundle whose timestamps do not describe a window at all keeps the
+    // old reading rather than being treated as fresh for ever.
+    return true;
+  }
   if (latest === undefined) return false;
   return (
     latest.org > bundle.deny_generation.org ||
@@ -346,7 +379,12 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   }
 
   // 2. Freshness.
-  const stale = isStale(bundle, input.latestDenyGeneration, input.now);
+  const stale = isStale(
+    bundle,
+    input.latestDenyGeneration,
+    input.now,
+    input.mandateConfirmedAt,
+  );
   if (stale && !readOnly) {
     if (!input.controlReachable) {
       return deny(
