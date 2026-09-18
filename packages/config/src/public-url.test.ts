@@ -62,6 +62,45 @@ describe("assertPublicHttpUrl", () => {
     expect(() => assertPublicHttpUrl(raw, TLS)).toThrow(UnsafeOutboundUrlError);
   });
 
+  // Beyond loopback, RFC 1918 and link-local: every block the IANA
+  // special-purpose registry (RFC 6890) lists as not globally reachable. A
+  // deployment can route these to internal services — the shared address
+  // space is where a cloud's NAT sits, the benchmarking range is reused by
+  // VPCs — so an endpoint in any of them is an internal host with a customer
+  // key in the header (P1 on #3308).
+  it.each([
+    ["shared address space (CGNAT)", "https://100.64.0.1/v1"],
+    ["shared address space, top", "https://100.127.255.254/v1"],
+    ["IETF protocol assignments", "https://192.0.0.8/v1"],
+    ["TEST-NET-1", "https://192.0.2.10/v1"],
+    ["6to4 relay anycast", "https://192.88.99.1/v1"],
+    ["benchmarking", "https://198.18.0.1/v1"],
+    ["benchmarking, second half", "https://198.19.255.1/v1"],
+    ["TEST-NET-2", "https://198.51.100.7/v1"],
+    ["TEST-NET-3", "https://203.0.113.9/v1"],
+    ["multicast", "https://224.0.0.1/v1"],
+    ["reserved class E", "https://240.0.0.1/v1"],
+    ["broadcast", "https://255.255.255.255/v1"],
+    ["IPv4-mapped CGNAT", "https://[::ffff:100.64.0.1]/v1"],
+    ["IPv6 site-local", "https://[fec0::1]/v1"],
+    ["IPv6 multicast", "https://[ff02::1]/v1"],
+    ["IPv6 documentation", "https://[2001:db8::1]/v1"],
+    ["IPv6 discard-only", "https://[100::1]/v1"],
+    ["6to4 wrapping RFC1918", "https://[2002:a00:1::1]/v1"],
+    ["Teredo wrapping loopback", "https://[2001:0:7f00:1::1]/v1"],
+  ])("refuses the special-use range %s", (_name, raw) => {
+    expect(() => assertPublicHttpUrl(raw, TLS)).toThrow(/non-routable/);
+  });
+
+  it.each([
+    ["the address just below the shared space", "https://100.63.255.255/v1"],
+    ["the address just above the shared space", "https://100.128.0.0/v1"],
+    ["the address beside the benchmarking range", "https://198.20.0.1/v1"],
+    ["6to4 wrapping a public address", "https://[2002:808:808::1]/v1"],
+  ])("still admits %s — the ranges are exact", (_name, raw) => {
+    expect(() => assertPublicHttpUrl(raw, TLS)).not.toThrow();
+  });
+
   it.each([
     ["IPv4-mapped public", "https://[::ffff:8.8.8.8]/"],
     ["a public IPv6 host", "https://[2606:4700:4700::1111]/"],

@@ -144,20 +144,38 @@ function normalizeIPv4(host: string): string | null {
   return octets.join(".");
 }
 
+/**
+ * True for every IPv4 block the IANA special-purpose registry (RFC 6890) says
+ * is not globally reachable, not just loopback, RFC 1918 and link-local.
+ * The extra blocks matter because a deployment CAN route them to internal
+ * services: `100.64.0.0/10` is what a cloud's NAT and service mesh sit on,
+ * `198.18.0.0/15` is the benchmarking range some VPCs reuse, and multicast or
+ * the reserved class E block reach something only from inside a network.
+ * An admin-typed endpoint in any of them is a request to have this process
+ * dial an internal host with a customer key in the header.
+ */
 function isPrivateIPv4(host: string): boolean {
   const parts = host.split(".").map((s) => {
     const n = Number.parseInt(s, 10);
     return Number.isNaN(n) ? -1 : n;
   });
   if (parts.length !== 4 || parts.some((p) => p < 0 || p > 255)) return false;
-  const [a, b] = parts as [number, number, number, number];
+  const [a, b, c] = parts as [number, number, number, number];
   return (
-    a === 0 || // 0.0.0.0/8 — unspecified
-    a === 10 || // 10.0.0.0/8
-    a === 127 || // 127.0.0.0/8
-    (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12
-    (a === 192 && b === 168) || // 192.168.0.0/16
-    (a === 169 && b === 254) // 169.254.0.0/16 (incl. 169.254.169.254 IMDS)
+    a === 0 || // 0.0.0.0/8 — "this network"
+    a === 10 || // 10.0.0.0/8 — RFC 1918
+    (a === 100 && b >= 64 && b <= 127) || // 100.64.0.0/10 — shared address space (CGNAT)
+    a === 127 || // 127.0.0.0/8 — loopback
+    (a === 169 && b === 254) || // 169.254.0.0/16 — link-local (incl. 169.254.169.254 IMDS)
+    (a === 172 && b >= 16 && b <= 31) || // 172.16.0.0/12 — RFC 1918
+    (a === 192 && b === 0 && c === 0) || // 192.0.0.0/24 — IETF protocol assignments
+    (a === 192 && b === 0 && c === 2) || // 192.0.2.0/24 — TEST-NET-1
+    (a === 192 && b === 88 && c === 99) || // 192.88.99.0/24 — deprecated 6to4 relay anycast
+    (a === 192 && b === 168) || // 192.168.0.0/16 — RFC 1918
+    (a === 198 && (b === 18 || b === 19)) || // 198.18.0.0/15 — benchmarking
+    (a === 198 && b === 51 && c === 100) || // 198.51.100.0/24 — TEST-NET-2
+    (a === 203 && b === 0 && c === 113) || // 203.0.113.0/24 — TEST-NET-3
+    a >= 224 // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, 255.255.255.255 broadcast
   );
 }
 
@@ -227,7 +245,26 @@ function isPrivateIPv6(ip: string): boolean {
   if (zeroTo(7) && g[7] === 1) return true; // ::1 loopback
   if (zeroTo(8)) return true; // :: unspecified
   if ((g[0]! & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0]! & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local (deprecated, still routed by some stacks)
   if ((g[0]! & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((g[0]! & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (g[0] === 0x2001 && g[1] === 0xdb8) return true; // 2001:db8::/32 documentation
+  if (g[0] === 0x100 && g.slice(1, 4).every((x) => x === 0)) return true; // 100::/64 discard-only
+
+  // Transition addresses that carry an IPv4 address in their high bits and
+  // reach it through a relay: 6to4 (`2002:a.b.c.d::/48`) and Teredo
+  // (`2001:0::/32`, the server's IPv4 in groups 2–3). Range-check the embedded
+  // IPv4 the same way the low-bits forms below are checked.
+  if (g[0] === 0x2002) {
+    return isPrivateIPv4(
+      [g[1]! >> 8, g[1]! & 0xff, g[2]! >> 8, g[2]! & 0xff].join("."),
+    );
+  }
+  if (g[0] === 0x2001 && g[1] === 0) {
+    return isPrivateIPv4(
+      [g[2]! >> 8, g[2]! & 0xff, g[3]! >> 8, g[3]! & 0xff].join("."),
+    );
+  }
 
   // Addresses that carry an IPv4 address in their low 32 bits and that the OS
   // or the network delivers TO that IPv4 address. Range-check the embedded
