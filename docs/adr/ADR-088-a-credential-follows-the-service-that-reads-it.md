@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-18
 - **Owners:** platform, app
-- **Related:** ADR-087 (an on-demand read lives in a `"use server"` module — the
+- **Related:** ADR-089 (an on-demand read lives in a `"use server"` module — the
   kernel seam is the only route from `apps/app` to `invoke()`), ADR-020
   (per-workspace GitHub write credentials), ADR-042 (data planes), ADR-053 §1
   (the engine is a separate container the app reaches over loopback),
@@ -37,7 +37,7 @@ Nine variables behind the GitHub repository flow named `api` (two of them also
 
 All of those run **inside `apps/app`**. The app reaches every capability
 in-process: `apps/app/src/server/kernel.ts` calls `invoke()` directly, and
-ADR-087 makes that seam the only route to it. So the declaration said the app
+ADR-089 makes that seam the only route to it. So the declaration said the app
 needs none of these while the app is where they are read.
 
 It had been wrong longer than the branch that found it. `commit_agent_definition`
@@ -119,7 +119,7 @@ key from the app withholds nothing from anyone who has the app.
 capability. The single outbound service call `apps/app` makes is to
 `stella-serve` over loopback (ADR-053 §1). Routing three capabilities would
 introduce a transport that exists for nothing else, for three capabilities,
-against ADR-087's "the kernel seam is still the only path to `invoke()`".
+against ADR-089's "the kernel seam is still the only path to `invoke()`".
 
 **3. It would need user-identity forwarding, which is a worse credential.**
 These handlers gate on `assertOrgRole` against the acting user, so the hop

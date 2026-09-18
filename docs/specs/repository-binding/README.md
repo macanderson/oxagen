@@ -261,7 +261,7 @@ Each phase is shippable and leaves the gate green.
    `list_repository_bindings` composed from #3233's `get_main_repository` and
    `list_installation_repositories` rather than re-reading GitHub; the `.oxagen/` presence
    read and its observation row; the page with the Repositories tab. Reads from
-   `features/**` follow ADR-087.
+   `features/**` follow ADR-089.
 4. **The init wizard.** `init_oxagen_directory` and its five checks. Closes the
    `governance.toml` gap.
 5. **Changes.** `list_oxagen_prs` / `get_oxagen_pr`; the Changes tab over every kind,
