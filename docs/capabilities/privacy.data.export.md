@@ -41,8 +41,20 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 
 ## Roles
 
-- `scope: "user"` — any authenticated user (their own data only).
-- `scope: "org"` — Owner or Admin role on the org.
+- `scope: "user"` — any authenticated user (their own data only). The contract
+  defaults to `allow` rather than listing roles: an invited member holds no org
+  role, and portability is a right the person holds, not a privilege an
+  administrator grants. An explicit deny grant still refuses.
+- `scope: "org"` — Owner or Admin role on the org. Enforced in the handler, not
+  by the role map, because the rule turns on an input field. The handler reads
+  membership on the **target** org, so a body-supplied `orgId` is checked
+  against the caller's role there rather than in the context org.
+
+## Billing
+
+Exempt from the billing gate (`noBillingGate`). Assembling the ZIP spends no AI
+credits, and a person must still be able to export their data when the
+organization has exhausted its credits or reached its spend ceiling.
 
 ## Side effects
 
@@ -62,6 +74,6 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 | code | meaning |
 |---|---|
 | `unauthorized` | No authenticated session. |
-| `forbidden` | `scope: "org"` requested without Owner/Admin role. |
+| `forbidden` | `scope: "org"` requested without Owner/Admin role (`reason: "org_export_requires_admin"`). |
 | `validation_error` | Input failed Zod parse. |
 | `not_found` | `exportId` not found when polling. |
