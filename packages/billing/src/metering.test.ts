@@ -342,6 +342,27 @@ describe("chargeUsageCredits: the default markup, by reason", () => {
     );
     expect(resolveMeterMarkup).not.toHaveBeenCalled();
   });
+
+  it("an explicit markup is used without resolving the solved markup at all, so a caller that supplies one does not depend on meter configuration", async () => {
+    // The real resolveMeterMarkup reads OXAGEN_METER_MARKUP through requireEnv
+    // and otherwise runs the margin solve, either of which throws when meter
+    // configuration is absent or invalid. The mock stands in for that by
+    // throwing whenever no test value is set. A caller that passes its own
+    // markup must never reach it, which an eager default would break for
+    // every reason other than assistant tokens.
+    meterMarkupState.value = null;
+    // Throwing here IS the failure: the mock throws when no value is set.
+    await chargeUsageCredits({
+      orgId: "org-1",
+      reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+      markup: MARKUP,
+      ...sonnetCall,
+    });
+    expect(consumeCredits).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedMicroCents: 19_914_000n }),
+    );
+    expect(resolveMeterMarkup).not.toHaveBeenCalled();
+  });
 });
 
 // ── ADR-053 §3: the assistant spend cap ──────────────────────────────────────

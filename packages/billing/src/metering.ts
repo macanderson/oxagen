@@ -364,14 +364,19 @@ async function chargeCostUsd(params: {
   // blended markup. Branching on the reason here, in the one function every
   // charge funnels through, is what makes "assistant tokens bill at cost"
   // true regardless of which caller reaches this line.
-  const defaultMarkup =
-    params.reason === CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS
+  //
+  // Resolved lazily, behind the override: `resolveMeterMarkup()` reads
+  // OXAGEN_METER_MARKUP through requireEnv and falls back to the margin solve,
+  // either of which throws on absent or invalid meter configuration. A caller
+  // that supplies its own markup (a test, a dry run) must not be made to
+  // depend on that configuration, which is why the override is checked first
+  // rather than after both branches have already run.
+  const markup =
+    params.markup ??
+    (params.reason === CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS
       ? ASSISTANT_TOKEN_MARKUP
-      : resolveMeterMarkup();
-  const microCredits = microCreditsForCostUsd(
-    params.costUsd,
-    params.markup ?? defaultMarkup,
-  );
+      : resolveMeterMarkup());
+  const microCredits = microCreditsForCostUsd(params.costUsd, markup);
   if (microCredits <= 0n) {
     logger.debug(
       {
