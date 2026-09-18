@@ -31,6 +31,21 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const dbMock = { ...real, withTenantDb: mocks.withTenantDb };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
+// Only the constructor: every other export is the real one, and every other
+// test in this file injects its own store, so nothing else here goes through
+// it. The capture is what proves the default store carries both seams.
+const storeOptions: Array<Record<string, unknown>> = [];
+vi.mock("@oxagen/run-ledger", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/run-ledger")>();
+  return {
+    ...real,
+    createPostgresRunStore: (options: Record<string, unknown> = {}) => {
+      storeOptions.push(options);
+      return real.createPostgresRunStore(options);
+    },
+  };
+});
+
 vi.mock("@oxagen/iam", () => ({
   createAgentRunAuthorizationSnapshot: mocks.snapshot,
 }));
@@ -46,6 +61,7 @@ import {
   ASSISTANT_MAX_CONTEXT_TOKENS,
   ASSISTANT_PRINCIPAL_NAME,
   ASSISTANT_RETENTION_POLICY,
+  assistantRunStore,
   AssistantRunNotRecordedError,
   openAssistantRun,
   resolveAssistantRunIdentity,
@@ -1172,5 +1188,20 @@ describe("the recorder hands the ledger the content its frames are about", () =>
       }),
     ).resolves.toBeUndefined();
     expect(bodyOf(ledger.batches, "model.engine_call_started")).toBeUndefined();
+  });
+});
+
+describe("assistantRunStore", () => {
+  it("is built with a body store, because the assistant's frames carry bodies", () => {
+    // The unit tests above all inject their own store, so none of them reaches
+    // the constructor. Without this, a store missing `bodies` passes every
+    // test here and then refuses the first frame of every turn in production,
+    // because ASSISTANT_RETENTION_POLICY retains every content class and
+    // `resolveBodyColumns` raises rather than downgrading the run.
+    storeOptions.length = 0;
+    assistantRunStore();
+    const options = storeOptions.at(-1);
+    expect(options?.["bodies"]).toBeDefined();
+    expect(options?.["archive"]).toBeDefined();
   });
 });

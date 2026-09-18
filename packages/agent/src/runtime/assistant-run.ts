@@ -41,7 +41,10 @@ import {
   type ResolvedEngineIdentity,
   type RunStore,
 } from "@oxagen/run-ledger";
-import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
+import {
+  deferredEvidenceArchive,
+  deferredEvidenceBodies,
+} from "@oxagen/run-ledger/evidence-store";
 import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -421,8 +424,7 @@ export async function openAssistantRun(
   // rather than `evidenceStore()` because this module is constructed on a
   // path that does not always seal, and the deferred seam opens the storage
   // driver only when a segment is actually written.
-  const store =
-    args.store ?? createPostgresRunStore({ archive: deferredEvidenceArchive });
+  const store = args.store ?? assistantRunStore();
   const now = args.now ?? (() => new Date());
   const inScope = <T>(fn: () => Promise<T>): Promise<T> =>
     runInTenantScope(scope, fn);
@@ -571,6 +573,23 @@ export async function openAssistantRun(
       err,
     );
   }
+}
+
+/**
+ * The run store the in-app assistant records through.
+ *
+ * Both seams are required, and the body one is load-bearing: the assistant's
+ * frames carry bodies and `ASSISTANT_RETENTION_POLICY` retains every content
+ * class, so a store built without `bodies` refuses the first frame of every
+ * turn (`resolveBodyColumns` raises rather than silently downgrading a run
+ * the workspace asked to keep content for). Exported so a test can assert
+ * both are present without opening a storage driver.
+ */
+export function assistantRunStore(): RunStore {
+  return createPostgresRunStore({
+    archive: deferredEvidenceArchive,
+    bodies: deferredEvidenceBodies,
+  });
 }
 
 /**
