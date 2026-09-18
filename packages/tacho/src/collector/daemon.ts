@@ -8,7 +8,7 @@
 import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -38,7 +38,7 @@ import {
 import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
-import type { Exec } from "../host/service";
+import type { Exec, ExecAsync, ExecResult } from "../host/service";
 import { NO_RETENTION, type RetentionMandate } from "../evidence/retention";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
@@ -123,6 +123,11 @@ export interface DaemonOptions {
   host?: HostFile;
   fetch?: FetchLike;
   exec?: Exec;
+  /**
+   * The port the git probes use. Defaults to a promisified `exec` when one
+   * is injected, and otherwise to `execFile`.
+   */
+  execAsync?: ExecAsync;
   now?: () => number;
   log?: (line: string) => void;
   timers?: Partial<DaemonTimers>;
@@ -204,6 +209,45 @@ function defaultExec(command: string, args: string[]): ReturnType<Exec> {
   };
 }
 
+/**
+ * The daemon's asynchronous `Exec`, carrying the same two bounds.
+ *
+ * The git probes run through this one rather than through `defaultExec`.
+ * `spawnSync` stops this process's event loop until the child exits, and
+ * this process is the one answering hooks: a tick may read up to
+ * `GIT_READS_PER_TICK` worktrees, each of them several git commands with a
+ * ten second ceiling apiece, so one slow repository could keep the listener
+ * from answering any hook at all until the hooks gave up and decided
+ * locally. A hook that decides locally is a mandate that was not enforced,
+ * which is why the probes had to stop blocking.
+ *
+ * `execFile` reports a non-zero exit as an error carrying the child's own
+ * `code`, and a spawn failure as an error with no code at all. Both become a
+ * status here rather than a rejection, because the reader upstream treats
+ * every failure the same way: no facts, no throw.
+ */
+function defaultExecAsync(
+  command: string,
+  args: string[],
+): Promise<ExecResult> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      args,
+      { encoding: "utf8", maxBuffer: 4 * 1024 * 1024, timeout: 10_000 },
+      (error, stdout, stderr) => {
+        const code = (error as (Error & { code?: number | string }) | null)
+          ?.code;
+        resolve({
+          status: error === null ? 0 : typeof code === "number" ? code : 1,
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+        });
+      },
+    );
+  });
+}
+
 function defaultKill(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean {
   try {
     process.kill(pid, signal);
@@ -235,6 +279,14 @@ export async function startDaemon(
     });
   const timers: DaemonTimers = { ...DEFAULT_TIMERS, ...options.timers };
   const exec = options.exec ?? defaultExec;
+  // An injected synchronous `exec` still governs the git probes, so a test
+  // that hands the daemon a fake git does not get a real one. Only a daemon
+  // given neither port reaches for a child process.
+  const execAsync: ExecAsync =
+    options.execAsync ??
+    (options.exec !== undefined
+      ? async (command, args) => exec(command, args)
+      : defaultExecAsync);
   const kill = options.kill ?? defaultKill;
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
@@ -749,11 +801,14 @@ export async function startDaemon(
   const gitFactsByCwd = new Map<string, { at: number; facts?: GitFacts }>();
   const GIT_FACTS_TTL_MS = 30_000;
 
-  function gitFactsFor(cwd: string, force: boolean): GitFacts | undefined {
+  async function gitFactsFor(
+    cwd: string,
+    force: boolean,
+  ): Promise<GitFacts | undefined> {
     const cached = gitFactsByCwd.get(cwd);
     if (cached !== undefined && !force && now() - cached.at < GIT_FACTS_TTL_MS)
       return cached.facts;
-    const facts = readGitFacts(exec, cwd);
+    const facts = await readGitFacts(execAsync, cwd);
     gitFactsByCwd.set(cwd, {
       at: now(),
       ...(facts !== undefined ? { facts } : {}),
@@ -849,7 +904,7 @@ export async function startDaemon(
       const cwd = session?.cwd;
       if (session === undefined || session.sealed || cwd === undefined)
         continue;
-      const facts = gitFactsFor(cwd, want.force);
+      const facts = await gitFactsFor(cwd, want.force);
       // Undefined is "not a repository this host can read", and there is
       // nothing to say about the worktree of a directory that is not one.
       if (facts === undefined) continue;
@@ -862,7 +917,9 @@ export async function startDaemon(
       found.push({
         session,
         facts,
-        ...(due ? { changes: readWorkingTreeChanges(exec, cwd) } : {}),
+        ...(due
+          ? { changes: await readWorkingTreeChanges(execAsync, cwd) }
+          : {}),
       });
     }
     if (found.length === 0) return;
@@ -910,8 +967,8 @@ export async function startDaemon(
    * `unobserved_tail` rather than guessing at it.
    *
    * There is no per-tool-call trigger on purpose: `readWorkingTreeChanges`
-   * spawns up to four git processes, and paying that on every `Edit` would
-   * cost more than the fact is worth.
+   * spawns several git processes, one of them per untracked file, and paying
+   * that on every `Edit` would cost more than the fact is worth.
    */
   const RECONCILE_HOOKS = new Set(["Stop"]);
 

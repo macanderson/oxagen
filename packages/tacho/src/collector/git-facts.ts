@@ -35,10 +35,19 @@
  * never stored: the field is `git_remote_digest` and its schema type is a
  * sha256 digest, which is enough to tell two hosts working the same
  * repository apart without saying which repository it is.
+ *
+ * Nothing here blocks the caller. Every read takes `ExecAsync`, not the
+ * synchronous `Exec` the CLI and the service manager use, because the one
+ * caller of this module is the collector daemon and the daemon answers hooks
+ * on the same event loop a synchronous spawn would stop. Reads that do not
+ * depend on each other are issued together, which is safe because they are
+ * all reads and `--no-optional-locks` keeps every one of them off the index
+ * lock, so two concurrent git processes in one worktree contend for nothing
+ * and neither can disturb the agent working there.
  */
 import { digestBytes, type Sha256Digest } from "../digest";
 import { MAX_OBSERVED_CHANGES } from "../envelope";
-import type { Exec } from "../host/service";
+import type { ExecAsync, ExecResult } from "../host/service";
 
 /** Repository facts for one working directory, all optional. */
 export interface GitFacts {
@@ -71,6 +80,35 @@ const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
 export const MAX_CHANGED_PATHS = 2_000;
 
 /**
+ * The most untracked files one reconciliation measures line counts for.
+ *
+ * An untracked create appears in `git status` and in no diff, so neither
+ * `diff --numstat HEAD` nor the unstaged fallback offers a count for it. It
+ * was previously recorded as zero added lines, and ingest then persisted
+ * that zero as the run's observed line count, which is a different claim
+ * from "not measured": an agent that wrote a four hundred line file read as
+ * an agent that wrote nothing. The count is now measured, one
+ * `diff --numstat --no-index` per untracked file.
+ *
+ * That costs a process per file, so it is bounded twice. This constant caps
+ * how many files are measured in one reconciliation, and
+ * `UNTRACKED_COUNT_CONCURRENCY` caps how many run at once. The cap is rarely
+ * reached in practice because porcelain v1 collapses a wholly untracked
+ * directory into one entry: a generated tree of a hundred thousand files is
+ * one path here, not a hundred thousand.
+ *
+ * Two cases still record zero rather than a measurement, and both are
+ * stated rather than hidden: a directory entry, which names a subtree and
+ * not a file, and any file past this cap. Telling those apart from a real
+ * zero needs a field the observed-change schema does not have, which is a
+ * change to the envelope and to ingest rather than to this reader.
+ */
+export const MAX_UNTRACKED_LINE_COUNTS = 64;
+
+/** The most untracked-file probes in flight at once. */
+export const UNTRACKED_COUNT_CONCURRENCY = 4;
+
+/**
  * Run one git command in `cwd` and return its stdout, or undefined for every
  * failure there is: git missing, a directory that is not a repo, a non-zero
  * exit, or a spawn that threw.
@@ -79,11 +117,20 @@ export const MAX_CHANGED_PATHS = 2_000;
  * observing a worktree never contends with the agent working in it.
  * `core.quotePath=false` stops git from escaping non-ASCII paths, which
  * keeps the parsing below to one quoting case rather than two.
+ *
+ * `okStatus` names the exit codes that mean the command answered. It is `[0]`
+ * for every read but the untracked-file probe, where git follows `diff` and
+ * exits 1 to say the two inputs differ, which is the answer being asked for.
  */
-function git(exec: Exec, cwd: string, args: string[]): string | undefined {
-  let result: ReturnType<Exec>;
+async function git(
+  exec: ExecAsync,
+  cwd: string,
+  args: string[],
+  okStatus: readonly number[] = [0],
+): Promise<string | undefined> {
+  let result: ExecResult;
   try {
-    result = exec("git", [
+    result = await exec("git", [
       "-C",
       cwd,
       "--no-optional-locks",
@@ -94,7 +141,8 @@ function git(exec: Exec, cwd: string, args: string[]): string | undefined {
   } catch {
     return undefined;
   }
-  if (result.status !== 0) return undefined;
+  if (result.status === null || !okStatus.includes(result.status))
+    return undefined;
   const stdout = result.stdout ?? "";
   return stdout.length > MAX_STDOUT_BYTES
     ? stdout.slice(0, MAX_STDOUT_BYTES)
@@ -115,18 +163,26 @@ function firstLine(value: string | undefined): string | undefined {
  * recording a guess. A repository that answers `HEAD` but has no branch
  * (detached) or no remote simply omits those members.
  */
-export function readGitFacts(exec: Exec, cwd: string): GitFacts | undefined {
-  const head = firstLine(git(exec, cwd, ["rev-parse", "HEAD"]));
+export async function readGitFacts(
+  exec: ExecAsync,
+  cwd: string,
+): Promise<GitFacts | undefined> {
+  const head = firstLine(await git(exec, cwd, ["rev-parse", "HEAD"]));
   if (head === undefined) return undefined;
   const facts: GitFacts = { head_sha: head };
-  const branch = firstLine(git(exec, cwd, ["rev-parse", "--abbrev-ref", "HEAD"]));
+  // `HEAD` gates the other three: a directory that cannot answer it is not a
+  // repository, and there is nothing to ask it. The three that follow answer
+  // independent questions, so they are asked at once rather than in series.
+  const [branch, status, remote] = await Promise.all([
+    git(exec, cwd, ["rev-parse", "--abbrev-ref", "HEAD"]).then(firstLine),
+    git(exec, cwd, ["status", "--porcelain"]),
+    git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
+  ]);
   // `HEAD` is what a detached checkout answers, and it names no branch.
   if (branch !== undefined && branch !== "HEAD") facts.branch = branch;
-  const status = git(exec, cwd, ["status", "--porcelain"]);
   // Undefined here is a failed read, not a clean tree, so the field is left
   // off rather than asserting cleanliness nobody observed.
   if (status !== undefined) facts.dirty = status.trim().length > 0;
-  const remote = firstLine(git(exec, cwd, ["remote", "get-url", "origin"]));
   if (remote !== undefined) facts.remote_digest = digestBytes(remote);
   return facts;
 }
@@ -231,6 +287,62 @@ export function parseNumstat(
 }
 
 /**
+ * Run `tasks` with at most `limit` in flight, discarding the results.
+ *
+ * A bounded pool rather than `Promise.all` because the tasks here are child
+ * processes: the whole point of measuring untracked files is that it costs a
+ * spawn each, and sixty-four spawns at once on an operator's laptop is a
+ * worse neighbour than the blocking read this replaced.
+ */
+async function pooled(
+  tasks: readonly (() => Promise<void>)[],
+  limit: number,
+): Promise<void> {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      const task = tasks[index];
+      if (task === undefined) return;
+      await task();
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, tasks.length) }, worker),
+  );
+}
+
+/**
+ * Lines in one untracked file, measured by diffing it against nothing.
+ *
+ * `--no-index` puts git in plain-diff mode, where it compares two paths on
+ * disk rather than anything the repository knows about, so an untracked file
+ * has an answer after all. It exits 1 when the inputs differ, which is
+ * always here, hence the widened `okStatus`. A binary file answers `-` for
+ * both counts and parses to zero, the same as it does in every other diff
+ * this module reads.
+ *
+ * `/dev/null` is the empty side. A host without it (or a path git refuses)
+ * returns undefined, and the caller leaves the count as it was.
+ */
+async function untrackedLineCount(
+  exec: ExecAsync,
+  cwd: string,
+  absolutePath: string,
+): Promise<number | undefined> {
+  const stdout = await git(
+    exec,
+    cwd,
+    ["diff", "--numstat", "--no-index", "--", "/dev/null", absolutePath],
+    [0, 1],
+  );
+  if (stdout === undefined) return undefined;
+  for (const value of parseNumstat(stdout).values()) return value.added;
+  return undefined;
+}
+
+/**
  * Every path the worktree holds differently from `HEAD`, with line counts.
  *
  * The status listing decides which paths are reported, and the numstat only
@@ -244,29 +356,67 @@ export function parseNumstat(
  * would have its work counted as zero lines, which is the same blindness
  * this pass exists to remove. A repository with no commits has no `HEAD` to
  * diff, and falls back to the unstaged form.
+ *
+ * The status listing gates everything else, so it is read on its own. The
+ * numstat and the repository root are then read together: they answer
+ * unrelated questions about the same worktree, both are reads, and
+ * `--no-optional-locks` keeps both off the index lock. The untracked probes
+ * come last because they need the root to build an absolute path.
  */
-export function readWorkingTreeChanges(
-  exec: Exec,
+export async function readWorkingTreeChanges(
+  exec: ExecAsync,
   cwd: string,
-): GitWorkingTreeChange[] {
-  const status = git(exec, cwd, ["status", "--porcelain=v1", "-z"]);
+): Promise<GitWorkingTreeChange[]> {
+  const status = await git(exec, cwd, ["status", "--porcelain=v1", "-z"]);
   if (status === undefined) return [];
   const entries = parsePorcelainZ(status);
   if (entries.length === 0) return [];
-  const numstatOut =
-    git(exec, cwd, ["diff", "--numstat", "HEAD"]) ??
-    git(exec, cwd, ["diff", "--numstat"]) ??
-    "";
+  const [numstatOut, root] = await Promise.all([
+    git(exec, cwd, ["diff", "--numstat", "HEAD"]).then(
+      async (head) => head ?? (await git(exec, cwd, ["diff", "--numstat"])) ?? "",
+    ),
+    git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
+  ]);
   const counts = parseNumstat(numstatOut);
-  const root = firstLine(git(exec, cwd, ["rev-parse", "--show-toplevel"]));
+  const absolute = (repoRelative: string): string =>
+    root === undefined
+      ? repoRelative
+      : `${root.replace(/\/$/, "")}/${repoRelative}`;
+
+  // Untracked files, in path order so the same ones are measured on every
+  // pass rather than whichever order git happened to list the tree in, and a
+  // directory entry left out because it names a subtree and not a file.
+  if (root !== undefined) {
+    const untracked = entries
+      // `??` and nothing else. A tracked path missing from the numstat is a
+      // change git reported no line count for (a mode change, for one), and
+      // diffing it against nothing would count the whole file as added.
+      .filter((entry) => entry.code === "??")
+      .map((entry) => unquote(entry.path))
+      .filter(
+        (repoRelative) =>
+          !repoRelative.endsWith("/") && !counts.has(repoRelative),
+      )
+      .sort()
+      .slice(0, MAX_UNTRACKED_LINE_COUNTS);
+    await pooled(
+      untracked.map((repoRelative) => async () => {
+        const added = await untrackedLineCount(
+          exec,
+          cwd,
+          absolute(repoRelative),
+        );
+        if (added !== undefined) counts.set(repoRelative, { added, removed: 0 });
+      }),
+      UNTRACKED_COUNT_CONCURRENCY,
+    );
+  }
+
   return entries.map((entry) => {
     const repoRelative = unquote(entry.path);
     const count = counts.get(repoRelative);
     return {
-      path:
-        root === undefined
-          ? repoRelative
-          : `${root.replace(/\/$/, "")}/${repoRelative}`,
+      path: absolute(repoRelative),
       repo_relative_path: repoRelative,
       status: statusOf(entry.code),
       lines_added: count?.added ?? 0,
