@@ -57,7 +57,13 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { Detector } from "./detector";
-import { type GitFacts, readGitFacts } from "./git-facts";
+import {
+  type GitFacts,
+  type GitWorkingTreeChange,
+  readGitFacts,
+  readWorkingTreeChanges,
+  worktreeReconciledBody,
+} from "./git-facts";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -78,7 +84,11 @@ import {
   MODEL_PROXY_ROUTES,
   type ModelUpstreams,
 } from "./model-routes";
-import { parseRegistryState, SessionRegistry } from "./registry";
+import {
+  parseRegistryState,
+  type SessionRecord,
+  SessionRegistry,
+} from "./registry";
 import {
   type CollectorApi,
   createCollectorServer,
@@ -168,8 +178,26 @@ interface SpoolFile {
   agent?: HookEnvelope["agent"];
 }
 
+/**
+ * The daemon's own `Exec`, with two bounds the default does not have.
+ *
+ * `maxBuffer` is 1 MiB by default, and a `git status` in a worktree holding a
+ * build directory passes that easily. Over the limit spawnSync reports an
+ * error rather than output, so the caller reads it as "not a repository" and
+ * loses the fact for exactly the worktrees it most wanted it for. The git
+ * reader truncates its own stdout at 2 MiB, so the buffer is set above that
+ * and the reader's bound is the one that binds.
+ *
+ * `timeout` bounds how long one command may take. Nothing read here has an
+ * answer worth waiting on: a read that times out returns no status, the
+ * caller records no fact, and the session carries on.
+ */
 function defaultExec(command: string, args: string[]): ReturnType<Exec> {
-  const result = spawnSync(command, args, { encoding: "utf8" });
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 10_000,
+  });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
@@ -651,28 +679,125 @@ export async function startDaemon(
   }
 
   /**
-   * Hand every live session the git context of the worktree it runs in.
+   * The git work one session is waiting for, by harness session id.
    *
-   * `force` is passed at turn boundaries, where a commit, a checkout or a
-   * branch switch is most likely to have happened since the last read.
+   * A hook never reads a worktree. It records that one wants reading and
+   * returns; the tick drains this map outside the serial queue. Two reasons.
+   * A hook holds the queue that every wrapped agent on this host waits on,
+   * and a prompt hook has a budget measured in seconds, so four `git`
+   * invocations for one session times every live session was a way to spend
+   * that budget on someone else's repository. And the read this seam now
+   * also does, the worktree reconciliation, is heavier still: a whole-tree
+   * `git status` plus a numstat. Neither belongs on the path a hook answers
+   * on. Only the session the hook names is queued, never every live one.
+   *
+   * `force` skips the facts cache. `reconcile` asks for the observed change
+   * list as well.
    */
-  function refreshGitContext(force: boolean): void {
-    for (const session of registry.live()) {
-      const cwd = session.cwd;
-      if (cwd === undefined || session.sealed) continue;
-      const facts = gitFactsFor(cwd, force);
+  const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
+
+  /** The most sessions one tick reads worktrees for. */
+  const GIT_READS_PER_TICK = 4;
+
+  /**
+   * The least time between two worktree reconciliations of one session.
+   *
+   * The trigger is `Stop`, so the sampling rule is one reconciliation per
+   * turn at most, and no more than one per this interval however short the
+   * turns are. A burst of one-line turns therefore costs one whole-tree
+   * `git status` every fifteen seconds rather than one per turn.
+   */
+  const RECONCILE_MIN_INTERVAL_MS = 15_000;
+  const lastReconcileAt = new Map<string, number>();
+
+  function requestGitRead(
+    harnessSessionId: string,
+    want: { force: boolean; reconcile: boolean },
+  ): void {
+    const pending = gitPending.get(harnessSessionId);
+    gitPending.set(harnessSessionId, {
+      force: want.force || (pending?.force ?? false),
+      reconcile: want.reconcile || (pending?.reconcile ?? false),
+    });
+  }
+
+  /**
+   * The git context of one worktree as a whole block, for `noteContext`.
+   *
+   * Every member is present, holding its value or undefined, because the
+   * recorder merges what it is handed and drops the undefined ones. A
+   * conditional spread would leave the last branch a session reported
+   * standing on every later frame after the checkout went detached, which is
+   * a stale fact stated as a current one. This is only ever called with the
+   * result of a read that SUCCEEDED: a read that failed is not a report of a
+   * detached head or a clean tree, it is no report at all, and it clears
+   * nothing.
+   */
+  function gitContextOf(facts: GitFacts): Record<string, unknown> {
+    return {
+      git_head_sha: facts.head_sha,
+      git_branch: facts.branch,
+      git_dirty: facts.dirty,
+      git_remote_digest: facts.remote_digest,
+    };
+  }
+
+  /**
+   * Do the pending git reads, then apply what they found.
+   *
+   * Called from the tick outside `serial.run`, so the spawns are not holding
+   * the hook queue. Applying the results is in-memory work and goes back on
+   * the queue, because sealing a frame moves a chain a hook may be moving
+   * too.
+   */
+  async function drainGitReads(): Promise<void> {
+    if (gitPending.size === 0) return;
+    const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
+    const found: Array<{
+      session: SessionRecord;
+      facts: GitFacts;
+      changes?: GitWorkingTreeChange[];
+    }> = [];
+    for (const harnessSessionId of work) {
+      const want = gitPending.get(harnessSessionId);
+      gitPending.delete(harnessSessionId);
+      if (want === undefined) continue;
+      const session = registry.get(harnessSessionId);
+      const cwd = session?.cwd;
+      if (session === undefined || session.sealed || cwd === undefined)
+        continue;
+      const facts = gitFactsFor(cwd, want.force);
+      // Undefined is "not a repository this host can read", and there is
+      // nothing to say about the worktree of a directory that is not one.
       if (facts === undefined) continue;
-      session.recorder.noteContext({
-        ...(facts.head_sha !== undefined
-          ? { git_head_sha: facts.head_sha }
-          : {}),
-        ...(facts.branch !== undefined ? { git_branch: facts.branch } : {}),
-        ...(facts.dirty !== undefined ? { git_dirty: facts.dirty } : {}),
-        ...(facts.remote_digest !== undefined
-          ? { git_remote_digest: facts.remote_digest }
-          : {}),
+      const at = now();
+      const last = lastReconcileAt.get(harnessSessionId);
+      const due =
+        want.reconcile &&
+        (last === undefined || at - last >= RECONCILE_MIN_INTERVAL_MS);
+      if (due) lastReconcileAt.set(harnessSessionId, at);
+      found.push({
+        session,
+        facts,
+        ...(due ? { changes: readWorkingTreeChanges(exec, cwd) } : {}),
       });
     }
+    if (found.length === 0) return;
+    await serial.run(async () => {
+      const events: TachoEvent[] = [];
+      for (const { session, facts, changes } of found) {
+        if (session.sealed) continue;
+        session.recorder.noteContext(gitContextOf(facts));
+        if (changes === undefined) continue;
+        events.push(
+          session.recorder.sealCollectorEvent(
+            "oxagen:worktree_reconciled",
+            worktreeReconciledBody(changes),
+          ),
+        );
+      }
+      record(events);
+    });
   }
 
   /** The hook events that open or close a turn, where the worktree may have moved. */
@@ -684,18 +809,48 @@ export async function startDaemon(
     "SessionEnd",
   ]);
 
+  /**
+   * The hook events after which the worktree has settled enough to read it.
+   *
+   * `Stop` is the end of a turn: the agent has finished acting and is
+   * handing back, so what the tree holds now is what the turn left behind.
+   * It is the only trigger.
+   *
+   * `SubagentStop` is not, because a subagent finishes inside its parent's
+   * turn and the parent's own `Stop` observes the same tree once, rather
+   * than once per subagent. `SessionEnd` is not either: it seals the chain
+   * in the same pass that handles it, and a read that lands a tick later
+   * would be sealing a frame onto a chain that has already ended. For Claude
+   * Code the last `Stop` precedes it with nothing in between, so the final
+   * turn is observed anyway. A session killed without a `Stop` leaves its
+   * last turn unobserved, which the record already says with
+   * `unobserved_tail` rather than guessing at it.
+   *
+   * There is no per-tool-call trigger on purpose: `readWorkingTreeChanges`
+   * spawns up to four git processes, and paying that on every `Edit` would
+   * cost more than the fact is worth.
+   */
+  const RECONCILE_HOOKS = new Set(["Stop"]);
+
   async function handleHookInner(
     envelope: HookEnvelope,
   ): Promise<Record<string, unknown>> {
-    // Before the frame is sealed, so it carries the facts rather than the
-    // frame after it. A session's very first hook opens the chain, so there is
-    // no recorder to absorb into yet and `SessionStart` alone goes without;
-    // every frame from the next one on has them.
-    const hookName = (envelope.payload as { hook_event_name?: string })
-      .hook_event_name;
-    refreshGitContext(
-      hookName !== undefined && TURN_BOUNDARY_HOOKS.has(hookName),
-    );
+    // The hook asks for the read and does not wait for it: the spawns happen
+    // in the tick, off this queue. The facts therefore land on the frames
+    // after this one rather than on this one, which is what the recorder's
+    // context already is, a standing fact carried until something newer
+    // replaces it.
+    const payloadFacts = envelope.payload as {
+      hook_event_name?: string;
+      session_id?: string;
+    };
+    const hookName = payloadFacts.hook_event_name;
+    if (payloadFacts.session_id !== undefined && hookName !== undefined) {
+      requestGitRead(payloadFacts.session_id, {
+        force: TURN_BOUNDARY_HOOKS.has(hookName),
+        reconcile: RECONCILE_HOOKS.has(hookName),
+      });
+    }
     const outcome = await handleHookEvent(
       envelope.payload,
       envelope.env ?? {},
@@ -1231,6 +1386,9 @@ export async function startDaemon(
       }
       if (stateDirty) persistState();
     });
+    // Outside the serial block above on purpose: this is where the git
+    // process spawns happen, and a hook must never queue behind them.
+    await drainGitReads();
     await shipper.drain();
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();

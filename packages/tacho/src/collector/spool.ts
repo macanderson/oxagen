@@ -230,6 +230,23 @@ export class Shipper {
     this.lastRateLimit = hint;
   }
 
+  /**
+   * Set an event aside permanently: written to the quarantine directory,
+   * marked shipped so the WAL moves past it, and its retained body dropped.
+   *
+   * The body drop belongs here rather than at each call site because this is
+   * the one place that decides an event will never ship. A body whose event
+   * is gone from the WAL can never be retried, so holding it keeps prompt
+   * text on the operator's machine for the whole compaction window in
+   * exchange for nothing. Every path that gives up on an event reaches this
+   * method, so every path drops.
+   *
+   * The body is dropped rather than written beside the event. The quarantine
+   * file is for diagnosing why the control plane refused the frame, and the
+   * envelope answers that. The body is the customer's prompt text under a
+   * retention mandate, and copying it into a file the mandate does not
+   * govern would keep exactly what the mandate exists to bound.
+   */
   private quarantine(event: TachoEvent, reason: string): void {
     const path = join(
       this.options.quarantineDir,
@@ -242,6 +259,7 @@ export class Shipper {
       );
     }
     this.options.wal.markShipped(event.session_uuid, event.seq);
+    this.options.bodies?.drop([event.event_id_idem]);
     this.options.log(
       `quarantined ${event.session_uuid}#${event.seq}: ${reason}`,
     );
@@ -343,10 +361,6 @@ export class Shipper {
         `event is ${bytes} bytes; one request carries at most ${MAX_REQUEST_BYTES}`,
       );
     }
-    if (tooLarge.length > 0)
-      this.options.bodies?.drop(
-        tooLarge.map(({ event }) => event.event_id_idem),
-      );
     if (batch.length === 0)
       return {
         shipped: 0,

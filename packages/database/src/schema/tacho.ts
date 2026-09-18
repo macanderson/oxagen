@@ -614,6 +614,14 @@ export const tachoSessionFiles = tachoSchema.table(
       .default(0),
     linesAdded: integer("lines_added").notNull().default(0),
     linesRemoved: integer("lines_removed").notNull().default(0),
+    /**
+     * What git said about this path at the last reconciliation: added,
+     * modified, deleted or renamed. Null means no reconciliation covered it,
+     * which is not the same as git finding it unchanged. The counters above
+     * count tool calls; this states a condition, so it is assigned and never
+     * incremented.
+     */
+    observedStatus: text("observed_status"),
     firstSeq: bigint("first_seq", { mode: "number" }).notNull(),
     lastSeq: bigint("last_seq", { mode: "number" }).notNull(),
     digestBefore: text("digest_before"),

@@ -22,37 +22,79 @@
  * session with no worktree context, and an extension this module does not
  * know all return undefined rather than a guess, because a wrong language
  * on a run record is worse than an absent one.
+ *
+ * The file also holds the reader for the observed side of the same
+ * question. `repo_relative_path` and `language` are derived from an
+ * attested path; `observedChangesOf` unpacks what the collector read off
+ * the worktree with git, which is where `lines_added` and `lines_removed`
+ * come from.
  */
+import type { ObservedChange } from "@oxagen/tacho";
 
 /**
  * The worktree root a batch's events agree on, or undefined.
  *
- * `worktree_path` is preferred over `project_dir` because it is the
- * checkout's own root: `project_dir` is the directory the agent was pointed
- * at, which in a monorepo is often a package rather than the repository.
- * `cwd` is deliberately not consulted. It moves within a session, and a
- * path made relative to a subdirectory is not repo-relative, it is merely
- * shorter.
+ * `worktree_path` is the only field read, because it is the only one that
+ * is the checkout's own root. `project_dir` is the directory the agent was
+ * pointed at, which in a monorepo is usually a package: stripping
+ * `/repo/packages/tacho` off `/repo/packages/tacho/src/x.ts` leaves
+ * `src/x.ts`, which every other package in the tree also has. Two different
+ * files would then carry one repository identity on the Run page and in the
+ * lineage join, which is the opposite of what this column is for, so a
+ * batch that names no worktree leaves the field null instead. `cwd` is not
+ * consulted either, and for the same reason plus one more: it moves within
+ * a session.
+ *
+ * This is the attested fallback. Where a reconciliation frame observed the
+ * path, its own `repo_relative_path` wins, because git answered with
+ * `rev-parse --show-toplevel` rather than inferring a root.
  */
 export function worktreeRootOf(
-  contexts: readonly (
-    | { worktree_path?: string; project_dir?: string }
-    | undefined
-  )[],
+  contexts: readonly ({ worktree_path?: string } | undefined)[],
 ): string | undefined {
   for (const context of contexts) {
     const root = context?.worktree_path;
-    if (root !== undefined && root.length > 0) return normalizeRoot(root);
-  }
-  for (const context of contexts) {
-    const root = context?.project_dir;
     if (root !== undefined && root.length > 0) return normalizeRoot(root);
   }
   return undefined;
 }
 
 function normalizeRoot(root: string): string {
-  return root.length > 1 ? root.replace(/\/+$/, "") : root;
+  const slashes = toForwardSlashes(root);
+  return slashes.length > 1 ? slashes.replace(/\/+$/, "") : slashes;
+}
+
+/**
+ * A Windows path in the one separator the rest of this module compares on.
+ *
+ * `win32` is a supported host (`tachoPlatformSchema`), so its paths reach
+ * this module verbatim, separators and all. Comparing them without this
+ * makes every Windows path look relative.
+ */
+function toForwardSlashes(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+/** A drive-letter path (`C:/repo`) or a UNC share (`//server/share`). */
+function isWindowsAbsolute(path: string): boolean {
+  return /^[A-Za-z]:\//.test(path) || path.startsWith("//");
+}
+
+/**
+ * The comparable form of an absolute path: forward slashes, and an
+ * upper-case drive letter.
+ *
+ * The drive letter is the one case difference two hosts produce for the
+ * same file (`c:/repo` and `C:/repo`), so it is folded. The rest of the
+ * path is left exactly as it arrived: Windows compares filenames without
+ * case but records them with it, and folding the whole path would report
+ * `SRC/A.TS` and `src/a.ts` as one file on a case-sensitive host.
+ */
+function comparablePath(path: string): string {
+  const slashes = toForwardSlashes(path);
+  return /^[A-Za-z]:\//.test(slashes)
+    ? `${slashes[0]?.toUpperCase() ?? ""}${slashes.slice(1)}`
+    : slashes;
 }
 
 /**
@@ -64,19 +106,35 @@ function normalizeRoot(root: string): string {
  * `/src/oxagen`. A path equal to the root is not a file and returns
  * undefined. A path that is already relative is returned as it stands,
  * since a relative path in the record is relative to the worktree already.
+ *
+ * Absolute means absolute on any supported host, not just a leading slash.
+ * `C:\\repo\\src\\a.ts` and `\\\\server\\share\\src\\a.ts` are absolute on
+ * `win32`, which `tachoPlatformSchema` allows, and reading either as
+ * already-relative would store one machine's drive letter in the one field
+ * that is supposed to read the same on every machine. Both are normalized
+ * to forward slashes and then measured against the root exactly as a POSIX
+ * path is. A path with no root to measure against still returns undefined
+ * rather than the whole thing.
  */
 export function repoRelativePathOf(
   path: string,
   root: string | undefined,
 ): string | undefined {
   if (path.length === 0) return undefined;
-  if (!path.startsWith("/")) return path;
-  if (root === undefined || !root.startsWith("/")) return undefined;
+  const absolute = toForwardSlashes(path);
+  if (!absolute.startsWith("/") && !isWindowsAbsolute(absolute)) return path;
+  if (root === undefined) return undefined;
+  const base = toForwardSlashes(root);
+  if (!base.startsWith("/") && !isWindowsAbsolute(base)) return undefined;
   // Compare against the root plus its separator, so the boundary is checked
   // once for every root including `/`, whose separator is already there.
-  const prefix = root.endsWith("/") ? root : `${root}/`;
-  if (!path.startsWith(prefix)) return undefined;
-  const relative = path.slice(prefix.length);
+  const comparable = comparablePath(absolute);
+  const comparableRoot = comparablePath(base);
+  const prefix = comparableRoot.endsWith("/")
+    ? comparableRoot
+    : `${comparableRoot}/`;
+  if (!comparable.startsWith(prefix)) return undefined;
+  const relative = absolute.slice(prefix.length);
   return relative.length === 0 ? undefined : relative;
 }
 
@@ -156,4 +214,50 @@ export function languageOf(path: string): string | undefined {
   const dot = base.lastIndexOf(".");
   if (dot <= 0) return undefined;
   return LANGUAGE_BY_EXTENSION[base.slice(dot + 1).toLowerCase()];
+}
+
+/**
+ * The frame kind that carries what git observed, as opposed to what a tool
+ * announced. Spelled once here so the ingest rollup and its tests agree.
+ */
+export const WORKTREE_RECONCILED_KIND = "oxagen:worktree_reconciled";
+
+/**
+ * The observed change list of a reconciliation frame's body.
+ *
+ * The contract already validated the body against the frame's schema, so
+ * this is a narrowing rather than a parse. It stays defensive anyway: a row
+ * of the wrong shape is skipped rather than written as a partial record,
+ * because a file fact nobody can trust is worse than a missing one.
+ */
+export function observedChangesOf(
+  body: unknown,
+): readonly ObservedChange[] {
+  const changes = (body as { observed_changes?: unknown } | undefined)
+    ?.observed_changes;
+  if (!Array.isArray(changes)) return [];
+  const out: ObservedChange[] = [];
+  for (const change of changes) {
+    const row = change as Partial<ObservedChange> | undefined;
+    if (
+      row === undefined ||
+      typeof row.path !== "string" ||
+      row.path.length === 0 ||
+      typeof row.status !== "string" ||
+      typeof row.lines_added !== "number" ||
+      typeof row.lines_removed !== "number"
+    )
+      continue;
+    out.push({
+      path: row.path,
+      repo_relative_path:
+        typeof row.repo_relative_path === "string"
+          ? row.repo_relative_path
+          : "",
+      status: row.status,
+      lines_added: row.lines_added,
+      lines_removed: row.lines_removed,
+    });
+  }
+  return out;
 }

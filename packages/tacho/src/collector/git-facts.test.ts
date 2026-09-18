@@ -7,7 +7,9 @@ import {
   readGitFacts,
   readWorkingTreeChanges,
   resolveNumstatPath,
+  worktreeReconciledBody,
 } from "./git-facts";
+import { MAX_OBSERVED_CHANGES, observedChangeSchema } from "../envelope";
 
 /** A git that answers canned stdout, keyed by the sub-command it is given. */
 function fakeGit(
@@ -266,5 +268,50 @@ describe("readWorkingTreeChanges", () => {
   it("returns nothing for a clean tree", () => {
     const exec = fakeGit({ "status --porcelain=v1 -z": "" });
     expect(readWorkingTreeChanges(exec, "/repo")).toEqual([]);
+  });
+});
+
+describe("worktreeReconciledBody", () => {
+  const change = (name: string) => ({
+    path: `/repo/${name}`,
+    repo_relative_path: name,
+    status: "modified" as const,
+    lines_added: 1,
+    lines_removed: 0,
+  });
+
+  it("carries the whole list when it fits, sorted by path", () => {
+    const body = worktreeReconciledBody([change("b.ts"), change("a.ts")]);
+    expect(body["observed_changes_total"]).toBe(2);
+    expect(body["observed_changes_truncated"]).toBe(false);
+    expect(
+      (body["observed_changes"] as { repo_relative_path: string }[]).map(
+        (row) => row.repo_relative_path,
+      ),
+    ).toEqual(["a.ts", "b.ts"]);
+  });
+
+  it("records the cut rather than making it silently", () => {
+    const changes = Array.from({ length: MAX_OBSERVED_CHANGES + 10 }, (_, i) =>
+      change(`f${String(i).padStart(4, "0")}.ts`),
+    );
+    const body = worktreeReconciledBody(changes);
+    expect(body["observed_changes"]).toHaveLength(MAX_OBSERVED_CHANGES);
+    expect(body["observed_changes_total"]).toBe(MAX_OBSERVED_CHANGES + 10);
+    expect(body["observed_changes_truncated"]).toBe(true);
+  });
+
+  it("produces rows the envelope schema accepts", () => {
+    const body = worktreeReconciledBody([change("a.ts")]);
+    for (const row of body["observed_changes"] as unknown[]) {
+      expect(observedChangeSchema.parse(row)).toBeTruthy();
+    }
+  });
+
+  it("says nothing changed for a clean tree", () => {
+    const body = worktreeReconciledBody([]);
+    expect(body["observed_changes"]).toEqual([]);
+    expect(body["observed_changes_total"]).toBe(0);
+    expect(body["observed_changes_truncated"]).toBe(false);
   });
 });
