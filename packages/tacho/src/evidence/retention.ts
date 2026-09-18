@@ -53,3 +53,15 @@ export function retainsBody(
   if (contentClass === undefined) return false;
   return retention.classes.includes(contentClass);
 }
+
+/**
+ * The mandate to read when there is no trustworthy one: keep nothing.
+ *
+ * A cached bundle is a file on the operator's machine. It authorises
+ * retention only while its signature verifies, so a host holding one that
+ * does not falls back to this rather than to what the file happens to say.
+ */
+export const NO_RETENTION: RetentionMandate = {
+  mode: "digest_only",
+  classes: [],
+};

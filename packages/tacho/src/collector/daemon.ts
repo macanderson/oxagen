@@ -37,7 +37,11 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec } from "../host/service";
-import { retainsBody } from "../evidence/retention";
+import {
+  NO_RETENTION,
+  retainsBody,
+  type RetentionMandate,
+} from "../evidence/retention";
 import { BodyStore } from "../host/body-store";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
@@ -242,7 +246,9 @@ export async function startDaemon(
     onContentBody: (eventIdIdem, kind, contentType, bytes) => {
       // Both halves of the mandate bind: the mode says exact bytes may be
       // kept at all, the classes say which content the workspace authorised.
-      if (!retainsBody(kind, host.bundle.retention)) return;
+      // `retentionInForce` adds the third condition, that the mandate is one
+      // the control plane actually signed.
+      if (!retainsBody(kind, retentionInForce())) return;
       bodyStore.put(eventIdIdem, kind, contentType, bytes);
     },
   });
@@ -256,6 +262,25 @@ export async function startDaemon(
   const hostRecorder = hostRecord.recorder;
 
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  /**
+   * The retention clause the host may act on: the cached one while its
+   * signature holds, and nothing otherwise.
+   *
+   * `host.json` is a file on the operator's machine. Reading its retention
+   * clause without checking the signature would let an edit from
+   * `digest_only` to `content_exact` send prompt bodies until the first
+   * refresh replaced the bundle, which is the one thing the signature is
+   * there to prevent.
+   */
+  const retentionInForce = (): RetentionMandate =>
+    bundleVerified ? host.bundle.retention : NO_RETENTION;
+  if (!bundleVerified) {
+    const held = bodyStore.dropDisallowed(NO_RETENTION);
+    if (held > 0)
+      log(
+        `dropped ${held} held body file(s): the cached mandate does not verify`,
+      );
+  }
   let lastControlAt: number | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
@@ -374,7 +399,7 @@ export async function startDaemon(
       // only what is sealed next. Bodies kept under the old one are dropped
       // here, or a batch still waiting to drain would carry prompt bytes the
       // operator has just said to stop keeping.
-      const stranded = bodyStore.dropDisallowed(response.bundle.retention);
+      const stranded = bodyStore.dropDisallowed(retentionInForce());
       if (stranded > 0)
         log(
           `dropped ${stranded} stored body file(s) the new mandate does not retain`,
@@ -424,7 +449,7 @@ export async function startDaemon(
     bodies: bodyStore,
     // Read at ship time, not captured: a mandate that narrows between the
     // refresh and the drain must still be the one that decides.
-    retention: () => host.bundle.retention,
+    retention: retentionInForce,
     quarantineDir: paths.quarantine,
     // Re-enrolling leaves the WAL holding events stamped with the old id; the
     // control plane 403s a batch containing any of them, and a 403 is

@@ -859,6 +859,45 @@ describe("tachod", () => {
     },
   );
 
+  it("retains nothing when the cached mandate does not verify", async () => {
+    // `host.json` is a file on the operator's machine. Without checking the
+    // signature, editing `digest_only` to `content_exact` in it would send
+    // prompt bodies until the first refresh replaced the bundle, which is
+    // the one thing signing the mandate is there to prevent.
+    const plane = fakeControlPlane("etag-3");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const signed = signer.sign(
+      unsignedBundle({ retention: { mode: "content_exact", classes: [] } }),
+    );
+    // A bundle that claims the broadest retention, with the signature of one
+    // that claimed none.
+    const tampered = {
+      ...signed,
+      retention: { mode: "content_exact" as const, classes: ["model_call"] },
+    };
+    writeHostFile(paths.hostFile, testHostFile(signer, tampered));
+    const { handle } = await boot(plane, paths);
+
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111bbbb",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+  });
+
   it("backs off the command poll instead of retrying it every tick", async () => {
     // The regression this guards: `sendAcks` had no gate of its own. Its only
     // skip condition is "a recent ingest already carried a control envelope",
