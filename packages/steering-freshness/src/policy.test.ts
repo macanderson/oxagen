@@ -68,16 +68,26 @@ describe("resolveSteeringPolicy", () => {
     expect(policy.fetchIntervalSeconds).toBe(5);
   });
 
-  it("unions the excludes of the reviewed scopes rather than replacing them", () => {
+  it("takes exclusions from the workspace", () => {
     const policy = resolveSteeringPolicy([
-      { scope: "project", policy: { exclude: [".oxagen/scratch"] } },
       { scope: "workspace", policy: { exclude: [".oxagen/vendor"] } },
     ]);
     expect(policy.exclude).toEqual([
-      ".oxagen/scratch",
       ".oxagen/settings.local.json",
       ".oxagen/vendor",
     ]);
+  });
+
+  // `.oxagen/settings.json` is committed, but the loader reads the working
+  // copy, so a feature branch or an uncommitted edit counts. Excluding
+  // `.oxagen/rules` there needed no review and switched the gate off.
+  it("refuses an exclusion from the project settings file", () => {
+    const policy = resolveSteeringPolicy([
+      { scope: "workspace", policy: { blockStaleRuns: true } },
+      { scope: "project", policy: { exclude: [".oxagen/rules"] } },
+    ]);
+    expect(policy.exclude).toEqual([".oxagen/settings.local.json"]);
+    expect(policy.refusedExcludes).toEqual([".oxagen/rules"]);
   });
 
   // `~/.config/oxagen/settings.json` is exactly as personal as the local
@@ -118,9 +128,9 @@ describe("resolveSteeringPolicy", () => {
 
   // Nothing to report when a reviewed scope already excludes the same path:
   // the personal file is then redundant, not defeated.
-  it("reports nothing when a reviewed scope already excludes the path", () => {
+  it("reports nothing when the workspace already excludes the path", () => {
     const policy = resolveSteeringPolicy([
-      { scope: "project", policy: { exclude: [".oxagen/scratch"] } },
+      { scope: "workspace", policy: { exclude: [".oxagen/scratch"] } },
       { scope: "local", policy: { exclude: [".oxagen/scratch"] } },
     ]);
     expect(policy.exclude).toContain(".oxagen/scratch");

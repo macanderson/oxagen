@@ -7,7 +7,7 @@ import {
 } from "./check";
 import { resolveSteeringPolicy, type SteeringPolicy } from "./policy";
 import type { CacheIo } from "./cache";
-import type { GitRunner } from "./git";
+import { isSafeRefName, type GitRunner } from "./git";
 
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
@@ -28,7 +28,10 @@ function table(
     "rev-parse --verify --quiet HEAD^{commit}": HEAD,
     "symbolic-ref --quiet --short refs/remotes/origin/HEAD": "origin/main",
     "rev-parse --git-common-dir": "/repo/.git",
-    "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main":
+    // The remotes this repository has. The check refuses a remote name that is
+    // not one of them before any git call uses it.
+    remote: "origin",
+    "fetch --quiet --no-tags --no-write-fetch-head -- origin +refs/heads/main:refs/remotes/origin/main":
       "",
     "rev-parse --verify --quiet origin/main^{commit}": REMOTE,
     [`merge-base ${HEAD} ${REMOTE}`]: BASE,
@@ -277,7 +280,7 @@ describe("checkSteeringFreshness, when it cannot answer", () => {
     const v = await check(
       remoteDiff(
         table({
-          "fetch --quiet --no-tags --no-write-fetch-head origin +refs/heads/main:refs/remotes/origin/main":
+          "fetch --quiet --no-tags --no-write-fetch-head -- origin +refs/heads/main:refs/remotes/origin/main":
             new Error("could not resolve host"),
         }),
         REMOTE_ADDED,
@@ -443,5 +446,75 @@ describe("checkSteeringFreshness, a comparison that cannot run", () => {
     });
     expect(v.status).toBe("unknown");
     expect(v.notes.join(" ")).toContain("not a git repository");
+  });
+});
+
+// `.oxagen/settings.json` is committed, so whoever wrote the checkout controls
+// `remote` and `branch`. Git reads a leading `-` as an option, and
+// `git fetch --upload-pack=<command>` runs that command, so a hostile checkout
+// could execute code the first time `steering status` or the prompt gate ran.
+describe("checkSteeringFreshness, remote and branch names from settings", () => {
+  const INJECT = "--upload-pack=touch /tmp/pwn #";
+
+  it("refuses an option-like remote before any git command sees it", async () => {
+    const run = vi.fn(runner(table()));
+    const v = await check(table(), {
+      run,
+      policy: policy({ remote: INJECT, branch: "main" }),
+    });
+    expect(v.status).toBe("unknown");
+    const seen = run.mock.calls.map(([args]) => args.join(" "));
+    expect(seen.some((cmd) => cmd.includes("upload-pack"))).toBe(false);
+    expect(seen.some((cmd) => cmd.startsWith("fetch"))).toBe(false);
+  });
+
+  it("refuses an option-like branch the same way", async () => {
+    const run = vi.fn(runner(table()));
+    const v = await check(table(), {
+      run,
+      policy: policy({ branch: "--output=/tmp/x" }),
+    });
+    expect(v.status).toBe("unknown");
+    const seen = run.mock.calls.map(([args]) => args.join(" "));
+    expect(seen.some((cmd) => cmd.includes("--output"))).toBe(false);
+  });
+
+  // A settings file cannot invent a remote. One the repository does not have
+  // is refused, however ordinary its name.
+  it("refuses a remote this repository has not configured", async () => {
+    const run = vi.fn(runner(table()));
+    const v = await check(table(), {
+      run,
+      policy: policy({ remote: "evil" }),
+    });
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain('no remote named "evil"');
+    expect(
+      run.mock.calls.some(([args]) => args[0] === "fetch"),
+    ).toBe(false);
+  });
+});
+
+describe("isSafeRefName", () => {
+  it.each(["origin", "upstream", "main", "release/2026", "feature-x", "v1.2"])(
+    "accepts %s",
+    (name) => {
+      expect(isSafeRefName(name)).toBe(true);
+    },
+  );
+
+  it.each([
+    "",
+    "-x",
+    "--upload-pack=touch /tmp/pwn",
+    "a b",
+    "a..b",
+    "/abs",
+    "trailing/",
+    "a//b",
+    "a@{1}",
+    "tab\tname",
+  ])("refuses %j", (name) => {
+    expect(isSafeRefName(name)).toBe(false);
   });
 });

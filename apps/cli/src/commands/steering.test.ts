@@ -41,6 +41,7 @@ vi.mock("@oxagen/steering-freshness", async () => {
 import { captureWriter, type CommandWriter } from "../lib/capture-writer";
 import {
   findProjectRoot,
+  parseRemoteUrl,
   resolveContext,
   steeringGate,
   steeringHooks,
@@ -102,7 +103,7 @@ function remotes(table: Record<string, string>): void {
     if (args.length === 1 && args[0] === "remote")
       return Object.keys(table).join("\n");
     if (args[0] === "remote" && args[1] === "get-url")
-      return table[args[2] ?? ""] ?? "";
+      return table[args[args.length - 1] ?? ""] ?? "";
     return "";
   });
 }
@@ -151,9 +152,11 @@ describe("resolveContext", () => {
       JSON.stringify({ steering: { blockStaleRuns: false } }),
       "utf8",
     );
+    remotes({ origin: "git@github.com:acme/app.git" });
     apiPostOrThrow.mockResolvedValue({
       steeringVersion: 7,
       headCommit: null,
+      repository: "acme/app",
       defaultBranch: "main",
       policy: { blockStaleRuns: true },
     });
@@ -220,10 +223,11 @@ describe("resolveContext", () => {
       JSON.stringify({ steering: { branch: "main" } }),
       "utf8",
     );
+    remotes({ origin: "git@github.com:acme/app.git" });
     apiPostOrThrow.mockResolvedValue({
       steeringVersion: 7,
       headCommit: null,
-      repository: null,
+      repository: "acme/app",
       defaultBranch: "release",
       policy: { blockStaleRuns: true },
     });
@@ -285,6 +289,47 @@ describe("resolveContext", () => {
     const ctx = await resolveContext(tmp);
     expect(ctx.policy.remote).toBe("upstream");
     expect(ctx.platform?.steeringVersion).toBe(7);
+  });
+
+  // The contract says a null repository means steering is off, and there is
+  // no identity to match. Applying the gates anyway blocked or auto-synced an
+  // unrelated checkout.
+  it("ignores the answer of a workspace with no repository bound", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    remotes({ origin: "git@github.com:acme/app.git" });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: null,
+      defaultBranch: null,
+      policy: { blockStaleRuns: true, autoSync: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform).toBeNull();
+    expect(ctx.policy.blockStaleRuns).toBe(false);
+    expect(ctx.policy.autoSync).toBe(false);
+  });
+
+  // Keeping only `owner/repo` accepted a remote on another host, or a local
+  // path, as the workspace's GitHub repository.
+  it("does not accept the same owner/repo on another host", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    remotes({
+      gl: "git@gitlab.com:acme/app.git",
+      local: "/tmp/acme/app",
+    });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 7,
+      headCommit: null,
+      repository: "acme/app",
+      defaultBranch: "main",
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.platform).toBeNull();
+    expect(ctx.policy.blockStaleRuns).toBe(false);
   });
 
   it("says so when a personal exclusion was refused", async () => {
@@ -525,5 +570,29 @@ describe("steering hooks", () => {
     await steeringHooks("status", {}, w.writer, tmp);
     expect(w.output()).toContain("oxagen steering gate --harness <name>");
     expect(w.output()).toContain("Exit 2 means refuse it");
+  });
+});
+
+describe("parseRemoteUrl", () => {
+  it.each([
+    ["git@github.com:Acme/App.git", "github.com/acme/app"],
+    ["https://github.com/acme/app.git", "github.com/acme/app"],
+    ["https://github.com/acme/app", "github.com/acme/app"],
+    ["ssh://git@github.com/acme/app.git", "github.com/acme/app"],
+    ["ssh://git@github.com:22/acme/app.git", "github.com/acme/app"],
+    ["git@gitlab.com:acme/app.git", "gitlab.com/acme/app"],
+  ])("reads %s as %s", (url, expected) => {
+    expect(parseRemoteUrl(url)).toBe(expected);
+  });
+
+  it.each([
+    "/tmp/acme/app",
+    "file:///tmp/acme/app",
+    "../acme/app",
+    "https://github.com/acme",
+    "https://github.com/acme/app/extra",
+    "",
+  ])("is not a hosted repository: %j", (url) => {
+    expect(parseRemoteUrl(url)).toBeNull();
   });
 });

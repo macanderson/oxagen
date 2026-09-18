@@ -169,49 +169,85 @@ async function remoteFor(
   } catch {
     return null;
   }
-  const wanted = repository.toLowerCase();
+  const wanted = `${BOUND_REPOSITORY_HOST}/${repository}`.toLowerCase();
   for (const name of names) {
+    // A remote name git could read as an option is never passed to it.
+    if (name.startsWith("-")) continue;
     if ((await checkoutRepository(projectRoot, name)) === wanted) return name;
   }
   return null;
 }
 
 /**
- * `owner/repo` for a checkout's remote, or null when it cannot be read.
+ * `host/owner/repo` for a remote URL, or null when it is not a hosted
+ * repository address.
  *
- * Normalised across the three shapes a remote URL takes — `git@host:o/r.git`,
- * `https://host/o/r.git`, `ssh://git@host/o/r` — because the comparison below
- * is against a platform value that is always the bare `owner/repo`. Case is
- * folded: GitHub treats `Acme/App` and `acme/app` as the same repository and a
- * false mismatch would discard a perfectly good platform answer.
+ * The host is part of the identity. Keeping only `owner/repo` accepted
+ * `git@gitlab.com:acme/app.git`, or a local path like `/tmp/acme/app`, as the
+ * workspace's GitHub repository, and the gate then fetched and auto-synced
+ * `.oxagen/` from that other host. Two address shapes are understood:
+ *
+ *   - the scp form, `git@github.com:acme/app.git`
+ *   - URLs, `https://github.com/acme/app.git`, `ssh://git@github.com/acme/app`
+ *
+ * Anything else, including a filesystem path or `file://`, is not a hosted
+ * repository and answers null. The path must be exactly `owner/repo`. Case is
+ * folded, because GitHub treats `Acme/App` and `acme/app` as one repository.
  */
+export function parseRemoteUrl(url: string): string | null {
+  const trimmed = url.trim();
+  let host: string;
+  let path: string;
+  const scp = /^[^@\s/]+@([^:/\s]+):(?!\/)(.+)$/.exec(trimmed);
+  if (scp) {
+    host = scp[1]!;
+    path = scp[2]!;
+  } else {
+    let parsed: URL;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return null;
+    }
+    if (!["https:", "http:", "ssh:", "git:"].includes(parsed.protocol))
+      return null;
+    host = parsed.hostname;
+    path = parsed.pathname;
+  }
+  const parts = path
+    .replace(/\.git$/, "")
+    .split("/")
+    .filter((part) => part.length > 0);
+  if (host.length === 0 || parts.length !== 2) return null;
+  return `${host}/${parts[0]}/${parts[1]}`.toLowerCase();
+}
+
+/**
+ * The host a workspace's main repository lives on.
+ *
+ * `bind_main_repository` binds GitHub repositories only, through the GitHub
+ * App, so the platform's `owner/repo` always means one on github.com. When a
+ * second provider can be bound, the answer has to carry its host and this
+ * constant goes.
+ */
+const BOUND_REPOSITORY_HOST = "github.com";
+
+/** `host/owner/repo` for one of this checkout's remotes, or null. */
 async function checkoutRepository(
   projectRoot: string,
   remote: string,
 ): Promise<string | null> {
   const { execGit } = await import("@oxagen/steering-freshness");
-  let url: string;
   try {
-    url = (
-      await execGit(["remote", "get-url", remote], {
+    return parseRemoteUrl(
+      await execGit(["remote", "get-url", "--", remote], {
         cwd: projectRoot,
         timeoutMs: 5_000,
-      })
-    ).trim();
+      }),
+    );
   } catch {
     return null;
   }
-  if (url.length === 0) return null;
-  const withoutSuffix = url.replace(/\.git$/, "");
-  // Everything after the host: the last two path segments are owner and repo.
-  const parts = withoutSuffix
-    .replace(/^[a-z+]+:\/\//i, "")
-    .replace(/^[^@/]+@/, "")
-    .replace(":", "/")
-    .split("/")
-    .filter((part) => part.length > 0);
-  if (parts.length < 3) return null;
-  return parts.slice(-2).join("/").toLowerCase();
 }
 
 /**
@@ -292,11 +328,19 @@ export async function resolveContext(
   // On a mismatch the whole answer is discarded — policy and signal together,
   // since neither half is about this repository — and the developer is told.
   // Discarding is safe in the direction that matters: git remains the primary
-  // signal. A platform with no repository bound (`repository: null`) is not a
-  // mismatch: steering is simply off for that workspace, and its policy still
-  // legitimately applies.
+  // signal.
   let boundRemote: string | null = null;
   let belongsHere = fromPlatform !== null;
+  // No repository bound means steering is off for that workspace — the
+  // contract says so — and it also means there is no identity to match this
+  // checkout against. Accepting the answer anyway applied a workspace's gates
+  // (set through the API or MCP) to whatever unlinked checkout happened to ask,
+  // blocking or auto-syncing a repository that workspace has nothing to do
+  // with. Discarded, with nothing to report: this is the ordinary state of a
+  // workspace that has not bound a repository yet.
+  if (fromPlatform !== null && fromPlatform.repository == null) {
+    belongsHere = false;
+  }
   if (fromPlatform?.repository) {
     boundRemote = await remoteFor(projectRoot, fromPlatform.repository);
     if (boundRemote === null) {
@@ -355,7 +399,7 @@ export async function resolveContext(
       // believe they excluded.
       ...policy.refusedExcludes.map(
         (path) =>
-          `\`${path}\` is excluded in a personal settings file and was ignored: only the committed .oxagen/settings.json or the workspace can remove records from the freshness check`,
+          `\`${path}\` is excluded in a settings file and was ignored: only the workspace can remove records from the freshness check`,
       ),
     ],
   };

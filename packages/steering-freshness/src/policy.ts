@@ -106,8 +106,8 @@ export interface SteeringPolicy {
   suspended: boolean;
   suspendedReason: string | null;
   /**
-   * Exclusions named by a personal settings file (`user` or `local`) and
-   * refused. Reported so
+   * Exclusions named by any scope below the workspace (`user`, `project`,
+   * `local`) and refused. Reported so
    * the developer is told their setting did nothing, rather than discovering
    * it by being blocked over a record they thought they had excluded.
    */
@@ -122,13 +122,20 @@ export interface SteeringPolicy {
 export const ALWAYS_EXCLUDED = [".oxagen/settings.local.json"] as const;
 
 /**
- * The scopes whose exclusions are honoured: the ones somebody other than the
- * developer can read. `default` carries none of its own; it is listed so the
- * set reads as the whole rule rather than as an exception list.
+ * The scopes whose exclusions are honoured: the workspace, and nothing below
+ * it.
+ *
+ * An exclusion removes records from the comparison, so it is the gate's off
+ * switch, and only the party that switched the gate on may hold it. `user` and
+ * `local` are personal files nobody reviews. `project` looks reviewed because
+ * `.oxagen/settings.json` is committed, but the loader reads the WORKING COPY:
+ * a feature branch, or an edit not yet committed, is what it sees. Excluding
+ * `.oxagen/rules` there needed no review at all, and the check reported
+ * `current` with `blockStaleRuns` still nominally on. `default` carries none
+ * of its own; it is listed so the set reads as the whole rule.
  */
 const REVIEWED_EXCLUDE_SCOPES: ReadonlySet<PolicyScope> = new Set<PolicyScope>([
   "default",
-  "project",
   "workspace",
 ]);
 
@@ -230,9 +237,9 @@ export function resolveSteeringPolicy(
       // `user` is refused for the same reason. `~/.config/oxagen/settings.json`
       // is exactly as personal as `.oxagen/settings.local.json` — it is not in
       // the repository and nobody reviews it — and refusing only `local` just
-      // moved the off switch one directory up. What remains able to exclude is
-      // what a team can see: `project` (committed, so it goes through review)
-      // and `workspace` (set by the workspace, on the platform).
+      // moved the off switch one directory up. `project` is refused too: the
+      // loader reads the working copy, so an uncommitted edit counts. Only the
+      // workspace, which switched the gate on, may exclude.
       if (!REVIEWED_EXCLUDE_SCOPES.has(scope)) {
         refused.add(path);
         continue;

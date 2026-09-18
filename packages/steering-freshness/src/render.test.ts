@@ -268,3 +268,42 @@ describe("renderGate", () => {
     expect(out.exitCode).toBe(2);
   });
 });
+
+// The gate fails open on `unknown`, which is right. Rendering nothing made a
+// skipped check look like a passed one.
+describe("renderBanner, a check that could not run", () => {
+  it("says the prompt ran unchecked, and why", () => {
+    const text = renderBanner({
+      action: "allow",
+      verdict: verdict({
+        status: "unknown",
+        missing: [],
+        notes: [
+          'this repository has no remote named "evil", so the check did not run',
+        ],
+      }),
+      policy: resolveSteeringPolicy([]),
+      sync: null,
+      exitCode: 0,
+    });
+    expect(text).toContain("ran unchecked");
+    expect(text).toContain('no remote named "evil"');
+  });
+});
+
+// Behind with nothing git can show: `steering sync` refuses that state, so the
+// banner has to name the fetch first.
+describe("renderBanner, when only the platform knows", () => {
+  it("names the fetch, not just the sync", () => {
+    const text = renderBanner({
+      action: "block",
+      verdict: verdict({ status: "behind", missing: [] }),
+      policy: resolveSteeringPolicy([
+        { scope: "workspace", policy: { blockStaleRuns: true } },
+      ]),
+      sync: null,
+      exitCode: 2,
+    });
+    expect(text).toContain("git fetch origin");
+  });
+});

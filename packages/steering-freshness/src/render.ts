@@ -128,8 +128,25 @@ export function renderBanner(decision: GateDecision): string {
       );
       return lines.join("\n");
     }
+    // The other case worth a line: the check could not run. The gate fails
+    // open on `unknown`, which is right, but silence made a skipped check
+    // look like a passed one, and the reason the verdict carries is the only
+    // way anyone learns a git failure or a refused remote name switched the
+    // gate off for this prompt. Still exit 0.
+    if (verdict.status === "unknown" && verdict.notes.length > 0) {
+      lines.push("Oxagen could not check steering freshness, so the prompt ran unchecked.");
+      for (const note of verdict.notes) lines.push(note);
+      return lines.join("\n");
+    }
     return "";
   }
+
+  // Behind with no file git can show: the platform knows a publication the
+  // remote-tracking ref on disk does not contain. `steering sync` refuses
+  // that state (`remote_ref_stale`), so recommending it sent the developer
+  // round a loop. A fetch is what repairs it.
+  const onlyThePlatformKnows =
+    verdict.missing.length === 0 && verdict.status === "behind";
 
   const headline =
     action === "block"
@@ -160,10 +177,16 @@ export function renderBanner(decision: GateDecision): string {
     lines.push(
       verdict.status === "diverged"
         ? "Reconcile .oxagen/ with the production branch, then run the prompt again."
-        : "Run `oxagen steering sync`, then run the prompt again.",
+        : onlyThePlatformKnows
+          ? `Run \`git fetch ${verdict.remote}\` and \`oxagen steering sync\`, then run the prompt again.`
+          : "Run `oxagen steering sync`, then run the prompt again.",
     );
     lines.push(
       `Blocking is set in ${scopeName(policy.sources.blockStaleRuns)}. Set OXAGEN_STEERING_FRESHNESS=off for this shell to override it.`,
+    );
+  } else if (onlyThePlatformKnows) {
+    lines.push(
+      `Run \`git fetch ${verdict.remote}\` and \`oxagen steering sync\` to take them. The agent is running on the older records until you do.`,
     );
   } else {
     lines.push(

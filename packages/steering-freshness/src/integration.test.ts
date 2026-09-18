@@ -126,6 +126,30 @@ async function mergeContextPr(
   await g(author, "push", "--quiet", "origin", "main");
 }
 
+// The exploit, run for real. `.oxagen/settings.json` is committed, so a
+// hostile checkout controls `remote`. Before the guard, git read
+// `--upload-pack=<command>` as an option to `fetch` and ran the command. The
+// marker file is the proof: it must not exist after the check.
+describe("a hostile remote name in committed settings", () => {
+  it("never reaches git, so the command it smuggles never runs", async () => {
+    const marker = join(tmp, "pwned");
+    const verdict = await checkSteeringFreshness({
+      cwd: work,
+      policy: resolveSteeringPolicy([
+        {
+          scope: "project",
+          policy: {
+            remote: `--upload-pack=touch ${marker} #`,
+            branch: "main",
+          },
+        },
+      ]),
+    });
+    expect(verdict.status).toBe("unknown");
+    await expect(readFile(marker, "utf8")).rejects.toThrow();
+  });
+});
+
 describe("a checkout on the production branch", () => {
   it("is current, and resolves the default branch without being told", async () => {
     const verdict = await checkSteeringFreshness({

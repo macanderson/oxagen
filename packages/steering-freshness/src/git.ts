@@ -217,6 +217,11 @@ export async function fetchBranch(
       // is enough on a repository that is already shallow and harmless on one
       // that is not.
       "--no-write-fetch-head",
+      // End of options. The callers validate `remote` and `branch` first
+      // (`isSafeRefName`, `configuredRemotes`); this is the belt to that
+      // brace, so a name that slipped through is read as a repository, never
+      // as an option.
+      "--",
       remote,
       `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
     );
@@ -227,6 +232,40 @@ export async function fetchBranch(
       reason: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+/**
+ * Whether `name` is safe to hand to git as a remote or branch name.
+ *
+ * Both values can come from `.oxagen/settings.json`, which is committed to the
+ * repository and therefore controlled by whoever wrote the checkout. Git reads
+ * an argument that starts with `-` as an option, and `git fetch` has options
+ * that run programs: `remote: "--upload-pack=<command>"` executed that command
+ * the moment `steering status` or the prompt gate ran. So a name is refused
+ * unless it is a plain ref component: no leading `-`, no whitespace or control
+ * characters, no `..`, and only the characters git itself allows in a ref.
+ *
+ * This is the first of two guards. The second is `configuredRemotes`: a remote
+ * must also be one this repository actually has, which no settings file can
+ * invent.
+ */
+export function isSafeRefName(name: string): boolean {
+  if (name.length === 0 || name.length > 200) return false;
+  if (name.startsWith("-") || name.startsWith("/") || name.endsWith("/"))
+    return false;
+  if (name.includes("..") || name.includes("//") || name.includes("@{"))
+    return false;
+  return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name);
+}
+
+/** The remotes this repository has configured, from `git remote`. */
+export async function configuredRemotes(ctx: GitContext): Promise<string[]> {
+  const out = await gitOrNull(ctx, "remote");
+  if (!out) return [];
+  return out
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 /** Does this ref resolve? */

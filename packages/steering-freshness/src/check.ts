@@ -37,6 +37,7 @@
  */
 import {
   commitsTouching,
+  configuredRemotes,
   defaultBranch,
   diffPaths,
   dirtyPaths,
@@ -44,6 +45,7 @@ import {
   fetchBranch,
   gitOrNull,
   isAncestor,
+  isSafeRefName,
   mergeBase,
   parseNameStatus,
   repoRoot,
@@ -221,6 +223,32 @@ export async function checkSteeringFreshness(
     return unknown(base, "this repository has no commits yet");
   }
 
+  // Refuse a remote or branch name git could read as an option, and a remote
+  // this repository does not have, BEFORE any of them reaches a git command.
+  // Both can come from the committed `.oxagen/settings.json`, so a hostile
+  // checkout could otherwise run a program through `git fetch
+  // --upload-pack=…` the first time the gate looked at it. See
+  // `isSafeRefName` for the rule. Refused as `unknown`, which fails open and
+  // says why, rather than as an error.
+  if (!isSafeRefName(policy.remote)) {
+    return unknown(
+      base,
+      `the steering remote ${JSON.stringify(policy.remote)} is not a valid remote name, so the check did not run`,
+    );
+  }
+  if (policy.branch !== null && !isSafeRefName(policy.branch)) {
+    return unknown(
+      base,
+      `the steering branch ${JSON.stringify(policy.branch)} is not a valid branch name, so the check did not run`,
+    );
+  }
+  if (!(await configuredRemotes(repoCtx)).includes(policy.remote)) {
+    return unknown(
+      base,
+      `this repository has no remote named "${policy.remote}", so the check did not run`,
+    );
+  }
+
   // The stamp is read BEFORE the branch is resolved, because resolving the
   // branch can itself touch the network.
   //
@@ -282,6 +310,15 @@ export async function checkSteeringFreshness(
     return unknown(
       base,
       `could not work out the default branch of remote "${policy.remote}"`,
+    );
+  }
+
+  // A branch resolved from the remote (`git remote show`, the cached HEAD) is
+  // outside input as well: the server chose it. Same rule as a configured one.
+  if (!isSafeRefName(branch)) {
+    return unknown(
+      base,
+      `remote "${policy.remote}" reports a default branch ${JSON.stringify(branch)} that is not a valid branch name, so the check did not run`,
     );
   }
 

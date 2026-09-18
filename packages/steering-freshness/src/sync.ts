@@ -31,7 +31,14 @@
  * is one command from either outcome. `commit: true` is opt-in for the
  * developer who asked for it on the command line.
  */
-import { execGit, git, revParse, type GitContext, type GitRunner } from "./git";
+import {
+  execGit,
+  git,
+  isSafeRefName,
+  revParse,
+  type GitContext,
+  type GitRunner,
+} from "./git";
 import type { FreshnessVerdict } from "./check";
 
 export type SyncRefusal =
@@ -125,6 +132,20 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
       `\`.oxagen/\` has uncommitted changes (${verdict.dirty.join(
         ", ",
       )}), so it was left alone. Commit or discard them, or re-run with --force.`,
+    );
+  }
+
+  // The same guard `checkSteeringFreshness` applies, repeated here because
+  // this function takes a verdict from its caller and hands its remote and
+  // branch straight to git. A name git could read as an option never gets
+  // that far.
+  if (
+    !isSafeRefName(verdict.remote) ||
+    (verdict.branch !== null && !isSafeRefName(verdict.branch))
+  ) {
+    return refuse(
+      "unknown_state",
+      `The steering remote or branch is not a valid git name, so nothing was synced.`,
     );
   }
 
