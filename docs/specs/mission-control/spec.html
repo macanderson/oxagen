@@ -1144,7 +1144,7 @@ sandbox = &quot;read-only&quot;
 </tr>
 <tr>
 <td><code>applied</code></td>
-<td>The effect is visible in the record: the <code>model.request</code> carrying the steer was made, or the pause took hold. This is the only success status.</td>
+<td>The effect is visible in the record: the <code>model.request</code> carrying the steer was made, the pause took hold, or — for an <code>answer</code> (ADR-090) — the <code>control.answer</code> frame was written and the run left the interjected state and reached its first <code>model.request</code>. This is the only success status.</td>
 <td><strong>yes</strong></td>
 </tr>
 <tr>
@@ -1217,6 +1217,13 @@ sandbox = &quot;read-only&quot;
 <td>every call refused</td>
 <td>denied. The collector sends SIGTERM (the standard shutdown signal to a process) where it owns the process</td>
 <td>soft cancel guaranteed. Process kill best effort and recorded</td>
+</tr>
+<tr>
+<td><code>answer</code> (ADR-090)</td>
+<td>consumes it: the run is held <strong>before</strong> the first model call, so the proxy is what releases it</td>
+<td>not involved</td>
+<td>not involved</td>
+<td>guarantee: the run resumes only after the answer is recorded. No answer by the 30-minute timeout is not a <code>failed</code> command — no command was ever written, and the run falls back to <code>deny</code>, so &quot;nobody answered&quot; stays distinguishable from &quot;somebody denied it&quot;</td>
 </tr>
 <tr>
 <td><code>revoke</code> (agent or host)</td>

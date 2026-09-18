@@ -656,7 +656,7 @@ Commands are rows in `control.commands`. They travel on the control channel, eit
 | `sent` | Pushed onto the control channel or injected into an outbound request. Oxagen has done its part. | no |
 | `received` | The wrapper or the proxy took it. The connection point has it. | no |
 | `acknowledged` | The harness confirmed it entered the loop. | no |
-| `applied` | The effect is visible in the record: the `model.request` carrying the steer was made, or the pause took hold. This is the only success status. | **yes** |
+| `applied` | The effect is visible in the record: the `model.request` carrying the steer was made, the pause took hold, or — for an `answer` (ADR-090) — the `control.answer` frame was written and the run left the interjected state and reached its first `model.request`. This is the only success status. | **yes** |
 | `cancelled` | Withdrawn by the operator, or superseded by a later command on the same run, before delivery. | **yes** |
 | `expired` | The expiry passed with no boundary reached. Nobody withdrew it. Time ran out. | **yes** |
 | `failed` | The connection point refused it, or the host was gone. | **yes** |
@@ -671,6 +671,7 @@ Commands are rows in `control.commands`. They travel on the control channel, eit
 | `steer` (`interrupt`) | in-flight response stopped and billed. Steer injected at once | pending call abandoned, denied with reason `interrupted` | degrades to `next_step`. Frame records the degradation | immediate, except behind an irreversible tool call |
 | `steer` (`turn_boundary`) | injected on the first request of the next turn | n/a | injected at the next turn's prompt | at `turn_end` |
 | `cancel` | every request refused. Run token revoked | every call refused | denied. The collector sends SIGTERM (the standard shutdown signal to a process) where it owns the process | soft cancel guaranteed. Process kill best effort and recorded |
+| `answer` (ADR-090) | consumes it: the run is held **before** the first model call, so the proxy is what releases it | not involved | not involved | guarantee: the run resumes only after the answer is recorded. No answer by the 30-minute timeout is not a `failed` command — no command was ever written, and the run falls back to `deny`, so "nobody answered" stays distinguishable from "somebody denied it" |
 | `revoke` (agent or host) | credential dead. All run tokens dead | same | host suspended in bundle. Denies even if the daemon is down | guaranteed while any connection point is in the path. Visible as `hooks_removed` if hooks were stripped |
 | `deny_generation bump` (raises the deny generation, a counter that marks cached policy bundles as stale) | bundle stale. Non-read-only actions re-checked before they run, and fail closed | same | same | guaranteed for non-read-only tools |
 
