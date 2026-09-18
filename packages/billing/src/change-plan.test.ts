@@ -1355,3 +1355,158 @@ describe("the plan a change moves FROM, when the local row disagrees (r404247785
     expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The quote a person approved, honoured at the charge (#3157, PR #3171 review,
+// r4042477860).
+//
+// Every other binding in this file ties provider state to provider state. None
+// of them can notice that a discount expired while somebody was reading a
+// dialog, because nothing about the provider disagreed with itself — the
+// customer's £0 quote and the £60 charge are both correct readings, taken at
+// different moments.
+//
+// `approvedMaxCents` is not a reading at all. It is what the person agreed to,
+// and a person's approval does not go stale when Stripe's state moves. It is
+// also a BOUND rather than a token: acting on a stale one can only ever permit
+// a charge at or below what was agreed.
+//
+// THE FIXTURE CAN REPRESENT A PREVIEW THAT MOVES BETWEEN QUOTE AND CONFIRM.
+// `previewingProration` is re-armed per call, so a test sets the amount the
+// customer was quoted, then sets a DIFFERENT amount for the preview the swap
+// takes — which is exactly a discount expiring, a balance being consumed or a
+// period rolling over while the dialog sat open. It needs no provider-state
+// disagreement to do it, which is the point: this leg has none.
+// ---------------------------------------------------------------------------
+
+describe("a charge larger than the customer approved (r4042477860)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_scale");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("refuses when the fresh preview would charge more than was approved", async () => {
+    // Quoted $0: a downgrade, which ships `none` and collects nothing. By the
+    // time they confirm, the discount that made it a downgrade has expired and
+    // the same change now bills $600. The price has NOT moved, so the swap's
+    // own precondition sees nothing wrong — only the approval does.
+    previewingProration(60_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", BUILD_PLAN.slug, "month", {
+        approvedMaxCents: 0,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_EXCEEDS_APPROVED_AMOUNT" });
+  });
+
+  it("refuses before anything durable is written or mutated", async () => {
+    previewingProration(60_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", BUILD_PLAN.slug, "month", {
+        approvedMaxCents: 0,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_EXCEEDS_APPROVED_AMOUNT" });
+
+    // A refusal that came after the intent write would leave an intent for a
+    // swap that never happened, and one after the swap would be no refusal at
+    // all.
+    expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
+    expect(subscriptionUpdates).toHaveLength(0);
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
+  });
+
+  it("proceeds when the charge matches what was approved", async () => {
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+      approvedMaxCents: 49_900,
+    });
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+
+  it("proceeds when the charge came in BELOW what was approved", async () => {
+    // The discriminating negative for the direction of the comparison. An
+    // equality check, or a check on any change at all, would refuse here — and
+    // refusing a customer a cheaper bill than they agreed to is absurd. The
+    // approval is a ceiling.
+    previewingProration(10_000);
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+      approvedMaxCents: 49_900,
+    });
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalled();
+  });
+
+  it("compares what is COLLECTED, not the previewed proration", async () => {
+    // A downgrade previews a large credit and ships `none`, which writes no
+    // proration line, so nothing is collected at the swap. Comparing the
+    // previewed figure rather than the collected one would refuse a $0 change
+    // against a $0 approval on the strength of a credit nobody receives now.
+    previewingProration(-80_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", BUILD_PLAN.slug, "month", {
+      approvedMaxCents: 0,
+    });
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "none" }),
+    );
+  });
+
+  it("refuses when an approval exists and the charge cannot be established", async () => {
+    // Without an approval this settles as always_invoice, which bills the true
+    // difference — right for a caller with nobody waiting. With one it is
+    // wrong: a person agreed to a specific number, and not knowing the amount
+    // is not permission to charge an unknown one.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await expect(
+      changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month", {
+        approvedMaxCents: 49_900,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_CHANGE_EXCEEDS_APPROVED_AMOUNT" });
+    expect(upgradeSubscriptionMock).not.toHaveBeenCalled();
+  });
+
+  it("still settles an unpriceable change as always_invoice when NO approval was recorded", async () => {
+    // The paired negative. Absent must keep meaning "no approval was
+    // recorded", not "refuse everything" — a caller with no human behind it
+    // relies on this, and turning it into a refusal would be the
+    // over-correction.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(ENTERPRISE_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({ prorationBehavior: "always_invoice" }),
+    );
+  });
+});

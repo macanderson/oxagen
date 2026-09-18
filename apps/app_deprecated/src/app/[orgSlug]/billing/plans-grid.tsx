@@ -105,6 +105,11 @@ export function PlansGrid({
 
       if (result.requiresCheckout) {
         // No subscription yet — go straight to Stripe Checkout.
+        //
+        // Deliberately no `approvedMaxCents`: nothing has been approved yet.
+        // This path shows no confirm dialog and charges nothing in place; the
+        // customer approves the price on Stripe's own page. Passing a figure
+        // here would be inventing an approval that did not happen.
         startConfirmTransition(async () => {
           const res = await changePlanAction({
             orgSlug,
@@ -133,12 +138,17 @@ export function PlansGrid({
 
   function handleConfirm() {
     if (!pendingChange) return;
-    const { slug, interval: chosenInterval } = pendingChange;
+    const { slug, interval: chosenInterval, preview } = pendingChange;
     startConfirmTransition(async () => {
       const res = await changePlanAction({
         orgSlug,
         targetPlanSlug: slug,
         interval: chosenInterval,
+        // The number this dialog put in front of the customer. The server
+        // takes its own preview, and between the two a discount can expire or
+        // a credit balance be consumed — so it is sent what was agreed to and
+        // refuses to charge more than that (#3157, r4042477860).
+        approvedMaxCents: preview.amountCents,
       });
       if (!res.ok) {
         addToast({

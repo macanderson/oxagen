@@ -518,6 +518,59 @@ describe("PlansGrid — confirmation dialog", () => {
         orgSlug: "acme",
         targetPlanSlug: "scale-plan",
         interval: "month",
+        // The figure this dialog showed. The server previews again and will
+        // refuse to charge more than this, which is the only thing tying the
+        // number the customer read to the money they are asked for
+        // (#3157, r4042477860).
+        approvedMaxCents: 1500,
+      });
+    });
+  });
+
+  it("sends the amount the dialog actually displayed, not a constant", async () => {
+    // Discriminating: a wiring that hard-coded a value, or sent the target
+    // plan's list price, would pass the test above and fail this one.
+    const preview = makePreview({ requiresCheckout: false, amountCents: 4200 });
+    mockPreviewPlanAction.mockResolvedValue(preview);
+    mockChangePlanAction.mockResolvedValue({ ok: true, url: null });
+
+    renderGrid();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /scale/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/confirm plan change/i)).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockChangePlanAction).toHaveBeenCalledWith(
+        expect.objectContaining({ approvedMaxCents: 4200 }),
+      );
+    });
+  });
+
+  it("sends NO approved maximum on the checkout path, where nothing was approved", async () => {
+    // The paired negative. That path shows no dialog and charges nothing in
+    // place — the customer approves on Stripe's own page. Inventing a figure
+    // here would make the parameter meaningless, which is worse than absent.
+    mockPreviewPlanAction.mockResolvedValue(
+      makePreview({ requiresCheckout: true }),
+    );
+    mockChangePlanAction.mockResolvedValue({ ok: true, url: null });
+
+    renderGrid();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /scale/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockChangePlanAction).toHaveBeenCalledWith({
+        orgSlug: "acme",
+        targetPlanSlug: "scale-plan",
+        interval: "month",
       });
     });
   });

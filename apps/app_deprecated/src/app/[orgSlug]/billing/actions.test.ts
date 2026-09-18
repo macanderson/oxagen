@@ -616,6 +616,48 @@ describe("env validation scope + resilience (regression: page-wipe 812344190)", 
     expect(result.ok).toBe(false);
   });
 
+  it("changePlanAction forwards the approved maximum to changeOrgPlan", async () => {
+    // The action is the only thing between the number the dialog showed and
+    // the billing call that enforces it. Dropping it here would leave the
+    // guard wired to nothing while every other test still passed
+    // (#3157, r4042477860).
+    vi.mocked(changeOrgPlan).mockResolvedValue(null as never);
+
+    await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+      approvedMaxCents: 4200,
+    });
+
+    expect(changeOrgPlan).toHaveBeenCalledWith(
+      expect.any(String),
+      "scale-v2",
+      "month",
+      expect.objectContaining({ approvedMaxCents: 4200 }),
+    );
+  });
+
+  it("changePlanAction forwards NO maximum when the caller approved nothing", async () => {
+    // Absent must survive the round trip as absent. Coercing it to 0 here
+    // would refuse every real charge; coercing it to Infinity would silently
+    // disable the guard.
+    vi.mocked(changeOrgPlan).mockResolvedValue(null as never);
+
+    await changePlanAction({
+      orgSlug: "acme",
+      targetPlanSlug: "scale-v2",
+      interval: "month",
+    });
+
+    expect(changeOrgPlan).toHaveBeenCalledWith(
+      expect.any(String),
+      "scale-v2",
+      "month",
+      expect.objectContaining({ approvedMaxCents: undefined }),
+    );
+  });
+
   it("changePlanAction returns {ok:false} (no throw) when env validation fails", async () => {
     vi.mocked(requireEnv).mockImplementationOnce(() => {
       throw new Error("Invalid environment");

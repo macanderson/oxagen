@@ -54,6 +54,59 @@ export class SubscriptionStateUnavailableError extends Error {
   }
 }
 
+/**
+ * Raised when the change about to be applied would charge more than the
+ * customer approved.
+ *
+ * WHAT THIS BINDS, AND WHY IT IS NOT A STALE READING.
+ *
+ * The quote a person reads and the charge they get are separated by an HTTP
+ * round trip and however long the dialog sits open. `previewPlanChange`
+ * computes one preview; `changeOrgPlan` computes another; nothing connects
+ * them. A customer shown $0 for a downgrade can confirm and be invoiced an
+ * increase, because a discount expired, a credit balance was consumed or the
+ * period rolled over between the two (#3157, PR #3171 review, r4042477860).
+ *
+ * `approvedMaxCents` is not a reading of provider state, and that is the whole
+ * reason it is safe to carry across that gap. It is a fact about a HUMAN
+ * DECISION — what this person agreed to pay — and a person's approval does not
+ * go stale when Stripe's state moves. It is a bound, not a token: acting on it
+ * can only ever permit a charge at or below what was agreed, so a stale one
+ * cannot authorise anything the fresh one would not.
+ *
+ * Charging LESS than approved proceeds. The customer agreed to at most this,
+ * and a cheaper change is inside that.
+ *
+ * ABSENT MEANS NO APPROVAL WAS RECORDED, NOT "ANY AMOUNT IS FINE". It is
+ * optional because one real caller legitimately has no approved figure: a plan
+ * change with no active subscription returns a Stripe Checkout URL, where the
+ * customer approves the price on Stripe's own page. Forcing a number there
+ * would mean inventing one, and a parameter callers pass a meaningless value
+ * for is worse than no parameter. Where a human HAS approved a figure, passing
+ * it is what makes the confirmation binding.
+ *
+ * A PREVIEW THAT CANNOT BE TAKEN REFUSES, when an approval exists. The
+ * unpriceable change otherwise settles as `always_invoice`, which bills the
+ * true difference — a sound default for a caller with nobody waiting, and the
+ * wrong one when a person has been shown a specific number and agreed to it.
+ * Not knowing the amount is not permission to charge an unknown one.
+ */
+export class PlanChangeExceedsApprovedAmountError extends Error {
+  readonly code = "PLAN_CHANGE_EXCEEDS_APPROVED_AMOUNT" as const;
+  constructor(
+    readonly approvedMaxCents: number,
+    /** Null when no preview could be taken, so the charge is unknown. */
+    readonly chargedNowCents: number | null,
+  ) {
+    super(
+      chargedNowCents === null
+        ? `This change was approved at up to ${approvedMaxCents} cents, but what it will charge could not be established; it was not applied.`
+        : `This change would charge ${chargedNowCents} cents, more than the ${approvedMaxCents} cents that were approved; it was not applied.`,
+    );
+    this.name = "PlanChangeExceedsApprovedAmountError";
+  }
+}
+
 /** Which way the money moves across a plan change, and what the swap owes now. */
 export interface PlanChangeDirection {
   prorationBehavior: "always_invoice" | "none";
@@ -742,6 +795,16 @@ export async function changeOrgPlan(
      * guarantees.
      */
     requestId?: string;
+    /**
+     * The most this change was approved to charge now, in cents — the figure
+     * a person was shown and agreed to.
+     *
+     * Checked against what the swap will actually collect, and the swap
+     * refuses if it would cost more. Omit it only where no human approved an
+     * amount; see {@link PlanChangeExceedsApprovedAmountError} for why it is
+     * optional rather than required, and why absent does not mean unlimited.
+     */
+    approvedMaxCents?: number;
   },
 ): Promise<{ checkoutUrl: string } | null> {
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
@@ -1040,6 +1103,45 @@ export async function changeOrgPlan(
       newPriceId,
       interval,
     );
+  // ── What the customer agreed to pay, honoured ────────────────────────
+  //
+  // The quote is computed by a different call, on the other side of an HTTP
+  // round trip and a dialog somebody may leave open. This is the only thing
+  // that ties the number they read to the charge they get: everything else
+  // here binds provider state to provider state, and no amount of that can
+  // notice that a discount expired while a person was deciding.
+  //
+  // Derived exactly as `previewPlanChange` derives the figure it shows — the
+  // same expression, so the two cannot drift into disagreeing about what
+  // "charged now" means. A behaviour of `none` writes no proration line, so
+  // nothing is collected at the swap however large the previewed credit.
+  if (opts?.approvedMaxCents !== undefined) {
+    const chargedNowCents =
+      amountCents === null
+        ? null
+        : prorationBehavior === "always_invoice"
+          ? amountCents
+          : 0;
+    if (chargedNowCents === null || chargedNowCents > opts.approvedMaxCents) {
+      logger.warn(
+        {
+          orgId,
+          targetPlanSlug,
+          interval,
+          approvedMaxCents: opts.approvedMaxCents,
+          chargedNowCents,
+          priceDirection: direction,
+          prorationBehavior,
+        },
+        "billing: refusing a plan change that would charge more than was approved",
+      );
+      throw new PlanChangeExceedsApprovedAmountError(
+        opts.approvedMaxCents,
+        chargedNowCents,
+      );
+    }
+  }
+
   // Reported, never used to decide the credit grant. Whether the customer owes
   // money and whether their included allowance went up are different
   // questions, and this one answers only the first — see the grant below.
