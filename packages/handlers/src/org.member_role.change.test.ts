@@ -108,9 +108,11 @@ function buildSelectMock(calls: unknown[][]) {
     // builder itself, and `.length` on it is `undefined`, which silently
     // skipped the guard it was meant to drive.
     const orderBy = vi.fn().mockReturnValue({ limit });
-    const where = vi.fn().mockReturnValue(
-      Object.assign(Promise.resolve(result), { limit, orderBy }),
-    );
+    const where = vi
+      .fn()
+      .mockReturnValue(
+        Object.assign(Promise.resolve(result), { limit, orderBy }),
+      );
     const innerJoin = vi.fn().mockReturnValue({ where });
     const from = vi.fn().mockReturnValue({ where, innerJoin });
     return { from };

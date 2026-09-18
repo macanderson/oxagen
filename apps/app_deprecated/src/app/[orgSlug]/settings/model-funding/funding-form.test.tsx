@@ -117,6 +117,8 @@ const OWN_KEY_VIEW = {
   provider: "openrouter" as const,
   status: "active" as const,
   keyHint: "cdef",
+  baseUrl: null,
+  modelMap: {},
   lastVerifiedAt: "2026-09-08T12:00:00.000Z",
   rotatedAt: "2026-09-01T09:30:00.000Z",
 };
@@ -126,6 +128,8 @@ const PLATFORM_VIEW = {
   provider: null,
   status: null,
   keyHint: null,
+  baseUrl: null,
+  modelMap: {},
   lastVerifiedAt: null,
   rotatedAt: null,
 };

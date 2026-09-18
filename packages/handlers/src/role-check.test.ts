@@ -74,6 +74,15 @@ const ROLE_CHECKED_CONTRACTS = [
   "list_tool_versions",
   "list_credential_grants",
   "list_kill_switches",
+  // The organisation's model-vendor key (ADR-053 §2). All four shipped with
+  // no role check, relying on `defaultRoles`, which the non-enterprise IAM
+  // fast path never reads — so any member could set the key, and with an
+  // `openai_compatible` endpoint route the org's assistant traffic to a
+  // server they control.
+  "get_model_credential",
+  "set_model_credential",
+  "delete_model_credential",
+  "verify_model_credential",
 ] as const;
 
 const AGENT_ROLE_CHECKED_CONTRACTS = [
