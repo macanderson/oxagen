@@ -316,6 +316,18 @@ export const modelCredentials = orgSchema.table(
     // Last four characters of the key — what a vendor dashboard shows, and what
     // an operator needs to tell two keys apart. Not a secret.
     keyHint: text("key_hint").notNull(),
+    // The customer's own endpoint, for `openai_compatible` credentials only.
+    // NULL for every provider whose URL Oxagen spells; the pairing CHECK below
+    // enforces both directions, so a row can never carry an endpoint the
+    // provider client would ignore, nor omit one the client cannot build
+    // without. Not a secret: the settings page reads it back to show an
+    // operator what they configured.
+    baseUrl: text("base_url"),
+    // Which concrete model each white-labeled tier means on THIS key, as
+    // `{ fast?, balanced?, precise? }`. Empty for a routed provider, which
+    // understands the platform's gateway-shaped ids already. `{}` rather than
+    // NULL so every reader gets an object and none has to branch.
+    modelMap: jsonb("model_map").notNull().default(sql`'{}'::jsonb`),
     status: text("status").notNull().default("active"),
     lastVerifiedAt: timestamp("last_verified_at", {
       withTimezone: true,
@@ -334,7 +346,25 @@ export const modelCredentials = orgSchema.table(
       .where(sql`${t.deletedAt} IS NULL`),
     providerCheck: check(
       "model_credentials_provider_check",
-      sql`${t.provider} IN ('openrouter','gateway')`,
+      sql`${t.provider} IN ('openrouter','gateway','openai','anthropic','openai_compatible')`,
+    ),
+    // The endpoint and the provider agree, in BOTH directions: exactly the
+    // providers whose URL the customer supplies carry one. Without the second
+    // half a row could name `openrouter` and carry a base_url that the client
+    // silently ignores — a stored setting with no effect, which reads to an
+    // operator as a bug in the assistant rather than in the row.
+    baseUrlPairingCheck: check(
+      "model_credentials_base_url_pairing_check",
+      sql`(${t.provider} = 'openai_compatible') = (${t.baseUrl} IS NOT NULL)`,
+    ),
+    // An endpoint we will attach an API key to must be TLS. The range check
+    // that keeps it off loopback and the metadata address cannot be expressed
+    // here and runs in the handler (`@oxagen/config/public-url`); this is the
+    // half the database can hold, so a row written by any future path still
+    // cannot carry `http://`.
+    baseUrlTlsCheck: check(
+      "model_credentials_base_url_tls_check",
+      sql`${t.baseUrl} IS NULL OR ${t.baseUrl} LIKE 'https://%'`,
     ),
     statusCheck: check(
       "model_credentials_status_check",

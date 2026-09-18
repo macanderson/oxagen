@@ -8,6 +8,8 @@ import { defineTool } from "./_define";
  */
 import {
   modelCredentialApiKeySchema,
+  modelCredentialBaseUrlSchema,
+  modelCredentialModelMapSchema,
   modelCredentialVerificationSchema,
 } from "../org.model_credential.shared";
 import { pluginCredentialSetSecret } from "../plugin.credential.set_secret";
@@ -52,7 +54,8 @@ export const setConnectionInputObject = z.object({
   /**
    * Appendix A `tools.connections.provider` is free text because a connection
    * can point at any vendor. The closed `modelCredentialProviderSchema`
-   * (`openrouter`, `gateway`) still governs which values are legal when
+   * (`openrouter`, `gateway`, `openai`, `anthropic`, `openai_compatible`)
+   * still governs which values are legal when
    * `kind` is `model_provider` — enforced in the handler rather than as a
    * refinement here, so `.shape` stays reachable for the MCP parameter
    * builder (the same reason `verify_model_credential` exported its base
@@ -69,6 +72,28 @@ export const setConnectionInputObject = z.object({
    * `z.string()`, so this is a tightening — the stricter of two sources wins.
    */
   secret: modelCredentialApiKeySchema.optional(),
+
+  /**
+   * Carried from `set_model_credential` and from `verify_model_credential`'s
+   * candidate mode. The endpoint of a `model_provider` connection whose
+   * provider is `openai_compatible` — Together, Fireworks, Groq, Azure, a
+   * self-hosted vLLM. Free-text `provider` is what makes it necessary: a
+   * connection can point at any vendor, and for the one whose URL Oxagen does
+   * not spell, the URL is the connection. Null or absent for every provider
+   * whose URL Oxagen spells. The handler runs the same range check as the
+   * source (`assertPublicHttpUrl`: https, off loopback, RFC1918 and the cloud
+   * metadata address) before the row is written.
+   */
+  baseUrl: modelCredentialBaseUrlSchema.nullish(),
+
+  /**
+   * Carried from `set_model_credential`. What each white-labeled tier means
+   * on THIS key. A direct-vendor `model_provider` connection must map
+   * `balanced` and a routed one must not map anything — the handler enforces
+   * the pairing, as the source's `superRefine` did, so `.shape` stays
+   * reachable for the MCP parameter builder.
+   */
+  modelMap: modelCredentialModelMapSchema.optional(),
 
   // Carried from `set_plugin_secret` for `kind: "oauth"`. The refresh token
   // is stored and never read back — `list_connections` cannot return it and
@@ -236,6 +261,11 @@ export const setConnection = defineTool({
       field: "authKind",
       from: "set_plugin_secret",
       why: "the two-value oauth/secret discriminator widens into Appendix A's five-value `kind`, which also has to describe cloud roles, GitHub App installations and model providers",
+    },
+    {
+      field: "toolProbeModel",
+      from: "verify_model_credential",
+      why: "verify had to be told which model to send its forced tool call to, because a candidate was tested before its model map existed. Here the test and the save are one call and the map arrives with the secret, so the model the connection will actually run on — `modelMap.balanced` — is the one the probe asks, and a second field naming it could only disagree",
     },
   ],
 

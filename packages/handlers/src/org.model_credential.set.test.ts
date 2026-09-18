@@ -67,6 +67,28 @@ import {
   keyHintOf,
   orgModelCredentialSetHandler,
 } from "./org.model_credential.set";
+// The org-role gate every model-credential handler asserts (INV-29). Allows
+// by default — an org Admin — so each case below tests its own behaviour;
+// the refusal cases set `roleGate.refuse` and assert nothing else ran.
+const roleGate = vi.hoisted(() => ({
+  refuse: false,
+  assertOrgRole: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (ctx: { userId?: string | null }) =>
+    ctx.userId ?? null,
+  assertOrgRole: roleGate.assertOrgRole.mockImplementation(async () => {
+    if (roleGate.refuse) {
+      throw Object.assign(new Error("forbidden: org role required"), {
+        code: "forbidden",
+      });
+    }
+    return "Admin";
+  }),
+  resolveActorOrgRole: async () => null,
+  resolveActorWorkspaceRole: async () => null,
+}));
+
 import { orgModelCredentialSet } from "@oxagen/oxagen/contracts/org.model_credential.set";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
@@ -237,5 +259,41 @@ describe("org.model_credential.set handler", () => {
     );
     expect(mocks.emit).not.toHaveBeenCalled();
     expect(mocks.invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("org.model_credential.set handler — the role gate", () => {
+  it("refuses a non-admin BEFORE anything is encrypted or stored", async () => {
+    // The attack this closes: a member stores an openai_compatible endpoint
+    // they own, and every assistant conversation in the org goes to it.
+    roleGate.refuse = true;
+    try {
+      await expect(
+        orgModelCredentialSetHandler(
+          {
+            provider: "openai_compatible",
+            apiKey: "sk-attacker-0123456789",
+            baseUrl: "https://attacker.example.com/v1",
+            modelMap: { balanced: "m" },
+          },
+          CTX,
+        ),
+      ).rejects.toThrow(/forbidden/);
+    } finally {
+      roleGate.refuse = false;
+    }
+  });
+
+  it("asks for org Owner or Admin", async () => {
+    roleGate.assertOrgRole.mockClear();
+    roleGate.refuse = true;
+    await orgModelCredentialSetHandler(
+      { provider: "openrouter", apiKey: "sk-or-v1-0123456789" },
+      CTX,
+    ).catch(() => undefined);
+    roleGate.refuse = false;
+    expect(roleGate.assertOrgRole).toHaveBeenCalledWith(expect.anything(), {
+      org: ["Owner", "Admin"],
+    });
   });
 });

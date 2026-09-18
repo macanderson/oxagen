@@ -34,6 +34,10 @@ export const orgModelCredentialGet = registerCapability({
   // Reading who pays for tokens is governance, not AI usage — it consumes no
   // credits.
   noBillingGate: true,
+  // A pure read. Declared so the app's `kernelRead` accepts it — without the
+  // flag it refuses with `contract_mutates`, and the settings page could not
+  // show an organisation which key it has.
+  mutates: false,
   input: z.object({}),
   output: modelCredentialViewSchema,
 });
