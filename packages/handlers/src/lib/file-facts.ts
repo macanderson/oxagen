@@ -128,7 +128,13 @@ export function repoRelativePathOf(
 ): string | undefined {
   if (path.length === 0) return undefined;
   const absolute = toForwardSlashes(path);
-  if (!absolute.startsWith("/") && !isWindowsAbsolute(absolute)) return path;
+  // An already relative path is returned normalized, not as it arrived. A
+  // tool on Windows reports `src\\a.ts` for the file a POSIX host calls
+  // `src/a.ts`, and returning the first unchanged would store two keys for
+  // one file in the column whose whole purpose is to read the same on every
+  // machine.
+  if (!absolute.startsWith("/") && !isWindowsAbsolute(absolute))
+    return absolute;
   if (root === undefined) return undefined;
   const base = toForwardSlashes(root);
   if (!base.startsWith("/") && !isWindowsAbsolute(base)) return undefined;
@@ -236,9 +242,7 @@ export const WORKTREE_RECONCILED_KIND = "oxagen:worktree_reconciled";
  * of the wrong shape is skipped rather than written as a partial record,
  * because a file fact nobody can trust is worse than a missing one.
  */
-export function observedChangesOf(
-  body: unknown,
-): readonly ObservedChange[] {
+export function observedChangesOf(body: unknown): readonly ObservedChange[] {
   const changes = (body as { observed_changes?: unknown } | undefined)
     ?.observed_changes;
   if (!Array.isArray(changes)) return [];

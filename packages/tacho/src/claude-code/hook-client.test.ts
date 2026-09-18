@@ -53,6 +53,36 @@ describe("runTachoHook", () => {
     });
   });
 
+  it("refuses a Cursor call whose payload it cannot parse", async () => {
+    // The same fail-open as an unreadable enrollment, one step earlier. `{}`
+    // reads as no opinion to Claude Code, and Cursor's failClosed does not
+    // cover it: the hook answered successfully with nothing. A truncated
+    // payload or a schema change on Cursor's side would stop enforcement
+    // while every call was recorded as allowed.
+    const paths = scratchPaths();
+    const cursor = await runTachoHook({
+      paths,
+      env: {},
+      stdin: '{"hook_event_name":"preToolUse"}',
+      harness: "cursor",
+    });
+    expect(cursor.path).toBe("invalid");
+    expect(cursor.exitCode).toBe(0);
+    expect(
+      (JSON.parse(cursor.stdout) as Record<string, unknown>)["permission"],
+    ).toBe("deny");
+
+    // Claude Code keeps its own answer: `{}` is how a hook says nothing
+    // there, and changing it would alter behaviour this finding is not about.
+    const claude = await runTachoHook({
+      paths,
+      env: {},
+      stdin: "not json",
+    });
+    expect(claude.path).toBe("invalid");
+    expect(claude.stdout).toBe("{}\n");
+  });
+
   it("refuses a Cursor call when it cannot read the enrollment it has", async () => {
     // An unenrolled machine is one Oxagen does not govern, so allowing is
     // right. A machine whose host.json exists and will not parse is a

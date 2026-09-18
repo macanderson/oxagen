@@ -89,9 +89,9 @@ describe("repoRelativePathOf", () => {
   });
 
   it("strips a Windows root off a Windows path", () => {
-    expect(
-      repoRelativePathOf("C:\\repo\\src\\a.ts", "C:\\repo"),
-    ).toBe("src/a.ts");
+    expect(repoRelativePathOf("C:\\repo\\src\\a.ts", "C:\\repo")).toBe(
+      "src/a.ts",
+    );
   });
 
   it("matches a Windows root whatever case the drive letter carries", () => {
@@ -102,10 +102,7 @@ describe("repoRelativePathOf", () => {
 
   it("strips a UNC share root", () => {
     expect(
-      repoRelativePathOf(
-        "\\\\server\\share\\src\\a.ts",
-        "\\\\server\\share",
-      ),
+      repoRelativePathOf("\\\\server\\share\\src\\a.ts", "\\\\server\\share"),
     ).toBe("src/a.ts");
   });
 
@@ -123,9 +120,13 @@ describe("repoRelativePathOf", () => {
     ).toBeUndefined();
   });
 
-  it("returns an already relative Windows path unchanged", () => {
-    // Nothing to strip, so it is returned as it arrived.
-    expect(repoRelativePathOf("src\\a.ts", undefined)).toBe("src\\a.ts");
+  it("normalizes an already relative Windows path", () => {
+    // There is nothing to strip, but the separators still have to be
+    // normalized. A tool on Windows reports `src\\a.ts` for the file a POSIX
+    // host calls `src/a.ts`, and storing both would put two keys in a column
+    // whose whole purpose is to read the same on every machine.
+    expect(repoRelativePathOf("src\\a.ts", undefined)).toBe("src/a.ts");
+    expect(repoRelativePathOf("src/a.ts", undefined)).toBe("src/a.ts");
   });
 });
 

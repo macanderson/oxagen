@@ -34,6 +34,14 @@ import {
 } from "./stella-adapter";
 
 /** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
+/**
+ * What Cursor shows when a hook payload cannot be read. It names the cause
+ * and the repair rather than saying only that something was denied, because
+ * the person seeing it did nothing wrong and can act on it.
+ */
+const CURSOR_UNREADABLE_PAYLOAD =
+  "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
+
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const index = argv.indexOf("--harness");
   const value = index >= 0 ? argv[index + 1] : undefined;
@@ -347,7 +355,27 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
     return {
-      stdout: "{}\n",
+      // A payload this hook cannot parse is not a reason to let the call
+      // through on Cursor. `{}` reads as no opinion to Claude Code, and
+      // Cursor's `failClosed` does not cover it either, because the hook did
+      // not crash, time out or exit non-zero: it answered, successfully, with
+      // nothing. So a truncated payload or a schema change on Cursor's side
+      // would quietly stop enforcing while every call was recorded as
+      // allowed. The refusal is explicit instead, for the same reason an
+      // unreadable enrollment refuses below.
+      //
+      // The event is unknown here, since the parse is what failed, so the
+      // refusal goes out whatever the event was. Cursor reads no permission
+      // field on its observational events, so the cost of being wrong in
+      // that direction is nothing, and the cost of being wrong in the other
+      // is an unenforced mandate.
+      stdout: cursor
+        ? `${JSON.stringify({
+            permission: "deny",
+            user_message: CURSOR_UNREADABLE_PAYLOAD,
+            agent_message: CURSOR_UNREADABLE_PAYLOAD,
+          })}\n`
+        : "{}\n",
       stderr: `tacho-hook: payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",
