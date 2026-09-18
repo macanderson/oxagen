@@ -52,6 +52,14 @@ const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 export const COLD_BOOK_EFFECTIVE_FROM = new Date("2020-01-01T00:00:00.000Z");
 
 /**
+ * How long after the price book's first row a newly seen model is still
+ * backdated to {@link COLD_BOOK_EFFECTIVE_FROM}. Seven days covers a catalog
+ * that was down when the book was first written. After it, a new model is
+ * priced from the instant it appeared, never retroactively.
+ */
+export const COLD_START_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * The instant a scheduled sync's prices take effect: the next top of the hour
  * after `now`, never `now` itself.
  *
@@ -472,9 +480,33 @@ export async function syncPriceBook(args: {
     // silently repricing every frame inside it. A returning key is a successor
     // at the requested instant, like any other change.
     const seen = new Set<string>(existing.map((r) => key(r)));
-    const coldStart = !existing.some(
-      (r) => r.effectiveFrom.getTime() > COLD_BOOK_EFFECTIVE_FROM.getTime(),
+    // Cold start is also bounded in time, by the book's own creation.
+    //
+    // Waiting for the first real-instant row alone never ended it for a book
+    // whose rates stayed stable: every row sat at the floor forever, so a
+    // model a catalog added months later was backdated to the floor too, and
+    // a rollup retry priced frames from before that model had any known rate.
+    // The first row's `created_at` is durable initialization state. Once
+    // COLD_START_WINDOW_MS has passed since it, the book is established and a
+    // new key starts at the requested instant like any other change. The
+    // window stays long enough for a catalog that was down at first sync to
+    // come back and have its models backdated, which is what cold start is
+    // for.
+    const bookCreatedAt = existing.reduce<number | null>(
+      (earliest, r) =>
+        earliest === null || r.createdAt.getTime() < earliest
+          ? r.createdAt.getTime()
+          : earliest,
+      null,
     );
+    const withinColdWindow =
+      bookCreatedAt === null ||
+      now.getTime() - bookCreatedAt < COLD_START_WINDOW_MS;
+    const coldStart =
+      withinColdWindow &&
+      !existing.some(
+        (r) => r.effectiveFrom.getTime() > COLD_BOOK_EFFECTIVE_FROM.getTime(),
+      );
     const effectiveFrom = args.effectiveFrom;
     const seeds = coldStart
       ? requested.map((s) =>
@@ -643,9 +675,28 @@ export async function syncPriceBook(args: {
       for (const row of existing) {
         if (row.effectiveTo !== null || closedIds.has(row.id)) continue;
         if (seeded.has(key(row))) continue;
-        // A row that starts at or after this sync cannot close at this
-        // instant (`effective_to > effective_from`); it is a later correction
-        // this run must not touch.
+        // A row that starts exactly at this sync's instant, while that
+        // instant is still ahead, was scheduled by an earlier run of the same
+        // boundary and has priced nothing. The complete snapshot omits it, so
+        // it must not take effect: skipping it (as this once did) left it
+        // open, and at the boundary it began pricing a model the catalog had
+        // withdrawn. It cannot be closed at its own start
+        // (`effective_to > effective_from`), so it is deleted, which is safe
+        // for exactly that reason: no frame can cite it yet.
+        if (
+          row.effectiveFrom.getTime() === effectiveFrom.getTime() &&
+          effectiveFrom.getTime() > now.getTime()
+        ) {
+          await tx
+            .delete(schema.priceEntries)
+            .where(eq(schema.priceEntries.id, row.id));
+          closedIds.add(row.id);
+          retired += 1;
+          continue;
+        }
+        // A row that starts after this sync cannot close at this instant; it
+        // is a later correction this run must not touch. One that starts at
+        // an instant already in force is closed normally below.
         if (row.effectiveFrom.getTime() >= effectiveFrom.getTime()) continue;
         await tx
           .update(schema.priceEntries)
@@ -1013,7 +1064,12 @@ export async function setNegotiatedPriceEntry(
     // inherits the aliases of the row it replaces. Starting it with an empty
     // list dropped every stored alias from that instant on, and calls under
     // those names fell back to list pricing or went unpriced.
-    const inherited = modelAliases ?? open?.modelAliases ?? [];
+    //
+    // The same holds when the rate was ENDED and is now being re-established:
+    // there is no open row, but the most recent row in the chain still carries
+    // the names. `rows` is newest first, so `rows[0]` is that row.
+    const inherited =
+      modelAliases ?? open?.modelAliases ?? rows[0]?.modelAliases ?? [];
     const aliases = sql.join(
       inherited.map((a) => sql`${a}`),
       sql`, `,

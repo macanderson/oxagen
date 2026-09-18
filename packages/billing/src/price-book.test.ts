@@ -378,6 +378,29 @@ describe("the negotiated write path", () => {
     expect(successor?.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
   });
 
+  // There is no open row after a rate was ended, but the latest row in the
+  // chain still carries the names. Re-establishing the rate without retyping
+  // them started the new row with none.
+  it("carries the aliases of an ended rate into its re-establishment", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      modelAliases: ["anthropic/claude-sonnet-5"],
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+    const T3 = new Date(T2.getTime() + 86_400_000);
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_200_000n,
+      effectiveFrom: T3,
+    });
+    const reestablished = fake.rows.find(
+      (r) => (r.effectiveFrom as Date).getTime() === T3.getTime(),
+    );
+    expect(reestablished?.modelAliases).toEqual(["anthropic/claude-sonnet-5"]);
+  });
+
   it("replaces the stored aliases when a correction names an empty list", async () => {
     await setNegotiatedPriceEntry({
       ...SET,
@@ -1048,6 +1071,41 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(ops.indexOf("lock")).toBeLessThan(ops.indexOf("select"));
   });
 
+  // A book whose rates never moved had no real-instant row, so it stayed cold
+  // for ever, and a model a catalog added months later was backdated to the
+  // floor: a rollup retry then priced frames from before any rate was known.
+  it("stops backdating new models once the book is past its cold-start window", async () => {
+    fake.rows.push(
+      priceRow({
+        model: "claude-sonnet-5",
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
+    const LATER = new Date("2026-09-18T16:00:00.000Z");
+    const result = await syncPriceBook({
+      effectiveFrom: LATER,
+      now: new Date("2026-09-18T15:10:00.000Z"),
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-brand-new",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 1_000_000n,
+          effectiveFrom: LATER,
+          effectiveTo: null,
+        },
+      ],
+    });
+    expect(result.coldStart).toBe(false);
+    const added = fake.rows.find((r) => r.model === "claude-brand-new");
+    expect(added?.effectiveFrom).toEqual(LATER);
+  });
+
   // A key whose only row is CLOSED was priced and then retired; it is not a
   // key the book has never seen. Backdating its return to the floor collided
   // with the original floor-dated row, and the upsert reset that row's
@@ -1065,6 +1123,9 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     );
     const result = await syncPriceBook({
       effectiveFrom: T1,
+      // Inside the cold-start window of the book's first row (created
+      // 2026-09-01), so the book is still cold.
+      now: new Date("2026-09-03T00:00:00.000Z"),
       seeds: [
         {
           provider: "anthropic",
@@ -1376,6 +1437,25 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     expect(byKey("claude-sonnet-5", "cache_read").effectiveTo).toEqual(T1);
     expect(byKey("claude-sonnet-4", "input_uncached").effectiveTo).toEqual(T1);
     expect(fake.rows).toHaveLength(3);
+  });
+
+  // A same-hour re-run uses the same future boundary. A row an earlier run
+  // scheduled there has priced nothing, and the complete snapshot now omits
+  // it, so it must not take effect at the boundary. It cannot be closed at
+  // its own start, so it is removed.
+  it("cancels an omitted row scheduled at the still-future boundary", async () => {
+    const BOUNDARY = new Date("2026-09-18T16:00:00.000Z");
+    fake.rows.push(
+      priceRow({ model: "claude-withdrawn", effectiveFrom: BOUNDARY }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: BOUNDARY,
+      now: new Date("2026-09-18T15:30:00.000Z"),
+      seeds: [seed()],
+      retireAbsent: true,
+    });
+    expect(result.retired).toBeGreaterThanOrEqual(1);
+    expect(fake.rows.some((r) => r.model === "claude-withdrawn")).toBe(false);
   });
 
   // A row absent because its catalog was down is not a price that ended. The
