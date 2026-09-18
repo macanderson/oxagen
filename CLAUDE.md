@@ -163,6 +163,7 @@ Decomposition:
 
 Real skill directories live in `.claude/skills/` (checked in). Consult the matching one before writing code.
 
+- **`clear-prose`** (required): load it before writing or editing any prose a person will read, internal or external: docs, posts, READMEs, ADRs, specs, issues, PR bodies, commit messages, code comments, UI strings, errors, CLI output. Pairs with `oxagen-branding`. The rule and its scope live in `AGENTS.md` under "Writing".
 - **`oxagen-capability-contracts`** — defining a contract, the registry, handler binding, the `invoke()` pipeline, and the parity rule (contract → API route → MCP tool → CLI → UI).
 - **`oxagen-surface-patterns`** — Hono route and xmcp tool conventions: thin adapters, auth middleware, `capabilityContext`, error shaping.
 - **`oxagen-app-conventions`** — `apps/app`: server/client boundary, `actions.ts`, the `@/ui` component layer, the single chat SSE transport, the generative-UI registry, `proxy.ts`.
@@ -176,7 +177,7 @@ Real skill directories live in `.claude/skills/` (checked in). Consult the match
 - **`ai-assisted-config`** — the 8-step pattern for AI-drafted configuration UIs and the boundaries the AI must not cross.
 - **`playwright-cli`**, **`reflective-memory`**, **`continuous-learning-v2`** — browser automation, the recall/reflect protocol for agents, and instinct capture.
 
-Routing: code/schema/test/PR/CI → the matching `oxagen-*` skill first; then `pnpm gate`, push, and `gh run watch` until green before opening or finalizing the PR. UI → `oxagen-app-conventions` + `quality-gates`. Auth → Better Auth docs via Context7 plus `oxagen-tenancy`. Agent definitions for review, debugging, docs, e2e, and shipping live in `.claude/agents/`.
+Routing: any prose → `clear-prose` first (plus `oxagen-branding` for customer-facing copy); code/schema/test/PR/CI → the matching `oxagen-*` skill first; then `pnpm gate`, push, and `gh run watch` until green before opening or finalizing the PR. UI → `oxagen-app-conventions` + `quality-gates`. Auth → Better Auth docs via Context7 plus `oxagen-tenancy`. Agent definitions for review, debugging, docs, e2e, and shipping live in `.claude/agents/`.
 
 The former `.agents/skills/` corpus (`oxagen-engineering-policy`, `coss-ui`, `frontend-patterns`, `reablocks`, `reagraph`, `reaviz`, `oxagen-feature`, `vendor-better-auth`, `oxagen-code-audit`, `ci-green`, `test-completeness-judge`, and the vendored third-party skills) was deleted from git on 2026-07-10 in commit `dd36ade55`. Its symlinks under `.claude/skills/` dangled for two months and were pruned; the content is recoverable from `dd36ade55^` if any of it is wanted back.
 

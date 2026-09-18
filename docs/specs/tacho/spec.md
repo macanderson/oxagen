@@ -371,7 +371,7 @@ These are the same operations `stella-serve` exposes as `/pause`, `/resume`, `/c
 
 ### 7.5 Governed context injection
 
-The bundle's `context.system` is injected at `SessionStart` and after `compact` via `additionalContext`. It is authored on the control plane through the same closed operation set the lifecycle framework already uses (`prepend_system_context` / `append_system_context` only; nothing rewrites the harness's instructions), it is IAM-gated, and the injected text's digest is chained as part of `agent_start` so a replay shows what the agent was told.
+The bundle's `context.system` is injected at `SessionStart` and after `compact` via `additionalContext`. It is authored on the control plane through the same closed operation set the lifecycle framework already uses (`prepend_system_context` / `append_system_context` only; nothing rewrites the harness's instructions), it is IAM-gated, and the injected text's digest is chained as part of `agent_start` so a replay shows what the agent was told. The control plane fills it from the workspace's active `must` and `should` context records (ADR-091), capped at the 16,384 characters the host accepts.
 
 ---
 

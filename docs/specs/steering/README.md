@@ -105,7 +105,10 @@ registry row, a new immutable version holding the file at that commit, the
 promotion event on the ledger (`agent.context_promotions`, `action = promote`,
 `policy_version = governance:<mode>`), the proposal to `merged`, and the
 `steering.published` audit event. The workspace's steering version is the
-ledger length. `dismiss_proposal` closes an open PR (one found on the branch
+ledger length. A published `must` or `should` record is compiled into the
+policy bundle's `context.system` (`packages/handlers/src/lib/tacho-steering.ts`,
+ADR-091), so the merge moves the bundle etag and every enrolled host picks the
+record up on its next poll. `dismiss_proposal` closes an open PR (one found on the branch
 whose body names the proposal, when the row never recorded its number) and
 deletes its branch, and writes `rejected` only to a proposal that is not
 merged.
