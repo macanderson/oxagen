@@ -53,6 +53,7 @@ export {
   filterFramesByKind,
   isTranscriptKind,
   TRANSCRIPT_KINDS,
+  turnOrdinals,
   type RunFrame,
   type FramePhase,
   type FrameIdentity,

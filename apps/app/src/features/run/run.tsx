@@ -7,10 +7,12 @@
 // nobody looked at is paid for (§3.5's poll budget).
 //
 // Five sections have a store behind them: Transcript (`get_run_transcript` at
-// one of three zoom levels, through the chips the URL pressed), Frames
-// (`get_run`'s own page, plus one frame's bytes from `get_run_frame_body` when
-// `?body=` names it), Cost (`get_run_cost`, with the waterfall read from the
-// run's own per-turn ledger), Chain and seal (`get_run_chain`) and Approvals
+// `everything`, through the chips the URL pressed, grouped into turns and
+// steps in the view, with `?zoom=` naming which disclosures start open and the
+// player paging the cursor as the playhead moves), Frames (`get_run`'s own
+// page, plus one frame's bytes from `get_run_frame_body` when `?body=` names
+// it), Cost (`get_run_cost`, with the waterfall read from the run's own
+// per-turn ledger), Chain and seal (`get_run_chain`) and Approvals
 // (`list_approvals` narrowed to this run).
 //
 // Two of the mockup's tabs are still not drawn here (§3.6: a slice with no
@@ -112,7 +114,7 @@ export async function Run({
   runId: string;
   /** `?tab=`; anything but a section's name opens Transcript. */
   tab: string | null;
-  /** `?zoom=`; anything but a level reads the transcript by steps. */
+  /** `?zoom=`; anything but a level opens the transcript at steps. */
   zoom: string | null;
   /** `?kinds=`, the chips pressed, comma-separated; an unknown word is dropped. */
   kinds: string | null;
@@ -148,15 +150,13 @@ export async function Run({
       section = (
         <TranscriptSection
           read={
-            await source.runs.transcript(ctx, detail.run.id, {
-              zoom: zoomed,
+            await source.runs.transcript(ctx, detail.run.id, "everything", {
               kinds: chips,
-              after: null,
             })
           }
           zoom={zoomed}
           kinds={chips}
-          live={detail.run.status === "live"}
+          run={detail.run}
           {...place}
         />
       );
@@ -187,16 +187,8 @@ export async function Run({
       // figures on the Transcript tab come from one derivation.
       const [cost, turns, steps] = await Promise.all([
         source.runs.cost(ctx, detail.run.id),
-        source.runs.transcript(ctx, detail.run.id, {
-          zoom: "turns",
-          kinds: [],
-          after: null,
-        }),
-        source.runs.transcript(ctx, detail.run.id, {
-          zoom: "steps",
-          kinds: [],
-          after: null,
-        }),
+        source.runs.transcript(ctx, detail.run.id, "turns"),
+        source.runs.transcript(ctx, detail.run.id, "steps"),
       ]);
       section = <CostSection read={cost} turns={turns} steps={steps} />;
       break;

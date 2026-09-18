@@ -1,6 +1,7 @@
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import {
   runTranscriptGet,
+  TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { digestBytes } from "@oxagen/tacho";
@@ -121,6 +122,7 @@ describe("get_run_transcript", () => {
     ]);
     // A single terminal receipt has no request half to show.
     expect(out.entries.every((e) => e.request === null)).toBe(true);
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 1, 1, 2, 2, 2]);
     expect(out.entries[2]?.cost).toEqual({
       micros: "40",
       currency: "USD",
@@ -207,12 +209,14 @@ describe("get_run_transcript", () => {
   it("steps: model and tool calls, folding the frames between and summing their cost", async () => {
     const { transcript } = harness(rows);
     const out = await transcript(input({ zoom: "steps" }), ctx());
-    expect(out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames])).toEqual([
-      ["0", "1", "frame", 2],
-      ["2", "2", "model_call", 1],
-      ["3", "4", "tool_call", 2],
-      ["5", "6", "model_call", 2],
-    ]);
+    expect(out.entries.map((e) => [e.seq, e.endSeq, e.kind, e.frames])).toEqual(
+      [
+        ["0", "1", "frame", 2],
+        ["2", "2", "model_call", 1],
+        ["3", "4", "tool_call", 2],
+        ["5", "6", "model_call", 2],
+      ],
+    );
   });
 
   it("turns: one entry per turn with the turn's cost", async () => {
@@ -230,6 +234,7 @@ describe("get_run_transcript", () => {
       ["1", "3", 3, "40"],
       ["4", "6", 3, "60"],
     ]);
+    expect(out.entries.map((e) => e.turn)).toEqual([null, 1, 2]);
   });
 
   it("folds a policy decision into the step it was made about, and names it", async () => {
@@ -304,9 +309,9 @@ describe("get_run_transcript", () => {
     );
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries.every((e) => e.response?.text === null)).toBe(true);
-    expect(out.entries.every((e) => e.response?.fidelity === "digest_only")).toBe(
-      true,
-    );
+    expect(
+      out.entries.every((e) => e.response?.fidelity === "digest_only"),
+    ).toBe(true);
     expect(getBody).not.toHaveBeenCalled();
   });
 
@@ -335,6 +340,26 @@ describe("get_run_transcript", () => {
     expect(out.entries[2]?.response).toMatchObject({
       text: null,
       fidelity: "full",
+    });
+  });
+
+  it("carries an excerpt at a folded zoom and the whole body at everything", async () => {
+    // A page of 200 steps at the full cap is megabytes of body text nobody
+    // asked for on that render; a folded entry stands for an exchange, so it
+    // carries an excerpt and says it was cut.
+    const long = "y".repeat(TRANSCRIPT_TEXT_MAX + 5);
+    const { transcript } = harness([tachoRow(0, { ...stored(long) })]);
+
+    const steps = await transcript(input({ zoom: "steps" }), ctx());
+    expect(steps.entries[0]?.response).toMatchObject({
+      text: "y".repeat(TRANSCRIPT_STEP_TEXT_MAX),
+      truncated: true,
+    });
+
+    const all = await transcript(input({ zoom: "everything" }), ctx());
+    expect(all.entries[0]?.response).toMatchObject({
+      text: "y".repeat(TRANSCRIPT_TEXT_MAX),
+      truncated: true,
     });
   });
 

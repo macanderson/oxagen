@@ -53,8 +53,27 @@ export const transcriptZoomSchema = z.enum(TRANSCRIPT_ZOOMS);
 /** The most entries one page carries. */
 export const TRANSCRIPT_ENTRY_MAX = 500;
 export const TRANSCRIPT_ENTRY_DEFAULT = 200;
-/** The most UTF-16 units of body text one half carries. */
+/** The most UTF-16 units of body text one half carries at `everything`. */
 export const TRANSCRIPT_TEXT_MAX = 16_384;
+/**
+ * The same, at `turns` and `steps`, where an entry stands for a whole exchange
+ * rather than one frame.
+ *
+ * A folded zoom is a reading of the run, not the run's bytes: a page of 200
+ * steps at the full cap is several megabytes of body text nobody asked for on
+ * that render. An excerpt plus the entry's `label` is what those levels are
+ * for, and a half cut here says `truncated: true`, so a reader follows the
+ * frame to `get_run_frame_body` for the whole of it. `everything` is one entry
+ * per frame and keeps the full cap.
+ */
+export const TRANSCRIPT_STEP_TEXT_MAX = 1_024;
+
+/** The text cap a zoom level reads under. */
+export function transcriptTextMax(
+  zoom: z.output<typeof transcriptZoomSchema>,
+): number {
+  return zoom === "everything" ? TRANSCRIPT_TEXT_MAX : TRANSCRIPT_STEP_TEXT_MAX;
+}
 
 /**
  * The chips the Transcript tab filters on. The mockup also draws a `thinking`
@@ -136,6 +155,14 @@ export const transcriptEntrySchema = z
     decision: transcriptDecisionSchema.nullable(),
     /** Frames folded into the entry, the opening frame included. */
     frames: z.number().int().positive(),
+    /**
+     * The turn the opening frame belongs to, 1-based. Null for a frame
+     * recorded before the run's first `turn_start` (the agent starting and
+     * the context it was handed); a recording with no turn boundaries puts
+     * every frame in a turn. The same value at every zoom, so a client can
+     * group `everything` entries into the turns the `turns` zoom folds.
+     */
+    turn: z.number().int().positive().nullable(),
     /** The cost records of the folded frames, summed; null when none carried one. */
     cost: runCostSchema.nullable(),
     /** Every cost record up to and including this entry (§8.4 prefix sum). */

@@ -136,6 +136,10 @@ describe("GET /runs/:run_id/stream", () => {
     await open();
     for (const call of mocks.invoke.mock.calls) {
       expect(call[0]).toBe("get_run");
+      // The run id comes from the mounted path parameter; this is the only
+      // route in the table mounted with one, so it is asserted rather than
+      // assumed.
+      expect(call[1]).toMatchObject({ runId: RUN_ID });
       expect(call[2]).toBe(CTX);
       expect(call[3]).toEqual({ surface: "api" });
     }

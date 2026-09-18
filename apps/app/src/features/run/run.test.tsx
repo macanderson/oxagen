@@ -6,7 +6,14 @@
 // Two rules the tests hold the page to, because breaking either is how a
 // console starts lying: only the chosen tab makes its read, and a value the
 // contract did not carry reads "not recorded" rather than a zero.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
@@ -20,6 +27,7 @@ import {
   runFrame,
   runFrameBody,
   runRow,
+  mockupTranscript,
   runSource,
   runTranscript,
   transcriptBody,
@@ -27,13 +35,16 @@ import {
 } from "./run.builders";
 
 const notFound = vi.fn();
+const refresh = vi.fn();
+// jsdom has no layout, so it has no scrollIntoView; playback calls it.
+Element.prototype.scrollIntoView = vi.fn();
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
     <a {...rest}>{children}</a>
   ),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
   notFound: () => {
     notFound();
     throw new Error("NEXT_NOT_FOUND");
@@ -294,31 +305,38 @@ describe("tabs", () => {
     expect(calls.cost).toHaveLength(0);
   });
 
-  it("reads the transcript by steps when the zoom is not a level (negative)", async () => {
+  it("reads every frame once and opens it at Steps when the zoom is not a level (negative)", async () => {
     const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { zoom: "everything-else" },
     );
     expect(calls.transcript[0]).toEqual([
       ctx,
       "tse_7k2m9q",
-      { zoom: "steps", kinds: [], after: null },
+      "everything",
+      { kinds: [] },
     ]);
+    expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
-  it("reads the level the URL asked for", async () => {
+  it("opens the transcript at the level the URL asked for, from the same read", async () => {
     const { calls } = await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(runTranscript({ zoom: "turns" })),
-      },
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { zoom: "turns" },
     );
     expect(calls.transcript[0]).toEqual([
       ctx,
       "tse_7k2m9q",
-      { zoom: "turns", kinds: [], after: null },
+      "everything",
+      { kinds: [] },
     ]);
+    expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("opens Transcript for a tab that is not a section, Policy included (negative)", async () => {
@@ -337,42 +355,127 @@ describe("tabs", () => {
 });
 
 describe("transcript", () => {
-  it("draws an entry with its span, its body and the cost it folds", async () => {
+  it("draws the run's start, then each turn with its prompt, its steps on a spine and the agent's reply", async () => {
     const { container } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript" },
     );
-    const [entry] = screen.getAllByTestId("transcript-entry");
-    expect(entry).toHaveTextContent("Model call");
-    expect(entry).toHaveTextContent("frames 11 to 14");
-    expect(entry).toHaveTextContent("Cutting release/3.2 from main.");
+    const turns = screen.getAllByTestId("transcript-turn");
+    expect(
+      turns.map((turn) => turn.querySelector("summary")?.textContent),
+    ).toEqual([
+      expect.stringContaining("Run start"),
+      expect.stringContaining("turn 1"),
+      expect.stringContaining("turn 2"),
+    ]);
+    expect(turns[1]).toHaveTextContent("done");
+    expect(turns[1]).toHaveTextContent("4 steps");
+    expect(turns[1]).toHaveTextContent("seq 2 to 8");
+    expect(turns[1]).toContainElement(screen.getByTestId("transcript-you"));
+    expect(screen.getByTestId("transcript-you")).toHaveTextContent(
+      "Cut the 2026.9.2 release candidate.",
+    );
+    expect(turns[1]).toContainElement(screen.getByTestId("transcript-agent"));
+    expect(screen.getByTestId("transcript-agent")).toHaveTextContent(
+      "Both failures predate the release scope.",
+    );
+    const nodes = screen
+      .getAllByTestId("transcript-step")
+      .map((step) => step.getAttribute("data-node"));
+    expect(nodes).toEqual([
+      "control",
+      "tool",
+      "control",
+      "model",
+      "tool",
+      "control",
+      "control",
+      "model",
+      "deny",
+    ]);
     await expectNoAxe(container);
   });
 
-  it("says a digest_only entry has nothing to read rather than drawing an empty body", async () => {
+  it("puts the position at the head, marks the step holding it and reads the cost to that point", async () => {
     await renderRun(
-      {
-        detail: ok(runDetail()),
-        transcript: ok(
-          runTranscript({
-            entries: [
-              transcriptEntry({
-                response: transcriptBody({
-                  text: null,
-                  fidelity: "digest_only",
-                  bytesRef: null,
-                }),
-              }),
-            ],
-          }),
-        ),
-      },
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript" },
     );
-    expect(screen.getByText(/kept a digest and no body/)).toBeTruthy();
+    const readout = screen.getByTestId("transport-readout");
+    expect(readout).toHaveTextContent("seq 12");
+    expect(readout).toHaveTextContent("/ 12");
+    expect(readout).toHaveTextContent("0:24 / 0:24");
+    expect(readout).toHaveTextContent("$0.90");
+    const now = screen
+      .getAllByTestId("transcript-step")
+      .filter((step) => step.hasAttribute("data-now"));
+    expect(now).toHaveLength(1);
+    expect(now[0]).toHaveTextContent("create_tag");
+    expect(screen.getByRole("button", { name: "Step forward" })).toBeDisabled();
+    expect(
+      within(screen.getByTestId("transcript")).getByText("sealed"),
+    ).toBeTruthy();
+    expect(screen.getByText(/Replay grade fork/)).toBeTruthy();
   });
 
-  it("links a cut entry to its frame's whole body on the Frames tab", async () => {
+  it("scrubs back, dims the steps past the position and moves the cost with it", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript" },
+    );
+    fireEvent.change(screen.getByRole("slider", { name: "Scrub to frame" }), {
+      target: { value: "4" },
+    });
+    const readout = screen.getByTestId("transport-readout");
+    expect(readout).toHaveTextContent("seq 4");
+    expect(readout).toHaveTextContent("$0.38");
+    const steps = screen.getAllByTestId("transcript-step");
+    const now = steps.find((step) => step.hasAttribute("data-now"));
+    expect(now).toHaveTextContent("claude-fable-5-1");
+    expect(steps[steps.length - 1]?.className).toContain("opacity-35");
+    fireEvent.click(screen.getByRole("button", { name: "Step back" }));
+    expect(readout).toHaveTextContent("seq 3");
+  });
+
+  it("opens every step's frames at Everything, and says a digest_only frame has nothing to read", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", zoom: "everything" },
+    );
+    expect(screen.getAllByTestId("transcript-frame")).toHaveLength(13);
+    expect(screen.getByText('{"open":34}')).toBeTruthy();
+    expect(screen.getByText(/kept a digest and no body/)).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Frame 7 on the Frames tab" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=frames&body=7",
+    );
+  });
+
+  it("closes everything at Turns and keeps the position", async () => {
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", zoom: "everything" },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Turns" }));
+    expect(screen.queryAllByTestId("transcript-frame")).toHaveLength(0);
+    expect(
+      screen
+        .getAllByTestId("transcript-turn")
+        .every((turn) => !turn.hasAttribute("open")),
+    ).toBe(true);
+    expect(screen.getByTestId("transport-readout")).toHaveTextContent("seq 12");
+    expect(replaceState).toHaveBeenCalledWith(
+      null,
+      "",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    );
+    replaceState.mockRestore();
+  });
+
+  it("links a cut body to its frame's whole body on the Frames tab", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
@@ -387,7 +490,7 @@ describe("transcript", () => {
           }),
         ),
       },
-      { tab: "transcript" },
+      { tab: "transcript", zoom: "everything" },
     );
     const note = screen.getByTestId("entry-truncated");
     expect(note).toHaveTextContent("Cut at the length one entry carries.");
@@ -401,6 +504,83 @@ describe("transcript", () => {
     );
   });
 
+  it("follows a live run: a live badge, a running last turn, and a re-read every few seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      await renderRun(
+        {
+          detail: ok(runDetail({ run: runRow({ status: "live" }) })),
+          transcript: ok(mockupTranscript()),
+        },
+        { tab: "transcript" },
+      );
+      expect(
+        within(screen.getByTestId("transcript")).getByText("live"),
+      ).toBeTruthy();
+      expect(screen.getAllByTestId("transcript-turn")[2]).toHaveTextContent(
+        "running",
+      );
+      expect(
+        screen.getByText(/follows the run's head and reads what it records/),
+      ).toBeTruthy();
+      // Following is the view's own state: scrubbing back lets go of the head,
+      // and "go live" takes it again. The frames themselves arrive over the
+      // stream, which this environment has no EventSource for.
+      fireEvent.change(screen.getByRole("slider", { name: "Scrub to frame" }), {
+        target: { value: "2" },
+      });
+      expect(screen.getByTestId("transport-readout")).not.toHaveTextContent(
+        "seq 12",
+      );
+      fireEvent.click(screen.getByRole("button", { name: "go live" }));
+      expect(screen.getByTestId("transport-readout")).toHaveTextContent(
+        "seq 12",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plays from the start of a sealed run at the recorded pace", async () => {
+    vi.useFakeTimers();
+    try {
+      await renderRun(
+        { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+        { tab: "transcript" },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Play" }));
+      const readout = screen.getByTestId("transport-readout");
+      expect(readout).toHaveTextContent("seq 0");
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(readout).toHaveTextContent("seq 1");
+      fireEvent.click(screen.getByRole("button", { name: "×2" }));
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(readout).toHaveTextContent("seq 2");
+      fireEvent.click(screen.getByRole("button", { name: "Pause playback" }));
+      act(() => {
+        vi.advanceTimersByTime(10_000);
+      });
+      expect(readout).toHaveTextContent("seq 2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says a run with no frames has none (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ entries: [] })),
+      },
+      { tab: "transcript" },
+    );
+    expect(screen.getByText(/has no frames yet/)).toBeTruthy();
+  });
+
   it("says when the transcript stopped short of the end (negative)", async () => {
     await renderRun(
       {
@@ -410,8 +590,24 @@ describe("transcript", () => {
       { tab: "transcript" },
     );
     expect(screen.getByTestId("transcript-count")).toHaveTextContent(
-      "more behind this page",
+      "stops short of the end",
     );
+  });
+
+  it("says the transcript stopped short when entries lie past this read (negative)", async () => {
+    // The ledger read reached the run's end, but the page did not: the cursor
+    // is set, so drawing the page as the whole run would hide what is past it.
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ complete: true, cursor: "dDo0Mg" })),
+      },
+      { tab: "transcript" },
+    );
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "More lie past this page",
+    );
+    expect(screen.getByTestId("transcript-more")).toBeTruthy();
   });
 
   it("names its own failure when the transcript read is refused (negative)", async () => {
@@ -738,7 +934,8 @@ describe("chips", () => {
     expect(calls.transcript[0]).toEqual([
       ctx,
       "tse_7k2m9q",
-      { zoom: "steps", kinds: ["tools", "errors"], after: null },
+      "everything",
+      { kinds: ["tools", "errors"] },
     ]);
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-current",
@@ -754,11 +951,7 @@ describe("chips", () => {
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },
       { tab: "transcript", kinds: "thinking,proof,tools" },
     );
-    expect(calls.transcript[0]?.[2]).toEqual({
-      zoom: "steps",
-      kinds: ["tools"],
-      after: null,
-    });
+    expect(calls.transcript[0]?.[3]).toEqual({ kinds: ["tools"] });
     expect(screen.queryByTestId("chip-thinking")).toBeNull();
     expect(screen.queryByTestId("chip-proof")).toBeNull();
   });
@@ -890,8 +1083,8 @@ describe("cost", () => {
     );
     expect(calls.cost).toHaveLength(1);
     expect(calls.transcript.map((call) => call[2])).toEqual([
-      { zoom: "turns", kinds: [], after: null },
-      { zoom: "steps", kinds: [], after: null },
+      "turns",
+      "steps",
     ]);
     expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
   });

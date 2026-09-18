@@ -418,6 +418,7 @@ describe("runs.transcript", () => {
             },
             decision: null,
             frames: 4,
+            turn: 2,
             cost: null,
             cumulativeCost: null,
           },
@@ -427,20 +428,53 @@ describe("runs.transcript", () => {
         complete: false,
       }),
     );
-    const read = await runs.transcript(ctx, "tse_4f0a", {
-      zoom: "turns",
-      kinds: [],
-      after: null,
-    });
+    const read = await runs.transcript(ctx, "tse_4f0a", "turns");
     expect(read.ok && read.value.complete).toBe(false);
     expect(read.ok && read.value.entries[0]?.response?.fidelity).toBe(
       "digest_only",
     );
+    expect(read.ok && read.value.entries[0]?.turn).toBe(2);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runTranscriptGet,
       input: { runId: "tse_4f0a", zoom: "turns", kinds: [], limit: 200 },
       page: "run",
     });
+  });
+
+  it("passes the chips pressed and the cursor, and omits a cursor it was not given", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        zoom: "steps",
+        kinds: ["tools"],
+        entries: [],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
+      kinds: ["tools"],
+      after: "cur_7",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runTranscriptGet,
+      input: {
+        runId: "tse_4f0a",
+        zoom: "steps",
+        kinds: ["tools"],
+        limit: 200,
+        after: "cur_7",
+      },
+      page: "run",
+    });
+
+    kernelRead.mockClear();
+    await runs.transcript(ctx, "tse_4f0a", "steps", { after: null });
+    // The contract refuses a cursor it did not write, so "read from the start"
+    // omits the key rather than sending a null it would reject.
+    expect(kernelRead.mock.calls[0]?.[1]).toMatchObject({
+      input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },
+    });
+    expect(kernelRead.mock.calls[0]?.[1]).not.toHaveProperty("input.after");
   });
 });
 
@@ -455,8 +489,7 @@ describe("runs.transcript", () => {
         complete: false,
       }),
     );
-    await runs.transcript(ctx, "tse_4f0a", {
-      zoom: "steps",
+    await runs.transcript(ctx, "tse_4f0a", "steps", {
       kinds: ["tools", "errors"],
       after: "e:20",
     });
@@ -483,11 +516,7 @@ describe("runs.transcript", () => {
         complete: true,
       }),
     );
-    await runs.transcript(ctx, "tse_4f0a", {
-      zoom: "steps",
-      kinds: [],
-      after: null,
-    });
+    await runs.transcript(ctx, "tse_4f0a", "steps", { kinds: [], after: null });
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runTranscriptGet,
       input: { runId: "tse_4f0a", zoom: "steps", kinds: [], limit: 200 },

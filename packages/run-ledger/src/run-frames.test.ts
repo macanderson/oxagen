@@ -11,6 +11,7 @@ import {
   tachoFrame,
   tachoStage,
   tachoTimestamp,
+  turnOrdinals,
 } from "./run-frames";
 import type { AttemptEventReadRecord } from "./run-store";
 
@@ -308,6 +309,24 @@ describe("transcript fold", () => {
     const oneTurn = ledger.map((f) => ({ ...f, turnIndex: null }));
     expect(foldTranscript(oneTurn, "turns")).toHaveLength(1);
     expect(foldTranscript([], "turns")).toEqual([]);
+  });
+
+  it("turnOrdinals counts turn_start frames and leaves the frames before the first in no turn", () => {
+    expect(turnOrdinals(frames)).toEqual([null, 1, 1, 1, 1, 2, 2, 2]);
+  });
+
+  it("turnOrdinals follows the turn index without boundaries, and puts every frame in one turn when it has neither", () => {
+    const ledger = [
+      ledgerFrame(event(1, "admission.run_admitted", null)),
+      ledgerFrame(event(2, "model.call_completed", { turn_index: 0 })),
+      ledgerFrame(event(3, "tool.call_completed", null)),
+      ledgerFrame(event(4, "model.call_completed", { turn_index: 1 })),
+    ];
+    expect(turnOrdinals(ledger)).toEqual([1, 1, 1, 2]);
+    expect(
+      turnOrdinals(ledger.map((f) => ({ ...f, turnIndex: null }))),
+    ).toEqual([1, 1, 1, 1]);
+    expect(turnOrdinals([])).toEqual([]);
   });
 });
 

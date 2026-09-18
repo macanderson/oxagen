@@ -131,7 +131,10 @@ export async function readTranscriptPage(
   after: string,
 ): Promise<Read<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
-  return dataSource().runs.transcript(ctx, runId, { zoom, kinds, after });
+  return dataSource().runs.transcript(ctx, runId, zoom, {
+    kinds: [...kinds],
+    after,
+  });
 }
 
 /**

@@ -125,7 +125,7 @@ describe("field", () => {
     expect(svg).toContain(`<g fill="none" stroke="${INK.dim}"`);
     expect(svg).toContain(`<g fill="${INK.line}" stroke="none">`);
     expect(svg).toContain(`<g fill="${INK.rule}" stroke="none">`);
-    expect(svg.match(/fill="#D6962C"/g)).toHaveLength(1);
+    expect(svg.match(/fill="#D4AF37"/g)).toHaveLength(1);
     for (const c of colours(svg)) expect(ALLOWED.has(c)).toBe(true);
     expect(svg).not.toMatch(/gradient|fill-opacity/i);
     expect(cellsOf(svg).length).toBeGreaterThan(120);
@@ -141,7 +141,7 @@ describe("field", () => {
         expect(d).toBeGreaterThanOrEqual(1);
       }
       const gold = svg.match(
-        /<polygon points="([\d.]+),([\d.]+)[^"]*" fill="#D6962C"/,
+        /<polygon points="([\d.]+),([\d.]+)[^"]*" fill="#D4AF37"/,
       );
       expect(gold).not.toBeNull();
       const gx = Number(gold[1]) / 2400;

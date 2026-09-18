@@ -20,9 +20,10 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
-  TRANSCRIPT_TEXT_MAX,
+  transcriptTextMax,
   type TranscriptEntry,
   type TranscriptEntryBody,
+  type TranscriptZoom,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
 import {
   filterFramesByKind,
@@ -31,11 +32,17 @@ import {
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
+  turnOrdinals,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { digestBytes } from "@oxagen/tacho";
-import { invalidCursor, microsString, runScope, type RunScope } from "./run.list";
+import {
+  invalidCursor,
+  microsString,
+  runScope,
+  type RunScope,
+} from "./run.list";
 import {
   defaultRunReadDeps,
   readAllFrames,
@@ -78,6 +85,7 @@ async function half(
   bodies: Pick<EvidenceStore, "getBody">,
   scope: RunScope,
   frame: RunFrame | null,
+  textMax: number,
 ): Promise<TranscriptEntryBody | null> {
   if (frame === null) return null;
   const { bodyRef, bodyDigest, fidelity, redactions } = frame.body;
@@ -106,8 +114,8 @@ async function half(
   } catch {
     return { ...base, text: null, truncated: false };
   }
-  return text.length > TRANSCRIPT_TEXT_MAX
-    ? { ...base, text: text.slice(0, TRANSCRIPT_TEXT_MAX), truncated: true }
+  return text.length > textMax
+    ? { ...base, text: text.slice(0, textMax), truncated: true }
     : { ...base, text, truncated: false };
 }
 
@@ -174,6 +182,12 @@ export function createRunTranscriptGetHandler(
     const read = await readAllFrames(deps, run, TRANSCRIPT_FRAME_CAP);
     const frames = filterFramesByKind(read.frames, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
+    // Turns are counted over every frame of the run, so a chip filter never
+    // renumbers them: turn 2 is turn 2 whichever kinds the page shows.
+    const ordinals = turnOrdinals(read.frames);
+    const turnOf = new Map(
+      read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
+    );
 
     // The prefix sum runs over every fold of the run, so an entry's cumulative
     // cost is what the run had spent by then and not what this page has.
@@ -201,10 +215,16 @@ export function createRunTranscriptGetHandler(
     const page = folds.slice(start, start + input.limit);
     const runStartedAt = Date.parse(run.item.startedAt);
 
-    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => ({
-      request: await half(deps.bodies, scope, fold.request),
-      response: await half(deps.bodies, scope, fold.response),
-    }));
+    // A folded zoom carries an excerpt; `everything` carries the whole body.
+    const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
+    const halves = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold) => ({
+        request: await half(deps.bodies, scope, fold.request, textMax),
+        response: await half(deps.bodies, scope, fold.response, textMax),
+      }),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -233,6 +253,7 @@ export function createRunTranscriptGetHandler(
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,
+        turn: turnOf.get(opening.seq) ?? null,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(cumulative[start + i] ?? null),
       };

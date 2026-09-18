@@ -13,7 +13,14 @@ import {
 const slugFields = [
   [
     "create_workspace",
-    (slug: string) => workspaceCreate.input.parse({ name: "Team", slug }),
+    (slug: string) =>
+      workspaceCreate.input.parse({
+        name: "Team",
+        slug,
+        // Required since M0 (ADR-099); a valid repository so this fixture
+        // still isolates the slug.
+        mainRepo: { owner: "acme", name: "platform" },
+      }),
   ],
   [
     "update_workspace_settings",

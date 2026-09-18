@@ -598,7 +598,15 @@ export type DaemonHealth = z.output<typeof daemonHealthSchema>;
 export const TACHO_MAX_BATCH = 200;
 
 /** The most bytes one frame body may carry, before base64. */
-const TACHO_MAX_BODY_BYTES = 1_048_576;
+export const TACHO_MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * The most body bytes one batch carries, before base64. A batch of 200
+ * events could otherwise ship 200 MiB, and the shipper splits the batch at
+ * the event whose body would cross this line so every body still travels
+ * with its own event.
+ */
+export const TACHO_MAX_BATCH_BODY_BYTES = 4 * 1_048_576;
 
 /**
  * A frame body shipped next to its event (Mission Control spec §8.2; tacho
@@ -609,7 +617,7 @@ const TACHO_MAX_BODY_BYTES = 1_048_576;
  * outside the batch, or one whose digest disagrees, is refused and the event
  * is recorded without a body.
  */
-const tachoBodySchema = z
+export const tachoBodySchema = z
   .object({
     event_id_idem: z.string().regex(/^evt_[0-9a-f]{64}$/),
     content_type: z.string().min(1).max(128),

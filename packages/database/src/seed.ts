@@ -150,6 +150,14 @@ export async function seedDev(): Promise<void> {
     if (!userRow) throw new Error("Failed to upsert dev user");
 
     const workspaceSlug = "playground";
+    // Written raw, with no main repository. A workspace normally has exactly
+    // one (Mission Control spec §10.1; ADR-099) and `create_workspace` refuses
+    // to make one without it, but this row is the dev org's FIRST workspace,
+    // which stands where `create_org`'s does: no GitHub authorization exists
+    // for a fresh dev org, so no repository is reachable to bind, and the
+    // workspace is the spec-sanctioned provisional kind that
+    // `bind_main_repository` completes later from Workspace settings. Never
+    // copy this shape for a second workspace — that path is `create_workspace`.
     await tx
       .insert(workspaces)
       .values({

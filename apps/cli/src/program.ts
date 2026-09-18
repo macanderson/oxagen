@@ -213,6 +213,47 @@ export function buildProgram(): Command {
         await contextPropose(opts);
       },
     );
+
+  // ── repo: the workspace's repositories, one main and any number linked ──────
+
+  const repoCmd = program
+    .command("repo")
+    .description(
+      "The workspace's repositories: one main repository, bound at creation, and the linked ones its agents work on",
+    );
+  repoCmd
+    .command("list")
+    .description(
+      "Every repository the workspace binds, main first, with each one's approved default ref and binding id",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { repoList } = await import("./commands/repo.js");
+      await repoList(opts);
+    });
+  repoCmd
+    .command("link")
+    .description(
+      "Link a GitHub repository the workspace's GitHub App installation reaches as a linked repository",
+    )
+    .argument("<owner/name>", "The repository, as GitHub names it")
+    .option("--json", "Output JSON")
+    .action(async (ref: string, opts: { json?: boolean }) => {
+      const { repoLink } = await import("./commands/repo.js");
+      await repoLink(ref, opts);
+    });
+  repoCmd
+    .command("unlink")
+    .description(
+      "Unlink a linked repository by its binding id; the main repository is refused",
+    )
+    .argument("<bindingId>", "The rpb_… binding id `oxagen repo list` shows")
+    .option("--json", "Output JSON")
+    .action(async (bindingId: string, opts: { json?: boolean }) => {
+      const { repoUnlink } = await import("./commands/repo.js");
+      await repoUnlink(bindingId, opts);
+    });
+
   // ── run: the recorded run (export_run) ──────────────────────────────────────
 
   const runCmd = program

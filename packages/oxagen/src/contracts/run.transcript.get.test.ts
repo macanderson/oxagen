@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_MAX,
+  TRANSCRIPT_STEP_TEXT_MAX,
   TRANSCRIPT_TEXT_MAX,
+  transcriptTextMax,
   transcriptBodySchema,
   transcriptEntrySchema,
 } from "./run.transcript.get";
@@ -33,6 +35,7 @@ const entry = {
   response: { ...half, seq: "5", type: "tool_call", text: "# Oxagen" },
   decision: null,
   frames: 3,
+  turn: 2,
   cost: null,
   cumulativeCost: null,
 };
@@ -53,7 +56,9 @@ describe("get_run_transcript contract", () => {
       expect(input({ zoom }).success).toBe(true);
     }
     expect(input({ zoom: "frames" }).success).toBe(false);
-    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(false);
+    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(
+      false,
+    );
   });
 
   it("defaults to every chip and one page, and refuses a chip outside the set (negative)", () => {
@@ -78,7 +83,12 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({
         ...entry,
-        response: { ...half, text: null, bytesRef: null, fidelity: "digest_only" },
+        response: {
+          ...half,
+          text: null,
+          bytesRef: null,
+          fidelity: "digest_only",
+        },
       }).success,
     ).toBe(true);
   });
@@ -100,6 +110,12 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({ ...entry, elapsedMs: -1 }).success,
     ).toBe(false);
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, turn: null }).success,
+    ).toBe(true);
+    expect(transcriptEntrySchema.safeParse({ ...entry, turn: 0 }).success).toBe(
+      false,
+    );
   });
 
   it("carries a decision inline when one was folded into the step", () => {
@@ -135,5 +151,16 @@ describe("get_run_transcript contract", () => {
         complete: false,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("transcriptTextMax", () => {
+  it("carries the whole body per frame, and an excerpt per folded exchange", () => {
+    expect(transcriptTextMax("everything")).toBe(TRANSCRIPT_TEXT_MAX);
+    expect(transcriptTextMax("steps")).toBe(TRANSCRIPT_STEP_TEXT_MAX);
+    expect(transcriptTextMax("turns")).toBe(TRANSCRIPT_STEP_TEXT_MAX);
+    // The folded cap is genuinely smaller: a page of 200 steps at the full cap
+    // is megabytes of body text nobody asked for on that render.
+    expect(TRANSCRIPT_STEP_TEXT_MAX).toBeLessThan(TRANSCRIPT_TEXT_MAX);
   });
 });

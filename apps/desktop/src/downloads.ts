@@ -173,9 +173,9 @@ ${body}
 <title>Download Oxagen</title>
 <meta name="description" content="Oxagen desktop ${version}: installers for macOS, Windows and Linux.">
 <style>
-:root{--bg:#F2EEE5;--panel:#F8F5EE;--border:#D8CDBD;--text:#10100F;--body:#2A2823;--muted:#6B665C;--gold:#D6962C;--link:#8B5E1A;color-scheme:light}
+:root{--bg:#FFFFFF;--panel:#FFFFFF;--border:#E4E4E7;--text:#09090B;--body:#27272A;--muted:#71717A;--gold:#D4AF37;--link:#977017;color-scheme:light}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--body);font:16px/1.55 "Space Grotesk","Helvetica Neue",Arial,sans-serif;padding-inline:20px;padding-block:28px 72px}
+body{margin:0;background:var(--bg);color:var(--body);font:16px/1.55 "Geist",system-ui,-apple-system,"Segoe UI",sans-serif;padding-inline:20px;padding-block:28px 72px}
 main{max-width:880px;margin:0 auto}
 .wm{font-weight:600;font-size:24px;color:var(--text);letter-spacing:-.01em}.wm b{color:var(--gold);font-weight:600}
 h1{font-size:32px;line-height:1.15;color:var(--text);margin:28px 0 8px;letter-spacing:-.02em}

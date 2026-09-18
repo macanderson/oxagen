@@ -142,16 +142,16 @@ export interface DataSource {
       seq: string,
     ): Promise<Read<RunFrameBody>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
+    /**
+     * `get_run_transcript` at one zoom level, narrowed to the chips pressed
+     * and paged on the cursor the last page carried. An empty `kinds` keeps
+     * every frame: no chip pressed is not the same as every chip pressed off.
+     */
     transcript(
       ctx: WsCtx,
       runId: string,
-      q: {
-        zoom: TranscriptZoom;
-        /** The chips pressed; empty keeps every entry. */
-        kinds: readonly TranscriptKind[];
-        /** The entry cursor a later page resumes from; null reads from the start. */
-        after: string | null;
-      },
+      zoom: TranscriptZoom,
+      q?: { kinds?: TranscriptKind[]; after?: string | null },
     ): Promise<Read<RunTranscript>>;
     chain(ctx: WsCtx, runId: string): Promise<Read<RunChain>>;
   };

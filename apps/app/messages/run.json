@@ -33,26 +33,47 @@
         "steps": "Steps",
         "everything": "Everything"
       },
-      "kind": {
-        "turn": "Turn",
-        "model_call": "Model call",
-        "tool_call": "Tool call",
-        "frame": "Frame",
-        "policy": "Decision"
-      },
-      "frame": "frame {seq}",
-      "frames": "frames {from} to {to}",
-      "folded": "{count} frames",
       "digestOnly": "The recorder kept a digest and no body, so there is nothing to read here.",
       "noBody": "No body was retained for this entry, or the bytes are not text.",
       "truncated": "Cut at the length one entry carries.",
       "openFrame": "Read the whole body of frame {seq}",
       "empty": "This run has no frames yet. A run with no frames has cost nothing.",
-      "request": "Sent",
-      "response": "Returned",
-      "decision": "Decision: {decision}, at frame {seq}",
-      "elapsed": "{elapsed} into the run",
-      "cumulative": "<cost></cost> so far",
+      "complete": "{count} entries. This is the whole run.",
+      "cut": "{count} entries. The run has more frames than one read carries and the read offered no resume point, so this stops short of the end.",
+      "runStart": "Run start",
+      "turn": "turn {n}",
+      "turnDone": "done",
+      "turnRunning": "running",
+      "you": "YOU",
+      "agent": "AGENT",
+      "stepCount": "{count, plural, one {# step} other {# steps}}",
+      "frameCount": "{count, plural, one {# frame} other {# frames}}",
+      "seqSpan": "seq {from} to {to}",
+      "ms": "{ms} ms",
+      "live": "live",
+      "goLive": "go live",
+      "recorded": {
+        "sealed": "sealed",
+        "halted": "halted"
+      },
+      "back": "Step back",
+      "play": "Play",
+      "pause": "Pause playback",
+      "forward": "Step forward",
+      "scrub": "Scrub to frame",
+      "position": "seq {seq}",
+      "of": "/ {seq}",
+      "speedLabel": "Playback speed",
+      "speed": "×{speed}",
+      "transportNote": "The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
+      "transportNoteGraded": "Replay grade {grade}. The transport moves the viewer, never the run. Idle longer than 2 seconds is compressed, and the true elapsed time is shown beside the position.",
+      "frameHead": "seq {seq} · {time} · {fidelity}",
+      "fidelity": {
+        "full": "body retained",
+        "digest_only": "digest only"
+      },
+      "envelope": "Frame {seq} on the Frames tab",
+      "recording": "Recording. Every frame is hash-chained to its predecessor as it arrives, and this view follows the run's head and reads what it records.",
       "chipsLabel": "Filter the transcript",
       "chip": {
         "prompt": "Prompt",
@@ -65,14 +86,13 @@
       },
       "chipsClear": "Clear the filter",
       "emptyFiltered": "No entry in this run answers to the {count} chips you pressed. Clear the filter to read the whole run.",
-      "calledWith": "Called with",
-      "noHalves": "Neither half of this exchange was recorded. The frames it folds are on the Frames tab.",
-      "noDigest": "no digest",
-      "redacted": "removed {path}: {reason}",
-      "fidelity": {
-        "full": "bytes retained",
-        "digest_only": "digest only"
-      }
+      "more": "Read more",
+      "readingMore": "Reading",
+      "loadedMore": "{count} entries read so far. More lie past this page.",
+      "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
+      "pageFailed": "The next page could not be read. Everything above is still the record.",
+      "followLost": "The connection to the live head dropped. The run kept recording; read more to catch up.",
+      "followSealed": "The run sealed while you were following it. This is the whole recording."
     },
     "frames": {
       "title": "Frames",
@@ -249,49 +269,14 @@
       "harness": "observed at the harness",
       "observe": "observed from the side"
     },
-    "player": {
-      "first": "Go to the first entry",
-      "back": "Step back one entry",
-      "play": "Play",
-      "pause": "Pause",
-      "forward": "Step forward one entry",
-      "last": "Go to the last entry read",
-      "speedLabel": "Playback speed",
-      "speed": "{rate}x",
-      "scrub": "Position in the run",
-      "atFrame": "frame {seq}",
-      "ofEntries": "entry {index} of {total}",
-      "into": "{elapsed} into the run",
-      "noCostYet": "nothing priced up to here",
-      "spentSoFar": "<cost></cost> spent so far",
-      "idle": "The run waited {real} here. Playback holds it for {played}.",
-      "following": {
-        "off": "This run is live. Your browser cannot follow its head, so re-read the page for later entries.",
-        "connecting": "Connecting to the live head.",
-        "open": "Following the live head. New entries arrive as the run records them.",
-        "sealed": "The run sealed. This is the whole recording.",
-        "lost": "The connection to the live head dropped. The run kept recording; re-read the page to catch up."
-      },
-      "detached": "You are reading back through the recording. The run is still going, and the playhead is staying where you put it.",
-      "reattach": "Follow the live head",
-      "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
-      "pageFailed": "The next page could not be read. Everything above is still the record.",
-      "loadedComplete": "{count} entries. This is the whole run.",
-      "loadedCut": "{count} entries so far. The run has more behind this page.",
-      "more": "Read more",
-      "readingMore": "Reading"
-    },
     "chain": {
       "title": "Chain and seal",
       "hashRule": "Hash rule",
       "frameCount": "Frames read",
       "range": "Sequence range",
       "merkleRoot": "Merkle root",
-      "tier": {
-        "gateway": "observed at the gateway",
-        "harness": "observed at the harness",
-        "observe": "observed from the side"
-      },
+      "tierLabel": "Enforcement tier",
+      "gradeLabel": "Replay grade",
       "gapsTitle": "Gaps",
       "prefix": "This walk stopped before the end of the recording, so these are the gaps of the part it read, not of the whole run.",
       "noGaps": "The walk found no missing sequence and no missing body, and the seal recorded no gap.",
@@ -323,6 +308,11 @@
         "countersigned": "Countersigned",
         "anchor": "Anchor"
       },
+      "tier": {
+        "gateway": "observed at the gateway",
+        "harness": "observed at the harness",
+        "observe": "observed from the side"
+      },
       "grade": {
         "inspect": "Inspect",
         "view": "View",
@@ -338,9 +328,7 @@
         "unobserved_tail": "the process ended without a terminal event",
         "chain_break": "the hash chain does not hold end to end",
         "telemetry_gap": "telemetry stopped for part of the run"
-      },
-      "tierLabel": "Enforcement tier",
-      "gradeLabel": "Replay grade"
+      }
     },
     "waterfall": {
       "title": "Run waterfall",

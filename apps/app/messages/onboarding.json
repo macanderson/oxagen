@@ -58,7 +58,7 @@
         "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
         "detected": "Bind {repository}",
         "binding": "Binding…",
-        "noRepository": "No enrolled host has reported a GitHub remote for this workspace. Bind a repository from the register flow once one has."
+        "noRepository": "No enrolled host has reported a GitHub remote for this workspace. Bind its main repository from Workspace settings, or from the register flow once a host has reported one."
       },
       "firstRun": {
         "badge": "first run",
@@ -162,7 +162,7 @@
         },
         "repository": {
           "title": "Repository detected",
-          "body": "Read from the git remote of the directory the installer ran in. Binding it installs the GitHub App: repo binding, Context PRs, checks, merge handling and the code graph.",
+          "body": "Read from the git remote of the directory the installer ran in. Binding it as the main repo needs the Oxagen GitHub App installed on its owner, which Workspace settings walks you through. The binding is what turns on Context PRs, checks, merge handling and the code graph.",
           "bind": "Bind {repository} as the main repo",
           "binding": "Binding…",
           "skip": "Skipping leaves {workspace} provisional until {until}. Runs record and spend counts, and steering, context records and agent definitions stay off until a main repo is bound."

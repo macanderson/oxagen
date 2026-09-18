@@ -121,15 +121,17 @@ export const runs: DataSource["runs"] = {
     if (!read.ok) return read;
     return view(ctx.orgId, RunCost, toRunCost(read.value), "runs.cost");
   },
-  async transcript(ctx, runId, q) {
+  async transcript(ctx, runId, zoom, q) {
     const read = await kernelRead(ctx, {
       contract: runTranscriptGet,
       input: {
         runId,
-        zoom: q.zoom,
-        kinds: [...q.kinds],
+        zoom,
+        kinds: q?.kinds ?? [],
         limit: TRANSCRIPT_ENTRY_DEFAULT,
-        ...(q.after === null ? {} : { after: q.after }),
+        // Omitted rather than null: the contract refuses a cursor it did not
+        // write, and `undefined` is what "read from the start" means there.
+        ...(q?.after ? { after: q.after } : {}),
       },
       page: "run",
     });

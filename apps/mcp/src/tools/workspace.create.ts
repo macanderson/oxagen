@@ -12,6 +12,9 @@ export const schema = {
   slug: workspaceCreate.input.shape.slug.describe(
     "URL-safe unique slug within the organization",
   ),
+  mainRepo: workspaceCreate.input.shape.mainRepo.describe(
+    "The workspace's main GitHub repository ({ owner, name }), required: a workspace cannot exist without one. The GitHub App must be installed on the owner account and reachable by the organization's connected GitHub account.",
+  ),
 };
 
 export const metadata: ToolMetadata = {
