@@ -753,10 +753,23 @@ function BoundRepositoryPanel({
           {/*
             Spec §10.1: moving a workspace to a DIFFERENT repository is an org
             owner's decision recorded as a security event, and
-            `bind_main_repository` refuses it with `main_repo_bound`. A rebind
-            control here would be a control that lies.
+            `bind_main_repository` refuses it with `main_repo_bound`. A control
+            offering THAT here would be a control that lies, which is why none
+            is offered and the copy says so.
+
+            Re-approving the default branch below is not that control. It binds
+            the same owner and name — nothing about which repository is main
+            moves — and it is the only way the approved production ref ever
+            changes, because steering reads the ref from the binding and never
+            from live GitHub.
           */}
           <p className={`mt-3 ${prose}`}>{t("bound.fixed")}</p>
+          <ReapproveDefaultRef
+            org={org}
+            ws={ws}
+            repository={repository}
+            onRepaired={onRepaired}
+          />
           <ManageLink manageUrl={manageUrl} />
         </>
       ) : (
@@ -855,6 +868,89 @@ function RetiredConnection({
           />
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * The approved production ref, re-read from GitHub on demand (#3265 review, P1).
+ *
+ * Steering resolves `defaultBranch` from the binding's `configuredDefaultRef`,
+ * and `assertProductionBase` refuses any Context PR whose base is not it. That
+ * is deliberate — it is what stops a default-branch rename on GitHub silently
+ * retargeting every Context PR at a branch nobody approved. The cost is that a
+ * rename leaves the workspace pinned to a branch that may no longer exist, and
+ * until this control the pin had no way to move: `bind_main_repository` treated
+ * a same-repository re-bind as idempotent, and `set_main_repository` is a spec
+ * entry with no contract and no handler. Steering stopped and nothing on any
+ * surface could restart it.
+ *
+ * Offered unconditionally rather than only when drift is detected, because
+ * detecting it would put a GitHub round trip on every settings render:
+ * `get_main_repository` is a pure binding read today. The bind compares the
+ * recorded facts against what GitHub reports and writes a successor only if
+ * they differ, so pressing this when nothing has moved is a no-op that returns
+ * the existing binding's identity.
+ */
+function ReapproveDefaultRef({
+  org,
+  ws,
+  repository,
+  onRepaired,
+}: {
+  org: string;
+  ws: string;
+  repository: NonNullable<WorkspaceRepository["repository"]>;
+  onRepaired: () => void;
+}) {
+  const t = useTranslations("workspaceSettings.mainRepository");
+  const failureText = useWorkspaceSettingsFailure();
+  const navigate = useNavigate();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function reapprove(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      // The SAME owner and name the binding already carries. A re-approval of
+      // this repository's current default branch, never a choice of another
+      // repository — the bind refuses that with `main_repo_bound` regardless.
+      const result = await bindWorkspaceRepository(org, ws, {
+        owner: repository.owner,
+        name: repository.name,
+      });
+      if (result.ok) {
+        onRepaired();
+        navigate.refresh();
+      } else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(UNANSWERED));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="mt-3" data-testid="workspace-repository-reapprove">
+      <p className={prose}>{t("bound.refDrift")}</p>
+      <form noValidate className="mt-3" onSubmit={(e) => void reapprove(e)}>
+        {failure === null ? null : (
+          <div className="mb-3">
+            <FormAlert testId="workspace-repository-reapprove-failure">
+              {failure}
+            </FormAlert>
+          </div>
+        )}
+        <SubmitButton
+          pending={pending}
+          fullWidth={false}
+          label={t("bound.reapprove")}
+          pendingLabel={t("bound.reapproving")}
+        />
+      </form>
     </div>
   );
 }
