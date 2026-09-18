@@ -154,7 +154,15 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
   const target = verdict.branch
     ? `${verdict.remote}/${verdict.branch}`
     : verdict.remote;
-  const fromCommit = await revParse(ctx, target);
+  // The full ref, for the reason `check.ts` resolves it that way: a local
+  // branch named `origin/main` wins git's DWIM over the remote-tracking ref,
+  // and the sync would then restore from whatever that branch holds.
+  const fromCommit = await revParse(
+    ctx,
+    verdict.branch
+      ? `refs/remotes/${verdict.remote}/${verdict.branch}`
+      : verdict.remote,
+  );
   if (!fromCommit) {
     return refuse(
       "remote_ref_missing",

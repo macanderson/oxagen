@@ -374,6 +374,14 @@ export async function checkSteeringFreshness(
   }
 
   const target = `${policy.remote}/${branch}`;
+  // Resolved by its full ref, never by the short name. Git's revision DWIM
+  // reads `refs/heads/<name>` before `refs/remotes/<name>`, so a checkout
+  // that happens to hold a LOCAL branch called `origin/main` answered with
+  // that branch instead of the fetched remote-tracking ref: the check then
+  // compared HEAD against a ref the fetch never moves, reported `current`,
+  // and an enforced gate let the prompt through after production advanced.
+  // The short name stays, for the messages a developer reads.
+  const targetRef = `refs/remotes/${policy.remote}/${branch}`;
 
   if (allowNetwork) {
     if (shouldFetch(stamp, target, policy.fetchIntervalSeconds, now())) {
@@ -410,7 +418,7 @@ export async function checkSteeringFreshness(
     base.fetch = { attempted: false, ok: false, reason: "network not allowed" };
   }
 
-  const remoteHead = await revParse(repoCtx, target);
+  const remoteHead = await revParse(repoCtx, targetRef);
   if (!remoteHead) {
     return unknown(
       base,

@@ -36,7 +36,7 @@ function table(
     remote: "origin",
     "fetch --quiet --no-tags --no-write-fetch-head -- origin +refs/heads/main:refs/remotes/origin/main":
       "",
-    "rev-parse --verify --quiet origin/main^{commit}": REMOTE,
+    "rev-parse --verify --quiet refs/remotes/origin/main^{commit}": REMOTE,
     [`merge-base ${HEAD} ${REMOTE}`]: BASE,
     [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json`]:
       "",
@@ -292,7 +292,7 @@ describe("checkSteeringFreshness, when it cannot answer", () => {
   it("is unknown when the remote-tracking ref is not on disk", async () => {
     const v = await check(
       table({
-        "rev-parse --verify --quiet origin/main^{commit}": new Error("none"),
+        "rev-parse --verify --quiet refs/remotes/origin/main^{commit}": new Error("none"),
       }),
     );
     expect(v.status).toBe("unknown");
@@ -697,6 +697,31 @@ describe("checkSteeringFreshness, a removed record still on disk", () => {
 // A sparse checkout keeps governed records in the index while removing them
 // from disk. Every diff read them as present and `status` was clean, so the
 // verdict said `current` while the agent had none of its records.
+// Git's revision DWIM reads `refs/heads/<name>` before `refs/remotes/<name>`,
+// so a checkout holding a LOCAL branch called `origin/main` answered with
+// that branch. The check then compared against a ref the fetch never moves
+// and reported `current` while production had advanced.
+describe("a checkout with a local branch named like the remote-tracking ref", () => {
+  it("resolves the remote tip by its full ref", async () => {
+    const v = await check(
+      remoteDiff(
+        {
+          ...table({ [`rev-list --count ${BASE}..${REMOTE} -- .oxagen`]: "2" }),
+          // The short name resolves to the local branch, which is HEAD. A
+          // check that read it would compare HEAD with itself and answer
+          // `current`; every key below is keyed on the remote tip.
+          "rev-parse --verify --quiet origin/main^{commit}": HEAD,
+        },
+        REMOTE_ADDED,
+      ),
+    );
+    expect(v.status, v.notes.join(" | ")).toBe("behind");
+    expect(v.missing).toEqual([
+      { status: "added", path: ".oxagen/rules/ctx.release.pin.toml" },
+    ]);
+  });
+});
+
 describe("checkSteeringFreshness, governed files excluded from the working tree", () => {
   it("is behind, naming the excluded files, when the index matches but the disk does not", async () => {
     const v = await check({

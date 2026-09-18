@@ -30,7 +30,7 @@ function stubRepo({ behind }: { behind: boolean }) {
         return "/repo/.git";
       case "remote":
         return "origin";
-      case "rev-parse --verify --quiet origin/main^{commit}":
+      case "rev-parse --verify --quiet refs/remotes/origin/main^{commit}":
         return REMOTE;
       case `merge-base ${HEAD} ${REMOTE}`:
         return BASE;
