@@ -323,7 +323,7 @@
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at the zoom the URL names (data/live/runs.ts, features/run/transcript.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at everything and groups it into turns and steps, with the zoom the URL names choosing what starts open (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-c2f283fb-3282-review"
