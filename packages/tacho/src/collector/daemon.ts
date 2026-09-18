@@ -283,22 +283,27 @@ export async function startDaemon(
    * force is still this one. Freshness has to be measured from here, because
    * the etag covers policy content only, so an unchanged mandate is never
    * re-sent and its signed `expires_at` cannot be renewed on the host. See
-   * `isStale` in host/bundle.ts. Seeded from the last fetch, so a daemon that
-   * restarts does not declare a mandate it just cached stale.
+   * `isStale` in host/bundle.ts.
    *
-   * The seed is clamped to startup, because `bundle_fetched_at` is an
-   * unsigned field in a file on the operator's machine while the signature
-   * covers the bundle alone. Without the clamp, dating that field into the
-   * future would hand the host a freshness window nobody granted, and an
-   * expired `content_exact` grant would survive every restart. Clamped, the
-   * worst an edit can do is make a mandate look newly cached, which is what
-   * a first start already looks like, and dating it backwards only makes the
-   * mandate lapse sooner, which is the safe direction.
+   * Undefined until the control plane confirms something in this process,
+   * and deliberately not seeded from `bundle_fetched_at`. That field is
+   * unsigned and sits in a file on the operator's machine, while the
+   * signature covers the bundle alone, so any reading of it is a freshness
+   * window the operator wrote for themselves. Clamping it to startup was not
+   * enough: a restart is free, so an operator could date the field forward,
+   * restart, and take a fresh window every time, which keeps a revoked or
+   * expired mandate in force indefinitely. The mandate is what bounds the
+   * operator's own agent, so the operator must not be able to renew it.
+   *
+   * Nothing is lost by leaving it undefined. Both readers fall back to the
+   * bundle's signed `issued_at`, so a mandate still inside its own signed
+   * window reads fresh at startup exactly as before, and one that has
+   * outlived that window reads stale until the control plane says otherwise.
+   * The first poll confirms it, so the gap is one tick, and `issued_at` sits
+   * inside the signature, so editing it fails verification and enforce mode
+   * denies on `bundle_unverified` before freshness is ever consulted.
    */
-  let mandateConfirmedAt = Math.min(
-    Date.parse(host.bundle_fetched_at) || startedAt,
-    startedAt,
-  );
+  let mandateConfirmedAt: number | undefined;
   /**
    * The retention clause the host may act on: the cached one while its
    * signature holds, and nothing otherwise.
@@ -322,7 +327,9 @@ export async function startDaemon(
     const expires = Date.parse(host.bundle.expires_at);
     if (!Number.isFinite(issued) || !Number.isFinite(expires)) return true;
     if (expires <= issued) return true;
-    return now() - mandateConfirmedAt > expires - issued;
+    // The same fallback `isStale` uses: with no confirmation recorded in this
+    // process, the mandate is measured from the signed moment it was issued.
+    return now() - (mandateConfirmedAt ?? issued) > expires - issued;
   }
   let lastControlAt: number | undefined;
   let lastOtlpAt: number | undefined;

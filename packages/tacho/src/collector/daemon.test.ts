@@ -896,11 +896,13 @@ describe("tachod", () => {
 
   it("does not take a freshness window from a future-dated host file", async () => {
     // `bundle_fetched_at` is unsigned and sits in a file on the operator's
-    // machine, while the signature covers the bundle alone. Dated into the
-    // future it would make `now - confirmedAt` negative forever, so an
-    // expired `content_exact` grant would never lapse on this host. The seed
-    // is clamped to startup, which caps the attack at what a first start
-    // already gives.
+    // machine, while the signature covers the bundle alone, so nothing reads
+    // it for freshness. Clamping it to startup was not enough: a restart is
+    // free, so dating the field forward and restarting would take a fresh
+    // window every time and keep an expired grant in force for ever. Both
+    // readers fall back to the bundle's signed `issued_at` instead, so the
+    // mandate here has outlived its own signed window and is lapsed however
+    // the file is dated.
     const plane = fakeControlPlane("etag-fresh");
     const paths = scratchPaths();
     const signer = bundleSigner();
@@ -910,7 +912,9 @@ describe("tachod", () => {
       }),
     );
     const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
-    let clock = Date.parse("2026-09-11T00:00:00.000Z");
+    // Start the clock past the bundle's own signed window, which is the
+    // state a restart-loop tries to paper over.
+    const clock = Date.parse(bundle.issued_at) + window + 1;
     writeHostFile(
       paths.hostFile,
       testHostFile(signer, bundle, {
@@ -919,10 +923,6 @@ describe("tachod", () => {
       }),
     );
     const { handle } = await boot(plane, paths, { now: () => clock });
-
-    // Past the signed window with no confirmation from the control plane in
-    // between, so the mandate has lapsed however the file is dated.
-    clock += window + 1;
     const result = await runTachoHook({
       paths,
       env: {},
