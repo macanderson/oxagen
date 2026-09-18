@@ -13,7 +13,15 @@ const {
   syncSteering,
   execGit,
 } = vi.hoisted(() => ({
-  apiPostOrThrow: vi.fn<(path: string, body: unknown) => Promise<unknown>>(),
+  apiPostOrThrow:
+    vi.fn<
+      (
+        path: string,
+        body: unknown,
+        scope?: { org: string; ws: string },
+        options?: { timeoutMs?: number },
+      ) => Promise<unknown>
+    >(),
   evaluateGate: vi.fn(),
   checkSteeringFreshness: vi.fn(),
   syncSteering: vi.fn(),
@@ -287,9 +295,9 @@ describe("resolveContext", () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     await mkdir(join(tmp, ".oxagen"), { recursive: true });
     await resolveContext(tmp);
-    const [, , , options] = apiPostOrThrow.mock.calls[0] ?? [];
-    expect(options).toMatchObject({ timeoutMs: expect.any(Number) });
-    expect((options as { timeoutMs: number }).timeoutMs).toBeLessThan(10_000);
+    const options = apiPostOrThrow.mock.calls[0]?.[3];
+    expect(options?.timeoutMs).toEqual(expect.any(Number));
+    expect(options?.timeoutMs ?? Infinity).toBeLessThan(10_000);
   });
 
   // Validating a hard-coded `origin` while a settings file pointed `remote`
