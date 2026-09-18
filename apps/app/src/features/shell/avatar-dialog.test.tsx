@@ -233,7 +233,6 @@ describe("Photo", () => {
     expect(tiles(preview)[0]?.dataset.avatar).toBe("image");
     await user.click(screen.getByTestId("avatar-save"));
     expect(updateProfile).toHaveBeenCalledWith("acme", {
-      displayName: "Marcus Bell",
       avatarUrl: "https://cdn.example/marcus.png",
     });
   });
@@ -254,7 +253,7 @@ describe("Photo", () => {
 });
 
 describe("Save", () => {
-  it("writes the spec string with the display name as it stands, refreshes the shell and returns to Account", async () => {
+  it("writes the spec string alone, refreshes the shell and returns to Account", async () => {
     const { user, dialog } = await openEditor();
     await user.click(within(dialog).getByTestId("avatar-kind-icon"));
     await user.click(within(dialog).getByTestId("avatar-icon-satellite"));
@@ -262,12 +261,26 @@ describe("Save", () => {
     await user.click(screen.getByTestId("avatar-save"));
 
     expect(updateProfile).toHaveBeenCalledWith("acme", {
-      displayName: "Marcus Bell",
       avatarUrl: 'avatar:v1:{"kind":"icon","icon":"satellite","tone":"soft"}',
     });
     expect(await screen.findByTestId("which")).toHaveTextContent("account");
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("avatar-dialog")).toBeNull();
+  });
+
+  // auth.users.display_name is nullable and the editor has no name field, so
+  // it used to send "" for a person who has never set one — which
+  // update_profile's schema refuses, so their avatar could never be saved at
+  // all. The save carries the avatar alone now.
+  it("saves for a person who has no display name", async () => {
+    const { user, dialog } = await openEditor({ name: null });
+    await user.click(within(dialog).getByTestId("avatar-kind-icon"));
+    await user.click(within(dialog).getByTestId("avatar-icon-satellite"));
+    await user.click(screen.getByTestId("avatar-save"));
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    const [, draft] = updateProfile.mock.calls[0] as [string, object];
+    expect(draft).not.toHaveProperty("displayName");
+    expect(await screen.findByTestId("which")).toHaveTextContent("account");
   });
 
   it("stores a monogram upper-cased, in its typeface and tone", async () => {
@@ -279,7 +292,6 @@ describe("Save", () => {
     await user.click(within(dialog).getByTestId("avatar-tone-line"));
     await user.click(screen.getByTestId("avatar-save"));
     expect(updateProfile).toHaveBeenCalledWith("acme", {
-      displayName: "Marcus Bell",
       avatarUrl:
         'avatar:v1:{"kind":"initials","text":"MB","font":"serif","tone":"line"}',
     });

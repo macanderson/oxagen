@@ -28,6 +28,7 @@ import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
 import {
   type PreferencesDraft,
   readPreferences,
+  readExportStatus,
   requestExport,
   savePreferences,
   updateProfile,
@@ -156,7 +157,7 @@ function ProfileTab({ data }: { data: ShellData }) {
         avatarUrl: viewer.avatarUrl ?? "",
       });
       if (result.ok) {
-        setDisplayName(result.value.displayName);
+        setDisplayName(result.value.displayName ?? displayName);
         setOutcome("saved");
         // The shell renders the same person: the top bar's user menu reads
         // `data.viewer`, resolved on the server from the session. A re-render
@@ -830,8 +831,20 @@ type ExportState =
   | { kind: "idle" }
   | { kind: "pending"; scope: "user" | "org" }
   | { kind: "queued"; scope: "user" | "org"; exportId: string }
+  | { kind: "ready"; scope: "user" | "org"; exportId: string; url: string }
+  | { kind: "expired"; scope: "user" | "org"; exportId: string }
   | { kind: "denied"; scope: "user" | "org" }
   | { kind: "failed"; scope: "user" | "org" };
+
+/**
+ * How often the queued state asks after the bundle. `export_data` answers the
+ * moment it queues and the bundle is written later by an Inngest function, so
+ * without this the id is all a person would ever see. Three seconds is a
+ * compromise: a small export is ready inside one interval, and a large one
+ * costs a handful of reads of a single row. The interval is cleared when the
+ * export settles and when the dialog closes, so a shut dialog polls nothing.
+ */
+const EXPORT_POLL_MS = 3_000;
 
 function PrivacyTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.privacy");
@@ -850,6 +863,40 @@ function PrivacyTab({ data }: { data: ShellData }) {
       setState({ kind: "failed", scope });
     }
   }
+
+  // Ask after a queued bundle until it settles. A read that refuses or throws
+  // leaves the state alone and the next tick tries again: a blip on one poll
+  // is not a failed export, and the person keeps the id either way.
+  const queuedId = state.kind === "queued" ? state.exportId : null;
+  const queuedScope = state.kind === "queued" ? state.scope : null;
+  const orgSlug = data.org.slug;
+  useEffect(() => {
+    if (queuedId === null || queuedScope === null) return;
+    let live = true;
+    async function look() {
+      const read = await readExportStatus(orgSlug, queuedId as string);
+      if (!live || !read.ok) return;
+      const scope = queuedScope as "user" | "org";
+      const id = queuedId as string;
+      if (read.value.status === "ready" && read.value.downloadUrl)
+        setState({
+          kind: "ready",
+          scope,
+          exportId: id,
+          url: read.value.downloadUrl,
+        });
+      else if (read.value.status === "failed")
+        setState({ kind: "expired", scope, exportId: id });
+    }
+    const timer = setInterval(() => {
+      void look();
+    }, EXPORT_POLL_MS);
+    void look();
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [queuedId, queuedScope, orgSlug]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -893,7 +940,23 @@ function PrivacyTab({ data }: { data: ShellData }) {
               })}
             </span>
           ) : null}
+          {state.kind === "ready" ? (
+            <span data-testid="account-export-ready">
+              {t("ready")}{" "}
+              <a
+                data-testid="account-export-download"
+                className="underline"
+                href={state.url}
+                download
+              >
+                {t("download")}
+              </a>
+            </span>
+          ) : null}
         </p>
+        {state.kind === "expired" ? (
+          <FormAlert testId="account-export-expired">{t("expired")}</FormAlert>
+        ) : null}
         {state.kind === "denied" || state.kind === "failed" ? (
           <FormAlert testId={`account-export-${state.kind}`}>
             {t(

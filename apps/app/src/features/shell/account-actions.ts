@@ -16,6 +16,7 @@
 // acts on the authenticated principal. A profile write that took a target id
 // would be a privilege-escalation surface reachable from a form field.
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
+import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
@@ -25,7 +26,8 @@ import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type ProfileDraft = {
-  displayName: string;
+  /** Left out to change the avatar alone. */
+  displayName?: string;
   /**
    * An https URL or a designed-avatar spec string, per the canonical
    * `avatarUrlSchema`; empty clears the avatar. Not validated here —
@@ -36,7 +38,7 @@ export type ProfileDraft = {
 };
 
 export type ProfileWritten = {
-  displayName: string;
+  displayName: string | null;
   avatarUrl: string | null;
 };
 
@@ -54,7 +56,9 @@ export async function updateProfile(
 ): Promise<ActionResult<ProfileWritten>> {
   const ctx = await requireViewer(org);
   return kernelWrite(ctx, userProfileUpdate, {
-    displayName: draft.displayName,
+    ...(draft.displayName === undefined
+      ? {}
+      : { displayName: draft.displayName }),
     avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl,
   });
 }
@@ -141,4 +145,32 @@ export async function requestExport(
         value: { exportId: result.value.exportId, status: result.value.status },
       }
     : result;
+}
+
+export type ExportProgress = {
+  exportId: string;
+  status: "queued" | "processing" | "ready" | "failed";
+  /** Set only once the status is `ready`. */
+  downloadUrl: string | null;
+};
+
+/**
+ * `get_export_status`: where a queued bundle has got to, and the link once it
+ * is ready. `export_data` answers the instant it queues, so without this read
+ * the Privacy tab could start a bundle it could never hand over — and the
+ * right the export exists to serve is receiving the data, not starting a job.
+ */
+export async function readExportStatus(
+  org: string,
+  exportId: string,
+): Promise<ActionResult<ExportProgress>> {
+  const ctx = await requireViewer(org);
+  const read = await kernelRead(ctx, {
+    contract: privacyDataExportStatus,
+    input: { exportId },
+    page: "shell",
+  });
+  if (!read.ok) return asActionResult(read);
+  const { status, downloadUrl } = read.value;
+  return { ok: true, value: { exportId, status, downloadUrl } };
 }

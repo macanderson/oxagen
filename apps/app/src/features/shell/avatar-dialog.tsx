@@ -171,7 +171,6 @@ function AvatarEditor({ data }: { data: ShellData }) {
     setPending(true);
     try {
       const result = await updateProfile(org.slug, {
-        displayName: viewer.name ?? "",
         avatarUrl: stored(draft),
       });
       if (result.ok) {

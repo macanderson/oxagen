@@ -33,11 +33,13 @@ const updateProfile = vi.fn();
 const readPreferences = vi.fn();
 const savePreferences = vi.fn();
 const requestExport = vi.fn();
+const readExportStatus = vi.fn();
 vi.mock("./account-actions", () => ({
   updateProfile,
   readPreferences,
   savePreferences,
   requestExport,
+  readExportStatus,
 }));
 
 const liveListSessions = vi.fn();
@@ -161,6 +163,15 @@ beforeEach(() => {
   savePreferences.mockImplementation((_org: string, draft: unknown) =>
     Promise.resolve({ ok: true, value: draft }),
   );
+  readExportStatus.mockReset();
+  readExportStatus.mockResolvedValue({
+    ok: true,
+    value: {
+      exportId: "7a000000-0000-4000-8000-0000000000e1",
+      status: "queued",
+      downloadUrl: null,
+    },
+  });
   requestExport.mockReset();
   requestExport.mockResolvedValue({
     ok: true,
@@ -503,6 +514,55 @@ describe("Privacy", () => {
     expect(requestExport).toHaveBeenCalledWith("acme", "user");
     const queued = await screen.findByTestId("account-export-queued");
     expect(queued).toHaveTextContent("7a000000-0000-4000-8000-0000000000e1");
+  });
+
+  // export_data answers the moment it queues; the bundle is written later. If
+  // the tab stopped at the id, a person could start a bundle they could never
+  // receive — which is the whole point of the export.
+  it("polls a queued export and offers the bundle once it is ready", async () => {
+    readExportStatus.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        exportId: "7a000000-0000-4000-8000-0000000000e1",
+        status: "ready",
+        downloadUrl: "https://blob.example/bundle.zip",
+      },
+    });
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-user"));
+    // The first look happens at once rather than one interval later, so a
+    // bundle that is already written is offered immediately.
+    const link = await screen.findByTestId("account-export-download");
+    expect(readExportStatus).toHaveBeenCalledWith(
+      "acme",
+      "7a000000-0000-4000-8000-0000000000e1",
+    );
+    expect(link.getAttribute("href")).toBe("https://blob.example/bundle.zip");
+  });
+
+  it("says so when the bundle could not be prepared (negative)", async () => {
+    readExportStatus.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        exportId: "7a000000-0000-4000-8000-0000000000e1",
+        status: "failed",
+        downloadUrl: null,
+      },
+    });
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-user"));
+    expect(await screen.findByTestId("account-export-expired")).toBeTruthy();
+    expect(screen.queryByTestId("account-export-download")).toBeNull();
+  });
+
+  // A refused or thrown poll is a blip, not a failed export: the id stays and
+  // the next tick asks again.
+  it("keeps the queued state when a poll refuses", async () => {
+    readExportStatus.mockResolvedValue({ ok: false, reason: "unavailable" });
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-user"));
+    expect(await screen.findByTestId("account-export-queued")).toBeTruthy();
+    expect(screen.queryByTestId("account-export-expired")).toBeNull();
   });
 
   it("asks for the organization export as such, and reads a refusal back (negative)", async () => {

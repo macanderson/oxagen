@@ -1,7 +1,7 @@
 {
-  "name": "update_profile",
-  "domain": "user",
-  "description": "Update the calling user's own display name and avatar, and return the persisted values.",
+  "name": "get_export_status",
+  "domain": "privacy",
+  "description": "Read the status of one of the calling user's own data exports, with the download link once it is ready.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -18,30 +18,33 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "displayName": {
+      "exportId": {
         "type": "string",
-        "minLength": 1,
-        "maxLength": 120
-      },
-      "avatarUrl": {
-        "anyOf": [
-          {
-            "type": "string",
-            "maxLength": 512
-          },
-          {
-            "type": "null"
-          }
-        ]
+        "format": "uuid"
       }
     },
+    "required": [
+      "exportId"
+    ],
     "additionalProperties": false
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "displayName": {
+      "exportId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "processing",
+          "ready",
+          "failed"
+        ]
+      },
+      "downloadUrl": {
         "anyOf": [
           {
             "type": "string"
@@ -51,7 +54,7 @@
           }
         ]
       },
-      "avatarUrl": {
+      "completedAt": {
         "anyOf": [
           {
             "type": "string"
@@ -63,8 +66,10 @@
       }
     },
     "required": [
-      "displayName",
-      "avatarUrl"
+      "exportId",
+      "status",
+      "downloadUrl",
+      "completedAt"
     ],
     "additionalProperties": false
   }

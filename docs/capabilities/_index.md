@@ -305,6 +305,7 @@ Capabilities granted to an agent as a set have a page of their own:
 
 - [privacy.data.erase](privacy.data.erase.md) — Request erasure of personal or organizational data under GDPR Article 17
 - [privacy.data.export](privacy.data.export.md) — Request a machine-readable ZIP archive of data under GDPR Article 20
+- [privacy.data.export.status](privacy.data.export.status.md) — Read a queued export's status and, once ready, its download link
 
 ## Prompt (2)
 

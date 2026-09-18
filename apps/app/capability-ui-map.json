@@ -190,6 +190,15 @@
       "testid": "account-export-user",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
+    "get_export_status": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Account dialog › Privacy — a queued export is polled with get_export_status until it is ready, and the bundle is offered as a download link (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "account-export-download",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-01GYhmZx-account-dialog-w11"
+    },
     "export_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",

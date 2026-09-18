@@ -57,8 +57,15 @@ vi.mock("@/server/tenancy-lookups", () => ({
 
 const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
 
-const { updateProfile, readPreferences, savePreferences, requestExport } =
-  await import("./account-actions");
+const {
+  updateProfile,
+  readPreferences,
+  savePreferences,
+  requestExport,
+  readExportStatus,
+} = await import("./account-actions");
+
+const EXPORT_ID = "7a000000-0000-4000-8000-0000000000e1";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -134,6 +141,76 @@ describe("updateProfile", () => {
       "avatarUrl",
       "displayName",
     ]);
+  });
+});
+
+describe("updateProfile, avatar alone", () => {
+  // display_name is nullable and the avatar editor has no name field, so the
+  // write has to be a partial one: a key left out is left alone.
+  it("omits the display name entirely rather than sending an empty one", async () => {
+    invoke.mockResolvedValue({ displayName: null, avatarUrl: "avatar:v1:{}" });
+    await updateProfile("acme", { avatarUrl: "avatar:v1:{}" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { avatarUrl: "avatar:v1:{}" },
+      expect.anything(),
+    );
+  });
+
+  it("answers with a null display name for a person who has none", async () => {
+    invoke.mockResolvedValue({ displayName: null, avatarUrl: "avatar:v1:{}" });
+    const result = await updateProfile("acme", { avatarUrl: "avatar:v1:{}" });
+    expect(result).toEqual({
+      ok: true,
+      value: { displayName: null, avatarUrl: "avatar:v1:{}" },
+    });
+  });
+});
+
+describe("readExportStatus", () => {
+  it("sends a signed-out visitor to log in, reading nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(readExportStatus("acme", EXPORT_ID)).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("asks by export id alone and hands back the link once it is ready", async () => {
+    invoke.mockResolvedValue({
+      exportId: EXPORT_ID,
+      status: "ready",
+      downloadUrl: "https://blob.example/bundle.zip",
+      completedAt: "2026-09-18T22:00:00.000Z",
+    });
+    const result = await readExportStatus("acme", EXPORT_ID);
+    expect(invoke).toHaveBeenCalledWith(
+      "get_export_status",
+      { exportId: EXPORT_ID },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        exportId: EXPORT_ID,
+        status: "ready",
+        downloadUrl: "https://blob.example/bundle.zip",
+      },
+    });
+  });
+
+  // The contract takes no user id and neither does this action: the handler
+  // matches on the principal, so one person cannot ask after another's bundle.
+  it("never sends a user id", async () => {
+    invoke.mockResolvedValue({
+      exportId: EXPORT_ID,
+      status: "queued",
+      downloadUrl: null,
+      completedAt: null,
+    });
+    await readExportStatus("acme", EXPORT_ID);
+    const input = invoke.mock.calls[0]?.[1];
+    expect(Object.keys(input ?? {})).toEqual(["exportId"]);
   });
 });
 
