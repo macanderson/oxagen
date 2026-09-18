@@ -155,6 +155,14 @@ export const transcriptEntrySchema = z
     decision: transcriptDecisionSchema.nullable(),
     /** Frames folded into the entry, the opening frame included. */
     frames: z.number().int().positive(),
+    /**
+     * The turn the opening frame belongs to, 1-based. Null for a frame
+     * recorded before the run's first `turn_start` (the agent starting and
+     * the context it was handed); a recording with no turn boundaries puts
+     * every frame in a turn. The same value at every zoom, so a client can
+     * group `everything` entries into the turns the `turns` zoom folds.
+     */
+    turn: z.number().int().positive().nullable(),
     /** The cost records of the folded frames, summed; null when none carried one. */
     cost: runCostSchema.nullable(),
     /** Every cost record up to and including this entry (§8.4 prefix sum). */

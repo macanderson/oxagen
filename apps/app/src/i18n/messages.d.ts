@@ -1667,16 +1667,6 @@ type Messages = {
         steps: string;
         everything: string;
       };
-      kind: {
-        turn: string;
-        model_call: string;
-        tool_call: string;
-        frame: string;
-        policy: string;
-      };
-      frame: string;
-      frames: string;
-      folded: string;
       digestOnly: string;
       noBody: string;
       truncated: string;
@@ -1687,8 +1677,40 @@ type Messages = {
       request: string;
       response: string;
       decision: string;
-      elapsed: string;
-      cumulative: string;
+      runStart: string;
+      turn: string;
+      turnDone: string;
+      turnRunning: string;
+      you: string;
+      agent: string;
+      stepCount: string;
+      frameCount: string;
+      seqSpan: string;
+      ms: string;
+      live: string;
+      goLive: string;
+      recorded: {
+        sealed: string;
+        halted: string;
+      };
+      back: string;
+      play: string;
+      pause: string;
+      forward: string;
+      scrub: string;
+      position: string;
+      of: string;
+      speedLabel: string;
+      speed: string;
+      transportNote: string;
+      transportNoteGraded: string;
+      frameHead: string;
+      fidelity: {
+        full: string;
+        digest_only: string;
+      };
+      envelope: string;
+      recording: string;
     };
     frames: {
       title: string;

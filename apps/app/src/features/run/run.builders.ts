@@ -122,12 +122,200 @@ export function transcriptEntry(
     response: transcriptBody(),
     decision: null,
     frames: 4,
+    turn: 1,
     cost: { micros: "18240", currency: "USD", basis: "gateway_observed" },
     cumulativeCost: {
       micros: "18240",
       currency: "USD",
       basis: "gateway_observed",
     },
+    ...overrides,
+  };
+}
+
+/**
+ * A wrapped run read at `everything`, shaped like the mockup's release run:
+ * the agent starting, then two turns, each opening on the operator's prompt
+ * and closing on the agent's reply, with a model call, an allowed tool call,
+ * and in the second turn a tool call the policy denied.
+ */
+export function mockupTranscript(
+  overrides: Partial<RunTranscript> = {},
+): RunTranscript {
+  /**
+   * One frame of the run, at `everything`. A frame carries one half of an
+   * exchange: the phase it was recorded in decides whether its body is what
+   * went out or what came back.
+   */
+  type Spec = {
+    seq: number;
+    type: string;
+    kind: TranscriptEntry["kind"];
+    label: string;
+    turn: number | null;
+    text?: string;
+    fidelity?: TranscriptBody["fidelity"];
+    costMicros?: string;
+    decision?: string;
+  };
+  const REQUEST_TYPES = new Set(["model.request", "tool_requested"]);
+  const specs: Spec[] = [
+    {
+      seq: 0,
+      type: "agent_start",
+      kind: "frame",
+      label: "agent_start",
+      turn: null,
+    },
+    {
+      seq: 1,
+      type: "context.assembled",
+      kind: "frame",
+      label: "context.assembled",
+      turn: null,
+    },
+    {
+      seq: 2,
+      type: "turn_start",
+      kind: "frame",
+      label: "turn_start",
+      turn: 1,
+      text: "Cut the 2026.9.2 release candidate.",
+    },
+    {
+      seq: 3,
+      type: "model.request",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 1,
+    },
+    {
+      seq: 4,
+      type: "model.response",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 1,
+      text: "I will list the open pull requests first.",
+      costMicros: "380000",
+    },
+    {
+      seq: 5,
+      type: "tool_requested",
+      kind: "tool_call",
+      label: "list_pull_requests",
+      turn: 1,
+    },
+    {
+      seq: 6,
+      type: "policy_decision",
+      kind: "frame",
+      label: "policy allow",
+      turn: 1,
+      decision: "allow",
+    },
+    {
+      seq: 7,
+      type: "tool_call",
+      kind: "tool_call",
+      label: "list_pull_requests ok",
+      turn: 1,
+      text: '{"open":34}',
+    },
+    {
+      seq: 8,
+      type: "turn_end",
+      kind: "frame",
+      label: "turn_end",
+      turn: 1,
+      text: "Both failures predate the release scope.",
+    },
+    { seq: 9, type: "turn_start", kind: "frame", label: "turn_start", turn: 2 },
+    {
+      seq: 10,
+      type: "llm_call",
+      kind: "model_call",
+      label: "anthropic/claude-fable-5-1",
+      turn: 2,
+      costMicros: "520000",
+      fidelity: "digest_only",
+    },
+    {
+      seq: 11,
+      type: "tool_requested",
+      kind: "tool_call",
+      label: "create_tag",
+      turn: 2,
+    },
+    {
+      seq: 12,
+      type: "policy_decision",
+      kind: "frame",
+      label: "policy deny",
+      turn: 2,
+      decision: "deny",
+    },
+  ];
+  // The run's own prefix sum, exactly as `get_run_transcript` computes it:
+  // an entry's cumulative cost is what the run had spent by then.
+  let running: bigint | null = null;
+  const entries = specs.map((spec) => {
+    if (spec.costMicros !== undefined) {
+      running = (running ?? 0n) + BigInt(spec.costMicros);
+    }
+    const fidelity = spec.fidelity ?? "full";
+    const body = transcriptBody({
+      seq: String(spec.seq),
+      type: spec.type,
+      fidelity,
+      text: fidelity === "digest_only" ? null : (spec.text ?? null),
+      bytesRef: fidelity === "digest_only" ? null : "evb:v1:k:abc",
+    });
+    const request = REQUEST_TYPES.has(spec.type);
+    return transcriptEntry({
+      seq: String(spec.seq),
+      endSeq: String(spec.seq),
+      at: at(-3600 + spec.seq * 2),
+      elapsedMs: spec.seq * 2000,
+      kind: spec.kind,
+      type: spec.type,
+      label: spec.label,
+      turn: spec.turn,
+      frames: 1,
+      request: request ? body : null,
+      response: request ? null : body,
+      decision:
+        spec.decision === undefined
+          ? null
+          : {
+              seq: String(spec.seq),
+              decision: spec.decision,
+              type: spec.type,
+              at: at(-3600 + spec.seq * 2),
+            },
+      cost:
+        spec.costMicros === undefined
+          ? null
+          : {
+              micros: spec.costMicros,
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+      cumulativeCost:
+        running === null
+          ? null
+          : {
+              micros: String(running),
+              currency: "USD",
+              basis: "gateway_observed",
+            },
+    });
+  });
+  return {
+    zoom: "everything",
+    kinds: [],
+    entries,
+    cursor: null,
+    complete: true,
     ...overrides,
   };
 }

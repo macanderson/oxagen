@@ -7,11 +7,13 @@
 // what went out and what came back — then have their bodies read from the
 // evidence store, decoded as UTF-8 and cut at the contract's text cap.
 //
-// Two things are computed over the whole run and not over the page: the
-// cumulative cost, which is a prefix sum from the run's first frame (§8.4), and
-// the elapsed time, which is measured from the run's recorded start. A page
-// that computed either from its own first entry would restate the run's cost
-// and clock as the page's, which is wrong on every page but the first.
+// Three things are computed over the whole run and not over the page: the
+// cumulative cost, which is a prefix sum from the run's first frame (§8.4),
+// the elapsed time, which is measured from the run's recorded start, and the
+// turn each entry falls in, which is counted over the unfiltered frames so a
+// chip never renumbers the turns. A page that computed any of them from its
+// own first entry would restate the run's cost, clock and turns as the page's,
+// which is wrong on every page but the first.
 //
 // Bodies are read a few at a time; a body that is not text, or that no longer
 // hashes to its recorded digest, leaves its half with `text: null` rather than
@@ -32,11 +34,17 @@ import {
   type RunFrame,
   type TranscriptFold,
   type TranscriptKind,
+  turnOrdinals,
 } from "@oxagen/run-ledger";
 import type { EvidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { digestBytes } from "@oxagen/tacho";
-import { invalidCursor, microsString, runScope, type RunScope } from "./run.list";
+import {
+  invalidCursor,
+  microsString,
+  runScope,
+  type RunScope,
+} from "./run.list";
 import {
   defaultRunReadDeps,
   readAllFrames,
@@ -177,6 +185,14 @@ export function createRunTranscriptGetHandler(
     const frames = filterFramesByKind(read.frames, input.kinds);
     const folds = foldTranscript(frames, input.zoom);
 
+    // The turn an entry belongs to is counted over the whole run, not over the
+    // filtered frames, so pressing a chip never renumbers the turns a reader
+    // is looking at.
+    const ordinals = turnOrdinals(read.frames);
+    const turnOf = new Map(
+      read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
+    );
+
     // The prefix sum runs over every fold of the run, so an entry's cumulative
     // cost is what the run had spent by then and not what this page has.
     const cumulative: (number | null)[] = [];
@@ -205,10 +221,14 @@ export function createRunTranscriptGetHandler(
 
     // A folded zoom carries an excerpt; `everything` carries the whole body.
     const textMax = transcriptTextMax(input.zoom as TranscriptZoom);
-    const halves = await mapConcurrent(page, BODY_CONCURRENCY, async (fold) => ({
-      request: await half(deps.bodies, scope, fold.request, textMax),
-      response: await half(deps.bodies, scope, fold.response, textMax),
-    }));
+    const halves = await mapConcurrent(
+      page,
+      BODY_CONCURRENCY,
+      async (fold) => ({
+        request: await half(deps.bodies, scope, fold.request, textMax),
+        response: await half(deps.bodies, scope, fold.response, textMax),
+      }),
+    );
 
     const entries: TranscriptEntry[] = page.map((fold, i) => {
       const { opening } = fold;
@@ -237,6 +257,7 @@ export function createRunTranscriptGetHandler(
                 at: fold.decision.at.toISOString(),
               },
         frames: fold.frames,
+        turn: turnOf.get(opening.seq) ?? null,
         cost: cost(fold.costMicros),
         cumulativeCost: cost(cumulative[start + i] ?? null),
       };

@@ -751,3 +751,27 @@ export function foldTranscript(
     }
   }
 }
+
+/**
+ * The turn each frame belongs to, 1-based, in frame order: the grouping the
+ * transcript draws its turns from, whatever zoom the entries were read at.
+ *
+ * A recording with `turn_start` frames counts them, and a frame recorded
+ * before the first one (the agent starting, the context it was handed) is in
+ * no turn and answers null. A recording without them follows the `turns`
+ * fold: a new turn wherever the turn index changes, and every frame in one.
+ */
+export function turnOrdinals(frames: readonly RunFrame[]): (number | null)[] {
+  if (frames.some((frame) => TURN_OPENERS.has(frame.type))) {
+    let turn = 0;
+    return frames.map((frame) => {
+      if (TURN_OPENERS.has(frame.type)) turn += 1;
+      return turn === 0 ? null : turn;
+    });
+  }
+  const out: (number | null)[] = [];
+  foldTranscript(frames, "turns").forEach((fold, index) => {
+    for (let i = 0; i < fold.frames; i += 1) out.push(index + 1);
+  });
+  return out;
+}

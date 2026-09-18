@@ -35,6 +35,7 @@ const entry = {
   response: { ...half, seq: "5", type: "tool_call", text: "# Oxagen" },
   decision: null,
   frames: 3,
+  turn: 2,
   cost: null,
   cumulativeCost: null,
 };
@@ -55,7 +56,9 @@ describe("get_run_transcript contract", () => {
       expect(input({ zoom }).success).toBe(true);
     }
     expect(input({ zoom: "frames" }).success).toBe(false);
-    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(false);
+    expect(runTranscriptGet.input.safeParse({ runId: RUN }).success).toBe(
+      false,
+    );
   });
 
   it("defaults to every chip and one page, and refuses a chip outside the set (negative)", () => {
@@ -80,7 +83,12 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({
         ...entry,
-        response: { ...half, text: null, bytesRef: null, fidelity: "digest_only" },
+        response: {
+          ...half,
+          text: null,
+          bytesRef: null,
+          fidelity: "digest_only",
+        },
       }).success,
     ).toBe(true);
   });
@@ -102,6 +110,13 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({ ...entry, elapsedMs: -1 }).success,
     ).toBe(false);
+    // A frame recorded before the run's first turn is in no turn.
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, turn: null }).success,
+    ).toBe(true);
+    expect(transcriptEntrySchema.safeParse({ ...entry, turn: 0 }).success).toBe(
+      false,
+    );
   });
 
   it("carries a decision inline when one was folded into the step", () => {

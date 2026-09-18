@@ -236,6 +236,8 @@ export const TranscriptEntry = z.object({
   decision: TranscriptDecision.nullable(),
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),
+  /** The turn the opening frame falls in, 1-based; null before the run's first turn. */
+  turn: z.number().int().positive().nullable(),
   cost: Cost.nullable(),
   /** Every cost record of the run up to and including this entry. */
   cumulativeCost: Cost.nullable(),

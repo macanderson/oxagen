@@ -196,6 +196,7 @@ export function toRunTranscript(
       response: toTranscriptBody(entry.response),
       decision: entry.decision,
       frames: entry.frames,
+      turn: entry.turn,
       cost: toCost(entry.cost),
       cumulativeCost: toCost(entry.cumulativeCost),
     })),
