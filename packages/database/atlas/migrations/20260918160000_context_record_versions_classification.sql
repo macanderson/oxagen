@@ -55,6 +55,38 @@ WHERE v."kind" IS NULL
     LIMIT 1
   );
 
+-- Then reconcile the record rows with the versions they pin.
+--
+-- Before this change a promote never copied a classification onto the record
+-- row, so any record whose pin was moved to an older version carries whatever
+-- the last merge left there. Backfilling the versions alone fixes the steering
+-- bundle, which reads the pinned version -- but `list_context_records` returns
+-- and FILTERS on the record row (`context.steering.store.ts` `listRecords`), so
+-- without this those records stay mis-classified on that surface for good. No
+-- later promote repairs it either: the row is only rewritten when someone
+-- promotes again, which nothing guarantees (discussion_r4050626908).
+--
+-- Only rows that actually disagree are touched, and only where the pinned
+-- version carries a classification: a record pinning a legacy version has
+-- nothing better to copy, so its row keeps what it has. The four move together,
+-- so the record table's `constraint_effect` check cannot be left unsatisfied --
+-- the version table carries the same check.
+UPDATE "agent"."context_records" r
+SET
+  "kind" = v."kind",
+  "force" = v."force",
+  "constraint_effect" = v."constraint_effect",
+  "statement" = v."statement"
+FROM "agent"."context_record_versions" v
+WHERE v."id" = r."active_version_id"
+  AND v."kind" IS NOT NULL
+  AND (
+    r."kind" IS DISTINCT FROM v."kind"
+    OR r."force" IS DISTINCT FROM v."force"
+    OR r."constraint_effect" IS DISTINCT FROM v."constraint_effect"
+    OR r."statement" IS DISTINCT FROM v."statement"
+  );
+
 COMMENT ON COLUMN "agent"."context_record_versions"."kind" IS
   'The kind the version body declares. Written by merge_context_pr; NULL on a version the legacy publish_context_record path wrote.';
 COMMENT ON COLUMN "agent"."context_record_versions"."force" IS
