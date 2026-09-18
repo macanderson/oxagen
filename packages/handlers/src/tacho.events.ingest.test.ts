@@ -1265,6 +1265,9 @@ describe("ingest_tacho_events", () => {
       filesDeleted: 0,
       commandsRun: 0,
       networkCalls: 0,
+      commits: 0,
+      pushes: 0,
+      pullRequests: 0,
     };
     let cursor: ChainCursor = GENESIS_CURSOR;
     const seal = (draft: UnsealedTachoEvent) => {
@@ -1290,6 +1293,15 @@ describe("ingest_tacho_events", () => {
       ),
       seal(unsealed("policy_decision", { policy_decision: "deny" })),
       seal(unsealed("network", { effect_kind: "network" })),
+      // A repository effect is counted off its `effect_kind`, not off the
+      // frame kind: a pull request opened from the shell is a `command`
+      // frame and one opened over MCP is a `network` frame, and both are
+      // the same act.
+      seal(unsealed("command", { effect_kind: "git_commit" })),
+      seal(unsealed("command", { effect_kind: "git_push" })),
+      seal(unsealed("command", { effect_kind: "pr_open" })),
+      seal(unsealed("network", { effect_kind: "pr_open" })),
+      seal(unsealed("command", { effect_kind: "command" })),
       seal(unsealed("subagent_start", {})),
       seal(unsealed("oxagen:notification", {})),
       seal(unsealed("oxagen:elicitation", {})),
@@ -1316,7 +1328,11 @@ describe("ingest_tacho_events", () => {
       filesRead: 1,
       policyDecisions: 1,
       policyDenies: 1,
-      networkCalls: 1,
+      networkCalls: 2,
+      commandsRun: 4,
+      commits: 1,
+      pushes: 1,
+      pullRequests: 2,
       numSubagents: 1,
       numNotifications: 1,
       numElicitations: 1,

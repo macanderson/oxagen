@@ -125,6 +125,31 @@ interface SessionDelta {
   filesDeleted: number;
   commandsRun: number;
   networkCalls: number;
+  commits: number;
+  pushes: number;
+  pullRequests: number;
+}
+
+/**
+ * Count a frame that acted on a repository rather than on a file.
+ *
+ * The frame kind does not decide this and must not: a pull request opened
+ * from the shell seals a `command` frame and one opened through the GitHub
+ * MCP server seals a `network` frame, and they are the same act. The
+ * `effect_kind` is the discriminator, so both call sites ask the same
+ * question of it.
+ *
+ * These count intent, not confirmed outcome. The collector seals an effect
+ * frame only for a call that succeeded, so a push rejected for a
+ * non-fast-forward is not counted here. What is still not observed is the
+ * remote: nothing in this path reads the branch afterwards to confirm the
+ * ref moved, and a push performed inside a script the agent invoked is
+ * invisible to the classifier that produced these kinds.
+ */
+function countRepoEffect(delta: SessionDelta, effectKind: unknown): void {
+  if (effectKind === "git_commit") delta.commits += 1;
+  else if (effectKind === "git_push") delta.pushes += 1;
+  else if (effectKind === "pr_open") delta.pullRequests += 1;
 }
 
 function emptyDelta(): SessionDelta {
@@ -159,6 +184,9 @@ function emptyDelta(): SessionDelta {
     filesDeleted: 0,
     commandsRun: 0,
     networkCalls: 0,
+    commits: 0,
+    pushes: 0,
+    pullRequests: 0,
   };
 }
 
@@ -276,9 +304,11 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       break;
     case "command":
       delta.commandsRun += 1;
+      countRepoEffect(delta, body["effect_kind"]);
       break;
     case "network":
       delta.networkCalls += 1;
+      countRepoEffect(delta, body["effect_kind"]);
       break;
     case "policy_decision":
     case "token_denied":
@@ -1168,6 +1198,9 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         filesDeleted: sql`${schema.tachoSessions.filesDeleted} + ${delta.filesDeleted}`,
         commandsRun: sql`${schema.tachoSessions.commandsRun} + ${delta.commandsRun}`,
         networkCalls: sql`${schema.tachoSessions.networkCalls} + ${delta.networkCalls}`,
+        commits: sql`${schema.tachoSessions.commits} + ${delta.commits}`,
+        pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}`,
+        pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
       const common = {
         lastEventAt: now,
@@ -1852,9 +1885,8 @@ async function refreshSessionTitle(
       event.context?.project_dir !== undefined ||
       event.context?.worktree_path !== undefined,
   )?.context;
-  const branch = events.find(
-    (event) => event.context?.git_branch !== undefined,
-  )?.context?.git_branch;
+  const branch = events.find((event) => event.context?.git_branch !== undefined)
+    ?.context?.git_branch;
   if (place === undefined && branch === undefined) return;
 
   const [files, commands] = await Promise.all([
