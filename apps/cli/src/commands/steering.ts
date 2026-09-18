@@ -43,6 +43,7 @@ import {
   evaluateGate,
   hookStatus,
   installHook,
+  loadCommittedProjectGates,
   loadSteeringSettings,
   publishedCommits,
   readEmergencyOverride,
@@ -556,10 +557,25 @@ export async function resolveContext(
             ...(boundRemote === null ? {} : { remote: boundRemote }),
           },
   });
-  const policy = resolveSteeringPolicy(
-    layers,
-    readEmergencyOverride(process.env),
-  );
+  // The working copy of `.oxagen/settings.json` is whatever was last typed
+  // into it, so an uncommitted edit could switch off a gate the team had
+  // committed. The production branch's copy is folded in as well. The remote
+  // and branch come from the first resolution, which is why there are two:
+  // the committed layer carries only the two gates, so it cannot move either.
+  const emergency = readEmergencyOverride(process.env);
+  const located = resolveSteeringPolicy(layers, emergency);
+  const { execGit } = await import("@oxagen/steering-freshness");
+  const committed = await loadCommittedProjectGates({
+    cwd: projectRoot,
+    remote: located.remote,
+    branch: located.branch,
+    run: execGit,
+  });
+  if (committed.warning) warnings.push(committed.warning);
+  const policy =
+    committed.layer === null
+      ? located
+      : resolveSteeringPolicy([...layers, committed.layer], emergency);
   return {
     projectRoot,
     policy,

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { loadSteeringSettings } from "./settings";
+import { loadCommittedProjectGates, loadSteeringSettings } from "./settings";
+import { resolveSteeringPolicy } from "./policy";
+import type { GitRunner } from "./git";
 
 /** A fake `readFile` over a path → contents table. */
 function fakeRead(files: Record<string, string>) {
@@ -104,5 +106,149 @@ describe("loadSteeringSettings", () => {
     });
     expect(warnings).toHaveLength(3);
     expect(warnings[0]!.message).toContain("EACCES");
+  });
+});
+
+
+/** A fake git that answers `show <spec>` from a table and fails anything else. */
+function fakeShow(blobs: Record<string, string>): {
+  run: GitRunner;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const run: GitRunner = async (args) => {
+    calls.push(args.join(" "));
+    const spec = args[1] ?? "";
+    if (args[0] === "show" && spec in blobs) return blobs[spec]!;
+    throw new Error(`fatal: path does not exist: ${spec}`);
+  };
+  return { run, calls };
+}
+
+const MAIN_SPEC = "refs/remotes/origin/main:.oxagen/settings.json";
+
+describe("loadCommittedProjectGates", () => {
+  // The defect: production committed `blockStaleRuns: true`, the developer
+  // typed `false` into the working copy and committed nothing. The fold only
+  // ever saw the `false`.
+  it("keeps a gate production committed on when the working copy switches it off", async () => {
+    const { layers } = await loadSteeringSettings({
+      projectRoot: ROOT,
+      userSettingsPath: USER,
+      read: fakeRead({
+        [PROJECT]: JSON.stringify({ steering: { blockStaleRuns: false } }),
+      }),
+    });
+    expect(resolveSteeringPolicy(layers).blockStaleRuns).toBe(false);
+
+    const { run } = fakeShow({
+      [MAIN_SPEC]: JSON.stringify({ steering: { blockStaleRuns: true } }),
+    });
+    const committed = await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "origin",
+      branch: "main",
+      run,
+    });
+    const policy = resolveSteeringPolicy([...layers, committed.layer!]);
+    expect(policy.blockStaleRuns).toBe(true);
+    expect(policy.sources.blockStaleRuns).toBe("project");
+  });
+
+  it("lets the working copy switch a gate on before production has it", async () => {
+    const { run } = fakeShow({
+      [MAIN_SPEC]: JSON.stringify({ steering: { blockStaleRuns: false } }),
+    });
+    const committed = await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "origin",
+      branch: "main",
+      run,
+    });
+    const policy = resolveSteeringPolicy([
+      { scope: "project", policy: { blockStaleRuns: true } },
+      committed.layer!,
+    ]);
+    expect(policy.blockStaleRuns).toBe(true);
+  });
+
+  // The committed copy carries authority and nothing else. Its `remote` and
+  // `branch` would otherwise overwrite the ones that located it.
+  it("carries the two gates and drops every other key", async () => {
+    const { run } = fakeShow({
+      [MAIN_SPEC]: JSON.stringify({
+        steering: {
+          autoSync: true,
+          remote: "elsewhere",
+          branch: "other",
+          fetchIntervalSeconds: 1,
+          exclude: [".oxagen/rules"],
+        },
+      }),
+    });
+    const { layer } = await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "origin",
+      branch: "main",
+      run,
+    });
+    expect(layer).toEqual({ scope: "project", policy: { autoSync: true } });
+  });
+
+  it("reads the remote's own default when no scope named a branch", async () => {
+    const { run, calls } = fakeShow({});
+    await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "upstream",
+      branch: null,
+      run,
+    });
+    expect(calls).toEqual([
+      "show refs/remotes/upstream/HEAD:.oxagen/settings.json",
+    ]);
+  });
+
+  it("is no layer and no warning when production has no settings file", async () => {
+    const { run } = fakeShow({});
+    expect(
+      await loadCommittedProjectGates({
+        cwd: ROOT,
+        remote: "origin",
+        branch: "main",
+        run,
+      }),
+    ).toEqual({ layer: null, warning: null });
+  });
+
+  it("reports a committed file that does not parse, naming the ref", async () => {
+    const { run } = fakeShow({ [MAIN_SPEC]: "{ not json" });
+    const { layer, warning } = await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "origin",
+      branch: "main",
+      run,
+    });
+    expect(layer).toBeNull();
+    expect(warning?.path).toBe(MAIN_SPEC);
+    expect(warning?.message).toContain("not valid JSON");
+  });
+
+  // `remote` and `branch` can come from a personal settings file, and they
+  // are about to be placed in a git argument.
+  it("never hands git a ref name it would read as an option", async () => {
+    const { run, calls } = fakeShow({});
+    await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "--upload-pack=x",
+      branch: "main",
+      run,
+    });
+    await loadCommittedProjectGates({
+      cwd: ROOT,
+      remote: "origin",
+      branch: "-x",
+      run,
+    });
+    expect(calls).toEqual([]);
   });
 });

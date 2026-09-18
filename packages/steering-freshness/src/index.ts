@@ -45,11 +45,13 @@ export {
   type SteeringPolicyFile,
 } from "./policy";
 export {
+  loadCommittedProjectGates,
   loadSteeringSettings,
   LOCAL_SETTINGS_FILE,
   PROJECT_DIR_NAME,
   PROJECT_SETTINGS_FILE,
   USER_SETTINGS_RELATIVE,
+  type CommittedGatesOptions,
   type LoadedSettings,
   type SettingsReadWarning,
 } from "./settings";

@@ -296,6 +296,27 @@ describe("resolveContext", () => {
     expect(ctx.policy.blockStaleRuns).toBe(true);
   });
 
+  // The team committed `blockStaleRuns: true`. The developer typed `false`
+  // into the working copy and committed nothing. The production branch's
+  // copy still counts.
+  it("keeps a gate the production branch committed when the working copy switches it off", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    await writeFile(
+      join(tmp, ".oxagen", "settings.json"),
+      JSON.stringify({ steering: { blockStaleRuns: false } }),
+    );
+    execGit.mockImplementation(async (args: readonly string[]) =>
+      args[0] === "show" &&
+      args[1] === "refs/remotes/origin/HEAD:.oxagen/settings.json"
+        ? JSON.stringify({ steering: { blockStaleRuns: true } })
+        : "",
+    );
+    const ctx = await resolveContext(tmp);
+    expect(ctx.policy.blockStaleRuns).toBe(true);
+    expect(ctx.policy.sources.blockStaleRuns).toBe("project");
+  });
+
   // Two Context PRs merged inside one second, so the platform names both
   // commits without ordering them. HEAD holds the first and lacks the second.
   it("reads the checkout as behind the platform when HEAD lacks one of the tied commits", async () => {

@@ -18,6 +18,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { execGit, gitOrNull, isSafeRefName, type GitRunner } from "./git";
 import {
   steeringPolicyFileSchema,
   type PolicyLayer,
@@ -74,6 +75,15 @@ async function readLayer(
     };
   }
 
+  return parseLayer(scope, path, text);
+}
+
+/** Parse one settings file's text into its `steering` layer. */
+function parseLayer(
+  scope: PolicyScope,
+  path: string,
+  text: string,
+): { layer: PolicyLayer | null; warning: SettingsReadWarning | null } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -142,4 +152,75 @@ export async function loadSteeringSettings({
     layers.push({ scope: "workspace", policy: workspacePolicy });
   }
   return { layers, warnings };
+}
+
+export interface CommittedGatesOptions {
+  /** The repository root. */
+  cwd: string;
+  /** The resolved policy's remote and branch: the production branch. */
+  remote: string;
+  /** Null when no scope named one; the remote's own default is read then. */
+  branch: string | null;
+  run?: GitRunner;
+  timeoutMs?: number;
+}
+
+/**
+ * The two gates as the production branch's `.oxagen/settings.json` sets them.
+ *
+ * `loadSteeringSettings` reads the project file from the working copy, and a
+ * working copy is whatever the developer last typed. A team that committed
+ * `blockStaleRuns: true` had it switched off by an edit nobody committed: the
+ * OR fold never saw the committed `true`, because nothing read it. The rule
+ * that a lower scope may switch a gate on and never off did not hold against
+ * the file's own earlier, reviewed value.
+ *
+ * So the reviewed value is read as well, from the remote-tracking ref of the
+ * production branch, and folded in as one more `project` layer. HEAD would
+ * not do: a local commit on a feature branch is as unreviewed as an edit. The
+ * working copy still counts, so a branch can switch a gate on before it
+ * merges. It can no longer switch one off.
+ *
+ * Only the two booleans are carried. `remote`, `branch` and
+ * `fetchIntervalSeconds` hold no authority and stay with the working copy,
+ * and a project `exclude` is refused from either tree.
+ *
+ * The ref is read as it was last fetched. That costs no network on the prompt
+ * path, and a stale ref still holds reviewed history. With no such ref, or no
+ * file in it, there is no layer and no warning: a repository that never
+ * committed a policy has none to enforce.
+ */
+export async function loadCommittedProjectGates({
+  cwd,
+  remote,
+  branch,
+  run = execGit,
+  timeoutMs = 5_000,
+}: CommittedGatesOptions): Promise<{
+  layer: PolicyLayer | null;
+  warning: SettingsReadWarning | null;
+}> {
+  if (!isSafeRefName(remote) || (branch !== null && !isSafeRefName(branch))) {
+    return { layer: null, warning: null };
+  }
+  const ref = `refs/remotes/${remote}/${branch ?? "HEAD"}`;
+  const spec = `${ref}:${PROJECT_DIR_NAME}/${PROJECT_SETTINGS_FILE}`;
+  const text = await gitOrNull({ cwd, run, timeoutMs }, "show", spec);
+  // An empty blob holds no policy. The working-copy read reports the file if
+  // it is empty there too, so it is not reported twice.
+  if (text === null || text === "") return { layer: null, warning: null };
+
+  const { layer, warning } = parseLayer("project", spec, text);
+  if (layer === null) return { layer: null, warning };
+  const { autoSync, blockStaleRuns } = layer.policy;
+  return {
+    layer: {
+      scope: "project",
+      policy: {
+        ...(autoSync === undefined ? {} : { autoSync }),
+        ...(blockStaleRuns === undefined ? {} : { blockStaleRuns }),
+      },
+    },
+    warning: null,
+  };
 }

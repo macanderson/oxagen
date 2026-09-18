@@ -80,6 +80,11 @@ switch a gate ON and may never switch one OFF. The point of
 that are in force, and a personal file that could set it back to `false`
 would make the setting decorative.
 
+The project file is read from the working copy and from the production
+branch as last fetched (`loadCommittedProjectGates`). An uncommitted edit to
+`.oxagen/settings.json` therefore cannot switch off a gate the team
+committed.
+
 `OXAGEN_STEERING_FRESHNESS=off` suspends both for one shell. A gate with no
 way out is a gate that gets uninstalled the first time a remote is
 unreachable at 3am.

@@ -181,6 +181,11 @@ switch one off. Otherwise `.oxagen/settings.local.json`, which a developer
 owns and which is not committed, could switch off the gate the organisation
 set. `OXAGEN_STEERING_FRESHNESS=off` suspends both for one shell.
 
+`.oxagen/settings.json` is read twice: from the working copy, and from the
+production branch as it was last fetched. The working copy is whatever was
+last typed into it, so on its own an uncommitted edit could switch off a gate
+the team committed. A branch can still switch a gate on before it merges.
+
 ### What a sync refuses
 
 `oxagen steering sync` takes `.oxagen/` from the production branch and leaves
