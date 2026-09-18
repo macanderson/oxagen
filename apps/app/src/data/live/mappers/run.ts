@@ -9,7 +9,7 @@ import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.ge
 import type { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { z } from "zod";
-import { moneyFromMicros } from "@/data/contracts/money";
+import { Cost, moneyFromMicros } from "@/data/contracts/money";
 import type {
   RunCost,
   RunDetail,
@@ -24,10 +24,11 @@ type RunCostOutput = ContractOutput<typeof runCostGet>;
 type RunTranscriptOutput = ContractOutput<typeof runTranscriptGet>;
 type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 
-type ContractCost = { micros: string; currency: string; basis: string | null };
+/** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
+type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
 
 /** A metered figure keeps the basis that says who observed it (INV-09, INV-10). */
-function toCost(cost: ContractCost | null) {
+function toCost(cost: ContractCost | null): z.input<typeof Cost> | null {
   return cost === null
     ? null
     : { ...moneyFromMicros(cost.micros, cost.currency), basis: cost.basis };
