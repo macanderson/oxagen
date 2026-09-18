@@ -663,7 +663,8 @@ export interface IncompleteCostRun {
 
 /**
  * Rolled-up runs whose cost is incomplete: `cost_basis` null (no frame
- * priced at all) or `estimated` (some class had no price). Oldest first.
+ * priced at all), `estimated` (some class had no price), or a total that
+ * left a wholly unpriced frame out. Oldest first.
  *
  * These are the runs a newly written price can still change. The nightly
  * sweep does not reach them: it lists runs whose totals are missing or older
@@ -672,6 +673,16 @@ export interface IncompleteCostRun {
  * sync, and a sync that ran with a catalog down leaves that catalog's models
  * unpriced until it recovers, so without this their cost stayed blank for
  * ever.
+ *
+ * The third case is why the basis alone is not enough. `rollupRun` skips a
+ * frame the book prices nothing of and whose record reports no figure: it
+ * adds no cost and no basis, so a run with one priced frame beside it keeps
+ * the priced frame's basis, `gateway_observed` or `client_attested`, over a
+ * total that is missing the other call. Reading the basis alone would leave
+ * that run out of every later recovery and understate its run and daily
+ * cost for ever. The skipped frame's model group is the durable record of
+ * it: {@link rollupRun} writes `costMicros: null` on any model group no
+ * frame of which was priced, and jsonb containment finds those rows.
  *
  * `after` is the last row of the previous page. A run whose model no source
  * prices stays incomplete after its rebuild, so a caller that re-read the
@@ -687,6 +698,7 @@ export async function listRunsWithIncompleteCost(args: {
   const incomplete = or(
     isNull(totals.costBasis),
     eq(totals.costBasis, "estimated"),
+    sql`${totals.breakdown} -> 'models' @> '[{"costMicros": null}]'::jsonb`,
   );
   return withSystemDb(async (tx) => {
     const rows = await tx

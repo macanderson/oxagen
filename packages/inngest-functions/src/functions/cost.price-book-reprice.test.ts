@@ -88,8 +88,11 @@ describe("cost.price-book-reprice", () => {
     expect(sendEvent).not.toHaveBeenCalled();
     expect(out).toEqual({
       pending: 2,
+      retried: 0,
       repriced: 2,
       failed: 0,
+      dropped: 0,
+      carried: 0,
       workspaceDays: 1,
       more: false,
     });
@@ -101,7 +104,7 @@ describe("cost.price-book-reprice", () => {
     const out = await handler!({ event: { data: {} }, step });
     expect(sendEvent).toHaveBeenCalledWith("next-page", {
       name: "cost/price-book.backdated",
-      data: { after: page[PAGE - 1] },
+      data: { after: page[PAGE - 1], retry: [] },
     });
     expect(out).toMatchObject({ pending: PAGE, more: true });
   });
@@ -138,14 +141,114 @@ describe("cost.price-book-reprice", () => {
     expect(mocks.rebuildRunTotals).toHaveBeenCalledTimes(backlog.length);
   });
 
-  it("skips a run whose rebuild fails after its retries, and goes on", async () => {
+  it("goes on past a run whose rebuild fails, and carries it to the next invocation", async () => {
     mocks.listRunsWithIncompleteCost.mockResolvedValue([row(1), row(2)]);
     mocks.rebuildRunTotals
       .mockRejectedValueOnce(new Error("clickhouse degraded"))
       .mockResolvedValueOnce(RECORD);
     const out = await handler!({ event: { data: {} }, step });
     expect(mocks.warn).toHaveBeenCalledTimes(1);
-    expect(out).toMatchObject({ repriced: 1, failed: 1 });
+    expect(out).toMatchObject({ repriced: 1, failed: 1, carried: 1 });
+    // The page was short, so the cursor stays put: the next invocation exists
+    // only to rebuild the run this one could not.
+    expect(sendEvent).toHaveBeenCalledWith("next-page", {
+      name: "cost/price-book.backdated",
+      data: {
+        after: { runId: "tse_0002", startedAt: row(2).startedAt },
+        retry: [{ runId: "tse_0001", attempt: 1 }],
+      },
+    });
+  });
+
+  it("rebuilds the carried runs before the page, and drops the page's limit by as many", async () => {
+    mocks.listRunsWithIncompleteCost.mockResolvedValue([row(9)]);
+    await handler!({
+      event: { data: { retry: [{ runId: "tse_carried", attempt: 1 }] } },
+      step,
+    });
+    expect(mocks.listRunsWithIncompleteCost).toHaveBeenCalledWith({
+      limit: PAGE - 1,
+      after: undefined,
+    });
+    expect(mocks.rebuildRunTotals.mock.calls.map((c) => c[0])).toEqual([
+      "tse_carried",
+      "tse_0009",
+    ]);
+  });
+
+  it("drops a run that has failed every attempt, and stops the chain with it", async () => {
+    mocks.listRunsWithIncompleteCost.mockResolvedValue([]);
+    mocks.rebuildRunTotals.mockRejectedValue(new Error("clickhouse degraded"));
+    const out = await handler!({
+      event: { data: { retry: [{ runId: "tse_broken", attempt: 2 }] } },
+      step,
+    });
+    expect(out).toMatchObject({
+      repriced: 0,
+      failed: 1,
+      dropped: 1,
+      carried: 0,
+    });
+    expect(mocks.warn).toHaveBeenCalledTimes(1);
+    expect(sendEvent).not.toHaveBeenCalled();
+  });
+
+  it("retries a failing run until the attempt bound, then gives up", async () => {
+    mocks.listRunsWithIncompleteCost.mockResolvedValue([row(1)]);
+    mocks.rebuildRunTotals.mockRejectedValue(new Error("clickhouse degraded"));
+    const attempts: number[] = [];
+    let data: unknown = {};
+    for (let i = 0; i < 6 && data !== null; i += 1) {
+      sendEvent.mockClear();
+      // Only the first invocation reads the list; the rest carry the run.
+      mocks.listRunsWithIncompleteCost.mockResolvedValue(
+        i === 0 ? [row(1)] : [],
+      );
+      await handler!({ event: { data }, step });
+      const next = sendEvent.mock.calls[0] as unknown as
+        | [string, { data: { retry: { attempt: number }[] } }]
+        | undefined;
+      if (!next) {
+        data = null;
+        continue;
+      }
+      attempts.push(...next[1].data.retry.map((r) => r.attempt));
+      data = next[1].data;
+    }
+    expect(attempts).toEqual([1, 2]);
+    // Three rebuild calls in all: the page plus two carried retries. The
+    // third failure drops the run instead of carrying it again.
+    expect(mocks.rebuildRunTotals).toHaveBeenCalledTimes(3);
+  });
+
+  it("carries the retry list on to the next page when the page is full", async () => {
+    const page = Array.from({ length: PAGE - 1 }, (_, i) => row(i));
+    mocks.listRunsWithIncompleteCost.mockResolvedValue(page);
+    mocks.rebuildRunTotals.mockRejectedValueOnce(new Error("degraded"));
+    await handler!({
+      event: { data: { retry: [{ runId: "tse_carried", attempt: 1 }] } },
+      step,
+    });
+    expect(sendEvent).toHaveBeenCalledWith("next-page", {
+      name: "cost/price-book.backdated",
+      data: {
+        after: page[PAGE - 2],
+        retry: [{ runId: "tse_carried", attempt: 2 }],
+      },
+    });
+  });
+
+  it("refuses a malformed retry list without a retry", async () => {
+    await expect(
+      handler!({
+        event: { data: { retry: [{ runId: "tse_1", attempt: 0 }] } },
+        step,
+      }),
+    ).rejects.toThrow(/malformed retry list/);
+    await expect(
+      handler!({ event: { data: { retry: "nope" } }, step }),
+    ).rejects.toThrow(/malformed retry list/);
+    expect(mocks.listRunsWithIncompleteCost).not.toHaveBeenCalled();
   });
 
   it("lets a failing rebuild throw inside its step, so Inngest retries it", async () => {

@@ -13,13 +13,37 @@ import { logger } from "../logger";
 export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated";
 
 /**
- * Runs re-rolled per invocation. Each run is one step and each workspace-day
- * it touched is one more, so a page costs at most twice this plus two, under
- * Inngest's 1,000 steps per function run.
+ * Runs re-rolled per invocation, carried-forward retries included. Each run
+ * is one step and each workspace-day it touched is one more, so a page costs
+ * at most twice this plus two, under Inngest's 1,000 steps per function run.
+ * The retries count against the page for exactly that reason: however many
+ * runs a bad invocation carries, the next one still rebuilds at most this
+ * many.
  */
 const REPRICE_PAGE = 250;
 
+/**
+ * How many invocations may retry one run before it is dropped. Each attempt
+ * is itself retried `retries` times inside its own step, so a frame store
+ * that is merely slow recovers long before this. The bound is what stops one
+ * permanently broken run from carrying itself forward for ever.
+ */
+const MAX_ATTEMPTS = 3;
+
 type WorkspaceDay = { orgId: string; workspaceId: string; day: string };
+
+/** A run whose rebuild failed, carried to the next invocation to be tried again. */
+interface RetryRun {
+  runId: string;
+  /** How many invocations have already failed on it; 1 after the first failure. */
+  attempt: number;
+}
+
+function malformed(what: string): NonRetriableError {
+  return new NonRetriableError(
+    `${PRICE_BOOK_BACKDATED_EVENT} carries a malformed ${what}`,
+  );
+}
 
 function readCursor(data: unknown): IncompleteCostRun | undefined {
   const after = (data as { after?: unknown } | null)?.after;
@@ -31,15 +55,40 @@ function readCursor(data: unknown): IncompleteCostRun | undefined {
     typeof startedAt !== "string" ||
     Number.isNaN(Date.parse(startedAt))
   )
-    throw new NonRetriableError(
-      `${PRICE_BOOK_BACKDATED_EVENT} carries a malformed cursor`,
-    );
+    throw malformed("cursor");
   return { runId, startedAt };
 }
 
 /**
- * `cost/price-book.backdated` → re-roll every run whose cost is blank or
- * `estimated`, one page per invocation, until the list is empty.
+ * The runs a previous invocation failed on. The attempt counter is read but
+ * not bounded here: a deploy that lowers {@link MAX_ATTEMPTS} would otherwise
+ * make every in-flight event malformed, and the drop below applies the
+ * current bound anyway.
+ */
+function readRetries(data: unknown): RetryRun[] {
+  const raw = (data as { retry?: unknown } | null)?.retry;
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > REPRICE_PAGE)
+    throw malformed("retry list");
+  const entries: unknown[] = raw;
+  return entries.map((entry) => {
+    const { runId, attempt } = (entry ?? {}) as Partial<RetryRun>;
+    if (
+      typeof runId !== "string" ||
+      runId.length === 0 ||
+      typeof attempt !== "number" ||
+      !Number.isInteger(attempt) ||
+      attempt < 1
+    )
+      throw malformed("retry list");
+    return { runId, attempt };
+  });
+}
+
+/**
+ * `cost/price-book.backdated` → re-roll every run whose cost is blank,
+ * `estimated`, or missing an unpriced frame, one page per invocation, until
+ * the list is empty.
  *
  * The sync used to re-roll the first 500 such runs inline and stop. The next
  * hourly sync of an unchanged book writes nothing and is not backdated, so it
@@ -53,8 +102,14 @@ function readCursor(data: unknown): IncompleteCostRun | undefined {
  * of the list again would return the same page.
  *
  * A rebuild that throws is retried as a step, with Inngest's backoff, up to
- * `retries` times. A run that still fails is logged and skipped so that one
- * run cannot stop the chain; the next backdated sync reads it again.
+ * `retries` times. A run that still fails is carried in the next event's
+ * `retry` list and rebuilt first on the next invocation, because the chain
+ * moves its cursor past it and nothing else would come back for it: the
+ * trigger fires only when a cold sync writes a row, so an unchanged hourly
+ * sync starts no new pass and a moment of frame-store trouble would leave
+ * the run unpriced for ever. A run that fails {@link MAX_ATTEMPTS}
+ * invocations running is dropped with a warning, so one broken run cannot
+ * keep the chain alive by itself.
  *
  * The concurrency limit is 1: two chains can start an hour apart when two
  * syncs in a row backdate rows. Both rebuilds replace what they find, so an
@@ -69,14 +124,27 @@ export const [costPriceBookReprice] = createFunction(
   { event: PRICE_BOOK_BACKDATED_EVENT },
   async ({ event, step }) => {
     const after = readCursor(event.data);
-    const page = await step.run("list-incomplete-runs", () =>
-      listRunsWithIncompleteCost({ limit: REPRICE_PAGE, after }),
-    );
+    const retries = readRetries(event.data);
+    const limit = Math.max(0, REPRICE_PAGE - retries.length);
+    const page =
+      limit === 0
+        ? []
+        : await step.run("list-incomplete-runs", () =>
+            listRunsWithIncompleteCost({ limit, after }),
+          );
+
+    // The carried runs go first: a run that has already waited a whole
+    // invocation is rebuilt before the page that displaced it.
+    const work: RetryRun[] = [
+      ...retries,
+      ...page.map(({ runId }) => ({ runId, attempt: 0 })),
+    ];
 
     let repriced = 0;
-    let failed = 0;
+    let dropped = 0;
+    const carried: RetryRun[] = [];
     const days = new Map<string, WorkspaceDay>();
-    for (const { runId } of page) {
+    for (const { runId, attempt } of work) {
       let day: WorkspaceDay | null;
       try {
         day = await step.run(
@@ -92,11 +160,20 @@ export const [costPriceBookReprice] = createFunction(
           },
         );
       } catch (err) {
-        failed += 1;
-        logger.warn(
-          { runId, err },
-          "cost.price-book-reprice: run rollup failed after its retries",
-        );
+        const next = attempt + 1;
+        if (next >= MAX_ATTEMPTS) {
+          dropped += 1;
+          logger.warn(
+            { runId, attempts: next, err },
+            "cost.price-book-reprice: run rollup failed on every attempt, dropping it",
+          );
+        } else {
+          carried.push({ runId, attempt: next });
+          logger.warn(
+            { runId, attempt: next, err },
+            "cost.price-book-reprice: run rollup failed after its retries, carrying it to the next invocation",
+          );
+        }
         continue;
       }
       if (day) {
@@ -111,29 +188,32 @@ export const [costPriceBookReprice] = createFunction(
     }
 
     const last = page.at(-1);
-    const more = page.length === REPRICE_PAGE && last !== undefined;
-    if (more)
+    // A page the retries crowded out entirely leaves the list unread, so the
+    // chain has to go on whatever the page says.
+    const more = limit === 0 || (page.length === limit && last !== undefined);
+    const failed = carried.length + dropped;
+    if (more || carried.length > 0)
       await step.sendEvent("next-page", {
         name: PRICE_BOOK_BACKDATED_EVENT,
-        data: { after: last },
+        // An unfull page is the end of the list, so the cursor stays where it
+        // is and the next invocation exists only to retry what it carries.
+        data: { after: last ?? after, retry: carried },
       });
 
-    logger.info(
-      {
-        pending: page.length,
-        repriced,
-        failed,
-        workspaceDays: days.size,
-        more,
-      },
-      "cost.price-book-reprice: re-rolled a page of runs the backdated prices can price",
-    );
-    return {
+    const result = {
       pending: page.length,
+      retried: retries.length,
       repriced,
       failed,
+      dropped,
+      carried: carried.length,
       workspaceDays: days.size,
       more,
     };
+    logger.info(
+      result,
+      "cost.price-book-reprice: re-rolled a page of runs the backdated prices can price",
+    );
+    return result;
   },
 );
