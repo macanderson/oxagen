@@ -3,10 +3,6 @@
 // and the shape the rows come back in (docs/specs/tacho/data-model.md §2.7).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The group key the predicate uses; a null turn falls into its minute. */
-const TURN_GROUP =
-  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
-
 interface QueryCall {
   query: string;
   query_params: Record<string, unknown>;
@@ -98,23 +94,12 @@ describe("readModelCallFrames", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       rootSessionUuid: RUN,
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
-    // One token-bearing source per session, or a call the harness reports
-    // through the OTel log and a collector or hook event is priced twice.
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
-    // A row the harness reported with no turn falls into the minute it
-    // happened in, not into one bucket for the whole session: an OTel stream
-    // that stops mid-session must not take the collector's later calls with
-    // it, and a call one source numbered while another did not must not be
-    // counted twice under two group keys.
-    expect(query).not.toContain("ifNull(toInt64(turn_seq), -1)");
-    expect(query).toContain("toStartOfMinute(ts)");
+    // A call seen twice (OTel and transcript) is priced once: the host
+    // stamps the later sighting and the rollup skips stamped rows.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
 
     expect(frames).toEqual([
       {
@@ -316,22 +301,13 @@ describe("readObservedModels", () => {
     expect(query).toContain("UNION ALL");
     expect(query).toContain("kind = 'llm_call'");
     expect(query).toContain("source IN {sources:Array(String)}");
-    // One token-bearing source per session: a session that reports a call
-    // through the OTel log AND a collector or hook event holds two rows for
-    // it under different `seq`s, which FINAL does not collapse, so a plain
-    // count over the admitted sources would bill the call twice and rank the
-    // model above ones that need pricing more.
-    expect(query).toContain(
-      `(session_uuid, ${TURN_GROUP}, source) IN (`,
-    );
-    expect(query).toContain(
-      "argMin(source, indexOf({sources:Array(String)}, source))",
-    );
-    // Per turn, not per session: a stream that drops mid-session must not
-    // discard the calls a lower source alone recorded afterwards.
-    expect(query).toContain(
-      `GROUP BY session_uuid, ${TURN_GROUP}`,
-    );
+    // Each call is priced once: a session that reports a call through the
+    // OTel log AND a collector or hook event holds two rows for it under
+    // different `seq`s, which FINAL does not collapse, so a plain count over
+    // the admitted sources would bill the call twice and rank the model
+    // above ones that need pricing more. The host stamps the later sighting
+    // and this read skips stamped rows, the same rule the per-run read uses.
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
     expect(query).toContain("GROUP BY model");
     expect(query).toContain("ORDER BY tokens DESC, model");
     expect(query).toContain("LIMIT {limit:UInt32}");
@@ -343,7 +319,8 @@ describe("readObservedModels", () => {
     expect(query_params).toEqual({
       orgId: ORG,
       since: "2026-08-15 00:00:00.000",
-      sources: ["otel_log", "collector", "hook"],
+      sources: ["otel_log", "collector", "hook", "transcript"],
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
       limit: 500,
     });
 
@@ -383,12 +360,11 @@ describe("readObservedModels", () => {
     await readObservedModels({ orgId: ORG, since: SINCE, until: UNTIL });
     const bounded = lastQuery();
     expect(bounded.query).toContain("created_at <= {until:DateTime64(3)}");
+    // Once, in the tacho branch: `ts` is that store's timestamp column and
+    // the gateway branch is bounded on `created_at` instead.
     expect(
       bounded.query.match(/ts <= \{until:DateTime64\(3\)\}/g),
-    ).toHaveLength(
-      // The tacho branch, and the per-session source pick under the same filter.
-      2,
-    );
+    ).toHaveLength(1);
     expect(bounded.query_params).toMatchObject({
       until: "2026-09-10 00:00:00.000",
     });
@@ -404,10 +380,9 @@ describe("readObservedModels", () => {
     answer([]);
     await readObservedModels({ orgId: ORG, workspaceId: WS, since: SINCE });
     const { query, query_params } = lastQuery();
-    // Once per store, plus once in the tacho branch's per-session source
-    // pick: a fence on only one of them would leak the other, and a pick made
-    // over every workspace could name a source the fenced rows never used.
-    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(3);
+    // Once per store: a fence on only one of them would leak the other's
+    // rows into a workspace-scoped list.
+    expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
     expect(query_params).toMatchObject({ workspaceId: WS });
   });
 

@@ -13,18 +13,12 @@
  * (hook, collector, OTel log, transcript); the token-bearing sources are
  * `otel_log`, `collector` and `hook`, the same rule the ingest handler folds
  * session totals by, and FINAL collapses a redelivered (session, seq). FINAL
- * does NOT collapse two sources' records of one call: each source carries its
- * own `seq`, so a session that reports a call through the OTel log AND a
- * collector or hook event holds two token-bearing rows for it, and a plain
- * `count()`/`sum()` over the admitted sources bills the call twice. No column
- * correlates one call across sources, so authority is decided per TURN: for
- * each (session, turn) the first of `otel_log`, `collector`, `hook` that
- * recorded any model call under it (`TACHO_TOKEN_SOURCES` is in that order)
- * is the one that counts, and every reader below admits only that source's
- * rows for that turn ({@link ONE_TOKEN_SOURCE_PER_TURN}). Per turn rather
- * than per session so a stream that drops mid-session — the OTel log stops
- * after one call while collector events go on recording — does not discard
- * every later call the lower source alone saw. Those
+ * does NOT collapse two sources' records of one call, so the host stamps the
+ * later sighting of a call it already sealed from another source with
+ * `oxagen.llm_call_duplicate_of`, and every reader below drops a stamped row
+ * ({@link NOT_A_DUPLICATE}). That is the same rule `countsLlmCallUsage` in
+ * @oxagen/tacho folds session totals by, so the rollup and the fold cannot
+ * price a call a different number of times. Those
  * sources carry cache writes as one `cache_creation_tokens` figure (the
  * 5m/1h split and thinking tokens are transcript columns, docs/specs/tacho/
  * data-model.md §2.7), so a wrapped run's cache writes are priced as 5m
@@ -33,6 +27,10 @@
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
  */
+import {
+  LLM_CALL_DUPLICATE_OF_ATTR,
+  LLM_CALL_TOKEN_SOURCES,
+} from "@oxagen/tacho";
 import { breakerEnvConfig } from "./breaker-config";
 import { getBreaker } from "./circuit-breaker";
 import { clickhouse } from "./clickhouse";
@@ -67,54 +65,21 @@ export type FrameRunRef =
 
 const breaker = () => getBreaker("clickhouse", breakerEnvConfig());
 
-/** In order of authority: the first source a turn reports under is the one that counts. */
-const TACHO_TOKEN_SOURCES = ["otel_log", "collector", "hook"];
+/**
+ * The rollup prices each model call once, by the rule the ingest fold uses
+ * (`countsLlmCallUsage` in @oxagen/tacho): a token-bearing source, transcript
+ * included, and no duplicate stamp. The host stamps a later sighting of a call
+ * it already sealed from another source, and a transcript continuation block,
+ * with `oxagen.llm_call_duplicate_of`.
+ */
+const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
 
 /**
- * The group a row's authority is decided within: its turn, or, for a row the
- * harness reported without one, the minute it happened in.
- *
- * `turn_seq` is never negative, so a null turn's key is the negated unix
- * minute, which cannot collide with a real turn number or with another
- * minute. NULL never equals NULL in an `IN`, so the key has to carry a value
- * on both sides whatever it is.
- *
- * Grouping every null-turn row of a session together (which `-1` did) was
- * wrong in both directions. A session whose OTel stream stopped while the
- * collector went on recording had one winner for the whole session, so every
- * later collector-only call was dropped and the run was billed short. And a
- * call one source reported under a turn number while another reported it
- * without one fell into two groups, so it was counted twice.
- *
- * A minute is the bucket because a turn is seconds to minutes of wall time:
- * two sources recording the same call land in it together and one wins, and
- * a source that takes over later wins the minutes it alone covers. The
- * remaining edge is a single call whose copies straddle a minute boundary,
- * which is counted twice; that is bounded to one call, where the old rule
- * could drop the rest of a session. Correlating the copies of a null-turn
- * call exactly needs an id the harness does not yet emit (#3281).
+ * The predicate that keeps one row per model call: the host has already
+ * decided which sighting is the duplicate, so a reader only has to drop the
+ * stamped one. Spelled once so the two reads below cannot filter differently.
  */
-const TURN_GROUP =
-  "if(turn_seq IS NULL, -toInt64(toUnixTimestamp(toStartOfMinute(ts))), toInt64(turn_seq))";
-
-/**
- * The predicate that admits one token-bearing source per (session, turn).
- * The inner query finds, per group, the highest-authority source that
- * recorded any model call under the same filter as the outer read
- * (`{where}`), and the outer read keeps only rows in that source. `indexOf`
- * over the sources array is the authority rank, so the order of
- * `TACHO_TOKEN_SOURCES` is the rule, not a second copy of it.
- */
-function ONE_TOKEN_SOURCE_PER_TURN(where: string): string {
-  return `(session_uuid, ${TURN_GROUP}, source) IN (
-          SELECT session_uuid,
-                 ${TURN_GROUP},
-                 argMin(source, indexOf({sources:Array(String)}, source))
-          FROM tacho_events FINAL
-          WHERE ${where}
-          GROUP BY session_uuid, ${TURN_GROUP}
-        )`;
-}
+const NOT_A_DUPLICATE = "attrs[{duplicateAttr:String}] = ''";
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -174,11 +139,6 @@ export async function readModelCallFrames(args: {
     }));
   }
 
-  const tachoWhere = `org_id = {orgId:UUID}
-        AND root_session_uuid = {rootSessionUuid:UUID}
-        AND kind = 'llm_call'
-        AND source IN {sources:Array(String)}
-        AND model != ''`;
   const result = await breaker().exec(() =>
     ch.query({
       query: `
@@ -192,14 +152,19 @@ export async function readModelCallFrames(args: {
         coalesce(output_tokens, 0)         AS output,
         cost_usd_micros                    AS cost_micros
       FROM tacho_events FINAL
-      WHERE ${tachoWhere}
-        AND ${ONE_TOKEN_SOURCE_PER_TURN(tachoWhere)}
+      WHERE org_id = {orgId:UUID}
+        AND root_session_uuid = {rootSessionUuid:UUID}
+        AND kind = 'llm_call'
+        AND source IN {sources:Array(String)}
+        AND ${NOT_A_DUPLICATE}
+        AND model != ''
       ORDER BY ts, seq
     `,
       query_params: {
         orgId: args.orgId,
         rootSessionUuid: run.rootSessionUuid,
         sources: TACHO_TOKEN_SOURCES,
+        duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
       },
       format: "JSONEachRow",
     }),
@@ -430,6 +395,7 @@ export async function readObservedModels(args: {
           ${until.replace("{col}", "ts")}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
+          AND ${NOT_A_DUPLICATE}
           AND model != ''
           ${workspace}`;
   const result = await breaker().exec(() =>
@@ -475,7 +441,6 @@ export async function readObservedModels(args: {
           max(toDateTime64(ts, 3, 'UTC'))     AS last_seen
         FROM tacho_events FINAL
         WHERE ${tachoWhere}
-          AND ${ONE_TOKEN_SOURCE_PER_TURN(tachoWhere)}
         GROUP BY toString(model), toString(provider)
       )
       GROUP BY model
@@ -490,6 +455,7 @@ export async function readObservedModels(args: {
         since: chDateTime(args.since),
         ...(args.until === undefined ? {} : { until: chDateTime(args.until) }),
         sources: TACHO_TOKEN_SOURCES,
+        duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
         limit: OBSERVED_MODEL_LIMIT,
       },
       format: "JSONEachRow",
