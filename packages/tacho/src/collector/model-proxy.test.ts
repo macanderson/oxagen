@@ -14,7 +14,7 @@ import {
 } from "node:http";
 import { connect } from "node:net";
 import { join } from "node:path";
-import { zstdCompressSync } from "node:zlib";
+import { gzipSync, zstdCompressSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
@@ -33,6 +33,7 @@ import {
   type PolicyBundle,
   policyBundleSchema,
   TACHO_BUNDLE_FEATURES,
+  TACHO_MAX_BODY_BYTES,
 } from "../wire";
 import { type DaemonHandle, startDaemon } from "./daemon";
 import {
@@ -51,6 +52,18 @@ const FAKE_KEY = "sk-ant-api03-FAKE-CREDENTIAL-do-not-store-9f3b";
 const FAKE_BEARER = "eyJFAKE.chatgpt.subscription.token";
 const PROMPT = "PROMPT-BODY-the-launch-codes-are-0000";
 const COMPLETION = "COMPLETION-BODY-here-is-the-answer";
+/** A credential inside the conversation, not the one the call is signed with. */
+const LEAKED_KEY = "sk-ant-api03-PASTED-INTO-THE-PROMPT-abcdefghij";
+
+/**
+ * A workspace that keeps model bodies. The default bundle is `digest_only`,
+ * which is why the frames in most of these tests carry digests and no bytes:
+ * retention is the workspace's decision and the daemon applies it before the
+ * WAL, so a test that wants bodies has to ask for them.
+ */
+const RETAIN_MODEL_CALLS = {
+  retention: { mode: "content_exact", classes: ["model_call"] },
+} as const satisfies Partial<Omit<PolicyBundle, "signature">>;
 
 const sha = (bytes: Buffer | string) =>
   `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -583,6 +596,140 @@ describe("the loopback model proxy", () => {
     );
     const ttft = frame!.body as { ttft_ms: number; api_duration_ms: number };
     expect(ttft.api_duration_ms).toBeGreaterThanOrEqual(ttft.ttft_ms + 200);
+  });
+
+  it("records the decoded request and the buffered stream as one frame body", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-body");
+    const sent = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    // Sent gzipped, the way a harness sends it. The frame must carry what the
+    // vendor reads, not the compressed bytes nobody can replay.
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: [
+        "X-Api-Key",
+        FAKE_KEY,
+        "X-Claude-Code-Session-Id",
+        "sess-body",
+        "Content-Encoding",
+        "gzip",
+      ],
+      body: gzipSync(Buffer.from(sent)),
+    });
+    await until(() => frames(uuid).length === 1);
+
+    const [frame] = frames(uuid);
+    const [body] = handle.wal.bodiesFor([frame!]);
+    expect(body).toBeDefined();
+    expect(body!.content_type).toBe("application/json");
+    const bytes = Buffer.from(body!.bytes_base64, "base64");
+    // The chained digest names the bytes that shipped, so a reader holding the
+    // body can verify it against the chain.
+    expect(frame!.content?.digest).toBe(sha(bytes));
+
+    const exchange = JSON.parse(bytes.toString("utf8")) as {
+      request: string;
+      response: string;
+    };
+    expect(JSON.parse(exchange.request)).toMatchObject({
+      model: "claude-sonnet-5",
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    // Four SSE writes, one body. A proxy that dropped the stream would have
+    // the usage and none of the answer.
+    expect(exchange.response).toBe(ANTHROPIC_EVENTS.join(""));
+    expect(exchange.response).toContain(COMPLETION);
+
+    // The metering columns and the wire digests are what they always were.
+    expect(frame!.body).toMatchObject({
+      input_tokens: 1000,
+      output_tokens: 500,
+      cost_usd_micros: ANTHROPIC_COST,
+    });
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(
+      sha(ANTHROPIC_EVENTS.join("")),
+    );
+  });
+
+  it("holds no response body past the cap, and the frame says why", async () => {
+    const oversized = "y".repeat(TACHO_MAX_BODY_BYTES + 4096);
+    const reply = `{"id":"msg_big","model":"claude-sonnet-5","content":[{"type":"text","text":"${oversized}"}],"usage":{"input_tokens":10,"output_tokens":2}}`;
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(reply);
+    });
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-huge");
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", FAKE_KEY, "X-Claude-Code-Session-Id", "sess-huge"],
+      body: JSON.stringify({ model: "claude-sonnet-5", messages: [] }),
+    });
+    await until(() => frames(uuid).length === 1);
+
+    const [frame] = frames(uuid);
+    expect(frame!.attrs["oxagen.response_body_omitted"]).toBe("too_large");
+    // The call is still on the chain with its usage, its size and a digest of
+    // the bytes that crossed the wire, so a replay reads a size limit rather
+    // than a host that never captured.
+    expect(frame!.attrs["oxagen.response_digest"]).toBe(sha(reply));
+    expect(Number(frame!.attrs["oxagen.response_bytes"])).toBe(reply.length);
+
+    const [body] = handle.wal.bodiesFor([frame!]);
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as Record<string, unknown>;
+    // The request half still replays. JCS drops the member that has no bytes.
+    expect(exchange).not.toHaveProperty("response");
+    expect(exchange["request"]).toContain("claude-sonnet-5");
+    expect(frame!.content?.digest).toBe(
+      sha(Buffer.from(body!.bytes_base64, "base64")),
+    );
+  });
+
+  it("cuts a secret out of the recorded bytes, and chains the digest of what is left", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames, paths } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-leak");
+    await call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Api-Key", FAKE_KEY, "X-Claude-Code-Session-Id", "sess-leak"],
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        stream: true,
+        // A key the person pasted into the conversation, not the one the
+        // request is authenticated with.
+        messages: [{ role: "user", content: `deploy with ${LEAKED_KEY}` }],
+      }),
+    });
+    await until(() => frames(uuid).length === 1);
+
+    const [frame] = frames(uuid);
+    expect(frame!.content?.redactions).toMatchObject([
+      { reason: "model_api_key" },
+    ]);
+    const bytes = Buffer.from(
+      handle.wal.bodiesFor([frame!])[0]!.bytes_base64,
+      "base64",
+    );
+    expect(bytes.toString("utf8")).not.toContain(LEAKED_KEY);
+    // The chain names the redacted bytes. A digest of what the vendor saw
+    // would be a digest of a body that never ships, and an oracle for the
+    // secret besides.
+    expect(frame!.content?.digest).toBe(sha(bytes));
+    for (const file of walkFiles(paths.root))
+      expect(readFileSync(file, "latin1").includes(LEAKED_KEY)).toBe(false);
   });
 
   it("propagates a client abort upstream and records the partial stream", async () => {

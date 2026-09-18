@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { digestText } from "./context";
-import { hookInputSchema } from "./hooks";
+import { hookInputSchema, normalizeHook } from "./hooks";
 import {
   parseAnswerBody,
   parsePsLine,
@@ -379,5 +379,69 @@ describe("stella answer", () => {
     expect(tryParseAnswerBody('{"decision":"bl')).toBeUndefined();
     expect(tryParseAnswerBody("not json")).toBeUndefined();
     expect(tryParseAnswerBody("[1,2]")).toBeUndefined();
+  });
+});
+
+describe("a Stella payload carries the same frame bodies a Claude Code one does", () => {
+  // The adapter is a translation into Claude Code's hook shape and nothing
+  // more, so it inherits the body capture rather than needing its own. That
+  // is worth a test and not a comment: the day a renamed member stops
+  // landing on the name `normalizeHook` reads, Stella's runs would go back
+  // to grading `inspect` and every test above would still pass.
+  const dec = new TextDecoder();
+  const stella = (event: string, extra: Record<string, unknown> = {}) =>
+    normalizeHook(
+      hookInputSchema.parse(
+        translateStellaPayload(
+          {
+            event,
+            cwd: "/home/dev/proj",
+            transcript_path: "/t.jsonl",
+            ...extra,
+          },
+          4242,
+          "tok",
+        ),
+      ),
+      { OXAGEN_TACHO_HOST: "h" },
+      { sessionUuid: "11111111-1111-4111-8111-111111111111" },
+    );
+
+  it("records the prompt, the tool's input and its result, and the last message", () => {
+    const [prompt] = stella("UserPromptSubmit", { prompt: "ship it" });
+    expect(dec.decode(prompt?.content?.bytes)).toBe("ship it");
+
+    const input = { command: "ls", a: 1 };
+    const [requested] = stella("PreToolUse", {
+      tool: { name: "Bash", input },
+    });
+    // `tool.name` and `tool.input` are Stella's names; the body is built
+    // from `tool_name` and `tool_input` after the rename.
+    expect(requested?.content?.content_type).toBe("application/json");
+    expect(dec.decode(requested?.content?.bytes)).toContain('"command":"ls"');
+
+    const [call] = stella("PostToolUse", {
+      tool: { name: "Bash", input },
+      toolResult: { stdout: "a.txt" },
+    });
+    expect(dec.decode(call?.content?.bytes)).toContain('"stdout":"a.txt"');
+
+    const [stop] = stella("Stop", { finalText: "Done." });
+    expect(dec.decode(stop?.content?.bytes)).toBe("Done.");
+  });
+
+  it("still leaves a subagent's instruction preview as a digest", () => {
+    // Deliberate and unchanged: the preview is the parent's prompt text in
+    // the parent's words, and it is not one of the four contents a `view`
+    // reader needs, so capturing bodies does not license shipping it.
+    const [frame] = stella("SubagentStart", {
+      subagent: { agentId: "a1", instructionPreview: "refactor the parser" },
+    });
+    // The object Claude Code has no name for rides the recorder's leftover
+    // attributes, which is where the digest lands.
+    expect(frame?.attrs?.["hook.subagent"]).toContain(
+      digestText("refactor the parser"),
+    );
+    expect(JSON.stringify(frame)).not.toContain("refactor the parser");
   });
 });

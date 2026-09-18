@@ -34,9 +34,7 @@ function fakeSession(id: string, transcriptPath?: string) {
     lines,
     recorder: {
       ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
-        lines.push(
-          subagentId !== undefined ? { line, subagentId } : { line },
-        );
+        lines.push(subagentId !== undefined ? { line, subagentId } : { line });
         return [{ kind: "line" } as unknown as TachoEvent];
       },
       takeBodies(): FrameBody[] {
@@ -187,13 +185,17 @@ describe("TranscriptTailer", () => {
     const session = fakeSession("s1", path);
     writeFileSync(agentPath, "sub-1\nsub-2\n");
     const { instance } = tailer([session]);
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(2);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      2,
+    );
     expect(session.lines).toEqual([
       { line: "sub-1", subagentId: "a1" },
       { line: "sub-2", subagentId: "a1" },
     ]);
     // A replayed SubagentStop for the same agent feeds nothing.
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(0);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
     expect(session.lines).toHaveLength(2);
     // A path that is not there is reported, not thrown.
     expect(

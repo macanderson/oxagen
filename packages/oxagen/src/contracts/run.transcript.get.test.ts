@@ -19,6 +19,7 @@ const entry = {
   truncated: false,
   fidelity: "full",
   frames: 3,
+  turn: 2,
   cost: null,
 };
 
@@ -66,6 +67,12 @@ describe("get_run_transcript contract", () => {
     expect(
       transcriptEntrySchema.safeParse({ ...entry, frames: 0 }).success,
     ).toBe(false);
+    expect(
+      transcriptEntrySchema.safeParse({ ...entry, turn: null }).success,
+    ).toBe(true);
+    expect(transcriptEntrySchema.safeParse({ ...entry, turn: 0 }).success).toBe(
+      false,
+    );
   });
 
   it("bounds the transcript and says when it was cut", () => {

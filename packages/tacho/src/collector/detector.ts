@@ -51,6 +51,9 @@ export interface DetectorDeps {
   maxDirsPerTick?: number;
 }
 
+/** Writes sealed frames to the WAL; see `Detector.tick`. */
+export type RecordSink = (events: readonly TachoEvent[]) => void;
+
 interface TranscriptSighting {
   path: string;
   firstSeenAt: number;
@@ -171,7 +174,9 @@ export class TranscriptScanner {
    * One bounded pass. `watched` are transcript paths whose mtime the caller
    * needs fresh every tick whatever directory they are in.
    */
-  async tick(watched: ReadonlySet<string> = new Set()): Promise<TranscriptEntry[]> {
+  async tick(
+    watched: ReadonlySet<string> = new Set(),
+  ): Promise<TranscriptEntry[]> {
     const dirs: Array<{ dir: string; mtimeMs: number }> = [];
     for (const root of this.roots) {
       let names: string[];
@@ -206,8 +211,15 @@ export class TranscriptScanner {
       toScan.set(d.dir, d.mtimeMs);
     const rotating = Math.max(1, Math.floor(this.maxDirsPerTick / 4));
     if (dirs.length > 0) {
-      for (let i = 0; i < rotating && toScan.size < this.maxDirsPerTick; i += 1) {
-        const d = dirs[this.rotation % dirs.length] as { dir: string; mtimeMs: number };
+      for (
+        let i = 0;
+        i < rotating && toScan.size < this.maxDirsPerTick;
+        i += 1
+      ) {
+        const d = dirs[this.rotation % dirs.length] as {
+          dir: string;
+          mtimeMs: number;
+        };
         this.rotation = (this.rotation + 1) % dirs.length;
         toScan.set(d.dir, d.mtimeMs);
       }
@@ -338,7 +350,7 @@ export class Detector {
     return events;
   }
 
-  private async checkTranscripts(): Promise<TachoEvent[]> {
+  private async checkTranscripts(record: RecordSink): Promise<TachoEvent[]> {
     const watched = new Set(
       [...this.sightings.values()].map((sighting) => sighting.path),
     );
@@ -388,11 +400,26 @@ export class Detector {
           }),
       );
     }
+    record(events);
     return events;
   }
 
-  /** One detector pass; returns the incidents it chained. */
-  async tick(): Promise<TachoEvent[]> {
-    return [...this.checkHooks(), ...(await this.checkTranscripts())];
+  /**
+   * One detector pass; returns the incidents it chained.
+   *
+   * `record` must write the frames to the WAL, and it is called in the same
+   * synchronous stretch as each seal. The WAL is appended in call order and
+   * read back in that order, so a frame sealed here but appended after the
+   * caller's `await` resolved would land behind any model or gateway call
+   * sealed on the host chain in between: the chain reads out of order, and a
+   * busy scan could ship past the held frame and mark it skipped. The hook
+   * check seals before the scan yields, so its frames are recorded before
+   * it; the transcript seals come after the scan and are recorded before the
+   * pass returns, not after the promise settles.
+   */
+  async tick(record: RecordSink = () => {}): Promise<TachoEvent[]> {
+    const hooks = this.checkHooks();
+    record(hooks);
+    return [...hooks, ...(await this.checkTranscripts(record))];
   }
 }

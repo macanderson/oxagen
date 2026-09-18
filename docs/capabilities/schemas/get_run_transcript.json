@@ -103,6 +103,17 @@
               "type": "integer",
               "minimum": 0
             },
+            "turn": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "cost": {
               "anyOf": [
                 {
@@ -148,6 +159,7 @@
             "truncated",
             "fidelity",
             "frames",
+            "turn",
             "cost"
           ],
           "additionalProperties": false

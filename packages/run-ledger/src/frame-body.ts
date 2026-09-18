@@ -26,7 +26,10 @@ import {
   digestBytes,
   redactBytes,
 } from "@oxagen/tacho";
-import { isContentClassRetained } from "./event-payload-registry";
+import {
+  isContentClassRetained,
+  stepKindOfEventType,
+} from "./event-payload-registry";
 import type { AttemptTerminalStatus } from "./run-store";
 
 /** The bytes a producer hands the ledger with a frame. */
@@ -171,8 +174,21 @@ export interface SealedFrameRow {
   fidelity: string;
 }
 
-const TOOL_CALL_EVENT = "tool.call_completed";
-const MODEL_CALL_EVENT = "model.call_completed";
+/**
+ * Both spellings of each call event, from the registry: the ledger's own
+ * `model.call_completed` / `tool.call_completed` and the in-app assistant's
+ * `model.engine_call_completed` / `tool.engine_call_completed`. The rollup
+ * and the gaps below counted only the first pair, so every run the assistant
+ * recorded sealed with `modelCalls: 0`, `toolCalls: 0` and no `tool_bodies`
+ * gap however many calls it made.
+ */
+function isToolCallEvent(eventType: string): boolean {
+  return stepKindOfEventType(eventType) === "tool_call";
+}
+
+function isModelCallEvent(eventType: string): boolean {
+  return stepKindOfEventType(eventType) === "model_call";
+}
 
 /**
  * The seal's rollup (spec §13.3): what the run keeps of its counts once
@@ -193,8 +209,8 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
   let opaque = false;
   const turns = new Set<string>();
   for (const row of rows) {
-    if (row.event_type === TOOL_CALL_EVENT) toolCalls += 1;
-    if (row.event_type !== MODEL_CALL_EVENT) continue;
+    if (isToolCallEvent(row.event_type)) toolCalls += 1;
+    if (!isModelCallEvent(row.event_type)) continue;
     modelCalls += 1;
     const payload = row.payload_inline;
     const turn =
@@ -240,7 +256,7 @@ export function deriveCompletenessGaps(input: {
         input.policy.mode === "digest_only" ? "digest_only" : "body_missing",
       );
     }
-    if (row.event_type === TOOL_CALL_EVENT) {
+    if (isToolCallEvent(row.event_type)) {
       toolCalls += 1;
       if (row.body_ref !== null) toolBodies += 1;
     }
