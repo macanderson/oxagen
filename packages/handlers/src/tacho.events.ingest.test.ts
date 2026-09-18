@@ -568,6 +568,7 @@ function wire(db: FakeDb): void {
           retentionPolicyVersions: {
             findFirst: async () => db.retentionPolicy,
           },
+          contextRecords: { findMany: async () => [] },
         },
         // The one grouped read `gatewayInvocationsFor` makes: this host's
         // invocations for the chains the batch names, newest per chain.

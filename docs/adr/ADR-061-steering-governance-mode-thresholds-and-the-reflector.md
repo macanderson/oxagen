@@ -211,7 +211,9 @@ steering version is the number of rows in `agent.context_promotions` for the
 workspace, which a merge increments by one — Stella's `policy_version` is the
 same figure. Delivery into the signed policy bundle (`context.system`,
 `tacho.bundle.get.ts`) and into context frames (spec §10.4) reads that
-version and belongs to the lane that compiles steering text.
+version and belongs to the lane that compiles steering text. ADR-091 landed
+the bundle half: the compiled text is part of the bundle etag, so a merge
+moves the etag without a counter of its own.
 
 ### 9. Metering
 
