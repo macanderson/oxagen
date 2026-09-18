@@ -7,7 +7,10 @@ import {
   gitOrNull,
   parseNameStatus,
   parsePorcelain,
+  indexBlobs,
   pathsInTree,
+  treeBlobs,
+  workingBlobs,
   type GitContext,
   type GitRunner,
 } from "./git";
@@ -96,32 +99,70 @@ describe("parsePorcelain", () => {
   });
 });
 
-describe("pathsInTree", () => {
-  it("keeps only the paths the tree holds, in the order asked", async () => {
+describe("treeBlobs, indexBlobs, workingBlobs and pathsInTree", () => {
+  it("reads production's blobs, keeping only what the tree holds", async () => {
     const run = runner({
-      "ls-tree -r --name-only -z deadbeef -- .oxagen/rules/a.toml .oxagen/rules/b.toml .oxagen/rules/c.toml":
-        ".oxagen/rules/c.toml\0.oxagen/rules/a.toml\0",
+      "ls-tree -r -z deadbeef -- .oxagen/rules/a.toml .oxagen/rules/b.toml .oxagen/rules/c.toml":
+        [
+          "100644 blob cccc\t.oxagen/rules/c.toml",
+          "100644 blob aaaa\t.oxagen/rules/a.toml",
+          "040000 tree dddd\t.oxagen/rules/d",
+          "",
+        ].join("\0"),
+    });
+    const paths = [
+      ".oxagen/rules/a.toml",
+      ".oxagen/rules/b.toml",
+      ".oxagen/rules/c.toml",
+    ];
+    await expect(treeBlobs(ctx(run), "deadbeef", paths)).resolves.toEqual(
+      new Map([
+        [".oxagen/rules/c.toml", "cccc"],
+        [".oxagen/rules/a.toml", "aaaa"],
+      ]),
+    );
+    await expect(pathsInTree(ctx(run), "deadbeef", paths)).resolves.toEqual([
+      ".oxagen/rules/a.toml",
+      ".oxagen/rules/c.toml",
+    ]);
+  });
+
+  it("reads the index's blobs", async () => {
+    const run = runner({
+      "ls-files -s -z -- .oxagen/rules/a.toml .oxagen/rules/b.toml":
+        "100644 aaaa 0\t.oxagen/rules/a.toml\0",
     });
     await expect(
-      pathsInTree(ctx(run), "deadbeef", [
-        ".oxagen/rules/a.toml",
-        ".oxagen/rules/b.toml",
-        ".oxagen/rules/c.toml",
+      indexBlobs(ctx(run), [".oxagen/rules/a.toml", ".oxagen/rules/b.toml"]),
+    ).resolves.toEqual(new Map([[".oxagen/rules/a.toml", "aaaa"]]));
+  });
+
+  it("reads the working copy's blobs in the order asked", async () => {
+    const run = runner({
+      "hash-object -- .oxagen/rules/a.toml .oxagen/rules/b.toml":
+        "aaaa\nbbbb\n",
+    });
+    await expect(
+      workingBlobs(ctx(run), [".oxagen/rules/a.toml", ".oxagen/rules/b.toml"]),
+    ).resolves.toEqual(
+      new Map([
+        [".oxagen/rules/a.toml", "aaaa"],
+        [".oxagen/rules/b.toml", "bbbb"],
       ]),
-    ).resolves.toEqual([".oxagen/rules/a.toml", ".oxagen/rules/c.toml"]);
+    );
   });
 
   it("asks nothing for an empty list", async () => {
     const run = vi.fn<GitRunner>();
     await expect(pathsInTree(ctx(run), "deadbeef", [])).resolves.toEqual([]);
+    await expect(indexBlobs(ctx(run), [])).resolves.toEqual(new Map());
+    await expect(workingBlobs(ctx(run), [])).resolves.toEqual(new Map());
     expect(run).not.toHaveBeenCalled();
   });
 
   it("lets a failing ls-tree reject, so the caller can report unknown", async () => {
     const run = runner({
-      "ls-tree -r --name-only -z deadbeef -- .oxagen/rules/a.toml": new Error(
-        "bad object",
-      ),
+      "ls-tree -r -z deadbeef -- .oxagen/rules/a.toml": new Error("bad object"),
     });
     await expect(
       pathsInTree(ctx(run), "deadbeef", [".oxagen/rules/a.toml"]),

@@ -320,33 +320,93 @@ export async function skipWorktreePaths(
 }
 
 /**
- * Which of `paths` exist as blobs in the tree of `rev`. A skip-worktree
- * entry is only worth restoring from production if production has it; one
- * that exists only in this index (a staged addition under skip-worktree)
- * would make `restore --source=<rev>` fail on a pathspec the source lacks.
+ * `path → blob oid` for each of `paths` that exists in the tree of `rev`.
  * Batched so a very large rules directory cannot overrun the argv limit.
+ */
+export async function treeBlobs(
+  ctx: GitContext,
+  rev: string,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < paths.length; i += 200) {
+    const batch = paths.slice(i, i + 200);
+    const raw = await git(ctx, "ls-tree", "-r", "-z", rev, "--", ...batch);
+    // `<mode> <type> <oid>\t<path>`
+    for (const entry of raw.split("\0")) {
+      const tab = entry.indexOf("\t");
+      if (tab < 0) continue;
+      const [, type, oid] = entry.slice(0, tab).split(" ");
+      if (type === "blob" && oid) out.set(entry.slice(tab + 1), oid);
+    }
+  }
+  return out;
+}
+
+/**
+ * Which of `paths` exist as blobs in the tree of `rev`, in the order asked.
+ * A skip-worktree entry is only worth restoring from production if
+ * production has it; one that exists only in this index (a staged addition
+ * under skip-worktree) would make `restore --source=<rev>` fail on a
+ * pathspec the source lacks.
  */
 export async function pathsInTree(
   ctx: GitContext,
   rev: string,
   paths: readonly string[],
 ): Promise<string[]> {
-  const present = new Set<string>();
+  const present = await treeBlobs(ctx, rev, paths);
+  return paths.filter((path) => present.has(path));
+}
+
+/**
+ * `path → blob oid` for each of `paths` as the INDEX holds it. Null for a
+ * path the index does not have. Batched like the others.
+ */
+export async function indexBlobs(
+  ctx: GitContext,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
   for (let i = 0; i < paths.length; i += 200) {
     const batch = paths.slice(i, i + 200);
-    const raw = await git(
-      ctx,
-      "ls-tree",
-      "-r",
-      "--name-only",
-      "-z",
-      rev,
-      "--",
-      ...batch,
-    );
-    for (const path of raw.split("\0")) if (path.length > 0) present.add(path);
+    const raw = await git(ctx, "ls-files", "-s", "-z", "--", ...batch);
+    // `<mode> <oid> <stage>\t<path>`
+    for (const entry of raw.split("\0")) {
+      const tab = entry.indexOf("\t");
+      if (tab < 0) continue;
+      const [, oid] = entry.slice(0, tab).split(" ");
+      if (oid) out.set(entry.slice(tab + 1), oid);
+    }
   }
-  return paths.filter((path) => present.has(path));
+  return out;
+}
+
+/**
+ * `path → blob oid` for each of `paths` as the WORKING COPY holds it: the
+ * object id git would store for the file on disk, filters applied. Every
+ * path must exist on disk; `hash-object` fails on one that does not.
+ *
+ * This is the only content read this package makes, and it is here because
+ * a `skip-worktree` entry is the one file git will not compare for us:
+ * `diff` and `status` both read the index in its place, so an edit to the
+ * file on disk is invisible to every other question this package asks.
+ */
+export async function workingBlobs(
+  ctx: GitContext,
+  paths: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (let i = 0; i < paths.length; i += 200) {
+    const batch = paths.slice(i, i + 200);
+    const raw = await git(ctx, "hash-object", "--", ...batch);
+    const oids = raw.split("\n").filter((line) => line.length > 0);
+    batch.forEach((path, j) => {
+      const oid = oids[j];
+      if (oid) out.set(path, oid);
+    });
+  }
+  return out;
 }
 
 /** Does this ref resolve? */

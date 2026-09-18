@@ -85,7 +85,13 @@ import {
   steeringSync,
 } from "./steering";
 import { resolveSteeringPolicy } from "@oxagen/steering-freshness";
-import { mkdtemp, realpath, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  realpath,
+  mkdir,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -365,7 +371,10 @@ describe("resolveContext", () => {
     const rewritten = JSON.parse(
       await readFile(join(tmp, ".oxagen", "workspace.json"), "utf8"),
     ) as { orgSlug: string; workspaceSlug: string };
-    expect(rewritten).toMatchObject({ orgSlug: "acme", workspaceSlug: "payments" });
+    expect(rewritten).toMatchObject({
+      orgSlug: "acme",
+      workspaceSlug: "payments",
+    });
   });
 
   // The recovery calls run inside the same deadline as the read, so a hung
@@ -759,6 +768,10 @@ describe("parseRemoteUrl", () => {
     "https://github.com/acme",
     "https://github.com/acme/app/extra",
     "",
+    // Plaintext transports do not say who the server is, so they never
+    // identify the bound repository the gate may auto-sync from.
+    "http://github.com/acme/app.git",
+    "git://github.com/acme/app.git",
   ])("is not a hosted repository: %j", (url) => {
     expect(parseRemoteUrl(url)).toBeNull();
   });

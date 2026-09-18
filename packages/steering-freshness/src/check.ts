@@ -45,6 +45,7 @@ import {
   execGit,
   fetchBranch,
   gitOrNull,
+  indexBlobs,
   isAncestor,
   isSafeRefName,
   isShallow,
@@ -54,7 +55,9 @@ import {
   repoRoot,
   revParse,
   skipWorktreePaths,
+  treeBlobs,
   treeOid,
+  workingBlobs,
   type GitContext,
   type GitRunner,
   type PathChange,
@@ -500,6 +503,73 @@ export async function checkSteeringFreshness(
     );
   }
 
+  // A `skip-worktree` entry is the one file git will not compare for us:
+  // `diff` and `status` both read the index in its place, so a record a
+  // developer materialised by hand and then edited is invisible to every
+  // question above. When production changed that same record, it sat in
+  // `outstanding` with `dirty` empty, the verdict read as safe to sync, and
+  // `restore --ignore-skip-worktree-bits` wrote over the edit with `force`
+  // false. So for each skipped entry that IS on disk, the file itself is
+  // compared, three ways:
+  //
+  //   - it holds production's bytes: not outstanding, not this checkout's
+  //     work either, whatever the merge-base diffs said;
+  //   - it holds the index's bytes: unedited, so whatever the diffs said
+  //     stands, and a sync may replace it;
+  //   - anything else is an edit git cannot see, and it is dirt.
+  //
+  // The entries NOT on disk are the sparse-checkout case: every diff read
+  // them as present, `status` was clean, and the verdict said `current`
+  // while the agent ran with none of its records. The files have to be on
+  // disk to steer anything, so each one is outstanding, and a sync is what
+  // puts it there — but only when production has the record to give: an
+  // entry that exists in this index alone would make the restore fail on a
+  // pathspec its source lacks.
+  try {
+    const skipped = await skipWorktreePaths(repoCtx, pathspecs);
+    const absentSet = new Set(await absentFromDisk(root, skipped));
+    const onDisk = skipped.filter((path) => !absentSet.has(path));
+    const absent = await pathsInTree(
+      repoCtx,
+      remoteHead,
+      skipped.filter((path) => absentSet.has(path)),
+    );
+    if (absent.length > 0) {
+      const named = new Set(outstanding.map((c) => c.path));
+      for (const path of absent) {
+        if (!named.has(path)) outstanding.push({ status: "added", path });
+      }
+      base.notes.push(
+        `${absent.length} governed file(s) are excluded from this checkout's working tree (a sparse checkout, or skip-worktree), so the agent cannot read them`,
+      );
+    }
+    if (onDisk.length > 0) {
+      const [inProduction, inIndex, onDiskNow] = await Promise.all([
+        treeBlobs(repoCtx, remoteHead, onDisk),
+        indexBlobs(repoCtx, onDisk),
+        workingBlobs(repoCtx, onDisk),
+      ]);
+      const holdsProduction = new Set<string>();
+      for (const path of onDisk) {
+        const here = onDiskNow.get(path);
+        if (here !== undefined && here === inProduction.get(path)) {
+          holdsProduction.add(path);
+        } else if (here !== inIndex.get(path) && !dirty.includes(path)) {
+          dirty.push(path);
+        }
+      }
+      outstanding = outstanding.filter((c) => !holdsProduction.has(c.path));
+      authored = authored.filter((c) => !holdsProduction.has(c.path));
+    }
+  } catch (error) {
+    return unknown(
+      base,
+      `could not compare this checkout with ${target}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
   base.missing = outstanding;
   base.local = authored;
   base.dirty = dirty;
@@ -556,48 +626,6 @@ export async function checkSteeringFreshness(
   // Both are consulted by `isSyncSafe`, which is the question dirt actually
   // bears on.
   if (outstanding.length === 0) {
-    // Nothing differs from production BY GIT'S RECKONING. That reckoning is
-    // over the index, and a sparse checkout (or `skip-worktree`) keeps
-    // governed records in the index while removing them from disk: every
-    // diff read them as present, `status` was clean, and the verdict said
-    // `current` while the agent ran with none of its records. The files have
-    // to be on disk to steer anything, so this is `behind`, with the paths
-    // named, and a sync is what puts them there.
-    //
-    // But the `S` bit says only that git is not LOOKING at the file, not that
-    // the file is gone. A developer can materialise a skip-worktree record
-    // by hand and edit it, and every diff and `status` above ignored that
-    // edit. Calling such a file missing sent it to the auto-sync as safe to
-    // restore, and `restore --ignore-skip-worktree-bits` overwrote the edit
-    // without `force`. So a skipped entry counts as missing only when the
-    // file is really absent from disk, and only when production has it to
-    // give: an entry that exists in this index alone would make the restore
-    // fail on a pathspec its source lacks.
-    const skipped = await skipWorktreePaths(repoCtx, pathspecs);
-    if (skipped.length > 0) {
-      const absent = await absentFromDisk(root, skipped);
-      let restorable: string[];
-      try {
-        restorable = await pathsInTree(repoCtx, remoteHead, absent);
-      } catch (error) {
-        return unknown(
-          base,
-          `could not read ${target}'s tree: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
-      if (restorable.length > 0) {
-        base.missing = restorable.map((path) => ({ status: "added", path }));
-        base.notes.push(
-          `${restorable.length} governed file(s) are excluded from this checkout's working tree (a sparse checkout, or skip-worktree), so the agent cannot read them`,
-        );
-        return {
-          ...base,
-          status: authored.length > 0 ? "diverged" : "behind",
-        };
-      }
-    }
     return { ...base, status: authored.length > 0 ? "ahead" : "current" };
   }
   return { ...base, status: authored.length > 0 ? "diverged" : "behind" };

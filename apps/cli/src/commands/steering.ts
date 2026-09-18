@@ -186,12 +186,9 @@ async function readPlatform(
   const deadline = now() + PLATFORM_READ_TIMEOUT_MS;
   const remaining = () => Math.max(250, deadline - now());
   const ask = (scope: { org: string; ws: string } | undefined) =>
-    apiPostOrThrow<PlatformFreshness>(
-      "context/steering/freshness",
-      {},
-      scope,
-      { timeoutMs: remaining() },
-    );
+    apiPostOrThrow<PlatformFreshness>("context/steering/freshness", {}, scope, {
+      timeoutMs: remaining(),
+    });
   try {
     return await ask(link?.scope);
   } catch (error) {
@@ -326,8 +323,13 @@ async function remoteFor(
  *   - URLs, `https://github.com/acme/app.git`, `ssh://git@github.com/acme/app`
  *
  * Anything else, including a filesystem path or `file://`, is not a hosted
- * repository and answers null. The path must be exactly `owner/repo`. Case is
- * folded, because GitHub treats `Acme/App` and `acme/app` as one repository.
+ * repository and answers null. So is a plaintext transport, `http://` or
+ * `git://`: the identity check is what lets the gate fetch and auto-sync
+ * `.oxagen/` from the remote it matched, and over an unauthenticated
+ * transport anyone on the path can serve a different ref under the same
+ * host and path. Only HTTPS and SSH say who the server is. The path must be
+ * exactly `owner/repo`. Case is folded, because GitHub treats `Acme/App` and
+ * `acme/app` as one repository.
  */
 export function parseRemoteUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -344,8 +346,7 @@ export function parseRemoteUrl(url: string): string | null {
     } catch {
       return null;
     }
-    if (!["https:", "http:", "ssh:", "git:"].includes(parsed.protocol))
-      return null;
+    if (!["https:", "ssh:"].includes(parsed.protocol)) return null;
     host = parsed.hostname;
     path = parsed.pathname;
   }

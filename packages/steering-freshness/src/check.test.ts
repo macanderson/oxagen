@@ -72,11 +72,26 @@ function runner(t: Record<string, string | Error>): GitRunner {
     if (key.startsWith("ls-files --others -z --")) return "";
     // Index entries excluded from the working tree. None, unless a test says so.
     if (key.startsWith("ls-files -t -z --")) return "";
-    // Which of the paths production holds. All of them, unless a test says so.
-    if (key.startsWith(`ls-tree -r --name-only -z ${REMOTE} --`)) {
+    // Production's blob for each path. Every path, unless a test says so.
+    if (key.startsWith(`ls-tree -r -z ${REMOTE} --`)) {
       return args
         .slice(args.indexOf("--") + 1)
-        .map((path) => `${path}\0`)
+        .map((path) => `100644 blob remote-${path}\t${path}\0`)
+        .join("");
+    }
+    // The index's blob for each path.
+    if (key.startsWith("ls-files -s -z --")) {
+      return args
+        .slice(args.indexOf("--") + 1)
+        .map((path) => `100644 index-${path} 0\t${path}\0`)
+        .join("");
+    }
+    // The working copy's blob for each path. Production's, unless a test
+    // says so: the file on disk holds what production holds.
+    if (key.startsWith("hash-object --")) {
+      return args
+        .slice(args.indexOf("--") + 1)
+        .map((path) => `remote-${path}\n`)
         .join("");
     }
     throw new Error(`unexpected git ${key}`);
@@ -702,8 +717,7 @@ describe("checkSteeringFreshness, governed files excluded from the working tree"
       ...table(),
       "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
         "S .oxagen/rules/ctx.only-here.toml\0",
-      [`ls-tree -r --name-only -z ${REMOTE} -- .oxagen/rules/ctx.only-here.toml`]:
-        "",
+      [`ls-tree -r -z ${REMOTE} -- .oxagen/rules/ctx.only-here.toml`]: "",
     });
     expect(v.status).toBe("current");
     expect(v.missing).toEqual([]);
@@ -714,10 +728,126 @@ describe("checkSteeringFreshness, governed files excluded from the working tree"
       ...table(),
       "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
         "S .oxagen/rules/ctx.a.toml\0",
-      [`ls-tree -r --name-only -z ${REMOTE} -- .oxagen/rules/ctx.a.toml`]:
-        new Error("bad object"),
+      [`ls-tree -r -z ${REMOTE} -- .oxagen/rules/ctx.a.toml`]: new Error(
+        "bad object",
+      ),
     });
     expect(v.status).toBe("unknown");
-    expect(v.notes.join(" ")).toContain("could not read");
+    expect(v.notes.join(" ")).toContain("could not compare");
+  });
+
+  // Excluded records are outstanding alongside whatever else production
+  // changed, so one sync puts everything on disk rather than two.
+  it("names excluded records next to the other outstanding ones", async () => {
+    const v = await check({
+      ...remoteDiff(table(), `M\0.oxagen/rules/ctx.b.toml\0`),
+      "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json":
+        "S .oxagen/rules/ctx.a.toml\0",
+    });
+    expect(v.status).toBe("behind");
+    expect(v.missing.map((c) => c.path).sort()).toEqual([
+      ".oxagen/rules/ctx.a.toml",
+      ".oxagen/rules/ctx.b.toml",
+    ]);
+  });
+});
+
+// `diff` and `status` read the index in place of a skip-worktree file, so an
+// edit to the materialised file on disk is invisible to both. When production
+// changed the same record, the verdict was `behind` with `dirty` empty, and
+// the auto-sync's `restore --ignore-skip-worktree-bits` overwrote the edit
+// with `force` false. The file itself is now compared, three ways.
+describe("checkSteeringFreshness, a materialised skip-worktree record", () => {
+  const LS =
+    "ls-files -t -z -- .oxagen :(exclude).oxagen/settings.local.json :(exclude).oxagen/workspace.json";
+  const A = ".oxagen/rules/ctx.a.toml";
+
+  async function materialised(): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "steering-check-"));
+    await mkdir(join(root, ".oxagen/rules"), { recursive: true });
+    await writeFile(join(root, A), "whatever is on disk\n");
+    return root;
+  }
+
+  it("is dirt when the file matches neither the index nor production", async () => {
+    const root = await materialised();
+    const v = await check(
+      {
+        ...remoteDiff(table(), `M\0${A}\0`),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`hash-object -- ${A}`]: "edited-by-hand\n",
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("behind");
+    expect(v.missing.map((c) => c.path)).toEqual([A]);
+    expect(v.dirty).toEqual([A]);
+    expect(isSyncSafe(v)).toBe(false);
+  });
+
+  it("is not dirt when the file still holds the index's bytes", async () => {
+    const root = await materialised();
+    const v = await check(
+      {
+        ...remoteDiff(table(), `M\0${A}\0`),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`hash-object -- ${A}`]: `index-${A}\n`,
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("behind");
+    expect(v.missing.map((c) => c.path)).toEqual([A]);
+    expect(v.dirty).toEqual([]);
+    expect(isSyncSafe(v)).toBe(true);
+  });
+
+  it("is current, and not this checkout's work, when the file holds production's bytes", async () => {
+    const root = await materialised();
+    const v = await check(
+      {
+        ...remoteDiff(table(), `M\0${A}\0`),
+        ...localDiff(table(), `M\0${A}\0`),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`hash-object -- ${A}`]: `remote-${A}\n`,
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("current");
+    expect(v.missing).toEqual([]);
+    expect(v.local).toEqual([]);
+    expect(v.dirty).toEqual([]);
+  });
+
+  it("is dirt when production retired the record and a copy is on disk", async () => {
+    const root = await materialised();
+    const v = await check(
+      {
+        ...table(),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`ls-tree -r -z ${REMOTE} -- ${A}`]: "",
+        [`hash-object -- ${A}`]: "anything\n",
+      },
+      { cwd: root },
+    );
+    expect(v.dirty).toEqual([A]);
+  });
+
+  it("is unknown when the file cannot be hashed", async () => {
+    const root = await materialised();
+    const v = await check(
+      {
+        ...table(),
+        "rev-parse --show-toplevel": root,
+        [LS]: `S ${A}\0`,
+        [`hash-object -- ${A}`]: new Error("unreadable"),
+      },
+      { cwd: root },
+    );
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("unreadable");
   });
 });
