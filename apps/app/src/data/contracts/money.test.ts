@@ -13,6 +13,7 @@ import {
   mulMicros,
   ratioOfIntegers,
   ratioOfMicros,
+  sumMoney,
 } from "./money";
 
 const usd = (micros: string) => ({ micros, currency: "USD" });
@@ -110,6 +111,28 @@ describe("mulMicros", () => {
     expect(() => mulMicros(usd("0.005"), 2)).toThrow(
       "micros must be an integer string",
     );
+  });
+});
+
+describe("sumMoney", () => {
+  it("adds micros exactly past what a float holds", () => {
+    expect(sumMoney([usd("9007199254740993"), usd("1")])).toEqual(
+      usd("9007199254740994"),
+    );
+  });
+
+  it("answers null for nothing to sum (negative)", () => {
+    expect(sumMoney([])).toBeNull();
+  });
+
+  it("answers null across currencies rather than a meaningless total (negative)", () => {
+    expect(
+      sumMoney([usd("1000000"), { micros: "1000000", currency: "EUR" }]),
+    ).toBeNull();
+  });
+
+  it("refuses a micros string that is not an integer", () => {
+    expect(() => sumMoney([usd("1.5")])).toThrow(/micros must be an integer/);
   });
 });
 
