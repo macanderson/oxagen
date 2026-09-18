@@ -189,14 +189,6 @@ export interface SealedFrameRow {
  * dangling intention, and counting it would report a call the record does not
  * claim happened.
  */
-/**
- * The submitting engine's single model receipt. The tier below tells it from
- * the in-app engine's `model.engine_call_completed` by name, because the two
- * say different things about who observed the call: this one is the engine's
- * own word for it, the other is the gateway's.
- */
-const MODEL_CALL_EVENT = "model.call_completed";
-
 function isToolCallEvent(eventType: string): boolean {
   return stepKindOfEventType(eventType) === "tool_call";
 }
@@ -310,7 +302,8 @@ export function ledgerEnforcementTier(
 ): GradeEnforcementTier {
   let gatewayObserved = false;
   for (const row of rows) {
-    if (row.event_type === MODEL_CALL_EVENT) return "harness";
+    // A submitted receipt: evidence from an engine Oxagen did not host.
+    if (row.event_type === "model.call_completed") return "harness";
     if (row.event_type === "model.engine_call_completed")
       gatewayObserved = true;
   }

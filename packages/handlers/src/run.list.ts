@@ -51,15 +51,15 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import {
-  MODEL_CALL_EVENT_TYPES,
-  TOOL_CALL_EVENT_TYPES,
-} from "@oxagen/run-ledger";
-import {
   type CompletenessGapKind,
   isCompletenessGapKind,
   isGradeEnforcementTier,
   isReplayGrade,
 } from "@oxagen/tacho";
+import {
+  MODEL_CALL_EVENT_TYPES,
+  TOOL_CALL_EVENT_TYPES,
+} from "@oxagen/run-ledger";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,

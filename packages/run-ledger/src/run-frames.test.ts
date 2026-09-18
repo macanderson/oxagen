@@ -511,7 +511,7 @@ describe("the steps zoom on a run the in-app assistant recorded", () => {
     ),
   ];
 
-  it("opens a step at each call's intention and folds its receipt into it", () => {
+  it("opens a step at its intention and closes it at the completion, so both halves are one entry", () => {
     expect(
       foldTranscript(assistant, "steps").map((f) => [
         f.opening.seq,
@@ -520,14 +520,23 @@ describe("the steps zoom on a run the in-app assistant recorded", () => {
         f.frames,
       ]),
     ).toEqual([
-      // The admission receipt stands alone; each call's write-ahead intention
-      // opens its step and its receipt folds into it, so one call is one
-      // entry carrying both halves. Before the halves paired, the tool's
-      // intention folded into the model call that preceded it.
       ["1", "1", "frame", 1],
       ["2", "3", "model_call", 2],
       ["4", "5", "tool_call", 2],
     ]);
+  });
+
+  it("puts each call's request on the same entry as its result", () => {
+    // Why the intention opens the step rather than folding into what came
+    // before it: the entry carries `request` and `response`, and the request
+    // is on the intention. Folding intentions into the preceding entry put
+    // the model call's prompt in the entry before it and the tool call's
+    // input inside the MODEL step — each call's request stranded away from
+    // the call it belongs to. An intention is still not a step of its own;
+    // it is the frame its step opens on.
+    const [, model, tool] = foldTranscript(assistant, "steps");
+    expect([model?.request?.seq, model?.response?.seq]).toEqual(["2", "3"]);
+    expect([tool?.request?.seq, tool?.response?.seq]).toEqual(["4", "5"]);
   });
 
   it("names the step kind of both halves of each call", () => {

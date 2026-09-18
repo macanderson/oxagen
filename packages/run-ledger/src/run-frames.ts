@@ -17,6 +17,7 @@
  */
 import {
   MODEL_CALL_EVENT_TYPES,
+  type RunStepKind,
   stepKindOfEventType,
   TOOL_CALL_EVENT_TYPES,
 } from "./event-payload-registry";
@@ -134,19 +135,51 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
         case "tool_call": {
           const tool = toolNameOf(p);
           const outcome = field(p, "outcome");
-          if (tool !== null && outcome !== null) return `${tool} ${outcome}`;
-          // A write-ahead intention has no outcome yet, so it names the tool
-          // alone. A receipt without one recorded no result, and falls
-          // through to its type rather than reading as a call that returned.
-          if (tool !== null && ledgerPhase(event.eventType) === "request") {
-            return tool;
-          }
-          return event.eventType;
+          if (tool && outcome) return `${tool} ${outcome}`;
+          // An intention has no outcome by design — it is the frame that says
+          // a call is about to happen — so its tool name is the whole truth
+          // about it, and a paired step takes its label from it. A RECEIPT
+          // with no outcome is malformed, and falls through to its bare type
+          // rather than reading as a call that did something.
+          return tool && isIntention(event.eventType) ? tool : event.eventType;
         }
         default:
           return event.eventType;
       }
   }
+}
+
+/**
+ * The two write-ahead intentions and the step each opens.
+ *
+ * The registry gives a `step` only to the frame that COMPLETES a call, because
+ * counting an intention there would report every call twice. A transcript asks
+ * which frame OPENS the exchange, and that is the intention — it carries the
+ * request. Naming them here keeps both answers right without widening the
+ * registry and double-counting every run's steps.
+ */
+const INTENTION_STEP_KIND: Readonly<Record<string, RunStepKind>> = {
+  "model.engine_call_started": "model_call",
+  "tool.engine_call_started": "tool_call",
+};
+
+/** The step an event belongs to, the intention that opens it included. */
+function ledgerStepKind(eventType: string): RunStepKind | null {
+  return (
+    stepKindOfEventType(eventType) ?? INTENTION_STEP_KIND[eventType] ?? null
+  );
+}
+
+/** Is this the write-ahead frame of a call, rather than its receipt? */
+function isIntention(eventType: string): boolean {
+  return Object.hasOwn(INTENTION_STEP_KIND, eventType);
+}
+
+/** The intentions that open a step of `kind`, read off the table above. */
+function intentionsOpening(kind: RunStepKind): string[] {
+  return Object.entries(INTENTION_STEP_KIND)
+    .filter(([, step]) => step === kind)
+    .map(([type]) => type);
 }
 
 /** The called tool, under either payload's name for it. */
@@ -157,9 +190,9 @@ function toolNameOf(payload: unknown): string | null {
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
   const step = ledgerStepKind(event.eventType);
-  // The call id travels only on the engine's own halves, which is what pairs
-  // a write-ahead intention with its receipt into one transcript entry; the
-  // ledger's single-receipt events carry none and answer null.
+  // The call id is what pairs an intention with its receipt (`foldTranscript`).
+  // Only the engine's own events record one; a submitted receipt stands for a
+  // whole exchange and needs no pairing, so its null is correct.
   if (step === "tool_call")
     return {
       ...NO_IDENTITY,
@@ -203,30 +236,6 @@ const LEDGER_PHASES: Readonly<Record<string, FramePhase>> = {
 
 export function ledgerPhase(eventType: string): FramePhase {
   return LEDGER_PHASES[eventType] ?? "single";
-}
-
-/**
- * The engine's write-ahead halves, read off the phase table above rather than
- * listed again. The event registry marks only the receipt with a step, which
- * is right there — a started event with no completion is a dangling intention
- * and counts as no call — but a transcript still opens the step at the
- * intention, so that the request and the result read as one exchange.
- */
-const ENGINE_REQUEST_HALVES: readonly string[] = Object.entries(LEDGER_PHASES)
-  .filter(([, phase]) => phase === "request")
-  .map(([type]) => type);
-
-/**
- * The step a ledger event belongs to, the write-ahead half included. The
- * registry answers for the receipts; the intention is the request half of the
- * same step, and reading it as no step at all is what left an engine call's
- * two halves in two entries with no way to tell they were one call.
- */
-function ledgerStepKind(eventType: string): "model_call" | "tool_call" | null {
-  const step = stepKindOfEventType(eventType);
-  if (step !== null) return step;
-  if (!ENGINE_REQUEST_HALVES.includes(eventType)) return null;
-  return eventType.startsWith("model.") ? "model_call" : "tool_call";
 }
 
 /** A ledger event as a run frame. Ledger frames carry no cost record (§12). */
@@ -484,30 +493,6 @@ export type TranscriptEntryKind =
 // list. Re-exported here so a caller over frames has one import site.
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
-/**
- * Model-stage frame types, both vocabularies and both halves. The ledger's own
- * names come from the registry, so both spellings of each call event are
- * covered: the engine's own calls (`model.engine_call_*`, ADR-043) were
- * missing from the literal list this replaces, so every in-app run's model
- * exchanges folded into whatever step preceded them instead of opening one,
- * and the `steps` transcript of an in-app run showed no model calls at all.
- * The wrapped-session names are added beside them: a tacho recording is not
- * in the ledger's registry and never will be.
- */
-const MODEL_TYPES: ReadonlySet<string> = new Set([
-  ...MODEL_CALL_EVENT_TYPES,
-  ...ENGINE_REQUEST_HALVES.filter((type) => type.startsWith("model.")),
-  "llm_call",
-  "model.request",
-  "model.response",
-]);
-/** Tool-stage frame types, the same way. */
-const TOOL_TYPES: ReadonlySet<string> = new Set([
-  ...TOOL_CALL_EVENT_TYPES,
-  ...ENGINE_REQUEST_HALVES.filter((type) => type.startsWith("tool.")),
-  "tool_call",
-  "tool_requested",
-]);
 /** Frames that record a decision a rule or a person made about a call. */
 const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
@@ -523,9 +508,6 @@ const RECALL_TYPES: ReadonlySet<string> = new Set([
   "context.frames_selected",
   "context.assembled",
 ]);
-/** Frames a producer writes to open a turn. */
-const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
-
 /** Tool outcomes that record a call that did not do what it was asked to. */
 const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
   "failed",
@@ -608,6 +590,38 @@ export interface TranscriptFold {
   /** The last decision frame folded into the entry; null when none was. */
   decision: TranscriptDecision | null;
 }
+
+/**
+ * The frame types that open a step, in the `steps` zoom. The ledger's own
+ * names come from the registry, so both spellings of each call event are
+ * covered — the in-app assistant writes `model.engine_call_completed` and
+ * `tool.engine_call_completed`, which this list named neither of, so every
+ * ledger-recorded run folded into one `frame` entry however many calls it
+ * made. The wrapped-session names are added beside them: a tacho recording
+ * is not in the ledger's registry and never will be.
+ *
+ * The write-ahead intentions are here too, and are NOT in the registry's step
+ * sets. The two sets answer different questions. The registry's answers "which
+ * frame completes a call", and counting an intention there would report every
+ * call twice. This one answers "which frame opens an exchange", and the
+ * intention is exactly that: it carries the request the step was made with, so
+ * a fold that did not open on it would leave the request stranded in the entry
+ * before and make one tool call two entries again.
+ */
+const MODEL_TYPES: ReadonlySet<string> = new Set([
+  ...MODEL_CALL_EVENT_TYPES,
+  ...intentionsOpening("model_call"),
+  "llm_call",
+  "model.request",
+  "model.response",
+]);
+const TOOL_TYPES: ReadonlySet<string> = new Set([
+  ...TOOL_CALL_EVENT_TYPES,
+  ...intentionsOpening("tool_call"),
+  "tool_call",
+  "tool_requested",
+]);
+const TURN_OPENERS: ReadonlySet<string> = new Set(["turn_start"]);
 
 export function stepKind(frame: RunFrame): "model_call" | "tool_call" | null {
   if (MODEL_TYPES.has(frame.type)) return "model_call";

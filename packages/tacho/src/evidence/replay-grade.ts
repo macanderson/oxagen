@@ -81,15 +81,14 @@ const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
   "model.call_completed",
   "tool.call_completed",
   // The engine's own halves of the same two exchanges (ADR-043: the in-app
-  // engine appends these). They carry exactly the content a `view` reader
-  // reads — the request that left the process and the result that came back —
-  // so a recording that drops their bodies is as unreadable as one that drops
-  // the submitted engine's. Omitting them graded a body-less in-app run `view`.
-  //
-  // The two write-ahead halves are here and not in the ledger's step registry,
-  // which is right both ways: a started event opens no step, and it still
-  // carries the bytes a reader needs. The registry drift test asks only that
-  // every step type is content-bearing, so this set may hold more.
+  // engine appends these). BOTH halves are listed, because the recorder puts
+  // the request on the write-ahead frame and the result on the completion —
+  // "the request, and so the turn's prompt, rides the write-ahead frame rather
+  // than the completion" and "what the tool was called with, on the frame that
+  // is durable before the tool runs" (assistant-run.ts). Spec §8.4 defines
+  // `view` as what the agent asked AND what came back, so a recording that
+  // dropped its prompt bodies and kept its completions is not `view`; listing
+  // the completions alone would grade it so.
   "model.engine_call_started",
   "model.engine_call_completed",
   "tool.engine_call_started",
