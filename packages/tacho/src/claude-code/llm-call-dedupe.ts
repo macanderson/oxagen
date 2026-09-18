@@ -72,15 +72,16 @@ export type LlmCallVerdict =
   | { kind: "repeat" };
 
 interface Entry {
-  source: string;
+  /** The source sealed first, then every source seen since, in order. */
+  sources: string[];
   /** Whether the entry was registered under an id, not only under its tuple. */
   identified: boolean;
 }
 
 /** The ledger's memory, for the recorder state a restart continues from. */
 export interface LlmCallLedgerState {
-  /** Key to source, in first-seen order. */
-  keys: Array<[string, string, boolean]>;
+  /** Key, the sources that reported it (first sealed first), identified. */
+  keys: Array<[string, string[], boolean]>;
 }
 
 function str(value: unknown): string | undefined {
@@ -88,7 +89,9 @@ function str(value: unknown): string | undefined {
 }
 
 function num(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 /**
@@ -123,15 +126,15 @@ export class LlmCallLedger {
   private readonly entries = new Map<string, Entry>();
 
   constructor(state?: LlmCallLedgerState) {
-    for (const [key, source, identified] of state?.keys ?? [])
-      this.entries.set(key, { source, identified });
+    for (const [key, sources, identified] of state?.keys ?? [])
+      this.entries.set(key, { sources: [...sources], identified });
   }
 
   state(): LlmCallLedgerState {
     return {
       keys: [...this.entries].map(([key, entry]) => [
         key,
-        entry.source,
+        [...entry.sources],
         entry.identified,
       ]),
     };
@@ -153,7 +156,10 @@ export class LlmCallLedger {
         byTuple = candidate;
     }
     const seen = byId ?? byTuple;
-    const entry: Entry = { source: seen?.source ?? source, identified };
+    const entry: Entry = seen ?? { sources: [], identified };
+    const first = entry.sources[0];
+    const reported = entry.sources.includes(source);
+    if (!reported) entry.sources.push(source);
     for (const key of [...ids, ...(tuple !== undefined ? [tuple] : [])]) {
       if (!this.entries.has(key)) this.entries.set(key, entry);
     }
@@ -162,11 +168,13 @@ export class LlmCallLedger {
       if (oldest === undefined) break;
       this.entries.delete(oldest);
     }
-    if (seen === undefined) return { kind: "first" };
-    if (seen.source !== source) return { kind: "duplicate", of: seen.source };
-    // The same source, twice. Under an id that is a re-read of a record the
-    // chain holds. Under a tuple alone it may be two calls that happen to
-    // match, and a source that cannot tell them apart must count both.
-    return byId !== undefined ? { kind: "repeat" } : { kind: "first" };
+    if (first === undefined) return { kind: "first" };
+    // A source reporting a call it already reported. Under an id that is a
+    // re-read of a record the chain holds. Under a tuple alone it may be two
+    // calls that happen to match, and a source that cannot tell them apart
+    // must count both.
+    if (reported)
+      return byId !== undefined ? { kind: "repeat" } : { kind: "first" };
+    return { kind: "duplicate", of: first };
   }
 }
