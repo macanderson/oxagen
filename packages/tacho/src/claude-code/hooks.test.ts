@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
 import { redactionMarker } from "../evidence/redaction";
+import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import { normalizeHook } from "./hooks";
+import { SessionRecorder } from "./recorder";
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
 const ENV = {
@@ -341,5 +343,69 @@ describe("content on a prompt frame", () => {
     const draft = hook("UserPromptSubmit", { prompt: "ship it" })[0];
     expect(draft?.content_digest).toBe(digestBytes("ship it"));
     expect(draft?.content_redactions).toBeUndefined();
+  });
+});
+
+describe("a prompt with more credentials than the envelope records", () => {
+  // Redaction removes every match. The record of the matches is what is
+  // bounded: `contentSchema` caps `content.redactions`, and before this the
+  // draft handed over all of them, so a prompt pasting a long list of tokens
+  // failed to seal. The daemon answered 500, the hook fell back to a local
+  // decision, and the turn lost the frame it was supposed to leave behind.
+  const many = Array.from(
+    { length: MAX_CONTENT_REDACTIONS + 44 },
+    (_, i) => `ghp_${String(i).padStart(36, "a")}`,
+  );
+
+  it("redacts every one, records the cap, and says how many there were", () => {
+    const draft = hook("UserPromptSubmit", { prompt: many.join(" ") })[0];
+
+    expect(draft?.content_redactions).toHaveLength(MAX_CONTENT_REDACTIONS);
+    expect(draft?.attrs["oxagen.content_redactions_total"]).toBe(
+      String(many.length),
+    );
+    // Not one token survives in the bytes a body would carry.
+    const carried = new TextDecoder().decode(
+      draft?.content_bytes ?? new Uint8Array(),
+    );
+    expect(carried).not.toContain("ghp_");
+    expect(draft?.content_digest).toBe(digestBytes(carried));
+  });
+
+  it("seals, which is the whole point", () => {
+    const recorder = new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: "he_0000000000000000000000000000",
+        },
+      },
+      harnessSessionId: SESSION,
+      scope: "he_0000000000000000000000000000",
+    });
+    const events = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: many.join(" "),
+      },
+      ENV,
+    );
+    expect(events.map((e) => e.kind)).toContain("turn_start");
+  });
+
+  it("keeps the unpromoted hook fields next to the count", () => {
+    const draft = hook("UserPromptSubmit", {
+      prompt: many.join(" "),
+      some_new_upstream_field: "kept",
+    })[0];
+    expect(draft?.attrs["hook.some_new_upstream_field"]).toBe("kept");
+    expect(draft?.attrs["oxagen.content_redactions_total"]).toBeDefined();
   });
 });

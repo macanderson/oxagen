@@ -11,6 +11,7 @@ import { z } from "zod";
 import { digestJcs, jsonByteLength, type JsonValue } from "../digest";
 import { contentFrameOf, type Redaction } from "../evidence/redaction";
 import { effectId } from "../ids";
+import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import type { BodyOf, TachoKind } from "../envelope";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
 import { classifyTool } from "./tools";
@@ -138,13 +139,23 @@ function contentDraft(text: string): {
   content_digest: `sha256:${string}`;
   content_redactions?: Redaction[];
   content_bytes: Uint8Array;
+  attrs?: Record<string, string>;
 } {
   const frame = contentFrameOf(text);
+  // Every matched byte is redacted. What is bounded is the record of them:
+  // `contentSchema` caps `content.redactions`, and a prompt that pastes more
+  // credential-shaped strings than that would otherwise fail to seal, 500 the
+  // daemon, and lose the frame the turn was supposed to leave behind. The
+  // count is exact even when the list is a sample.
+  const total = frame.redactions.length;
   return {
     content_digest: frame.digest,
     content_bytes: frame.bytes,
-    ...(frame.redactions.length > 0
-      ? { content_redactions: frame.redactions }
+    ...(total > 0
+      ? { content_redactions: frame.redactions.slice(0, MAX_CONTENT_REDACTIONS) }
+      : {}),
+    ...(total > MAX_CONTENT_REDACTIONS
+      ? { attrs: { "oxagen.content_redactions_total": String(total) } }
       : {}),
   };
 }
@@ -265,6 +276,9 @@ export function normalizeHook(
     body,
     ...base,
     ...extra,
+    // Merged, not replaced: `base.attrs` carries every unpromoted hook field,
+    // and an extra that named `attrs` would otherwise drop the lot.
+    attrs: { ...base.attrs, ...(extra.attrs ?? {}) },
   });
 
   switch (input.hook_event_name) {

@@ -809,6 +809,14 @@ export const spanSchema = z
   })
   .strict();
 
+/**
+ * The most redaction records one frame's content may carry. Redaction still
+ * removes every credential it finds; this bounds what is *recorded about*
+ * them, so a prompt that pastes a thousand tokens cannot make its own event
+ * unsealable. A producer at the cap says so in `oxagen.content_redactions_total`.
+ */
+export const MAX_CONTENT_REDACTIONS = 256;
+
 export const contentSchema = z
   .object({
     digest: digest.optional(),
@@ -823,7 +831,7 @@ export const contentSchema = z
           })
           .strict(),
       )
-      .max(256)
+      .max(MAX_CONTENT_REDACTIONS)
       .default([]),
   })
   .strict();
