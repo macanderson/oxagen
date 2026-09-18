@@ -120,10 +120,10 @@
     "create_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
-      "entry": "/[org] — the rev1 surface that invokes create_workspace (features/organization/actions.ts)",
+      "entry": "/[org] — Organization › Workspaces › “Create a workspace”: name, slug and the main repository as owner/name, which create_workspace binds in the same transaction (features/organization/workspace-actions.tsx, features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-m0-workspace-repositories"
     },
     "decline_member_invite": {
       "route": "/invite/[token]",
@@ -377,6 +377,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "link_repository": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Repositories — “Link” on the owner/name typed into “Link a repository” (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-m0-workspace-repositories"
+    },
     "list_agents": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
@@ -506,6 +515,15 @@
       "proof": "apps/app/src/features/steering/steering.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "list_repositories": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Repositories — the list every open reads, main first with its role, GitHub link, approved default ref and connection state (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-m0-workspace-repositories"
     },
     "list_runs": {
       "route": "/[org]/[ws]",
@@ -731,6 +749,15 @@
       "proof": "apps/app/src/features/agents/agent-actions.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "unlink_repository": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Workspace settings › Repositories — “Unlink”, then “Unlink it”, on a linked row; the main row offers none (features/shell/workspace-repositories.tsx, features/shell/workspace-settings-actions.ts)",
+      "testid": "open-workspace-settings",
+      "proof": "apps/app/src/features/shell/workspace-settings.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-m0-workspace-repositories"
     },
     "update_profile": {
       "route": "/[org]",

@@ -1,7 +1,9 @@
 "use server";
 // What the Workspace settings dialog reads and writes: the workspace's main
-// repository, the repositories its GitHub App installation reaches, and the
-// bind that turns the second into the first (MC spec §10.1–§10.2, #2967).
+// repository, the repositories its GitHub App installation reaches, the bind
+// that turns the second into the first (MC spec §10.1–§10.2, #2967), and the
+// Repositories section's list, link and unlink (§10.1, §17 M0: "a second repo
+// can be linked and unlinked").
 //
 // These are reads made on demand rather than through a DataSource port,
 // because the dialog is shell chrome. The organization layout renders the
@@ -21,12 +23,18 @@
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
+import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
+import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
 import type {
   AttachedInstallation,
   GitHubInstallations,
   InstallationRepositories,
+  LinkedRepository,
+  UnlinkedRepository,
+  WorkspaceRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
 import type { Read } from "@/data/read";
@@ -179,6 +187,84 @@ export async function attachGithubInstallation(
         value: {
           connectionId: result.value.connectionId,
           accountLogin: result.value.accountLogin,
+        },
+      }
+    : result;
+}
+
+/**
+ * Every repository the workspace binds, main and linked, with each one's role.
+ * Local facts only — no GitHub call — so the Repositories section draws while
+ * GitHub is down, and draws the connection-retired note from the same record.
+ */
+export async function readWorkspaceRepositories(
+  org: string,
+  ws: string,
+): Promise<ActionResult<WorkspaceRepositories>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: repositoryList,
+    input: {},
+    page: "workspaceSettings",
+  });
+  return asActionResult(read);
+}
+
+/**
+ * Link a repository as one of the workspace's LINKED repositories. Names only
+ * the repository, as the bind does and for the same reason: the installation
+ * is the workspace's own. The handler refuses the workspace's main repository
+ * (`conflict: main_repo`), a repository already linked
+ * (`conflict: repository_already_linked`), another workspace's main
+ * repository (`conflict: main_repo_claimed`, ADR-099), one the installation
+ * cannot see (`not_found: repository_not_installed`), and a workspace with
+ * no installation attached (`conflict: github_not_connected`).
+ */
+export async function linkWorkspaceRepository(
+  org: string,
+  ws: string,
+  repository: { owner: string; name: string },
+): Promise<ActionResult<LinkedRepository>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, repositoryLink, {
+    provider: "github",
+    owner: repository.owner,
+    name: repository.name,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          bindingId: result.value.bindingId,
+          fullName: result.value.fullName,
+          defaultRef: result.value.defaultRef,
+          linkedAt: result.value.linkedAt,
+        },
+      }
+    : result;
+}
+
+/**
+ * Unlink a linked repository by the binding id the list answered. The head
+ * goes; every binding version stays, because runs admitted against it still
+ * cite it. The main repository is refused (`conflict: main_repo_unlink_refused`)
+ * and the section never offers it; a binding this workspace does not see is
+ * `not_found: repository_not_linked`.
+ */
+export async function unlinkWorkspaceRepository(
+  org: string,
+  ws: string,
+  bindingId: string,
+): Promise<ActionResult<UnlinkedRepository>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, repositoryUnlink, { bindingId });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          bindingId: result.value.bindingId,
+          fullName: result.value.fullName,
+          unlinkedAt: result.value.unlinkedAt,
         },
       }
     : result;

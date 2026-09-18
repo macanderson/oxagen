@@ -1,0 +1,133 @@
+// `list_repositories` (Mission Control spec §10.1): every head in the
+// workspace, main first, with the connection behind each judged live or
+// retired by the same predicate `get_main_repository` uses.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeCTX } from "./test-utils/fixtures";
+
+const mocks = vi.hoisted(() => ({
+  withTenantDb: vi.fn(),
+}));
+
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  const __dbMock = { ...real, withTenantDb: mocks.withTenantDb };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
+});
+
+import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
+import { repositoryListHandler } from "./repository.list";
+
+const BOUND_AT = new Date("2026-09-15T12:06:00.000Z");
+const LINKED_AT = new Date("2026-09-17T09:00:00.000Z");
+
+function row(overrides: Record<string, unknown>) {
+  return {
+    bindingId: "rpb_0123abcd",
+    role: "linked",
+    owner: "acme",
+    name: "docs",
+    fullName: "acme/docs",
+    defaultRef: "main",
+    boundAt: LINKED_AT,
+    connectionStatus: "connected" as string | null,
+    connectionDeletedAt: null as Date | null,
+    ...overrides,
+  };
+}
+
+const MAIN = row({
+  bindingId: "rpb_ffffaaaa",
+  role: "main",
+  name: "widgets",
+  fullName: "acme/widgets",
+  defaultRef: "trunk",
+  boundAt: BOUND_AT,
+});
+
+/** The one read: select → from → innerJoin → leftJoin → where, awaited. */
+function wire(rows: unknown[]): void {
+  mocks.withTenantDb.mockImplementationOnce(
+    async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            innerJoin: () => ({
+              leftJoin: () => ({ where: async () => rows }),
+            }),
+          }),
+        }),
+      }),
+  );
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
+
+describe("list_repositories", () => {
+  it("answers an empty list for a workspace with no heads", async () => {
+    wire([]);
+    await expect(repositoryListHandler({}, makeCTX())).resolves.toEqual({
+      repositories: [],
+    });
+  });
+
+  it("sorts the main repository first, then the linked ones by full name, whatever order the rows arrive in", async () => {
+    wire([
+      row({ bindingId: "rpb_0000000b", fullName: "acme/zeta", name: "zeta" }),
+      MAIN,
+      row({ bindingId: "rpb_0000000a", fullName: "acme/alpha", name: "alpha" }),
+    ]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(out.repositories.map((r) => [r.role, r.fullName])).toEqual([
+      ["main", "acme/widgets"],
+      ["linked", "acme/alpha"],
+      ["linked", "acme/zeta"],
+    ]);
+    expect(out.repositories[0]).toEqual({
+      bindingId: "rpb_ffffaaaa",
+      role: "main",
+      owner: "acme",
+      name: "widgets",
+      fullName: "acme/widgets",
+      defaultRef: "trunk",
+      htmlUrl: "https://github.com/acme/widgets",
+      boundAt: BOUND_AT.toISOString(),
+      connectionLive: true,
+    });
+    expect(repositoryList.output.safeParse(out).success).toBe(true);
+  });
+
+  it("reports connectionLive false for a head whose connection is retired, without dropping the repository", async () => {
+    wire([
+      MAIN,
+      // `delete_connection` leaves the row at 'deleting' with deleted_at null
+      // until the purge; that is already retired.
+      row({ bindingId: "rpb_00000001", connectionStatus: "deleting" }),
+      // The purge has been through: the left join found no connection at all.
+      row({
+        bindingId: "rpb_00000002",
+        fullName: "acme/purged",
+        name: "purged",
+        connectionStatus: null,
+        connectionDeletedAt: null,
+      }),
+      row({
+        bindingId: "rpb_00000003",
+        fullName: "acme/soft",
+        name: "soft",
+        connectionStatus: "connected",
+        connectionDeletedAt: new Date("2026-09-16T00:00:00.000Z"),
+      }),
+    ]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(
+      out.repositories.map((r) => [r.bindingId, r.connectionLive]),
+    ).toEqual([
+      ["rpb_ffffaaaa", true],
+      ["rpb_00000001", false],
+      ["rpb_00000002", false],
+      ["rpb_00000003", false],
+    ]);
+  });
+});

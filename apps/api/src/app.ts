@@ -259,6 +259,9 @@ import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
 import { repositoryMainGetRoute } from "./routes/v1/repository.main.get";
+import { repositoryLinkRoute } from "./routes/v1/repository.link";
+import { repositoryUnlinkRoute } from "./routes/v1/repository.unlink";
+import { repositoryListRoute } from "./routes/v1/repository.list";
 import { repositoryInstallationListRoute } from "./routes/v1/repository.installation.list";
 import { repositoryInstallationCandidatesRoute } from "./routes/v1/repository.installation.candidates";
 import { repositoryInstallationAttachRoute } from "./routes/v1/repository.installation.attach";
@@ -550,6 +553,11 @@ orgScoped.route("/repository/main", repositoryMainBindRoute);
 // install state and the signed GitHub doors; the picker it feeds sits one level
 // down, under the installation the workspace acts through.
 orgScoped.route("/repository/main", repositoryMainGetRoute);
+// The workspace's repositories beyond the main one (MC spec §10.1): the list
+// of all of them, and the link and unlink writes for linked repositories.
+orgScoped.route("/repositories", repositoryListRoute);
+orgScoped.route("/repository/link", repositoryLinkRoute);
+orgScoped.route("/repository/unlink", repositoryUnlinkRoute);
 orgScoped.route(
   "/repository/installation/repositories",
   repositoryInstallationListRoute,
