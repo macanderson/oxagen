@@ -6,10 +6,11 @@
  * before the connected tier existed must still load, and the machine must
  * still report, without the operator re-enrolling.
  *
- * `hostFileSchema` is `.strict()`, so this cuts both ways: a member added
- * without a default would reject every older file, and an unknown member
- * would reject a *newer* file read by an older build. These tests pin both
- * directions.
+ * A member added without a default would reject every older file, which is
+ * what these tests pin. The other direction, a newer file read by an older
+ * build, is covered by `install-hardening.test.ts`: the schema carries an
+ * unknown member instead of rejecting it, so an older `tacho` left on PATH can
+ * still unenroll the machine.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -166,7 +167,7 @@ describe("the endpoint resolver", () => {
 });
 
 describe("the persisted endpoint override", () => {
-  it("is accepted by the strict schema and survives a round trip", () => {
+  it("is accepted by the schema and survives a round trip", () => {
     const file = testHostFile(signer, bundle, {
       mcp_endpoint_override: "http://127.0.0.1:4100/mcp",
     });

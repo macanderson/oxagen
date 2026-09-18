@@ -2423,11 +2423,15 @@ describe("stella", () => {
       0o644,
     );
     const r = await enroll({ ...WHERE, harnesses: ["stella"] }, refused);
-    expect(r.ok).toBe(true);
+    // Enrolled, but the one harness asked for is not hooked: that is not a
+    // success, and exit 0 used to tell the desktop app it was.
+    expect(r.ok).toBe(false);
+    expect(r.unhooked).toEqual(["stella"]);
+    expect(r.host).toBeDefined();
     expect(r.warnings.join("\n")).toContain(
-      `Stella hooks not written: ${refused.paths.stellaToml} already defines hooks.Stop`,
+      `Stella was not hooked: ${refused.paths.stellaToml} already defines hooks.Stop`,
     );
-    expect(refused.errors.join("\n")).toContain("Stella hooks not written");
+    expect(refused.errors.join("\n")).toContain("Stella was not hooked");
     expect(readFileSync(refused.paths.stellaToml, "utf8")).toBe(
       "hooks.Stop = []\n",
     );

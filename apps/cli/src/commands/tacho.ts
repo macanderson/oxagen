@@ -94,9 +94,13 @@ export async function handleTachoEnroll(
 ): Promise<boolean> {
   const { enroll, parseHarnesses, verify } = await import("@oxagen/tacho/cli");
   const deps = await tachoDeps(writer);
+  // Without `apiUrl`: tacho reads the same env and config.json when the
+  // machine has no host yet, and on an enrolled host its own `api_url` must
+  // win, which an explicit value here would override.
+  const { apiUrl: _cliDefaultApiUrl, ...credentials } = tachoCredentials(opts);
   const result = await enroll(
     {
-      ...tachoCredentials(opts),
+      ...credentials,
       ...(opts.managed !== undefined ? { managed: opts.managed } : {}),
       ...(opts.printManaged !== undefined
         ? { printManaged: opts.printManaged }
