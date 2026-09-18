@@ -541,7 +541,10 @@ describe("Privacy", () => {
       "7a000000-0000-4000-8000-0000000000e1",
     );
     // The archive is a private object, so the tab links at the app's own
-    // authenticated route, never at storage.
+    // authenticated route, never at storage. A plain download anchor, not a
+    // prefetching Link: fetching the archive stays an explicit act.
+    expect(link.tagName).toBe("A");
+    expect(link.hasAttribute("download")).toBe(true);
     expect(link.getAttribute("href")).toBe(
       "/acme/account/export/7a000000-0000-4000-8000-0000000000e1",
     );

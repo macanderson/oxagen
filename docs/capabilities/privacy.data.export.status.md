@@ -71,7 +71,7 @@ Rows written before that change stored `result.url`, which on Vercel Blob is a
 full authenticated URL rather than a key. `storageKey` accepts both: an
 absolute URL is reduced to its pathname, which is the key the object was
 written under, so an export queued before this shipped still downloads. The
-rows are not migrated — a backfill would have to reach every data plane
+rows are not migrated. A backfill would have to reach every data plane
 (ADR-042), and the pathname is recoverable exactly.
 
 Bytes are served by two routes, one per kind of caller, because a storage key

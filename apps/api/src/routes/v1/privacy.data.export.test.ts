@@ -2,7 +2,7 @@
 //
 // The case that earns the download route is the last describe: the bundle is a
 // private object, so the status read answers with a storage key and no URL,
-// and a key is no use to a token-authenticated client — reading it needs the
+// and a key is no use to a token-authenticated client: reading it needs the
 // store's credentials. Without this route the API export flow ends with a
 // caller who can see that their archive is ready and cannot fetch it.
 import { describe, it, expect, vi, beforeEach } from "vitest";
