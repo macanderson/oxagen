@@ -2226,7 +2226,7 @@ How the four grants combine for this role: every GitHub tool is allowed for read
 
 ## Appendix E. The agent tools that survive
 
-The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **108 agent tools** (89 of them in the wedge; eleven are the Skills tools — `list_skills` from 2026-09-15 and the ten ADR-090 adds, `search_skills` plus nine controls), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
+The current repository registers 229 real contracts (244 names minus test fixtures). The list below is the definitive set for the rebuild: **109 agent tools** (91 of them in the wedge; twelve are the Skills tools — `list_skills` from 2026-09-15 and the eleven ADR-090 adds, `search_skills` and `preview_skill_search` plus nine controls), grouped by the job they serve. Each row names the new tool, what it absorbs from today's registry, and what it does. Anything not named here is **de-registered**, and the de-registrations are listed by family at the end. De-registered means the contract comes off the surfaces — it loses `app` from its `layers[]`, loses the `api` / `mcp` / `cli` entries in its `surfaces[]`, or loses its registration in `packages/handlers/src/register.ts`. It does **not** mean deleted. Every de-registered contract, handler, route, tool, page and package stays in the tree, keeps compiling and keeps its tests; `DEREGISTERED.md` at the repository root records each one with its file paths, and `pnpm check:deregistered` fails the build if any of those paths is removed. Deleting a de-registered feature takes an ADR under `docs/adr/` that names the files. Names follow ADR-025 (verb-first snake case, scope as an argument). Every tool has an input schema, an output schema, a risk grade, a default effect, and is exposed on API, MCP, and the UI unless marked headless.
 
 **Organization and workspace (11)**
 
@@ -2260,7 +2260,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `set_agent_role` | assign_agent_role, revoke_agent_role | |
 | `set_role_grants` | (new; grants were seeded) | role's grants and resource scopes; `list_roles` is its read side, folded into `get_agent` and the Tools page |
 
-**Wrapping and control (15)**
+**Wrapping and control (26)**
 
 | Agent tool | Absorbs | Does |
 |---|---|---|
@@ -2283,14 +2283,16 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `approve_skill_digest` | (new; ADR-090) | write: approve a changed digest so the skill stops being withheld as `unapproved_digest`. Recomputed at merge against the file read back at the head |
 | `propose_skill` | (new; ADR-090) | write: add a skill as a pull request — registry pin by digest, a drafted `SKILL.md`, or an uploaded bundle. Gated on frontmatter, semver, digest, grants, secret scan and the search budget |
 | `set_reflection_capture` | (new; ADR-090) | write: turn reflection capture on or off. Capture is research-only and never becomes evidence, so this grants no read — `read_skill_reflection` still needs `research.read` |
+| `preview_skill_search` | (new; ADR-090) | read: the Search tab's console. Runs the **same** resolution as `search_skills` against the same pinned config version, and returns a different projection: a person sees each withheld skill by name with its reason, where the agent is told only the count and the reason class. Human-authorized (org Owner/Admin/Member or workspace Owner/Member) and `noBillingGate: true`, because inspecting your own configuration is not an agent's governed action. It resolves and returns; it never loads a skill into a run |
 
-**Roles and billing for the ten (ADR-090).** `checkIAM` allows every capability for a non-enterprise org (§5), so each of these asserts its own role in its handler rather than relying on the kernel. The five writes are org Owner or Admin; `read_skill_reflection` additionally requires the org-scoped `research.read` grant; the four console reads are org Owner, Admin or Member, or workspace Owner or Member. All nine declare `noBillingGate: true`, because an organization out of governed action units must still be able to read its configuration and **turn skills off** — a control you cannot switch off when the bill lapses is not a control. `search_skills` is the exception and is metered.
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |
 | `resolve_approval` | resolve_approval, resolve_mcp_consent | approve or deny, mints the token |
 | `send_message` | (new) | message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6) |
 | `list_messages` | (new) | sent and received, with delivery outcome |
+
+**Roles and billing for the eleven Skills tools (ADR-090).** `checkIAM` allows every capability for a non-enterprise org (§5), so each asserts its own role in its handler rather than relying on the kernel. The five writes are org Owner or Admin; `read_skill_reflection` additionally requires the org-scoped `research.read` grant; the five console reads (`get_skill_config`, `list_skill_resolutions`, `list_skill_interjections`, `preview_skill_search`, `list_skills`) are org Owner, Admin or Member, or workspace Owner or Member. All ten of those declare `noBillingGate: true`, because an organization out of governed action units must still be able to read its configuration and **turn skills off** — a control you cannot switch off when the bill lapses is not a control. `search_skills` is the one exception: it is the agent's tool, authorized by the belt rather than a human role, and **metered**, because it is resolution a run consumes.
 
 **Toolbelt (17)**
 
@@ -2398,7 +2400,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 
 Two notes on that list. `read_file` has no registered contract on `main` — the only match is a test fixture in `packages/oxagen/src/contracts/tool.declaration.publish.test.ts` — so there is nothing to de-register and nothing to preserve. And the three plugin credential tools (`set_plugin_secret`, `revoke_plugin_credential`, `reauth_plugin_credential`) are absorbed into `set_connection` and `delete_connection` rather than dropped outright: the behaviour survives under the connection vocabulary, and only the plugin-shaped entry points come off the surfaces.
 
-Count: **108** rows for the full product, counted from the table above, of which eleven are the Skills tools (`list_skills`, 2026-09-15; `search_skills` and the nine controls ADR-090 adds). The family line below it — 11 + 10 + 14 + 17 + 13 + 9 + 9 + 7 + 6 = 96 — plus those eleven gives 107, one short of the rows actually present: a pre-existing miscount in one family that predates ADR-090 and is not chased here, recorded so the next editor reconciles the families rather than trusting the sum. The wedge ships **89**: the 96 minus the eighteen marked new in the toolbelt, compliance, wrapping, and knowledge families that land from M2 onward and in Series A. Nothing is added back without a row in this appendix.
+Count: **109** rows for the full product, counted from the table above, of which twelve are the Skills tools: `list_skills` (2026-09-15) and the eleven ADR-090 adds — `search_skills`, `preview_skill_search` and the nine controls. The wedge ships **91**: the 109 minus the eighteen marked new in the toolbelt, compliance, wrapping and knowledge families that land from M2 onward and in Series A. The per-family headings were recomputed from the rows rather than adjusted, after the Skills additions left Wrapping and control reading 15 against 26 actual rows.
 
 ## Appendix F. The pages that survive
 
