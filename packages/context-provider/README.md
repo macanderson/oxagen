@@ -1,5 +1,15 @@
 # @oxagen/context-provider
 
+> **Status, 2026-09-18.** Nothing in production imports this package, and
+> `@oxagen/engram`, which it reads, has no application importer either. It holds
+> the only token budgeter in the repository (`packWithinBudget`,
+> `src/budget.ts`). ADR-093 makes this package the home of
+> `assembleSteering(run, budget)` in Phase 1 of the steering refactor: the
+> budgeter is reused, the sources become adapters (the record registry,
+> `:AgentMemory`, gate notices, skill descriptions, workspace instructions), and
+> `packages/engram` is deleted or folded in. What follows describes the package
+> as it is today.
+
 The Context Exchange Provider: one oxagen workspace's memory, served as
 Context Graph Protocol frames.
 

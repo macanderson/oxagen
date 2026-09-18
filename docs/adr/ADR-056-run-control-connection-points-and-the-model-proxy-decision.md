@@ -1,6 +1,6 @@
 # ADR-056: Run control connection points and the model-proxy decision
 
-- **Status:** Accepted
+- **Status:** Accepted; amended 2026-09-15 (run token) and 2026-09-18 (ledger producers exist; the proxy decision is ADR-094)
 - **Date:** 2026-09-14
 - **Owners:** platform
 - **Related:** issue #2953 (run controls: pause, resume, cancel, steer with a
@@ -204,3 +204,27 @@ second connection point beside the hook adapter:
   `no_connection_point` copy stays for the kinds that remain refused.
 
 `apps/app/architecture.worklist.json` WL-61 builds it.
+
+## Amendment 2026-09-18: producers now append to the run ledger, and the proxy decision is made
+
+Two sentences above are no longer true at `main` `02278c913`.
+
+**"No producer in this tree calls `createAttempt` or `appendAttemptBatch` on
+`@oxagen/run-ledger`"** (§1) and **"No producer in this tree appends to
+`@oxagen/run-ledger`"** (the 2026-09-15 amendment). Two producers now do:
+
+- `packages/agent/src/runtime/assistant-run.ts` records the in-app agent's turn
+  as a run: it calls `store.createRun`, `store.createAttempt` and appends frames
+  through its recorder (ADR-053's 2026-09-15 amendment).
+- `packages/handlers/src/run.fork.ts` calls `createAttempt` to mint the attempt
+  behind a fork (ADR-058).
+
+Neither is a wrapped harness, so the hook adapter is still the connection point
+for Claude Code, Codex and Stella, and the refusal of a command addressed to a
+ledger run with no connection point is unchanged.
+
+**"The model proxy is its own decision"** (§1). ADR-094 is that decision:
+`tachod` grows into the gateway, with a loopback model proxy. Phase 4 is in
+build. When it lands, `interrupt` stops degrading to `next_step` for a run on
+the `gateway` tier, and the irreversible-tool guard this ADR deferred to the
+proxy has a home.

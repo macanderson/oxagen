@@ -89,7 +89,11 @@ operates anything. Every one of those operator actions is a governed action the
 meter prices.
 
 Every claim states its scope (ADR-067). Enforcement applies to actions routed through
-Oxagen, and observe mode is recorded, not enforced. Completion checks are an optional
+Oxagen, and observe mode is recorded, not enforced. The tier ladder has four words,
+computed from what was actually routed: observe, harness, gateway, contained
+(ADR-095). A hook-tier control is delivered, recorded, client-attested and fail-open,
+never enforced. Today agents sit on observe or harness; the gateway tier is in build
+and the contained tier is not started. Completion checks are an optional
 control for bounded tasks, and a passing verdict means the specified checks held.
 Cost copy claims attribution, not savings, unless the workload was measured. The
 approved copy lives in the message registry in `oxagenai/oxagen-brand` `messages/`.
@@ -193,9 +197,10 @@ enforce or record it:
   subagent fan-out, skill executor, eval harness, automation engine, browser/code
   tool, or content generator as a product surface (ADR-043): Oxagen is the control
   plane, not the agent. Engine work belongs in Stella; removing or extracting runtime
-  code in service of the refocus is advancing, not drift. One sentence of revision,
-  approved on 2026-09-18 (ADR-096): Oxagen does not run turns, but it may contain the process
-  that does. A launcher that confines a process is not an agent runtime. The
+  code in service of the refocus is advancing, not drift. One distinction (ADR-096,
+  amending ADR-043): Oxagen does not run turns, but it may contain the process that
+  does. A launcher that confines a process is not an agent runtime, and neither is a
+  loopback proxy that forwards a request a harness made (ADR-094). The
   contained tier (`oxagen run -- <agent>`, an OS sandbox whose only egress is the
   gateway) is that launcher, aimed at CI, headless runs, cloud runners and managed
   devices, and it is not built yet.
@@ -236,11 +241,10 @@ strategic drift, not to nag maintenance.
    exists? (drifts)
 5. Is it front-line investment in a market we explicitly declined to fight
    (connector breadth, standalone evals, framework mindshare)? (drifts)
-6. Does it make Oxagen run agents rather than govern them — an engine, fan-out,
-   or executor as a product surface, or a sandbox that runs the agent's turns?
-   (drifts) A launcher that only confines a process, so its one egress is the
-   gateway, and that runs no turn of its own (the contained tier, ADR-096), is
-   governance, not a runtime. (advances)
+6. Does it make Oxagen run agents rather than govern them — an engine, a sandbox
+   for Oxagen's own agent code, fan-out, or an executor as a product surface?
+   (drifts) Containing a customer's agent process, or proxying its model traffic on
+   loopback, is governing, not running (ADR-094, ADR-096).
 7. Does it strengthen or weaken the enforced contract — the binding of identity,
    knowledge scope, permitted action, commercial terms, outcome, and audit record
    into one object? (advances / drifts)

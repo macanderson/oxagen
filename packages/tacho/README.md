@@ -89,6 +89,8 @@ bypasses the hooks. That is why the detector exists and why the session record
 carries `enforcement_tier`. Managed settings (`enroll --print-managed`) lock the
 hooks for MDM-managed machines; the record is still labelled `client_attested`.
 
+## What the daemon is today, and what it grows into
+
 What the signed bundle carries today is one thing: the workspace's steering. The
 server compiles its active `must` and `should` context records into
 `context.system` (`packages/handlers/src/lib/tacho-steering.ts`, ADR-091), which
@@ -98,7 +100,10 @@ deny only on host status or a paused session, and nothing reads
 `session_limit_usd`. Operator steer commands are the only
 live text channel from the server to a running agent. Token and cost numbers for
 Claude Code are the harness's own telemetry, self-reported. Codex and Stella export
-none. There is no model proxy and no sandbox.
+none. There is no model proxy and no sandbox. The MCP gateway (`src/collector/mcp-gateway.ts`) is real
+and server-enforced, and it is registered only into Claude Desktop. The leaf
+constraint stays through every phase below: the proxy imports no `@oxagen/*`
+runtime package.
 
 ## Where this package is going
 
@@ -142,6 +147,9 @@ It does not describe the hook process, which fails closed against its cached
 bundle: in enforce mode a stale or unverified bundle denies non-read-only tools.
 Five events run as command hooks (`COMMAND_HOOK_EVENTS`), and four of them can
 refuse. `Stop` is the fifth.
+
+The tier words are fixed by ADR-095: `observe`, `harness`, `gateway`,
+`contained`, computed from what was actually routed.
 
 ## Modules
 
