@@ -198,7 +198,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   NEO4J_ORG_PROVISIONER: {
     group: "Neo4j",
     description:
-      "Graph provisioner for paid organisations (ADR-091): pooled (Community, dev, CI), cypher (self-managed Enterprise: CREATE DATABASE org-<namespace>), aura (not implemented; refused).",
+      "Graph provisioner for paid organisations (ADR-098): pooled (Community, dev, CI), cypher (self-managed Enterprise: CREATE DATABASE org-<namespace>), aura (not implemented; refused).",
     secret: false,
     clientExposed: false,
     services: ["api", "app", "mcp"],

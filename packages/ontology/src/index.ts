@@ -18,7 +18,7 @@ export {
   DEFAULT_OVERSAMPLE_CAP,
   SCOPE_OVERSAMPLE_FACTOR,
 } from "./ann";
-// Organisation graph provisioning (spec §5.3, ADR-091).
+// Organisation graph provisioning (spec §5.3, ADR-098).
 export {
   createAuraProvisioner,
   createCypherProvisioner,

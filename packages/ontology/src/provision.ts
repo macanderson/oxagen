@@ -1,5 +1,5 @@
 /**
- * Organisation graph provisioning — spec §5.3 rules 1, 3 and 4, ADR-091.
+ * Organisation graph provisioning — spec §5.3 rules 1, 3 and 4, ADR-098.
  *
  * One interface, one call site (organisation creation), and three answers to
  * "where does this organisation's graph live":
@@ -16,7 +16,7 @@
  *           are created only through the Aura API, never with Cypher. NOT
  *           IMPLEMENTED: selecting it throws `OrgGraphProvisionerNotConfigured`
  *           rather than guessing at an API this repository has never been
- *           verified against. ADR-091 records the gap.
+ *           verified against. ADR-098 records the gap.
  *
  * The provisioner touches only Neo4j. Recording the answer — the
  * `org.data_planes` row the resolver routes by — belongs to the caller, which
@@ -148,7 +148,7 @@ export function createAuraProvisioner(): OrgGraphProvisioner {
     provision: async () => {
       throw new OrgGraphProvisionerNotConfigured(
         "aura",
-        "the Aura API provider is not implemented yet (ADR-091); use NEO4J_ORG_PROVISIONER=cypher on self-managed Enterprise or pooled",
+        "the Aura API provider is not implemented yet (ADR-098); use NEO4J_ORG_PROVISIONER=cypher on self-managed Enterprise or pooled",
       );
     },
   };

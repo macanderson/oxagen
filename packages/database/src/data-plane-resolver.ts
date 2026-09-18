@@ -229,7 +229,7 @@ export async function loadDataPlaneBinding(
       status,
       configDigest: row.configDigest ?? null,
       schemaVersion: row.schemaVersion ?? null,
-      // ADR-091: a provisioned organisation's own database on the platform
+      // ADR-098: a provisioned organisation's own database on the platform
       // cluster. Only a neo4j row can carry one (DB CHECK); null = the pool.
       database: kind === "neo4j" ? (row.graphDatabase ?? null) : null,
     };
@@ -314,7 +314,7 @@ export function bootstrapDataPlaneResolver(): void {
 
 /**
  * Record that an organisation's graph lives in its own database on the shared
- * cluster (ADR-091). Written by organisation creation, on the SAME transaction
+ * cluster (ADR-098). Written by organisation creation, on the SAME transaction
  * as the organisation row, right after an OrgGraphProvisioner returned a
  * `database` placement — so an organisation is never visible with a database
  * that exists and no row routing to it, or a row routing to one that does not.

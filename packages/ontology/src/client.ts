@@ -24,7 +24,7 @@ export function driver(): Driver {
  * Open a session on the shared cluster. With no argument it opens the POOLED
  * database (`NEO4J_DATABASE`), where free and trial organisations live under
  * property scoping. An organisation provisioned into its own database
- * (spec §5.3, ADR-091) passes that name, and the engine — not a `WHERE` clause
+ * (spec §5.3, ADR-098) passes that name, and the engine — not a `WHERE` clause
  * — keeps every other tenant's graph out of reach.
  */
 export function session(database?: string | null): Session {

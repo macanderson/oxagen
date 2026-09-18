@@ -283,7 +283,7 @@ describe("splitStatements (via migrate behaviour)", () => {
   });
 });
 
-describe("migrate() per organisation database (ADR-091)", () => {
+describe("migrate() per organisation database (ADR-098)", () => {
   beforeEach(() => {
     runFn.mockClear();
     sessionArgs.mockClear();

@@ -308,7 +308,7 @@ describe("resolveDataPlaneKms", () => {
   });
 });
 
-describe("the organisation's own graph database (ADR-091)", () => {
+describe("the organisation's own graph database (ADR-098)", () => {
   const sharedRow = (graphDatabase: string | null) => ({
     mode: "shared",
     status: "active",

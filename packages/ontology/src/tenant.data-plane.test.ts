@@ -115,7 +115,7 @@ describe("scopedSession — shared plane (default)", () => {
   });
 });
 
-describe("scopedSession — the organisation's own database (ADR-091)", () => {
+describe("scopedSession — the organisation's own database (ADR-098)", () => {
   it("opens the pooled database when the shared binding names none", async () => {
     await runInTenantScope({ orgId: ORG, workspaceId: WS }, async () => {
       await scopedSession().run(CYPHER);

@@ -147,7 +147,7 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     passthrough();
   });
 
-  // ── graph placement (spec §5.3, ADR-091) ───────────────────────────────────
+  // ── graph placement (spec §5.3, ADR-098) ───────────────────────────────────
 
   it("places a free org in the pooled graph and records no binding", async () => {
     await organizationCreateHandler(INPUT, CTX);

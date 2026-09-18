@@ -280,7 +280,7 @@ export function scopedSession(scope?: GraphScope): {
     assertDataPlaneUsable(plane);
     // A shared plane is either the POOLED database (no `database` on the
     // binding) or the organisation's own database on the platform cluster,
-    // created by an OrgGraphProvisioner at organisation creation (ADR-091).
+    // created by an OrgGraphProvisioner at organisation creation (ADR-098).
     s =
       plane.mode === "shared"
         ? session(plane.database)

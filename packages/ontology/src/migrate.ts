@@ -202,7 +202,7 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
 /**
  * Apply `schema.cypher` (and the legacy clean-up passes) to one database. With
  * no argument that is the POOLED database; an organisation provisioned into its
- * own database (ADR-091) is migrated by name — by the provisioner right after
+ * own database (ADR-098) is migrated by name — by the provisioner right after
  * `CREATE DATABASE`, and by the direct-run entry below on every deploy.
  */
 export async function migrate(database?: string | null): Promise<void> {
@@ -228,7 +228,7 @@ export async function migrate(database?: string | null): Promise<void> {
 }
 
 /**
- * Bring every provisioned organisation database (`org-<namespace>`, ADR-091)
+ * Bring every provisioned organisation database (`org-<namespace>`, ADR-098)
  * to the same schema as the pooled one. The list comes from the engine itself
  * (`SHOW DATABASES` on `system`), so an organisation whose binding row was
  * written but whose migration never ran is still reached. On Community

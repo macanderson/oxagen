@@ -1,4 +1,4 @@
--- ADR-091 / spec §5.3: an organisation's graph lives in its OWN Neo4j database
+-- ADR-098 / spec §5.3: an organisation's graph lives in its OWN Neo4j database
 -- on the platform cluster once an OrgGraphProvisioner has created it.
 --
 -- `graph_database` names that database (`org-<namespace>`). It rides on a

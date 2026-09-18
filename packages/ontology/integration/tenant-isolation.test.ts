@@ -19,7 +19,7 @@
  * per-organisation database path is proven by unit tests (`provision.test.ts`,
  * `tenant.data-plane.test.ts`); this file adds the one real-engine fact about
  * it that Community can give, that the engine refuses `CREATE DATABASE` and
- * the Cypher provisioner surfaces that as a typed error. ADR-091 records the
+ * the Cypher provisioner surfaces that as a typed error. ADR-098 records the
  * split.
  *
  * The file also runs three queries the seam REFUSES through a raw driver session,

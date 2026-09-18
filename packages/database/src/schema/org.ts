@@ -247,7 +247,7 @@ export const dataPlanes = orgSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // ADR-091: the organisation's own database on the SHARED Neo4j cluster
+    // ADR-098: the organisation's own database on the SHARED Neo4j cluster
     // (`org-<namespace>`), written when an OrgGraphProvisioner creates it.
     // NULL = the pooled database. Only on a shared-mode neo4j row; CHECK below.
     graphDatabase: text("graph_database"),

@@ -1,5 +1,5 @@
 /**
- * Naming and discovery for organisation graph databases (spec §5.3, ADR-091).
+ * Naming and discovery for organisation graph databases (spec §5.3, ADR-098).
  *
  * The tenant boundary on the graph is the DATABASE: an organisation on a paid
  * plan gets its own database on the platform cluster, and a query cannot cross
@@ -15,7 +15,7 @@ import { driver } from "./client";
  * Prefix of every organisation database. The spec writes `org_<namespace>`,
  * but Neo4j refuses an underscore in a database name — the first character must
  * be an ASCII letter and the rest letters, digits, dots or dashes — so the
- * separator is a dash. Recorded in ADR-091.
+ * separator is a dash. Recorded in ADR-098.
  */
 export const ORG_GRAPH_DATABASE_PREFIX = "org-";
 

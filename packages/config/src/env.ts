@@ -35,7 +35,7 @@ export const baseEnvSchema = z.object({
   NEO4J_USERNAME: z.string().min(1),
   NEO4J_PASSWORD: z.string().min(1),
   NEO4J_DATABASE: z.string().default("neo4j"),
-  // Which OrgGraphProvisioner a PAID organisation gets at creation (ADR-091).
+  // Which OrgGraphProvisioner a PAID organisation gets at creation (ADR-098).
   // Free and trial organisations are pooled whatever this says.
   NEO4J_ORG_PROVISIONER: z.enum(["pooled", "cypher", "aura"]).default("pooled"),
 

@@ -18,7 +18,7 @@ import { bootstrapWorkspace } from "./workspace-bootstrap";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
- * the org's graph placement (pooled, or its own Neo4j database — ADR-091),
+ * the org's graph placement (pooled, or its own Neo4j database — ADR-098),
  * the IAM roles and grants, the first workspace with everything a workspace
  * needs, the onboarding gate opened on that workspace (#2967: the
  * organization exists, so the gate is at `wrap` with its 14-day provisional
@@ -114,7 +114,7 @@ export const organizationCreateHandler: CapabilityHandler<
         updatedById: userId,
       });
 
-      // The org's graph (spec §5.3 rules 1, 3, 4; ADR-091). A free or trial
+      // The org's graph (spec §5.3 rules 1, 3, 4; ADR-098). A free or trial
       // org is placed in the pooled database and nothing is created. A paid
       // org on a deployment that runs a real provisioner gets `org-<namespace>`
       // created (idempotently) and the routing row written on THIS
