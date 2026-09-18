@@ -18,6 +18,7 @@ import type { Read } from "@/data/read";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { cell, numericCell, Table } from "@/ui/table";
+import { invoicesInMonth } from "./invoices-in-month";
 import { ReadFailure } from "./read-failure";
 import { Section } from "./section";
 
@@ -32,21 +33,6 @@ const LINES: readonly {
   { line: "topups", kinds: ["gau_auto_topup"] },
   { line: "overage", kinds: ["gau_interim", "gau_period_close"] },
 ];
-
-/** The invoices whose period touches the bucket month, a void one excluded. */
-export function invoicesInMonth(
-  items: readonly InvoiceRow[],
-  period: GauBucket["period"],
-): InvoiceRow[] {
-  const start = Date.parse(period.start);
-  const end = Date.parse(period.end);
-  return items.filter(
-    (row) =>
-      row.status !== "void" &&
-      Date.parse(row.periodEnd) >= start &&
-      Date.parse(row.periodStart) < end,
-  );
-}
 
 function Amount({ value }: { value: MoneyValue | null | undefined }) {
   const t = useTranslations("billing");

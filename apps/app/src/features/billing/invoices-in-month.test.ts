@@ -1,4 +1,4 @@
-// invoicesInMonth (this-month.tsx): the invoices whose period touches the
+// invoicesInMonth (invoices-in-month.ts): the invoices whose period touches the
 // bucket month, a void one excluded. Boundary inclusion is
 // `periodEnd >= period.start` and `periodStart < period.end`, so a row that
 // starts exactly on the bucket's end date belongs to next month, not this
@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { GauBucket, InvoiceRow } from "@/data/contracts/billing";
 import { invoiceRow } from "./billing.builders";
-import { invoicesInMonth } from "./this-month";
+import { invoicesInMonth } from "./invoices-in-month";
 
 const PERIOD: GauBucket["period"] = {
   start: "2026-09-01T00:00:00.000Z",
