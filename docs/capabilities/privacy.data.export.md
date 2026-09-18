@@ -74,6 +74,7 @@ organization has exhausted its credits or reached its spend ceiling.
 | code | meaning |
 |---|---|
 | `unauthorized` | No authenticated session. |
+| `forbidden` | Requested by a machine principal (`reason: "export_requires_a_person"`). A normal API key carries no user, and an export is a person's right over their own data. A CLI session key speaks for its creator and is unaffected. |
 | `forbidden` | `scope: "org"` requested without Owner/Admin role (`reason: "org_export_requires_admin"`). |
 | `validation_error` | Input failed Zod parse. |
 | `not_found` | `exportId` not found when polling. |

@@ -102,6 +102,24 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   // Uncoded, the app shows its generic failure instead of "an organization
   // export needs an owner or admin" and records a runtime error rather than a
   // policy denial, and the API answers 500 rather than 403.
+  // Reachable since the contract started admitting every org role: a normal API
+  // key resolves with `userId: null`, so a machine principal now reaches the
+  // handler instead of being stopped at IAM. Uncoded, that read as a runtime
+  // error and a 500 rather than an authorization refusal.
+  it("refuses a machine principal with a coded forbidden", async () => {
+    const err = await privacyDataExportHandler(
+      { scope: "user" },
+      { ...CTX, userId: null } as typeof CTX,
+    ).catch((e: unknown) => e);
+    expect(isHandlerError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: "forbidden",
+      reason: "export_requires_a_person",
+    });
+    expect(mocks.insertReturning).not.toHaveBeenCalled();
+    expect(mocks.eventSend).not.toHaveBeenCalled();
+  });
+
   it("refuses with a coded forbidden, so the surfaces read it as a denial", async () => {
     queueSelects([{ role: "member" }]);
     const err = await privacyDataExportHandler(

@@ -15,10 +15,23 @@ function generatePublicId(prefix: string): string {
 export const privacyDataExportHandler: CapabilityHandler<
   typeof privacyDataExport
 > = async (input, ctx) => {
+  // A typed refusal, because this branch is now REACHABLE. The contract admits
+  // every org role so a member can export their own data, which also lets a
+  // machine principal through the kernel: a normal API key resolves with
+  // `userId: null` (`packages/auth/src/resolvers/api-key.ts`). An uncoded throw
+  // reads as `unclassified`, so the API answered 500 and the kernel audited a
+  // runtime error where the truth is an authorization refusal.
+  //
+  // There is nothing to export for a machine: the row is keyed on `userId`, and
+  // "this key's personal data" names nobody. A CLI session key, which speaks
+  // for its creator, carries that person's `userId` and is unaffected.
   if (!ctx.userId) {
-    throw new Error(
-      "Unauthorized: authentication required to request a data export",
-    );
+    throw new HandlerError({
+      code: "forbidden",
+      reason: "export_requires_a_person",
+      message:
+        "A data export is a person's right over their own data, so it cannot be requested by a machine principal",
+    });
   }
   if (!ctx.orgId) {
     throw new Error("Forbidden: orgId is required");
