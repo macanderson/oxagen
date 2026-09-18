@@ -191,6 +191,8 @@ describe("loadModelCredential — an active row", () => {
       apiKey: PLAINTEXT_KEY,
       digest: "sha256:deadbeef",
       keyHint: "-key",
+      baseUrl: null,
+      modelMap: {},
     });
     expect(mocks.warn).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
