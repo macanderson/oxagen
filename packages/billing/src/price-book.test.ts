@@ -33,7 +33,7 @@ import {
   priceEntriesFromRateCards,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
-  syncPriceBook,
+  syncPriceBook as syncPriceBookLive,
   usdPerMillionToMicros,
   usdPerUnitToMicrosPerMillion,
   type PriceEntry,
@@ -41,6 +41,7 @@ import {
 } from "./price-book";
 import {
   makeFakePriceStore,
+  fakeClock,
   makeFakePriceTx,
   priceRow,
   type FakePriceStore,
@@ -238,11 +239,31 @@ const SET = {
 const T1 = new Date("2026-09-10T00:00:00.000Z");
 const T2 = new Date("2026-10-01T00:00:00.000Z");
 
+/**
+ * The sync refuses a boundary the write instant has already passed, and
+ * these fixtures use fixed instants. Unless a test pins its own clock, the
+ * write instant is one second before the requested boundary, so the boundary
+ * is always just ahead, as it is for a real run.
+ */
+const TEST_NOW = new Date(T1.getTime() - 1_000);
+const syncPriceBook: typeof syncPriceBookLive = (args) => {
+  // One clock for the whole file, a second before T1: every fixture instant
+  // is then ahead of the write, and the cold-start window (measured from the
+  // book's first row) does not silently expire between T1 and T2 fixtures
+  // three weeks apart. A test that needs a different clock passes its own.
+  const now = args.now ?? TEST_NOW;
+  // The fake stamps `created_at` from this clock too, as Postgres's `now()`
+  // would inside the same transaction.
+  fakeClock.now = now;
+  return syncPriceBookLive({ now, ...args });
+};
+
 describe("the negotiated write path", () => {
   let fake: FakePriceStore;
 
   beforeEach(() => {
     fake = makeFakePriceStore();
+    fakeClock.now = null;
     store.tx = makeFakePriceTx(fake);
   });
 
@@ -984,6 +1005,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
 
   beforeEach(() => {
     fake = makeFakePriceStore();
+    fakeClock.now = null;
     store.tx = makeFakePriceTx(fake);
   });
 
@@ -1071,17 +1093,21 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     ).rejects.toMatchObject({
       name: "HandlerError",
       code: "conflict",
-      reason: "price_book_row_already_effective",
+      // The boundary itself has passed, which is refused before any row is
+      // looked at: the same defect, caught one step earlier.
+      reason: "price_book_boundary_passed",
     });
     expect(fake.rows[0]!.microsPerMillion).toBe(3_000_000n);
 
-    // Unchanged terms at the same instant are still a no-op.
-    const same = await syncPriceBook({
-      effectiveFrom: T1,
-      seeds: [seed(3_000_000n, T1)],
-      now: new Date("2026-09-10T00:30:00.000Z"),
-    });
-    expect(same.unchanged).toBe(1);
+    // A boundary that has passed is refused whatever the terms: the refusal
+    // is about the instant, decided before any row is compared.
+    await expect(
+      syncPriceBook({
+        effectiveFrom: T1,
+        seeds: [seed(3_000_000n, T1)],
+        now: new Date("2026-09-10T00:30:00.000Z"),
+      }),
+    ).rejects.toMatchObject({ reason: "price_book_boundary_passed" });
 
     // A row scheduled ahead of the write instant corrects in place.
     fake.rows.length = 0;
@@ -1144,7 +1170,6 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     });
     const result = await syncPriceBook({
       effectiveFrom: T1,
-      now: new Date("2026-09-18T00:00:00.000Z"),
       seeds: [
         seedFor("claude-sonnet-5", 3_000_000n),
         seedFor("claude-haiku-5", 1_200_000n),
@@ -1579,6 +1604,7 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
 
   beforeEach(() => {
     fake = makeFakePriceStore();
+    fakeClock.now = null;
     store.tx = makeFakePriceTx(fake);
   });
 
@@ -1680,6 +1706,22 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     expect(byModel("claude-haiku-4").effectiveTo).toBeNull();
   });
 
+  // The operator removed an override whose terms matched the catalog to the
+  // micro. The row stayed tagged `override`, and on the next partial run the
+  // override-retirement pass closed it as a removed override, leaving the
+  // model unpriced until every catalog answered.
+  it("re-stamps a row's source in place when only its author changed", async () => {
+    fake.rows.push(priceRow({ source: "override" }));
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed({ source: "list" })],
+    });
+    expect(result.unchanged).toBe(1);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.source).toBe("list");
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+  });
+
   it("records which rows came from an override, so they can be told apart later", async () => {
     await syncPriceBook({
       effectiveFrom: T1,
@@ -1732,6 +1774,7 @@ describe("the negotiated write path refuses in a shape every surface can classif
 
   beforeEach(() => {
     fake = makeFakePriceStore();
+    fakeClock.now = null;
     store.tx = makeFakePriceTx(fake);
   });
 

@@ -345,6 +345,13 @@ function thenable<T>(run: () => T) {
  * pushing onto `store.rows` (use {@link priceRow}); `store.log` is the
  * statement log.
  */
+/**
+ * The clock the fake stamps `created_at` with on insert. A test that pins the
+ * write's `now` sets this to the same instant, the way Postgres's `now()`
+ * would agree with the transaction; null means the wall clock.
+ */
+export const fakeClock: { now: Date | null } = { now: null };
+
 export function makeFakePriceTx(store: FakePriceStore): Tx {
   return fakePriceExecutor(store) as unknown as Tx;
 }
@@ -437,7 +444,7 @@ export function fakePriceExecutor(store: FakePriceStore) {
       }
       const row: PriceRow = {
         id: crypto.randomUUID(),
-        createdAt: new Date(),
+        createdAt: fakeClock.now ?? new Date(),
         updatedAt: new Date(),
         createdByUserId: null,
         updatedByUserId: null,

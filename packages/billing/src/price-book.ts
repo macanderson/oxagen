@@ -565,6 +565,23 @@ export async function syncPriceBook(args: {
       );
     const completeSnapshot = args.retireAbsent === true;
     const effectiveFrom = args.effectiveFrom;
+
+    // The boundary is checked HERE, under the lock, against the write
+    // instant, not by the caller before its catalog reads. Those reads take
+    // up to fifteen seconds and the lock wait is unbounded, so an instant
+    // that was ahead when the run began can be behind by the time it writes;
+    // the commit would then close old rows retroactively, and frames rolled
+    // up in between would cite a window that no longer covers them, with a
+    // retry repricing them. Refused, and the transaction rolls back, so the
+    // caller re-runs with a later instant. A cold book is exempt: its writes
+    // land at the floor by design, below every frame.
+    if (!coldStart && effectiveFrom.getTime() <= now.getTime()) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_book_boundary_passed",
+        message: `the effective instant ${effectiveFrom.toISOString()} is not after the write instant ${now.toISOString()}: the refresh took long enough that its boundary has passed, and writing at it would reprice frames already settled; re-run with a later effectiveFrom`,
+      });
+    }
     const seeds = coldStart
       ? requested.map((s) => {
           const seenKey = `${s.model}|${s.tokenClass}|${s.region ?? ""}`;
@@ -604,6 +621,20 @@ export async function syncPriceBook(args: {
         pricedTheSame &&
         sameNameList(current.modelAliases, seed.modelAliases)
       ) {
+        // Same terms, same names, but a different author: an operator
+        // removed an override whose terms matched the catalog exactly, or
+        // added one that does. The row must say who owns it now, or the
+        // override-retirement pass reads a catalog row as an override and
+        // closes it on the next partial run, leaving the model unpriced.
+        // Provenance is not a price, so it is stamped in place, not given a
+        // new window.
+        const source = seed.source ?? "list";
+        if (current.source !== source) {
+          await tx
+            .update(schema.priceEntries)
+            .set({ source, updatedAt: new Date() })
+            .where(eq(schema.priceEntries.id, current.id));
+        }
         unchanged += 1;
         continue;
       }
