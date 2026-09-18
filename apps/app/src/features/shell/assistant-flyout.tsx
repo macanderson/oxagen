@@ -103,6 +103,8 @@ import {
 } from "react";
 import { ASSISTANT_PANEL_ID } from "./assistant-launcher";
 import { askAssistant, type ParkedCard } from "./assistant-actions";
+import { AssistantStreamingText } from "./assistant-streaming-text";
+import { AssistantThinkingDots } from "./assistant-thinking-dots";
 import { parseShellPath } from "./nav";
 import { usePageRecord } from "./page-record";
 import { useShellState } from "./shell-state";
@@ -571,7 +573,7 @@ export function AssistantFlyout() {
                   </p>
                 ) : entry.kind === "answered" ? (
                   <div data-testid="assistant-answer">
-                    <p className="whitespace-pre-wrap text-sm">{entry.text}</p>
+                    <AssistantStreamingText text={entry.text} />
                     <p
                       data-testid="assistant-recorded-as"
                       className="mt-1 font-mono text-[11px] text-muted-foreground"
@@ -616,14 +618,7 @@ export function AssistantFlyout() {
             ))}
           </ol>
         )}
-        {pending ? (
-          <p
-            data-testid="assistant-thinking"
-            className="mt-3 text-[13px] text-muted-foreground"
-          >
-            {t("thinking")}
-          </p>
-        ) : null}
+        {pending ? <AssistantThinkingDots label={t("thinking")} /> : null}
       </div>
 
       <div className="flex-none border-t border-border px-3 py-3">

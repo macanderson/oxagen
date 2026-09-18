@@ -136,8 +136,11 @@ covers credits (1 credit = $0.01) and nothing else:
 
 - the credit packs,
 - the `includedCredits` a plan invoice grants,
-- the meter markup at which a platform-funded assistant turn debits credits
-  (metering spec §5.3).
+- the meter markup at which a platform-paid embedding call debits credits
+  (metering spec §5.3). A platform-funded assistant turn no longer reads this
+  knob: `consume_assistant_tokens` bills at `ASSISTANT_TOKEN_MARKUP` (1, cost
+  with no margin, ADR-053 amended 2026-09-18), so a margin change here does
+  not touch it.
 
 It sets no GAU figure. The GAU rate, block size and allowance are
 `gauTerms`, and a margin change moves none of them.

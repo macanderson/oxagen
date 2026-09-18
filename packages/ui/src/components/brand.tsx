@@ -4,12 +4,12 @@
  * Geometry comes from `./brand-marks.generated.ts`, extracted by
  * `tools/scripts/sync-brand-assets.mjs` from the house brand kit
  * (oxagenai/oxagen-brand). Nothing here is drawn: both wordmarks are
- * Space Grotesk's own outlines at weight 600, and both icons are the same face
- * at display weight, so the marks and the product's running text cannot drift
- * apart. To change a mark, change the kit and re-run the sync.
+ * Space Grotesk's own outlines at weight 600, and Stella's icon is the same
+ * face's asterisk. Oxagen's icon is the hive, built from the kit's cell
+ * geometry. To change a mark, change the kit and re-run the sync.
  *
  *   <OxagenWordmark className="h-7" />   // "oxagen", the x in gold — THE logo
- *   <OxagenIcon className="size-7" />    // the one-colour "Ox" lettermark
+ *   <OxagenIcon className="size-7" />    // the hive, two cells in gold
  *   <StellaWordmark className="h-7" />   // "stella*", the asterisk in gold
  *   <StellaIcon className="size-7" />    // the asterisk alone, in gold
  *   <BrandMark />                        // OxagenIcon at the app-chrome size
@@ -20,9 +20,8 @@
  *
  * OXAGEN'S LOGO IS THE WORDMARK. There is deliberately no Oxagen lockup export
  * and no horizontal/vertical composition helper. The kit does emit a lockup —
- * the Ox mark in a plate, a gap, then the word — and it is not used in the
- * product: set plainly, `Ox oxagen` stutters, because the mark is the word's
- * own first two letters at the word's own size. Use the wordmark; use the icon
+ * the hive, a gap, then the word — and it is not used in the product. Use
+ * the wordmark; use the icon
  * only where the slot is square and small (a favicon, an avatar, collapsed
  * chrome), and then use it ALONE, never beside the word.
  *
@@ -30,14 +29,13 @@
  * the wordmark IS the Stella lockup and nothing is ever placed to its left.
  *
  * ONE GLYPH IS GOLD. The `x` of oxagen, the asterisk of stella — never a second
- * one, never the whole word. The gold stays #D6962C in BOTH themes: the kit's
- * "gold becomes its deep shade on paper" rule governs gold WORDS, not the mark,
+ * one, never the whole word. The gold stays #D4AF37 in BOTH themes: the kit's
+ * "gold becomes its deep shade on white" rule governs gold WORDS, not the mark,
  * and the kit's own light and dark files both fill the accent with the metal.
  *
- * THE ICON IS ONE COLOUR. It takes the colour of whatever it sits on, so it can
- * be placed and forgotten — and handed to an operating system that will tint it
- * however it likes. It never carries the metal. StellaIcon is the exception the
- * kit itself makes: the asterisk IS the metal, so it ships gold.
+ * THE HIVE IS TWO COLOURS. Its outlines take the colour of whatever it sits on;
+ * its two lit cells take the gold. `tone="mono"` paints all of it one colour.
+ * StellaIcon is the asterisk alone, and the asterisk is the metal.
  *
  * MINIMUM SIZES. 88px for a wordmark, 24px for an icon. Below that, use the
  * favicon asset instead of shrinking a mark past legibility.
@@ -100,21 +98,25 @@ function Wordmark({
   );
 }
 
-/** An icon: one path, one colour, inside the kit's own 96-unit box. */
+/**
+ * An icon, inside the kit's own 96-unit box. Each part keeps its role: `ink`
+ * parts take currentColor, `accent` parts take the gold. A mono tone paints
+ * every part in currentColor.
+ */
 function Icon({
   geometry,
   label,
-  fill,
+  tone,
   className,
   style,
 }: {
   geometry: BrandGeometry;
   label: string;
-  fill: string;
+  tone: LogoTone;
   className?: string;
   style?: CSSProperties;
 }) {
-  const { viewBox, transform, path } = geometry.icon;
+  const { viewBox, transform, parts } = geometry.icon;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -126,7 +128,30 @@ function Icon({
       style={style}
     >
       <g transform={transform}>
-        <path d={path} fill={fill} />
+        {parts.map((part) => {
+          const colour =
+            part.role === "accent" && tone !== "mono"
+              ? BRAND_GOLD
+              : "currentColor";
+          return part.strokeWidth === undefined ? (
+            <path
+              key={part.d}
+              d={part.d}
+              fill={colour}
+              opacity={part.opacity}
+            />
+          ) : (
+            <path
+              key={part.d}
+              d={part.d}
+              fill="none"
+              stroke={colour}
+              strokeWidth={part.strokeWidth}
+              strokeLinejoin="miter"
+              opacity={part.opacity}
+            />
+          );
+        })}
       </g>
     </svg>
   );
@@ -157,22 +182,25 @@ export function OxagenWordmark({
 }
 
 /**
- * The Oxagen icon — `Ox`, the word's own first two letters, one colour, taken
- * from whatever it sits on. Square slots only, and always alone: putting it
- * beside the wordmark rebuilds the lockup the product does not use.
+ * The Oxagen icon — the hive: six cells, four outlined in the ink of whatever
+ * it sits on and two filled with the gold, one at half strength. Square slots
+ * only, and always alone: putting it beside the wordmark rebuilds the lockup
+ * the product does not use.
  */
 export function OxagenIcon({
   className,
+  tone = "adaptive",
   style,
 }: {
   className?: string;
+  tone?: LogoTone;
   style?: CSSProperties;
 }) {
   return (
     <Icon
       geometry={OXAGEN}
       label="Oxagen"
-      fill="currentColor"
+      tone={tone}
       className={cn("text-foreground", className)}
       style={style}
     />
@@ -204,9 +232,8 @@ export function StellaWordmark({
 }
 
 /**
- * The Stella icon — the asterisk alone. Unlike the Ox lettermark this one IS
- * the metal: the kit ships it gold, because a lone asterisk in ink reads as
- * punctuation rather than a mark. `tone="mono"` flattens it for one-colour
+ * The Stella icon — the asterisk alone, in gold: a lone asterisk in ink reads
+ * as punctuation rather than a mark. `tone="mono"` flattens it for one-colour
  * contexts.
  */
 export function StellaIcon({
@@ -222,7 +249,7 @@ export function StellaIcon({
     <Icon
       geometry={STELLA}
       label="Stella"
-      fill={tone === "mono" ? "currentColor" : BRAND_GOLD}
+      tone={tone}
       className={className}
       style={style}
     />
