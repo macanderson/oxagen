@@ -1305,6 +1305,20 @@ export function App() {
               ? ` · ${tacho.service.kind} ${tacho.service.running ? "running" : tacho.service.installed ? "installed, stopped" : "not installed"}`
               : ""}
           </dd>
+          <dt>Gateway</dt>
+          <dd>
+            {tacho?.gateway
+              ? `model proxy ${tacho.gateway.listening ? `listening on 127.0.0.1:${tacho.gateway.port}` : "not listening"}`
+              : "not available on this build"}
+            {host.harnesses.length > 0 ? (
+              <>
+                {" · "}
+                {host.harnesses
+                  .map((h) => `${h}: ${tacho?.tiers?.[h] ?? "no run yet"}`)
+                  .join(", ")}
+              </>
+            ) : null}
+          </dd>
           <dt>Agents</dt>
           <dd>{summarizeAgents(agentRows)}</dd>
           <dt>Signed in</dt>
