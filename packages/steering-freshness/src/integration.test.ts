@@ -518,9 +518,9 @@ describe("a sparse checkout that excludes .oxagen", () => {
     // than failing on a pathspec the sparse boundary refuses.
     const result = await syncSteering({ cwd: sparse, verdict, force: false });
     expect(result.applied, result.message).toBe(true);
-    expect(
-      existsSync(join(sparse, ".oxagen/rules/ctx.base.always.toml")),
-    ).toBe(true);
+    expect(existsSync(join(sparse, ".oxagen/rules/ctx.base.always.toml"))).toBe(
+      true,
+    );
   });
 });
 
@@ -534,7 +534,13 @@ describe("a forced sync over an untracked copy of a retired record", () => {
     await g(author, "config", "user.name", "Test");
     await g(author, "config", "user.email", "test@example.invalid");
     await g(author, "rm", "--quiet", ".oxagen/rules/ctx.base.always.toml");
-    await g(author, "commit", "--quiet", "-m", "context: retire ctx.base.always");
+    await g(
+      author,
+      "commit",
+      "--quiet",
+      "-m",
+      "context: retire ctx.base.always",
+    );
     await g(author, "push", "--quiet", "origin", "main");
 
     // A fresh clone of the pre-retirement state, with the deletion staged
@@ -544,11 +550,20 @@ describe("a forced sync over an untracked copy of a retired record", () => {
     await g(forced, "config", "user.name", "Test");
     await g(forced, "config", "user.email", "test@example.invalid");
     await g(forced, "checkout", "--quiet", "HEAD~1");
-    await g(forced, "rm", "--quiet", "--cached", ".oxagen/rules/ctx.base.always.toml");
+    await g(
+      forced,
+      "rm",
+      "--quiet",
+      "--cached",
+      ".oxagen/rules/ctx.base.always.toml",
+    );
     const path = join(forced, ".oxagen/rules/ctx.base.always.toml");
     expect(existsSync(path)).toBe(true);
 
-    const verdict = await checkSteeringFreshness({ cwd: forced, policy: policy() });
+    const verdict = await checkSteeringFreshness({
+      cwd: forced,
+      policy: policy(),
+    });
     expect(verdict.missing.map((c) => c.path)).toContain(
       ".oxagen/rules/ctx.base.always.toml",
     );
@@ -576,5 +591,111 @@ describe("a linked checkout", () => {
       policy: policy(),
     });
     expect(verdict.dirty).toEqual([]);
+  });
+});
+
+// A record production retired, whose deletion this checkout staged while an
+// IGNORED copy stayed on disk. `ls-files --others` lists ignored files unless
+// `--exclude-standard` narrows it, and the check passes no exclude flag, so
+// the copy is seen and the removal stays outstanding. Pinned against real
+// git because a review read the flag the other way.
+describe("a retired record whose ignored copy is still on disk", () => {
+  it("is still missing, so the agent is not left reading it", async () => {
+    // By this point in the file production has retired ctx.base.always.
+    const ignored = join(tmp, "ignored-copy");
+    await g(tmp, "clone", "--quiet", origin, ignored);
+    await g(ignored, "config", "user.name", "Test");
+    await g(ignored, "config", "user.email", "test@example.invalid");
+    await g(ignored, "checkout", "--quiet", "HEAD~1");
+    const rel = ".oxagen/rules/ctx.base.always.toml";
+    await g(ignored, "rm", "--quiet", "--cached", rel);
+    await write(ignored, ".git/info/exclude", `${rel}\n`);
+    expect(existsSync(join(ignored, rel))).toBe(true);
+
+    const verdict = await checkSteeringFreshness({
+      cwd: ignored,
+      policy: policy(),
+    });
+    expect(verdict.missing.map((c) => c.path)).toContain(rel);
+    expect(verdict.status).toBe("behind");
+  });
+});
+
+// `diff` and `status` read the index in place of a skip-worktree file, so an
+// edit to the file on disk was invisible to both. When production changed the
+// same record, the auto-sync's `restore --ignore-skip-worktree-bits` wrote
+// over the edit with `force` false.
+describe("a materialised skip-worktree record with a local edit", () => {
+  it("is dirt, and the sync refuses to overwrite it", async () => {
+    await mergeContextPr("ctx.skipped.edit", "Production's first version");
+    const skipped = join(tmp, "skipped");
+    await g(tmp, "clone", "--quiet", origin, skipped);
+    await g(skipped, "config", "user.name", "Test");
+    await g(skipped, "config", "user.email", "test@example.invalid");
+    const rel = ".oxagen/rules/ctx.skipped.edit.toml";
+    await g(skipped, "update-index", "--skip-worktree", rel);
+    await write(skipped, rel, "# the developer's own edit, hidden from git\n");
+    // git itself sees no change.
+    expect(await g(skipped, "status", "--porcelain", "--", rel)).toBe("");
+
+    // Production then changes the same record.
+    const author = join(tmp, "author-skipped-edit");
+    await g(tmp, "clone", "--quiet", origin, author);
+    await g(author, "config", "user.name", "Test");
+    await g(author, "config", "user.email", "test@example.invalid");
+    await write(
+      author,
+      rel,
+      recordToml("ctx.skipped.edit", "Production's second version"),
+    );
+    await g(author, "add", "-A");
+    await g(
+      author,
+      "commit",
+      "--quiet",
+      "-m",
+      "context: revise ctx.skipped.edit",
+    );
+    await g(author, "push", "--quiet", "origin", "main");
+
+    const verdict = await checkSteeringFreshness({
+      cwd: skipped,
+      policy: policy(),
+    });
+    expect(verdict.status).toBe("behind");
+    expect(verdict.missing.map((c) => c.path)).toContain(rel);
+    expect(verdict.dirty).toContain(rel);
+    expect(isSyncSafe(verdict)).toBe(false);
+
+    const result = await syncSteering({ cwd: skipped, verdict, force: false });
+    expect(result.applied).toBe(false);
+    expect(await readFile(join(skipped, rel), "utf8")).toContain(
+      "the developer's own edit",
+    );
+  });
+
+  it("is not dirt when the file is unedited, and a sync replaces it", async () => {
+    const unedited = join(tmp, "skipped-unedited");
+    await g(tmp, "clone", "--quiet", origin, unedited);
+    await g(unedited, "config", "user.name", "Test");
+    await g(unedited, "config", "user.email", "test@example.invalid");
+    const rel = ".oxagen/rules/ctx.skipped.edit.toml";
+    // Pin the checkout one commit back so production is ahead on this file.
+    await g(unedited, "checkout", "--quiet", "HEAD~1");
+    await g(unedited, "update-index", "--skip-worktree", rel);
+
+    const verdict = await checkSteeringFreshness({
+      cwd: unedited,
+      policy: policy(),
+    });
+    expect(verdict.status).toBe("behind");
+    expect(verdict.missing.map((c) => c.path)).toContain(rel);
+    expect(verdict.dirty).toEqual([]);
+
+    const result = await syncSteering({ cwd: unedited, verdict, force: false });
+    expect(result.applied, result.message).toBe(true);
+    expect(await readFile(join(unedited, rel), "utf8")).toContain(
+      "Production's second version",
+    );
   });
 });

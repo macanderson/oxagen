@@ -608,6 +608,46 @@ describe("checkSteeringFreshness, the network budget", () => {
     expect(fetch?.timeoutMs).toBe(2_000);
   });
 
+  // `defaultBranch` makes two network calls in sequence from one context: the
+  // cached-HEAD refresh, then `remote show` when the cached ref is absent. A
+  // timeout snapshotted when the context was built gave each the whole
+  // remainder, so the pair could spend twice the budget.
+  it("gives the second call inside defaultBranch only what the first left", async () => {
+    let clock = 1_000_000;
+    const seen: { cmd: string; timeoutMs: number }[] = [];
+    const base = runner({
+      ...table(),
+      // No cached HEAD, so the fallback asks the server.
+      "symbolic-ref --quiet --short refs/remotes/origin/HEAD": new Error(
+        "no such ref",
+      ),
+      "remote show origin": "* remote origin\n  HEAD branch: main\n",
+    });
+    const run: GitRunner = async (args, opts) => {
+      const cmd = args.join(" ");
+      seen.push({ cmd, timeoutMs: opts.timeoutMs });
+      // The refresh takes 3 seconds of a 5-second budget.
+      if (cmd === "remote set-head origin --auto") clock += 3_000;
+      // And the server takes another 1.5.
+      if (cmd === "remote show origin") clock += 1_500;
+      return base(args, opts);
+    };
+    const v = await check(table(), {
+      run,
+      now: () => clock,
+      timeoutMs: 10_000,
+      networkBudgetMs: 5_000,
+    });
+    expect(v.branch).toBe("main");
+    const refresh = seen.find((c) => c.cmd === "remote set-head origin --auto");
+    const show = seen.find((c) => c.cmd === "remote show origin");
+    const fetch = seen.find((c) => c.cmd.startsWith("fetch "));
+    expect(refresh?.timeoutMs).toBe(5_000);
+    expect(show?.timeoutMs).toBe(2_000);
+    // Past the deadline: the floor, so it fails fast rather than hanging.
+    expect(fetch?.timeoutMs).toBe(1_000);
+  });
+
   it("leaves local git calls on their own timeout", async () => {
     const seen: { cmd: string; timeoutMs: number }[] = [];
     const base = runner(table());

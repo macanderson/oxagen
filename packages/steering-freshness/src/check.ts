@@ -221,16 +221,26 @@ export async function checkSteeringFreshness(
 
   const ctx: GitContext = { cwd, timeoutMs, run: run ?? execGit };
   // The deadline every network call in this check shares. `networkCtx()`
-  // hands out a context whose timeout is what is left of it, floored at one
-  // second so a call already past the deadline fails fast instead of hanging
-  // on a zero timeout.
+  // hands out a context whose runner clamps each call's timeout to what is
+  // left of it AT THE MOMENT THE CALL IS MADE, floored at one second so a
+  // call already past the deadline fails fast instead of hanging on a zero
+  // timeout. The clamp is on the runner rather than on `timeoutMs`, because a
+  // context is handed to functions that make more than one network call in
+  // sequence (`defaultBranch`: the cached-HEAD refresh, then `remote show`),
+  // and a timeout snapshotted at construction gave each of those the whole
+  // remainder — two slow calls spent twice the budget, past the hook's own
+  // timeout, and the harness allowed the prompt before the stamp was written.
   const networkDeadline = now() + networkBudgetMs;
   const networkCtx = (base: GitContext): GitContext => ({
     ...base,
-    timeoutMs: Math.max(
-      1_000,
-      Math.min(base.timeoutMs, networkDeadline - now()),
-    ),
+    run: (args, o) =>
+      base.run(args, {
+        ...o,
+        timeoutMs: Math.max(
+          1_000,
+          Math.min(o.timeoutMs, networkDeadline - now()),
+        ),
+      }),
   });
 
   const base: Omit<FreshnessVerdict, "status"> = {
