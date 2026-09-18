@@ -8,3 +8,6 @@
 export { Landing } from "./landing";
 export { ShellChrome } from "./shell-chrome";
 export { ShellFrame } from "./shell-frame";
+// Rendered by a page, not a layout: the record it is showing, so the assistant
+// is asked about what is on screen rather than about what the URL implies.
+export { PageRecord } from "./page-record";

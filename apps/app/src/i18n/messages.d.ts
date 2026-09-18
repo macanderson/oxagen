@@ -1350,6 +1350,19 @@ type Messages = {
         title: string;
         body: string;
       };
+      filter: {
+        label: string;
+        active: string;
+        all: string;
+        allWithCount: string;
+      };
+      pager: {
+        label: string;
+        range: string;
+        previous: string;
+        next: string;
+      };
+      emptyFiltered: string;
     };
     denied: {
       title: string;
@@ -2659,6 +2672,9 @@ type Messages = {
         reconnect: string;
         reconnecting: string;
         fixed: string;
+        refDrift: string;
+        reapprove: string;
+        reapproving: string;
       };
       manage: string;
       installChoose: string;
