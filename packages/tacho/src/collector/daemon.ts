@@ -563,6 +563,26 @@ export async function startDaemon(
     { calls: number; refused: number; lastSeenAt: string }
   >();
 
+  /**
+   * The hash of this daemon chain's first sealed event, which the gateway
+   * states on every forwarded call (#3221).
+   *
+   * Computed on first use and kept, rather than assigned at a distance from
+   * the genesis seal below. By the time any gateway call arrives the genesis
+   * exists — it is sealed before the server listens — and a chain's genesis
+   * does not change, so one read answers for the process.
+   *
+   * From the WAL rather than from the seal: a RESUMED daemon does not seal a
+   * genesis at all, and its chain's first event is already on disk. Reading it
+   * per call would put disk I/O on the forward path, which is the one path
+   * that was deliberately taken off the daemon's queue.
+   */
+  let genesisHashCache: string | undefined;
+  function hostGenesisHash(): string | undefined {
+    genesisHashCache ??= wal.read(hostRecorder.sessionUuid)[0]?.hash;
+    return genesisHashCache;
+  }
+
   function recordGatewayCall(call: GatewayCallRecord): void {
     const seen = connected.get(call.client) ?? {
       calls: 0,
@@ -624,6 +644,17 @@ export async function startDaemon(
         workspaceSlug: host.workspace_slug,
         apiKey: gatewayKey,
         hostEnrollmentId: host.host_enrollment_id,
+        // The chain this call will be sealed onto, named on the request so
+        // the control plane's record of it points at a specific session
+        // rather than at the host alone (#3221). Read here, from the same
+        // recorder `recordGatewayCall` seals with, so the two cannot name
+        // different chains.
+        chainSessionUuid: hostRecorder.sessionUuid,
+        // What makes the chain id above evidence rather than a name anyone
+        // holding the ingest key could also write.
+        ...(hostGenesisHash() === undefined
+          ? {}
+          : { chainGenesisHash: hostGenesisHash() }),
       };
     },
     endpoint: mcpEndpointFor(host),

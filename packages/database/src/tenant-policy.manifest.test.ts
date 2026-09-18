@@ -1,5 +1,28 @@
 import { describe, expect, it } from "vitest";
+import { getTableColumns, getTableName, is, Table } from "drizzle-orm";
+import * as schema from "./schema";
 import { POLICY_MANIFEST, type PolicyClass } from "./tenant-policy.manifest";
+
+/** `schema.table` for a Drizzle table, the way the manifest spells it. */
+function qualifiedName(table: Table): string {
+  const pgSchema = (table as unknown as Record<symbol, string | undefined>)[
+    Symbol.for("drizzle:Schema")
+  ];
+  return `${pgSchema ?? "public"}.${getTableName(table)}`;
+}
+
+/** Every declared table that carries an org or a scoping workspace column. */
+function scopedTables(): string[] {
+  const out: string[] = [];
+  for (const value of Object.values(schema)) {
+    if (!is(value as object, Table)) continue;
+    const table = value as unknown as Table;
+    const columns = getTableColumns(table);
+    if (!("orgId" in columns) && !("workspaceId" in columns)) continue;
+    out.push(qualifiedName(table));
+  }
+  return out.sort();
+}
 
 describe("tenant policy manifest", () => {
   it("assigns a known class to every table", () => {
@@ -131,14 +154,59 @@ describe("tenant policy manifest", () => {
     expect(unique.size).toBe(tables.length);
   });
 
+  it("registers every scoped table the schema declares", () => {
+    // Derived from the Drizzle schema rather than from a list somebody keeps.
+    // The count below is a ratchet — it makes adding a table deliberate — but
+    // a ratchet only notices that the NUMBER moved, so a table can be added
+    // and the pin bumped while the manifest entry is forgotten. That is
+    // exactly what happened to `tacho.gateway_chains` (#3221): the
+    // migration installed standard tenant RLS and the table carried both org
+    // columns, and the manifest, which is where that is DECLARED, did not
+    // mention it. The manifest is what generated RLS migrations are built
+    // from, so the omission is not a reporting error — it is the table
+    // dropping out of every future policy migration.
+    //
+    // `integration/manifest-coverage.test.ts` catches this against a live
+    // database. That is the right check and it is also the slow one, gated
+    // behind `rls-integration` and behind the migration having been applied.
+    // This one needs neither, and the schema already knows the answer.
+    //
+    // Deliberately allowance-free. Every scoped table in the tree today is
+    // registered, so an exclusion list would have no members and would exist
+    // only as a place to put the next omission.
+    const listed = new Set(POLICY_MANIFEST.map((entry) => entry.table));
+    expect(scopedTables().filter((name) => !listed.has(name))).toEqual([]);
+  });
+
+  it("registers nothing the schema does not declare", () => {
+    // The other direction. A manifest entry for a table that no longer exists
+    // generates a policy for nothing and reads as coverage it does not have.
+    const declared = new Set(scopedTables());
+    expect(
+      POLICY_MANIFEST.map((entry) => entry.table).filter(
+        (name) => !declared.has(name),
+      ),
+    ).toEqual([]);
+  });
+
   it("covers exactly the policied tables of the current schema", () => {
     // Intentional ratchet: adding a tenant-owned table means updating BOTH the
     // manifest and this count (and regenerating the Atlas RLS migration), so
     // a table can't gain org_id without a policy entry. Removing a table
     // lowers the pin — that direction is always legitimate.
     //
-    // 111 as of billing.gau_reversals (ADR-085), the record of a refunded or
-    // disputed GAU block purchase, which lands on top of the 110 below.
+    // 112: both sides of this merge added a table. `tacho.gateway_chains`
+    // (#3221) is the control plane's record of each authorised
+    // local-MCP-gateway call and the daemon chain it was serving; it landed
+    // unregistered on its first push, because the migration installs standard
+    // tenant RLS and the table carries both org columns while the manifest is
+    // where that is DECLARED — so it read as unscoped and would have failed
+    // `rls-integration` once the migration applied, and been left out of every
+    // generated RLS migration after.
+    //
+    // `billing.gau_reversals` (ADR-085) is the record of a refunded or disputed
+    // GAU block purchase.
+    //
     // Was 110 as of mcp.credential_grants (ADR-072, #2958), which landed on
     // the 109 this branch merged. Those 109 were evidence.witnesses,
     // evidence.verdicts and evidence.disclosure_policies (ADR-064, #2955)
@@ -160,7 +228,7 @@ describe("tenant policy manifest", () => {
     // said 91, so it had already drifted from the number it was describing — a
     // count nobody can check against its own comment is a pin with no ratchet
     // behind it.
-    expect(POLICY_MANIFEST.length).toBe(111);
+    expect(POLICY_MANIFEST.length).toBe(112);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

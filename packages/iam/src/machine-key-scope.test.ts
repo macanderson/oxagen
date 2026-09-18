@@ -14,13 +14,64 @@ const hostUpdates: Array<Record<string, unknown>> = [];
 const hostWritePlanes: string[] = [];
 /** Whether the database claims to have `gateway_last_seen_at` yet. */
 let gatewayColumnPresent = true;
+/** Whether it claims to have `tacho.gateway_chains` yet (#3221). */
+let chainTablePresent = true;
+/** Every `tacho.gateway_chains` upsert the gate made, in order. */
+const chainUpserts: Array<Record<string, unknown>> = [];
+/** The SET clause of each upsert, for the monotonicity assertions. */
+const chainSets: Array<Record<string, unknown>> = [];
+/**
+ * The ROWS those upserts leave behind, keyed the way the unique index keys
+ * them. Modelled rather than counted, because the property under test is that
+ * the table is bounded by chains and not by calls.
+ */
+const chainRows = new Map<string, Record<string, unknown>>();
+/** The host row the gate reads, or undefined for a host it cannot find. */
+let hostRow: Record<string, unknown> | undefined = {
+  id: "host-uuid",
+  orgId: "11111111-1111-4111-8111-111111111111",
+  workspaceId: "22222222-2222-4222-8222-222222222222",
+};
 
 const fakeTx = () => ({
-  query: { apiKeys: { findFirst } },
+  query: {
+    apiKeys: { findFirst },
+    tachoHosts: { findFirst: async () => hostRow },
+  },
   update: () => ({
     set: (values: Record<string, unknown>) => ({
       where: async () => {
         hostUpdates.push(values);
+        return [];
+      },
+    }),
+  }),
+  insert: () => ({
+    // One row per (host, chain): the gate upserts and only `lastSeenAt` moves.
+    values: (values: Record<string, unknown>) => ({
+      onConflictDoUpdate: async (args: {
+        target: unknown[];
+        set: Record<string, unknown>;
+      }) => {
+        chainUpserts.push(values);
+        chainSets.push(args.set);
+        // Keyed by the columns the statement ACTUALLY names as its conflict
+        // target, not by the pair this fixture would have guessed. The mocked
+        // `schema.tachoGatewayChains` maps each property to its SQL name, so a
+        // target that forgets `chain_session_uuid` collapses two chains into
+        // one row here exactly as the unique index would refuse to.
+        const byColumn: Record<string, string> = {
+          host_id: "hostId",
+          chain_session_uuid: "chainSessionUuid",
+        };
+        const key = args.target
+          .map((column) => String(values[byColumn[String(column)] ?? ""]))
+          .join("\u0000");
+        const existing = chainRows.get(key);
+        chainRows.set(
+          key,
+          existing === undefined ? { ...values } : { ...existing, ...args.set },
+        );
         return [];
       },
     }),
@@ -30,15 +81,30 @@ const fakeTx = () => ({
 vi.mock("@oxagen/database", () => ({
   schema: {
     apiKeys: { id: "id", orgId: "org_id", deletedAt: "deleted_at" },
-    tachoHosts: { orgId: "org_id", publicId: "public_id" },
+    tachoHosts: { id: "id", orgId: "org_id", publicId: "public_id" },
+    tachoGatewayChains: {
+      hostId: "host_id",
+      chainSessionUuid: "chain_session_uuid",
+    },
   },
   HOST_GATEWAY_COLUMN: {
     schema: "tacho",
     table: "hosts",
     column: "gateway_last_seen_at",
   },
-  hasColumn: async () => gatewayColumnPresent,
-  planeKeyFor: async (orgId: string) => `plane-of:${orgId}`,
+  GATEWAY_CHAIN_COLUMN: {
+    schema: "tacho",
+    table: "gateway_chains",
+    column: "chain_session_uuid",
+  },
+  // Per column, not one answer for both. The host column and the invocations
+  // table ship in DIFFERENT migrations, so either can be the one still pending
+  // and a shared answer would describe a state no deployment is ever in.
+  hasColumn: async (_tx: unknown, ref: { table: string }) =>
+    ref.table === "hosts" ? gatewayColumnPresent : chainTablePresent,
+  // The plane `withOrgPlaneSystemDb` opened the transaction on, published by
+  // the seam rather than resolved a second time by the probe (#3223).
+  ambientPlaneKey: async () => `plane-of:${hostWritePlanes.at(-1) ?? ""}`,
   withSystemDb: (fn: (tx: unknown) => unknown) => fn(fakeTx()),
   // The seam the host write must use. `withSystemDb` always targets the SHARED
   // plane, and `tacho.hosts` is tenant data, so on a dedicated plane that write
@@ -84,7 +150,16 @@ beforeEach(() => {
   getCapability.mockReset();
   hostUpdates.length = 0;
   hostWritePlanes.length = 0;
+  chainUpserts.length = 0;
+  chainRows.clear();
+  chainSets.length = 0;
   gatewayColumnPresent = true;
+  chainTablePresent = true;
+  hostRow = {
+    id: "host-uuid",
+    orgId: ORG,
+    workspaceId: "22222222-2222-4222-8222-222222222222",
+  };
   listCapabilities.mockReset();
   listCapabilities.mockReturnValue([]);
 });
@@ -423,6 +498,220 @@ describe("a served gateway call is recorded where the tier can read it", () => {
     expect(hostUpdates).toHaveLength(1);
     expect(hostUpdates[0]?.["gatewayLastSeenAt"]).toBeInstanceOf(Date);
     expect(hostWritePlanes).toEqual([ORG]);
+  });
+
+  it("records the CHAIN the gateway named, not just the host (#3221)", async () => {
+    // The correlation. The host timestamp says a gateway call happened; this
+    // row says which of the host's chains it happened for. Without it the
+    // answer came from an attribute on the submitted batch, so a holder of the
+    // host's control-plane key could point a real observation at any session.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(chainUpserts).toHaveLength(1);
+    expect(chainUpserts[0]).toMatchObject({
+      chainSessionUuid: "tachod-abc",
+      // From the HOST ROW, resolved through the key's own scope — never from
+      // anything the caller sent.
+      hostId: "host-uuid",
+      orgId: ORG,
+    });
+    expect(chainUpserts[0]?.["lastSeenAt"]).toBeInstanceOf(Date);
+  });
+
+  it("keeps one row per chain however many calls it serves", async () => {
+    // The bound (AGENTS.md storage boundaries). A row per authorised call
+    // would be an append-only audit stream growing with gateway traffic inside
+    // the transactional database, which is what ClickHouse is for — and the
+    // per-call history is already there, on the `tool_call` and
+    // `policy_decision` events the daemon seals onto this very chain. Postgres
+    // holds only what ingest must read inside a transaction.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    for (let i = 0; i < 5; i += 1) {
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        userId: null,
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: "tachod-abc",
+      });
+    }
+    expect(chainUpserts).toHaveLength(5);
+    expect(chainRows.size).toBe(1);
+  });
+
+  it("never moves last_seen_at backwards", async () => {
+    // Gateway calls are deliberately not serialised — the forward was taken
+    // off the daemon's queue because one slow connected-app call held every
+    // wrapped agent on the machine — so two calls for the same chain can reach
+    // the upsert out of order and the later-committing one can carry the OLDER
+    // timestamp. Assigning it would rewind `last_seen_at`, and a session
+    // created between the two would then read as having served no gateway call
+    // during its lifetime. If that batch also seals the session, the tier is
+    // wrong for good.
+    //
+    // Asserted on the statement rather than on a modelled row: the fixture
+    // does not execute SQL, and a fake that pretended to would be asserting
+    // its own guess at what GREATEST does.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    const set = chainSets[0] ?? {};
+    expect(JSON.stringify(set["lastSeenAt"])).toContain("GREATEST");
+    // …and the genesis hash is coalesced for the same reason one type along: a
+    // daemon too old to state it must not erase what a newer one proved.
+    expect(JSON.stringify(set["chainGenesisHash"])).toContain("COALESCE");
+  });
+
+  it("keeps the chains of one host apart", async () => {
+    // Bounded by chains, not collapsed to the host: the whole point of the
+    // table is that it says WHICH chain, so two chains are two rows.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    for (const chain of ["tachod-abc", "tachod-def"]) {
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        userId: null,
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: chain,
+      });
+    }
+    expect(chainRows.size).toBe(2);
+  });
+
+  it("records a refused call on the chain too", async () => {
+    getCapability.mockReturnValue({ ...readOnlyMcp, mutates: true });
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const denial = await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "delete_workspace",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(denial).toMatch(/outside this agent's mandate/);
+    // A call Oxagen stopped is evidence that Oxagen was enforcing, so it
+    // advances `lastSeenAt` exactly as a success does. The ruling itself is not
+    // stored here — it is in ClickHouse, on the `policy_decision` the daemon
+    // sealed onto this very chain.
+    expect(chainUpserts).toHaveLength(1);
+    expect(chainUpserts[0]?.["chainSessionUuid"]).toBe("tachod-abc");
+  });
+
+  it("records no chain when the caller named none", async () => {
+    // A daemon too old to send the header. A row naming no chain is not
+    // evidence about any session, so none is written and the host timestamp
+    // stands alone — which leaves the session on the host's own mode rather
+    // than promoting it on a correlation nobody made.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+    });
+    expect(hostUpdates).toHaveLength(1);
+    expect(chainUpserts).toEqual([]);
+  });
+
+  it("records no chain while its migration is pending", async () => {
+    // `tacho.gateway_chains` arrives in its own migration, applied by
+    // hand after the deploy (#1275). Naming an absent TABLE raises 42P01,
+    // which aborts the transaction exactly as a missing column does — and the
+    // host stamp, whose own migration HAS landed, must still be written.
+    chainTablePresent = false;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    expect(
+      await machineKeyDenial({
+        orgId: ORG,
+        apiKeyId: "aky_g",
+        userId: null,
+        capabilityName: "query_ontology",
+        gatewaySessionUuid: "tachod-abc",
+      }),
+    ).toBeUndefined();
+    expect(hostUpdates).toHaveLength(1);
+    expect(chainUpserts).toEqual([]);
+  });
+
+  it("writes nothing for a host the key's scope names but the org lacks", async () => {
+    // The enrollment was deleted between minting the key and this call. There
+    // is no host to attribute the invocation to, and inventing one would file
+    // evidence against a row that is not there.
+    hostRow = undefined;
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_GATEWAY_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_g",
+      userId: null,
+      capabilityName: "query_ontology",
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(hostUpdates).toEqual([]);
+    expect(chainUpserts).toEqual([]);
+  });
+
+  it("ignores a chain named on a credential that is not a gateway", async () => {
+    // The header is carried for every caller and read back for exactly one
+    // purpose. A chain id attested by a credential whose use it says nothing
+    // about is not evidence, and must not become a row.
+    getCapability.mockReturnValue(readOnlyMcp);
+    keyWithScope({
+      purpose: TACHO_HOST_PURPOSE,
+      host_enrollment_id: "tch_aaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const allowed = [
+      ...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? []),
+    ][0];
+    await machineKeyDenial({
+      orgId: ORG,
+      apiKeyId: "aky_h",
+      userId: null,
+      capabilityName: allowed as string,
+      gatewaySessionUuid: "tachod-abc",
+    });
+    expect(chainUpserts).toEqual([]);
   });
 
   it("records nothing for the HOST key, which serves no connected app", async () => {

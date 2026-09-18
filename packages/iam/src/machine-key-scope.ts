@@ -71,15 +71,16 @@
  */
 import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
 import {
+  ambientPlaneKey,
+  GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
-  planeKeyFor,
   schema,
   withOrgPlaneSystemDb,
   withSystemDb,
 } from "@oxagen/database";
 import { getCapability, listCapabilities } from "@oxagen/oxagen";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 /** The scope purpose Tacho enrollment mints the host's control-plane key with. */
 export const TACHO_HOST_PURPOSE = "tacho_host_v1";
@@ -194,6 +195,22 @@ export interface MachineKeyCheck {
    * on there being one.
    */
   userId: string | null | undefined;
+  /**
+   * The Tacho daemon chain a local MCP gateway is serving, as it named the
+   * chain on the request (#3221).
+   *
+   * Read back only when the key's scope purpose is `tacho_gateway_v1`. On any
+   * other credential it is carried here and dropped, because a value that
+   * attests a gateway call means nothing on a credential that is not one.
+   * It never reaches the denial decision — see `machineKeyDenial`.
+   */
+  gatewaySessionUuid?: string | null;
+  /**
+   * The genesis hash of that chain, which is what makes the id above evidence
+   * rather than a name a forger could also write (#3221). Read back on the
+   * same one credential and under the same rules.
+   */
+  gatewayChainGenesisHash?: string | null;
 }
 
 /**
@@ -284,6 +301,8 @@ export async function readKeyScope(
 async function recordGatewayInvocation(
   orgId: string,
   hostEnrollmentId: string | undefined,
+  chainSessionUuid: string | null,
+  chainGenesisHash: string | null,
 ): Promise<void> {
   if (!hostEnrollmentId) return;
   // The ORGANISATION'S plane, not the shared one. `tacho.hosts` is tenant data
@@ -292,23 +311,111 @@ async function recordGatewayInvocation(
   // observation never arrives, and genuine connected-app sessions stay
   // classified `observe` for good (discussion_r4040617216). RLS is bypassed
   // because this runs at authorisation time, before any handler scope exists.
-  const planeKey = await planeKeyFor(orgId);
   await withOrgPlaneSystemDb(orgId, async (tx) => {
+    // The plane the transaction was actually opened on, published by
+    // `withOrgPlaneSystemDb` itself. This used to call `planeKeyFor(orgId)`
+    // just above — a SECOND resolution of the same question, which can
+    // disagree with the first if the organisation is repointed in between, and
+    // then files the answer under a database the statement did not run on
+    // (#3223).
+    const planeKey = await ambientPlaneKey();
     // Ask before writing. Production applies migrations by hand after the
-    // deploy (#1275), so between the two this statement names a column the
-    // database does not have; 42703 would abort the transaction and turn a
-    // missing observation into a FAILED gateway call, denying traffic this
-    // function only meant to take a note about (discussion_r4040352870).
-    if (!(await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey))) return;
-    await tx
-      .update(schema.tachoHosts)
-      .set({ gatewayLastSeenAt: new Date() })
-      .where(
-        and(
-          eq(schema.tachoHosts.orgId, orgId),
-          eq(schema.tachoHosts.publicId, hostEnrollmentId),
-        ),
-      );
+    // deploy (#1275), so between the two these statements name a column — and
+    // a whole TABLE — the database does not have; 42703 and 42P01 both abort
+    // the transaction, which would turn a missing observation into a FAILED
+    // gateway call, denying traffic this function only meant to take a note
+    // about (discussion_r4040352870). Probed separately rather than inferred
+    // from one another: they ship in different migrations and either can be
+    // the one still pending.
+    const hostColumn = await hasColumn(tx, HOST_GATEWAY_COLUMN, planeKey);
+    const chains = await hasColumn(tx, GATEWAY_CHAIN_COLUMN, planeKey);
+    if (!hostColumn && !chains) return;
+
+    // The host row, read once and by the server's own attribution: the public
+    // id comes from the KEY'S scope, never from the request. An invocation
+    // filed against a host the caller named would be the defect this whole
+    // path exists to close, one layer down.
+    const host = await tx.query.tachoHosts.findFirst({
+      where: and(
+        eq(schema.tachoHosts.orgId, orgId),
+        eq(schema.tachoHosts.publicId, hostEnrollmentId),
+      ),
+      // Named, so a column the pending migration adds cannot join this read
+      // and raise 42703 for a column it does not want
+      // (discussion_r4040558842's failure, in this package).
+      columns: { id: true, orgId: true, workspaceId: true },
+    });
+    if (host === undefined) return;
+
+    if (hostColumn) {
+      await tx
+        .update(schema.tachoHosts)
+        .set({ gatewayLastSeenAt: new Date() })
+        .where(eq(schema.tachoHosts.id, host.id));
+    }
+
+    // The correlation (#3221). Without a chain id there is nothing to
+    // correlate, and a row naming no chain is not evidence about any session —
+    // so none is written, and the host observation above stands alone exactly
+    // as it did before. That is the honest degradation: a daemon too old to
+    // send the header keeps its sessions on the host's own mode rather than
+    // being promoted on a correlation nobody made.
+    //
+    // UPSERT, one row per (host, chain) rather than one per call. A row per
+    // call would be an append-only audit stream growing with gateway traffic
+    // inside the transactional database, which is what AGENTS.md's storage
+    // table assigns to ClickHouse. Nothing is lost: the per-call history is
+    // already there and is richer — `recordGatewayCall` seals a `tool_call` or
+    // `policy_decision` carrying the tool, the connected app and the outcome
+    // onto this very chain, and ingest writes it through `insertTachoEvents`.
+    // Postgres holds only the bounded fact ingest has to read inside a
+    // transaction: this host's gateway served this chain, most recently then.
+    //
+    // A refusal advances `lastSeenAt` exactly as a success does. `outcome` is
+    // still computed above because it is what the caller is told; it is not
+    // stored here, because a call Oxagen stopped is evidence that Oxagen was
+    // enforcing, which is the only thing the tier asks.
+    if (chains && chainSessionUuid !== null) {
+      const at = new Date();
+      await tx
+        .insert(schema.tachoGatewayChains)
+        .values({
+          orgId: host.orgId,
+          workspaceId: host.workspaceId,
+          hostId: host.id,
+          chainSessionUuid,
+          chainGenesisHash,
+          firstSeenAt: at,
+          lastSeenAt: at,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.tachoGatewayChains.hostId,
+            schema.tachoGatewayChains.chainSessionUuid,
+          ],
+          set: {
+            // GREATEST, not assignment. Gateway calls are deliberately NOT
+            // serialised — the forward was taken off the daemon's queue
+            // because one slow connected-app call held every wrapped agent on
+            // the machine — so two calls for the same chain can reach this
+            // upsert out of order, and the later-committing one can carry the
+            // older `at`. Assigning it would move `last_seen_at` BACKWARDS.
+            //
+            // That is not cosmetic. If a session row was created between the
+            // two calls, a rewound timestamp reads as "this chain served no
+            // gateway call during the session's lifetime", and if that batch
+            // also seals the session the tier is wrong for good — the seal is
+            // final and no later call can repair it.
+            lastSeenAt: sql`GREATEST(${schema.tachoGatewayChains.lastSeenAt}, ${at})`,
+            // COALESCE for the same reason, one type along: a chain's genesis
+            // hash is constant, so a non-null value is always the right one and
+            // a null only ever means "this caller did not state it". Assigning
+            // unconditionally would let a daemon too old to send it erase what
+            // a newer one proved, and leave the chain unpromotable.
+            chainGenesisHash: sql`COALESCE(${chainGenesisHash}::text, ${schema.tachoGatewayChains.chainGenesisHash})`,
+          },
+        });
+    }
   });
 }
 
@@ -381,8 +488,17 @@ export async function machineKeyDenial(
     // record is a call the tier will not reflect, and silently under-reporting
     // enforcement is the failure this whole path exists to end. It is one
     // indexed UPDATE by public id.
-    await recordGatewayInvocation(orgId, scope.hostEnrollmentId);
-    if (!gatewayMayInvoke(capabilityName)) {
+    const permitted = gatewayMayInvoke(capabilityName);
+    await recordGatewayInvocation(
+      orgId,
+      scope.hostEnrollmentId,
+      // The chain the caller named, which is what makes this record about a
+      // SESSION rather than only about a host (#3221). Read only here, on the
+      // one credential whose authentication it can attest anything about.
+      check.gatewaySessionUuid ?? null,
+      check.gatewayChainGenesisHash ?? null,
+    );
+    if (!permitted) {
       return `Forbidden: ${capabilityName} is outside this agent's mandate. A connected app may call read-only, non-sensitive workspace tools through the Oxagen gateway; changing that is a mandate change, made in Oxagen.`;
     }
     return undefined;

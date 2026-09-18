@@ -153,6 +153,35 @@ describe("the forward carries the host key, not the caller's", () => {
     expect(calls[0]?.init.headers["X-Tacho-Host"]).toBe(ENROLLMENT);
   });
 
+  it("names the daemon chain so the control plane can correlate the call", async () => {
+    // #3221. The control plane knows from the credential WHICH HOST it is
+    // serving; it cannot know which of that host's chains. Until this header
+    // existed the answer came from an attribute on the submitted batch, so
+    // anything able to submit a batch chose it — and a real observation could
+    // be pointed at any session, including an invented one.
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({
+      fetch,
+      attribution: () => attribution({ chainSessionUuid: "tachod-abc" }),
+    });
+    await gw.handle(CALL, CTX);
+    expect(calls[0]?.init.headers["x-tacho-gateway-session"]).toBe(
+      "tachod-abc",
+    );
+  });
+
+  it("omits the chain header when the daemon has no chain yet", async () => {
+    // The honest answer rather than a placeholder: the control plane records
+    // an invocation it cannot attribute to a chain, and the tier stays on the
+    // host's own mode. A fabricated id would be a correlation nobody made.
+    const { fetch, calls } = remote({ content: [] });
+    const { gw } = gateway({ fetch });
+    await gw.handle(CALL, CTX);
+    expect(calls[0]?.init.headers).not.toHaveProperty(
+      "x-tacho-gateway-session",
+    );
+  });
+
   it("forwards the JSON-RPC envelope unchanged", async () => {
     const { fetch, calls } = remote({ content: [] });
     const { gw } = gateway({ fetch });
