@@ -304,18 +304,23 @@ describe("Pricing › The price book", () => {
 
     const panel = panelOf("spend-price-book");
     const rows = panel.querySelectorAll("tbody tr");
-    const [negotiated, listed] = [...rows];
+    // Typed by the query rather than asserted at each use: `querySelectorAll`
+    // over a generic selector yields `Element`, and `within()` wants an
+    // `HTMLElement`, which the repo's lint forbids reaching by assertion.
+    const [negotiated, listed] = [...rows].filter(
+      (row): row is HTMLElement => row instanceof HTMLElement,
+    );
     // The organization's own row reads before the list row it beats.
     expect(negotiated).toHaveAttribute("data-negotiated", "true");
     expect(negotiated).toHaveTextContent("Your negotiated rate");
     expect(listed).toHaveAttribute("data-negotiated", "false");
     expect(listed).toHaveTextContent("List price");
     expect(
-      within(negotiated as HTMLElement).getByRole("button", {
+      within(negotiated!).getByRole("button", {
         name: "Remove the negotiated rate for claude-sonnet-5, Input",
       }),
     ).toBeInTheDocument();
-    expect(within(listed as HTMLElement).queryByRole("button")).toBeNull();
+    expect(within(listed!).queryByRole("button")).toBeNull();
     expect(listed).toHaveTextContent("The platform sets this one");
   });
 

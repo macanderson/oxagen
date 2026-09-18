@@ -11,7 +11,6 @@
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
-import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";

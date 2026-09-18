@@ -19,7 +19,10 @@ import ui from "../../../messages/ui.json";
 
 const router = { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-const setPriceEntryAction = vi.fn();
+// Typed on the values argument, so reading a call's payload back is not an
+// `any` the lint rules refuse to let escape.
+const setPriceEntryAction =
+  vi.fn<(at: unknown, values: Record<string, unknown>) => unknown>();
 const removePriceEntryAction = vi.fn();
 vi.mock("./actions", () => ({
   setBudgetAction: vi.fn(),
@@ -249,7 +252,7 @@ describe("Remove a negotiated rate", () => {
     expect(
       screen.getByRole("button", { name: "End this rate, use the list price" }),
     ).toBeInTheDocument();
-    expect(dialog.textContent ?? "").not.toMatch(/\bdelete this\b/i);
+    expect(dialog.textContent).not.toMatch(/\bdelete this\b/i);
   });
 
   it("ends the rate by its key and returns to the Pricing tab", async () => {

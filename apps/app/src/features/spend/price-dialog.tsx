@@ -212,8 +212,15 @@ export function PriceDialog({
       if (found.usdPerMillion !== undefined && tokenClass !== undefined) {
         perClass[tokenClass] = found.usdPerMillion;
       }
+      // Built field by field rather than `Object.assign`-ed: INV-02 refuses a
+      // copy into an arbitrary shape, and the shape here is known — every key
+      // of `PriceFieldErrors` except the per-class rate, which `perClass`
+      // above already carries.
       const { usdPerMillion: _rate, ...rest } = found;
-      Object.assign(fieldErrors, rest);
+      for (const key of Object.keys(rest) as (keyof typeof rest)[]) {
+        const message = rest[key];
+        if (message !== undefined) fieldErrors[key] = message;
+      }
     }
     if (
       Object.keys(fieldErrors).length > 0 ||
