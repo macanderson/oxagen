@@ -1393,10 +1393,11 @@ export async function closeNegotiatedPriceEntry(args: {
     // priced against it during the wait.
     const now = args.now ?? new Date();
     const atInstant = args.at ?? now;
-    const rows = await readKeyRows(tx, args, { includeList: true });
-    const own = rows.filter(
-      (r) => r.orgId === args.orgId && r.source !== "list",
-    );
+    // The organization's rows only. The list rows used to be read here so a
+    // key priced only by the list could be refused; that refusal is gone (see
+    // above), so there is nothing to read them for.
+    const rows = await readKeyRows(tx, args, { includeList: false });
+    const own = rows.filter((r) => r.source !== "list");
     // Nothing of this organization's to end: never negotiated, or a
     // scheduled row an earlier call already cancelled. The same answer for
     // both, because the cancellation left no row to tell them apart, and a

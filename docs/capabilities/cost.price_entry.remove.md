@@ -6,7 +6,7 @@ It removes the rate from the *active* book, not from the book. The row in effect
 
 The rate is the whole effective-dated chain for the key, so a correction **scheduled to start after `at`** does not survive the end either: it would re-establish the rate the caller just ended. One that has not begun by the write instant is cancelled — removed, since no run was ever priced against it and a row cannot end before it starts — and named in the handler's log. One that has already begun is refused: ending the rate before a window that has shipped would reprice settled runs, the same refusal a backdated write meets. End it at or after that window's start instead.
 
-Nothing here touches a list row either: the platform's published price is not an organization's to change, so a key this organization never negotiated is refused rather than answered as though something had been removed.
+Nothing here touches a list row either: the platform's published price is not an organization's to change. A key this organization never negotiated answers `closed: null`, which claims nothing was removed.
 
 ## Mode
 
@@ -42,7 +42,7 @@ One token class per call, for the same reason `set_price_entry` takes one: a tok
 | `at` | string | the instant the negotiated rate stopped applying |
 | `closed` | object or null | the row that was in effect at `at`, as closed, in the `cost.price_entry.list` entry shape, or null when nothing was in effect at that instant |
 
-Re-ending a class this organization has already ended answers `closed: null` and changes nothing, so a retry is safe.
+Re-ending a class this organization has already ended answers `closed: null` and changes nothing, so a retry is safe. So is a retry after a cancellation: a scheduled row that never began is deleted when it is cancelled, and the retry finds nothing and answers the same null close. A key this organization never negotiated gets that answer too.
 
 The call takes the same per-key transaction lock `set_price_entry` takes, so a removal that overlaps a write cannot read the old state and either close a row the write is replacing or report success while the new rate stands.
 
@@ -52,7 +52,7 @@ The call takes the same per-key transaction lock `set_price_entry` takes, so a r
 |---|---|
 | Caller is not an org Owner, Admin or Billing member | `forbidden` / `org_role_required` |
 | API key whose creator is deleted, of another org, or unrecorded | `forbidden` / `no_principal` |
-| The key has no negotiated row for this organization | `conflict` / `price_entry_not_negotiated` — it is priced by the platform list, which is not an organization's to change |
+| The organization is on a dedicated Postgres plane | refused before the store is called — the price book is read from the shared plane only, so a close on a dedicated plane would report an end the rollup never sees; the same refusal `set_price_entry` makes |
 | `at` is at or before the start of the row in effect at `at` | `conflict` / `price_entry_ends_before_it_starts` — a price cannot end at or before it starts (`price_entries_effective_range_check`) |
 | A correction scheduled after `at` has already begun by the write instant | `conflict` / `price_entry_ends_before_it_starts` — ending the rate before a window that has shipped would reprice settled runs; end it at or after that window starts |
 
@@ -62,4 +62,4 @@ Emits `billing.plan_changed` (SOC 2 CC6.3), whether or not a row was open: the r
 
 ## Tenancy
 
-The write runs through `withTenantDb` in the caller's scope. The read admits the list rows — the same set the RLS policy on `cost.price_entries` shows a tenant session — precisely so a key priced only by the list is distinguishable from one this organization has already ended; only a row whose `org_id` is the caller's and whose `source` is not `list` is ever updated.
+The write runs through `withTenantDb` in the caller's scope and reads only the caller's rows; a list row (`org_id` null) is never read or updated. The handler refuses an organization on a dedicated Postgres plane before the store is called, because `loadPriceBook` and the rollup read the price book from the shared plane (ADR-042).

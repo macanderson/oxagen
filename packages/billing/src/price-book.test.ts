@@ -696,12 +696,15 @@ describe("the negotiated write path", () => {
     expect(ended.cancelled).toEqual([]);
   });
 
-  it("refuses to touch the list row", async () => {
+  // A key priced only by the list is nothing of this organization's to end:
+  // the list row is never touched, and the answer is the null close a
+  // never-negotiated key gets (the retry case is proven further down).
+  it("leaves the list row alone and answers a null close", async () => {
     fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
 
-    await expect(closeNegotiatedPriceEntry({ ...SET, at: T2 })).rejects.toThrow(
-      /not an organization's to change/,
-    );
+    const out = await closeNegotiatedPriceEntry({ ...SET, at: T2 });
+    expect(out).toEqual({ at: T2, closed: null, cancelled: [] });
+    expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]!.effectiveTo).toBeNull();
     expect(fake.rows[0]!.source).toBe("list");
   });
