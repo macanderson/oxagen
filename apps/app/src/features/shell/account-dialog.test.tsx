@@ -565,6 +565,25 @@ describe("Privacy", () => {
 
   // A refused or thrown poll is a blip, not a failed export: the id stays and
   // the next tick asks again.
+  // A rejection, not a refusal: a server action whose request loses its
+  // connection throws. Uncaught, it would repeat every three seconds for as
+  // long as the tab is open.
+  it("keeps the queued state when a poll throws, without an unhandled rejection", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      readExportStatus.mockRejectedValue(new Error("connection lost"));
+      const { user } = await openDialog("privacy");
+      await user.click(screen.getByTestId("account-export-user"));
+      expect(await screen.findByTestId("account-export-queued")).toBeTruthy();
+      expect(screen.queryByTestId("account-export-expired")).toBeNull();
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
   it("keeps the queued state when a poll refuses", async () => {
     readExportStatus.mockResolvedValue({ ok: false, reason: "unavailable" });
     const { user } = await openDialog("privacy");

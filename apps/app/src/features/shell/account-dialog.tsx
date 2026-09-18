@@ -875,13 +875,21 @@ function PrivacyTab({ data }: { data: ShellData }) {
     if (queuedId === null || queuedScope === null) return;
     let live = true;
     async function look() {
-      const read = await readExportStatus(orgSlug, queuedId as string);
-      if (!live || !read.ok) return;
-      const scope = queuedScope as "user" | "org";
-      const id = queuedId as string;
-      if (read.value.ready) setState({ kind: "ready", scope, exportId: id });
-      else if (read.value.status === "failed")
-        setState({ kind: "expired", scope, exportId: id });
+      // The catch is the point, not a formality: a server action whose request
+      // loses its connection rejects, and an uncaught rejection here would
+      // repeat every tick until the tab closes. A throw is the same as a
+      // refusal — leave the state alone and try again on the next tick.
+      try {
+        const read = await readExportStatus(orgSlug, queuedId as string);
+        if (!live || !read.ok) return;
+        const scope = queuedScope as "user" | "org";
+        const id = queuedId as string;
+        if (read.value.ready) setState({ kind: "ready", scope, exportId: id });
+        else if (read.value.status === "failed")
+          setState({ kind: "expired", scope, exportId: id });
+      } catch {
+        return;
+      }
     }
     const timer = setInterval(() => {
       void look();

@@ -234,7 +234,7 @@
       "note": "Saved with <code>update_profile</code>, like any change to your account.",
       "noPhoto": "Paste an https link to a photo first, or switch to an icon or initials.",
       "noLetters": "Type at least one letter.",
-      "invalid": "That avatar was refused. Set a display name on the Profile tab, then try again.",
+      "invalid": "That avatar was refused. A photo link must be an https address under 512 characters.",
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
       "photoPlaceholder": "https://"
