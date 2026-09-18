@@ -859,6 +859,105 @@ describe("tachod", () => {
     },
   );
 
+  it("does not take a freshness window from a future-dated host file", async () => {
+    // `bundle_fetched_at` is unsigned and sits in a file on the operator's
+    // machine, while the signature covers the bundle alone. Dated into the
+    // future it would make `now - confirmedAt` negative forever, so an
+    // expired `content_exact` grant would never lapse on this host. The seed
+    // is clamped to startup, which caps the attack at what a first start
+    // already gives.
+    const plane = fakeControlPlane("etag-fresh");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+    let clock = Date.parse("2026-09-11T00:00:00.000Z");
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, bundle, {
+        // A century out, so no elapsed time could ever overtake it.
+        bundle_fetched_at: "2126-09-10T00:00:00.000Z",
+      }),
+    );
+    const { handle } = await boot(plane, paths, { now: () => clock });
+
+    // Past the signed window with no confirmation from the control plane in
+    // between, so the mandate has lapsed however the file is dated.
+    clock += window + 1;
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111cccc",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+  });
+
+  it("does not renew the mandate on a bundle that fails to verify", async () => {
+    // A response carrying a changed bundle is a confirmation only once that
+    // bundle verifies. Renewing first would let a control plane extend the
+    // very mandate its response was sent to replace, and keep extending it
+    // for as long as it kept answering that way.
+    const plane = fakeControlPlane("etag-old");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+    let clock = Date.parse("2026-09-11T00:00:00.000Z");
+    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+    const { handle } = await boot(plane, paths, { now: () => clock });
+
+    // A changed bundle carrying someone else's signature.
+    plane.setBundle({
+      ...signer.sign(unsignedBundle({ version: 99 })),
+      retention: {
+        mode: "content_exact",
+        classes: ["model_call", "tool_call"],
+      },
+    });
+    // Just inside the window, where a renewal would still have something to
+    // extend, then just outside the original one.
+    clock += window - 1;
+    await handle.refreshBundle();
+    clock += 2;
+
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111dddd",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(new BodyStore(paths.bodies).stats().bodies).toBe(0);
+  });
+
   it("retains nothing when the cached mandate does not verify", async () => {
     // `host.json` is a file on the operator's machine. Without checking the
     // signature, editing `digest_only` to `content_exact` in it would send

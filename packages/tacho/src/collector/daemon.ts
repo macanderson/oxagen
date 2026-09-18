@@ -272,9 +272,20 @@ export async function startDaemon(
    * re-sent and its signed `expires_at` cannot be renewed on the host. See
    * `isStale` in host/bundle.ts. Seeded from the last fetch, so a daemon that
    * restarts does not declare a mandate it just cached stale.
+   *
+   * The seed is clamped to startup, because `bundle_fetched_at` is an
+   * unsigned field in a file on the operator's machine while the signature
+   * covers the bundle alone. Without the clamp, dating that field into the
+   * future would hand the host a freshness window nobody granted, and an
+   * expired `content_exact` grant would survive every restart. Clamped, the
+   * worst an edit can do is make a mandate look newly cached, which is what
+   * a first start already looks like, and dating it backwards only makes the
+   * mandate lapse sooner, which is the safe direction.
    */
-  let mandateConfirmedAt =
-    Date.parse(host.bundle_fetched_at) || startedAt;
+  let mandateConfirmedAt = Math.min(
+    Date.parse(host.bundle_fetched_at) || startedAt,
+    startedAt,
+  );
   /**
    * The retention clause the host may act on: the cached one while its
    * signature holds, and nothing otherwise.
@@ -406,11 +417,22 @@ export async function startDaemon(
     try {
       const response = await client.bundle(host.bundle.etag);
       lastControlAt = now();
-      // The answer confirms the etag in force either way. `not_modified`
-      // means "still this one", which is exactly the confirmation freshness
-      // is measured from.
-      mandateConfirmedAt = now();
-      if (response.not_modified || response.bundle === null) return false;
+      // `not_modified` is the confirmation freshness is measured from: it
+      // says the etag in force is still the current one, which is the only
+      // thing an unchanged mandate ever gets to hear.
+      //
+      // Nothing else renews here. A changed bundle renews only once it has
+      // verified, below. Renewing before that check would let a response
+      // carrying an unverifiable bundle extend the mandate it was sent to
+      // replace, and a control plane answering that way repeatedly would
+      // extend it for as long as it kept answering. A `bundle: null`
+      // response is not a confirmation either: it says the control plane is
+      // serving no bundle, which is the opposite of agreeing with this one.
+      if (response.not_modified) {
+        mandateConfirmedAt = now();
+        return false;
+      }
+      if (response.bundle === null) return false;
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
@@ -426,6 +448,8 @@ export async function startDaemon(
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
+      // The replacement verified, so this response is a confirmation.
+      mandateConfirmedAt = now();
       // A mandate that narrows retention binds what is already on disk, not
       // only what is sealed next. Bodies kept under the old one are dropped
       // here, or a batch still waiting to drain would carry prompt bytes the
@@ -639,7 +663,9 @@ export async function startDaemon(
       const facts = gitFactsFor(cwd, force);
       if (facts === undefined) continue;
       session.recorder.noteContext({
-        ...(facts.head_sha !== undefined ? { git_head_sha: facts.head_sha } : {}),
+        ...(facts.head_sha !== undefined
+          ? { git_head_sha: facts.head_sha }
+          : {}),
         ...(facts.branch !== undefined ? { git_branch: facts.branch } : {}),
         ...(facts.dirty !== undefined ? { git_dirty: facts.dirty } : {}),
         ...(facts.remote_digest !== undefined
@@ -1221,7 +1247,9 @@ export async function startDaemon(
       // machine because a batch failed a week ago.
       const staleBodies = bodyStore.compact(now(), timers.walRetainMs);
       if (staleBodies.length > 0)
-        log(`dropped ${staleBodies.length} unshipped body file(s) past retention`);
+        log(
+          `dropped ${staleBodies.length} unshipped body file(s) past retention`,
+        );
     }
   }
 
