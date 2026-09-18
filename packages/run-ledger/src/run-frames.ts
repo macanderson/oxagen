@@ -15,6 +15,11 @@
  * transcript entry shows is fetched by the caller for the frames the fold
  * names, and folded in with `withText`.
  */
+import {
+  MODEL_CALL_EVENT_TYPES,
+  stepKindOfEventType,
+  TOOL_CALL_EVENT_TYPES,
+} from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
 import {
@@ -113,70 +118,65 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       const frames = field(p, "frame_count");
       return frames ? `frames=${frames}` : event.eventType;
     }
-    case "model.call_completed":
-    case "model.engine_call_started":
-    case "model.engine_call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return provider && model ? `${provider}/${model}` : event.eventType;
-    }
-    case "tool.call_completed": {
-      const capability = field(p, "capability_name");
-      const outcome = field(p, "outcome");
-      return capability && outcome
-        ? `${capability} ${outcome}`
-        : event.eventType;
-    }
-    case "tool.engine_call_started":
-    case "tool.engine_call_completed": {
-      // The engine's own halves name the tool `tool_name`, not
-      // `capability_name`; reading only the latter left every in-app tool
-      // call labelled with its bare event type.
-      const tool = field(p, "tool_name");
-      const outcome = field(p, "outcome");
-      if (!tool) return event.eventType;
-      return outcome ? `${tool} ${outcome}` : tool;
-    }
     default:
-      return event.eventType;
+      // Both spellings of each call, and both spellings of the tool's name:
+      // the ledger's own event calls it `capability_name`, the assistant's
+      // engine event calls it `tool_name`. Read through the registry rather
+      // than another literal case, because a summary that falls through to
+      // the raw event type is what the transcript showed for every run the
+      // assistant recorded.
+      switch (ledgerStepKind(event.eventType)) {
+        case "model_call": {
+          const provider = field(p, "provider");
+          const model = field(p, "model");
+          return provider && model ? `${provider}/${model}` : event.eventType;
+        }
+        case "tool_call": {
+          const tool = toolNameOf(p);
+          const outcome = field(p, "outcome");
+          if (tool !== null && outcome !== null) return `${tool} ${outcome}`;
+          // A write-ahead intention has no outcome yet, so it names the tool
+          // alone. A receipt without one recorded no result, and falls
+          // through to its type rather than reading as a call that returned.
+          if (tool !== null && ledgerPhase(event.eventType) === "request") {
+            return tool;
+          }
+          return event.eventType;
+        }
+        default:
+          return event.eventType;
+      }
   }
+}
+
+/** The called tool, under either payload's name for it. */
+function toolNameOf(payload: unknown): string | null {
+  return field(payload, "capability_name") ?? field(payload, "tool_name");
 }
 
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
+  const step = ledgerStepKind(event.eventType);
+  // The call id travels only on the engine's own halves, which is what pairs
+  // a write-ahead intention with its receipt into one transcript entry; the
+  // ledger's single-receipt events carry none and answer null.
+  if (step === "tool_call")
+    return {
+      ...NO_IDENTITY,
+      tool: toolNameOf(p),
+      toolStatus: field(p, "outcome"),
+      callId: field(p, "tool_call_id"),
+    };
+  if (step === "model_call") {
+    const provider = field(p, "provider");
+    const model = field(p, "model");
+    return {
+      ...NO_IDENTITY,
+      model: provider && model ? `${provider}/${model}` : model,
+      callId: field(p, "model_call_id"),
+    };
+  }
   switch (event.eventType) {
-    case "tool.call_completed":
-      return {
-        ...NO_IDENTITY,
-        tool: field(p, "capability_name"),
-        toolStatus: field(p, "outcome"),
-      };
-    case "tool.engine_call_started":
-    case "tool.engine_call_completed":
-      return {
-        ...NO_IDENTITY,
-        tool: field(p, "tool_name"),
-        toolStatus: field(p, "outcome"),
-        callId: field(p, "tool_call_id"),
-      };
-    case "model.call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return {
-        ...NO_IDENTITY,
-        model: provider && model ? `${provider}/${model}` : model,
-      };
-    }
-    case "model.engine_call_started":
-    case "model.engine_call_completed": {
-      const provider = field(p, "provider");
-      const model = field(p, "model");
-      return {
-        ...NO_IDENTITY,
-        model: provider && model ? `${provider}/${model}` : model,
-        callId: field(p, "model_call_id"),
-      };
-    }
     case "tool.approval_recorded":
       return { ...NO_IDENTITY, policy: field(p, "decision") };
     case "verification.completed":
@@ -205,6 +205,30 @@ export function ledgerPhase(eventType: string): FramePhase {
   return LEDGER_PHASES[eventType] ?? "single";
 }
 
+/**
+ * The engine's write-ahead halves, read off the phase table above rather than
+ * listed again. The event registry marks only the receipt with a step, which
+ * is right there — a started event with no completion is a dangling intention
+ * and counts as no call — but a transcript still opens the step at the
+ * intention, so that the request and the result read as one exchange.
+ */
+const ENGINE_REQUEST_HALVES: readonly string[] = Object.entries(LEDGER_PHASES)
+  .filter(([, phase]) => phase === "request")
+  .map(([type]) => type);
+
+/**
+ * The step a ledger event belongs to, the write-ahead half included. The
+ * registry answers for the receipts; the intention is the request half of the
+ * same step, and reading it as no step at all is what left an engine call's
+ * two halves in two entries with no way to tell they were one call.
+ */
+function ledgerStepKind(eventType: string): "model_call" | "tool_call" | null {
+  const step = stepKindOfEventType(eventType);
+  if (step !== null) return step;
+  if (!ENGINE_REQUEST_HALVES.includes(eventType)) return null;
+  return eventType.startsWith("model.") ? "model_call" : "tool_call";
+}
+
 /** A ledger event as a run frame. Ledger frames carry no cost record (§12). */
 export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
   return {
@@ -216,8 +240,11 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
     summary: ledgerFrameSummary(event),
     body: event.body,
     costMicros: null,
+    // A turn index only travels on the ledger's own model event; the
+    // assistant's engine event has no such field, so an assistant run's
+    // `turns` zoom falls back to the boundaries rather than to an index.
     turnIndex:
-      event.eventType === "model.call_completed"
+      stepKindOfEventType(event.eventType) === "model_call"
         ? numberField(event.payload, "turn_index")
         : null,
     phase: ledgerPhase(event.eventType),
@@ -458,25 +485,26 @@ export type TranscriptEntryKind =
 export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 
 /**
- * Model-stage frame types, both vocabularies and both halves. The engine's own
- * calls (`model.engine_call_*`, ADR-043) were missing here, so every in-app
- * run's model exchanges folded into whatever step preceded them instead of
- * opening one, and the `steps` transcript of an in-app run showed no model
- * calls at all.
+ * Model-stage frame types, both vocabularies and both halves. The ledger's own
+ * names come from the registry, so both spellings of each call event are
+ * covered: the engine's own calls (`model.engine_call_*`, ADR-043) were
+ * missing from the literal list this replaces, so every in-app run's model
+ * exchanges folded into whatever step preceded them instead of opening one,
+ * and the `steps` transcript of an in-app run showed no model calls at all.
+ * The wrapped-session names are added beside them: a tacho recording is not
+ * in the ledger's registry and never will be.
  */
 const MODEL_TYPES: ReadonlySet<string> = new Set([
-  "model.call_completed",
-  "model.engine_call_started",
-  "model.engine_call_completed",
+  ...MODEL_CALL_EVENT_TYPES,
+  ...ENGINE_REQUEST_HALVES.filter((type) => type.startsWith("model.")),
   "llm_call",
   "model.request",
   "model.response",
 ]);
-/** Tool-stage frame types, both vocabularies and both halves. */
+/** Tool-stage frame types, the same way. */
 const TOOL_TYPES: ReadonlySet<string> = new Set([
-  "tool.call_completed",
-  "tool.engine_call_started",
-  "tool.engine_call_completed",
+  ...TOOL_CALL_EVENT_TYPES,
+  ...ENGINE_REQUEST_HALVES.filter((type) => type.startsWith("tool.")),
   "tool_call",
   "tool_requested",
 ]);

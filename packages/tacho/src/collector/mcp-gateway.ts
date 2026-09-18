@@ -50,6 +50,14 @@
  * the TCP listener, not only these.
  */
 import {
+  digestBytes,
+  jcs,
+  jsonByteLength,
+  type JsonValue,
+  type Sha256Digest,
+} from "../digest";
+import { type DraftContent, jsonContent } from "../evidence/frame-body";
+import {
   TACHO_GATEWAY_GENESIS_HEADER,
   TACHO_GATEWAY_SESSION_HEADER,
   type PolicyBundle,
@@ -189,6 +197,18 @@ export interface GatewayCallRecord {
   durationMs: number;
   /** Set when the control plane refused the call. */
   refusedReason?: string;
+  /** JCS digest of the call's arguments, for `tool_input_digest`. */
+  inputDigest?: Sha256Digest;
+  inputBytes?: number;
+  /** JCS digest of what came back, for `tool_output_digest`. */
+  outputDigest?: Sha256Digest;
+  outputBytes?: number;
+  /**
+   * The arguments and the result in one frame body, so a gateway-observed
+   * call replays rather than only counting. Absent when the call carried
+   * neither, or when neither could be canonicalised.
+   */
+  content?: DraftContent;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -619,6 +639,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
         outcomeOf(response.status, rpc),
         now() - startedAt,
         rpc?.error?.message,
+        rpc,
       );
       return response;
     },
@@ -630,6 +651,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
     status: GatewayCallRecord["status"],
     durationMs: number,
     refusedReason?: string,
+    rpc?: JsonRpcResponse,
   ): void {
     if (deps.record === undefined) return;
     // Only calls are evidence. `initialize`, `tools/list` and the ping
@@ -645,7 +667,82 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
       status,
       durationMs,
       ...(refusedReason === undefined ? {} : { refusedReason }),
+      ...exchangeOf(request, rpc, log),
     });
+  }
+}
+
+/**
+ * What the call asked for and what came back, as the frame records it: the two
+ * digests `tool_input_digest` and `tool_output_digest` name, and one body
+ * carrying both halves.
+ *
+ * Both halves ride one body because a frame carries at most one. The gateway
+ * seals exactly one event per call, and a `tool_call` frame from a hook
+ * already holds its input and output together for the same reason
+ * (`toolCallContent` in `claude-code/hooks.ts`), so a reader has one shape to
+ * learn rather than two.
+ *
+ * A refused or failed call still records what it has. The arguments are known
+ * before the forward and are the whole evidence of what was attempted, so a
+ * call the control plane turned down is not a blank row.
+ */
+function exchangeOf(
+  request: JsonRpcRequest,
+  rpc: JsonRpcResponse | undefined,
+  log: (line: string) => void,
+): Pick<
+  GatewayCallRecord,
+  "inputDigest" | "inputBytes" | "outputDigest" | "outputBytes" | "content"
+> {
+  const input = canonical(request.params?.["arguments"], log, "arguments");
+  // A JSON-RPC answer is a result or an error, never both. An error is as much
+  // of an outcome as a result is, and a replay that dropped it would show a
+  // call that was made and never answered.
+  const output = canonical(rpc?.error ?? rpc?.result, log, "result");
+  if (input === undefined && output === undefined) return {};
+  return {
+    ...(input === undefined
+      ? {}
+      : {
+          inputDigest: digestBytes(input.text),
+          inputBytes: jsonByteLength(input.value),
+        }),
+    ...(output === undefined
+      ? {}
+      : {
+          outputDigest: digestBytes(output.text),
+          outputBytes: jsonByteLength(output.value),
+        }),
+    // The members and the digests are spelled the way a hook spells them, so
+    // one reader handles a `tool_call` frame whichever seam produced it.
+    content: jsonContent(jcs({ input: input?.value, output: output?.value })),
+  };
+}
+
+/**
+ * One half of a call as its JCS text and the value behind it, or nothing when
+ * there is no half and nothing when it has no JCS form.
+ *
+ * A tool argument or result carrying a value RFC 8785 cannot canonicalise (a
+ * non-finite number is the one that occurs) would otherwise throw out of
+ * `recordCall` and take the forward's answer with it. The gateway stands in
+ * the caller's path, so the call is served and the frame says less, rather
+ * than the call failing over its own evidence.
+ */
+function canonical(
+  value: unknown,
+  log: (line: string) => void,
+  half: string,
+): { value: JsonValue; text: string } | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return { value: value as JsonValue, text: jcs(value as JsonValue) };
+  } catch (error) {
+    log(
+      `mcp gateway recorded a call without its ${half}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
   }
 }
 

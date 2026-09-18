@@ -61,10 +61,21 @@ export function isGradeEnforcementTier(
  * Frames whose bodies a `view` reader reads (spec §8.4: what the agent
  * asked, what the model returned, what a tool was called with and what came
  * back), by each recorder's type name: the ledger's `model.call_completed`
- * and `tool.call_completed`, a wrapped session's `llm_call` and `tool_call`.
- * Both seals derive `body_missing` from this set, so a recording with no
- * body on such a frame grades `inspect` whether or not the producer chained
- * a digest for it.
+ * and `tool.call_completed`, the in-app assistant's
+ * `model.engine_call_completed` and `tool.engine_call_completed`, a wrapped
+ * session's `llm_call` and `tool_call`. Both seals derive `body_missing`
+ * from this set, so a recording with no body on such a frame grades
+ * `inspect` whether or not the producer chained a digest for it.
+ *
+ * The two `engine_call` names were missing until the bodies existed to read.
+ * The in-app assistant is the only ledger producer in the tree and it has
+ * always written those names, so this set matched none of its frames: an
+ * assistant run derived no `body_missing` gap and could not have reached
+ * `view` even once the bodies were captured. `@oxagen/run-ledger` derives
+ * the same pair from its event registry (`stepKindOfEventType`); this module
+ * is the leaf that registry's package depends on, so the names are spelled
+ * here rather than imported, and `run-ledger`'s registry drift test holds
+ * the two lists together.
  */
 const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
   "model.call_completed",
@@ -74,6 +85,11 @@ const CONTENT_BEARING_FRAME_TYPES: ReadonlySet<string> = new Set([
   // reads — the request that left the process and the result that came back —
   // so a recording that drops their bodies is as unreadable as one that drops
   // the submitted engine's. Omitting them graded a body-less in-app run `view`.
+  //
+  // The two write-ahead halves are here and not in the ledger's step registry,
+  // which is right both ways: a started event opens no step, and it still
+  // carries the bytes a reader needs. The registry drift test asks only that
+  // every step type is content-bearing, so this set may hold more.
   "model.engine_call_started",
   "model.engine_call_completed",
   "tool.engine_call_started",

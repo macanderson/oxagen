@@ -59,7 +59,12 @@ const gapsOf = (value: unknown): string[] =>
     : [];
 
 export function ledgerStore(): RunStore {
-  return createPostgresRunStore({ archive: evidenceStore() });
+  // `evidenceStore()` is both seams already (`EvidenceStore extends
+  // RunBodyStore, RunArchiveStore`). Passing it as the archive alone left a
+  // store that refuses any append whose frame carries a retained body, which
+  // is a trap for the next producer rather than a decision anyone made.
+  const store = evidenceStore();
+  return createPostgresRunStore({ archive: store, bodies: store });
 }
 
 /** The run behind a public id in its tenant, or null. */

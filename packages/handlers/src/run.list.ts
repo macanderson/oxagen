@@ -51,6 +51,10 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import {
+  MODEL_CALL_EVENT_TYPES,
+  TOOL_CALL_EVENT_TYPES,
+} from "@oxagen/run-ledger";
+import {
   type CompletenessGapKind,
   isCompletenessGapKind,
   isGradeEnforcementTier,
@@ -260,8 +264,20 @@ export function ledgerIdentityQuery(
     .limit(1);
 }
 
-const MODEL_CALL = "model.call_completed";
-const TOOL_CALL = "tool.call_completed";
+/**
+ * A model call and a tool call have two spellings each: the ledger's own
+ * `model.call_completed` / `tool.call_completed` and the in-app assistant's
+ * `model.engine_call_completed` / `tool.engine_call_completed`. The registry
+ * is the one place that knows both, so the counts below match on a set
+ * rather than an equality. They matched only the first spelling before, and
+ * the assistant is the only producer in the tree: every run it recorded
+ * listed zero model calls, zero tool calls and zero turns on the Runs page
+ * while its frame count climbed.
+ */
+const MODEL_CALL_TYPES = [...MODEL_CALL_EVENT_TYPES];
+const TOOL_CALL_TYPES = [...TOOL_CALL_EVENT_TYPES];
+const IS_MODEL_CALL = inArray(events.eventType, MODEL_CALL_TYPES);
+const IS_TOOL_CALL = inArray(events.eventType, TOOL_CALL_TYPES);
 
 /** Frame, step and turn counts folded from the V2 event log, per run. */
 export function ledgerRollupQuery(
@@ -274,19 +290,19 @@ export function ledgerRollupQuery(
       runId: events.runId,
       frames: sql<number>`count(*)::int`.mapWith(Number),
       modelCalls:
-        sql<number>`(count(*) filter (where ${events.eventType} = ${MODEL_CALL}))::int`.mapWith(
+        sql<number>`(count(*) filter (where ${IS_MODEL_CALL}))::int`.mapWith(
           Number,
         ),
       toolCalls:
-        sql<number>`(count(*) filter (where ${events.eventType} = ${TOOL_CALL}))::int`.mapWith(
+        sql<number>`(count(*) filter (where ${IS_TOOL_CALL}))::int`.mapWith(
           Number,
         ),
       turnIndexes:
-        sql<number>`(count(distinct ${events.payloadInline}->>'turn_index') filter (where ${events.eventType} = ${MODEL_CALL}))::int`.mapWith(
+        sql<number>`(count(distinct ${events.payloadInline}->>'turn_index') filter (where ${IS_MODEL_CALL}))::int`.mapWith(
           Number,
         ),
       opaqueModelCalls:
-        sql<number>`(count(*) filter (where ${events.eventType} = ${MODEL_CALL} and ${events.payloadInline} is null))::int`.mapWith(
+        sql<number>`(count(*) filter (where ${IS_MODEL_CALL} and ${events.payloadInline} is null))::int`.mapWith(
           Number,
         ),
     })
@@ -707,7 +723,8 @@ export function toLedgerRunItem(
   const { run, identity, rollup } = record;
   const status = ledgerRunStatus(run.status);
   // A live run has sealed nothing, so it has recorded no gaps — not "none".
-  const gaps = status === "live" ? [] : publishedGaps(record.seal?.completenessGaps);
+  const gaps =
+    status === "live" ? [] : publishedGaps(record.seal?.completenessGaps);
   return {
     id: run.publicId,
     source: "ledger",
