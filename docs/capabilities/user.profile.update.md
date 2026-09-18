@@ -37,12 +37,20 @@ is reached.
 
 ## Input
 
-Both fields are required — this is a full replace of the identity fields, not a partial update.
+A partial update: a field left out is left alone, and at least one must be
+present. `auth.users.display_name` is nullable and the avatar editor has no
+name field, so a save that always carried both could never come from a person
+who has not set a name — every such avatar save was refused before the avatar
+was written.
+
+Each surface sends only what it changes. The Account dialog's Profile tab sends
+`displayName` alone: sending back the avatar it rendered with would revert a
+newer one saved since, because the handler writes every field it is given.
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `displayName` | string | yes | trimmed, 1-120 characters |
-| `avatarUrl` | string \| null | yes | an `https://` URL or a designed-avatar spec string (`avatar:v1:<json>`); `null` clears it |
+| `displayName` | string | no | trimmed, 1-120 characters |
+| `avatarUrl` | string \| null | no | an `https://` URL or a designed-avatar spec string (`avatar:v1:<json>`) up to 512 characters; `null` clears it |
 
 ## Output
 
@@ -50,5 +58,5 @@ The persisted values, read back from the row after the write.
 
 | Field | Type | Description |
 |---|---|---|
-| `displayName` | string | the stored display name |
+| `displayName` | string \| null | the stored display name, `null` for a person who has not set one |
 | `avatarUrl` | string \| null | the stored avatar value, or `null` when unset |
