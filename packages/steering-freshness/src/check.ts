@@ -43,6 +43,7 @@ import {
   execGit,
   fetchBranch,
   gitOrNull,
+  isAncestor,
   mergeBase,
   parseNameStatus,
   repoRoot,
@@ -290,15 +291,38 @@ export async function checkSteeringFreshness(
 
   const { include, pathspecs } = steeringPathspec(policy);
 
-  const [missing, local, dirty, behindByCommits, localTree, remoteTree] =
-    await Promise.all([
-      diffPaths(repoCtx, mergeBaseCommit, remoteHead, pathspecs),
-      diffPaths(repoCtx, mergeBaseCommit, head, pathspecs),
-      dirtyPaths(repoCtx, pathspecs),
-      commitsTouching(repoCtx, mergeBaseCommit, remoteHead, include),
-      treeOid(repoCtx, head, include),
-      treeOid(repoCtx, remoteHead, include),
-    ]);
+  // `diffPaths` and `dirtyPaths` run git directly and reject on any non-zero
+  // exit — a timeout, an unreadable object, a worktree someone deleted under
+  // us. This function's contract is that it never throws for an ordinary
+  // failure, and the gate relies on it: an exception here escapes `steering
+  // status` and `steering sync` as a crash, while the prompt hook catches it
+  // and allows the run with none of the diagnostic note an `unknown` carries.
+  // Silently allowing is the worst of the three outcomes, so the failure is
+  // converted into the verdict the contract promises.
+  let missing: PathChange[];
+  let local: PathChange[];
+  let dirty: string[];
+  let behindByCommits: number;
+  let localTree: string | null;
+  let remoteTree: string | null;
+  try {
+    [missing, local, dirty, behindByCommits, localTree, remoteTree] =
+      await Promise.all([
+        diffPaths(repoCtx, mergeBaseCommit, remoteHead, pathspecs),
+        diffPaths(repoCtx, mergeBaseCommit, head, pathspecs),
+        dirtyPaths(repoCtx, pathspecs),
+        commitsTouching(repoCtx, mergeBaseCommit, remoteHead, include),
+        treeOid(repoCtx, head, include),
+        treeOid(repoCtx, remoteHead, include),
+      ]);
+  } catch (error) {
+    return unknown(
+      base,
+      `could not compare this checkout with ${target}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
 
   // Both merge-base diffs describe commits, and the question is about
   // files. Anything whose working copy already matches the production
@@ -332,10 +356,30 @@ export async function checkSteeringFreshness(
     // promotion in it, usually because the fetch failed. Report it as
     // staleness — the platform is the authority on what is in force — and
     // say which signal decided, so the banner is not mysterious.
-    base.notes.push(
-      `Oxagen reports steering version ${platform.steeringVersion}, published at a commit this checkout cannot reach`,
-    );
-    return { ...base, status: "behind" };
+    //
+    // But `aheadOfCheckout` is computed against HEAD, and a sync deliberately
+    // does not move HEAD: it writes and stages the files. So after a
+    // successful auto-sync the signal still reads "ahead" while every record
+    // it named is now on disk, and returning `behind` here made
+    // `autoSync + blockStaleRuns` exit 2 immediately after installing
+    // everything that was missing — refusing the prompt over nothing, with a
+    // note naming a version the checkout was by then holding.
+    //
+    // What separates the two cases is the remote-tracking ref, not HEAD. If
+    // the ref can reach the published commit then the fetch worked, git saw
+    // the promotion, and `outstanding` being empty means the files are here:
+    // the git comparison is complete and the platform adds nothing. If it
+    // cannot — or the commit is not in this clone at all — the ref really is
+    // too old and the platform is the only signal that knows.
+    const refHasPromotion = platform.headCommit
+      ? await isAncestor(repoCtx, platform.headCommit, remoteHead)
+      : null;
+    if (refHasPromotion !== true) {
+      base.notes.push(
+        `Oxagen reports steering version ${platform.steeringVersion}, published at a commit this checkout cannot reach`,
+      );
+      return { ...base, status: "behind" };
+    }
   }
 
   // The status describes committed history only. Uncommitted work is

@@ -12,6 +12,7 @@ import type { GitRunner } from "./git";
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
 const BASE = "3333333333333333333333333333333333333333";
+const PROMOTION = "4444444444444444444444444444444444444444";
 
 const policy = (over: Partial<SteeringPolicy> = {}): SteeringPolicy => ({
   ...resolveSteeringPolicy([]),
@@ -369,5 +370,78 @@ describe("checkSteeringFreshness, the platform signal", () => {
     expect(v.notes.filter((n) => n.includes("steering version"))).toHaveLength(
       0,
     );
+  });
+
+  // A sync writes and stages the files without moving HEAD, so the platform
+  // signal it was given still says `aheadOfCheckout` on the re-check. What
+  // has changed is the remote-tracking ref: it now reaches the published
+  // commit, and nothing is outstanding. Reporting `behind` here made
+  // `autoSync + blockStaleRuns` exit 2 immediately after installing every
+  // missing record.
+  it("clears platform staleness once the fetched ref holds the promotion", async () => {
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: "",
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: "",
+      },
+      {
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("current");
+    expect(v.notes.filter((n) => n.includes("steering version"))).toHaveLength(
+      0,
+    );
+  });
+
+  it("keeps reporting behind when the ref cannot reach the promotion", async () => {
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: "",
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: new Error(
+          "not an ancestor",
+        ),
+      },
+      {
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("behind");
+    expect(v.notes[0]).toContain("steering version 42");
+  });
+});
+
+// The contract is that an ordinary failure is `unknown` with a note, never a
+// throw: `steering status` and `steering sync` crash on an exception, and the
+// prompt hook catches it and allows the run with no diagnostic at all.
+describe("checkSteeringFreshness, a comparison that cannot run", () => {
+  it("is unknown, not a throw, when the diff fails", async () => {
+    const v = await check({
+      ...table(),
+      [`diff --name-status --no-renames -z ${BASE} ${REMOTE} -- .oxagen :(exclude).oxagen/settings.local.json`]:
+        new Error("fatal: unable to read object"),
+    });
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("unable to read object");
+  });
+
+  it("is unknown, not a throw, when status fails", async () => {
+    const v = await check({
+      ...table(),
+      "status --porcelain=v1 -z --untracked-files=normal -- .oxagen :(exclude).oxagen/settings.local.json":
+        new Error("fatal: not a git repository"),
+    });
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("not a git repository");
   });
 });

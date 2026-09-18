@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   defaultBranch,
   fetchBranch,
+  isAncestor,
   gitOrNull,
   parseNameStatus,
   parsePorcelain,
@@ -108,16 +109,60 @@ describe("gitOrNull", () => {
 describe("defaultBranch", () => {
   const SYMREF = "symbolic-ref --quiet --short refs/remotes/origin/HEAD";
 
-  it("uses the cached remote HEAD first, without touching the network", async () => {
-    const run = vi.fn(runner({ [SYMREF]: "origin/main" }));
+  const SETHEAD = "remote set-head origin --auto";
+
+  it("reads the cached remote HEAD, refreshing it first when online", async () => {
+    const run = vi.fn(runner({ [SETHEAD]: "", [SYMREF]: "origin/main" }));
     expect(
       await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("main");
+    expect(run).toHaveBeenCalledWith(
+      ["remote", "set-head", "origin", "--auto"],
+      expect.anything(),
+    );
+  });
+
+  // `refs/remotes/<remote>/HEAD` is written by clone and never again, so a
+  // renamed default branch leaves it pointing at a branch that is no longer
+  // production — and every steering change on the new one is invisible.
+  it("follows a renamed default branch rather than the stale cache", async () => {
+    let head = "origin/main";
+    const run: GitRunner = async (args) => {
+      const key = args.join(" ");
+      if (key === SETHEAD) {
+        head = "origin/production";
+        return "";
+      }
+      if (key === SYMREF) return head;
+      throw new Error(`unexpected git ${key}`);
+    };
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("production");
+  });
+
+  it("uses the cache untouched when the network is not allowed", async () => {
+    const run = vi.fn(runner({ [SYMREF]: "origin/main" }));
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: false }),
     ).toBe("main");
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  // Offline, or a remote that will not answer, is the case the cache exists
+  // to cover: the refresh is best-effort and never fails the lookup.
+  it("still answers from the cache when the refresh fails", async () => {
+    const run = runner({
+      [SETHEAD]: new Error("offline"),
+      [SYMREF]: "origin/main",
+    });
+    expect(
+      await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
+    ).toBe("main");
+  });
+
   it("keeps a branch name containing a slash intact", async () => {
-    const run = runner({ [SYMREF]: "origin/release/2026" });
+    const run = runner({ [SETHEAD]: "", [SYMREF]: "origin/release/2026" });
     expect(
       await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
     ).toBe("release/2026");
@@ -125,6 +170,7 @@ describe("defaultBranch", () => {
 
   it("asks the server when the cached ref is missing", async () => {
     const run = runner({
+      [SETHEAD]: new Error("offline"),
       [SYMREF]: new Error("no symref"),
       "remote show origin": "* remote origin\n  HEAD branch: trunk\n",
     });
@@ -151,6 +197,7 @@ describe("defaultBranch", () => {
 
   it("falls back to probing the conventional names", async () => {
     const run = runner({
+      [SETHEAD]: new Error("offline"),
       [SYMREF]: new Error("no symref"),
       "remote show origin": new Error("offline"),
       "rev-parse --verify --quiet refs/remotes/origin/main": new Error("no"),
@@ -164,6 +211,7 @@ describe("defaultBranch", () => {
   // Guessing "main" here would produce a confident, wrong verdict.
   it("returns null rather than guessing", async () => {
     const run = runner({
+      [SETHEAD]: new Error("offline"),
       [SYMREF]: new Error("no symref"),
       "remote show origin": new Error("offline"),
       "rev-parse --verify --quiet refs/remotes/origin/main": new Error("no"),
@@ -184,6 +232,36 @@ describe("defaultBranch", () => {
     expect(
       await defaultBranch(ctx(run), "origin", { allowNetwork: true }),
     ).toBe("main");
+  });
+});
+
+describe("isAncestor", () => {
+  const C = "cccccccccccccccccccccccccccccccccccccccc";
+  const D = "dddddddddddddddddddddddddddddddddddddddd";
+
+  it("is true when the commit is reachable", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: "",
+      [`merge-base --is-ancestor ${C} ${D}`]: "",
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBe(true);
+  });
+
+  it("is false when it is not", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: "",
+      [`merge-base --is-ancestor ${C} ${D}`]: new Error("exit 1"),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBe(false);
+  });
+
+  // "not in this clone" is not the same answer as "no": a caller weighing git
+  // against the platform has to be able to tell them apart.
+  it("is null when the commit is not in this clone", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new Error("no such object"),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBeNull();
   });
 });
 

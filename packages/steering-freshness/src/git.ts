@@ -134,6 +134,24 @@ export async function defaultBranch(
   remote: string,
   { allowNetwork }: { allowNetwork: boolean },
 ): Promise<string | null> {
+  // The cached ref answers first because it is local and free — but only
+  // after it has been given the chance to be right. `refs/remotes/<remote>/HEAD`
+  // is written once by clone and never again, so a repository whose default
+  // branch is renamed keeps pointing at the old one indefinitely, and reading
+  // it straight would have this checker fetch and compare a branch that is no
+  // longer production. Every steering change on the new branch would be
+  // invisible, confidently.
+  //
+  // `remote set-head --auto` is the operation that reconciles the cache with
+  // the server, so when networking is allowed it runs first and the read below
+  // is then reading a fresh answer rather than a remembered one. It is the
+  // same single round trip `git remote show` would cost, and it leaves the
+  // repository better than it found it, so the next offline run is right too.
+  // A failure is ignored: offline, or a remote that will not answer, is
+  // exactly the case the cached ref exists to cover.
+  if (allowNetwork) {
+    await gitOrNull(ctx, "remote", "set-head", remote, "--auto");
+  }
   const head = await gitOrNull(
     ctx,
     "symbolic-ref",
@@ -221,6 +239,38 @@ export async function treeOid(
   path: string,
 ): Promise<string | null> {
   return gitOrNull(ctx, "rev-parse", `${rev}:${path}`);
+}
+
+/**
+ * Whether `ancestor` is reachable from `descendant`.
+ *
+ * Null rather than false when the question cannot be asked — either commit
+ * missing from this clone is not the same answer as "no", and a caller
+ * deciding whether to trust git over the platform needs to tell them apart.
+ */
+export async function isAncestor(
+  ctx: GitContext,
+  ancestor: string,
+  descendant: string,
+): Promise<boolean | null> {
+  const present = await gitOrNull(
+    ctx,
+    "cat-file",
+    "-e",
+    `${ancestor}^{commit}`,
+  );
+  if (present === null) return null;
+  try {
+    await ctx.run(["merge-base", "--is-ancestor", ancestor, descendant], {
+      cwd: ctx.cwd,
+      timeoutMs: ctx.timeoutMs,
+    });
+    return true;
+  } catch {
+    // Exit 1 is the honest "no". Any other failure is indistinguishable here,
+    // and "no" is the conservative answer: it keeps the platform's signal.
+    return false;
+  }
 }
 
 /** The best common ancestor of two commits, or null when they share none. */
