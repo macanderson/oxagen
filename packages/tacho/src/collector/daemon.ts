@@ -1163,11 +1163,13 @@ export async function startDaemon(
     if (stopped) return;
     // The detector runs off the serial queue: its scan is asynchronous file
     // I/O over every project directory, and a hook that arrived while it
-    // ran would otherwise wait on it. Its seals are synchronous once the scan
-    // returns, the same property the gateway relies on to record off-queue.
+    // ran would otherwise wait on it. It records each frame in the same
+    // synchronous stretch that seals it, the property the gateway relies on
+    // to record off-queue: a model or gateway call sealed on the host chain
+    // during the scan must not be appended ahead of an earlier detector frame.
     if (now() - lastDetect >= timers.detectorMs) {
       lastDetect = now();
-      record(await detector.tick());
+      await detector.tick((events) => record(events));
     }
     await serial.run(async () => {
       const t = now();
