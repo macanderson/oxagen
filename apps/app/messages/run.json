@@ -157,10 +157,10 @@
       "cancel": {
         "open": "Cancel",
         "title": "Cancel {run}",
-        "body": "Oxagen revokes the run token, so no further governed call succeeds. Killing the process itself is best effort, and either way it is recorded.",
+        "body": "When the command is applied, Oxagen revokes the run token so no further governed call succeeds. Killing the process itself is best effort, and either way it is recorded.",
         "confirm": "Cancel the run",
         "pending": "Cancelling",
-        "queued": "The cancel is queued. The run token is revoked; the process kill is best effort."
+        "queued": "The cancel is queued. Nothing has changed yet: the token is revoked and the process kill attempted when the command is applied, so until then the run can still make governed calls."
       },
       "failure": {
         "orgRoleRequired": "This needs an organization Owner or Admin role.",
