@@ -90,6 +90,14 @@ The freeze lifts when the proof is recorded on #2592.
 - On a workspace with records, every enrolled host refetches its bundle once
   after each merge. Bundles are small and records change when a person
   merges one, so the cost is negligible.
+- The text is compiled from the classification each record's pinned version
+  carries, not from the record row's copy, so promoting an older version
+  back into service changes what the bundle says. Every control poll and
+  event ingest carries the bundle etag, so the compiled text is cached per
+  workspace and keyed on the workspace's steering version (the promotions
+  ledger length, ADR-061 section 8, plus the count of pinned records that
+  steer). One `count(*)` per response decides whether the records are read
+  again.
 - A registry read failure fails the bundle fetch, as a deny-generation or
   retention read failure already does. A host keeps the mandate it has. It
   does not receive a bundle that looks unsteered but is not.

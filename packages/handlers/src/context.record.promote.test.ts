@@ -8,10 +8,15 @@ import { canonicalJson, sha256Hex } from "./registry-digest";
 //   2. (version_id set) version lookup → select(...).where(...).limit(1)
 //   3. chain head       → select(...).where(...).orderBy(...).limit(1)
 //   4. transaction      → insert promotion .values(); update record .set()
+//
+// A version lookup is preceded by the deploy-before-migrate probe, which runs
+// `execute` rather than `select` and so consumes none of the queued results.
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
+  /** Whether migration `20260918160000` has run on this database. */
+  classificationColumns: true,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -22,6 +27,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     return next ? next() : Promise.resolve([]);
   };
   const makeTx = () => ({
+    // The column probe. `hasColumn` reads presence from the row count, so an
+    // empty array is "the migration has not run".
+    execute: () =>
+      Promise.resolve(mocks.classificationColumns ? [{ "?column?": 1 }] : []),
     select: () => ({
       from: () => ({
         where: () => ({
@@ -56,6 +65,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+import { resetColumnProbesForTests } from "@oxagen/database";
 import { contextRecordPromoteHandler } from "./context.record.promote";
 
 const CTX: CapabilityContext = {
@@ -102,6 +112,10 @@ beforeEach(() => {
   mocks.selectResults.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
+  mocks.classificationColumns = true;
+  // The probe answers once per process per plane, so a test that runs without
+  // the columns would otherwise decide it for every test after it.
+  resetColumnProbesForTests();
 });
 
 describe("context.record.promote handler", () => {
@@ -143,6 +157,165 @@ describe("context.record.promote handler", () => {
       status: "active",
       activeVersionId: "version-uuid",
     });
+    // A legacy version carries no classification, so the row keeps its own.
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
+    expect(mocks.updateSets[0]).not.toHaveProperty("force");
+    expect(mocks.updateSets[0]).not.toHaveProperty("statement");
+  });
+
+  // The witness for #3312: with v2 in service, promoting v1 must leave the
+  // row saying what v1 says, in the same update that moves the pin.
+  it("copies the pinned version's classification onto the record row, clearing a constraint effect the row no longer earns", async () => {
+    const v1 = {
+      kind: "rule",
+      force: "should",
+      constraintEffect: null,
+      statement: "Prefer the narrowest test that proves the change.",
+    };
+    // The chain head is v2's promote: the row currently carries v2's
+    // classification (a must constraint), which is what the bug left behind.
+    //
+    // Four reads now, in this order: the record, the version lookup (id and
+    // ownership only), the chain head, and -- inside the writing transaction --
+    // the pinned version's classification.
+    queueSelects(
+      [RECORD],
+      [{ id: "version-1" }],
+      [{ seq: 2, chainDigest: "d".repeat(64) }],
+      [v1],
+    );
+
+    const out = await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(out).toMatchObject({ action: "promote", seq: 3, status: "active" });
+    expect(mocks.updateSets).toHaveLength(1);
+    expect(mocks.updateSets[0]).toMatchObject({
+      status: "active",
+      activeVersionId: "version-1",
+      kind: "rule",
+      force: "should",
+      constraintEffect: null,
+      statement: "Prefer the narrowest test that proves the change.",
+    });
+    // A promote is one more ledger row, which is what moves the steering
+    // version the bundle cache is keyed on.
+    expect(mocks.insertedValues[0]).toMatchObject({
+      action: "promote",
+      versionId: "version-1",
+      seq: 3,
+    });
+  });
+
+  // Production applies migrations by hand while `deploy-node` ships on merge,
+  // so the handler is live on a database without the four columns for as long
+  // as that window lasts. Naming one then raises 42703 and the promote fails
+  // outright -- the operator cannot move the pin at all.
+  it("still moves the pin while migration 20260918160000 is pending, leaving the row's classification alone", async () => {
+    mocks.classificationColumns = false;
+    // Only three reads: with the columns missing the classification select is
+    // never issued, so nothing names them and none can raise 42703.
+    queueSelects(
+      [RECORD],
+      [{ id: "version-1" }],
+      [{ seq: 2, chainDigest: "d".repeat(64) }],
+    );
+
+    const out = await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(out).toMatchObject({ action: "promote", seq: 3, status: "active" });
+    expect(mocks.updateSets[0]).toMatchObject({
+      status: "active",
+      activeVersionId: "version-1",
+    });
+    // The row keeps what it has: on a database whose versions cannot carry a
+    // classification, the row's copy is the only one there is.
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
+    expect(mocks.updateSets[0]).not.toHaveProperty("statement");
+  });
+
+  // The classification is read in the transaction that writes it, not in the
+  // version lookup, because that lookup commits first. A migration landing in
+  // between used to leave the pin moved and the classification uncopied, so
+  // the row described the PREVIOUSLY active version -- and nothing guarantees
+  // anyone ever promotes again to correct it (discussion_r4050583312).
+  it("reads the classification after the lookup, so a migration landing in between is still seen", async () => {
+    mocks.classificationColumns = false;
+    mocks.selectResults.push(
+      () => Promise.resolve([RECORD]),
+      // The version lookup. The migration lands as it returns: on the old
+      // code the probe had already run by now and the answer was no.
+      () => {
+        mocks.classificationColumns = true;
+        return Promise.resolve([{ id: "version-1" }]);
+      },
+      () => Promise.resolve([{ seq: 2, chainDigest: "d".repeat(64) }]),
+      () =>
+        Promise.resolve([
+          {
+            kind: "rule",
+            force: "should",
+            constraintEffect: null,
+            statement: "What the pinned version says.",
+          },
+        ]),
+    );
+
+    await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "promote",
+        version_id: "crv_1",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(mocks.updateSets[0]).toMatchObject({
+      activeVersionId: "version-1",
+      kind: "rule",
+      force: "should",
+      statement: "What the pinned version says.",
+    });
+  });
+
+  it("leaves the row's classification alone when a supersede names a classified version", async () => {
+    // A supersede reads no classification: only a promote copies one, so the
+    // version lookup is the id-and-ownership read and nothing follows it.
+    queueSelects(
+      [RECORD],
+      [{ id: "version-2" }],
+      [{ seq: 1, chainDigest: "e".repeat(64) }],
+    );
+
+    await contextRecordPromoteHandler(
+      {
+        record_id: "ctr_1",
+        action: "supersede",
+        version_id: "crv_2",
+        policy_version: "regulated-1",
+      },
+      CTX,
+    );
+
+    expect(mocks.updateSets[0]).toMatchObject({ status: "superseded" });
+    expect(mocks.updateSets[0]).not.toHaveProperty("activeVersionId");
+    expect(mocks.updateSets[0]).not.toHaveProperty("kind");
   });
 
   it("chains a later entry off the head's digest", async () => {
