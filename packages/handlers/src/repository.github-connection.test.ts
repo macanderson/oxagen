@@ -387,8 +387,11 @@ describe("installationIdOf refuses everything its regex exists to refuse", () =>
 // screen to show for the connect that just succeeded. They share one function,
 // and this is what says so.
 
-/** A `tx` that records the select's SQL, the update's SET and the insert's VALUES. */
-function attachTx(rows: readonly unknown[]) {
+/** A `tx` that records each select's SQL, the update's SET and the insert's VALUES. */
+function attachTx(
+  rows: readonly unknown[],
+  oauthRows: readonly unknown[] = [{ id: "oauth-account-uuid" }],
+) {
   const db = drizzle.mock({ schema });
   const select = db.select.bind(db) as unknown as (fields: unknown) => {
     from: (t: unknown) => {
@@ -401,9 +404,16 @@ function attachTx(rows: readonly unknown[]) {
   };
   const captured: {
     sql?: CapturedSql;
+    oauthSql?: CapturedSql;
     updateSet?: Record<string, unknown>;
     insertValues?: Record<string, unknown>;
   } = {};
+
+  // Two selects share this chain shape: the connection lookup, then — on an
+  // insert, or an update whose row carries no link — the org's GitHub OAuth
+  // account. They are told apart by order, and each keeps its own SQL so the
+  // predicate assertions below stay about the query they name.
+  let selects = 0;
 
   const tx = {
     select: (fields: unknown) => ({
@@ -411,13 +421,19 @@ function attachTx(rows: readonly unknown[]) {
         where: (condition: unknown) => ({
           orderBy: (order: unknown) => ({
             limit: (n: number) => {
-              captured.sql = select(fields)
+              const sql = select(fields)
                 .from(table)
                 .where(condition)
                 .orderBy(order)
                 .limit(n)
                 .toSQL();
-              return rows;
+              selects += 1;
+              if (selects === 1) {
+                captured.sql = sql;
+                return rows;
+              }
+              captured.oauthSql = sql;
+              return oauthRows;
             },
           }),
         }),
@@ -445,8 +461,9 @@ async function runAttach(
   rows: readonly unknown[],
   installationId = "555",
   actingUserId: string | null = "u_acting",
+  oauthRows: readonly unknown[] = [{ id: "oauth-account-uuid" }],
 ) {
-  const { tx, captured } = attachTx(rows);
+  const { tx, captured } = attachTx(rows, oauthRows);
   mocks.withTenantDb.mockImplementationOnce(
     async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   );
@@ -497,6 +514,7 @@ describe("attachWorkspaceGithubInstallation", () => {
           repo: "platform",
           syncDepthDays: 30,
         },
+        oauthAccountId: null,
       },
     ]);
     expect(captured.insertValues).toBeUndefined();
@@ -513,6 +531,90 @@ describe("attachWorkspaceGithubInstallation", () => {
     // `connected`, and choosing an installation again is not a demotion.
     expect(captured.updateSet).not.toHaveProperty("status");
     expect(result).toEqual({ connectionId: "conn-uuid", publicId: "con_ABC" });
+  });
+
+  /**
+   * The connection has to name the OAuth account, or the poller cannot
+   * authenticate it.
+   *
+   * `bind_main_repository` promotes this row to `connected`, which is exactly
+   * the status `source_connections_poll_due_partial_idx` claims — so the
+   * ingestion poll scheduler picks it up, `resolveConnectionAuth` finds neither
+   * a linked account nor a per-connection credential, and every poll records
+   * `no_usable_credential` and degrades the connection's health, for a
+   * workspace whose GitHub works perfectly from the dialog. The install
+   * callback's own attach has always written the link; this door did not.
+   */
+  describe("the OAuth account link", () => {
+    it("writes it on the insert, from the org's GitHub account", async () => {
+      const { captured } = await runAttach([]);
+      expect(captured.insertValues).toMatchObject({
+        oauthAccountId: "oauth-account-uuid",
+      });
+    });
+
+    it("reads that account by org and provider, newest refresh first", async () => {
+      const { captured } = await runAttach([]);
+      // Same row, same ordering as `resolveWorkspaceGithubUserToken` and as the
+      // API's own fallback — so the account linked is the account whose token
+      // verified the installation.
+      expect(captured.oauthSql?.sql).toContain('"ingestion"."oauth_accounts"');
+      expect(captured.oauthSql?.sql).toMatch(/"org_id" = \$\d+/);
+      expect(captured.oauthSql?.sql).toMatch(/"provider" = \$\d+/);
+      expect(captured.oauthSql?.params).toContain(SCOPE.orgId);
+      expect(captured.oauthSql?.params).toContain("github");
+      expect(captured.oauthSql?.sql).toMatch(/order by .*"updated_at" desc/i);
+    });
+
+    it("fills it in on an existing row that carries none", async () => {
+      const { captured } = await runAttach([
+        {
+          id: "conn-uuid",
+          publicId: "con_ABC",
+          deliveryConfig: { installationId: "111" },
+          oauthAccountId: null,
+        },
+      ]);
+      expect(captured.updateSet).toMatchObject({
+        oauthAccountId: "oauth-account-uuid",
+      });
+    });
+
+    it("never repoints a row that already names one (negative)", async () => {
+      // Merge, never replace — the same rule the delivery config follows. A
+      // connection the legacy wizard linked names the account someone
+      // deliberately connected it through, and choosing an installation is not
+      // a reason to swap its token.
+      const { captured } = await runAttach([
+        {
+          id: "conn-uuid",
+          publicId: "con_ABC",
+          deliveryConfig: { installationId: "111" },
+          oauthAccountId: "oauth-already-linked",
+        },
+      ]);
+      expect(captured.updateSet).not.toHaveProperty("oauthAccountId");
+      // And the account was not even looked up: there was nothing to decide.
+      expect(captured.oauthSql).toBeUndefined();
+      // The installation still lands, which is what the caller asked for.
+      expect(captured.updateSet).toMatchObject({
+        deliveryConfig: { installationId: "555" },
+      });
+    });
+
+    it("still attaches when the org has no GitHub OAuth account at all (negative)", async () => {
+      // Unreachable from `attach_github_installation`, which refuses
+      // `conflict: github_not_authorized` before it gets here — there is no
+      // token, so nothing could have verified the installation. Pinned anyway
+      // so a future caller that skips that gate writes a row rather than
+      // throwing on a column that is nullable by design.
+      const { result, captured } = await runAttach([], "555", "u_acting", []);
+      expect(captured.insertValues).not.toHaveProperty("oauthAccountId");
+      expect(result).toEqual({
+        connectionId: "conn-new-uuid",
+        publicId: "con_new",
+      });
+    });
   });
 
   it("creates the workspace's GitHub connection when it has none", async () => {

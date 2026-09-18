@@ -9,11 +9,54 @@
 // could choose would let one tenant mint tokens for another account's
 // installation, so it is always taken from the connection the HMAC-verified
 // install callback attached (apps/api/src/routes/v1/github-oauth.ts).
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { and, desc, eq, isNull, notInArray, type SQL } from "drizzle-orm";
 
 /** The connector id the GitHub install callback writes. */
 export const GITHUB_PROVIDER = "github";
+
+/**
+ * The `ingestion.oauth_accounts.provider` value GitHub rows carry.
+ *
+ * The same string as {@link GITHUB_PROVIDER} and deliberately not the same
+ * constant: one names a connector in `source_connections`, the other an OAuth
+ * provider in `oauth_accounts`, and a rename of either must not silently
+ * retarget the other's query.
+ */
+const GITHUB_OAUTH_PROVIDER = "github";
+
+/**
+ * The org's GitHub OAuth account row, newest refresh first, or null when the
+ * org has never authorized GitHub.
+ *
+ * Keyed by org, not by workspace or by connection: `oauth_accounts` holds one
+ * row per GitHub user per org, which is the same trust boundary the OAuth
+ * callback writes on. `resolveConnectionAccessToken`
+ * (apps/api/src/routes/v1/github-oauth.ts) states the argument in full and
+ * falls back the same way; `resolveWorkspaceGithubUserToken`
+ * (./repository.github-user-installations) reads the same row for its token by
+ * the same ordering, so the account this links is the account whose token
+ * verified the installation.
+ *
+ * Read on the caller's transaction so RLS bounds it to this org.
+ */
+async function orgGithubOauthAccountId(
+  tx: Tx,
+  orgId: string,
+): Promise<string | null> {
+  const rows = await tx
+    .select({ id: schema.oauthAccounts.id })
+    .from(schema.oauthAccounts)
+    .where(
+      and(
+        eq(schema.oauthAccounts.orgId, orgId),
+        eq(schema.oauthAccounts.provider, GITHUB_OAUTH_PROVIDER),
+      ),
+    )
+    .orderBy(desc(schema.oauthAccounts.updatedAt))
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
 
 /**
  * Statuses that mean the connection is on its way out and must not mint
@@ -175,7 +218,19 @@ export async function resolveWorkspaceGithubInstallation(scope: {
  * carries operational keys (owner/repo/defaultBranch, syncDepthDays) the
  * resync path reads. Status is left alone on an update, because a workspace
  * that has already bound a repository is `connected` and choosing an
- * installation again is not a reason to demote it.
+ * installation again is not a reason to demote it. The OAuth account link
+ * follows the same rule: written on insert, filled in on an update that finds
+ * it null, and never repointed when a row already names one.
+ *
+ * That link is not decoration. `bind_main_repository` promotes this row to
+ * `connected`, which is the status `source_connections_poll_due_partial_idx`
+ * claims, so the ingestion poll scheduler picks it up — and with no
+ * `oauth_account_id` and no per-connection credential, `resolveConnectionAuth`
+ * answers `no_usable_credential` on every poll and degrades the connection's
+ * health, while the settings dialog shows a workspace that works. The install
+ * callback's own attach (apps/api/src/routes/v1/github-oauth.ts) has always
+ * written it; this is the other door to the same row, and a door that writes
+ * the same row less completely is the defect, not a variant.
  *
  * A workspace with no live GitHub connection gets one, at `pending_setup`
  * rather than `connected`: `status = 'connected'` is precisely what the
@@ -205,6 +260,7 @@ export async function attachWorkspaceGithubInstallation(args: {
         id: schema.sourceConnections.id,
         publicId: schema.sourceConnections.publicId,
         deliveryConfig: schema.sourceConnections.deliveryConfig,
+        oauthAccountId: schema.sourceConnections.oauthAccountId,
       })
       .from(schema.sourceConnections)
       .where(workspaceGithubConnectionFilter({ orgId, workspaceId }))
@@ -213,6 +269,15 @@ export async function attachWorkspaceGithubInstallation(args: {
 
     const row = existing[0];
     if (row) {
+      // Link the org's GitHub OAuth account when this row carries none, and
+      // leave a link that exists alone — merge, never replace, the same rule
+      // the delivery config above follows. A connection the legacy wizard
+      // linked names the account someone deliberately connected it through;
+      // choosing an installation is not a reason to repoint its token.
+      const linkedOauthAccountId =
+        row.oauthAccountId === null
+          ? await orgGithubOauthAccountId(tx, orgId)
+          : null;
       await tx
         .update(schema.sourceConnections)
         .set({
@@ -220,12 +285,27 @@ export async function attachWorkspaceGithubInstallation(args: {
             ...((row.deliveryConfig as Record<string, unknown> | null) ?? {}),
             installationId,
           },
+          ...(linkedOauthAccountId
+            ? { oauthAccountId: linkedOauthAccountId }
+            : {}),
           updatedAt: now,
           ...(actingUserId ? { updatedById: actingUserId } : {}),
         })
         .where(eq(schema.sourceConnections.id, row.id));
       return { connectionId: row.id, publicId: row.publicId };
     }
+
+    // A connection with no `oauth_account_id` is a connection nothing can
+    // authenticate. `bind_main_repository` promotes this row to `connected`,
+    // which is exactly what `source_connections_poll_due_partial_idx` claims,
+    // and `resolveConnectionAuth` then finds neither a linked account nor a
+    // per-connection credential — so every scheduled poll records
+    // `no_usable_credential` and degrades the connection's health, for a
+    // workspace whose GitHub is working perfectly from the dialog. The OAuth
+    // callback's own attach (apps/api/src/routes/v1/github-oauth.ts) has always
+    // persisted the account id; this path is the other door to the same row and
+    // did not, which is the whole defect.
+    const oauthAccountId = await orgGithubOauthAccountId(tx, orgId);
 
     const inserted = await tx
       .insert(schema.sourceConnections)
@@ -240,6 +320,7 @@ export async function attachWorkspaceGithubInstallation(args: {
         authScheme: "oauth2_authorization_code",
         deliveryMethod: "webhook",
         deliveryConfig: { installationId },
+        ...(oauthAccountId ? { oauthAccountId } : {}),
         status: "pending_setup",
         createdAt: now,
         updatedAt: now,
