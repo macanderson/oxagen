@@ -35,11 +35,23 @@ vi.mock("./api-key-actions", () => ({
 
 const { CreateKeyDialog, KeyRowActions } = await import("./create-key-dialog");
 
-const HERE = routes.apiKeys("acme", { workspace: "core-platform" });
 /**
- * Where a rotation returns. A rotation mints a key and the roster is newest
- * first, so the replacement is only ever on the first page of the filter in
- * view; a revocation holds its place and returns to `HERE`.
+ * The view the row was read on: the third page of the revoked-keys-included
+ * roster. A revocation returns here, because it changes no order and holds the
+ * reader's place.
+ */
+const HERE = routes.apiKeys("acme", {
+  workspace: "core-platform",
+  show: "all",
+  offset: "40",
+});
+/**
+ * Where a rotation returns: the first page of *that same filter*. A rotation
+ * mints a key and the roster is newest first, so the replacement is only ever
+ * on the first page. The two paths differ in the page and never in the filter —
+ * which is why `show=all` is on both. A fixture that varied the filter instead
+ * would assert that an active-view rotation navigates into the all-keys view,
+ * which is not what the page does.
  */
 const AFTER_MINT = routes.apiKeys("acme", {
   workspace: "core-platform",

@@ -21,7 +21,8 @@
 //
 // `list_api_keys` answers the workspace's whole roster, revoked rows included,
 // with no filter and no page of its own. The cut is made here: the page opens
-// on the keys that still work, hides the revoked ones behind one link, and
+// on the keys that have not been revoked, hides the revoked ones behind one
+// link, and
 // shows `API_KEYS_PAGE` rows at a time. Both are query values on this one route
 // (`api-keys-view.ts`), so a filtered page survives a reload and a shared link.
 import { useLocale, useTranslations } from "next-intl";

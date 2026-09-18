@@ -6,7 +6,7 @@
 //
 // The default hides revoked keys. A revoked key authenticates nothing —
 // `resolveApiKey` never sees the row again — so it is a record of a key, not a
-// key, and leaving it on the roster pushes the keys that do work below it. It
+// key, and leaving it on the roster pushes the unrevoked ones below it. It
 // is still reachable: `show=all` is one link away and the revoked rows come
 // back with their revocation dates, which is how a person answers "was this
 // one ever revoked, and when".
@@ -34,19 +34,32 @@ export type ApiKeysView = {
   offset: number;
 };
 
-/** An offset the query may carry: a non-negative integer, without leading zeros or a sign. */
-const OFFSET = /^(0|[1-9][0-9]{0,5})$/;
+/**
+ * An offset the query may carry: a non-negative integer, without leading zeros
+ * or a sign, that a double holds exactly. The digit bound is the one
+ * `Number.isSafeInteger` needs to mean anything — a longer run of digits parses
+ * to a rounded value, and rounding an offset silently moves the page — and not
+ * a bound on how many keys a workspace may have. A ceiling of the latter kind
+ * fails the wrong way: an offset above it falls back to 0, so the last page of
+ * a roster past the ceiling would answer Next by jumping to the first.
+ */
+const OFFSET = /^(0|[1-9][0-9]{0,15})$/;
 
 type Params = Readonly<Record<string, string | string[] | undefined>>;
 
+/** The offset a query asked for, or 0 for one this page cannot read. */
+function readOffset(raw: string | undefined): number {
+  if (raw === undefined || !OFFSET.test(raw)) return 0;
+  const offset = Number(raw);
+  return Number.isSafeInteger(offset) ? offset : 0;
+}
+
 export function parseApiKeysView(params: Params): ApiKeysView {
   const rawShow = firstParam(params.show);
-  const rawOffset = firstParam(params.offset);
   return {
     workspace: firstParam(params.workspace),
     show: API_KEYS_SHOW.find((s) => s === rawShow) ?? "active",
-    offset:
-      rawOffset !== undefined && OFFSET.test(rawOffset) ? Number(rawOffset) : 0,
+    offset: readOffset(firstParam(params.offset)),
   };
 }
 

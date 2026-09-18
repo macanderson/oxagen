@@ -40,7 +40,9 @@ const { OrgCtx, WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
 const { ApiKeys, chooseWorkspace } = await import("./api-keys");
-const { API_KEYS_PAGE, parseApiKeysView } = await import("./api-keys-view");
+const { API_KEYS_PAGE, pageOfKeys, parseApiKeysView } = await import(
+  "./api-keys-view"
+);
 /** `API_KEYS_PAGE` and the figures around it, as the pager prints them. */
 const PAGE = String(API_KEYS_PAGE);
 const nth = (n: number) => String(API_KEYS_PAGE + n);
@@ -300,10 +302,10 @@ const rowIds = () =>
   );
 
 describe("the revoked keys the page hides", () => {
-  it("opens on the keys that still work, with no revoked row on the table", async () => {
+  it("opens on the unrevoked keys, with no revoked row on the table", async () => {
     // A revoked key authenticates nothing — resolveApiKey never sees the row
     // again — so it is a record of a key, not a key, and it does not push the
-    // keys that do work below it.
+    // unrevoked ones below it. An expired key is not revoked and stays.
     await renderApiKeys(readOk([live, expired, revoked]));
     expect(rowIds()).toEqual([live.id, expired.id]);
     expect(keysTable()).not.toHaveTextContent("Laptop");
@@ -477,8 +479,22 @@ describe("paging a roster larger than a page", () => {
     expect(parseApiKeysView({ offset: "-1" }).offset).toBe(0);
     expect(parseApiKeysView({ offset: "020" }).offset).toBe(0);
     expect(parseApiKeysView({ offset: "1e3" }).offset).toBe(0);
-    expect(parseApiKeysView({ offset: "9999999999" }).offset).toBe(0);
     expect(parseApiKeysView({}).offset).toBe(0);
+  });
+
+  it("reads an offset far past any real roster rather than resetting it to the first page (negative)", () => {
+    // The bound is what a double holds exactly, not a guess at how many keys a
+    // workspace may have. A ceiling of the latter kind fails the wrong way: an
+    // offset above it falls back to 0, so Next on the last page of a roster
+    // past the ceiling would jump to the first page instead. `pageOfKeys`
+    // clamps a too-large offset onto the last page that exists, which is where
+    // an offset beyond the roster is supposed to land.
+    expect(parseApiKeysView({ offset: "9999999999" }).offset).toBe(9999999999);
+    expect(pageOfKeys(manyKeys(3), 9999999999).offset).toBe(0);
+    // Past what a double holds exactly, the parse would round — and a rounded
+    // offset is a silently different page — so it falls back instead.
+    expect(parseApiKeysView({ offset: "9007199254740993" }).offset).toBe(0);
+    expect(parseApiKeysView({ offset: "99999999999999999999" }).offset).toBe(0);
   });
 });
 
