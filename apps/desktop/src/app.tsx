@@ -302,14 +302,24 @@ export function App() {
   /**
    * Poll `landed` until it answers true. Used to stop waiting on a sidecar
    * that has already written its result to disk; see `sessionLanded`.
+   *
+   * `poll.stopped` is how the caller ends it. A `Promise.race` does not
+   * cancel its loser, and this one would otherwise outlive the action that
+   * started it: a login that fails, or one whose session fields never change,
+   * would leave it calling `readState` every 500ms for the rest of the app
+   * session — and on an enrolled machine each of those waits on the daemon.
    */
   async function waitForLanding(
     landed: () => Promise<boolean>,
+    poll: { stopped: boolean },
   ): Promise<RunOutcome> {
-    for (;;) {
+    while (!poll.stopped) {
       await new Promise((r) => setTimeout(r, 500));
+      if (poll.stopped) break;
       if (await landed().catch(() => false)) return { code: 0, stderr: "" };
     }
+    // The race settled without this one; the value is never read.
+    return { code: null, stderr: "" };
   }
 
   async function act(
@@ -334,15 +344,23 @@ export function App() {
       const run = runSidecar(sidecar, args, (line, stream) =>
         setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
       );
-      const result = landed
-        ? await Promise.race([run, waitForLanding(landed)])
-        : await run;
-      // The race leaves the sidecar running when `landed` wins. Its failure
-      // is still a failure of this action if it comes before the next one.
-      if (landed)
+      let result: RunOutcome;
+      if (landed) {
+        const poll = { stopped: false };
+        try {
+          result = await Promise.race([run, waitForLanding(landed, poll)]);
+        } finally {
+          // Whichever won, the other one is done being useful.
+          poll.stopped = true;
+        }
+        // The race leaves the sidecar running when `landed` wins. Its failure
+        // is still a failure of this action if it comes before the next one.
         run.catch((e: unknown) =>
           setError(e instanceof Error ? e.message : String(e)),
         );
+      } else {
+        result = await run;
+      }
       if (result.code !== 0) {
         setError(
           `${sidecar} ${args[0]} exited ${result.code ?? "?"}; see the output below.`,
