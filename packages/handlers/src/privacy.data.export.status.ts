@@ -14,6 +14,30 @@ import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.e
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 
+/**
+ * The canonical object key from whatever `export_url` holds.
+ *
+ * Rows written before this change stored `result.url`, and on Vercel Blob that
+ * is a full authenticated URL, not a key: the driver returns `url: result.url`
+ * and `key: result.pathname`, which differ. `storage().get()` accepts only a
+ * canonical key, so an older ready row would read as ready and then fail to
+ * download. Both representations are accepted here rather than the rows being
+ * migrated, because the pathname is recoverable from the URL exactly and a
+ * backfill would have to reach every data plane (ADR-042).
+ *
+ * The filesystem driver returns `url: input.key`, so its rows need nothing.
+ */
+export function exportObjectKey(stored: string): string {
+  if (!/^https?:\/\//i.test(stored)) return stored;
+  try {
+    return new URL(stored).pathname.replace(/^\/+/, "");
+  } catch {
+    // Not parseable as a URL after all. It is whatever it is, and get() will
+    // refuse it rather than this returning something invented.
+    return stored;
+  }
+}
+
 export const privacyDataExportStatusHandler: CapabilityHandler<
   typeof privacyDataExportStatus
 > = async (input, ctx) => {
@@ -58,12 +82,12 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
   // object's url (Vercel Blob needs the store token; the filesystem driver
   // returns the key itself). A key left on a row that has since failed is not
   // offered either, so nothing points at a half-written bundle.
-  const ready = row.status === "ready" && row.exportUrl !== null;
+  const stored = row.status === "ready" ? row.exportUrl : null;
   return {
     exportId: row.id,
     status: row.status,
-    ready,
-    storageKey: ready ? row.exportUrl : null,
+    ready: stored !== null,
+    storageKey: stored === null ? null : exportObjectKey(stored),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
   };
 };

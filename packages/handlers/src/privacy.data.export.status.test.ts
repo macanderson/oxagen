@@ -31,7 +31,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-import { privacyDataExportStatusHandler } from "./privacy.data.export.status";
+import {
+  exportObjectKey,
+  privacyDataExportStatusHandler,
+} from "./privacy.data.export.status";
 
 const EXPORT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -176,5 +179,54 @@ describe("get_export_status", () => {
     expect(out.status).toBe("failed");
     expect(out.ready).toBe(false);
     expect(out.storageKey).toBeNull();
+  });
+});
+
+// Rows written before the key change hold `result.url`, and on Vercel Blob
+// that is a full authenticated URL rather than a key — the driver returns
+// `url: result.url` and `key: result.pathname`, which differ. An older ready
+// export would otherwise read as ready and then fail at `storage().get()`.
+describe("reading a key out of what the row holds", () => {
+  it("passes a canonical key through untouched", () => {
+    expect(exportObjectKey("privacy-exports/org-1/exp-1.zip")).toBe(
+      "privacy-exports/org-1/exp-1.zip",
+    );
+  });
+
+  it("takes the pathname out of an older stored blob URL", () => {
+    expect(
+      exportObjectKey(
+        "https://abc123.blob.vercel-storage.com/privacy-exports/org-1/exp-1-Xy9.zip",
+      ),
+    ).toBe("privacy-exports/org-1/exp-1-Xy9.zip");
+  });
+
+  // The stored pathname carries the suffix Vercel added, so the recovered key
+  // is the one the object was actually written under, not the input key.
+  it("keeps a query string out of the key", () => {
+    expect(
+      exportObjectKey("https://x.example/privacy-exports/a.zip?token=secret"),
+    ).toBe("privacy-exports/a.zip");
+  });
+
+  it("leaves something that is neither alone", () => {
+    expect(exportObjectKey("s3://bucket/key.zip")).toBe("s3://bucket/key.zip");
+  });
+
+  it("hands the recovered key to the caller through the handler", async () => {
+    mocks.rows = [
+      {
+        id: EXPORT_ID,
+        status: "ready",
+        exportUrl:
+          "https://abc123.blob.vercel-storage.com/privacy-exports/org-1/old.zip",
+        completedAt: null,
+      },
+    ];
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org-1/old.zip");
   });
 });
