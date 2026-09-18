@@ -46,6 +46,7 @@ export {
   bisectFrames,
   foldTranscript,
   stepKind,
+  turnOrdinals,
   type RunFrame,
   type FrameIdentity,
   type TachoFrameRowLike,
