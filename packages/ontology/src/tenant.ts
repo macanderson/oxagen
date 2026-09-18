@@ -11,8 +11,10 @@ import { session } from "./client";
 import { dedicatedSession } from "./data-plane-driver";
 import {
   applyGraphScope,
+  expressionLocalBindings,
   GraphScopeError,
   keepFilteringPositions,
+  keepPredicatePositions,
   projectedNames,
   rowSelectingScope,
 } from "./graph-scope";
@@ -130,16 +132,53 @@ export type { GraphScope };
 // reaches it. `tenant.scope-guard.test.ts` asserts it as known-accepted.
 const ID_START = "\\p{ID_Start}\\p{Pc}";
 const ID_PART = "\\p{ID_Continue}\\p{Sc}";
-/** `<variable>.orgId = $orgId` — a dot, and a non-parameter identifier before it. */
-const ANCHOR_PROPERTY = `(?<![${ID_PART}])[${ID_START}][${ID_PART}]*\\s*\\.\\s*orgId\\s*=\\s*\\$orgId(?![${ID_PART}])`;
 /** `orgId: $orgId` — a pattern property map key. Never preceded by a dot. */
 const ANCHOR_MAP_KEY = `(?<![${ID_PART}.])orgId\\s*:\\s*\\$orgId(?![${ID_PART}])`;
-const SCOPE_GUARD = new RegExp(`${ANCHOR_PROPERTY}|${ANCHOR_MAP_KEY}`, "u");
-/** `ANCHOR_PROPERTY` with the anchored variable captured, for the per-part rule. */
+/**
+ * The map-key form, tested against PATTERN-MAP positions only. Each of the two
+ * anchor shapes belongs to exactly one position, and reading either in the
+ * other's is a hole: inside a pattern map a `x.orgId = $orgId` can only be a
+ * map VALUE — `MATCH (a {orgId: $orgId}) MATCH (n {ok: a.orgId = $orgId})`
+ * constrains `n.ok`, not `n.orgId`, and every tenant's `n` with `ok: true`
+ * comes back — while a map key cannot occur in a WHERE at all, since every
+ * map literal there is blanked.
+ */
+const MAP_KEY_ANCHOR = new RegExp(ANCHOR_MAP_KEY, "u");
+/**
+ * `<variable>.orgId = $orgId` — a dot, and a non-parameter identifier before
+ * it, captured — tested against WHERE positions only.
+ */
 const ANCHORED_VARIABLE = new RegExp(
   `(?<![${ID_PART}])([${ID_START}][${ID_PART}]*)\\s*\\.\\s*orgId\\s*=\\s*\\$orgId(?![${ID_PART}])`,
   "gu",
 );
+
+/**
+ * The variables a WHERE projection anchors — `<v>.orgId = $orgId` — minus
+ * every anchor whose variable is an EXPRESSION-LOCAL name at that position.
+ *
+ *     MATCH (n) WHERE any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n
+ *
+ * spells the anchor exactly, and the `n` it names is the list predicate's,
+ * bound to the map and compared with its own value: true for every row, so
+ * the pattern's `n` reads every tenant. A name a list predicate, a list
+ * comprehension or a `reduce` binds shadows the pattern variable inside its
+ * bracket, and an anchor inside that bracket is credit for the local, not for
+ * the pattern. `expressionLocalBindings` reports the brackets and the names.
+ */
+function whereAnchoredVariables(where: string): Set<string> {
+  const regions = expressionLocalBindings(where);
+  const anchored = new Set<string>();
+  for (const m of where.matchAll(ANCHORED_VARIABLE)) {
+    const name = m[1]!;
+    const at = m.index;
+    const shadowed = regions.some(
+      (r) => r.start < at && at < r.end && r.names.includes(name),
+    );
+    if (!shadowed) anchored.add(name);
+  }
+  return anchored;
+}
 // EVERY ROW-SELECTING PATTERN PART IS ANCHORED (M0, spec §5.3).
 //
 // The query-wide check above answers "is the tenant bound somewhere", and the
@@ -241,10 +280,8 @@ function isPartAnchored(
   part: RowSelectingPart,
   anchored: ReadonlySet<string>,
 ): boolean {
-  if (SCOPE_GUARD.test(part.anchors)) return true;
-  const whereAnchored = new Set(
-    [...part.where.matchAll(ANCHORED_VARIABLE)].map((m) => m[1]!),
-  );
+  if (MAP_KEY_ANCHOR.test(part.anchors)) return true;
+  const whereAnchored = whereAnchoredVariables(part.where);
   return part.variables.some((v) => whereAnchored.has(v) || anchored.has(v));
 }
 
@@ -348,7 +385,13 @@ function assertEveryPartAnchored(cypher: string): void {
  * below, which is an enforced invariant rather than a reachable failure today.
  */
 export function assertAnchorsTenant(cypher: string): void {
-  if (!SCOPE_GUARD.test(keepFilteringPositions(cypher))) {
+  // Each shape in its own position: the map-key form where a pattern map is
+  // kept, the property form where a WHERE is — and the latter credited only
+  // to a variable no expression inside that WHERE re-binds.
+  if (
+    !MAP_KEY_ANCHOR.test(keepFilteringPositions(cypher)) &&
+    whereAnchoredVariables(keepPredicatePositions(cypher)).size === 0
+  ) {
     throw new TenantScopeError(
       `Cypher over a scoped session must bind the tenant to the seam's own $orgId, in a WHERE predicate (\`WHERE n.orgId = $orgId\`) or an inline pattern property (\`MATCH (n {orgId: $orgId})\`). A SET target, a RETURN projection, and any other parameter name (which the caller controls) do not scope anything: ${cypher.slice(0, 80)}`,
     );

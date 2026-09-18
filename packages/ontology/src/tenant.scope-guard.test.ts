@@ -632,6 +632,129 @@ describe("tenancy guard — an anchor is credited to a variable, not a name", ()
   });
 });
 
+// ── An anchor names the pattern's variable, not a name an expression binds ──
+//
+// Review's third finding against the per-part rule. A WHERE anchor is credit
+// for the variable it names, and a Cypher expression can bind a name of its
+// own — a list predicate, a list comprehension, `reduce` — that shadows the
+// pattern variable inside its bracket. An anchor written there is true of the
+// local and says nothing about the row. The pattern-map cases are the same
+// mistake in the other position: a `x.orgId = $orgId` inside a pattern map
+// can only be a map VALUE, and a value constrains the key it is under.
+describe("tenancy guard — an anchor on a shadowing or value position", () => {
+  const refused: Array<[name: string, cypher: string]> = [
+    [
+      "the anchor names a list predicate's variable (review's query)",
+      "MATCH (n) WHERE any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the same under all()",
+      "MATCH (n) WHERE all(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the same under none() negated",
+      "MATCH (n) WHERE NOT none(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the same under single()",
+      "MATCH (n) WHERE single(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the anchor names a list comprehension's variable",
+      "MATCH (n) WHERE size([n IN [{orgId: $orgId}] WHERE n.orgId = $orgId]) > 0 RETURN n",
+    ],
+    [
+      "the anchor names a list comprehension's variable in its projection",
+      "MATCH (n) WHERE [n IN [{orgId: $orgId}] | n.orgId = $orgId][0] RETURN n",
+    ],
+    [
+      "the anchor names reduce's element",
+      "MATCH (n) WHERE reduce(ok = true, n IN [{orgId: $orgId}] | ok AND n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the anchor names reduce's accumulator",
+      "MATCH (n) WHERE reduce(n = {orgId: $orgId}, x IN [1] | n).orgId = $orgId RETURN n",
+    ],
+    [
+      "the shadowing bracket is nested inside another",
+      "MATCH (n) WHERE size(any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId)) RETURN n",
+    ],
+    [
+      "the shadowing predicate feeds a write",
+      "MATCH (n) WHERE any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) SET n.x = 1 RETURN n",
+    ],
+    [
+      "the shadowed anchor is the only one, beside an unrelated predicate",
+      "MATCH (n) WHERE n.x = 1 AND any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "the anchor is a pattern-map value on an earlier variable",
+      "MATCH (a {orgId: $orgId}) MATCH (n {ok: a.orgId = $orgId}) RETURN n",
+    ],
+    [
+      "the anchor is a pattern-map value inside a list predicate",
+      "MATCH (n {ok: any(m IN [1] WHERE m.orgId = $orgId)}) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of refused) {
+    it(`rejects: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(false);
+    });
+  }
+
+  it("is discriminating: the query-wide anchor accepted the map-value cases", () => {
+    // Property-form text sits inside a kept pattern map, so a projection that
+    // read either shape in either position took it as an anchor.
+    expect(
+      keepFilteringPositions(
+        "MATCH (a {orgId: $orgId}) MATCH (n {ok: a.orgId = $orgId}) RETURN n",
+      ),
+    ).toMatch(/a\.orgId = \$orgId/);
+  });
+
+  const accepted: Array<[name: string, cypher: string]> = [
+    [
+      "the anchor outside a predicate that shadows its variable",
+      "MATCH (n) WHERE n.orgId = $orgId AND any(n IN [1] WHERE n > 0) RETURN n",
+    ],
+    [
+      "the anchor after a shadowing predicate has closed",
+      "MATCH (n) WHERE any(n IN [1] WHERE n > 0) AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "a list predicate over another name beside the anchor",
+      "MATCH (n) WHERE n.orgId = $orgId AND all(k IN keys(n) WHERE k <> 'x') RETURN n",
+    ],
+    [
+      "the anchor inside a list predicate over another name",
+      "MATCH (n) WHERE any(k IN keys(n) WHERE n.orgId = $orgId AND k = 'x') RETURN n",
+    ],
+    [
+      "the anchor inside reduce over another name",
+      "MATCH (n) WHERE reduce(ok = true, k IN keys(n) | ok AND n.orgId = $orgId) RETURN n",
+    ],
+    [
+      "a membership test on a property beside the anchor",
+      "MATCH (n) WHERE n.x IN [1, 2] AND n.orgId = $orgId RETURN n",
+    ],
+    [
+      "the anchor inside a pattern comprehension, which binds no new name for n",
+      "MATCH (n) WHERE size([(n)-->(m) WHERE n.orgId = $orgId | m]) > 0 RETURN n",
+    ],
+    [
+      "a pattern-map key beside a property-form value",
+      "MATCH (a {orgId: $orgId}) MATCH (n {orgId: $orgId, ok: a.orgId = $orgId}) RETURN n",
+    ],
+  ];
+
+  for (const [name, cypher] of accepted) {
+    it(`accepts: ${name}`, async () => {
+      await expect(guardAccepts(cypher)).resolves.toBe(true);
+    });
+  }
+});
+
 // ── Delimiting the anchor by Cypher's rules, not JavaScript's ────────────────
 //
 // The pattern is `orgId <: or => $orgId`, and it is only worth anything if

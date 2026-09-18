@@ -130,7 +130,12 @@ name (`*`, or a bare variable; an expression or an `AS` alias keeps nothing),
 a `CALL { … }` body sees only what it imports through a scope clause or an
 importing `WITH` and hands back what its `RETURN` kept, an expression subquery
 sees the enclosing scope and hands back nothing, and a `UNION` at any level
-restarts its scope from what it was handed.
+restarts its scope from what it was handed. Each anchor shape is read in its
+own position only: the map-key form where a pattern map is kept, and the
+property form where a `WHERE` is, credited to its variable only outside every
+bracket that re-binds the name (a list predicate, a list comprehension, or
+`reduce`), so `any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId)` anchors
+nothing.
 
 That closes the second unanchored `MATCH`, the unanchored `OPTIONAL MATCH`, the
 unanchored `UNION` branch at any level, the `MATCH` after an anchoring `MERGE`,

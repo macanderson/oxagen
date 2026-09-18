@@ -7,6 +7,7 @@ import {
   buildScopeParams,
   clampLimits,
   clampVarLengthHops,
+  expressionLocalBindings,
   GraphScopeError,
   keepFilteringPositions,
   keepPredicatePositions,
@@ -2608,5 +2609,64 @@ describe("projectedNames", () => {
 
   it("is delimited by Cypher's identifier classes", () => {
     expect([...projectedNames("né", new Set(["n", "né"]))]).toEqual(["né"]);
+  });
+});
+
+describe("expressionLocalBindings", () => {
+  const spans = (text: string) =>
+    expressionLocalBindings(text).map((r) => ({
+      inside: text.slice(r.start, r.end + 1),
+      names: [...r.names],
+    }));
+
+  it("binds a list predicate's variable to its paren", () => {
+    expect(spans("WHERE any(x IN xs WHERE x > 0) AND n.y = 1")).toEqual([
+      { inside: "(x IN xs WHERE x > 0)", names: ["x"] },
+    ]);
+  });
+
+  it("binds a list comprehension's variable to its bracket", () => {
+    expect(spans("WHERE [x IN xs WHERE x > 0 | x] <> []")).toEqual([
+      { inside: "[x IN xs WHERE x > 0 | x]", names: ["x"] },
+    ]);
+  });
+
+  it("binds reduce's accumulator and element, and not a grouping's first name", () => {
+    expect(
+      spans("WHERE reduce(acc = 0, x IN xs | acc + x) > (n.x = 1)"),
+    ).toEqual([
+      { inside: "(acc = 0, x IN xs | acc + x)", names: ["acc", "x"] },
+    ]);
+  });
+
+  it("reads IN as a whole keyword, case-insensitively", () => {
+    expect(spans("WHERE any(x in xs WHERE x > 0)")).toEqual([
+      { inside: "(x in xs WHERE x > 0)", names: ["x"] },
+    ]);
+    expect(spans("WHERE f(x INx)")).toEqual([]);
+    expect(spans("WHERE f(x, INx)")).toEqual([]);
+  });
+
+  it("does not read a property membership test as a binding", () => {
+    expect(spans("WHERE n.x IN [1, 2] AND f(n.y IN xs)")).toEqual([]);
+  });
+
+  it("nests, keeping each bracket's own names", () => {
+    expect(spans("WHERE any(x IN xs WHERE all(y IN ys WHERE x = y))")).toEqual([
+      { inside: "(y IN ys WHERE x = y)", names: ["y"] },
+      { inside: "(x IN xs WHERE all(y IN ys WHERE x = y))", names: ["x"] },
+    ]);
+  });
+
+  it("reports an unclosed bracket to the end of the text", () => {
+    expect(expressionLocalBindings("WHERE any(x IN xs")).toEqual([
+      { start: 9, end: 17, names: ["x"] },
+    ]);
+  });
+
+  it("reports nothing for a text with no bindings", () => {
+    expect(spans("WHERE n.orgId = $orgId AND (n.x = 1 OR n.y = 2)")).toEqual(
+      [],
+    );
   });
 });

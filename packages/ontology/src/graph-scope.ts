@@ -1503,6 +1503,105 @@ export function projectedNames(
   return kept;
 }
 
+/** A span of `text` inside which `names` are bound by the expression itself. */
+export interface LocalBindingRegion {
+  /** Index of the `(` or `[` that opens the binding's scope. */
+  readonly start: number;
+  /** Index of the `)` or `]` that closes it (or `text.length` if unclosed). */
+  readonly end: number;
+  /** The names the bracket binds, in the order they are written. */
+  readonly names: readonly string[];
+}
+
+/** The keyword `IN` at `at`, whole, case-insensitive. */
+const IN_AT = /IN(?![\p{ID_Continue}\p{Sc}])/iuy;
+
+/**
+ * Every EXPRESSION-LOCAL binding in `text` — a kept WHERE projection — with the
+ * bracket span it is scoped to.
+ *
+ * A Cypher expression can bind a name of its own, and the name lives only
+ * inside the bracket that binds it: a list predicate (`any(x IN xs WHERE …)`,
+ * `all`, `none`, `single`), a list comprehension (`[x IN xs WHERE … | …]`),
+ * and `reduce(acc = init, x IN xs | …)`. Such a name SHADOWS a pattern
+ * variable spelled the same, so
+ *
+ *     MATCH (n) WHERE any(n IN [{orgId: $orgId}] WHERE n.orgId = $orgId) RETURN n
+ *
+ * compares the list's map with itself, is true for every row, and the
+ * `n.orgId = $orgId` it contains names the predicate's `n`, not the pattern's.
+ * The tenancy guard reads a WHERE anchor as credit for the variable it names,
+ * and that credit belongs only to an anchor OUTSIDE every region binding the
+ * name.
+ *
+ * The binding is read at the positions the grammar puts it: the first tokens
+ * after the opening bracket (`IDENT IN`, or `IDENT =` when the bracket is
+ * `reduce`'s), and after each top-level comma inside the bracket (`reduce`'s
+ * second argument). A bare membership test that happens to open a grouping
+ * paren — `(n IN $nodes AND n.orgId = $orgId)` — reads as a binding too, and
+ * costs that query its credit; that is the fail-closed direction, and no
+ * query in the corpus writes it. A pattern comprehension binds nothing here:
+ * a name already bound in the enclosing scope IS that variable inside it.
+ */
+export function expressionLocalBindings(text: string): LocalBindingRegion[] {
+  const regions: LocalBindingRegion[] = [];
+  const stack: Array<{ start: number; names: string[]; reduce: boolean }> = [];
+  const wordBefore = (idx: number): string => {
+    let k = idx - 1;
+    while (k >= 0 && /\s/.test(text[k]!)) k -= 1;
+    let j = k;
+    while (j >= 0 && ID_PART_CHAR.test(text[j]!)) j -= 1;
+    return text.slice(j + 1, k + 1).toUpperCase();
+  };
+  // `IDENT IN` (or `IDENT =` for reduce's accumulator) starting at `at`.
+  const bindAt = (
+    at: number,
+    frame: { names: string[]; reduce: boolean },
+    accumulator: boolean,
+  ) => {
+    let j = at;
+    while (j < text.length && /\s/.test(text[j]!)) j += 1;
+    IDENTIFIER_AT.lastIndex = j;
+    const id = IDENTIFIER_AT.exec(text);
+    if (!id) return;
+    let k = j + id[0].length;
+    while (k < text.length && /\s/.test(text[k]!)) k += 1;
+    IN_AT.lastIndex = k;
+    if (IN_AT.test(text) || (accumulator && frame.reduce && text[k] === "=")) {
+      frame.names.push(id[0]);
+    }
+  };
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (ch === "(" || ch === "[") {
+      const frame = {
+        start: i,
+        names: [],
+        reduce: ch === "(" && wordBefore(i) === "REDUCE",
+      };
+      bindAt(i + 1, frame, true);
+      stack.push(frame);
+    } else if (ch === ")" || ch === "]") {
+      const frame = stack.pop();
+      if (frame && frame.names.length > 0) {
+        regions.push({ start: frame.start, end: i, names: frame.names });
+      }
+    } else if (ch === "," && stack.length > 0) {
+      bindAt(i + 1, stack[stack.length - 1]!, false);
+    }
+  }
+  for (const frame of stack) {
+    if (frame.names.length > 0) {
+      regions.push({
+        start: frame.start,
+        end: text.length,
+        names: frame.names,
+      });
+    }
+  }
+  return regions;
+}
+
 /**
  * Positions where a NAME-TO-PARAMETER BINDING can narrow the row set: a WHERE
  * clause, or an inline pattern property map in a clause that selects rows. The
