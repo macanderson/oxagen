@@ -197,7 +197,7 @@ describe("legacy routes (Appendix F, ARCHITECTURE.md §7.3)", () => {
     ["/acme/workspaces", "/acme"],
     ["/acme/new-workspace", "/acme"],
     ["/acme/settings/general", "/acme"],
-    ["/acme/settings/model-funding", "/acme"],
+    ["/acme/settings/model-funding", "/acme/model-funding"],
     ["/acme/settings/privacy", "/acme"],
     ["/acme/developer", "/acme/api-keys"],
     ["/acme/developer/tokens", "/acme/api-keys"],

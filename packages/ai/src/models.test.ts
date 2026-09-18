@@ -374,6 +374,17 @@ describe("BYOK beyond the routed vendors (@oxagen/ai)", () => {
     );
   });
 
+  it("sends the customer endpoint's requests through a fetch that refuses redirects", () => {
+    // The URL was checked when the row was written; a redirect target was
+    // not. The probe refuses redirects, and the runtime client must too, or
+    // the check holds for the test and not for the turn.
+    selectModel({ tier: "balanced", credential: compat() });
+    const call = mocks.createOpenAICompatible.mock.calls[0]?.[0] as {
+      fetch?: unknown;
+    };
+    expect(typeof call.fetch).toBe("function");
+  });
+
   it("spells the endpoint for openai and anthropic, so the customer pastes only a key", () => {
     selectModel({
       tier: "balanced",

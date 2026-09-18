@@ -333,6 +333,7 @@ describe("command menu", () => {
       "Organization",
       "Roles",
       "API keys",
+      "Model funding",
       "Billing",
       "Audit",
     ]);
