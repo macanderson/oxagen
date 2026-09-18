@@ -8,7 +8,7 @@
 
 ## Intent
 
-Request a machine-readable ZIP archive of personal or organizational data under GDPR Article 20 (right to data portability). The request queues an async job and returns immediately with an `exportId`. Poll `GET /v1/:org/:ws/privacy/export/:exportId` to track status; when `status: "ready"`, a signed `downloadUrl` is returned.
+Request a machine-readable ZIP archive of personal or organizational data under GDPR Article 20 (right to data portability). The request queues an async job and returns immediately with an `exportId`. Poll `GET /v1/:org/:ws/privacy/export/:exportId` (the `get_export_status` capability) to track status; when it answers `ready`, fetch the archive from `GET /v1/:org/:ws/privacy/export/:exportId/download`. No URL is returned: the bundle is a private object, so the bytes are streamed by an authenticated route rather than linked.
 
 ## Input
 
@@ -23,7 +23,7 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 |---|---|---|
 | `exportId` | `string (UUID)` | Stable ID for polling. |
 | `status` | `"queued" \| "processing" \| "ready" \| "failed"` | Always `"queued"` on initial response. |
-| `downloadUrl` | `string (URL)?` | Present only when `status = "ready"`. Signed URL; expires in 24 hours. |
+| `downloadUrl` | — | Not returned. The archive is written `access: "private"`, and the storage contract forbids rendering a private object's url, so the bytes come from the authenticated download route instead. See `privacy.data.export.status`. |
 
 ## ZIP archive contents
 
@@ -69,6 +69,7 @@ organization has exhausted its credits or reached its spend ceiling.
 
 - `POST /api/v1/{org}/{ws}/privacy/export`
 - `GET /api/v1/{org}/{ws}/privacy/export/:exportId` (status polling)
+- `GET /api/v1/{org}/{ws}/privacy/export/:exportId/download` (the archive itself)
 - MCP tool `privacy_data_export`
 - CLI: `oxagen privacy export [--scope user|org] [--org-id <uuid>]`
 

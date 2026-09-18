@@ -6,6 +6,10 @@ import { invoke } from "@oxagen/oxagen/kernel";
 import { capabilityContext } from "../../lib/context";
 import type { AppEnv } from "../../app";
 
+// Mounted at `/v1/:org_slug/:workspace_slug/privacy/export` (apps/api/src/app.ts),
+// so the paths below are relative to that: a client calls
+// `/v1/{org}/{workspace}/privacy/export/{exportId}/download`, tenant segments
+// and all.
 export const privacyDataExportRoute = new Hono<AppEnv>();
 
 // POST /privacy/export — initiate an async export

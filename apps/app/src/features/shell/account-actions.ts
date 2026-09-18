@@ -29,12 +29,17 @@ export type ProfileDraft = {
   /** Left out to change the avatar alone. */
   displayName?: string;
   /**
-   * An https URL or a designed-avatar spec string, per the canonical
-   * `avatarUrlSchema`; empty clears the avatar. Not validated here —
-   * `kernelWrite` pre-parses with the contract's own schema and answers
+   * Left out to change the name alone, which is what the Profile form does:
+   * sending the avatar it rendered with would revert a newer one saved since
+   * (in the editor, or in another tab) — the handler writes every field it
+   * is given.
+   *
+   * When present: an https URL or a designed-avatar spec string, per the
+   * canonical `avatarUrlSchema`; empty clears the avatar. Not validated here
+   * — `kernelWrite` pre-parses with the contract's own schema and answers
    * `invalid` with the offending field before the kernel runs (§3.2 step 5).
    */
-  avatarUrl: string;
+  avatarUrl?: string;
 };
 
 export type ProfileWritten = {
@@ -59,7 +64,9 @@ export async function updateProfile(
     ...(draft.displayName === undefined
       ? {}
       : { displayName: draft.displayName }),
-    avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl,
+    ...(draft.avatarUrl === undefined
+      ? {}
+      : { avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl }),
   });
 }
 

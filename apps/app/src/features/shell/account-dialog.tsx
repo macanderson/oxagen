@@ -152,10 +152,11 @@ function ProfileTab({ data }: { data: ShellData }) {
     setOutcome(null);
     setPending(true);
     try {
-      const result = await updateProfile(org.slug, {
-        displayName,
-        avatarUrl: viewer.avatarUrl ?? "",
-      });
+      // The name alone. `viewer.avatarUrl` is what the server rendered with,
+      // so sending it back would revert an avatar saved since — in the
+      // editor, or in another tab — because the handler writes every field
+      // it is given.
+      const result = await updateProfile(org.slug, { displayName });
       if (result.ok) {
         setDisplayName(result.value.displayName ?? displayName);
         setOutcome("saved");

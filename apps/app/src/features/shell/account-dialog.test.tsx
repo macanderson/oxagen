@@ -245,7 +245,7 @@ describe("the tabs", () => {
 });
 
 describe("Profile", () => {
-  it("saves a new display name through update_profile, keeping the stored avatar", async () => {
+  it("saves a new display name through update_profile, and sends nothing else", async () => {
     const { user } = await openDialog(
       "profile",
       viewerWith({ avatarUrl: "https://cdn.example/a.png" }),
@@ -262,9 +262,11 @@ describe("Profile", () => {
     });
     await user.click(screen.getByTestId("account-save"));
 
+    // The name alone. `viewer.avatarUrl` is what the server rendered with, so
+    // sending it back would revert an avatar saved since — in the editor, or
+    // in another tab — because the handler writes every field it is given.
     expect(updateProfile).toHaveBeenCalledWith("acme", {
       displayName: "Marcus B",
-      avatarUrl: "https://cdn.example/a.png",
     });
     expect(await screen.findByTestId("account-saved")).toBeTruthy();
     expect(refresh).toHaveBeenCalledTimes(1);
@@ -342,11 +344,10 @@ describe("Profile", () => {
     expect(email).toBeDisabled();
     expect(email).toHaveAttribute("readonly");
     await user.click(screen.getByTestId("account-save"));
+    // The form sends one field, so the guard is tighter than it was: email
+    // cannot ride along, and neither can the stale avatar it used to carry.
     const draft: unknown = updateProfile.mock.calls[0]?.[1];
-    expect(Object.keys(draft ?? {}).sort()).toEqual([
-      "avatarUrl",
-      "displayName",
-    ]);
+    expect(Object.keys(draft ?? {})).toEqual(["displayName"]);
   });
 
   // "Saved." describes the draft that was submitted. The first keystroke after

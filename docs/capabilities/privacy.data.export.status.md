@@ -47,7 +47,10 @@ bundle. A field here would be a way to enumerate other people's exports.
 
 ## Surfaces
 
-`GET /v1/privacy/export/:exportId` dispatches this contract. The route used to
+`GET /v1/{org}/{workspace}/privacy/export/{exportId}` dispatches this
+contract. The route file spells its paths relative to the mount; `apps/api`
+mounts the whole family under `/v1/:org_slug/:workspace_slug`, so both segments
+are part of every URL a client calls. The route used to
 query `privacy.privacy_export_requests` directly, outside `invoke()`, so the
 read carried no IAM check, no audit row and no parity entry.
 
@@ -74,8 +77,8 @@ rows are not migrated — a backfill would have to reach every data plane
 Bytes are served by two routes, one per kind of caller, because a storage key
 is no use to either on its own:
 
-- `GET /v1/privacy/export/{exportId}/download` for token-authenticated API and
-  CLI clients.
+- `GET /v1/{org}/{workspace}/privacy/export/{exportId}/download` for
+  token-authenticated API and CLI clients.
 - `GET /{org}/account/export/{exportId}` for the cookie-authenticated app.
 
 Both dispatch this capability first and stream `storage().get(storageKey)`

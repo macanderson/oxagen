@@ -165,6 +165,28 @@ describe("updateProfile, avatar alone", () => {
       value: { displayName: null, avatarUrl: "avatar:v1:{}" },
     });
   });
+
+  it("omits the avatar entirely when the caller sends only a name", async () => {
+    invoke.mockResolvedValue({ displayName: "Marcus B", avatarUrl: null });
+    await updateProfile("acme", { displayName: "Marcus B" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B" },
+      expect.anything(),
+    );
+  });
+
+  // An empty string is still the way to clear the column; only an absent key
+  // means "leave it alone".
+  it("still clears the avatar when an empty string is sent", async () => {
+    invoke.mockResolvedValue({ displayName: "Marcus B", avatarUrl: null });
+    await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B", avatarUrl: null },
+      expect.anything(),
+    );
+  });
 });
 
 describe("readExportStatus", () => {
