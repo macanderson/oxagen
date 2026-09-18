@@ -185,6 +185,8 @@ export const TranscriptEntry = z.object({
   fidelity: FrameFidelity,
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),
+  /** The turn the opening frame falls in, 1-based; null before the run's first turn. */
+  turn: z.number().int().positive().nullable(),
   cost: Cost.nullable(),
 });
 export type TranscriptEntry = z.infer<typeof TranscriptEntry>;
