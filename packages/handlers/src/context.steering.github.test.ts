@@ -44,6 +44,7 @@ const BOUND: SteeringConnection = {
   source: "binding",
   owner: "a-intel",
   repo: "platform",
+  approvedFullName: "a-intel/platform",
   approvedDefaultRef: "main",
 };
 
@@ -68,6 +69,7 @@ describe("the GitHub seam", () => {
       owner: "a-intel",
       repo: "platform",
       fullName: "a-intel/platform",
+      currentFullName: "a-intel/platform",
       defaultBranch: "main",
     });
     expect(resolveToken).toHaveBeenCalledWith(SCOPE);
@@ -90,6 +92,7 @@ describe("the GitHub seam", () => {
       source: "binding",
       owner: "a-intel",
       repo: "platform",
+      approvedFullName: "a-intel/platform",
       approvedDefaultRef: "release",
     });
     // The fake client reports "main" as the live default branch.
@@ -97,11 +100,70 @@ describe("the GitHub seam", () => {
     expect(repo.defaultBranch).toBe("release");
   });
 
+  /**
+   * The repository's NAME is an identifier too, and had the same defect one
+   * field over.
+   *
+   * `open_context_pr` dots `fullName` into the `set_id` at the top of every
+   * Context record file and stores it as the proposal row's `repository`, so
+   * it is what groups a workspace's records into one set. Taking it from live
+   * `getRepoInfo()` meant renaming the repository on GitHub re-stamped every
+   * later record with a different set id while the existing ones kept the old
+   * one — two sets for one workspace, no error, nothing said. It also
+   * disagreed with `get_main_repository`, which has always answered the
+   * binding's frozen `provider_full_name`.
+   */
+  it("stamps records with the name the binding approved, not the one GitHub reports after a rename", async () => {
+    // GitHub now calls it something else; the binding still says
+    // `a-intel/platform`, which is what BOUND carries.
+    const { gh } = seam(
+      fakeClient({
+        getRepoInfo: async () => ({
+          fullName: "a-intel/core-platform",
+          htmlUrl: "",
+          defaultBranch: "main",
+        }),
+      } as unknown as Partial<GitHubClient>),
+    );
+
+    const repo = await gh.resolveRepository(SCOPE);
+
+    // The identifier holds the approved name…
+    expect(repo.fullName).toBe("a-intel/platform");
+    // …and the live one is carried separately rather than thrown away, so the
+    // divergence is observable instead of silent.
+    expect(repo.currentFullName).toBe("a-intel/core-platform");
+  });
+
+  it("carries the live name as the current one when nothing has been renamed", async () => {
+    const { gh } = seam(fakeClient());
+    const repo = await gh.resolveRepository(SCOPE);
+    // Equal is the normal case, and the fields are still distinct facts: this
+    // pins that the current name is read from GitHub rather than copied off
+    // the binding, which would make the rename test above pass for free.
+    expect(repo.currentFullName).toBe("a-intel/platform");
+    expect(repo.fullName).toBe(repo.currentFullName);
+  });
+
+  it("has no approved name to hold for a legacy connection, so both names are the live one", async () => {
+    const { gh } = seam(fakeClient(), {
+      source: "legacy_delivery_config",
+      owner: "a-intel",
+      repo: "platform",
+    });
+    const repo = await gh.resolveRepository(SCOPE);
+    // Nothing was ever approved to disagree with — the same reason the legacy
+    // arm resolves its ref from live GitHub.
+    expect(repo.fullName).toBe("a-intel/platform");
+    expect(repo.currentFullName).toBe("a-intel/platform");
+  });
+
   it("refuses a Context PR retargeted at the branch GitHub now calls default", async () => {
     const { gh } = seam(fakeClient(), {
       source: "binding",
       owner: "a-intel",
       repo: "platform",
+      approvedFullName: "a-intel/platform",
       approvedDefaultRef: "release",
     });
     const repo = await gh.resolveRepository(SCOPE);
@@ -133,6 +195,7 @@ describe("the GitHub seam", () => {
       owner: "a-intel",
       repo: "platform",
       fullName: "a-intel/platform",
+      currentFullName: "a-intel/platform",
       defaultBranch: "main",
     });
   });
@@ -352,7 +415,13 @@ describe("the GitHub seam", () => {
     const { gh } = seam(fakeClient());
     await expect(
       gh.readFile(
-        { owner: "o", repo: "r", fullName: "o/r", defaultBranch: "main" },
+        {
+          owner: "o",
+          repo: "r",
+          fullName: "o/r",
+          currentFullName: "o/r",
+          defaultBranch: "main",
+        },
         "p",
         "main",
       ),
@@ -461,7 +530,12 @@ describe("the workspace's main repository", () => {
   it("resolves the repository and the approved ref the bind recorded, on a connection that names none", async () => {
     db({
       bound: [
-        { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+        {
+          owner: "Acme",
+          repo: "Widgets",
+          approvedFullName: "Acme/Widgets",
+          approvedDefaultRef: "release",
+        },
       ],
       connections: [{ deliveryConfig: { installationId: "555" } }],
     });
@@ -469,6 +543,7 @@ describe("the workspace's main repository", () => {
       source: "binding",
       owner: "Acme",
       repo: "Widgets",
+      approvedFullName: "Acme/Widgets",
       approvedDefaultRef: "release",
     });
   });
@@ -476,7 +551,12 @@ describe("the workspace's main repository", () => {
   it("prefers the binding over a legacy connection's ingestion sync target", async () => {
     db({
       bound: [
-        { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+        {
+          owner: "Acme",
+          repo: "Widgets",
+          approvedFullName: "Acme/Widgets",
+          approvedDefaultRef: "release",
+        },
       ],
       connections: [{ deliveryConfig: { owner: "a-intel", repo: "platform" } }],
     });
@@ -484,6 +564,7 @@ describe("the workspace's main repository", () => {
       source: "binding",
       owner: "Acme",
       repo: "Widgets",
+      approvedFullName: "Acme/Widgets",
       approvedDefaultRef: "release",
     });
   });
@@ -579,7 +660,12 @@ describe("the workspace's main repository", () => {
       // The joined read hit, so there is nothing to disambiguate.
       const counts = db({
         bound: [
-          { owner: "Acme", repo: "Widgets", approvedDefaultRef: "release" },
+          {
+            owner: "Acme",
+            repo: "Widgets",
+            approvedFullName: "Acme/Widgets",
+            approvedDefaultRef: "release",
+          },
         ],
         heads: [{ id: "head-1" }],
         connections: [
@@ -591,6 +677,7 @@ describe("the workspace's main repository", () => {
         source: "binding",
         owner: "Acme",
         repo: "Widgets",
+        approvedFullName: "Acme/Widgets",
         approvedDefaultRef: "release",
       });
       expect(counts.headReads).toBe(0);

@@ -415,6 +415,10 @@ export const REPO: SteeringRepository = {
   owner: "a-intel",
   repo: "platform",
   fullName: "a-intel/platform",
+  // The un-renamed case, which is every test that does not care: the approved
+  // name and the current one agree. A test about a rename sets them apart
+  // itself rather than this fixture carrying a divergence nothing asked for.
+  currentFullName: "a-intel/platform",
   defaultBranch: "main",
 };
 
