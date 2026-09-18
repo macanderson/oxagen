@@ -528,7 +528,8 @@ describe("the negotiated write path", () => {
       effectiveFrom: T2,
     });
     const endAt = new Date("2026-09-20T00:00:00.000Z");
-    const now = new Date("2026-09-21T00:00:00.000Z");
+    // Ended at the write instant: a cutoff in the past is refused.
+    const now = endAt;
 
     const result = await closeNegotiatedPriceEntry({ ...SET, at: endAt, now });
 
@@ -792,6 +793,34 @@ describe("the negotiated write path", () => {
     ).rejects.toThrow(/before it starts/);
   });
 
+  // A cutoff in the past shortens a window that has already priced runs: on a
+  // rollup retry every frame between `at` and now would resolve to the list
+  // price while its cost record still cites the negotiated entry.
+  it("refuses to end a rate in the past, over a window that has shipped (negative)", async () => {
+    const first = await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    const now = new Date("2026-09-20T00:00:00.000Z");
+    await expect(
+      closeNegotiatedPriceEntry({
+        ...SET,
+        at: new Date("2026-09-15T00:00:00.000Z"),
+        now,
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_entry_window_shipped",
+    });
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+    // Ending it now, or later, is the answer the refusal points at.
+    const ended = await closeNegotiatedPriceEntry({ ...SET, at: now, now });
+    expect(ended.closed?.id).toBe(first.entry.id);
+    expect(ended.closed?.effectiveTo).toEqual(now);
+  });
+
   // The current row already ends at the correction's start, so ending the
   // rate AT that instant means list pricing from the transition on: the
   // unshipped correction is cancelled, exactly as one scheduled after `at`.
@@ -887,6 +916,63 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(successor!.effectiveFrom).toEqual(T1);
     expect(successor!.effectiveTo).toBeNull();
     expect(successor!.microsPerMillion).toBe(2_000_000n);
+  });
+
+  // A same-instant re-run that changes a rate would rewrite a row frames
+  // earlier in that window were priced with; the entry id on their cost
+  // records would then cite different terms. Ahead of the instant nothing has
+  // been priced, so the in-place correction stays.
+  it("refuses to correct a list row in place once its instant has passed, and allows it ahead of time (negative)", async () => {
+    fake.rows.push(
+      priceRow({ effectiveFrom: T1, microsPerMillion: 3_000_000n }),
+    );
+    const seed = (micros: bigint, at: Date): PriceEntrySeed => ({
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: micros,
+      effectiveFrom: at,
+      effectiveTo: null,
+    });
+    await expect(
+      syncPriceBook({
+        effectiveFrom: T1,
+        seeds: [seed(2_000_000n, T1)],
+        now: new Date("2026-09-10T00:30:00.000Z"),
+      }),
+    ).rejects.toMatchObject({
+      name: "HandlerError",
+      code: "conflict",
+      reason: "price_book_row_already_effective",
+    });
+    expect(fake.rows[0]!.microsPerMillion).toBe(3_000_000n);
+
+    // Unchanged terms at the same instant are still a no-op.
+    const same = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed(3_000_000n, T1)],
+      now: new Date("2026-09-10T00:30:00.000Z"),
+    });
+    expect(same.unchanged).toBe(1);
+
+    // A row scheduled ahead of the write instant corrects in place.
+    fake.rows.length = 0;
+    fake.rows.push(
+      priceRow({ effectiveFrom: T2, microsPerMillion: 3_000_000n }),
+    );
+    // Not a cold book: the row exists. Only the price moves.
+    const ahead = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [seed(2_000_000n, T2)],
+      now: new Date("2026-09-20T00:00:00.000Z"),
+    });
+    expect(ahead.written).toBe(1);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.microsPerMillion).toBe(2_000_000n);
   });
 
   // The hourly job serialises its own executions, but the CLI's --apply runs

@@ -348,10 +348,13 @@ interface PriceBookSyncResult {
 /**
  * Write the list price book from the in-code cards. Idempotent on the row key
  * (provider, model, class, region, effective_from): a re-run with the same
- * `effectiveFrom` updates a changed price in place, a run with a later
- * `effectiveFrom` adds the new rows and closes the previous ones at that
- * instant, so a run priced before the change keeps the entry it used.
- * Negotiated rows are never touched.
+ * `effectiveFrom` and the same terms is a no-op, a re-run with the same
+ * `effectiveFrom` and changed terms corrects the row in place only while that
+ * instant is still ahead (once it has passed the row may have priced runs,
+ * and the change is refused until it is stated as a later window), and a run
+ * with a later `effectiveFrom` adds the new rows and closes the previous ones
+ * at that instant, so a run priced before the change keeps the entry it
+ * used. Negotiated rows are never touched.
  *
  * `retireAbsent` says the seeds are the whole book: every open list row they
  * do not name is closed at `effectiveFrom`. Without it an omitted row stays
@@ -366,8 +369,11 @@ export async function syncPriceBook(args: {
   effectiveFrom: Date;
   seeds?: readonly PriceEntrySeed[];
   retireAbsent?: boolean;
+  /** The write instant; a row effective at or before it is not corrected in place. */
+  now?: Date;
 }): Promise<PriceBookSyncResult> {
   const requested = args.seeds ?? priceEntriesFromRateCards(args.effectiveFrom);
+  const now = args.now ?? new Date();
   return withSystemDb(async (tx) => {
     // One list-book writer at a time, whoever the caller is. The hourly job
     // serialises its own executions, but `pnpm billing:price-book-sync
@@ -445,6 +451,23 @@ export async function syncPriceBook(args: {
       // rate, which is all this once did, sent an alias-only change down the
       // `unchanged` path and left the row's names stale for ever.)
       if (pricedTheSame) renamed += 1;
+      // The upsert below corrects a row at the SAME instant in place. That is
+      // right while the instant is still ahead — nothing has been priced
+      // against the row — and wrong once it has passed: a same-hour re-run of
+      // the CLI with a changed catalog rate or alias would rewrite a row that
+      // frames earlier in the hour were priced with, so a rollup retry would
+      // apply different terms under the same entry id. A change to a shipped
+      // row needs a later window, which is what a later --effective-from is.
+      if (
+        current &&
+        current.effectiveFrom.getTime() === seed.effectiveFrom.getTime() &&
+        seed.effectiveFrom.getTime() <= now.getTime()
+      )
+        throw new HandlerError({
+          code: "conflict",
+          reason: "price_book_row_already_effective",
+          message: `the list price for ${key(seed)} effective from ${seed.effectiveFrom.toISOString()} is already in force and may have priced runs; a change needs a later effectiveFrom`,
+        });
       if (
         current &&
         current.effectiveFrom.getTime() > seed.effectiveFrom.getTime()
@@ -1053,6 +1076,18 @@ export async function closeNegotiatedPriceEntry(args: {
 
     if (active === null && scheduled.length === 0)
       return { closed: null, cancelled: [] };
+
+    // A cutoff in the past shortens a window that has already priced runs:
+    // every frame between `at` and now would resolve to the list price on a
+    // rollup retry while its cost record still cites the negotiated entry.
+    // The same refusal the setter gives an in-place correction to a shipped
+    // row. `at` at or after the write instant shortens nothing that shipped.
+    if (active && at < now.getTime())
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_window_shipped",
+        message: `the negotiated price for ${key} has priced runs between ${args.at.toISOString()} and ${now.toISOString()}; a rate cannot be ended in the past — end it now or at a later instant`,
+      });
 
     if (active) {
       await tx

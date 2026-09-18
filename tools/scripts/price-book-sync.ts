@@ -17,12 +17,15 @@
  * air-gapped installation where the catalogs are unreachable (`--offline`).
  *
  * A price is effective over [effective_from, effective_to). With no
- * `--effective-from` the run is effective from the top of the current UTC
- * hour, so a re-run within the hour corrects a row in place and a later run
- * closes the previous rows at the new instant. A run that would start earlier
- * than an open row is refused by `syncPriceBook`: a correction is always a
- * later row, so every cost record keeps the entry it was priced with.
- * Negotiated and override rows are never touched.
+ * `--effective-from` the run is effective from the instant it runs, so a
+ * later run closes the previous rows at the new instant and every cost record
+ * keeps the entry it was priced with. (The default used to be the top of the
+ * UTC hour so a re-run within the hour corrected a row in place — but a row
+ * whose instant has passed may already have priced runs, and `syncPriceBook`
+ * now refuses to rewrite one; a same-instant re-run with unchanged terms is
+ * still a no-op.) A run that would start earlier than an open row is refused
+ * for the same reason: a correction is always a later row. Negotiated and
+ * override rows are never touched.
  *
  * Runs against whatever DATABASE_URL is in scope and prints the host so the
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
@@ -37,18 +40,11 @@ export interface Flags {
   effectiveFrom: Date;
 }
 
-/** The top of the UTC hour `now` falls in. */
-export function topOfHour(now: Date): Date {
-  const at = new Date(now.getTime());
-  at.setUTCMinutes(0, 0, 0);
-  return at;
-}
-
 export function parseFlags(argv: string[], now: Date): Flags {
   const flags: Flags = {
     apply: false,
     offline: false,
-    effectiveFrom: topOfHour(now),
+    effectiveFrom: now,
   };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;

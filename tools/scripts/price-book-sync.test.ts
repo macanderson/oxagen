@@ -3,20 +3,19 @@
  * defaults to, the report, and the target line that never prints a credential.
  */
 import { describe, expect, it } from "vitest";
-import {
-  describeTarget,
-  parseFlags,
-  reportLines,
-  topOfHour,
-} from "./price-book-sync";
+import { describeTarget, parseFlags, reportLines } from "./price-book-sync";
 
 const NOW = new Date("2026-09-14T17:42:31.123Z");
 
 describe("parseFlags", () => {
-  it("is a dry run effective from the top of the current UTC hour by default", () => {
+  // The run instant, not the top of the hour: a same-instant re-run that
+  // changed a rate would rewrite a row frames earlier in the hour were priced
+  // with, and syncPriceBook now refuses that, so the default must be an
+  // instant no earlier run can have used.
+  it("is a dry run effective from the run instant by default", () => {
     const flags = parseFlags([], NOW);
     expect(flags.apply).toBe(false);
-    expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T17:00:00.000Z");
+    expect(flags.effectiveFrom.toISOString()).toBe("2026-09-14T17:42:31.123Z");
   });
 
   it("takes --apply and an explicit --effective-from", () => {
@@ -33,14 +32,6 @@ describe("parseFlags", () => {
       /RFC 3339/,
     );
     expect(() => parseFlags(["--force"], NOW)).toThrow(/unknown flag/);
-  });
-});
-
-describe("topOfHour", () => {
-  it("drops minutes, seconds and milliseconds and leaves the input alone", () => {
-    const at = topOfHour(NOW);
-    expect(at.toISOString()).toBe("2026-09-14T17:00:00.000Z");
-    expect(NOW.toISOString()).toBe("2026-09-14T17:42:31.123Z");
   });
 });
 
