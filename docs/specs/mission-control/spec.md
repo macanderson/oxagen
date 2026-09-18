@@ -374,7 +374,7 @@ An agent is registered once, in a workspace, with:
 - `harness`: `stella` | `claude-code` | `claude-agent-sdk` | `custom`.
 - `principal_id`.
 - A **long-lived agent credential**. This is an API key issued to the operator once. It is stored as a hash (a one-way fingerprint of the key), locked to one purpose, and revocable.
-- **Short-lived run tokens** (target, not built: no run token exists on `main` at 2026-09-18, and they arrive with the gateway in Phase 4, §17.2) minted by the gateway at run start. The default life is fifteen minutes, refreshed on the control channel. Every model-proxy and tool-gateway call carries a run token. Revoking the agent credential or suspending the agent invalidates every run token at the next call. This is what makes a halt stick (§7.4).
+- **Short-lived run tokens** (target, not built: no run token exists on `main` at 2026-09-18, and they arrive with the gateway in Phase 4, §17.2) minted by the gateway at run start. The default life is fifteen minutes, refreshed on the control channel. Every model-proxy request is bound to a run token, by the token in a run-scoped base URL path or by the connecting process (§7.1), and every tool-gateway call carries one. Revoking the agent credential or suspending the agent invalidates every run token at the next call. This is what makes a halt stick (§7.4).
 - For hook-enrolled hosts (Claude Code), the host device key (Ed25519) from the agent enrollment. It signs checkpoints.
 
 Delegation ceiling: an agent can never do more than the person it acts for. Its effective permission is its own grants intersected with the invoking human's grants. Subagents can only narrow. This carries over from the agent-RBAC spec (RBAC is role-based access control, permissions granted by role).
@@ -638,6 +638,13 @@ Running the proxy on loopback inside `tachod`, and not as a service in Oxagen's 
 - Per-turn steering injection, an enforced `session_limit_usd` and a real `interrupt` become possible (§7.3, §12.5).
 
 Both OpenAI and Anthropic work through a base URL proxy, subscription logins included, and neither vendor's terms explicitly forbid it: validated by the maintainer on 2026-09-18 (ADR-094). The review listed this as its one unverified risk. It is closed, and it does not gate Phase 4.
+
+**How a proxied request binds to a run.** An unmodified harness sends an ordinary vendor request to the loopback base URL, and two sessions on one host send to the same one. The proxy binds each request to one run before it forwards it, by one of two mechanisms, and every `model.request` frame records which:
+
+- **Run-scoped base URL** (`binding: "token"`). The hook adapter mints the run token at `SessionStart` (§6.2). Where the harness lets a `SessionStart` hook set that session's environment (Claude Code's `CLAUDE_ENV_FILE`), the adapter writes `ANTHROPIC_BASE_URL=http://127.0.0.1:<port>/r/<run_token>` for that session only. A request on a run-scoped path is authenticated by the token in its path, which `tachod` minted and verifies locally. The host-level base URL that enrollment writes stays in place as the fallback.
+- **Connecting process** (`binding: "process"`). Where the harness cannot carry a per-session base URL (Codex and Stella today), the proxy resolves the loopback connection's peer socket to a pid. The hook adapter reported the harness pid with its session id at `SessionStart` (`claude_ppid` in the envelope, `process.ppid` in `packages/tacho/src/claude-code/hook-client.ts`). The connecting pid, or an ancestor of it inside that session's process tree, selects the run.
+
+A request that binds to no run is **unattributed**. The proxy forwards it, so a person's other vendor tools on the same machine keep working, and records it against the host with digests and usage, charged to no run. It receives no steering, counts toward no `session_limit_usd`, and no run command can interrupt it. Every run open on the host during an unattributed request records the completeness gap `model_call_unattributed` for that window, and that run's tier reads `harness`, because the proxy cannot say it routed that run's model traffic (ADR-095: the tier is computed from what was routed and is never over-stated). A vendor client's own correlation fields, where it sends any, are recorded as a cross-check and never used as the binding.
 
 The seams, and the tier each one earns:
 
