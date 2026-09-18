@@ -219,3 +219,56 @@ Decisions 1–3 of #2968, each the issue's recommendation, adopted:
    ADR-055 §13, `apps/app/ARCHITECTURE.md` §9). `set_org_billing_terms`
    stays an idempotent terms upsert and carries no grant.
 
+## Amendment, 2026-09-18: `consume_assistant_tokens` bills at cost, no margin
+
+The maintainer decided the in-app agent should carry no margin for a
+customer on the `platform` funding source, at the same time BYOK widened
+from two routed vendors to any OpenAI-compatible endpoint (#3290). §3's "at
+the rate card's vendor cost plus a published markup" is amended for this one
+ledger reason: the markup is fixed at `ASSISTANT_TOKEN_MARKUP` (1, in
+`packages/billing/src/metering.ts`), never the solved blended markup
+`resolveMeterMarkup()` returns for everything else on the same chokepoint.
+
+**What does not change.** The funding-source resolution (§2), the ledger
+reason and its cap (§3's other two bullets), and `resolveMeterMarkup()` and
+the blended-margin target it solves for. `consume_embedding`
+(platform-paid ingestion and recall embeddings) is a separate ledger reason
+this amendment did not touch and keeps the solved markup. It is a different
+product line, priced on its own, not part of "the assistant."
+
+**Where it is enforced.** `chargeCostUsd`, the one function every metered
+text/image/video call funnels through, branches on `params.reason` before
+falling back to `resolveMeterMarkup()`: `consume_assistant_tokens` gets
+`ASSISTANT_TOKEN_MARKUP` and everything else gets the blended markup, unless
+a caller passes an explicit `markup` (tests, dry-run), which still wins over
+both. One branch, one chokepoint, so no caller of `chargeUsageCredits` can
+reach the assistant reason with the old markup by omission.
+
+**Consequence for the platform-funded spend cap (§3, third bullet).** The
+cap sums whatever was actually charged under `consume_assistant_tokens`. It
+was never a margin figure, so it needs no change. An organisation on the
+platform key now reaches it more slowly at the same usage. The cap bounds
+Oxagen's real exposure, and that exposure is now smaller.
+
+**Consequence for the sub-credit carry.** Two differently priced reasons on
+one chokepoint cannot share a carry. The fractional-credit carry (#1413)
+was a single org-wide counter on `org_billing_settings`, and the ledger
+holds whole credits, so whichever call crossed the whole-credit boundary was
+debited for the fractions the other reasons had banked: a 0.9-credit
+marked-up embedding followed by a 0.1-credit assistant turn wrote one credit
+as `consume_assistant_tokens`, putting embedding margin on the at-cost line
+and counting it against the cap. The carry is now one bucket per ledger
+reason (`meter_carry_micro_credits_by_reason`, migration
+`20260918120000_meter_carry_per_billing_reason.sql`), so a fraction is
+debitable only under the reason that accrued it. Existing pooled residue
+migrated to `consume_embedding`: it was accrued under the old single markup,
+so it is marked-up money and belongs on a marked-up line.
+
+The switch is an expand-and-contract rollout, because production applies
+migrations by hand and deploys code separately, so old and new code overlap.
+That migration is the expand half: it adds the map, moves the residue across
+and zeroes the old column, and keeps `meter_carry_micro_credits` and its
+CHECK for the code that still writes it. It is applied before the deploy.
+The contract half folds whatever the old code accrued in the gap into the
+`consume_embedding` bucket and drops the column; it is a separate migration,
+applied once no node runs the old code.
