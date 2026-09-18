@@ -3403,7 +3403,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4db2c3012286ee3b6d71aaec2dc341740ff235d59b4492eddbcebfc54470af5a",
+  "contentHash": "0cbd75b4ca688240b6487ab9acae35fef457fad850ddebadce95d460a4a027af",
   "domains": [
     {
       "name": "agent",
@@ -10229,6 +10229,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "meter_carry_micro_credits_by_reason",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
         },
         {
           "name": "meter_carry_micro_credits",
