@@ -33,23 +33,23 @@
 // a turn compares the generation it was asked on, so its reply, its run and
 // its conversation id reach only the transcript that asked for them.
 //
-// Each answer names the run it was recorded as, and names it as text, not as a
-// link. `list_runs` excludes the `chat` and `api-chat` surfaces — the
-// assistant is Oxagen's, and its turns are recorded but never listed as the
-// customer's own runs (`packages/handlers/src/run.list.ts`) — so a link here
-// would be the only claimed way to the evidence, and there is nothing at the
-// other end of it yet: `app/[org]/[ws]/runs/[run]/page.tsx` renders a title
-// and reads nothing until WL-35 builds the Run page, and `get_run` declares
-// `layers: [schema, api, mcp, unit, docs]` with no `app`, so the contract
-// itself makes no app promise to bind. A link to a page that shows a title is
-// the same dead end with an anchor on it, and this is the one surface where
-// the link would be the whole claim rather than a convenience beside a row
-// that is already on screen.
+// Each answer names the run it was recorded as, and links it. `list_runs`
+// excludes the `chat` and `api-chat` surfaces — the assistant is Oxagen's, and
+// its turns are recorded but never listed as the customer's own runs
+// (`packages/handlers/src/run.list.ts`) — so this link is the only way to that
+// evidence from the app, which is the reason it has to work rather than a
+// reason to withhold it.
 //
-// The id stays, in mono, because it is true and it is the handle: `get_run` is
-// implemented on the API, MCP and CLI surfaces, so an operator can inspect the
-// run today with the id this prints. The link belongs in the change that gives
-// it somewhere to go.
+// It was text until WL-35 (#3282). The page it points at rendered a title and
+// read nothing, and `get_run` declared no `app` layer, so an anchor would have
+// been a dead end with a claim on it. Both have since changed: the Run page
+// reads its run, and `get_run` declares `layers: [..., "app"]`. The link is
+// the change that gave it somewhere to go.
+//
+// Outside a workspace the id stays plain text, because `routes.run` needs an
+// org and a workspace to point into and the shell mounts at organization
+// scope. The id alone is still the handle: `get_run` is implemented on the
+// API, MCP and CLI surfaces, so an operator can inspect the run with it.
 //
 // Closing returns focus where it came from. The host is always mounted and
 // goes `inert` when it closes, so focus left on a control inside it would land
