@@ -61,9 +61,20 @@ type GitHubInstallation = {
    * picker that could only refuse.
    */
   connected: boolean;
-  /** Install the App against this workspace; null when the App is unconfigured for this deployment. */
+  /**
+   * CONNECT: the identity leg, for an account that already carries the App
+   * somewhere. Signed; always round-trips a code and our state. Null when the
+   * App is unconfigured for this deployment — all three are null together.
+   */
+  connectUrl: string | null;
+  /**
+   * INSTALL: `installations/new`, signed with the same state, for an account
+   * that carries the App nowhere. Distinct from `manageUrl`, which is the same
+   * page with no state: that one round-tripped nothing, so a first-ever install
+   * dead-ended on the app root with the workspace unconnected (#3254).
+   */
   installUrl: string | null;
-  /** Change which repositories the existing installation reaches; null when the App is unconfigured. */
+  /** MANAGE: reconfigure an installation that is already attached. Unsigned; it starts no flow. */
   manageUrl: string | null;
 };
 

@@ -74,14 +74,17 @@ const prose = "text-sm leading-relaxed text-muted-foreground";
 /**
  * What the connect leg came back saying; null when it said nothing.
  *
- * Four words, matching GITHUB_ACK in the API's callback, because the person's
+ * Five words, matching GITHUB_ACK in the API's callback, because the person's
  * next click differs in each: an installation was attached; one was claimed and
- * declined; the account reaches several and has to choose; the account reaches
- * none, so the App has to be installed somewhere before any of this works.
+ * declined; one was claimed and there was nothing to check it against, so the
+ * App is installed but not yet attached and one identity round trip finishes
+ * it; the account reaches several and has to choose; the account reaches none,
+ * so the App has to be installed somewhere before any of this works.
  */
 type InstallAcknowledgement =
   | "connected"
   | "failed"
+  | "authorize"
   | "choose"
   | "install"
   | null;
@@ -95,6 +98,7 @@ type InstallAcknowledgement =
 const ACKNOWLEDGEMENTS: Record<string, InstallAcknowledgement> = {
   connected: "connected",
   failed: "failed",
+  authorize: "authorize",
   choose: "choose",
   install: "install",
 };
@@ -333,8 +337,8 @@ function MainRepositoryPanel({
                 <ConnectPanel
                   org={org}
                   ws={ws}
-                  connectUrl={settings.value.github.installUrl}
-                  installUrl={settings.value.github.manageUrl}
+                  connectUrl={settings.value.github.connectUrl}
+                  installUrl={settings.value.github.installUrl}
                   candidates={candidates}
                   onAttached={bound}
                 />
@@ -353,8 +357,8 @@ function MainRepositoryPanel({
           <ConnectPanel
             org={org}
             ws={ws}
-            connectUrl={settings.value.github.installUrl}
-            installUrl={settings.value.github.manageUrl}
+            connectUrl={settings.value.github.connectUrl}
+            installUrl={settings.value.github.installUrl}
             candidates={candidates}
             onAttached={bound}
           />
@@ -374,6 +378,10 @@ function MainRepositoryPanel({
 const ACKNOWLEDGEMENT_SENTENCES = {
   connected: { key: "connected", testId: "workspace-github-connected" },
   failed: { key: "installRefused", testId: "workspace-github-failed" },
+  authorize: {
+    key: "installUnverified",
+    testId: "workspace-github-authorize",
+  },
   choose: { key: "installChoose", testId: "workspace-github-choose" },
   install: { key: "installNone", testId: "workspace-github-none" },
 } as const;

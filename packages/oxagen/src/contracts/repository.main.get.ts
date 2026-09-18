@@ -20,11 +20,21 @@
  *   - `repository`: the bound main repo, or null while none is bound.
  *   - `github.connected`: whether an installation is attached, which is
  *     exactly the precondition `bind_main_repository` checks.
- *   - `github.installUrl` / `github.manageUrl`: the doors to GitHub. The
- *     Connect URL carries the API's HMAC-signed state naming this org and
+ *   - `github.connectUrl` / `github.installUrl` / `github.manageUrl`: the
+ *     three doors to GitHub, which are three different doors and not one worn
+ *     three ways. CONNECT is the identity leg, for an account that already
+ *     carries the App. INSTALL is `installations/new`, for an account that does
+ *     not. Both carry the API's HMAC-signed state naming this org and
  *     workspace, so the callback can attach the installation to the workspace
- *     that asked for it and to no other. It expires, and both are null when
- *     this deployment cannot complete a connect round trip.
+ *     that asked for it and to no other, and both expire. MANAGE is the App's
+ *     configuration page for an installation already attached, and is unsigned
+ *     because it starts no flow. All three are null when this deployment cannot
+ *     complete a connect round trip.
+ *
+ *     The install door was the unsigned manage URL until #3254, so a first-ever
+ *     install — the primary first-run path for every new customer — round-
+ *     tripped no state, hit the callback's no-state branch, attached nothing,
+ *     and left the person on the app root with the workspace unconnected.
  *
  * The installation id is deliberately NOT in the output. A caller that could
  * name an installation could mint tokens for another account's installation,
@@ -104,19 +114,52 @@ export const repositoryMainGet = registerCapability({
            */
           connected: z.boolean(),
           /**
-           * The Connect action: GitHub's user-authorization URL
+           * CONNECT — the identity leg: GitHub's user-authorization URL
            * (`login/oauth/authorize`) carrying the API's HMAC-signed state.
-           * NOT `installations/new` — that only round-trips a `code` and our
-           * state on the FIRST install of the App on an account, so with it
-           * here a reconnect, and a second workspace connecting to an account
-           * that already has the App, both dead-ended at the callback's
-           * no-state branch. Null when this deployment cannot complete the
-           * round trip (any of the App's client id, client secret, slug or
-           * state secret unset) — the handler returns no door rather than one
-           * the callback answers with 503.
+           * It ALWAYS round-trips a fresh `code` and our state, installed or
+           * not, so it is the door for an account that already carries the App
+           * somewhere: the callback exchanges the code, asks
+           * `GET /user/installations` what this person reaches, and attaches
+           * the one it finds. It never returns an `installation_id`, so it
+           * cannot by itself put the App on an account that lacks it.
+           *
+           * Null when this deployment cannot complete the round trip (any of
+           * the App's client id, client secret, slug or state secret unset) —
+           * the handler returns no door rather than one the callback answers
+           * with 503. All three URLs are null together.
+           */
+          connectUrl: z.string().url().nullable(),
+          /**
+           * INSTALL — `installations/new`, SIGNED with the same state the
+           * connect leg carries. This is the first-run door: the account has
+           * the App nowhere, so there is nothing for `/user/installations` to
+           * find and the identity leg alone would loop.
+           *
+           * Signed, not bare. The unsigned form round-trips nothing, so the
+           * callback took its no-state branch, attached nothing, and dropped
+           * the person on the app root at `/?github_installed=1` — workspace
+           * still unconnected, with no way back but to guess. With the state
+           * here the callback knows which org and workspace asked, and lands
+           * them on the dialog either attached or told what to click next.
+           *
+           * What comes back still depends on the App's "request user
+           * authorization (OAuth) during installation" setting, which is
+           * external configuration: with it, GitHub returns `code` + state +
+           * `installation_id` and the callback verifies the id against the
+           * authorizing user's own `/user/installations` before attaching
+           * anything. Without it there is no `code`, so nothing can testify
+           * that this person reaches the installation the query names — and an
+           * unverifiable claim is no claim, so nothing is attached and the
+           * dialog is told to finish through the connect door.
            */
           installUrl: z.string().url().nullable(),
-          /** Change which repositories the existing installation reaches, and install it on a further account; null on the same condition as `installUrl`. */
+          /**
+           * MANAGE — the App's own configuration page for an installation that
+           * is already attached: change which repositories it reaches, or put
+           * it on a further account. Unsigned on purpose, because it starts no
+           * flow and carries nothing back; never offer it as the way to
+           * establish a connection.
+           */
           manageUrl: z.string().url().nullable(),
         })
         .strict(),

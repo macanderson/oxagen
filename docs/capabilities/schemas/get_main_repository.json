@@ -83,6 +83,17 @@
           "connected": {
             "type": "boolean"
           },
+          "connectUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uri"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "installUrl": {
             "anyOf": [
               {
@@ -108,6 +119,7 @@
         },
         "required": [
           "connected",
+          "connectUrl",
           "installUrl",
           "manageUrl"
         ],

@@ -52,7 +52,12 @@ vi.mock("./workspace-settings-actions", () => ({
     ok: true,
     value: {
       repository: null,
-      github: { connected: false, installUrl: null, manageUrl: null },
+      github: {
+        connected: false,
+        connectUrl: null,
+        installUrl: null,
+        manageUrl: null,
+      },
     },
   }),
   listInstallationRepositories: vi.fn(),
@@ -371,9 +376,7 @@ describe("the other dialogs on a phone", () => {
     renderPhone(shellData());
     await user.click(screen.getByRole("button", { name: "Open navigation" }));
     const drawer = await screen.findByTestId("nav-drawer");
-    await user.click(
-      within(drawer).getByTestId("open-workspace-settings"),
-    );
+    await user.click(within(drawer).getByTestId("open-workspace-settings"));
 
     await waitFor(() => {
       expect(screen.queryByTestId("nav-drawer")).toBeNull();

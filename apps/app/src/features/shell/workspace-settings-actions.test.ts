@@ -54,8 +54,9 @@ const UNBOUND = {
   repository: null,
   github: {
     connected: false,
-    installUrl:
+    connectUrl:
       "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=s",
+    installUrl: "https://github.com/apps/oxagen/installations/new?state=s",
     manageUrl: null,
   },
 };
@@ -69,9 +70,11 @@ const BOUND = {
     defaultRef: "main",
     htmlUrl: "https://github.com/acme/platform",
     boundAt: "2026-09-16T10:00:00.000Z",
+    connectionLive: true,
   },
   github: {
     connected: true,
+    connectUrl: null,
     installUrl: null,
     manageUrl: "https://github.com/settings/installations/42",
   },

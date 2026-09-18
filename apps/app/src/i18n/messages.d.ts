@@ -2399,6 +2399,7 @@ type Messages = {
       loading: string;
       connected: string;
       installRefused: string;
+      installUnverified: string;
       install: {
         heading: string;
         body: string;

@@ -757,6 +757,15 @@ const INSTALLATION_ID_PATTERN = /^[1-9]\d{0,19}$/;
  *
  *   attached    an installation was verified and written.
  *   refused     one was claimed and declined — say so; do not swallow it.
+ *   unverified  one was claimed and there was nothing to check it against: the
+ *               install leg returned no `code`, so no user token exists and
+ *               `GET /user/installations` cannot be asked. Distinct from
+ *               `refused` because the person did nothing wrong and the next
+ *               click differs — the App IS installed now, so the identity leg
+ *               finishes it in one step, whereas `refused` means installing
+ *               again on the right account. Whether a `code` comes back is the
+ *               App's "request user authorization (OAuth) during installation"
+ *               setting, which is external configuration neither leg controls.
  *   choose      the authorizing user reaches several and the platform will not
  *               guess which one this workspace should act through.
  *   uninstalled the authorizing user reaches none: the App is installed on no
@@ -769,6 +778,7 @@ type InstallAttachOutcome =
   | "none"
   | "attached"
   | "refused"
+  | "unverified"
   | "choose"
   | "uninstalled";
 
@@ -781,6 +791,7 @@ type InstallAttachOutcome =
 const GITHUB_ACK: Record<InstallAttachOutcome, string> = {
   attached: "&github=connected",
   refused: "&github=failed",
+  unverified: "&github=authorize",
   choose: "&github=choose",
   uninstalled: "&github=install",
   none: "",
@@ -872,13 +883,23 @@ type InstallLeg = "settings" | "wizard";
  * parameter on the same public endpoint as the settings leg's. One door or two
  * does not change what is behind it, so there is one check.
  */
+type InstallClaimVerdict =
+  /** Syntactically usable and demonstrably reachable by the authorizing user. */
+  | "ok"
+  /** Not a shape `installationIdOf` would ever read back. */
+  | "malformed"
+  /** No `code` on this leg, so no user token, so nothing to check it against. */
+  | "unverifiable"
+  /** Checked against the user's own list and absent from it. */
+  | "unreachable";
+
 async function installationClaimVerified(args: {
   orgId: string;
   workspaceId: string;
   installationId: string;
   userAccessToken: string | null;
   leg: InstallLeg;
-}): Promise<boolean> {
+}): Promise<InstallClaimVerdict> {
   const { orgId, workspaceId, installationId, userAccessToken, leg } = args;
 
   if (!INSTALLATION_ID_PATTERN.test(installationId)) {
@@ -886,18 +907,23 @@ async function installationClaimVerified(args: {
       { orgId, workspaceId, installationId, leg },
       "github install callback: the install carried a malformed installation_id — not attached to the workspace connection",
     );
-    return false;
+    return "malformed";
   }
 
   // No `code` on this leg → no user token → nothing can testify that this
   // person reaches this installation. An unverifiable claim is not a weaker
   // claim, it is no claim, and it is the exact shape the forgery takes.
+  //
+  // It is named apart from the other refusals only so the redirect can say
+  // which next click finishes the job. Nothing is attached either way: the
+  // install DID happen, and an honest person's next step is one click, but a
+  // forged id arrives in exactly this shape too, so the answer is the same.
   if (!userAccessToken) {
     logger.warn(
       { orgId, workspaceId, installationId, leg },
       "github install callback: the install carried an installation_id but no OAuth code to verify it against — not attached",
     );
-    return false;
+    return "unverifiable";
   }
 
   if (!(await userCanReachInstallation(userAccessToken, installationId))) {
@@ -905,10 +931,10 @@ async function installationClaimVerified(args: {
       { orgId, workspaceId, installationId, leg },
       "github install callback: the authorizing user cannot reach this installation — not attached to the workspace connection",
     );
-    return false;
+    return "unreachable";
   }
 
-  return true;
+  return "ok";
 }
 
 /**
@@ -923,14 +949,19 @@ async function attachVerifiedSettingsInstallation(args: {
   oauthAccountId: string | null;
   now: Date;
 }): Promise<InstallAttachOutcome> {
-  const verified = await installationClaimVerified({
+  const verdict = await installationClaimVerified({
     orgId: args.orgId,
     workspaceId: args.workspaceId,
     installationId: args.installationId,
     userAccessToken: args.userAccessToken,
     leg: "settings",
   });
-  if (!verified) return "refused";
+  // Nothing but "ok" attaches. The split exists so the dialog can name the
+  // right next click: an install that came back without a `code` needs one
+  // identity round trip, and everything else needs the App put on the account
+  // that owns the repository.
+  if (verdict === "unverifiable") return "unverified";
+  if (verdict !== "ok") return "refused";
 
   await attachWorkspaceGithubInstallation({
     orgId: args.orgId,
@@ -1491,14 +1522,14 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
     // party for a parameter the attacker, not they, controls.
     let verifiedInstallationId: string | null = null;
     if (installationId != null) {
-      const verified = await installationClaimVerified({
+      const verdict = await installationClaimVerified({
         orgId,
         workspaceId,
         installationId,
         userAccessToken,
         leg: "wizard",
       });
-      verifiedInstallationId = verified ? installationId : null;
+      verifiedInstallationId = verdict === "ok" ? installationId : null;
     }
 
     const mergedDeliveryConfig =
@@ -1595,8 +1626,12 @@ githubOauthCallbackRoute.get("/callback", async (c) => {
   // `connected: false` and rendered the install panel. Announcing a connection
   // the product cannot see is the exact dishonesty this work exists to remove,
   // so each outcome gets its own word: `connected` only on a real attach,
-  // `failed` when a claim was made and declined, and nothing at all when there
-  // was no claim to make (the identity-only leg), because silence is the honest
+  // `failed` when a claim was made and declined, `authorize` when one was made
+  // and there was nothing to check it against (the install leg without a
+  // `code`: the App is on the account now, and one identity round trip
+  // finishes the job — a different next click from `failed`, which means
+  // install it on the right account), and nothing at all when there was no
+  // claim to make (the identity-only leg), because silence is the honest
   // answer to a question nobody asked.
   const redirectUrl =
     returnTo === "settings"

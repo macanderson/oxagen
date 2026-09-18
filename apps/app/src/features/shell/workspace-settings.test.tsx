@@ -92,21 +92,26 @@ vi.mock("next/link", () => ({
 
 const { WorkspaceSettingsDialog } = await import("./workspace-settings");
 
-// The contract's `installUrl` is the IDENTITY leg — authorize Oxagen as this
-// GitHub user — and its `manageUrl` is `installations/new`, which is the door
-// that puts the App on an account that does not have it. The dialog needs both,
-// and a deployment that can mint one can mint the other.
+// Three doors, and the contract now names them apart. `connectUrl` is the
+// IDENTITY leg — authorize Oxagen as this GitHub user, for an account that
+// already carries the App. `installUrl` is `installations/new` SIGNED with the
+// same state, the door that puts the App on an account that does not have it.
+// `manageUrl` is that page bare, for reconfiguring an installation already
+// attached — it round-trips nothing, which is why it is not the install door
+// (#3254). A deployment that can mint one can mint all three.
 const CONNECT_URL =
   "https://github.com/login/oauth/authorize?client_id=Iv1.test&state=signed";
-const INSTALL_URL = "https://github.com/apps/oxagen/installations/new";
+const INSTALL_URL =
+  "https://github.com/apps/oxagen/installations/new?state=signed";
 const MANAGE_URL = "https://github.com/settings/installations/42";
 
 const notConnected: WorkspaceRepository = {
   repository: null,
   github: {
     connected: false,
-    installUrl: CONNECT_URL,
-    manageUrl: INSTALL_URL,
+    connectUrl: CONNECT_URL,
+    installUrl: INSTALL_URL,
+    manageUrl: MANAGE_URL,
   },
 };
 
@@ -138,7 +143,12 @@ const NOT_AUTHORIZED = {
 
 const connected: WorkspaceRepository = {
   repository: null,
-  github: { connected: true, installUrl: null, manageUrl: MANAGE_URL },
+  github: {
+    connected: true,
+    connectUrl: null,
+    installUrl: null,
+    manageUrl: MANAGE_URL,
+  },
 };
 
 const BOUND_REPOSITORY = {
@@ -154,7 +164,12 @@ const BOUND_REPOSITORY = {
 
 const bound: WorkspaceRepository = {
   repository: BOUND_REPOSITORY,
-  github: { connected: true, installUrl: null, manageUrl: MANAGE_URL },
+  github: {
+    connected: true,
+    connectUrl: null,
+    installUrl: null,
+    manageUrl: MANAGE_URL,
+  },
 };
 
 /**
@@ -164,7 +179,12 @@ const bound: WorkspaceRepository = {
  */
 const retired: WorkspaceRepository = {
   repository: { ...BOUND_REPOSITORY, connectionLive: false },
-  github: { connected: true, installUrl: CONNECT_URL, manageUrl: MANAGE_URL },
+  github: {
+    connected: true,
+    connectUrl: CONNECT_URL,
+    installUrl: INSTALL_URL,
+    manageUrl: MANAGE_URL,
+  },
 };
 
 const listing: InstallationRepositories = {
@@ -331,7 +351,12 @@ describe("no GitHub App installation", () => {
       ok: true,
       value: {
         repository: null,
-        github: { connected: false, installUrl: null, manageUrl: null },
+        github: {
+          connected: false,
+          connectUrl: null,
+          installUrl: null,
+          manageUrl: null,
+        },
       },
     });
     await openSettings();
@@ -349,6 +374,7 @@ describe("no GitHub App installation", () => {
         repository: null,
         github: {
           connected: false,
+          connectUrl: "https://github.com.evil.example/apps/oxagen",
           installUrl: "https://github.com.evil.example/apps/oxagen",
           manageUrl: "https://github.com.evil.example/apps/oxagen",
         },
@@ -360,12 +386,37 @@ describe("no GitHub App installation", () => {
     ).toBeTruthy();
   });
 
+  /**
+   * The install door has to round-trip our state (#3254).
+   *
+   * It was wired to the MANAGE url, which carries none. So a first-ever
+   * install — the primary first-run path for every new customer — landed on the
+   * callback with nothing to attribute it to: the no-state branch attached
+   * nothing and dropped the person on the app root, workspace still
+   * unconnected, with "Connect an existing installation" the only way out and
+   * no way to know it.
+   */
+  it("opens a SIGNED install door, never the bare manage URL", async () => {
+    await openSettings();
+    const install = await screen.findByTestId("workspace-github-install");
+    const href = install.getAttribute("href") ?? "";
+    expect(href).toBe(INSTALL_URL);
+    expect(new URL(href).searchParams.get("state")).not.toBeNull();
+    // The manage URL is the same page without the state, and is not this door.
+    expect(href).not.toBe(MANAGE_URL);
+  });
+
   it("draws the door it can and drops the one it cannot (negative)", async () => {
     readWorkspaceRepository.mockResolvedValue({
       ok: true,
       value: {
         repository: null,
-        github: { connected: false, installUrl: CONNECT_URL, manageUrl: null },
+        github: {
+          connected: false,
+          connectUrl: CONNECT_URL,
+          installUrl: null,
+          manageUrl: null,
+        },
       },
     });
     await openSettings();
@@ -863,7 +914,12 @@ describe("a bound main repository", () => {
       ok: true,
       value: {
         repository: bound.repository,
-        github: { connected: true, installUrl: null, manageUrl: null },
+        github: {
+          connected: true,
+          connectUrl: null,
+          installUrl: null,
+          manageUrl: null,
+        },
       },
     });
     await openSettings();
@@ -1000,8 +1056,9 @@ describe("a binding whose connection was retired", () => {
         repository: retired.repository,
         github: {
           connected: false,
-          installUrl: CONNECT_URL,
-          manageUrl: INSTALL_URL,
+          connectUrl: CONNECT_URL,
+          installUrl: INSTALL_URL,
+          manageUrl: MANAGE_URL,
         },
       },
     });
@@ -1181,6 +1238,40 @@ describe("the return leg from GitHub", () => {
       await screen.findByTestId("workspace-repository-install"),
     ).toBeTruthy();
     expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform");
+  });
+
+  /**
+   * `github=authorize` — the install came back with nothing to verify it
+   * against (#3254).
+   *
+   * Whether GitHub returns a `code` alongside the installation id is the App's
+   * "request user authorization (OAuth) during installation" setting, external
+   * configuration this product cannot flip. Without a code there is no user
+   * token, so `GET /user/installations` cannot be asked and the claim is
+   * unverifiable — nothing is attached, because an unverifiable claim is the
+   * exact shape a forged one takes. What differs from `failed` is the next
+   * click: the App IS on the account now, so the identity leg finishes it.
+   */
+  it("says an installed App is not yet attached, and points at the connect door", async () => {
+    nav.query = "settings=repository&github=authorize";
+    readWorkspaceRepository.mockResolvedValue({
+      ok: true,
+      value: notConnected,
+    });
+    Shell();
+
+    expect(await screen.findByTestId("workspace-settings-dialog")).toBeTruthy();
+    const said = screen.getByTestId("workspace-github-authorize");
+    expect(said).toHaveTextContent(/nothing has been attached yet/i);
+    // Never the word for a real attach.
+    expect(screen.queryByTestId("workspace-github-connected")).toBeNull();
+    expect(screen.queryByTestId("workspace-github-failed")).toBeNull();
+    // The click it names is on screen.
+    expect(
+      (await screen.findByTestId("workspace-github-connect")).getAttribute(
+        "href",
+      ),
+    ).toBe(CONNECT_URL);
   });
 
   // The identity leg's own two answers. The callback lists what the authorizing

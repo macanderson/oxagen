@@ -1381,7 +1381,11 @@ describe("GET /oauth/github/callback", () => {
         status: 200,
         json: async () => ({ id: 7, login: "owner" }),
       })
-      .mockResolvedValueOnce({ ok: false, status: 502, json: async () => ({}) });
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: async () => ({}),
+      });
     const { tx } = makeCapturingTx([]);
     queueOauthUpsert();
     queueSlugLookups();
@@ -1511,6 +1515,11 @@ describe("GET /oauth/github/callback", () => {
     // The mirror of the test above, so the check is not merely proven to refuse
     // everything: the same request, differing only in whether GitHub lists the
     // id, attaches.
+    //
+    // This is also the first-ever install's happy path (#3254): the signed
+    // install door round-trips `code` + state + `installation_id`, so the
+    // callback verifies the claim and attaches in one hop, and the person lands
+    // on the dialog connected rather than on the app root.
     queueVerifiedInstallFetches([999999]);
     const { tx, captured } = makeCapturingTx([]);
     queueOauthUpsert();
@@ -1527,9 +1536,13 @@ describe("GET /oauth/github/callback", () => {
     expect(captured.insertValues).toMatchObject({
       deliveryConfig: { installationId: "999999" },
     });
-    expect(res.headers.get("location") ?? "").toBe(
+    const location = res.headers.get("location") ?? "";
+    expect(location).toBe(
       `${APP_URL}/my-org/my-ws?settings=repository&github=connected`,
     );
+    // Not the no-state branch's destination: state was carried, so the
+    // callback knew which workspace asked.
+    expect(location).not.toContain("github_installed");
   });
 
   it("settings install: verification reads /user/installations with the just-exchanged user token", async () => {
@@ -1553,11 +1566,20 @@ describe("GET /oauth/github/callback", () => {
     );
   });
 
-  it("settings install: an installation_id with NO code to verify it against is refused", async () => {
+  it("settings install: an installation_id with NO code to verify it against attaches nothing", async () => {
     // Without a `code` there is no user token, so nothing can testify that this
     // person reaches this installation. An unverifiable claim is not a weaker
     // claim — it is the exact shape the forgery takes, since `code` is optional
     // on this leg and the attacker simply omits it.
+    //
+    // Whether a `code` comes back is the App's "request user authorization
+    // (OAuth) during installation" setting, which is external configuration
+    // this codebase cannot flip — so this is an ordinary outcome for an honest
+    // first-ever install, not only an attack shape. It is acknowledged apart
+    // from `failed` for that reason and ONLY for that reason: the person did
+    // nothing wrong and one identity round trip finishes the job, whereas
+    // `failed` means installing again on the right account. Nothing is attached
+    // either way, which is the part that must never move (#3254).
     queueSlugLookups();
 
     const res = await makeCallbackReq({
@@ -1571,9 +1593,14 @@ describe("GET /oauth/github/callback", () => {
     expect(mocks.withSystemDb).toHaveBeenCalledTimes(2);
     // And no GitHub call was made either: there was no token to make one with.
     expect(mocks.fetch).not.toHaveBeenCalled();
-    expect(res.headers.get("location") ?? "").toBe(
-      `${APP_URL}/my-org/my-ws?settings=repository&github=failed`,
+    const location = res.headers.get("location") ?? "";
+    // Back on the dialog, told which click finishes it — never the app root
+    // the unsigned install door used to strand people on.
+    expect(location).toBe(
+      `${APP_URL}/my-org/my-ws?settings=repository&github=authorize`,
     );
+    expect(location).not.toContain("github=connected");
+    expect(location).not.toContain("github_installed");
   });
 
   it("settings install: a /user/installations that errors refuses rather than attaching", async () => {

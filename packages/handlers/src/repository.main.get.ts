@@ -20,10 +20,12 @@
 //   3. The installation: the workspace's GitHub connection, through the one
 //      shared resolver. The installation id is NOT in the output; a caller that
 //      could name one could mint tokens for another account's installation.
-//   4. The doors to GitHub: the signed Connect URL (the identity leg, which
-//      works whether or not the App is already installed on the target
-//      account) and the manage URL, or nulls when this deployment cannot
-//      complete a connect.
+//   4. The doors to GitHub, which are three and not one: the signed Connect URL
+//      (the identity leg, for an account that already carries the App), the
+//      signed Install URL (`installations/new`, for an account that does not),
+//      and the unsigned manage URL (reconfigure an installation already
+//      attached) — or nulls when this deployment cannot complete a connect,
+//      which means the whole flow and not merely the redirect.
 //
 // This handler makes no GitHub API call. It is a settings read that has to
 // render while GitHub is down, and every fact it reports is already local.
@@ -35,6 +37,7 @@ import {
 import { schema, withTenantDb } from "@oxagen/database";
 import {
   buildIdentityAuthUrl,
+  buildInstallAuthUrl,
   buildManageInstallationUrl,
 } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -46,39 +49,61 @@ import {
 
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
 
-/** The two GitHub doors, or null when the App is not configured here. */
+/** The three GitHub doors, or null when the App is not configured here. */
 export interface GithubAppUrls {
   /**
-   * The dialog's Connect action: the signed IDENTITY URL
-   * (`login/oauth/authorize`), not `installations/new`. Named `installUrl`
-   * because that is the contract's field; what it opens is the authorization
-   * leg. See `envGithubUrls` for why.
+   * CONNECT: the signed IDENTITY URL (`login/oauth/authorize`), for an account
+   * that already carries the App somewhere. Always returns a `code` and our
+   * state; never returns an `installation_id`.
+   */
+  connectUrl: string;
+  /**
+   * INSTALL: `installations/new`, SIGNED with the same state. For an account
+   * that carries the App nowhere, which is every first-run account.
    */
   installUrl: string;
+  /** MANAGE: the App's configuration page for an installation already attached. Unsigned; it starts no flow. */
   manageUrl: string;
 }
 
 /**
  * The complete set of env vars a Connect must have to finish its round trip:
- * the two that mint the URL, and the two the public callback demands before it
- * will exchange the `code` GitHub sends back. They are independently optional
- * in the env registry, so a deployment can hold some and not others.
+ * the two that mint the URLs, the two the public callback demands before it
+ * will exchange the `code` GitHub sends back, and the two that mint the
+ * installation token every step AFTER the connect runs on. They are
+ * independently optional in the env registry, so a deployment can hold some and
+ * not others.
  *
- * All four, or no URLs at all. Offering a Connect that the callback answers
- * with 503 strands the operator mid-flow on a GitHub page, with nothing on our
- * side to tell them why; `null` is the contract's honest "unconfigured", which
- * the dialog already renders as "not configured for this deployment".
+ * All six, or no URLs at all. Offering a Connect that the callback answers with
+ * 503 strands the operator mid-flow on a GitHub page, with nothing on our side
+ * to tell them why; `null` is the contract's honest "unconfigured", which the
+ * dialog already renders as "not configured for this deployment".
+ *
+ * "Finish its round trip" is the whole flow, not the redirect. A deployment
+ * holding the OAuth half and not the App's signing half mints a working Connect
+ * URL, completes OAuth, and reports the installation attached — and then every
+ * `list_installation_repositories` and every `bind_main_repository` throws,
+ * because both mint a token with `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`
+ * and refuse without them. That strands the operator PAST the point of no
+ * return, which is worse than refusing at the door.
  */
 const REQUIRED_GITHUB_APP_ENV = [
-  // Mints the identity URL below.
+  // Mints the identity (connect) URL below.
   "GITHUB_APP_CLIENT_ID",
-  // Mints the manage URL below.
+  // Mints the install and manage URLs below.
   "GITHUB_APP_SLUG",
   // Signs the state both URLs round-trip, and verifies it on the way back.
   "GITHUB_APP_INSTALL_STATE_SECRET",
   // Only the callback needs this one — and without it the callback 503s, so a
   // Connect offered without it cannot complete.
   "GITHUB_APP_CLIENT_SECRET",
+  // Neither of these is needed to START the flow, and both are needed for
+  // anything the flow is FOR: `getInstallationToken` signs a JWT with them
+  // (packages/handlers/src/repository.main.bind.ts,
+  // repository.installation.list.ts), and throws
+  // "GitHub App is not configured" without them.
+  "GITHUB_APP_ID",
+  "GITHUB_APP_PRIVATE_KEY",
 ] as const;
 
 export interface MainRepositoryGetDeps {
@@ -121,19 +146,27 @@ export const envGithubUrls: MainRepositoryGetDeps = {
       returnTo: "settings" as const,
     };
     return {
-      // The IDENTITY leg (`login/oauth/authorize`), not `installations/new` —
-      // the same rule /connections/github/status follows, for the same reason.
-      // `installations/new` only round-trips a `code` and our signed `state` on
+      // CONNECT: the IDENTITY leg (`login/oauth/authorize`), not
+      // `installations/new` — the same rule /connections/github/status follows,
+      // for the same reason. `installations/new` only round-trips a `code` on
       // the FIRST install of the App on an account. Once the App is already
       // installed there, GitHub degrades to its stateless setup/update
-      // redirect, which carries neither: the callback takes its no-state
-      // branch, redirects to the app root and attaches nothing. So with the
-      // install URL here, reconnecting, and connecting a second workspace to an
-      // account that already has the App, were both impossible from this
-      // dialog. The identity URL always returns code+state, installed or not.
-      installUrl: buildIdentityAuthUrl(clientId, stateSecret, state),
-      // The other door, unchanged: change which repositories the existing
-      // installation reaches (and the way to install it on a further account).
+      // redirect, which carries no code: with only that URL, reconnecting, and
+      // connecting a second workspace to an account that already has the App,
+      // were both impossible from this dialog. The identity URL always returns
+      // code+state, installed or not.
+      connectUrl: buildIdentityAuthUrl(clientId, stateSecret, state),
+      // INSTALL: `installations/new`, carrying the SAME signed state. The
+      // identity leg cannot serve a first-ever install — there is nothing for
+      // `/user/installations` to find — and this door used to be minted bare,
+      // so GitHub round-tripped no state, the callback took its no-state
+      // branch, and the primary first-run path for every new customer ended on
+      // the app root with the workspace unconnected and nothing to click
+      // (#3254). With the state, the callback knows which workspace asked.
+      installUrl: buildInstallAuthUrl(appSlug, stateSecret, state),
+      // MANAGE: unsigned on purpose. It starts no flow and carries nothing
+      // back — it is where an ALREADY attached installation is reconfigured,
+      // never the way to establish one.
       manageUrl: buildManageInstallationUrl(appSlug),
     };
   },
@@ -223,6 +256,7 @@ export function createMainRepositoryGetHandler(
         : null,
       github: {
         connected: connection !== null,
+        connectUrl: urls?.connectUrl ?? null,
         installUrl: urls?.installUrl ?? null,
         manageUrl: urls?.manageUrl ?? null,
       },

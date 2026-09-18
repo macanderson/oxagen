@@ -30,14 +30,18 @@ describe("get_main_repository contract", () => {
         defaultRef: "main",
         htmlUrl: "https://github.com/acme/widgets",
         boundAt: "2026-09-15T12:06:00.000Z",
+        connectionLive: true,
       },
       github: {
         connected: true,
-        // The Connect action is the identity leg, not installations/new:
-        // installations/new returns neither our state nor a code once the App
-        // is already installed on the target account.
-        installUrl:
+        // Three doors, three different URLs. Connect is the identity leg, which
+        // always round-trips a code and our state. Install is
+        // `installations/new` WITH that state; manage is the same page without
+        // it, and is never the way to establish a connection.
+        connectUrl:
           "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
+        installUrl:
+          "https://github.com/apps/oxagen/installations/new?state=abc.def",
         manageUrl: "https://github.com/apps/oxagen/installations/new",
       },
     };
@@ -55,11 +59,10 @@ describe("get_main_repository contract", () => {
       repository: null,
       github: {
         connected: false,
-        // The Connect action is the identity leg, not installations/new:
-        // installations/new returns neither our state nor a code once the App
-        // is already installed on the target account.
-        installUrl:
+        connectUrl:
           "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
+        installUrl:
+          "https://github.com/apps/oxagen/installations/new?state=abc.def",
         manageUrl: "https://github.com/apps/oxagen/installations/new",
       },
     };
@@ -69,7 +72,12 @@ describe("get_main_repository contract", () => {
   it("allows null URLs, so a deployment with no GitHub App still renders", () => {
     const out = {
       repository: null,
-      github: { connected: false, installUrl: null, manageUrl: null },
+      github: {
+        connected: false,
+        connectUrl: null,
+        installUrl: null,
+        manageUrl: null,
+      },
     };
     expect(repositoryMainGet.output.parse(out)).toEqual(out);
   });
@@ -80,6 +88,7 @@ describe("get_main_repository contract", () => {
         repository: null,
         github: {
           connected: true,
+          connectUrl: null,
           installUrl: null,
           manageUrl: null,
           installationId: "424242",
@@ -94,7 +103,8 @@ describe("get_main_repository contract", () => {
         repository: null,
         github: {
           connected: true,
-          installUrl: "not-a-url",
+          connectUrl: "not-a-url",
+          installUrl: null,
           manageUrl: null,
         },
       }).success,
@@ -109,8 +119,14 @@ describe("get_main_repository contract", () => {
           defaultRef: "main",
           htmlUrl: "https://github.com/acme/widgets",
           boundAt: "2026-09-15 12:06:00",
+          connectionLive: true,
         },
-        github: { connected: true, installUrl: null, manageUrl: null },
+        github: {
+          connected: true,
+          connectUrl: null,
+          installUrl: null,
+          manageUrl: null,
+        },
       }).success,
     ).toBe(false);
   });

@@ -43,10 +43,12 @@ const BINDING_ROW = {
 };
 
 const URLS = {
-  // The Connect action is the IDENTITY leg, not installations/new — see
-  // `envGithubUrls` and the env-set suite at the bottom of this file.
-  installUrl:
+  // Three doors, and they are three. Connect is the IDENTITY leg; install is
+  // `installations/new` SIGNED with the same state; manage is that page bare.
+  // See `envGithubUrls` and the env-set suite at the bottom of this file.
+  connectUrl:
     "https://github.com/login/oauth/authorize?client_id=Iv1.x&state=abc.def",
+  installUrl: "https://github.com/apps/oxagen/installations/new?state=abc.def",
   manageUrl: "https://github.com/apps/oxagen/installations/new",
 };
 
@@ -223,6 +225,7 @@ describe("get_main_repository", () => {
     // showing even where nobody can install anything.
     expect(out.github).toEqual({
       connected: false,
+      connectUrl: null,
       installUrl: null,
       manageUrl: null,
     });
@@ -353,6 +356,12 @@ describe("envGithubUrls", () => {
     GITHUB_APP_CLIENT_SECRET: "client-secret",
     GITHUB_APP_SLUG: "oxagen-test",
     GITHUB_APP_INSTALL_STATE_SECRET: "state-secret-32-bytes-long!!!!!!",
+    // Not needed to start the flow, and needed for everything the flow is for:
+    // `getInstallationToken` signs its JWT with these, so a deployment without
+    // them can complete a connect and then throw on every list and every bind.
+    GITHUB_APP_ID: "123456",
+    GITHUB_APP_PRIVATE_KEY:
+      "-----BEGIN RSA PRIVATE KEY-----\nx\n-----END RSA PRIVATE KEY-----",
   } as const;
 
   const SCOPE = { orgId: "org-1", workspaceId: "ws-1" };
@@ -372,11 +381,11 @@ describe("envGithubUrls", () => {
     withEnv(ENV);
     const urls = envGithubUrls.githubUrls(SCOPE);
     expect(urls).not.toBeNull();
-    const installUrl = urls!.installUrl;
-    expect(installUrl).toContain("https://github.com/login/oauth/authorize");
+    const connectUrl = urls!.connectUrl;
+    expect(connectUrl).toContain("https://github.com/login/oauth/authorize");
     // The URL that dead-ends when the App is already installed.
-    expect(installUrl).not.toContain("installations/new");
-    const parsed = new URL(installUrl);
+    expect(connectUrl).not.toContain("installations/new");
+    const parsed = new URL(connectUrl);
     expect(parsed.searchParams.get("client_id")).toBe(ENV.GITHUB_APP_CLIENT_ID);
     // Still signed, and still naming this org+workspace: the callback attaches
     // the installation to the workspace that asked and to no other.
@@ -400,6 +409,50 @@ describe("envGithubUrls", () => {
     );
   });
 
+  /**
+   * The first-run door, and the defect it fixes (#3254).
+   *
+   * The install action was wired to the MANAGE url, which carries no state at
+   * all. So an account with the App installed nowhere clicked Install, GitHub
+   * installed it and redirected to the callback with nothing to attribute —
+   * the callback took its no-state branch, attached nothing and dropped them on
+   * the app root at `/?github_installed=1`, workspace still unconnected. That
+   * is the primary first-run path for every new customer.
+   */
+  it("signs the install door with the same state the connect door carries", () => {
+    withEnv(ENV);
+    const urls = envGithubUrls.githubUrls(SCOPE);
+    const parsed = new URL(urls!.installUrl);
+    expect(parsed.origin + parsed.pathname).toBe(
+      `https://github.com/apps/${ENV.GITHUB_APP_SLUG}/installations/new`,
+    );
+    const state = parsed.searchParams.get("state") ?? "";
+    expect(state).not.toBe("");
+    const payload = JSON.parse(
+      Buffer.from(state.slice(0, state.lastIndexOf(".")), "base64url").toString(
+        "utf8",
+      ),
+    ) as { orgId: string; workspaceId: string; returnTo: string };
+    // Naming this workspace is the whole point: the callback attaches to the
+    // workspace that asked and lands the person back on its dialog.
+    expect(payload).toMatchObject({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      returnTo: "settings",
+    });
+  });
+
+  it("leaves the manage door unsigned, and keeps the three doors distinct", () => {
+    withEnv(ENV);
+    const urls = envGithubUrls.githubUrls(SCOPE);
+    // Manage starts no flow and carries nothing back, so it has no state — and
+    // that is exactly why it must never be offered as the install door.
+    expect(new URL(urls!.manageUrl).searchParams.get("state")).toBeNull();
+    expect(urls!.manageUrl).not.toBe(urls!.installUrl);
+    expect(urls!.connectUrl).not.toBe(urls!.installUrl);
+    expect(urls!.connectUrl).not.toBe(urls!.manageUrl);
+  });
+
   // One case per var: each is independently optional in the env registry, so a
   // deployment really can hold three of the four.
   for (const missing of [
@@ -407,6 +460,12 @@ describe("envGithubUrls", () => {
     "GITHUB_APP_CLIENT_SECRET",
     "GITHUB_APP_SLUG",
     "GITHUB_APP_INSTALL_STATE_SECRET",
+    // The signing half. Without either, the connect completes and then every
+    // `list_installation_repositories` and `bind_main_repository` throws
+    // "GitHub App is not configured" — the operator stranded PAST the point of
+    // no return, which is worse than being refused at the door.
+    "GITHUB_APP_ID",
+    "GITHUB_APP_PRIVATE_KEY",
   ] as const) {
     it(`offers no door when ${missing} is unset`, () => {
       withEnv({ ...ENV, [missing]: undefined });
