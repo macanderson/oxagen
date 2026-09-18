@@ -1351,11 +1351,13 @@ export interface NegotiatedPriceClose {
  * Takes the same per-key lock the write takes: a removal that overlaps a
  * write is otherwise a race one of them loses silently.
  *
- * A list row is not an organization's to change. The read admits the list rows
- * (the same set the RLS policy shows a tenant session) precisely so this case
- * is distinguishable: a key priced only by the list is refused rather than
- * silently reported as closed, which would leave the customer believing the
- * platform's own price had moved.
+ * A key with no negotiated row for this organization answers the same null
+ * close, whatever else prices it. A list row is not an organization's to
+ * change and is never touched, and a null close claims nothing was. This
+ * once refused such a key (`price_entry_not_negotiated`), which broke the
+ * retry: a cancelled scheduled row is deleted, so a call that cancelled the
+ * only row succeeded and its retry, finding nothing, threw. The contract and
+ * the MCP tool promise an idempotent retry, so the empty case is the no-op.
  */
 export async function closeNegotiatedPriceEntry(args: {
   orgId: string;
@@ -1395,18 +1397,11 @@ export async function closeNegotiatedPriceEntry(args: {
     const own = rows.filter(
       (r) => r.orgId === args.orgId && r.source !== "list",
     );
-    if (own.length === 0)
-      // The normal path for a bad key on the API and MCP surfaces, where the
-      // caller names the entry rather than clicking a row that exists.
-      throw new HandlerError({
-        code: "conflict",
-        reason: "price_entry_not_negotiated",
-        message:
-          `${key} has no negotiated price for this organization to end` +
-          (rows.length > 0
-            ? `; it is priced by the platform list, which is not an organization's to change`
-            : ``),
-      });
+    // Nothing of this organization's to end: never negotiated, or a
+    // scheduled row an earlier call already cancelled. The same answer for
+    // both, because the cancellation left no row to tell them apart, and a
+    // retry of a lost response must succeed.
+    if (own.length === 0) return { at: atInstant, closed: null, cancelled: [] };
 
     const at = atInstant.getTime();
     // The row in effect at `at`, not the open one: after a future-dated

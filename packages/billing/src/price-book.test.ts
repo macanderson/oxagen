@@ -2089,19 +2089,33 @@ describe("the negotiated write path refuses in a shape every surface can classif
     store.tx = makeFakePriceTx(fake);
   });
 
-  // A bare Error reaches the API and MCP surfaces as an unclassified 500 and
-  // the app as `kernel_failure`, because all three classify on `code`. These
-  // are caller-actionable refusals, so each must carry one.
-  it("refuses to end a rate the organization never negotiated, as a conflict", async () => {
+  // Refusing a key with no negotiated row broke the retry: a call that
+  // cancelled the only (scheduled) row deleted it and succeeded, and its
+  // retry found nothing and threw. The list row is untouched either way,
+  // and a null close claims nothing was removed.
+  it("answers a null close for a key the organization never negotiated, and leaves the list row alone", async () => {
     fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
 
-    await expect(
-      closeNegotiatedPriceEntry({ ...SET, at: T1 }),
-    ).rejects.toMatchObject({
-      name: "HandlerError",
-      code: "conflict",
-      reason: "price_entry_not_negotiated",
+    const out = await closeNegotiatedPriceEntry({ ...SET, at: T1 });
+    expect(out.closed).toBeNull();
+    expect(out.cancelled).toEqual([]);
+    expect(fake.rows).toHaveLength(1);
+    expect(fake.rows[0]!.effectiveTo).toBeNull();
+  });
+
+  it("retries a cancellation as a no-op once the scheduled row is gone", async () => {
+    fake.rows.push(priceRow({ microsPerMillion: 3_000_000n }));
+    await setNegotiatedPriceEntry({
+      ...SET,
+      microsPerMillion: usdPerMillionToMicros(2.4),
+      effectiveFrom: T2,
+      now: T1,
     });
+    const first = await closeNegotiatedPriceEntry({ ...SET, at: T1, now: T1 });
+    expect(first.cancelled).toHaveLength(1);
+    expect(first.closed).toBeNull();
+    const again = await closeNegotiatedPriceEntry({ ...SET, at: T1, now: T1 });
+    expect(again).toEqual({ at: T1, closed: null, cancelled: [] });
   });
 
   it("refuses to end a rate before a window that has already begun, as a conflict", async () => {

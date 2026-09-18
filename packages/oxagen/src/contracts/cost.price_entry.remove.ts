@@ -8,8 +8,8 @@
  * `at` names the entry id it was priced with and must still be able to read
  * it. Nothing here deletes history, and nothing here touches a list row: the
  * platform's published price is not an organization's to change, and a key
- * this organization never negotiated is refused rather than answered as
- * though something had been removed.
+ * this organization never negotiated answers `closed: null`, which claims
+ * nothing was removed.
  *
  * One token class per call, for the same reason `set_price_entry` takes one:
  * a token class is a row, each effective-dated on its own, and closing them
@@ -17,7 +17,9 @@
  * a loop with one `at`.
  *
  * Re-ending a class this organization has already ended is a no-op that
- * answers `closed: null`, so a retry is safe.
+ * answers `closed: null`, so a retry is safe. So is a retry after a
+ * cancellation: a scheduled row that never began is deleted, and the retry
+ * finds nothing and answers the same null close.
  *
  * This changes what every run in the organization is billed at, so it is not a
  * Member's to make: `sensitivity: "high"`, `defaultEffect: "deny"`, and only
