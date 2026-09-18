@@ -43,7 +43,7 @@ Skill format mirrors the `oxagen-feature.skill` bundle: Markdown body
 
 ## Amendment 2026-09-18: what this ADR describes does not exist; skills are governed files under Steering
 
-Maintainer decision of 2026-09-18, recorded in ADR-093 §6 and ADR-092 §5.
+Maintainer decision of 2026-09-18, recorded in ADR-093 §6 and ADR-097 §5.
 
 Checked at `main` `02278c913`: there is no `packages/skills`, no `agent.skills`
 or `agent.skill_versions` table, and no loader. ADR-043 retired them with the

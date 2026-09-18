@@ -5,7 +5,7 @@
 - **Owners:** platform
 - **Decided by:** the maintainer, 2026-09-18, approving the architecture review
   of the same date in full
-- **Related:** ADR-091 (Phase 0, the first prefix), ADR-092 (the two planes and
+- **Related:** ADR-091 (Phase 0, the first prefix), ADR-097 (the two planes and
   the precedence rule), ADR-094 (the gateway, injection point five), ADR-051
   (volatile policy), ADR-061 (steering governance), ADR-090 (skill resolution),
   ADR-008 (skills, amended), ADR-035 and ADR-036 (the Context Graph Protocol
@@ -86,12 +86,12 @@ vocabularies and the adapter must not conflate them.
 
 The record registry, `:AgentMemory`, gate notices from rules and mandates, skill
 descriptions, and `promptConfig.additionalInstructions`. Each adapter returns
-`SteeringItem`s and owns nothing else. Precedence is ADR-092 §4 and is applied
+`SteeringItem`s and owns nothing else. Precedence is ADR-097 §4 and is applied
 in the assembler, not in an adapter.
 
 `additionalInstructions` becomes an `instruction` item. It is then ranked,
 budgeted and listed in the manifest like anything else, which closes the gap
-ADR-092's context describes.
+ADR-097's context describes.
 
 ### 4. Oxagen does not own the context window; the harness does
 
@@ -152,7 +152,7 @@ with NULL `force` cannot be ordered and cannot be delivered.
 - The manifest is a frame, so it is in the run's chain, replayable, and visible
   on the Run page. "Which records did this run see, and which were cut" becomes
   a read, not a guess.
-- The Preview tab (ADR-092 §5) is the assembler run without delivery. It needs
+- The Preview tab (ADR-097 §5) is the assembler run without delivery. It needs
   no second implementation.
 - A slow or failing assembler never blocks a prompt at the hook tier. The cost
   of failing open is a turn with the prefix and no volatile selection, and the

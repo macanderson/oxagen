@@ -9,7 +9,7 @@
   this ADR is that decision), ADR-078 (the MCP gateway is a proxy, not a second
   materialiser), ADR-043 (Oxagen does not run turns), ADR-047 (handle provider
   divergence at the gateway), ADR-052 and ADR-060 (the meter and spend),
-  ADR-080 (Stella is wrapped through its hooks), ADR-092, ADR-093, ADR-095,
+  ADR-080 (Stella is wrapped through its hooks), ADR-097, ADR-093, ADR-095,
   ADR-096, the Mission Control spec section "The three seams" (§7), the Tacho
   spec
 - **Delivered by:** Phase 4, in build now, in parallel with Phase 0 (PR #3289).
@@ -100,7 +100,7 @@ The MCP aggregator uses the displace-and-restore logic
 `packages/tacho/src/host/mcp-config-writer.ts` already has. Where a vendor
 offers managed settings, Oxagen pins them (ADR-078 §3).
 
-Bundle permissions are filled from the second compilation (ADR-092 §3).
+Bundle permissions are filled from the second compilation (ADR-097 §3).
 
 ## Consequences
 

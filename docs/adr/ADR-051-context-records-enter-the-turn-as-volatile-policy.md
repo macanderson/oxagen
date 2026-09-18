@@ -115,4 +115,4 @@ seam, and later per turn at the proxy.**
   model proxy, which is the closest thing to the turn this ADR was written for.
 
 The scope and enforcement decisions in this ADR carry over as ADR-091 §5 states
-them, until ADR-092's enforcement grant lands in Phase 1.
+them, until ADR-097's enforcement grant lands in Phase 1.

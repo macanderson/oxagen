@@ -225,11 +225,11 @@ Approved 2026-09-18. The present and the six-phase path are in
 | ADR | Decision |
 |---|---|
 | 091 (in review, PR #3289) | Phase 0: active `must` and `should` records compile into the bundle's `context.system` |
-| [092](./adr/ADR-092-steering-and-gating-are-two-planes-authored-on-one-surface-and-compiled-twice.md) | Steering and gating are two planes, authored on one surface and compiled twice |
 | [093](./adr/ADR-093-one-assembler-decides-what-reaches-the-agent-and-records-what-it-cut.md) | One assembler decides what reaches the agent, and records what it cut |
 | [094](./adr/ADR-094-tachod-grows-into-the-gateway-a-loopback-model-proxy-and-an-mcp-aggregator.md) | `tachod` grows into the gateway: a loopback model proxy and an MCP aggregator |
 | [095](./adr/ADR-095-the-tier-ladder-is-four-words-computed-from-what-was-routed.md) | The tier ladder is four words, computed from what was routed |
 | [096](./adr/ADR-096-oxagen-may-contain-the-process-that-runs-turns-the-contained-tier.md) | Oxagen may contain the process that runs turns: the contained tier |
+| [097](./adr/ADR-097-steering-and-gating-are-two-planes-authored-on-one-surface-and-compiled-twice.md) | Steering and gating are two planes, authored on one surface and compiled twice |
 
 ### Naming & identity
 

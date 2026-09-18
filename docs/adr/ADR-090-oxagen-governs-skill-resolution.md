@@ -1,6 +1,6 @@
 # ADR-090: Oxagen governs skill resolution, and the 2026-09-15 narrowing is reversed
 
-- **Status:** Accepted; amended 2026-09-18 by ADR-092 and ADR-093 (Skills is a tab under Steering; delivery is by sync)
+- **Status:** Accepted; amended 2026-09-18 by ADR-097 and ADR-093 (Skills is a tab under Steering; delivery is by sync)
 - **Date:** 2026-09-18
 - **Owners:** app, kernel, evidence
 - **Supersedes:** the 2026-09-15 narrowing recorded in `apps/app/ARCHITECTURE.md`
@@ -161,7 +161,7 @@ read a reflection into the record is a new ADR, not an extension of this one.
 
 ## Amendment 2026-09-18: Skills is a tab under Steering, and delivery is by sync
 
-Maintainer decision of 2026-09-18, recorded in ADR-092 §5 and ADR-093 §6, made
+Maintainer decision of 2026-09-18, recorded in ADR-097 §5 and ADR-093 §6, made
 the same day as this ADR and after it. The two agree on everything this ADR
 decides about resolution. They differ in two places, and this amendment settles
 both.

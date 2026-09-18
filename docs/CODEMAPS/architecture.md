@@ -102,7 +102,7 @@ ingress / MCP-gateway seam (ADR-040 Phase 2) — see
 
 ## Steering, gating and the gateway
 
-Approved by the maintainer on 2026-09-18 (ADR-091 to ADR-096). This section
+Approved by the maintainer on 2026-09-18 (ADR-091 and ADR-093 to ADR-097). This section
 states the present first, in the status words the ADRs fix, and then the target
 with the phase that delivers each part.
 
@@ -156,7 +156,7 @@ with the phase that delivers each part.
 
 Steering is what the model reads: advisory, ranked, budgeted, may be dropped.
 Gating is what the kernel refuses: deterministic, never budgeted, never ranked,
-works when Neo4j is down. The two planes never merge (ADR-092). Storage stays
+works when Neo4j is down. The two planes never merge (ADR-097). Storage stays
 plural with one writer per fact: git for what is published, Postgres for what
 must be transactional or money-grade, the graph for lineage, evidence and entity
 links. Only the assembler and its index are single.
@@ -175,8 +175,8 @@ Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3, 5.
 | Phase | What it delivers | ADR | Status |
 |---|---|---|---|
 | 0. Make one record steer one agent | Active `must` and `should` records compile into `context.system` in `unsignedBundle`. New governance ceremony is frozen until this lands | ADR-091 | In review, PR #3289 |
-| 1. One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, `packages/context-provider` as the home, `packages/engram` deleted or folded in, `UserPromptSubmit` calls the assembler (tight timeout, fail open), precedence fixed, the two publish paths collapse, the in-app agent uses the same assembler | ADR-092, ADR-093 | Not started |
-| 2. One screen | Steering is the hub: Records, Skills, Memory, Ontology, Policy, Proposals, Preview | ADR-092 | Not started |
+| 1. One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, `packages/context-provider` as the home, `packages/engram` deleted or folded in, `UserPromptSubmit` calls the assembler (tight timeout, fail open), precedence fixed, the two publish paths collapse, the in-app agent uses the same assembler | ADR-097, ADR-093 | Not started |
+| 2. One screen | Steering is the hub: Records, Skills, Memory, Ontology, Policy, Proposals, Preview | ADR-097 | Not started |
 | 3. The graph becomes the index | `:Record` nodes with `ABOUT` edges, registry to graph, verified by hash, Postgres kept as the fallback behind the same port | ADR-093 | Not started; waits for the knowledge graph on by default |
 | 4. The gateway | Loopback model proxy in `tachod`, enrollment writes the base URL, observed metering, enforced `session_limit_usd`, real `interrupt`, MCP aggregator, bundle permissions from the second compilation | ADR-094, ADR-095 | In build now |
 | 5. The contained tier | `oxagen run -- <agent>` under an OS sandbox with egress limited to the gateway; the witness runner on the same launcher | ADR-096 | Not started |
