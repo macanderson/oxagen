@@ -38,6 +38,11 @@ export interface TachoPaths {
   /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
   codexHooks: string;
   /**
+   * Cursor's user hooks file (`~/.cursor/hooks.json`), read by the IDE's
+   * agent and by the `cursor-agent` CLI alike.
+   */
+  cursorHooks: string;
+  /**
    * Stella's user config (`$STELLA_HOME/stella.toml`, `~/.stella` by
    * default). When it exists it wins whole over `stellaSettingsJson`.
    */
@@ -80,6 +85,7 @@ export function tachoPaths(
     claudeSettings: join(claudeConfigDir, "settings.json"),
     claudeProjects: join(claudeConfigDir, "projects"),
     codexHooks: join(codexHome, "hooks.json"),
+    cursorHooks: join(home, ".cursor", "hooks.json"),
     stellaToml: join(stellaHome, "stella.toml"),
     stellaSettingsJson: join(stellaHome, "settings.json"),
     daemonLauncher: join(root, "tachod.cmd"),

@@ -5,6 +5,7 @@
  */
 import { claudeDesktopPresence } from "../host/claude-desktop-writer";
 import { codexHookPresence } from "../host/codex-writer";
+import { cursorHookPresence } from "../host/cursor-writer";
 import { modelProxyPortFor, readHostFileLenient } from "../host/host-file";
 import type {
   ModelBaseUrlHarness,
@@ -60,6 +61,7 @@ export interface StatusReport {
     port: number;
     claude_version: string | null;
     codex_version: string | null;
+    cursor_version: string | null;
     stella_version: string | null;
     wrapper_version: string;
     /** The slugs the desktop app shows and reassigns against. */
@@ -85,6 +87,8 @@ export interface StatusReport {
   hooks?: ReturnType<typeof tachoHookPresence>;
   /** Present when the host enrolled Codex. */
   codexHooks?: ReturnType<typeof codexHookPresence>;
+  /** Present when the host enrolled Cursor. */
+  cursorHooks?: ReturnType<typeof cursorHookPresence>;
   /** Present when the host enrolled Stella. */
   stellaHooks?: ReturnType<typeof stellaHookPresence>;
   /**
@@ -192,6 +196,9 @@ export async function status(
   const codexHooks = host.harnesses.includes("codex")
     ? codexHookPresence(guarded(deps.readCodexHooks), host.host_enrollment_id)
     : undefined;
+  const cursorHooks = host.harnesses.includes("cursor")
+    ? cursorHookPresence(guarded(deps.readCursorHooks), host.host_enrollment_id)
+    : undefined;
   const stellaHooks = host.harnesses.includes("stella")
     ? guarded(() =>
         stellaHookPresence(deps.readStellaHooks(), host.host_enrollment_id),
@@ -250,6 +257,7 @@ export async function status(
       port: host.port,
       claude_version: host.claude_version,
       codex_version: host.codex_version ?? null,
+      cursor_version: host.cursor_version ?? null,
       stella_version: host.stella_version ?? null,
       wrapper_version: host.wrapper_version,
       org_slug: host.org_slug,
@@ -271,6 +279,7 @@ export async function status(
     daemon,
     hooks,
     ...(codexHooks !== undefined ? { codexHooks } : {}),
+    ...(cursorHooks !== undefined ? { cursorHooks } : {}),
     ...(stellaHooks !== undefined ? { stellaHooks } : {}),
     ...(claudeDesktop !== undefined ? { claudeDesktop } : {}),
     wal: {
@@ -364,6 +373,13 @@ export async function status(
     );
     if (codexHooks.missing.length > 0)
       deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
+  }
+  if (cursorHooks !== undefined) {
+    deps.out(
+      `Cursor      ${cursorHooks.complete ? "complete" : "INCOMPLETE"}: ${cursorHooks.present.length} present, ${cursorHooks.missing.length} missing`,
+    );
+    if (cursorHooks.missing.length > 0)
+      deps.out(`            missing: ${cursorHooks.missing.join(", ")}`);
   }
   if (stellaHooks !== undefined) {
     deps.out(

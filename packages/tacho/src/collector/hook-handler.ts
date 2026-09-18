@@ -190,13 +190,17 @@ function invocationToolUseId(
  * prose (`stellaAnswer`). Draining at Stella's UserPromptSubmit would seal
  * `message_delivered` and tell the fleet the command applied while Stella
  * never saw a word, so the message stays queued for a boundary that carries
- * it.
+ * it. Cursor is the same at this boundary: its `beforeSubmitPrompt` answer is
+ * `{"continue": bool}` and has no field for context (`cursorAnswer`).
  */
 function deliversMessages(
   harness: TachoHarness | undefined,
   hookEventName: string,
 ): boolean {
-  return harness !== "stella" || hookEventName === "SessionStart";
+  return (
+    (harness !== "stella" && harness !== "cursor") ||
+    hookEventName === "SessionStart"
+  );
 }
 
 /**

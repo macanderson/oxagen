@@ -23,6 +23,7 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
+import { cursorAnswer, translateCursorPayload } from "./cursor-adapter";
 import { hookInputSchema } from "./hooks";
 import {
   parseAnswerBody,
@@ -315,6 +316,10 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const harness: TachoHarness =
     agent !== undefined ? "claude-code" : (deps.harness ?? "claude-code");
   const stella = harness === "stella";
+  const cursor = harness === "cursor";
+  // Stella and Cursor speak their own hook shapes; their adapters translate
+  // the payload in and the answer out. Every other harness is Claude Code's.
+  const translated = stella || cursor;
   let raw: unknown;
   try {
     raw = JSON.parse(deps.stdin);
@@ -339,22 +344,26 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     )(harnessPid);
     raw = translateStellaPayload(raw, harnessPid, instance);
   }
+  if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
     return {
       stdout: "{}\n",
-      stderr: `tacho-hook: payload is not a ${stella ? "Stella" : "Claude Code"} hook\n`,
+      stderr: `tacho-hook: payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",
     };
   }
   const input = parsed.data;
   // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
-  // as prompt text; every other harness reads Claude Code's answer as is.
+  // as prompt text; Cursor reads `{"permission": ...}` and friends; every
+  // other harness reads Claude Code's answer as is.
   const answer = (response: Record<string, unknown>): string =>
     stella
       ? stellaAnswer(response, input.hook_event_name)
-      : `${JSON.stringify(response)}\n`;
+      : cursor
+        ? cursorAnswer(response, input.hook_event_name)
+        : `${JSON.stringify(response)}\n`;
   const emptyAnswer = answer({});
   let host: HostFile | undefined;
   try {
@@ -400,7 +409,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     });
     if (result.status === 200) {
       return {
-        stdout: stella
+        stdout: translated
           ? answer(parseAnswerBody(result.body))
           : `${result.body.trim() || "{}"}\n`,
         stderr: "",

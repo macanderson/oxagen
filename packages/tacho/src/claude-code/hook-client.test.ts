@@ -587,3 +587,76 @@ describe("runTachoHook for Stella and custom agents", () => {
     }
   });
 });
+
+describe("runTachoHook for Cursor", () => {
+  const CURSOR_PRE = JSON.stringify({
+    conversation_id: "conv-9",
+    generation_id: "gen-1",
+    hook_event_name: "preToolUse",
+    workspace_roots: ["/repo"],
+    tool_name: "Shell",
+    tool_input: { command: "git push" },
+    tool_use_id: "tu-9",
+  });
+
+  it("translates a Cursor payload for the daemon and the daemon's answer for Cursor", async () => {
+    const paths = enrolledPaths();
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const denied = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async (options) => {
+        seen.push(options);
+        return {
+          status: 200,
+          body: '{"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"no push"}}',
+        };
+      },
+    });
+    expect(denied).toMatchObject({ path: "daemon", exitCode: 0 });
+    expect(JSON.parse(denied.stdout)).toEqual({
+      permission: "deny",
+      user_message: "no push",
+      agent_message: "no push",
+    });
+    const body = JSON.parse(seen[0]?.body ?? "{}") as {
+      payload: Record<string, unknown>;
+      harness: string;
+    };
+    expect(body.harness).toBe("cursor");
+    expect(body.payload).toMatchObject({
+      session_id: "conv-9",
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_use_id: "tu-9",
+      cwd: "/repo",
+    });
+    expect(seen[0]?.responseTimeoutMs).toBe(10_000);
+    // A body that is not JSON is no decision, and Cursor still gets a
+    // conforming allow rather than a malformed answer it would read as a block.
+    const junk = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({ status: 200, body: "oops" }),
+    });
+    expect(JSON.parse(junk.stdout)).toEqual({ permission: "allow" });
+  });
+
+  it("says the payload is not a Cursor hook when it is not one", async () => {
+    const result = await runTachoHook({
+      paths: enrolledPaths(),
+      env: {},
+      stdin: JSON.stringify({ hello: "world" }),
+      harness: "cursor",
+      platform: "linux",
+    });
+    expect(result).toMatchObject({ path: "invalid", stdout: "{}\n" });
+    expect(result.stderr).toContain("not a Cursor hook");
+  });
+});
