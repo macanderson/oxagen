@@ -78,9 +78,13 @@ interface Cursor {
   /** Subagent transcripts already fed, so a replayed SubagentStop feeds none twice. */
   subagents: string[];
   /**
-   * Set once the session sealed and the tailer drained what was left. The
-   * cursor is then dropped at the next tick rather than immediately, so a
-   * final `cost-state` line the harness flushes after SessionEnd still lands.
+   * Set once the session sealed and the tailer drained what was left, which
+   * is one unbounded pass after the seal so a final `cost-state` line the
+   * harness flushes after SessionEnd still lands. The cursor then stays as a
+   * tombstone for as long as the registry lists the sealed session (seven
+   * days), and nothing reads the transcript again. Dropping it sooner lets
+   * the next tick make a fresh cursor at byte 0 and append the whole
+   * transcript after `agent_stop`.
    */
   drained?: boolean;
 }
@@ -183,6 +187,8 @@ export class TranscriptTailer {
 
   private cursorFor(session: TailedSession, path: string): Cursor {
     const existing = this.cursors.get(session.harnessSessionId);
+    // A drained cursor is final whatever path the session reports now.
+    if (existing?.drained) return existing;
     if (existing !== undefined && existing.path === path) return existing;
     // A session that reports a different transcript path (a resume that
     // moved projects) starts over on the new file; the old one is done.
@@ -198,19 +204,29 @@ export class TranscriptTailer {
 
   /**
    * Advance every live cursor by at most the budget, and drop the cursors of
-   * sessions that sealed and drained or left the registry.
+   * sessions that left the registry. A drained cursor is kept until then.
    */
   async tick(): Promise<void> {
     const live = new Set<string>();
     for (const session of this.options.sessions()) {
       live.add(session.harnessSessionId);
       if (session.transcriptPath === undefined) continue;
-      const cursor = this.cursorFor(session, session.transcriptPath);
-      if (cursor.drained) {
-        this.cursors.delete(session.harnessSessionId);
+      const existing = this.cursors.get(session.harnessSessionId);
+      if (existing?.drained) continue;
+      if (session.sealed && existing === undefined) {
+        // Sealed with no cursor: a daemon before the tombstone dropped it, or
+        // its state file was lost. Either way the chain is closed, and
+        // reading from byte 0 would append the transcript after agent_stop.
+        this.cursors.set(session.harnessSessionId, {
+          path: session.transcriptPath,
+          offset: 0,
+          subagents: [],
+          drained: true,
+        });
         this.dirty = true;
         continue;
       }
+      const cursor = this.cursorFor(session, session.transcriptPath);
       if (session.sealed) {
         // One unbounded pass after the chain closed, then the cursor goes.
         await this.advance(session, cursor, Number.POSITIVE_INFINITY);

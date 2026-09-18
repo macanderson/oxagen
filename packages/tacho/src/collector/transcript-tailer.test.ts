@@ -205,7 +205,7 @@ describe("TranscriptTailer", () => {
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then drops its cursor", async () => {
+  it("drains a sealed session once more, then keeps its cursor as a tombstone", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
@@ -222,15 +222,41 @@ describe("TranscriptTailer", () => {
     await instance.tick();
     expect(session.lines).toHaveLength(3);
     expect(instance.state().cursors["s1"]?.drained).toBe(true);
-    await instance.tick();
-    expect(instance.state().cursors["s1"]).toBeUndefined();
-    // A session that left the registry loses its cursor too.
-    const other = fakeSession("s2", path);
-    const second = tailer([other]);
+    // The registry keeps listing the sealed session for its retention. The
+    // tombstone stays, and nothing is read again: no replay after agent_stop.
+    appendFileSync(path, "late\n");
+    for (let i = 0; i < 4; i += 1) await instance.tick();
+    await instance.drain("s1");
+    expect(session.lines).toHaveLength(3);
+    expect(instance.state().cursors["s1"]?.drained).toBe(true);
+    // Once the registry forgets the session, the tombstone goes too.
+    const sessions = [session];
+    const second = tailer(sessions);
     await second.instance.tick();
-    expect(second.instance.state().cursors["s2"]).toBeDefined();
-    other.sealed = false;
+    expect(second.instance.state().cursors["s1"]).toBeDefined();
+    sessions.length = 0;
     await second.instance.tick();
+    expect(second.instance.state().cursors["s1"]).toBeUndefined();
+  });
+
+  it("does not read a sealed session that has no cursor", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const statePath = join(dir, "state", "transcript-tail.json");
+    writeFileSync(path, "one\ntwo\n");
+    // A daemon before the tombstone dropped this cursor; the registry still
+    // lists the session, sealed.
+    const session = fakeSession("s1", path);
+    session.sealed = true;
+    const first = tailer([session], { statePath });
+    await first.instance.tick();
+    await first.instance.tick();
+    expect(session.lines).toEqual([]);
+    expect(first.instance.state().cursors["s1"]?.drained).toBe(true);
+    // The tombstone survives a restart.
+    const second = tailer([session], { statePath });
+    await second.instance.tick();
+    expect(session.lines).toEqual([]);
   });
 
   it("persists cursors so a restart does not re-read the transcript", async () => {
