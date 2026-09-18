@@ -3424,7 +3424,7 @@
       "writes": []
     }
   ],
-  "contentHash": "13e0bec29c36f4d787ac7df56a33988889ee23dc62abf084ed5f54fc8ca63c5a",
+  "contentHash": "396f9d2dd550cbb3c4b5b59584778cdaf60ea8485776e3ed0ae84e2913076041",
   "domains": [
     {
       "name": "agent",
@@ -15832,6 +15832,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "graph_database",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "org",

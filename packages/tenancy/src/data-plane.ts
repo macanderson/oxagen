@@ -104,6 +104,14 @@ export interface DataPlaneBinding {
   readonly configDigest?: string | null;
   /** Applied schema version of a dedicated plane; null for shared. */
   readonly schemaVersion?: string | null;
+  /**
+   * The organisation's own database on the SHARED Neo4j cluster (spec §5.3,
+   * ADR-098): set only for `kind === "neo4j"` and `mode === "shared"`, once an
+   * `OrgGraphProvisioner` has created `org-<namespace>`. Null or absent means
+   * the POOLED database — free and trial organisations, scoped by property.
+   * A dedicated plane names its database inside `config` instead.
+   */
+  readonly database?: string | null;
 }
 
 /** The injected resolver's shape. */
