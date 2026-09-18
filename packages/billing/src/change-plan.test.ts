@@ -40,7 +40,12 @@ function previewingProration(
   amountCents: number,
   billingInterval: "month" | "year" = "month",
 ) {
-  previewPlanChangeMock.mockResolvedValue({
+  // A mockImplementation, not a fixed value, so the state the preview REPORTS
+  // tracks the state the fixture has the provider in — which is what the real
+  // adapter does, since it reads both off one response. A frozen payload would
+  // let a test describe a preview of a subscription that is not the one the
+  // rest of the fixture says exists.
+  previewPlanChangeMock.mockImplementation(async () => ({
     amountCents,
     isCharge: amountCents > 0,
     currency: "usd",
@@ -50,8 +55,13 @@ function previewingProration(
     // cases give the customer an account balance.
     amountDueCents: amountCents,
     billingInterval,
+    // The subscription this preview priced: the one it is moving FROM. The
+    // price binds the swap that follows; the product names the plan the
+    // credit grant is sized from.
+    billingPriceId: providerActivePriceId,
+    billingProductId: currentProviderProduct(providerActivePriceId),
     lines: [],
-  });
+  }));
 }
 
 vi.mock("./client", () => ({
@@ -197,6 +207,7 @@ const BUILD_PLAN = {
   tier: "build",
   stripePriceIdMonthly: "price_build_m",
   stripePriceIdAnnual: "price_build_y",
+  stripeProductId: "prod_build",
   monthlyCents: BUILD_CATALOG.monthlyCents,
   annualCents: BUILD_CATALOG.annualCents,
 };
@@ -206,6 +217,7 @@ const SCALE_PLAN = {
   tier: "scale",
   stripePriceIdMonthly: "price_scale_m",
   stripePriceIdAnnual: "price_scale_y",
+  stripeProductId: "prod_scale",
   monthlyCents: SCALE_CATALOG.monthlyCents,
   annualCents: SCALE_CATALOG.annualCents,
 };
@@ -215,9 +227,106 @@ const ENTERPRISE_PLAN = {
   tier: "enterprise",
   stripePriceIdMonthly: "price_enterprise_m",
   stripePriceIdAnnual: "price_enterprise_y",
+  stripeProductId: "prod_enterprise",
   monthlyCents: ENTERPRISE_CATALOG.monthlyCents,
   annualCents: ENTERPRISE_CATALOG.annualCents,
 };
+
+type PlanRow = {
+  id: string;
+  slug: string;
+  stripeProductId?: string;
+  stripePriceIdMonthly?: string | null;
+  stripePriceIdAnnual?: string | null;
+  [key: string]: unknown;
+};
+
+const ALL_PLANS: PlanRow[] = [BUILD_PLAN, SCALE_PLAN, ENTERPRISE_PLAN];
+
+/**
+ * The product a price belongs to, as the catalogue records it.
+ *
+ * A subscription's product FOLLOWS its price at the provider — they are two
+ * fields of one item, not two independent facts — so the fixture derives one
+ * from the other rather than letting a test set them apart by accident. The
+ * grant origin is resolved by product, so a fixture whose product drifted from
+ * its price would quietly grant from the wrong plan.
+ */
+function productForPrice(priceId: string | null): string | undefined {
+  return ALL_PLANS.find(
+    (plan) =>
+      plan.stripePriceIdMonthly === priceId ||
+      plan.stripePriceIdAnnual === priceId,
+  )?.stripeProductId;
+}
+
+/**
+ * The product the PROVIDER reports for a price it does not recognise from the
+ * catalogue — which is the normal state of a grandfathered subscriber, sitting
+ * on an immutable old price of a product that still exists.
+ *
+ * Set by {@link stubProviderSubscription} and read by the preview stub too, so
+ * the subscription the preview reports and the subscription `getSubscription`
+ * reports cannot drift apart on this field. In the real adapter both come off
+ * the same object; a fixture where they differ describes something that cannot
+ * happen.
+ */
+let providerProductFallback = "prod_build";
+
+function currentProviderProduct(priceId: string | null): string {
+  return productForPrice(priceId) ?? providerProductFallback;
+}
+
+/**
+ * The column and value a `findFirst` was actually filtered on.
+ *
+ * Drizzle's `eq(col, value)` keeps both in `queryChunks`, so a fixture can
+ * answer the query it was ASKED rather than the query the test author happened
+ * to expect Nth. That distinction is the point of this helper: a positional
+ * `mockResolvedValueOnce` chain cannot represent "this product maps to no
+ * plan", and it silently answers the wrong row the moment a call is added or
+ * removed anywhere upstream — which is the class of fixture that hid three
+ * findings on #3238 and three on #3187.
+ */
+function whereFacts(where: unknown): { column?: string; value?: unknown } {
+  const chunks =
+    (where as { queryChunks?: unknown[] } | undefined)?.queryChunks ?? [];
+  let column: string | undefined;
+  let value: unknown;
+  for (const chunk of chunks) {
+    const c = chunk as Record<string, unknown> | undefined;
+    if (!c || typeof c !== "object") continue;
+    if (typeof c.name === "string" && "notNull" in c) column = c.name;
+    else if ("encoder" in c) value = c.value;
+  }
+  return { column, value };
+}
+
+/**
+ * `billing.plans`, answering by predicate.
+ *
+ * changeOrgPlan reads it by slug (the target), by id (the plan the org is on,
+ * for the log line) and by stripe_product_id (the plan the PROVIDER says this
+ * subscription is moving from, which is what sizes the credit grant), and
+ * `syncSubscriptionFromStripe` reads it by product too. Any plan not in
+ * `catalog` is genuinely absent — which is how "a grandfathered product no
+ * catalogue row carries" is expressed.
+ */
+function stubCatalog(catalog: PlanRow[] = ALL_PLANS) {
+  dbQueryMocks.plans.findFirst.mockImplementation(
+    (args: { where?: unknown } = {}) => {
+      const { column, value } = whereFacts(args.where);
+      const found = catalog.find((plan) => {
+        if (column === "slug") return plan.slug === value;
+        if (column === "id") return plan.id === value;
+        if (column === "stripe_product_id")
+          return plan.stripeProductId === value;
+        return false;
+      });
+      return Promise.resolve(found);
+    },
+  );
+}
 
 /**
  * Which price the PROVIDER reports the subscription as being on, before any
@@ -239,29 +348,35 @@ let providerActivePriceId: string | null = "price_build_m";
  * that: the same call is made before the swap (to decide whether it already
  * happened) and after it (by the sync), and those two want different answers.
  */
-function stubProviderSubscription(productId: string) {
-  getSubscriptionMock.mockImplementation(async () => ({
-    id: "sub_active_001",
-    customerId: "cus_001",
-    metadata: { org_id: "org-abc" },
-    status: "active",
-    billingInterval: "month",
-    currentPeriodStart: new Date(),
-    currentPeriodEnd: new Date(),
-    cancelAtPeriodEnd: false,
-    canceledAt: null,
-    trialEnd: null,
-    productId,
-    priceId:
+function stubProviderSubscription(fallbackProductId: string) {
+  providerProductFallback = fallbackProductId;
+  getSubscriptionMock.mockImplementation(async () => {
+    const priceId =
       upgradeSubscriptionMock.mock.calls.length > 0
         ? ((
             upgradeSubscriptionMock.mock.calls.at(-1)?.[1] as
               | { newPriceId?: string }
               | undefined
           )?.newPriceId ?? providerActivePriceId)
-        : providerActivePriceId,
-    seatCount: 1,
-  }));
+        : providerActivePriceId;
+    return {
+      id: "sub_active_001",
+      customerId: "cus_001",
+      metadata: { org_id: "org-abc" },
+      status: "active",
+      billingInterval: "month",
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      trialEnd: null,
+      // Derived from the price, never set apart from it — see
+      // currentProviderProduct, which the preview stub uses too.
+      productId: currentProviderProduct(priceId),
+      priceId,
+      seatCount: 1,
+    };
+  });
 }
 
 function makeActiveSub(
@@ -312,15 +427,20 @@ function onPrice(
 }
 
 /**
- * changeOrgPlan reads `billing.plans` twice before the swap — the target by
- * slug, then the plan the org is on by id — and `syncSubscriptionFromStripe`
- * reads it once more afterwards by product id.
+ * The plans a test wants to exist, answered by predicate rather than by call
+ * order — see {@link stubCatalog}. The arguments name which rows matter to the
+ * test; every plan in the catalogue is reachable by whichever key the code
+ * actually looks it up with.
  */
-function stubPlanLookups(target: unknown, current: unknown) {
-  dbQueryMocks.plans.findFirst
-    .mockResolvedValueOnce(target)
-    .mockResolvedValueOnce(current)
-    .mockResolvedValue(target);
+function stubPlanLookups(target: PlanRow, current: PlanRow) {
+  // The rows the test named come FIRST, so a test that defines its own
+  // catalogue entry (a grandfathered price, a plan under a slug the standard
+  // three do not use) wins over a standing row with the same key.
+  const catalog: PlanRow[] = [target, current];
+  for (const plan of ALL_PLANS) {
+    if (!catalog.some((p) => p.id === plan.id)) catalog.push(plan);
+  }
+  stubCatalog(catalog);
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -330,10 +450,9 @@ describe("changeOrgPlan", () => {
     vi.clearAllMocks();
     // syncSubscriptionFromStripe uses billingProvider().getSubscription and db().insert
     stubProviderSubscription("prod_build");
-    dbQueryMocks.plans.findFirst.mockImplementation(() => {
-      // sync uses stripeProductId; changeOrgPlan uses slug
-      return Promise.resolve(BUILD_PLAN);
-    });
+    // Answered by predicate: the sync looks up by stripe_product_id, the
+    // change looks up the target by slug and the origin by product.
+    stubCatalog();
     stubInsertChain();
   });
 
@@ -876,7 +995,11 @@ describe("changeOrgPlan — a retried swap is a no-op, not a second decision", (
     stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
     onPrice("price_scale_m", { planId: "plan-scale-id" });
 
-    await changeOrgPlan("org-abc", "build", "month");
+    // `BUILD_PLAN.slug`, not the literal "build". The catalogue now answers the
+    // query it was asked, so a slug no plan carries is correctly not found —
+    // the positional mock this replaced returned the target plan for any slug
+    // at all, which is how a wrong argument went unnoticed here.
+    await changeOrgPlan("org-abc", BUILD_PLAN.slug, "month");
 
     expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
       "org-abc",
@@ -1032,5 +1155,203 @@ describe("createCheckoutSession — active subscription guard", () => {
       interval: "month",
     });
     expect(result.url).toBe("https://checkout.test/free");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The preview decided one transition; the provider applies it to whatever the
+// subscription is when the update lands (#3157, PR #3171 review, r4042477836
+// and r4042477853).
+//
+// The window inside one adapter call is closed. These are the next two
+// boundaries outward, and both carry a value taken before the preview or from
+// it and act on it afterwards.
+//
+// THE FIXTURE CAN REPRESENT BOTH INTERLEAVINGS. `previewPlanChangeMock` and
+// `getSubscriptionMock` are independent stubs, and the provider's reported
+// price is a variable the test can move BETWEEN calls — so "a plan update
+// landed after the preview and before the swap" is a state this mock is
+// genuinely in, not one it merely fails to rule out.
+// ---------------------------------------------------------------------------
+
+describe("a plan update landing between the preview and the swap (r4042477836)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    // `vi.clearAllMocks()` empties the call log and leaves IMPLEMENTATIONS in
+    // place, so a test that makes the swap throw would otherwise poison every
+    // test after it. Reset the behaviour, not just the history.
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_build");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("refuses the swap when the subscription has left the price that was priced", async () => {
+    // Previewed as a decrease off Scale. The preview reports the subscription
+    // it priced — Scale — and `none` is selected because the bill falls.
+    previewingProration(-40_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    // Now the concurrent update lands: by the time the swap is issued, the
+    // subscription is on Enterprise. The move being applied is no longer the
+    // move that was priced, and `none` carried onto it drops a real charge.
+    upgradeSubscriptionMock.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("moved"), {
+        code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW",
+      });
+    });
+
+    await expect(
+      changeOrgPlan("org-abc", BUILD_PLAN.slug, "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW" });
+  });
+
+  it("hands the swap the price the decision was made against", async () => {
+    // The mechanism. The adapter cannot check a precondition it was never
+    // given, so what is pinned is that the priced state travels with the
+    // mutation rather than being left behind with the preview.
+    previewingProration(-40_000);
+    stubPlanLookups(BUILD_PLAN, SCALE_PLAN);
+    onPrice("price_scale_m", { planId: "plan-scale-id" });
+
+    await changeOrgPlan("org-abc", BUILD_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({
+        prorationBehavior: "none",
+        expectedCurrentPriceId: "price_scale_m",
+      }),
+    );
+  });
+
+  it("binds nothing when there was no preview, because there is no 'none' to protect", async () => {
+    // An unpriceable change settles as always_invoice, which bills the true
+    // difference whichever way it falls. Refusing it on a precondition would
+    // trade a safe outcome for an outage, which is the trade this file has
+    // already rejected once.
+    previewPlanChangeMock.mockRejectedValue(new Error("stripe unavailable"));
+    stubPlanLookups(SCALE_PLAN, BUILD_PLAN);
+    onPrice("price_build_m", { planId: "plan-build-id" });
+
+    await changeOrgPlan("org-abc", SCALE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalledWith(
+      "sub_active_001",
+      expect.objectContaining({
+        prorationBehavior: "always_invoice",
+        expectedCurrentPriceId: undefined,
+      }),
+    );
+  });
+});
+
+describe("the plan a change moves FROM, when the local row disagrees (r4042477853)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    subscriptionUpdates.length = 0;
+    grantProratedPlanUpgradeCreditsMock.mockResolvedValue(undefined);
+    // `vi.clearAllMocks()` empties the call log and leaves IMPLEMENTATIONS in
+    // place, so a test that makes the swap throw would otherwise poison every
+    // test after it. Reset the behaviour, not just the history.
+    upgradeSubscriptionMock.mockReset();
+    upgradeSubscriptionMock.mockResolvedValue(undefined);
+    stubProviderSubscription("prod_build");
+    stubCatalog();
+    stubInsertChain();
+  });
+
+  it("sizes the grant from the provider's plan, not the stale row", async () => {
+    // The lost-sync case this branch exists for: the provider already moved
+    // this subscription to Scale and the row still says Build. A move to
+    // Enterprise is a SCALE→Enterprise step; granting it as BUILD→Enterprise
+    // credits an allowance step the customer already has.
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, BUILD_PLAN);
+    onPrice("price_scale_m", {
+      // The row is stale in both columns, exactly as a lost sync leaves it.
+      planId: "plan-build-id",
+      stripePriceId: "price_build_m",
+    });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-scale-id",
+      ENTERPRISE_PLAN.id,
+    );
+    // The defect's output, named so a regression cannot read as a pass.
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalledWith(
+      "org-abc",
+      "plan-build-id",
+      ENTERPRISE_PLAN.id,
+    );
+  });
+
+  it("records the provider's origin on the durable intent, so a retry finishes it correctly", async () => {
+    // The intent is what a retry reads after a crash. Writing the stale row
+    // into it would carry this defect across the crash it exists to survive.
+    previewingProration(49_900);
+    stubPlanLookups(ENTERPRISE_PLAN, BUILD_PLAN);
+    onPrice("price_scale_m", {
+      planId: "plan-build-id",
+      stripePriceId: "price_build_m",
+    });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(subscriptionUpdates).toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: "plan-scale-id" }),
+    );
+    expect(subscriptionUpdates).not.toContainEqual(
+      expect.objectContaining({ pendingUpgradeFromPlanId: "plan-build-id" }),
+    );
+  });
+
+  it("resolves a grandfathered subscriber by product, whose price no catalogue row carries", async () => {
+    // The discriminating negative for the choice of key. Resolving the origin
+    // by PRICE would fail here — this subscriber sits on an immutable old
+    // price that was never in `billing.plans` — and the code would then either
+    // skip a grant that is owed or fall back to the stale row. The product is
+    // what survives a reprice, which is why `syncSubscriptionFromStripe`
+    // already keys on it.
+    previewingProration(49_900);
+    stubProviderSubscription("prod_scale");
+    stubPlanLookups(ENTERPRISE_PLAN, BUILD_PLAN);
+    onPrice("price_scale_m_legacy_2021", { planId: "plan-build-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(grantProratedPlanUpgradeCreditsMock).toHaveBeenCalledWith(
+      "org-abc",
+      "plan-scale-id",
+      ENTERPRISE_PLAN.id,
+    );
+  });
+
+  it("skips the grant rather than sizing it from a source known to be wrong", async () => {
+    // The provider reports a PRODUCT no catalogue row carries, so the plan
+    // being left cannot be established. The stale column is RIGHT THERE and is
+    // deliberately not used: granting from it sends credits out of the door,
+    // while skipping leaves a loud log and a standing intent to repair.
+    //
+    // Note this is an unknown product, not merely an unknown price. A
+    // grandfathered subscriber sits on an immutable OLD PRICE of a product the
+    // catalogue still carries, which is exactly why the origin is resolved by
+    // product — that case resolves fine and is not this one.
+    previewingProration(49_900);
+    stubProviderSubscription("prod_not_in_catalogue");
+    stubPlanLookups(ENTERPRISE_PLAN, BUILD_PLAN);
+    onPrice("price_outside_catalogue", { planId: "plan-build-id" });
+
+    await changeOrgPlan("org-abc", ENTERPRISE_PLAN.slug, "month");
+
+    expect(upgradeSubscriptionMock).toHaveBeenCalled();
+    expect(grantProratedPlanUpgradeCreditsMock).not.toHaveBeenCalled();
   });
 });

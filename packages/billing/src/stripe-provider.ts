@@ -49,6 +49,7 @@ import {
   AmbiguousProrationAnchorError,
   PreviewedSubscriptionUnavailableError,
   SimulatedPreviewSubscriptionError,
+  SubscriptionMovedError,
   ProrationAttributionError,
   ProrationLinesTruncatedError,
 } from "./provider";
@@ -238,8 +239,16 @@ function summarizeProration(
     // "charged now" (#3157, PR #3171 review).
     amountDueCents: preview.amount_due,
     // The interval of the subscription that was priced, off the preview's own
-    // response — see `previewedSubscriptionOf`.
+    // response — see `previewedSubscriptionOf`. The price and product come off
+    // the SAME object, so the mutation binding and the grant origin are the
+    // same single observation the direction is.
     billingInterval: pickInterval(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
+    billingPriceId: resolvePriceId(
+      previewedSubscriptionOf(preview, subscriptionId),
+    ),
+    billingProductId: resolveProductId(
       previewedSubscriptionOf(preview, subscriptionId),
     ),
     lines: prorationLines,
@@ -901,6 +910,27 @@ export class StripeProvider implements BillingProvider {
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
     const item = sub.items.data[0];
     if (!item) throw new Error("subscription has no items");
+
+    // The proration decision was made against a specific price. Stripe has no
+    // conditional update, so this retrieval — which the swap takes anyway, one
+    // round trip from the write — is asked whether that price still holds.
+    //
+    // Refusing, not adapting: a change that is no longer the change that was
+    // priced needs a fresh preview, and carrying `none` onto a different
+    // transition is how a real charge goes unraised. See
+    // {@link SubscriptionMovedError} for the evidence that no CAS primitive
+    // exists and for the residual this leaves.
+    const actualPriceId = resolvePriceId(sub);
+    if (
+      input.expectedCurrentPriceId !== undefined &&
+      actualPriceId !== input.expectedCurrentPriceId
+    ) {
+      throw new SubscriptionMovedError(
+        subscriptionId,
+        input.expectedCurrentPriceId,
+        actualPriceId,
+      );
+    }
     const prorationBehavior = input.prorationBehavior ?? "always_invoice";
     await stripe.subscriptions.update(
       subscriptionId,

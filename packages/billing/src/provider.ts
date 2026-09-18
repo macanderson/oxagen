@@ -86,6 +86,17 @@ export interface BillingSubscriptionUpgradeInput {
   prorationBehavior?: BillingProrationBehavior;
   /** Stripe idempotency key — dedupes a retried mutating request. */
   idempotencyKey?: string;
+  /**
+   * The price the subscription was on when the proration decision was made.
+   * When set, the swap refuses unless the subscription it is about to mutate
+   * is still on it — see {@link SubscriptionMovedError}.
+   *
+   * Omitted when no preview was obtained. There is nothing to protect in that
+   * case: an unpriceable change settles as `always_invoice`, which bills the
+   * true difference whichever way it falls, and it is `none` that this guard
+   * exists to keep honest.
+   */
+  expectedCurrentPriceId?: string;
 }
 
 export interface BillingSubscriptionSeatUpdateInput {
@@ -296,6 +307,53 @@ export class SimulatedPreviewSubscriptionError extends Error {
   }
 }
 
+/**
+ * Raised when the subscription a swap is about to mutate is no longer on the
+ * price the proration decision was made against.
+ *
+ * WHY A PRECONDITION AND NOT A CONDITIONAL UPDATE. Stripe has no
+ * compare-and-set on `subscriptions.update`: the full parameter list carries
+ * `items`, `proration_behavior`, `proration_date`, `billing_cycle_anchor` and
+ * the rest, and nothing version-like, no ETag and no if-match. Checked at
+ * source against `stripe@17.7.0`. So there is no primitive that makes the
+ * mutation conditional on the state it was planned from, and the nearest
+ * honest thing is a precondition read taken at the mutation site.
+ *
+ * It is deliberately taken at the MUTATION, not at the caller. The adapter
+ * already retrieves the subscription immediately before updating it, to find
+ * the item to reprice; asking the same retrieval whether the price still
+ * matches costs nothing and puts the observation one round trip from the
+ * write, rather than several round trips and a durable intent write away.
+ *
+ * WHAT IT COSTS WHEN MISSING. `planChangeDirection` selects `none` for a
+ * change that does not raise the bill, and `none` writes no proration line at
+ * all. Preview a $200 to $150 decrease and `none` is right; let a concurrent
+ * update move the subscription to $100 first and the same call performs a real
+ * $100 to $150 INCREASE carrying `none`, so the charge it owes is never raised
+ * and nothing anywhere records that it was dropped (r4042477836).
+ *
+ * WHAT IS LEFT. A read and a write are not one operation, so a change landing
+ * inside that last round trip is still invisible. The window is bounded by one
+ * HTTP call with no intervening work, against the several calls and a database
+ * write it replaces, and it is stated here rather than described as closed —
+ * the same honesty `previewWithOwnedAnchor` applies to its own bracket.
+ * Refusing is recoverable: the next attempt re-previews against the state that
+ * actually exists.
+ */
+export class SubscriptionMovedError extends Error {
+  readonly code = "SUBSCRIPTION_MOVED_SINCE_PREVIEW" as const;
+  constructor(
+    readonly subscriptionId: string,
+    readonly expectedPriceId: string,
+    readonly actualPriceId: string | null,
+  ) {
+    super(
+      `Subscription ${subscriptionId} was priced on ${expectedPriceId} but is now on ${actualPriceId ?? "an unknown price"}; the proration decision was made for a change that is no longer the one being applied.`,
+    );
+    this.name = "SubscriptionMovedError";
+  }
+}
+
 export interface BillingProrationPreview {
   /**
    * Net proration amount in cents for THIS change. Positive = the customer
@@ -369,6 +427,36 @@ export interface BillingProrationPreview {
    * back to a snapshot from another moment.
    */
   billingInterval: BillingInterval;
+  /**
+   * The price the subscription was on when this preview priced it, and the
+   * product behind it — both off the same single observation the interval
+   * comes from.
+   *
+   * They are here for the two things that happen AFTER a preview and used to
+   * be decided from somewhere else:
+   *
+   *  - `billingPriceId` is the state the proration decision was made against.
+   *    The mutation that follows is bound to it: Stripe offers no conditional
+   *    update, so the swap refuses if the subscription it is about to change
+   *    is no longer on the price that was priced. Without that, a concurrent
+   *    update turns a previewed $200→$150 decrease into a real $100→$150
+   *    increase still carrying `none`, and the charge is never raised
+   *    (r4042477836).
+   *  - `billingProductId` identifies the plan the customer is moving FROM, for
+   *    sizing the prorated credit grant. That used to come from
+   *    `subscriptions.plan_id`, which is written by the post-mutation sync and
+   *    is stale in exactly the failure the already-applied guard exists for: a
+   *    row still reading Build for a subscription the provider already moved
+   *    to Scale makes a Scale→Enterprise move grant a Build→Enterprise delta
+   *    (r4042477853). The product rather than the price, because a
+   *    grandfathered subscriber sits on an immutable old price that no
+   *    catalogue row carries, while the product is what
+   *    `syncSubscriptionFromStripe` already maps to a plan.
+   *
+   * Null when the provider reports no price or product for the item.
+   */
+  billingPriceId: string | null;
+  billingProductId: string | null;
   /** Per-line breakdown of the proration adjustments. */
   lines: BillingProrationLine[];
 }

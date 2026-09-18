@@ -484,9 +484,19 @@ export async function upgradeSubscription(
    * {@link planChangeIdempotencyKey} for what each choice guarantees.
    */
   requestId?: string,
+  /**
+   * The price the subscription was on when `prorationBehavior` was decided —
+   * `BillingProrationPreview.billingPriceId`, off the same observation that
+   * produced the decision.
+   *
+   * The swap refuses if the subscription has left it. Omit only when there is
+   * no preview to bind to; the unpriceable case settles as `always_invoice`,
+   * which is safe in either direction, and it is `none` that needs binding.
+   */
+  expectedCurrentPriceId?: string,
 ): Promise<void> {
   logger.info(
-    { stripeSubId, newPriceId, prorationBehavior },
+    { stripeSubId, newPriceId, prorationBehavior, expectedCurrentPriceId },
     "billing: upgrading subscription price",
   );
   const idempotencyKey = planChangeIdempotencyKey(
@@ -498,6 +508,7 @@ export async function upgradeSubscription(
     newPriceId,
     prorationBehavior,
     idempotencyKey,
+    expectedCurrentPriceId,
   });
   await syncSubscriptionFromStripe(stripeSubId);
 }
@@ -687,17 +698,27 @@ async function clearPlanUpgradeIntent(
  * here is a value that cannot disagree with the preview, whereas returning it
  * unused would leave the next caller a plausible-looking second source.
  *
- * What remains — the active price id — is consumed BEFORE the preview is
- * taken, to recognise a swap that has already been applied. It is a single
- * read feeding a single decision, with nothing to be out of step with. See
- * that guard for what it does and does not establish.
+ * What remains is the active price id, consumed BEFORE the preview is taken to
+ * recognise a swap that has already been applied, and the active PRODUCT id.
+ *
+ * The product is not a second interval by another name, and the distinction is
+ * the whole reason it is allowed back. The interval was removed because a
+ * caller holding one could compare it against the preview's, and two readings
+ * of one fact is the defect. The product answers a fact the preview does not
+ * always carry: WHICH PLAN this subscription is moving from, which sizes the
+ * prorated credit grant. When a preview exists, the preview's product is used
+ * and this one is not consulted at all; this is reached only when no preview
+ * could be taken, where the alternative is not a second opinion but no opinion
+ * — and an earlier round of this branch established that a failed preview must
+ * still grant the credits an upgrade earns, because withholding them was its
+ * own defect (r4042477853).
  */
 async function resolveActiveProviderState(
   stripeSubscriptionId: string,
-): Promise<{ priceId: string | null }> {
+): Promise<{ priceId: string | null; productId: string | null }> {
   try {
     const sub = await billingProvider().getSubscription(stripeSubscriptionId);
-    return { priceId: sub.priceId };
+    return { priceId: sub.priceId, productId: sub.productId };
   } catch (err) {
     logger.warn(
       { stripeSubId: stripeSubscriptionId, err },
@@ -820,9 +841,8 @@ export async function changeOrgPlan(
   // Asked of the PROVIDER, not of our record of the provider — see
   // resolveActiveProviderState for why the local column is blind to exactly the
   // failure this guard exists for.
-  const { priceId: activePriceId } = await resolveActiveProviderState(
-    activeSubRow.stripeSubscriptionId,
-  );
+  const { priceId: activePriceId, productId: activeProductId } =
+    await resolveActiveProviderState(activeSubRow.stripeSubscriptionId);
 
   if (activePriceId && activePriceId === newPriceId) {
     // ── Is this request resuming a mutation, or did nothing happen? ─────────
@@ -1054,21 +1074,75 @@ export async function changeOrgPlan(
     "billing: changeOrgPlan — swapping price on active subscription",
   );
 
+  // ── The plan being moved FROM, asked of the state the preview priced ─────
+  //
+  // This decides the size of the prorated credit grant, and it used to be
+  // `activeSub.planId` — the LOCAL row, written by the post-mutation sync, and
+  // therefore stale in precisely the failure the already-applied guard exists
+  // for. A subscription the provider already moved Build→Scale whose sync was
+  // lost still reads Build here, so a Scale→Enterprise change is granted the
+  // Build→Enterprise delta: the customer is credited for an allowance step
+  // they already had (r4042477853).
+  //
+  // The preview's subscription is the provider's own answer, on the single
+  // observation the direction came from. The PRODUCT rather than the price,
+  // because a grandfathered subscriber sits on an immutable old price that no
+  // catalogue row carries, while the product is exactly what
+  // `syncSubscriptionFromStripe` already maps to a plan.
+  // The preview's product when there is a preview — the same single observation
+  // the direction came from. When there is not, the provider-state read taken
+  // above, which is the only other place the PROVIDER has spoken. Never
+  // `activeSub.planId`: the local row is the thing this finding is about.
+  //
+  // This is a fallback, not a second opinion: exactly one of the two is
+  // consulted, chosen by whether a preview exists at all.
+  const previewedProductId = preview
+    ? preview.billingProductId
+    : activeProductId;
+  const originPlanRow = previewedProductId
+    ? await withSystemDb((tx) =>
+        tx.query.plans.findFirst({
+          where: eq(schema.plans.stripeProductId, previewedProductId),
+          columns: { id: true },
+        }),
+      )
+    : null;
+  const originPlanId = originPlanRow?.id ?? null;
+  if (originPlanId !== activeSub.planId) {
+    logger.warn(
+      {
+        orgId,
+        stripeSubId: activeSub.stripeSubscriptionId,
+        recordedPlanId: activeSub.planId,
+        previewedProductId,
+        previewedOriginPlanId: originPlanId,
+      },
+      "billing: the plan this change moves from, as the provider priced it, is not the plan the local row records",
+    );
+  }
+
   // Durable intent, written before the provider is touched. `upgradeSubscription`
   // syncs the subscription synchronously and that sync repoints `planId` at
   // the target, so from this line on the plan being left exists nowhere else.
   // A crash between the swap and the grant is what this is for: the retry
   // reads it on the already-applied branch above and finishes the grant.
-  await recordPlanUpgradeIntent(
-    activeSub.stripeSubscriptionId,
-    activeSub.planId,
-  );
+  //
+  // It records the PROVIDER's origin for the same reason the grant uses it:
+  // an intent carrying the stale row would hand the retry the wrong delta,
+  // which is the defect above surviving a crash.
+  if (originPlanId) {
+    await recordPlanUpgradeIntent(activeSub.stripeSubscriptionId, originPlanId);
+  }
 
   await upgradeSubscription(
     activeSub.stripeSubscriptionId,
     newPriceId,
     prorationBehavior,
     opts?.requestId,
+    // Binds the mutation to the state the decision was made against. Null when
+    // no preview was taken, in which case `prorationBehavior` is already
+    // `always_invoice` and there is nothing for a stale `none` to drop.
+    preview?.billingPriceId ?? undefined,
   );
 
   // SOC2 audit: an org's plan tier changed on an active subscription (upgrade
@@ -1109,22 +1183,38 @@ export async function changeOrgPlan(
   // idempotent on (org, target plan, period), so handing it a downgrade or a
   // lateral move costs one catalogue read and grants nothing. The fact that
   // decides is the delta, so the delta is what is consulted.
+  //
+  // Sized from `originPlanId`, the provider's own answer — never the local
+  // row. When the preview could not name it (no preview, or a product no
+  // catalogue row carries), the grant is SKIPPED rather than sized from the
+  // stale column: granting from a source known to be wrong sends credits out
+  // of the door, while skipping leaves a loud log and a standing intent that
+  // a retry or an operator can finish. An unknown is not a nothing, which is
+  // the rule the rest of this change is built on.
   let grantSettled = false;
-  try {
-    const { grantProratedPlanUpgradeCredits } = await import("./grants");
-    await grantProratedPlanUpgradeCredits(
-      orgId,
-      activeSub.planId,
-      targetPlan.id,
-    );
-    grantSettled = true;
-  } catch (err) {
-    // Grant failure must never fail the plan swap — log and continue. The
-    // intent is deliberately left standing so the grant is recoverable.
+  if (!originPlanId) {
     logger.error(
-      { orgId, fromPlanId: activeSub.planId, toPlanId: targetPlan.id, err },
-      "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing; the recorded upgrade intent is left in place so a retry can finish it",
+      {
+        orgId,
+        targetPlanSlug,
+        previewedProductId,
+        recordedPlanId: activeSub.planId,
+      },
+      "billing: the plan this change moved from could not be established from the provider, so the prorated credit grant was not sized; the upgrade intent is left standing for repair",
     );
+  } else {
+    try {
+      const { grantProratedPlanUpgradeCredits } = await import("./grants");
+      await grantProratedPlanUpgradeCredits(orgId, originPlanId, targetPlan.id);
+      grantSettled = true;
+    } catch (err) {
+      // Grant failure must never fail the plan swap — log and continue. The
+      // intent is deliberately left standing so the grant is recoverable.
+      logger.error(
+        { orgId, fromPlanId: originPlanId, toPlanId: targetPlan.id, err },
+        "billing: grantProratedPlanUpgradeCredits failed after plan swap — continuing; the recorded upgrade intent is left in place so a retry can finish it",
+      );
+    }
   }
   if (grantSettled) {
     await clearPlanUpgradeIntent(activeSub.stripeSubscriptionId);

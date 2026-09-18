@@ -763,12 +763,26 @@ describe("a plan update landing between the adapter's retrieval and its preview 
     expect(quote.amountCents).not.toBe(UNUSED_ANNUAL_CREDIT_CENTS);
   });
 
-  it("bills the swap under always_invoice, not the 'none' the retrieval would have selected", async () => {
-    await changeOrgPlan("org-abc", "build-v2", "month");
+  it("refuses the swap outright, because the state that was priced is not the state being mutated", async () => {
+    // This asserted `always_invoice` when it was written, and that was the
+    // strongest guarantee available then: the DECISION was taken off the
+    // preview, so an interval change could no longer be mis-scored as a
+    // downgrade and shipped as `none`.
+    //
+    // The decision being right is not the same as it being applied to the
+    // subscription it was made about. In this fixture the two really have
+    // diverged — the preview priced the annual subscription, the swap is about
+    // to mutate one sitting on a monthly Scale price — so applying ANY
+    // previewed behaviour here would be applying it to a different change.
+    // The mutation is now bound to the priced state and refuses (r4042477836).
+    //
+    // Refusing is recoverable; the next attempt previews the subscription that
+    // actually exists. Nothing is mutated, which is the point.
+    await expect(
+      changeOrgPlan("org-abc", "build-v2", "month"),
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_MOVED_SINCE_PREVIEW" });
 
-    expect(stripeMethods.subscriptions.update).toHaveBeenCalledTimes(1);
-    expect(prorationBehaviorSent()).toBe("always_invoice");
-    expect(prorationBehaviorSent()).not.toBe("none");
+    expect(stripeMethods.subscriptions.update).not.toHaveBeenCalled();
   });
 
   it("asks the preview request itself for the subscription it priced", async () => {
