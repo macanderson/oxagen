@@ -985,6 +985,8 @@ describe("merge_context_pr", () => {
     expect(h.store.records).toHaveLength(2);
     const latest = await h.store.latestPublication(SCOPE);
     expect(latest?.commitSha).toBe(commitB);
+  });
+
   // GitHub reports `merged_at` to the second, so two PRs can merge inside
   // one. Ordering on that alone picked either record, and picking the
   // earlier merge let a checkout at that commit read as current while it
