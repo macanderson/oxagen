@@ -35,6 +35,7 @@ import {
   GITHUB_PROVIDER,
   attachWorkspaceGithubInstallation,
   installationIdOf,
+  isLiveConnectionRow,
   resolveWorkspaceGithubInstallation,
   workspaceGithubConnectionFilter,
 } from "./repository.github-connection";
@@ -234,6 +235,72 @@ describe("resolveWorkspaceGithubInstallation names every predicate in SQL", () =
   });
 });
 
+/**
+ * The same rule in row shape, for a reader that joins the connection instead of
+ * selecting it.
+ *
+ * `get_main_repository` must still report WHICH repository a workspace binds
+ * when the connection behind it is retired — that is the whole point of
+ * `repository.connectionLive` — so it left-joins the connection and judges the
+ * row here rather than letting the predicate drop it. Two shapes of one rule is
+ * only safe while they agree, so the last test asserts exactly that against the
+ * emitted SQL.
+ */
+describe("isLiveConnectionRow", () => {
+  it("admits a live connection", () => {
+    expect(isLiveConnectionRow({ status: "connected", deletedAt: null })).toBe(
+      true,
+    );
+    // The status the install callback's attach writes. A workspace that has
+    // reconnected but not yet re-bound sits here, and its connection is live.
+    expect(
+      isLiveConnectionRow({ status: "pending_setup", deletedAt: null }),
+    ).toBe(true);
+    // An erroring connection is still the one the workspace acts through.
+    expect(isLiveConnectionRow({ status: "error", deletedAt: null })).toBe(
+      true,
+    );
+  });
+
+  it("refuses a connection mid-delete, whose deleted_at the purge has not set", () => {
+    expect(isLiveConnectionRow({ status: "deleting", deletedAt: null })).toBe(
+      false,
+    );
+    expect(isLiveConnectionRow({ status: "deleted", deletedAt: null })).toBe(
+      false,
+    );
+  });
+
+  it("refuses a soft-deleted connection whose status still reads live", () => {
+    expect(
+      isLiveConnectionRow({
+        status: "connected",
+        deletedAt: new Date("2026-09-17T00:00:00.000Z"),
+      }),
+    ).toBe(false);
+  });
+
+  it("refuses a row the left join did not find at all", () => {
+    // The purge has been through: there is no connection, which is as retired
+    // as a connection gets.
+    expect(isLiveConnectionRow({ status: null, deletedAt: null })).toBe(false);
+  });
+
+  it("refuses exactly the statuses the SQL predicate excludes — one rule, two shapes", async () => {
+    const query = await emittedSql();
+    const excluded = query.params.filter(
+      (p): p is string => typeof p === "string" && p !== GITHUB_PROVIDER,
+    );
+    // The status exclusion is the only list-valued predicate in that WHERE,
+    // and the scope params are UUIDs, so what is left is the retired set.
+    const statuses = excluded.filter((p) => !p.includes("-"));
+    expect(statuses.length).toBeGreaterThan(0);
+    for (const status of statuses) {
+      expect(isLiveConnectionRow({ status, deletedAt: null })).toBe(false);
+    }
+  });
+});
+
 describe("installationIdOf refuses everything its regex exists to refuse", () => {
   // Each of these, accepted, would be interpolated into a GitHub API path with
   // no further validation. The first is the one that matters most: a path
@@ -326,7 +393,9 @@ function attachTx(rows: readonly unknown[]) {
   const select = db.select.bind(db) as unknown as (fields: unknown) => {
     from: (t: unknown) => {
       where: (c: unknown) => {
-        orderBy: (o: unknown) => { limit: (n: number) => { toSQL: () => CapturedSql } };
+        orderBy: (o: unknown) => {
+          limit: (n: number) => { toSQL: () => CapturedSql };
+        };
       };
     };
   };
@@ -364,9 +433,7 @@ function attachTx(rows: readonly unknown[]) {
       values: (values: Record<string, unknown>) => {
         captured.insertValues = values;
         return {
-          returning: async () => [
-            { id: "conn-new-uuid", publicId: "con_new" },
-          ],
+          returning: async () => [{ id: "conn-new-uuid", publicId: "con_new" }],
         };
       },
     }),
@@ -463,7 +530,10 @@ describe("attachWorkspaceGithubInstallation", () => {
     // mappings does not belong in the sync loop. `bind_main_repository`
     // promotes it.
     expect(captured.insertValues?.["status"]).toBe("pending_setup");
-    expect(result).toEqual({ connectionId: "conn-new-uuid", publicId: "con_new" });
+    expect(result).toEqual({
+      connectionId: "conn-new-uuid",
+      publicId: "con_new",
+    });
   });
 
   it("writes no attribution when there is no acting user (negative)", async () => {

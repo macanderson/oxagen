@@ -71,7 +71,8 @@ interface Writes {
  * `resolveWorkspaceGithubInstallation` (select → from → where → orderBy), then
  * the bind transaction. `selects` is the queue the transaction's selects are
  * answered from, in the order the handler issues them: the workspace's binding
- * heads, then — only on an idempotent re-bind — the binding the head names.
+ * heads, then — whenever a head already names this repository — the binding
+ * that head points at.
  */
 function wire(opts: {
   connections?: unknown[];
@@ -246,7 +247,14 @@ describe("bind_main_repository", () => {
     const writes = wire({
       connections: [CONNECTED_CONNECTION],
       selects: [
-        [{ providerRepositoryId: "4242", currentBindingId: "other-uuid" }],
+        [
+          {
+            id: "head-uuid",
+            connectionId: "conn-uuid",
+            providerRepositoryId: "4242",
+            currentBindingId: "other-uuid",
+          },
+        ],
       ],
     });
     await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
@@ -256,20 +264,159 @@ describe("bind_main_repository", () => {
     expect(writes.inserts).toHaveLength(0);
   });
 
-  it("re-binding the same repository is idempotent: no new binding, the first bind's identity", async () => {
+  it("re-binding the same repository through the same connection is idempotent: no new binding, the first bind's identity", async () => {
     const boundAt = new Date("2026-09-16T08:00:00.000Z");
     const writes = wire({
       connections: [CONNECTED_CONNECTION],
       selects: [
-        [{ providerRepositoryId: "9001", currentBindingId: "binding-uuid" }],
-        [{ publicId: "rpb_first", createdAt: boundAt }],
+        [
+          {
+            id: "head-uuid",
+            // The head already names the connection the bind resolved, so
+            // nothing has moved and nothing is written.
+            connectionId: "conn-uuid",
+            providerRepositoryId: "9001",
+            currentBindingId: "binding-uuid",
+          },
+        ],
+        [
+          {
+            id: "binding-uuid",
+            publicId: "rpb_first",
+            createdAt: boundAt,
+            version: 1,
+          },
+        ],
       ],
     });
     const out = await handler().run(INPUT, makeCTX());
     expect(writes.inserts).toHaveLength(0);
+    expect(
+      writes.updates.filter((w) => w.table === schema.repositoryBindingHeads),
+    ).toHaveLength(0);
     expect(out).toMatchObject({
       bindingId: "rpb_first",
       boundAt: boundAt.toISOString(),
+    });
+  });
+
+  /**
+   * The repair, and the state that needs it (#3233).
+   *
+   * Delete the workspace's GitHub connection and reconnect: `delete_connection`
+   * leaves the old row at `status = 'deleting'` for a later purge, so
+   * `attachWorkspaceGithubInstallation` — which reads live rows only — inserts a
+   * NEW connection, and the binding head goes on naming the retired one. Every
+   * reader that joins the head back to its connection (`readGitHubConnection`,
+   * the seam steering resolves the main repository through) then finds nothing,
+   * so steering is off while the workspace still reads as bound. Before this,
+   * re-binding the same repository took the idempotent branch and moved nothing,
+   * so there was no way back from any surface.
+   */
+  describe("re-binding the same repository through a replacement connection", () => {
+    const RETIRED_HEAD = {
+      id: "head-uuid",
+      // The connection this workspace acted through before the delete.
+      connectionId: "retired-conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    const CURRENT_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 3,
+    };
+
+    function repair() {
+      return wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[RETIRED_HEAD], [CURRENT_BINDING]],
+        insertReturns: [{ id: "binding-2", publicId: "rpb_second" }],
+      });
+    }
+
+    it("supersedes the binding onto the live connection, keeping the version chain", async () => {
+      const writes = repair();
+      const out = await handler().run(INPUT, makeCTX());
+
+      const binding = writes.inserts.find(
+        (w) => w.table === schema.repositoryBindings,
+      );
+      expect(binding?.values).toMatchObject({
+        connectionId: "conn-uuid",
+        // version + 1 and a parent, which is exactly what
+        // repository_bindings_supersedes_check admits for a version past 1.
+        version: 4,
+        supersedesBindingId: "binding-1",
+        // Freshly observed identity, as GitHub reported it on this call.
+        providerRepositoryId: "9001",
+        providerOwner: "Acme",
+        providerName: "Widgets",
+        providerFullName: "Acme/Widgets",
+        configuredDefaultRef: "trunk",
+        createdById: "u_1",
+      });
+      expect(out).toMatchObject({
+        bindingId: "rpb_second",
+        connectionId: "con_ABC",
+        fullName: "Acme/Widgets",
+      });
+    });
+
+    it("moves the head onto the live connection and its new binding, in place", async () => {
+      const writes = repair();
+      await handler().run(INPUT, makeCTX());
+
+      // Updated, never inserted: a second head row would leave two heads for one
+      // workspace repository, and whichever a reader took would disagree with
+      // the binding about the connection.
+      expect(
+        writes.inserts.filter((w) => w.table === schema.repositoryBindingHeads),
+      ).toHaveLength(0);
+      const head = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({
+        connectionId: "conn-uuid",
+        currentBindingId: "binding-2",
+        updatedAt: expect.any(Date),
+      });
+    });
+
+    it("leaves the superseded binding row exactly as it was", async () => {
+      const writes = repair();
+      await handler().run(INPUT, makeCTX());
+      // A binding is immutable evidence; only the head pointer moves.
+      expect(
+        writes.updates.filter((w) => w.table === schema.repositoryBindings),
+      ).toHaveLength(0);
+      expect(
+        writes.inserts.filter((w) => w.table === schema.repositoryBindings),
+      ).toHaveLength(1);
+    });
+
+    it("answers the new binding's identity, not the superseded one's", async () => {
+      repair();
+      const out = await handler().run(INPUT, makeCTX());
+      expect(out.bindingId).toBe("rpb_second");
+      expect(out.boundAt).not.toBe(CURRENT_BINDING.createdAt.toISOString());
+    });
+
+    it("still refuses a DIFFERENT repository through the replacement connection (negative)", async () => {
+      // The repair is of the connection behind the same repository. Moving a
+      // workspace to another repository stays an org owner's decision recorded
+      // as a security event (spec §10.1), whichever connection asks.
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[{ ...RETIRED_HEAD, providerRepositoryId: "4242" }]],
+      });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_bound",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.updates).toHaveLength(0);
     });
   });
 

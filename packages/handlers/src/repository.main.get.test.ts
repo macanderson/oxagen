@@ -35,6 +35,11 @@ const BINDING_ROW = {
   fullName: "acme/widgets",
   defaultRef: "main",
   boundAt: BOUND_AT,
+  // The connection the head names, left-joined: its status and deleted_at are
+  // what `connectionLive` is judged from, and both are null when the purge has
+  // already taken the row away.
+  connectionStatus: "connected" as string | null,
+  connectionDeletedAt: null as Date | null,
 };
 
 const URLS = {
@@ -47,21 +52,25 @@ const URLS = {
 
 /**
  * The handler makes two reads through `withTenantDb`, in this order: the
- * binding head joined to its binding, then the workspace's GitHub connection.
- * Each gets its own chain shape.
+ * binding head joined to its binding and LEFT-joined to the connection that
+ * head names, then the workspace's GitHub connection. Each gets its own chain
+ * shape; the left join is the one that lets a retired connection be reported
+ * rather than drop the repository off the answer.
  */
 function wire(opts: {
-  binding?: typeof BINDING_ROW | null;
+  binding?: Partial<typeof BINDING_ROW> | null;
   connections?: unknown[];
 }): void {
-  const bindingRows = opts.binding ? [opts.binding] : [];
+  const bindingRows = opts.binding ? [{ ...BINDING_ROW, ...opts.binding }] : [];
   mocks.withTenantDb
     .mockImplementationOnce(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         select: () => ({
           from: () => ({
             innerJoin: () => ({
-              where: () => ({ limit: async () => bindingRows }),
+              leftJoin: () => ({
+                where: () => ({ limit: async () => bindingRows }),
+              }),
             }),
           }),
         }),
@@ -135,6 +144,7 @@ describe("get_main_repository", () => {
         // Derived from the full name: the bind persists no html url.
         htmlUrl: "https://github.com/acme/widgets",
         boundAt: "2026-09-15T12:06:00.000Z",
+        connectionLive: true,
       },
       github: { connected: true, ...URLS },
     });
@@ -230,6 +240,87 @@ describe("get_main_repository", () => {
     expect(githubUrls).toHaveBeenCalledWith({
       orgId: "org-9",
       workspaceId: "ws-9",
+    });
+  });
+
+  /**
+   * The state a delete-then-reconnect leaves, and the only thing on any surface
+   * that says so (#3233).
+   *
+   * `delete_connection` sets `status = 'deleting'` and leaves `deleted_at` for
+   * a later purge, so the install callback's attach — which reads live rows
+   * only — inserts a NEW connection while the binding head still names the
+   * retired one. `readGitHubConnection` filters exactly these statuses, so
+   * steering resolves nothing from that moment. This read used to join only the
+   * head to its binding, so it reported the repository as usable and the
+   * workspace looked fine with its steering silently off.
+   */
+  describe("connectionLive", () => {
+    const LIVE_CONNECTIONS = [
+      {
+        id: "conn-uuid",
+        publicId: "con_ABC",
+        status: "connected",
+        deliveryConfig: { installationId: "555" },
+      },
+    ];
+
+    it("is false when the head still names a connection marked deleting", async () => {
+      wire({
+        binding: { connectionStatus: "deleting" },
+        connections: LIVE_CONNECTIONS,
+      });
+      const out = await handler()({}, makeCTX());
+      expect(out.repository?.connectionLive).toBe(false);
+      // Still reported: the person has to be told WHICH repository is bound,
+      // and re-binding that same one is the repair.
+      expect(out.repository?.fullName).toBe("acme/widgets");
+      // And a live replacement connection is attached, so the repair can run.
+      expect(out.github.connected).toBe(true);
+      expect(() => repositoryMainGet.output.parse(out)).not.toThrow();
+    });
+
+    it("is false when the head names a connection marked deleted", async () => {
+      wire({ binding: { connectionStatus: "deleted" }, connections: [] });
+      const out = await handler()({}, makeCTX());
+      expect(out.repository?.connectionLive).toBe(false);
+      expect(out.repository?.fullName).toBe("acme/widgets");
+    });
+
+    it("is false when the connection is soft-deleted though its status reads live", async () => {
+      wire({
+        binding: {
+          connectionStatus: "connected",
+          connectionDeletedAt: new Date("2026-09-17T00:00:00.000Z"),
+        },
+        connections: [],
+      });
+      const out = await handler()({}, makeCTX());
+      expect(out.repository?.connectionLive).toBe(false);
+      expect(out.repository?.fullName).toBe("acme/widgets");
+    });
+
+    it("is false when the purge has taken the connection row away entirely", async () => {
+      // The left join found nothing, which is as retired as a row can get.
+      wire({
+        binding: { connectionStatus: null, connectionDeletedAt: null },
+        connections: [],
+      });
+      const out = await handler()({}, makeCTX());
+      expect(out.repository?.connectionLive).toBe(false);
+      expect(out.repository?.fullName).toBe("acme/widgets");
+    });
+
+    it("is true for a connection that is neither retired nor soft-deleted", async () => {
+      // `pending_setup`, not just `connected`: the attach writes that status
+      // and the steering seam admits it, so the repository is usable through it.
+      wire({
+        binding: { connectionStatus: "pending_setup" },
+        connections: LIVE_CONNECTIONS,
+      });
+      const out = await handler()({}, makeCTX());
+      expect(out.repository?.connectionLive).toBe(true);
+      expect(() => repositoryMainGet.output.parse(out)).not.toThrow();
     });
   });
 

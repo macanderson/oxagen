@@ -355,6 +355,14 @@ describe("the workspace's main repository", () => {
     });
   });
 
+  /**
+   * Also the shape of the reconnect state (#3233): when the head names a
+   * connection that has been deleted, the join above yields nothing, and the
+   * replacement connection the install callback inserted carries an
+   * installation id and no owner/repo — so steering resolves null with a
+   * repository still bound. `bind_main_repository` on the SAME repository is
+   * what moves the head onto the live connection and brings the join back.
+   */
   it("answers null when neither a binding nor a configured connection names a repository", async () => {
     db({
       bound: [],
