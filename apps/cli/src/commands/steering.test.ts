@@ -38,6 +38,8 @@ vi.mock("@oxagen/steering-freshness", async () => {
   };
 });
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { captureWriter, type CommandWriter } from "../lib/capture-writer";
 import {
   findProjectRoot,
@@ -49,7 +51,7 @@ import {
   steeringSync,
 } from "./steering";
 import { resolveSteeringPolicy } from "@oxagen/steering-freshness";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -128,10 +130,22 @@ describe("findProjectRoot", () => {
     expect(findProjectRoot(join(tmp, "packages", "deep"))).toBe(tmp);
   });
 
-  // Guessing some ancestor would point the check at the wrong repository.
-  it("falls back to the starting directory when there is no .oxagen above it", async () => {
+  // Outside any repository there is nothing better than where we started.
+  it("falls back to the starting directory outside a repository", async () => {
     const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
     expect(findProjectRoot(tmp)).toBe(tmp);
+  });
+
+  // A branch cut before the repository's first `.oxagen/` has none above the
+  // prompt's directory. Anchoring at that subdirectory made the sync's
+  // root-relative `git restore` match nothing, throw, and let the gate allow
+  // the prompt with `blockStaleRuns` on.
+  it("falls back to the repository root, not the subdirectory, inside a repository", async () => {
+    const tmp = await realpath(await mkdtemp(join(tmpdir(), "oxagen-cli-")));
+    await promisify(execFile)("git", ["init", "--quiet"], { cwd: tmp });
+    const deep = join(tmp, "packages", "deep");
+    await mkdir(deep, { recursive: true });
+    expect(findProjectRoot(deep)).toBe(tmp);
   });
 });
 
@@ -309,6 +323,23 @@ describe("resolveContext", () => {
     expect(ctx.platform).toBeNull();
     expect(ctx.policy.blockStaleRuns).toBe(false);
     expect(ctx.policy.autoSync).toBe(false);
+  });
+
+  // Pointing the link or the global selection at an unbound workspace is a
+  // way to leave the workspace's gates behind, so it is reported rather than
+  // dropped quietly.
+  it("says so when the workspace it asked has no repository bound", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    apiPostOrThrow.mockResolvedValue({
+      steeringVersion: 0,
+      headCommit: null,
+      repository: null,
+      defaultBranch: null,
+      policy: { blockStaleRuns: true },
+    });
+    const ctx = await resolveContext(tmp);
+    expect(ctx.warnings.join(" ")).toContain("no repository bound");
   });
 
   // Keeping only `owner/repo` accepted a remote on another host, or a local

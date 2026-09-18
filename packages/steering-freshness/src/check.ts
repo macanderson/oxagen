@@ -472,8 +472,17 @@ export async function checkSteeringFreshness(
     // too old and the platform is the only signal that knows.
     const refHasPromotion = platform.headCommit
       ? await isAncestor(repoCtx, platform.headCommit, remoteHead)
-      : null;
-    if (refHasPromotion !== true) {
+      : false;
+    // Git could not answer. Blocking here would stop a prompt over a plumbing
+    // failure, not over staleness, so the verdict is `unknown`: the gate
+    // fails open and the banner says the check did not run.
+    if (refHasPromotion === null) {
+      return unknown(
+        base,
+        `could not tell whether ${target} contains the commit Oxagen published steering version ${platform.steeringVersion} at`,
+      );
+    }
+    if (!refHasPromotion) {
       base.notes.push(
         `Oxagen reports steering version ${platform.steeringVersion}, published at a commit this checkout cannot reach`,
       );

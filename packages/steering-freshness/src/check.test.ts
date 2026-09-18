@@ -7,7 +7,7 @@ import {
 } from "./check";
 import { resolveSteeringPolicy, type SteeringPolicy } from "./policy";
 import type { CacheIo } from "./cache";
-import { isSafeRefName, type GitRunner } from "./git";
+import { GitCommandError, isSafeRefName, type GitRunner } from "./git";
 
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
@@ -407,9 +407,12 @@ describe("checkSteeringFreshness, the platform signal", () => {
       {
         ...table(),
         [`cat-file -e ${PROMOTION}^{commit}`]: "",
-        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: new Error(
-          "not an ancestor",
-        ),
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]:
+          new GitCommandError(
+            ["merge-base", "--is-ancestor", PROMOTION, REMOTE],
+            1,
+            "",
+          ),
       },
       {
         platform: {
@@ -421,6 +424,35 @@ describe("checkSteeringFreshness, the platform signal", () => {
     );
     expect(v.status).toBe("behind");
     expect(v.notes[0]).toContain("steering version 42");
+  });
+});
+
+// Git failing to answer is not staleness. Reading a timeout or a corrupt
+// object database as "the ref lacks the promotion" blocked prompts over a
+// plumbing failure.
+describe("checkSteeringFreshness, when the ancestry question fails", () => {
+  it("is unknown, not behind", async () => {
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: "",
+        [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]:
+          new GitCommandError(
+            ["merge-base", "--is-ancestor", PROMOTION, REMOTE],
+            128,
+            "fatal: bad object",
+          ),
+      },
+      {
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("unknown");
+    expect(v.notes.join(" ")).toContain("steering version 42");
   });
 });
 

@@ -292,9 +292,13 @@ export async function treeOid(
 /**
  * Whether `ancestor` is reachable from `descendant`.
  *
- * Null rather than false when the question cannot be asked — either commit
- * missing from this clone is not the same answer as "no", and a caller
- * deciding whether to trust git over the platform needs to tell them apart.
+ * Three answers, because the caller acts on each differently:
+ *
+ *   - `true`: reachable.
+ *   - `false`: not reachable. That includes `ancestor` missing from this
+ *     clone entirely, since a ref cannot contain a commit the clone lacks.
+ *   - `null`: git failed to answer (a timeout, a signal, a corrupt object
+ *     database). A caller must not read that as "no".
  */
 export async function isAncestor(
   ctx: GitContext,
@@ -307,17 +311,21 @@ export async function isAncestor(
     "-e",
     `${ancestor}^{commit}`,
   );
-  if (present === null) return null;
+  if (present === null) return false;
   try {
     await ctx.run(["merge-base", "--is-ancestor", ancestor, descendant], {
       cwd: ctx.cwd,
       timeoutMs: ctx.timeoutMs,
     });
     return true;
-  } catch {
-    // Exit 1 is the honest "no". Any other failure is indistinguishable here,
-    // and "no" is the conservative answer: it keeps the platform's signal.
-    return false;
+  } catch (err) {
+    // Exit 1 is git's documented "not an ancestor", and only that is "no".
+    // Anything else (a timeout, a signal, a corrupt object database) means
+    // the question went unanswered, which is the null this function promises.
+    // Reading every failure as "no" made a plumbing error look like
+    // platform-only staleness, and the gate blocked the prompt over it.
+    if (err instanceof GitCommandError && err.exitCode === 1) return false;
+    return null;
   }
 }
 

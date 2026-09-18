@@ -82,21 +82,31 @@ export const contextSteeringFreshness = registerCapability({
   sensitivity: "low",
   mutates: false,
   defaultEffect: "deny",
-  // Every role that exists, at both scopes — spelled against SystemOrgRole and
-  // SystemWorkspaceRole, because the previous grant named an org `Member` and
-  // a workspace `Admin`, neither of which is a role, and left out `Viewer`,
-  // which is.
+  // Every role that exists, at both scopes. The workspace list is the one
+  // `workspace_users_role_check` enforces (owner, admin, member, billing,
+  // compliance, viewer), not the narrower SystemWorkspaceRole type.
   //
   // A denial here is not merely a failed panel. The CLI swallows every
   // platform error so a prompt is never blocked by the platform being
-  // unreachable, which means a denied Viewer's machine silently lost the
-  // workspace's `autoSync` and `blockStaleRuns` policy and their agent ran
-  // ungated. A read-only answer about what is published cannot be the thing
-  // that turns governance off, so everyone who can see the workspace — the
-  // same set `list_records` admits — can ask it.
+  // unreachable, so a denied caller's machine silently lost the workspace's
+  // `autoSync` and `blockStaleRuns` and their agent ran ungated. A read-only
+  // answer about what is published cannot be the thing that turns governance
+  // off, so everyone who can see the workspace can ask it.
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Compliance: "allow", Billing: "allow" },
-    workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Compliance: "allow",
+      Billing: "allow",
+    },
+    workspace: {
+      Owner: "allow",
+      Admin: "allow",
+      Member: "allow",
+      Billing: "allow",
+      Compliance: "allow",
+      Viewer: "allow",
+    },
   },
   input: z.object({}),
   output: z.object({

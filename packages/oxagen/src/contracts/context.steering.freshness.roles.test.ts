@@ -8,12 +8,15 @@ import { contextSteeringFreshness } from "./context.steering.freshness";
 describe("get_steering_freshness grants", () => {
   const roles = contextSteeringFreshness.defaultRoles;
 
-  it("admits every workspace role, Viewer included", () => {
-    expect(roles.workspace).toEqual({
-      Owner: "allow",
-      Member: "allow",
-      Viewer: "allow",
-    });
+  // The set `workspace_users_role_check` enforces. Leaving any out denied
+  // that member, and the CLI then ran their agent without the workspace gates.
+  it("admits every role a workspace member can hold", () => {
+    expect(Object.keys(roles.workspace).sort()).toEqual(
+      ["Admin", "Billing", "Compliance", "Member", "Owner", "Viewer"].sort(),
+    );
+    expect(Object.values(roles.workspace).every((e) => e === "allow")).toBe(
+      true,
+    );
   });
 
   it("admits every org role", () => {
@@ -25,10 +28,9 @@ describe("get_steering_freshness grants", () => {
     });
   });
 
-  // The previous grant named roles that do not exist, which read as coverage
-  // and granted nothing.
-  it("names no role outside the system role sets", () => {
+  // An org `Member` does not exist; naming it read as coverage and granted
+  // nothing.
+  it("names no org role outside SystemOrgRole", () => {
     expect(Object.keys(roles.org)).not.toContain("Member");
-    expect(Object.keys(roles.workspace)).not.toContain("Admin");
   });
 });

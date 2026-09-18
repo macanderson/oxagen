@@ -35,6 +35,7 @@
  * because its exit code is a decision rather than a diagnosis, and its
  * stdout belongs to the harness.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, parse as parsePath } from "node:path";
 import {
@@ -78,10 +79,35 @@ export function findProjectRoot(start: string): string {
   let dir = start;
   for (;;) {
     if (existsSync(join(dir, PROJECT_DIR_NAME))) return dir;
-    if (dir === root) return start;
+    if (dir === root) return gitRootOr(start);
     const parent = dirname(dir);
-    if (parent === dir) return start;
+    if (parent === dir) return gitRootOr(start);
     dir = parent;
+  }
+}
+
+/**
+ * The repository root containing `start`, or `start` itself outside a
+ * repository.
+ *
+ * With no `.oxagen/` anywhere above (a branch cut before the repository's
+ * first records), falling back to the starting directory anchored the sync
+ * in a subdirectory while the check compared from the repository root. The
+ * missing paths it reported are root-relative, so `git restore` from the
+ * subdirectory matched none of them and threw, and the gate caught that and
+ * allowed the prompt: `blockStaleRuns` bypassed, silently.
+ */
+function gitRootOr(start: string): string {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: start,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5_000,
+    }).trim();
+    return out.length > 0 ? out : start;
+  } catch {
+    return start;
   }
 }
 
@@ -340,6 +366,16 @@ export async function resolveContext(
   // workspace that has not bound a repository yet.
   if (fromPlatform !== null && fromPlatform.repository == null) {
     belongsHere = false;
+    // Said out loud, not dropped quietly. A checkout's link and the global
+    // selection are both things the developer can change, so pointing either
+    // at a workspace with no repository is a way to leave the workspace's
+    // gates behind. It has to be visible the way OXAGEN_STEERING_FRESHNESS=off
+    // is. (Pointing at a workspace that binds a DIFFERENT repository is
+    // already reported below as a mismatch, and no two workspaces can bind
+    // the same main repository.)
+    mismatch.push(
+      `the ${scope ? "linked" : "selected"} workspace has no repository bound, so its steering gates were not applied to this checkout`,
+    );
   }
   if (fromPlatform?.repository) {
     boundRemote = await remoteFor(projectRoot, fromPlatform.repository);

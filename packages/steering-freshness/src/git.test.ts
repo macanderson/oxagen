@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   defaultBranch,
   fetchBranch,
+  GitCommandError,
   isAncestor,
   gitOrNull,
   parseNameStatus,
@@ -250,16 +251,34 @@ describe("isAncestor", () => {
   it("is false when it is not", async () => {
     const run = runner({
       [`cat-file -e ${C}^{commit}`]: "",
-      [`merge-base --is-ancestor ${C} ${D}`]: new Error("exit 1"),
+      [`merge-base --is-ancestor ${C} ${D}`]: new GitCommandError(
+        ["merge-base", "--is-ancestor", C, D],
+        1,
+        "",
+      ),
     });
     expect(await isAncestor(ctx(run), C, D)).toBe(false);
   });
 
-  // "not in this clone" is not the same answer as "no": a caller weighing git
-  // against the platform has to be able to tell them apart.
-  it("is null when the commit is not in this clone", async () => {
+  // A ref cannot contain a commit the clone does not have.
+  it("is false when the commit is not in this clone", async () => {
     const run = runner({
       [`cat-file -e ${C}^{commit}`]: new Error("no such object"),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBe(false);
+  });
+
+  // Only exit 1 means "not an ancestor". A timeout or a corrupt object
+  // database is no answer at all, and reading it as "no" blocked prompts over
+  // a plumbing failure.
+  it("is null when git fails for any reason other than exit 1", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: "",
+      [`merge-base --is-ancestor ${C} ${D}`]: new GitCommandError(
+        ["merge-base", "--is-ancestor", C, D],
+        128,
+        "fatal: bad object",
+      ),
     });
     expect(await isAncestor(ctx(run), C, D)).toBeNull();
   });
