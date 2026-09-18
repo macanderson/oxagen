@@ -40,6 +40,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
+  deriveSessionTitle,
   retainsBody,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
@@ -1402,6 +1403,7 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         await rollupModels(tx, ctx, sessionId, counted, now);
         await rollupFiles(tx, ctx, sessionId, fresh, now);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
+        await refreshSessionTitle(tx, ctx, sessionId, fresh, now);
       }
       if (accepted) {
         for (const event of fresh) {
@@ -1804,6 +1806,70 @@ async function rollupFiles(
         },
       });
   }
+}
+
+/**
+ * Re-derive the run's title from what the record now shows.
+ *
+ * It runs on every accepted batch rather than at seal, because a name that
+ * arrives when the run ends is no use to someone watching the run. The
+ * model-authored `name` and `summary` that `summarize_run` writes are the
+ * better read once they exist; this is what the list shows until then, and
+ * for every workspace recording `digest_only`, which that capability refuses
+ * outright.
+ *
+ * Derived from place and counts, never from prompt text, so it says the same
+ * thing at every retention setting. The place comes off the batch's own
+ * events rather than a re-read of the session row: the facts are already in
+ * hand, and a transaction does not need another round trip to learn them.
+ */
+async function refreshSessionTitle(
+  tx: Tx,
+  ctx: Scope,
+  sessionId: string,
+  events: TachoEvent[],
+  now: Date,
+): Promise<void> {
+  const place = events.find(
+    (event) =>
+      event.context?.cwd !== undefined ||
+      event.context?.project_dir !== undefined ||
+      event.context?.worktree_path !== undefined,
+  )?.context;
+  const branch = events.find(
+    (event) => event.context?.git_branch !== undefined,
+  )?.context?.git_branch;
+  if (place === undefined && branch === undefined) return;
+
+  const [files, commands] = await Promise.all([
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tachoSessionFiles)
+      .where(
+        and(
+          eq(schema.tachoSessionFiles.sessionId, sessionId),
+          sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
+        ),
+      ),
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tachoSessionCommands)
+      .where(eq(schema.tachoSessionCommands.sessionId, sessionId)),
+  ]);
+
+  const title = deriveSessionTitle({
+    projectDir: place?.project_dir ?? null,
+    cwd: place?.cwd ?? null,
+    worktreePath: place?.worktree_path ?? null,
+    gitBranch: branch ?? null,
+    filesChanged: Number(files[0]?.count ?? 0),
+    commandsRun: Number(commands[0]?.count ?? 0),
+  });
+  if (title === undefined) return;
+  await tx
+    .update(schema.tachoSessions)
+    .set({ title, updatedAt: now })
+    .where(eq(schema.tachoSessions.id, sessionId));
 }
 
 async function rollupCommands(

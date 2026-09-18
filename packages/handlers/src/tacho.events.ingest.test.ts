@@ -2041,6 +2041,38 @@ describe("ingest_tacho_events: bodies and the seal", () => {
     });
   });
 
+  it("names a live run from where it is working, before anything seals it", async () => {
+    // `summarize_run` refuses a run that is still live and refuses a
+    // `digest_only` workspace, so without this the list shows a uuid for
+    // exactly the runs someone is watching.
+    const db = fakeDb();
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      {
+        ...unsealed("agent_start", { session_start_source: "startup" }),
+        context: {
+          cwd: "/home/dev/oxagen",
+          git_branch: "agent/pensive-volta",
+        },
+      } as UnsealedTachoEvent,
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      title: "oxagen · agent/pensive-volta",
+    });
+  });
+
   it("refuses a body whose class the workspace did not authorise", async () => {
     // `content_exact` says exact bytes MAY be kept. The classes say which.
     // A workspace that authorised the model exchange and nothing else must

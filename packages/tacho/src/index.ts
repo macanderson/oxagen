@@ -6,3 +6,4 @@ export * from "./ids";
 export * from "./timestamp";
 export * from "./wire";
 export * from "./evidence/index";
+export * from "./session-title";
