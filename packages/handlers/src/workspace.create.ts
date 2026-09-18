@@ -1,5 +1,5 @@
 // `create_workspace`: a workspace in the caller's org, with its main repository
-// (Mission Control spec §10.1, §17 M0; ADR-091).
+// (Mission Control spec §10.1, §17 M0; ADR-099).
 //
 //   1. Role gate — assertOrgRole: org Owner or Admin, or the Owner of the
 //      workspace the call is scoped to (the contract's defaultRoles; INV-29),

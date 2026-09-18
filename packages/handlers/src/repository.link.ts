@@ -1,4 +1,4 @@
-// repository.link.ts — `link_repository` (Mission Control spec §10.1; ADR-091).
+// repository.link.ts — `link_repository` (Mission Control spec §10.1; ADR-099).
 //
 // Flow:
 //   1. Role gate — assertOrgRole: org Owner or Admin, or the workspace's Owner
@@ -147,7 +147,11 @@ export function createRepositoryLinkHandler(
     });
 
     logger.info(
-      { ...scope, repository: repo.fullName, bindingId: written.bindingPublicId },
+      {
+        ...scope,
+        repository: repo.fullName,
+        bindingId: written.bindingPublicId,
+      },
       "repository.link: repository linked",
     );
 

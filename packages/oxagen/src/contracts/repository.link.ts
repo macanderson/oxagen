@@ -18,7 +18,7 @@
  * `conflict: main_repo` (it is this workspace's main repository),
  * `conflict: repository_already_linked`, and `conflict: main_repo_claimed` —
  * it is ANOTHER workspace's main repository. That last one is deliberate
- * (ADR-091): §10.1 opens repository-scoped Context PRs on the linked repository
+ * (ADR-099): §10.1 opens repository-scoped Context PRs on the linked repository
  * itself, so linking another workspace's main repository would hand this
  * workspace a door into that workspace's `.oxagen/` governance tree. A
  * repository that is nobody's main may be linked by any number of workspaces.

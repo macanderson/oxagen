@@ -1,5 +1,5 @@
 // repository.unlink.ts — `unlink_repository` (Mission Control spec §10.1;
-// ADR-091).
+// ADR-099).
 //
 // Flow:
 //   1. Role gate — assertOrgRole: org Owner or Admin, or the workspace's Owner

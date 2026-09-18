@@ -34,7 +34,7 @@ import { createWorkspaceCreateHandler } from "./workspace.create";
 import { workspaceListHandler } from "./workspace.list";
 
 // `create_workspace` reaches GitHub twice before its transaction — the org's
-// installations and the repository through one of them (ADR-091). This suite
+// installations and the repository through one of them (ADR-099). This suite
 // proves the Postgres side, so GitHub is answered by a fixture: one
 // installation on `acme`, and a repository it can see.
 const workspaceCreateHandler = createWorkspaceCreateHandler({

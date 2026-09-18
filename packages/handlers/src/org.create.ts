@@ -124,6 +124,20 @@ export const organizationCreateHandler: CapabilityHandler<
 
       // The first workspace, on the same transaction: an org with no
       // workspace has no page to land on.
+      //
+      // Deliberately WITHOUT a main repository, although §10.1 says a
+      // workspace has exactly one and `create_workspace` refuses to make one
+      // without it (ADR-099). This is the spec's own exception (Mission
+      // Control spec §7, line ~222): onboarding binds the main repo in a LATER
+      // step — the installer offers the git remote of the directory it ran in
+      // and one more click installs the GitHub App — and if that step is
+      // skipped the workspace is provisional for 14 days (the gate
+      // `openOnboardingGate` opens below), with steering, records and agent
+      // definitions off until `bind_main_repository` closes the window. It
+      // cannot be otherwise: the org does not exist until this transaction
+      // commits, so it holds no GitHub authorization and no repository is
+      // reachable to bind. `create_workspace` — a SECOND workspace, in an org
+      // that can already reach GitHub — is the path that requires one.
       const workspace = await bootstrapWorkspace({
         tx,
         orgId: org.id,

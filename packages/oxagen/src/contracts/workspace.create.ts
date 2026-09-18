@@ -10,7 +10,7 @@ import { repositoryMainBind } from "./repository.main.bind";
  * cannot exist without a main repo. So `mainRepo` is required, and the handler
  * writes the workspace, its GitHub connection, the version-1 repository
  * binding and its `role = 'main'` head in ONE transaction — a creation that
- * cannot bind writes nothing (ADR-091).
+ * cannot bind writes nothing (ADR-099).
  *
  * The caller names the repository, never an installation. The installation is
  * the one the org's stored GitHub authorization reaches on the repository's
