@@ -484,13 +484,25 @@ export class SessionRecorder {
     const sealed = sealEvent(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
-    if (fields.content_bytes !== undefined)
-      this.options.onContentBody?.(
-        sealed.event.event_id_idem,
-        sealed.event.kind,
-        CONTENT_TYPE_TEXT,
-        fields.content_bytes,
-      );
+    if (fields.content_bytes !== undefined) {
+      // The cursor has already advanced and the caller has not appended the
+      // event yet. A sink that throws here, on a full or unwritable disk,
+      // would take the event with it and leave the next one holding a
+      // sequence number nothing explains, which the control plane reports as
+      // a broken chain for the rest of the session. A body that cannot be
+      // kept is a missing body, which the seal already knows how to record.
+      try {
+        this.options.onContentBody?.(
+          sealed.event.event_id_idem,
+          sealed.event.kind,
+          CONTENT_TYPE_TEXT,
+          fields.content_bytes,
+        );
+      } catch {
+        // Nothing to report from here: the recorder owns no log, and the
+        // frame is complete without its body.
+      }
+    }
     return sealed.event;
   }
 

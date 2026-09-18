@@ -3,7 +3,7 @@ import { digestBytes } from "../digest";
 import { redactionMarker } from "../evidence/redaction";
 import { MAX_CONTENT_REDACTIONS } from "../envelope";
 import { normalizeHook } from "./hooks";
-import { SessionRecorder } from "./recorder";
+import { type RecorderOptions, SessionRecorder } from "./recorder";
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
 const ENV = {
@@ -407,5 +407,64 @@ describe("a prompt with more credentials than the envelope records", () => {
     })[0];
     expect(draft?.attrs["hook.some_new_upstream_field"]).toBe("kept");
     expect(draft?.attrs["oxagen.content_redactions_total"]).toBeDefined();
+  });
+});
+
+describe("a body sink that cannot write", () => {
+  const recorderWith = (
+    onContentBody?: RecorderOptions["onContentBody"],
+  ): SessionRecorder =>
+    new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: "he_0000000000000000000000000000",
+        },
+      },
+      harnessSessionId: SESSION,
+      scope: "he_0000000000000000000000000000",
+      ...(onContentBody !== undefined ? { onContentBody } : {}),
+    });
+
+  const twoPrompts = (recorder: SessionRecorder) => {
+    const go = () =>
+      recorder.ingestHook(
+        {
+          session_id: SESSION,
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        },
+        ENV,
+      );
+    return [...go(), ...go()];
+  };
+
+  it("leaves the chain exactly as it would be with no sink at all", () => {
+    // `seal` advances the cursor before the caller appends the event. A sink
+    // that threw here would take the event with it, and the next hook would
+    // record a sequence number nothing explains: a chain break the control
+    // plane reports for the rest of the session, caused by a full disk.
+    const quiet = twoPrompts(recorderWith());
+    const failing = twoPrompts(
+      recorderWith(() => {
+        throw Object.assign(new Error("no space left on device"), {
+          code: "ENOSPC",
+        });
+      }),
+    );
+
+    expect(failing.map((e) => `${e.kind}#${e.seq}`)).toEqual(
+      quiet.map((e) => `${e.kind}#${e.seq}`),
+    );
+    // The frame still carries its digest, so the missing body is a gap the
+    // seal records rather than an event that never existed.
+    expect(failing[0]?.content?.digest).toBe(quiet[0]?.content?.digest);
+    expect(failing[0]?.content?.digest).toBeDefined();
   });
 });

@@ -29,7 +29,7 @@ import {
 import { applyCommands } from "./inbox";
 import { SessionRegistry } from "./registry";
 import { createRequestHandler } from "./server";
-import { Shipper } from "./spool";
+import { fitRequest, Shipper } from "./spool";
 
 const CONTEXT: ClaudeCodeContext = {
   agent: {
@@ -648,6 +648,64 @@ describe("shipper", () => {
     );
     await s.drain();
     expect(sent).toBeUndefined();
+  });
+
+  it("trims a request to what the route will accept, and ships the rest next time", async () => {
+    // The wedge this avoids: the ingest route refuses anything over 1 MiB
+    // with a 413, and a 413 is not a refusal the shipper can bisect. It
+    // retries, the WAL head never advances, and every later event queues
+    // behind it for ever.
+    const events = minimalSession();
+    const big = (id: string, kb: number) => ({
+      event_id_idem: id,
+      content_type: "text/plain; charset=utf-8",
+      bytes_base64: "A".repeat(kb * 1024),
+    });
+    const ids = events.map((e) => e.event_id_idem);
+    const fitted = fitRequest(events, [
+      big(ids[0] as string, 500),
+      big(ids[1] as string, 500),
+    ]);
+
+    expect(fitted.batch.length).toBeLessThan(events.length);
+    expect(fitted.batch.length).toBeGreaterThan(0);
+    expect(fitted.oversized).toEqual([]);
+    const bytes = Buffer.byteLength(
+      JSON.stringify({ events: fitted.batch, bodies: fitted.bodies }),
+      "utf8",
+    );
+    expect(bytes).toBeLessThan(1_048_576);
+  });
+
+  it("ships the first event without a body no request could carry", async () => {
+    // Otherwise the head of the queue is a frame that can never be sent,
+    // which is the same wedge by another route.
+    const events = minimalSession();
+    const fitted = fitRequest(events, [
+      {
+        event_id_idem: events[0]?.event_id_idem as string,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: "A".repeat(2 * 1024 * 1024),
+      },
+    ]);
+
+    expect(fitted.batch[0]?.event_id_idem).toBe(events[0]?.event_id_idem);
+    expect(fitted.bodies).toEqual([]);
+    expect(fitted.oversized).toEqual([events[0]?.event_id_idem]);
+  });
+
+  it("carries the whole batch when the bodies are small", async () => {
+    const events = minimalSession();
+    const fitted = fitRequest(events, [
+      {
+        event_id_idem: events[0]?.event_id_idem as string,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: "AAAA",
+      },
+    ]);
+    expect(fitted.batch).toHaveLength(events.length);
+    expect(fitted.bodies).toHaveLength(1);
+    expect(fitted.oversized).toEqual([]);
   });
 
   it("quarantines the single event a refused batch bisects down to", async () => {

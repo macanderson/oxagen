@@ -10,6 +10,7 @@ import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
 import type { RetentionMandate } from "../evidence/retention";
 import type { BodyStore } from "../host/body-store";
+import type { TachoBody } from "../wire";
 import {
   ControlError,
   ControlUnreachable,
@@ -57,6 +58,64 @@ export interface ShipperOptions {
    * the one that decides, so this is a function rather than a value.
    */
   retention?: () => RetentionMandate;
+}
+
+/**
+ * The most one ingest request may carry. The route refuses a larger one with
+ * 413 (`apps/api/src/routes/v1/tacho.events.ingest.ts`), and a 413 is not a
+ * refusal this shipper can bisect: it retries, the WAL head never advances,
+ * and every later event queues behind it for ever. The budget sits under the
+ * route's 1 MiB with room for the envelope and the daemon health block.
+ */
+const MAX_REQUEST_BYTES = 900_000;
+
+/** What one request will carry, and the bodies that will never fit in any. */
+interface FittedRequest {
+  batch: TachoEvent[];
+  bodies: TachoBody[];
+  /** Event ids whose body alone overflows a request. */
+  oversized: string[];
+}
+
+/**
+ * Trim a batch and its bodies to what one request can hold.
+ *
+ * Events keep their order and the remainder ships on the next drain, so
+ * nothing is lost by shipping fewer. The first event always ships, with its
+ * body only if it fits: a batch of none would not advance the WAL, which is
+ * the wedge this exists to avoid.
+ */
+export function fitRequest(
+  events: readonly TachoEvent[],
+  held: readonly TachoBody[],
+): FittedRequest {
+  const bodyFor = new Map(held.map((body) => [body.event_id_idem, body]));
+  const batch: TachoEvent[] = [];
+  const bodies: TachoBody[] = [];
+  const oversized: string[] = [];
+  let used = 0;
+  for (const event of events) {
+    const body = bodyFor.get(event.event_id_idem);
+    const eventBytes = Buffer.byteLength(JSON.stringify(event), "utf8");
+    const bodyBytes =
+      body === undefined
+        ? 0
+        : Buffer.byteLength(JSON.stringify(body), "utf8") + 1;
+    if (batch.length > 0 && used + eventBytes + bodyBytes > MAX_REQUEST_BYTES)
+      break;
+    if (batch.length === 0 && eventBytes + bodyBytes > MAX_REQUEST_BYTES) {
+      // The first event must ship or the queue wedges. Its body is what
+      // cannot travel, so the frame goes alone and the seal records the gap.
+      batch.push(event);
+      used += eventBytes;
+      if (body !== undefined) oversized.push(event.event_id_idem);
+      continue;
+    }
+    batch.push(event);
+    used += eventBytes + bodyBytes;
+    if (body !== undefined) bodies.push(body);
+  }
+  return { batch, bodies, oversized };
 }
 
 export interface ShipResult {
@@ -238,10 +297,22 @@ export class Shipper {
     return { ...result, quarantined: result.quarantined + quarantined };
   }
 
-  private async shipBatch(batch: TachoEvent[]): Promise<ShipResult> {
+  private async shipBatch(full: TachoEvent[]): Promise<ShipResult> {
+    const held =
+      this.options.bodies?.take(
+        full.map((event) => event.event_id_idem),
+        this.options.retention?.(),
+      ) ?? [];
+    const { batch, bodies, oversized } = fitRequest(full, held);
     const ids = batch.map((event) => event.event_id_idem);
-    const bodies =
-      this.options.bodies?.take(ids, this.options.retention?.()) ?? [];
+    // A body no request can carry is dropped rather than held: it would be
+    // offered on every drain and refused on every drain.
+    if (oversized.length > 0) {
+      this.options.bodies?.drop(oversized);
+      this.options.log(
+        `dropped ${oversized.length} body(ies) too large for one request`,
+      );
+    }
     try {
       const response = await this.options.client.ingest(
         batch,
