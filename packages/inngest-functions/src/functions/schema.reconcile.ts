@@ -1157,8 +1157,47 @@ Return only the derived property key-value pairs in the derivedProps field.`,
               let relUpdated = false;
 
               // AI-derive missing required properties for relationships.
+              //
+              // A RESERVED key is excluded from the question rather than from
+              // the answer. `schema.property.upsert` accepts any non-empty
+              // name, so an organisation can pin a relationship schema whose
+              // required property is `is_system`, `orgId` or any other
+              // platform-owned key. Such a key is stripped at the write
+              // chokepoint — correctly, it is not the schema's to set — but it
+              // was still being ASKED for: the model was called, charged, and
+              // its only answer discarded, the relationship left unchanged, and
+              // `processedRelationships` incremented anyway. The reconcile then
+              // reported success, and the next run repeated the paid call over
+              // the same edges, forever, without ever being able to converge.
+              //
+              // Excluding it here cannot lose anything, because nothing
+              // downstream would have kept it. What it does change is that the
+              // impossibility is now SAID: a schema declaring a reserved
+              // required property is logged by name once per batch, rather than
+              // showing up only as a bill.
+              const unsatisfiableRequired = relSchema.properties.filter(
+                (p) =>
+                  p.required &&
+                  p.description &&
+                  !(p.key in existingProps) &&
+                  RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(p.key),
+              );
+              if (unsatisfiableRequired.length > 0) {
+                logger.warn(
+                  {
+                    relElemId,
+                    relType,
+                    keys: unsatisfiableRequired.map((p) => p.key),
+                  },
+                  "schema.reconcile: relationship schema requires platform-reserved properties, which reconciliation can never set; not asking the model to derive them",
+                );
+              }
               const missingRequired = relSchema.properties.filter(
-                (p) => p.required && p.description && !(p.key in existingProps),
+                (p) =>
+                  p.required &&
+                  p.description &&
+                  !(p.key in existingProps) &&
+                  !RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(p.key),
               );
 
               if (missingRequired.length > 0) {

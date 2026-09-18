@@ -1170,3 +1170,130 @@ describe("the excluded edges are counted rather than disappearing", () => {
     expect(selected + excluded).toBe(rows.length);
   });
 });
+
+// ── A reserved required key is excluded from the QUESTION, not the answer ───
+//
+// `schema.property.upsert` accepts any non-empty property name, so an
+// organisation can pin a relationship schema whose required property is
+// `is_system`, `orgId`, or any other platform-owned key. Such a key is stripped
+// at the write chokepoint — correctly, it is not the schema's to set — but the
+// derivation step was still ASKING for it: the model was called, charged, and
+// its only answer discarded, the relationship left unchanged, and
+// `processedRelationships` incremented anyway. The reconcile reported success,
+// and the next run repeated the paid call over the same edges, never converging.
+//
+// These evaluate the SHIPPED selection predicate against constructed schema
+// properties rather than asserting the source contains a clause, for the same
+// reason the endpoint tests do: a constant redeclared here would keep passing
+// after the filter was removed.
+describe("a reserved required property is never sent to the model", () => {
+  const SOURCE = readFileSync(
+    new URL("./schema.reconcile.ts", import.meta.url),
+    "utf8",
+  );
+
+  interface SchemaProp {
+    readonly key: string;
+    readonly required: boolean;
+    readonly description: string | null;
+  }
+
+  /** The shipped `missingRequired` predicate, lifted and evaluated. */
+  function selectsForDerivation(
+    p: SchemaProp,
+    existingProps: Record<string, unknown>,
+  ): boolean {
+    // Anchored from the RELATIONSHIP filter forward: the node path a few
+    // hundred lines above uses the same variable name, so a bare indexOf for
+    // the closing marker finds the wrong one and slices an empty block — which
+    // would make every assertion here vacuous rather than failing.
+    const from = SOURCE.indexOf(
+      "const missingRequired = relSchema.properties.filter(",
+    );
+    expect(from).toBeGreaterThan(-1);
+    const block = SOURCE.slice(
+      from,
+      SOURCE.indexOf("if (missingRequired.length > 0)", from),
+    );
+    expect(block.length).toBeGreaterThan(0);
+    // Each conjunct the shipped filter applies, as a predicate over `p`.
+    const conditions: Array<[probe: string, run: () => boolean]> = [
+      ["p.required", () => p.required],
+      ["p.description", () => Boolean(p.description)],
+      ["!(p.key in existingProps)", () => !(p.key in existingProps)],
+      [
+        "!RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(p.key)",
+        () => !RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(p.key),
+      ],
+    ];
+    const applied = conditions.filter(([probe]) => block.includes(probe));
+    // If the shipped filter lost a conjunct this test knows about, it is no
+    // longer the filter these assertions describe.
+    expect(applied.length).toBe(conditions.length);
+    return applied.every(([, run]) => run());
+  }
+
+  const ordinary: SchemaProp = {
+    key: "weight",
+    required: true,
+    description: "how strong the link is",
+  };
+
+  it("still asks for an ordinary missing required property", () => {
+    expect(selectsForDerivation(ordinary, {})).toBe(true);
+  });
+
+  for (const key of ["is_system", "orgId", "workspaceId", "updatedAt"]) {
+    it(`does not ask the model to derive the reserved key ${key}`, () => {
+      expect(selectsForDerivation({ ...ordinary, key }, {})).toBe(false);
+    });
+  }
+
+  it("the reserved keys it refuses are the ones the write strips", () => {
+    // The two sets must be the same set, or the loop comes back: a key the
+    // write discards but the question still asks for is exactly the defect.
+    for (const key of RESERVED_RELATIONSHIP_PROPERTY_KEYS) {
+      expect(selectsForDerivation({ ...ordinary, key }, {})).toBe(false);
+      expect(
+        Object.keys(stripReservedRelationshipKeys({ [key]: "v" }).kept),
+      ).toEqual([]);
+    }
+  });
+
+  it("still skips a property that is present, optional, or undescribed", () => {
+    expect(selectsForDerivation(ordinary, { weight: 1 })).toBe(false);
+    expect(selectsForDerivation({ ...ordinary, required: false }, {})).toBe(
+      false,
+    );
+    expect(selectsForDerivation({ ...ordinary, description: null }, {})).toBe(
+      false,
+    );
+  });
+
+  it("says so, rather than letting the impossibility show up as a bill", () => {
+    // A schema that requires a platform-owned key can never be satisfied by
+    // reconciliation. Not asking is the fix; naming it is what stops the
+    // unsatisfiable schema from being invisible.
+    const block = SOURCE.slice(
+      SOURCE.indexOf("const unsatisfiableRequired"),
+      SOURCE.indexOf("const missingRequired = relSchema.properties.filter("),
+    );
+    expect(block).toContain("RESERVED_RELATIONSHIP_PROPERTY_KEYS.has(p.key)");
+    expect(block).toContain("logger.warn");
+    expect(block).toContain("can never set");
+    expect(block).toContain("keys:");
+  });
+
+  it("the derivation call sits behind the filtered list", () => {
+    // If `generateObjectFor` were reachable without `missingRequired.length`
+    // gating it, the filter above would not stop the spend.
+    const relBlock = SOURCE.slice(
+      SOURCE.indexOf("const unsatisfiableRequired"),
+      SOURCE.indexOf("// Prune off-schema properties from relationships"),
+    );
+    const gate = relBlock.indexOf("if (missingRequired.length > 0)");
+    const call = relBlock.indexOf("generateObjectFor(");
+    expect(gate).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(gate);
+  });
+});
