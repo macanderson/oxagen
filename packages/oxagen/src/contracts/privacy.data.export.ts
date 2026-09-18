@@ -28,15 +28,15 @@ export const privacyDataExport = registerCapability({
   sensitivity: "high",
   // Assembling the ZIP spends no AI credits, and the billing and budget gates
   // run before the handler. Without this an organisation that has exhausted
-  // its credits or hit its spend ceiling could not export its data -- so the
+  // its credits or hit its spend ceiling could not export its data, so the
   // one thing a customer needs most when their account is in trouble would be
   // the first thing to stop working, and GDPR Article 20 does not pause for an
   // unpaid invoice.
   noBillingGate: true,
   // `defaultEffect: "allow"`, for the same reason as `update_profile` and
   // `get_user_preferences` in this change: a person is never the wrong person
-  // to export their own data. On an enterprise org -- the only tier the
-  // resolver runs for -- the role map is the only thing between a member and
+  // to export their own data. On an enterprise org (the only tier the
+  // resolver runs for) the role map is the only thing between a member and
   // their own record, and the four system org roles are Owner, Admin,
   // Compliance and Billing. There is no org-level Member or Viewer:
   // `iam-provision` iterates the real role list and reads this map by name, so
@@ -47,7 +47,7 @@ export const privacyDataExport = registerCapability({
   // role can fall through it. Explicit denial still wins: rule 7 evaluates role
   // grants deny-first and hard-stops well before rule 8.
   //
-  // `scope: "org"` is NOT governed here and cannot be -- the gate turns on an
+  // `scope: "org"` is NOT governed here and cannot be: the gate turns on an
   // input field, which `defaultRoles` cannot read. The handler re-reads the
   // caller's membership on the TARGET org and refuses a non-Owner/Admin with a
   // coded `forbidden`. That check is also the only one that holds when a

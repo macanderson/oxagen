@@ -21,7 +21,7 @@
  * the person, and a bundle follows them rather than a workspace. The handler
  * matches on the principal's own user id, so one person can never read
  * another's export, whatever org either is in. The contract carries no user id
- * for the same reason `update_profile` carries none — a read that took a
+ * for the same reason `update_profile` carries none: a read that took a
  * target id would be a way to enumerate other people's bundles.
  *
  * A read of one's own request is never a governed action (ADR-052 exclusion
@@ -29,7 +29,7 @@
  * never the wrong person to ask after their own export; rule 7 still lets an
  * enterprise admin deny a role explicitly, since role grants are evaluated
  * deny-first and hard-stop before rule 8 is reached. The role maps name
- * exactly the real roles at each scope — the four system org roles are Owner,
+ * exactly the real roles at each scope. The four system org roles are Owner,
  * Admin, Compliance and Billing, and there is no org-level Member or Viewer.
  *
  * API only, no MCP surface, on `update_profile`'s reasoning: MCP builds every
@@ -79,7 +79,7 @@ export const privacyDataExportStatus = registerCapability({
        * contract is explicit that a private object's `url` is never rendered
        * in a browser: on Vercel Blob it needs the store's token, and on the
        * filesystem driver it is a key rather than a route. So no URL is
-       * offered here at all — bytes are served by an authenticated route
+       * offered here at all. Bytes are served by an authenticated route
        * that streams `storage().get(storageKey)`.
        */
       ready: z.boolean(),

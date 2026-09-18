@@ -22,7 +22,7 @@ describe("privacy.data.export capability", () => {
   });
 
   // The kernel runs `input.safeParse` on every surface, so this is where an
-  // org-scope request missing its orgId is refused -- as invalid input (400),
+  // org-scope request missing its orgId is refused, as invalid input (400)
   // not as a bare throw inside the handler (500). The MCP tool's flat xmcp
   // schema cannot express a cross-field rule, so it has to live here.
   it("rejects org-scope input with no orgId", () => {
@@ -82,8 +82,8 @@ describe("privacy.data.export capability", () => {
 
   // A person is never the wrong person to export their own data, and on an
   // enterprise org the resolver is the only thing between a member and their
-  // own record. An invited member holds no org role at all -- iam-provision
-  // seeds Owner, Admin, Compliance and Billing, and nothing else -- so a role
+  // own record. An invited member holds no org role at all (iam-provision
+  // seeds Owner, Admin, Compliance and Billing, and nothing else), so a role
   // map cannot admit them; rule 8 has to.
   it("defaults to allow, so a member holding no org role is not refused", () => {
     expect(privacyDataExport.defaultEffect).toBe("allow");
@@ -104,7 +104,7 @@ describe("privacy.data.export capability", () => {
 
   // Assembling the ZIP spends no AI credits, and the billing gate runs before
   // the handler. Without this, an organisation that has exhausted its credits
-  // could not export its data -- the thing a customer needs most when their
+  // could not export its data, the thing a customer needs most when their
   // account is in trouble would be the first to stop working.
   it("is exempt from the billing gate", () => {
     expect(privacyDataExport.noBillingGate).toBe(true);

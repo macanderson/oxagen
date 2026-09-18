@@ -5,7 +5,7 @@
 // the write beside it. The acting user id comes from the capability context
 // principal and is part of the match, never from input: the contract carries
 // no user id, so there is no way to ask after anyone else's bundle. An id that
-// exists but belongs to someone else is `not_found`, not `forbidden` — a
+// exists but belongs to someone else is `not_found`, not `forbidden`. A
 // refusal that distinguished the two would answer whether a stranger's export
 // id is real.
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -62,7 +62,7 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
           // The governed organisation as well as the person. IAM resolves
           // this capability against ctx.orgId, so without this an export
           // queued in org A stays readable through a membership in org B
-          // after the caller has lost A — the read would answer for a
+          // after the caller has lost A: the read would answer for a
           // tenant whose rules never governed it. This is the rule the
           // org-scope branch of `export_data` applies at dispatch, arriving
           // where the row is actually read.

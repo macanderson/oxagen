@@ -183,7 +183,7 @@ describe("get_export_status", () => {
 });
 
 // Rows written before the key change hold `result.url`, and on Vercel Blob
-// that is a full authenticated URL rather than a key — the driver returns
+// that is a full authenticated URL rather than a key. The driver returns
 // `url: result.url` and `key: result.pathname`, which differ. An older ready
 // export would otherwise read as ready and then fail at `storage().get()`.
 describe("reading a key out of what the row holds", () => {

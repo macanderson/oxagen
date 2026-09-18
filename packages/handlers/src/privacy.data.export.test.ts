@@ -83,7 +83,9 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     queueSelects([]);
     await expect(
       privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX),
-    ).rejects.toThrow("An organization export requires the Owner or Admin role");
+    ).rejects.toThrow(
+      "An organization export requires the Owner or Admin role",
+    );
     expect(mocks.insertReturning).not.toHaveBeenCalled();
     expect(mocks.eventSend).not.toHaveBeenCalled();
   });
@@ -92,7 +94,9 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     queueSelects([{ role: "member" }]);
     await expect(
       privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX),
-    ).rejects.toThrow("An organization export requires the Owner or Admin role");
+    ).rejects.toThrow(
+      "An organization export requires the Owner or Admin role",
+    );
     expect(mocks.insertReturning).not.toHaveBeenCalled();
   });
 
@@ -101,10 +105,10 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   // handler instead of being stopped at IAM. Uncoded, that read as a runtime
   // error and a 500 rather than an authorization refusal.
   it("refuses a machine principal with a coded forbidden", async () => {
-    const err = await privacyDataExportHandler(
-      { scope: "user" },
-      { ...CTX, userId: null } as typeof CTX,
-    ).catch((e: unknown) => e);
+    const err = await privacyDataExportHandler({ scope: "user" }, {
+      ...CTX,
+      userId: null,
+    } as typeof CTX).catch((e: unknown) => e);
     expect(isHandlerError(err)).toBe(true);
     expect(err).toMatchObject({
       code: "forbidden",
@@ -148,7 +152,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
 
   // `invoke()` resolves IAM against ctx.orgId, so an export whose target is a
   // DIFFERENT org would have the decision made in one tenant and the data read
-  // from another -- the target's own grants, including an explicit deny, never
+  // from another: the target's own grants, including an explicit deny, never
   // consulted. A membership read cannot substitute: it cannot see a deny grant
   // at all. So the two must name the same org.
   it("refuses an export whose target is not the org the kernel governed", async () => {

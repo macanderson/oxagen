@@ -59,6 +59,23 @@ export function SafeForm({
   return <form action={action} {...props} />;
 }
 
+/**
+ * A file this app serves, fetched when the person asks for it.
+ *
+ * Deliberately not `SafeLink`: `next/link` prefetches on viewport entry in a
+ * production build, which would open the private storage stream for the whole
+ * archive before anyone clicked, and would then do the work again on the
+ * click. It also treats a click as a client-side navigation, which is not what
+ * a route handler streaming bytes wants. A plain anchor with `download` keeps
+ * fetching an explicit act, and the path stays a `SafePath`.
+ */
+export function DownloadLink({
+  to,
+  ...props
+}: Omit<ComponentProps<"a">, "href" | "download"> & { to: SafePath }) {
+  return <a href={to} download {...props} />;
+}
+
 /** A Stripe-hosted invoice page, opened in a new tab without handing it this window. */
 export function HostedInvoiceLink({
   to,

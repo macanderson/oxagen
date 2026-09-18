@@ -42,8 +42,8 @@ export const privacyDataExportHandler: CapabilityHandler<
     //
     // `invoke()` resolves IAM against `ctx.orgId`, so a body-supplied `orgId`
     // naming a DIFFERENT org would have the decision made in one tenant and the
-    // data read from another: the target org's grants -- including an explicit
-    // `export_data` deny -- are never evaluated, and a person holding a
+    // data read from another: the target org's grants, including an explicit
+    // `export_data` deny, are never evaluated, and a person holding a
     // membership in both could export the denying org's ZIP by invoking through
     // the other one. A membership-role read is not a substitute for that
     // decision; it cannot see a deny grant at all
@@ -84,7 +84,7 @@ export const privacyDataExportHandler: CapabilityHandler<
     const role = membership[0]?.role?.toLowerCase();
     if (role !== "owner" && role !== "admin") {
       // A typed refusal, not a bare Error. Since the contract admits every org
-      // role -- it must, or a member could not export their own data -- this
+      // role (it must, or a member could not export their own data), so this
       // branch is now the ONLY thing that refuses a member's org export, and a
       // surface classifies a refusal by `code` alone. An uncoded throw reads as
       // `unclassified`, so the app showed its generic failure instead of "an

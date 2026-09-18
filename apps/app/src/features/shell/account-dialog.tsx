@@ -23,7 +23,7 @@ import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { formatCount, formatMoney } from "@/ui/money-format";
-import { SafeLink, useNavigate } from "@/ui/navigation";
+import { DownloadLink, SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog, SheetFooterAction } from "@/ui/sheet-dialog";
 import {
   type PreferencesDraft,
@@ -949,13 +949,13 @@ function PrivacyTab({ data }: { data: ShellData }) {
           {state.kind === "ready" ? (
             <span data-testid="account-export-ready">
               {t("ready")}{" "}
-              <SafeLink
+              <DownloadLink
                 data-testid="account-export-download"
                 className="underline"
                 to={routes.accountExport(data.org.slug, state.exportId)}
               >
                 {t("download")}
-              </SafeLink>
+              </DownloadLink>
             </span>
           ) : null}
         </p>
