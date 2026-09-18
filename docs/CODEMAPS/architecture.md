@@ -72,7 +72,8 @@ User → apps/app chat UI → POST /api/v1/chat/stream
        hop to apps/api)
      → SSE stream consumed by use-tool-stream.ts
      → Inngest: chat.persist-stream
-     → Engram memory consolidation
+     → workspace memory (Neo4j :AgentMemory; @oxagen/engram is not on this path, see
+       "Steering, gating and the gateway")
      → Neo4j graph sync
 ```
 
@@ -99,6 +100,95 @@ Third-party agent identity and interop are future work through the evidence-
 ingress / MCP-gateway seam (ADR-040 Phase 2) — see
 `docs/specs/a2a-agent-identity/spec.md`'s 2026-09-07 note.
 
+## Steering, gating and the gateway
+
+Approved by the maintainer on 2026-09-18 (ADR-091 to ADR-096). This section
+states the present first, in the status words the ADRs fix, and then the target
+with the phase that delivers each part.
+
+### What is true today (`main`, 2026-09-18)
+
+- Almost nothing reaches a wrapped agent. Records, the bundle's
+  `context.system` (hardcoded `null` in
+  `packages/handlers/src/lib/tacho-host.ts`), bundle permissions and budget
+  (always empty, `budget.mode = "observed"`) and skills (inventory only) do not
+  steer any Claude Code or Codex run. Operator steer commands are the only live
+  server-to-running-agent text channel for wrapped agents. Phase 0 (PR #3289,
+  ADR-091) is in review and changes the first of these.
+- The wrapped tier is a recorder plus a kill switch. No model proxy exists. No
+  sandbox exists. The MCP gateway is real and server-enforced but registered
+  only into Claude Desktop. Spend for Claude Code is self-reported; Codex and
+  Stella report none.
+- Memory reaches only the in-app agent (capped at 6). `packages/engram` and
+  `packages/context-provider` have no production importer. The graph holds no
+  steering.
+- `apps/app_deprecated` is drift. It is still in the tree and holds the only
+  other `resolvePrompt` wiring (its chat stream route and agent-defaults page).
+  The cutover has happened (`APP_DIR` is `apps/app`), and WL-53 of the rev1
+  worklist deletes the directory (`apps/app/ARCHITECTURE.md` §7.1, "one release
+  after cutover"). Phase 1 must not port its wiring: the in-app agent's
+  `assistant-turn.ts` moves to the one assembler and the deprecated copy goes.
+
+### The target
+
+```
+            AUTHORING (one surface: Steering)
+   records | skills | memory | ontology | policy | proposals
+                       |
+            one item type: SteeringItem
+   id, lineage, kind, force, scope, body, token_cost,
+   enforcement grant?, provenance, hash, valid_from
+                       |
+        +--------------+---------------+
+        |                              |
+  compile to TEXT                compile to GATES
+  assembleSteering(run, budget)  bundle permissions + kernel rules
+  ranked, budgeted, recorded     deterministic, never budgeted
+        |                              |
+        +-------------+----------------+
+                      |
+                 THE GATEWAY (tachod grows into it)
+   hook adapter | local model proxy | MCP aggregator | control channel
+                      |
+   tiers, computed from what was actually routed:
+   observe -> harness -> gateway -> contained (sandbox)
+```
+
+Steering is what the model reads: advisory, ranked, budgeted, may be dropped.
+Gating is what the kernel refuses: deterministic, never budgeted, never ranked,
+works when Neo4j is down. The two planes never merge (ADR-092). Storage stays
+plural with one writer per fact: git for what is published, Postgres for what
+must be transactional or money-grade, the graph for lineage, evidence and entity
+links. Only the assembler and its index are single.
+
+Oxagen does not own the context window; the harness does. Oxagen's injection
+points are exactly five: `SessionStart` additional context (capped at 16 KiB),
+`UserPromptSubmit` additional context, MCP tool results, files in the checkout
+(including skills), and the model request itself once the gateway's proxy
+exists (ADR-093).
+
+### The six phases
+
+Each phase ships alone. The names and numbers are fixed. The order of build is
+Phase 0 in review, Phase 4 in build, then Phases 1, 2, 3, 5.
+
+| Phase | What it delivers | ADR | Status |
+|---|---|---|---|
+| 0. Make one record steer one agent | Active `must` and `should` records compile into `context.system` in `unsignedBundle`. New governance ceremony is frozen until this lands | ADR-091 | In review, PR #3289 |
+| 1. One type, one assembler | `SteeringItem`, `assembleSteering`, the source adapters, `packages/context-provider` as the home, `packages/engram` deleted or folded in, `UserPromptSubmit` calls the assembler (tight timeout, fail open), precedence fixed, the two publish paths collapse, the in-app agent uses the same assembler | ADR-092, ADR-093 | Not started |
+| 2. One screen | Steering is the hub: Records, Skills, Memory, Ontology, Policy, Proposals, Preview | ADR-092 | Not started |
+| 3. The graph becomes the index | `:Record` nodes with `ABOUT` edges, registry to graph, verified by hash, Postgres kept as the fallback behind the same port | ADR-093 | Not started; waits for the knowledge graph on by default |
+| 4. The gateway | Loopback model proxy in `tachod`, enrollment writes the base URL, observed metering, enforced `session_limit_usd`, real `interrupt`, MCP aggregator, bundle permissions from the second compilation | ADR-094, ADR-095 | In build now |
+| 5. The contained tier | `oxagen run -- <agent>` under an OS sandbox with egress limited to the gateway; the witness runner on the same launcher | ADR-096 | Not started |
+
+### The words a surface may use
+
+- Hook tier (`harness`): "delivered", "recorded", "client-attested",
+  "fail-open". Never "enforced".
+- Gateway tier: "observed" metering, "enforced" budgets on routed traffic.
+- Contained tier: "enforced".
+- A control claim always carries its scope: "for actions routed through Oxagen".
+
 ## Tenancy Model
 Hierarchy: **Organization → Workspace → User**
 - API keys carry `orgId + workspaceId` scope (no session needed)
@@ -112,7 +202,8 @@ Hierarchy: **Organization → Workspace → User**
 | `@oxagen/oxagen` | Contracts (Zod; ~237 non-test contract files post-ADR-043, count drifts), CapabilityContext type, capability kernel |
 | `@oxagen/handlers` | Shared business logic handlers (~224 non-test files, count drifts) |
 | `@oxagen/database` | Drizzle schema + client (23 schema files, ~90 migrations, count drifts) |
-| `@oxagen/engram` | Local DuckDB memory, context compilation, replay |
+| `@oxagen/engram` | Local DuckDB memory. No app, handler or function imports it (only `@oxagen/context-provider` and `tools/scripts`). Deleted or folded into the assembler in Phase 1 (ADR-093) |
+| `@oxagen/context-provider` | Context Graph Protocol provider over engram, and the tree's only token budgeter (`packWithinBudget`). No production importer today. Becomes the home of `assembleSteering` in Phase 1 (ADR-093) |
 | `@oxagen/agent` | Governed in-app agent turn loop (`runGovernedTurn`), MCP tool gateway, agent registry handlers (~73 files). No sandbox, subagent dispatch, or coding pipeline — see ADR-043. |
 | `@oxagen/run-ledger` | Durable run/attempt/event/seal evidence ledger (formerly `agent-runner`) |
 | `@oxagen/iam` | AuthZ, audit, access requests |

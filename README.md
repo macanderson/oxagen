@@ -87,6 +87,12 @@ Every `invoke()` call, agent step, and LLM call (all LLM traffic goes through `@
 
 Connectors ingest fragmented sources (SaaS apps, databases, documents, events) through a universal pipeline into a per-workspace Neo4j graph governed by an ontology. Agents query it through governed capabilities (`query_ontology`, `get_ontology_neighbors`) and answer with citations to nodes and edges carrying time-aware validity, inspectable in the UI down to the property bag. Ingestion dual-writes: Postgres holds the operational record (sync cursors, connection health), Neo4j holds the graph index, ClickHouse observes the telemetry.
 
+### Steering, gating and the gateway
+
+What reaches a wrapped agent today is small, and the README should not imply otherwise. The wrapped tier is a recorder plus a kill switch: hooks deliver and record, client-attested and fail-open, and nothing at that tier is called enforced. No model proxy and no sandbox exist yet, the MCP gateway is server-enforced but registered only into Claude Desktop, and spend for Claude Code is self-reported while Codex and Stella report none. Published steering records start reaching a wrapped run with Phase 0 (PR #3289, ADR-091), which is in review.
+
+The approved target (ADR-092 to ADR-096, 2026-09-18) has two planes that never merge. **Steering** is what the model reads: advisory, ranked, budgeted, may be dropped. **Gating** is what the kernel refuses: deterministic, never budgeted, works when Neo4j is down. One assembler, `assembleSteering(run, budget)`, decides what reaches the agent and records what it cut. `tachod` grows into the gateway (a loopback model proxy and an MCP aggregator), and the tier ladder is four words computed from what was actually routed: observe, harness, gateway, contained. The phase table and the diagram are in [`docs/CODEMAPS/architecture.md`](docs/CODEMAPS/architecture.md#steering-gating-and-the-gateway).
+
 ### Vendor neutrality
 
 Model resolution goes through `modelIdOf()` and an AI gateway — no hard-coded vendor slugs. Customers bring their own model keys and their own Neo4j endpoint. No feature may couple the platform to a single cloud or model vendor where a neutral abstraction exists; the Vision Gate flags it as drift.
@@ -111,7 +117,7 @@ oxagen/
 │   ├── agent        Governed in-app Q&A turn loop, MCP tool gateway, agent registry handlers
 │   ├── run-ledger   Durable run/attempt/event/seal evidence ledger (was agent-runner)
 │   ├── run-evidence CGP frame normalisation + RFC-8785 canonical digests for evidence
-│   ├── tacho        Wrapper that records, gates and evidences agents Oxagen does not run
+│   ├── tacho        Wrapper that records agents Oxagen does not run and can stop them; hook tier today, growing into the gateway (ADR-094)
 │   ├── rules        Workspace decision-rules gate inside the kernel's invoke() chain
 │   ├── ai           LLM access layer — all model calls go through here (metered)
 │   ├── billing      Credit gate, usage metering, Stripe meter/ledger sync
