@@ -334,7 +334,11 @@ mod tests {
         let host = root.join("host.json");
         fs::write(&host, r#"{"host_enrollment_id":"tch_1","revoked_at":null}"#).unwrap();
         assert_eq!(enrollment(&roots), Enrollment::Live);
-        fs::write(&host, r#"{"host_enrollment_id":"tch_1","revoked_at":"2026-09-18T00:00:00Z"}"#).unwrap();
+        fs::write(
+            &host,
+            r#"{"host_enrollment_id":"tch_1","revoked_at":"2026-09-18T00:00:00Z"}"#,
+        )
+        .unwrap();
         assert_eq!(enrollment(&roots), Enrollment::Retired);
         fs::write(&host, "{ truncated").unwrap();
         assert_eq!(enrollment(&roots), Enrollment::Unreadable);

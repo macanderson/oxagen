@@ -198,10 +198,7 @@ pub fn auto_link_cli_default(developer_harness_present: bool) -> bool {
 
 /// Pure: whether automatic linking is enabled, resolving an absent setting
 /// through `auto_link_cli_default`.
-pub fn auto_link_cli_enabled_with(
-    config: &Map<String, Value>,
-    developer_harness_present: bool,
-) -> bool {
+pub fn auto_link_cli_enabled_with(config: &Map<String, Value>, developer_harness_present: bool) -> bool {
     config
         .get("autoLinkCli")
         .and_then(Value::as_bool)
@@ -218,10 +215,7 @@ const DEVELOPER_BINARIES: [&str; 3] = ["claude", "codex", "stella"];
 /// Pure: does any of the well-known install directories hold a coding agent?
 /// Takes the directory list and an existence probe so a test is not answered
 /// by whatever happens to be installed on the machine running it.
-pub fn developer_harness_in(
-    dirs: &[PathBuf],
-    exists: &dyn Fn(&Path) -> bool,
-) -> bool {
+pub fn developer_harness_in(dirs: &[PathBuf], exists: &dyn Fn(&Path) -> bool) -> bool {
     for dir in dirs {
         for name in DEVELOPER_BINARIES {
             if exists(&dir.join(exe(name))) {
@@ -743,9 +737,10 @@ fn link_one(dir: &Path, name: &str, target: &Path, durable: &Path) -> LinkOutcom
     let existing = read_existing_link(&link);
     match decide_symlink_action_in(&existing, target, durable) {
         LinkAction::AlreadyCorrect => LinkOutcome::AlreadyCorrect,
-        LinkAction::Skip => {
-            LinkOutcome::Skipped(format!("{name}: {} was not created by Oxagen, left alone", link.display()))
-        }
+        LinkAction::Skip => LinkOutcome::Skipped(format!(
+            "{name}: {} was not created by Oxagen, left alone",
+            link.display()
+        )),
         LinkAction::Create | LinkAction::Replace => {
             let _ = fs::remove_file(&link);
             match std::os::unix::fs::symlink(target, &link) {
@@ -763,9 +758,10 @@ fn link_one(dir: &Path, name: &str, target: &Path, _durable: &Path) -> LinkOutco
     let existing = fs::read_to_string(&shim).ok();
     match decide_shim_action(existing.as_deref(), &desired) {
         ShimAction::AlreadyCorrect => LinkOutcome::AlreadyCorrect,
-        ShimAction::Skip => {
-            LinkOutcome::Skipped(format!("{name}: {} was not written by Oxagen, left alone", shim.display()))
-        }
+        ShimAction::Skip => LinkOutcome::Skipped(format!(
+            "{name}: {} was not written by Oxagen, left alone",
+            shim.display()
+        )),
         ShimAction::Create | ShimAction::Replace => match fs::write(&shim, &desired) {
             Ok(()) => LinkOutcome::Linked(shim.display().to_string()),
             Err(e) => LinkOutcome::Failed(format!("cannot write {}: {e}", shim.display())),
@@ -787,7 +783,8 @@ fn keep_sidecars(sidecars: &Path, durable: &Path) -> Result<PathBuf, String> {
         // Copy beside, then rename: a running daemon keeps its old inode
         // and the link never points at a half-written file.
         let staging = durable.join(format!(".{}.tmp", exe(name)));
-        fs::copy(&from, &staging).map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))?;
+        fs::copy(&from, &staging)
+            .map_err(|e| format!("cannot copy {} to {}: {e}", from.display(), staging.display()))?;
         fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
             .map_err(|e| format!("cannot chmod {}: {e}", staging.display()))?;
         fs::rename(&staging, &to).map_err(|e| format!("cannot move {} to {}: {e}", staging.display(), to.display()))?;
@@ -966,7 +963,10 @@ fn record_created(roots: &Roots, paths: &[PathBuf]) -> Result<(), String> {
             created.push(text);
         }
     }
-    config.insert("created".to_string(), Value::Array(created.into_iter().map(Value::String).collect()));
+    config.insert(
+        "created".to_string(),
+        Value::Array(created.into_iter().map(Value::String).collect()),
+    );
     write_json_object(&path, &config)
 }
 
@@ -1124,7 +1124,10 @@ fn note_for(state: &str, view: &CliInstallView) -> String {
                 if view.path_updated {
                     "Linked into your user PATH; open a new terminal.".to_string()
                 } else {
-                    format!("Linked into {}, but it could not be added to your user PATH; see skipped.", view.dir)
+                    format!(
+                        "Linked into {}, but it could not be added to your user PATH; see skipped.",
+                        view.dir
+                    )
                 }
             } else {
                 format!("Linked into {}, already on PATH.", view.dir)
@@ -1237,7 +1240,8 @@ pub(crate) fn install_cli_locked(env: &InstallEnv) -> CliInstallView {
         };
         let canonical = fs::canonicalize(&found).unwrap_or_else(|_| found.clone());
         if decide_path_precedence_in(Some(&canonical), &dir, &durable) == PathPrecedence::Shadowed {
-            view.skipped.push(format!("{name} already on PATH at {}; left in place", found.display()));
+            view.skipped
+                .push(format!("{name} already on PATH at {}; left in place", found.display()));
             shadowed.push(name);
         }
     }
@@ -1457,7 +1461,9 @@ fn unlink_plan(env: &InstallEnv) -> Vec<(&'static str, PathBuf, UnlinkAction)> {
 /// sources a shell profile, so the process's own PATH is missing the
 /// install directory even in the second after we linked into it.
 pub fn cli_links_present() -> bool {
-    unlink_plan(&InstallEnv::real()).iter().any(|(_, _, action)| *action == UnlinkAction::Remove)
+    unlink_plan(&InstallEnv::real())
+        .iter()
+        .any(|(_, _, action)| *action == UnlinkAction::Remove)
 }
 
 /// What removing the links did.
@@ -1481,11 +1487,14 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
             UnlinkAction::Absent => {}
             UnlinkAction::Remove => match fs::remove_file(&candidate) {
                 Ok(()) => outcome.removed.push(candidate.display().to_string()),
-                Err(e) => outcome.failed.push(format!("cannot remove {}: {e}", candidate.display())),
+                Err(e) => outcome
+                    .failed
+                    .push(format!("cannot remove {}: {e}", candidate.display())),
             },
-            UnlinkAction::Keep => outcome
-                .skipped
-                .push(format!("{name}: {} was not created by Oxagen, left alone", candidate.display())),
+            UnlinkAction::Keep => outcome.skipped.push(format!(
+                "{name}: {} was not created by Oxagen, left alone",
+                candidate.display()
+            )),
         }
     }
     #[cfg(not(windows))]
@@ -1616,7 +1625,9 @@ mod tests {
             Path::new("/home/dev/.local/share/oxagen/bin"),
         ));
         assert!(ours("/tmp/.mount_OxagenAb12Cd/usr/bin/oxagen"));
-        assert!(ours("/private/var/folders/x/T/AppTranslocation/1234/d/Oxagen.app/Contents/MacOS/oxagen"));
+        assert!(ours(
+            "/private/var/folders/x/T/AppTranslocation/1234/d/Oxagen.app/Contents/MacOS/oxagen"
+        ));
         assert!(ours("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen"));
         assert!(ours("C:\\Program Files\\Oxagen\\bin\\oxagen.exe"));
         // The real durable directory, through the public wrapper.
@@ -1656,15 +1667,27 @@ mod tests {
         // An older app location (a mounted .dmg) or the durable copy:
         // recognized, replace.
         let stale = PathBuf::from("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen");
-        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(stale), target), LinkAction::Replace);
+        assert_eq!(
+            decide_symlink_action(&ExistingLink::Symlink(stale), target),
+            LinkAction::Replace
+        );
         let durable = durable_bin_dir().join("oxagen");
-        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(durable), target), LinkAction::Replace);
+        assert_eq!(
+            decide_symlink_action(&ExistingLink::Symlink(durable), target),
+            LinkAction::Replace
+        );
         // A developer checkout: not ours, leave it.
         let checkout = PathBuf::from("/Users/dev/src/oxagen/bin/oxagen");
-        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(checkout), target), LinkAction::Skip);
+        assert_eq!(
+            decide_symlink_action(&ExistingLink::Symlink(checkout), target),
+            LinkAction::Skip
+        );
         // A Homebrew install: not recognized, leave it.
         let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
-        assert_eq!(decide_symlink_action(&ExistingLink::Symlink(foreign), target), LinkAction::Skip);
+        assert_eq!(
+            decide_symlink_action(&ExistingLink::Symlink(foreign), target),
+            LinkAction::Skip
+        );
     }
 
     // ---- decide_unlink_action ----
@@ -1676,12 +1699,21 @@ mod tests {
         assert_eq!(decide_unlink_action(&ExistingLink::Absent, &ours), UnlinkAction::Absent);
         // A real binary someone dropped in under our name, not a link.
         assert_eq!(decide_unlink_action(&ExistingLink::Other, &ours), UnlinkAction::Keep);
-        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(current), &ours), UnlinkAction::Remove);
+        assert_eq!(
+            decide_unlink_action(&ExistingLink::Symlink(current), &ours),
+            UnlinkAction::Remove
+        );
         // Locations we no longer link to but still recognize as ours.
         let stale = PathBuf::from("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/oxagen");
-        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(stale), &ours), UnlinkAction::Remove);
+        assert_eq!(
+            decide_unlink_action(&ExistingLink::Symlink(stale), &ours),
+            UnlinkAction::Remove
+        );
         let durable = durable_bin_dir().join("oxagen");
-        assert_eq!(decide_unlink_action(&ExistingLink::Symlink(durable), &ours), UnlinkAction::Remove);
+        assert_eq!(
+            decide_unlink_action(&ExistingLink::Symlink(durable), &ours),
+            UnlinkAction::Remove
+        );
     }
 
     #[test]
@@ -1714,17 +1746,26 @@ mod tests {
         // follow; a canonicalized Unix symlink through our own link would
         // instead show its ultimate target, covered by the next case).
         let ours_in_install_dir = install_dir.join("oxagen");
-        assert_eq!(decide_path_precedence(Some(&ours_in_install_dir), install_dir), PathPrecedence::Ours);
+        assert_eq!(
+            decide_path_precedence(Some(&ours_in_install_dir), install_dir),
+            PathPrecedence::Ours
+        );
 
         // Canonicalizing our own symlink walks it through to the app
         // bundle or the durable copy, outside install_dir — still ours,
         // recognized via is_oxagen_managed_path.
         let ours_elsewhere = PathBuf::from("/Applications/Oxagen.app/Contents/MacOS/oxagen");
-        assert_eq!(decide_path_precedence(Some(&ours_elsewhere), install_dir), PathPrecedence::Ours);
+        assert_eq!(
+            decide_path_precedence(Some(&ours_elsewhere), install_dir),
+            PathPrecedence::Ours
+        );
 
         // A Homebrew install (or any other third party): shadowed, leave it.
         let foreign = PathBuf::from("/opt/homebrew/Cellar/oxagen/1.4.0/bin/oxagen");
-        assert_eq!(decide_path_precedence(Some(&foreign), install_dir), PathPrecedence::Shadowed);
+        assert_eq!(
+            decide_path_precedence(Some(&foreign), install_dir),
+            PathPrecedence::Shadowed
+        );
     }
 
     // ---- decide_shim_action / windows_shim_content ----
@@ -1739,10 +1780,16 @@ mod tests {
     fn shim_action_covers_every_branch() {
         let desired = windows_shim_content(Path::new(r"C:\Program Files\Oxagen\oxagen.exe"));
         assert_eq!(decide_shim_action(None, &desired), ShimAction::Create);
-        assert_eq!(decide_shim_action(Some(desired.as_str()), &desired), ShimAction::AlreadyCorrect);
+        assert_eq!(
+            decide_shim_action(Some(desired.as_str()), &desired),
+            ShimAction::AlreadyCorrect
+        );
         let stale = windows_shim_content(Path::new(r"C:\Users\dev\AppData\Local\Oxagen\bin\oxagen.exe"));
         assert_eq!(decide_shim_action(Some(stale.as_str()), &desired), ShimAction::Replace);
-        assert_eq!(decide_shim_action(Some("@echo off\r\nsomething-else.exe %*\r\n"), &desired), ShimAction::Skip);
+        assert_eq!(
+            decide_shim_action(Some("@echo off\r\nsomething-else.exe %*\r\n"), &desired),
+            ShimAction::Skip
+        );
     }
 
     // ---- PATH membership ----
@@ -1771,10 +1818,22 @@ mod tests {
     #[test]
     fn profile_path_matches_shell_and_platform() {
         let home = Path::new("/home/dev");
-        assert_eq!(profile_path_for(ShellKind::Zsh, home, "macos"), Some(home.join(".zprofile")));
-        assert_eq!(profile_path_for(ShellKind::Zsh, home, "linux"), Some(home.join(".zprofile")));
-        assert_eq!(profile_path_for(ShellKind::Bash, home, "macos"), Some(home.join(".bash_profile")));
-        assert_eq!(profile_path_for(ShellKind::Bash, home, "linux"), Some(home.join(".bashrc")));
+        assert_eq!(
+            profile_path_for(ShellKind::Zsh, home, "macos"),
+            Some(home.join(".zprofile"))
+        );
+        assert_eq!(
+            profile_path_for(ShellKind::Zsh, home, "linux"),
+            Some(home.join(".zprofile"))
+        );
+        assert_eq!(
+            profile_path_for(ShellKind::Bash, home, "macos"),
+            Some(home.join(".bash_profile"))
+        );
+        assert_eq!(
+            profile_path_for(ShellKind::Bash, home, "linux"),
+            Some(home.join(".bashrc"))
+        );
         assert_eq!(
             profile_path_for(ShellKind::Fish, home, "linux"),
             Some(home.join(".config").join("fish").join("conf.d").join("oxagen.fish"))
@@ -1828,7 +1887,16 @@ mod tests {
 
     #[test]
     fn upsert_then_remove_restores_every_file_byte_for_byte() {
-        for original in ["", "a", "a\n", "a\n\n", "\n", "a\r\n", "a\r\n\r\n", "export EDITOR=vim\n"] {
+        for original in [
+            "",
+            "a",
+            "a\n",
+            "a\n\n",
+            "\n",
+            "a\r\n",
+            "a\r\n\r\n",
+            "export EDITOR=vim\n",
+        ] {
             let inserted = upsert_path_block(original, "/home/dev/.local/bin");
             assert_eq!(remove_path_block(&inserted), original, "round trip of {original:?}");
             assert_eq!(
@@ -1960,7 +2028,9 @@ mod tests {
         let t = |p: &str| is_transient_dir(Path::new(p), false);
         assert!(t("/tmp/.mount_OxagenAb12Cd/usr/bin"));
         assert!(t("/Volumes/Oxagen/Oxagen.app/Contents/MacOS"));
-        assert!(t("/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS"));
+        assert!(t(
+            "/private/var/folders/x/T/AppTranslocation/1234-abcd/d/Oxagen.app/Contents/MacOS"
+        ));
         assert!(is_transient_dir(Path::new("/usr/lib/oxagen"), true));
         assert!(!t("/Applications/Oxagen.app/Contents/MacOS"));
         assert!(!t("/usr/lib/oxagen"));
@@ -2024,7 +2094,8 @@ mod tests {
         let dir = unique_temp_dir("link-one");
         // An older app bundle's MacOS directory, so is_oxagen_managed_path
         // recognizes links into it as ours.
-        let old_oxagen_dir = std::env::temp_dir().join(format!("oxagen-cli-install-test-old-app-{}", std::process::id()));
+        let old_oxagen_dir =
+            std::env::temp_dir().join(format!("oxagen-cli-install-test-old-app-{}", std::process::id()));
         let old_macos = old_oxagen_dir.join("Oxagen.app").join("Contents").join("MacOS");
         fs::create_dir_all(&old_macos).unwrap();
         let stale_target = old_macos.join("oxagen");
@@ -2039,24 +2110,36 @@ mod tests {
         fs::write(&current_target, b"current").unwrap();
 
         // Absent -> Created.
-        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Linked(_)));
+        assert!(matches!(
+            link_one(&dir, "oxagen", &current_target, &durable_bin_dir()),
+            LinkOutcome::Linked(_)
+        ));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), current_target);
 
         // Same target again -> AlreadyCorrect, no error, link unchanged.
-        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::AlreadyCorrect));
+        assert!(matches!(
+            link_one(&dir, "oxagen", &current_target, &durable_bin_dir()),
+            LinkOutcome::AlreadyCorrect
+        ));
 
         // Points at a recognizably Oxagen-owned path that isn't the current
         // target (an older app location, or the durable copy) -> Replace.
         let _ = fs::remove_file(dir.join("oxagen"));
         std::os::unix::fs::symlink(&stale_target, dir.join("oxagen")).unwrap();
-        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Linked(_)));
+        assert!(matches!(
+            link_one(&dir, "oxagen", &current_target, &durable_bin_dir()),
+            LinkOutcome::Linked(_)
+        ));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), current_target);
 
         // Points somewhere we don't recognize (a third-party install) ->
         // Skip, left untouched.
         let _ = fs::remove_file(dir.join("oxagen"));
         std::os::unix::fs::symlink(&foreign_target, dir.join("oxagen")).unwrap();
-        assert!(matches!(link_one(&dir, "oxagen", &current_target, &durable_bin_dir()), LinkOutcome::Skipped(_)));
+        assert!(matches!(
+            link_one(&dir, "oxagen", &current_target, &durable_bin_dir()),
+            LinkOutcome::Skipped(_)
+        ));
         assert_eq!(fs::read_link(dir.join("oxagen")).unwrap(), foreign_target);
 
         let _ = fs::remove_dir_all(&dir);

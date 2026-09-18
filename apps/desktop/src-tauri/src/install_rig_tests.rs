@@ -23,7 +23,12 @@ fn put(path: &Path, text: &[u8]) {
 
 /// The installed app's sidecars, and an environment that never asks a shell.
 fn env_for(roots: Roots, transient: bool) -> InstallEnv {
-    let sidecars: PathBuf = roots.home.join("Applications").join("Oxagen.app").join("Contents").join("MacOS");
+    let sidecars: PathBuf = roots
+        .home
+        .join("Applications")
+        .join("Oxagen.app")
+        .join("Contents")
+        .join("MacOS");
     for name in ["oxagen", "tacho"] {
         put(&sidecars.join(name), b"#!/bin/sh\n");
     }
@@ -62,8 +67,14 @@ fn link_twice_then_uninstall_twice_leaves_the_home_byte_identical() {
     let first = link_cli_in(&env).unwrap();
     assert_eq!(first.state, "linked", "{first:?}");
     let link = env.roots.home.join(".local/bin/tacho");
-    assert_eq!(fs::read_link(&link).unwrap(), env.sidecars.clone().unwrap().join("tacho"));
-    assert_eq!(fs::read(env.roots.home.join(".local/bin/oxagen")).unwrap(), b"#!/bin/sh\necho mine\n");
+    assert_eq!(
+        fs::read_link(&link).unwrap(),
+        env.sidecars.clone().unwrap().join("tacho")
+    );
+    assert_eq!(
+        fs::read(env.roots.home.join(".local/bin/oxagen")).unwrap(),
+        b"#!/bin/sh\necho mine\n"
+    );
     assert!(first.skipped.iter().any(|note| note.contains("oxagen")), "{first:?}");
     let profile = fs::read_to_string(env.roots.home.join(".zprofile")).unwrap();
     assert!(profile.starts_with(USER_ZPROFILE));
@@ -121,7 +132,10 @@ fn the_durable_copy_made_for_a_disk_image_launch_is_removed() {
     assert_eq!(link_cli_in(&env).unwrap().state, "linked");
     let durable = env.roots.durable_bin_dir();
     assert!(durable.join("tacho").is_file());
-    assert_eq!(fs::read_link(env.roots.home.join(".local/bin/tacho")).unwrap(), durable.join("tacho"));
+    assert_eq!(
+        fs::read_link(env.roots.home.join(".local/bin/tacho")).unwrap(),
+        durable.join("tacho")
+    );
     remove_everything_in(&env).unwrap();
     assert_eq!(snapshot(&env.roots.home), before);
 }
@@ -137,7 +151,10 @@ fn macos_bash_gets_its_block_in_the_profile_bash_already_reads() {
     let view = link_cli_in(&env).unwrap();
     // Creating .bash_profile would stop bash reading .profile at all.
     assert!(!env.roots.home.join(".bash_profile").exists());
-    assert_eq!(view.profile, Some(env.roots.home.join(".profile").display().to_string()));
+    assert_eq!(
+        view.profile,
+        Some(env.roots.home.join(".profile").display().to_string())
+    );
     remove_everything_in(&env).unwrap();
     assert_eq!(snapshot(&env.roots.home), before);
 }
@@ -166,7 +183,9 @@ fn a_symlinked_profile_stays_a_link_and_comes_back_byte_identical() {
     let env = env_for(roots, false);
     let before = snapshot(&env.roots.home);
     link_cli_in(&env).unwrap();
-    assert!(fs::read_to_string(env.roots.home.join("dotfiles/zprofile")).unwrap().contains(">>> oxagen >>>"));
+    assert!(fs::read_to_string(env.roots.home.join("dotfiles/zprofile"))
+        .unwrap()
+        .contains(">>> oxagen >>>"));
     remove_everything_in(&env).unwrap();
     assert_eq!(snapshot(&env.roots.home), before);
 }
@@ -193,7 +212,10 @@ fn uninstall_is_refused_while_enrolled_and_allowed_once_the_host_is_retired() {
     assert!(remove_everything_in(&env).unwrap_err().contains("still enrolled"));
     assert_eq!(snapshot(&env.roots.home), enrolled);
     // An offline `tacho unenroll` keeps host.json, marked. That is not enrolled.
-    put(&host, br#"{"host_enrollment_id":"tch_1","revoked_at":"2026-09-18T00:00:00Z"}"#);
+    put(
+        &host,
+        br#"{"host_enrollment_id":"tch_1","revoked_at":"2026-09-18T00:00:00Z"}"#,
+    );
     remove_everything_in(&env).unwrap();
     assert!(!env.roots.oxagen_dir().exists());
     assert!(!env.roots.home.join(".local/bin/tacho").exists());
@@ -223,8 +245,14 @@ fn a_stale_link_into_an_older_app_is_replaced_and_a_foreign_one_is_not() {
     std::os::unix::fs::symlink("/Volumes/Oxagen/Oxagen.app/Contents/MacOS/tacho", bin.join("tacho")).unwrap();
     std::os::unix::fs::symlink("/opt/homebrew/Cellar/oxagen/1.0/bin/oxagen", bin.join("oxagen")).unwrap();
     link_cli_in(&env).unwrap();
-    assert_eq!(fs::read_link(bin.join("tacho")).unwrap(), env.sidecars.clone().unwrap().join("tacho"));
-    assert_eq!(fs::read_link(bin.join("oxagen")).unwrap(), Path::new("/opt/homebrew/Cellar/oxagen/1.0/bin/oxagen"));
+    assert_eq!(
+        fs::read_link(bin.join("tacho")).unwrap(),
+        env.sidecars.clone().unwrap().join("tacho")
+    );
+    assert_eq!(
+        fs::read_link(bin.join("oxagen")).unwrap(),
+        Path::new("/opt/homebrew/Cellar/oxagen/1.0/bin/oxagen")
+    );
     remove_everything_in(&env).unwrap();
     assert!(fs::symlink_metadata(bin.join("tacho")).is_err());
     assert!(fs::symlink_metadata(bin.join("oxagen")).is_ok());
