@@ -33,6 +33,7 @@ type Messages = {
     apiKeys: string;
     billing: string;
     audit: string;
+    modelFunding: string;
   };
   unrecorded: {
     run: {
@@ -1248,6 +1249,7 @@ type Messages = {
       people: string;
       roles: string;
       apiKeys: string;
+      modelFunding: string;
     };
     roles: {
       owner: string;
@@ -1527,6 +1529,103 @@ type Messages = {
       noRole: string;
       empty: string;
     };
+    modelFunding: {
+      title: string;
+      intro: string;
+      explain: {
+        platform: string;
+        byok: string;
+      };
+      current: {
+        title: string;
+        none: string;
+        provider: string;
+        key: string;
+        keyEnding: string;
+        endpoint: string;
+        status: string;
+        active: string;
+        disabled: string;
+        tested: string;
+        at: string;
+        never: string;
+      };
+      tiers: {
+        balanced: string;
+        fast: string;
+        precise: string;
+      };
+      providers: {
+        openrouter: {
+          name: string;
+          hint: string;
+        };
+        gateway: {
+          name: string;
+          hint: string;
+        };
+        openai: {
+          name: string;
+          hint: string;
+        };
+        anthropic: {
+          name: string;
+          hint: string;
+          caching: string;
+        };
+        openai_compatible: {
+          name: string;
+          hint: string;
+        };
+      };
+      form: {
+        title: string;
+        replaceTitle: string;
+        provider: string;
+        key: string;
+        show: string;
+        hide: string;
+        baseUrl: string;
+        baseUrlHint: string;
+        baseUrlPlaceholder: string;
+        models: string;
+        balancedHint: string;
+        unmappedNote: string;
+        test: string;
+        testing: string;
+        save: string;
+        saving: string;
+        saved: string;
+      };
+      verdict: {
+        ok: string;
+        okWithTools: string;
+        refused: string;
+        noTools: string;
+        noReason: string;
+      };
+      remove: {
+        label: string;
+        confirm: string;
+        yes: string;
+        pending: string;
+        cancel: string;
+      };
+      denied: {
+        title: string;
+        body: string;
+      };
+      failure: {
+        denied: string;
+        keyRequired: string;
+        baseUrlRequired: string;
+        balancedRequired: string;
+        invalid: string;
+        refused: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
   };
   run: {
     eyebrow: string;
@@ -1752,6 +1851,7 @@ type Messages = {
       audit: string;
       roles: string;
       apiKeys: string;
+      modelFunding: string;
     };
     switcher: {
       org: string;

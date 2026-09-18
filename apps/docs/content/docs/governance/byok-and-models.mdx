@@ -93,10 +93,10 @@ For OpenAI, Anthropic, and custom servers, any tier you leave unmapped uses your
 
 **The model must be able to use tools.** The assistant answers questions by calling tools, so a model that cannot call them cannot answer anything about your workspace. When you test a custom server's key, Oxagen asks your `balanced` model for one tool call (at most 16 tokens) and tells you whether it worked. Keys for the four named providers are not asked, because they all support tools.
 
-**To set your key**, you need the org Owner or Admin role. There is no settings page for this yet, so use the API or the MCP tools below:
+**To set your key**, you need the org Owner or Admin role. In the app, open **Organization › Model funding** at `/{org}/model-funding`, choose the vendor, paste the key, and for OpenAI, Anthropic, or a custom server name the `balanced` model (and the server's URL). The same two steps are available from the API and the MCP tools below:
 
-1. Test the key with `POST .../verify`. Oxagen asks the vendor whether it accepts the key.
-2. Store it with `PUT`. Oxagen encrypts the key before storing it. Nobody can read it back, not even an Owner. Reads return only its last four characters, the endpoint and model settings, when it was last tested, and when it was last changed.
+1. Test the key. In the app, **Test key**; from the API, `POST .../verify`. Oxagen asks the vendor whether it accepts the key, and for a custom server whether the model can call tools.
+2. Store it. In the app, **Save key**; from the API, `PUT`. Oxagen encrypts the key before storing it. Nobody can read it back, not even an Owner. Reads return only its last four characters, the endpoint and model settings, when it was last tested, and when it was last changed.
 
 Setting a new key replaces the old one. Clearing the key returns your organisation to Oxagen's key.
 

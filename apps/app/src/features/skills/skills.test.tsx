@@ -106,6 +106,7 @@ const source: DataSource = {
     roles: vi.fn(),
     workspaces: vi.fn(),
     apiKeys: vi.fn(),
+    modelCredential: vi.fn(),
   },
   skills: { inventory: read },
   mandates: { list: vi.fn() },

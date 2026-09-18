@@ -33,9 +33,10 @@ export function buildCommands(
   for (const key of ORG_NAV) {
     go(key, orgHref(org, key));
     if (key === "organization") {
-      // The organization's other two pages, in the mockup's tab order.
+      // The organization's other pages, in the tab order.
       go("roles", orgHref(org, "roles"));
       go("apiKeys", orgHref(org, "apiKeys"));
+      go("modelFunding", orgHref(org, "modelFunding"));
     }
   }
   return out;
