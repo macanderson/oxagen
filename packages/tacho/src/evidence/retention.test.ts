@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contentClassOf } from "./frame-body";
 import {
+  narrowestOf,
   RETENTION_CLASS_BY_KIND,
   retainsBody,
   type RetentionMandate,
@@ -143,5 +144,33 @@ describe("one table, not two", () => {
         retainsBody(kind, { mode: "content_exact", classes: others }),
       ).toBe(false);
     }
+  });
+});
+
+describe("narrowestOf", () => {
+  it("keeps only what both mandates keep", () => {
+    expect(
+      narrowestOf(exact(["model_call", "tool_call"]), exact(["tool_call"])),
+    ).toEqual({ mode: "content_exact", classes: ["tool_call"] });
+  });
+
+  it("holds a class one mandate drops even when the other picks a class up", () => {
+    // The case a host owing an unfinished purge has to survive. One clause
+    // dropped tool content, the next drops model content and takes tool
+    // content back. Reading the newer clause alone would leave the tool bytes
+    // on disk with nothing left that names them.
+    expect(narrowestOf(exact(["model_call"]), exact(["tool_call"]))).toEqual({
+      mode: "content_exact",
+      classes: [],
+    });
+  });
+
+  it("falls to digest_only when either mandate says so", () => {
+    expect(
+      narrowestOf(exact(["model_call"]), {
+        mode: "digest_only",
+        classes: ["model_call"],
+      }),
+    ).toEqual({ mode: "digest_only", classes: ["model_call"] });
   });
 });

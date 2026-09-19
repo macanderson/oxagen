@@ -557,6 +557,141 @@ describe("tachod and frame bodies", () => {
     ).toBe(true);
   });
 
+  it("retries the purge on a confirming poll after it fails, and after a restart", async () => {
+    // The finding. `refreshBundle` caches the replacement bundle, and from that
+    // moment every later poll sends the new etag and comes back
+    // `not_modified`, which carries no clause to compare. A purge that fails
+    // once, or a process that exits between the cache write and the sweep,
+    // therefore left bodies the mandate excludes on disk with nothing that
+    // would ever look at them again.
+    const narrowed: { bundle?: PolicyBundle; confirmed?: true } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.confirmed === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // A transient filesystem error, standing in for anything that makes the
+    // sweep fail after the narrowing has been accepted.
+    const sweep = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    handle.wal.purgeBodiesOutsideMandate = () => {
+      throw new Error("EIO: the disk said no");
+    };
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+    // The bundle is cached and the bytes are still there, which is the leak.
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(log.some((line) => line.includes("will be retried"))).toBe(true);
+    // The debt is written down, so something can come back for it.
+    expect(existsSync(paths.pendingBodyPurge)).toBe(true);
+
+    // A restart is one of the two ways the host hears about it again. The
+    // second daemon reads the same TACHO_HOME and owes the same sweep, and it
+    // runs it without waiting for a poll.
+    await handle.stop();
+    handles.splice(handles.indexOf(handle), 1);
+    const restartLog: string[] = [];
+    const restarted = await startDaemon({
+      paths,
+      fetch,
+      exec: () => ({ status: 0, stdout: "", stderr: "" }),
+      log: (line) => restartLog.push(line),
+      port: 0,
+      transcriptRoots: [paths.root],
+      timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+    });
+    handles.push(restarted);
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(paths.pendingBodyPurge)).toBe(false);
+    expect(
+      restartLog.some((line) => line.startsWith("mandate narrowed (")),
+    ).toBe(true);
+    handle.wal.purgeBodiesOutsideMandate = sweep;
+  });
+
+  it("retries the purge on a not_modified poll, the only answer an unchanged mandate gets", async () => {
+    // The other retry point, and the one that matters while the process keeps
+    // running. Once the narrower etag is cached, `not_modified` is everything
+    // this host will hear, so that branch has to try the sweep again.
+    const narrowed: { bundle?: PolicyBundle; confirmed?: true } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.confirmed === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    const sweep = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    handle.wal.purgeBodiesOutsideMandate = () => {
+      throw new Error("EIO: the disk said no");
+    };
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // The error passes. Nothing changed on the control plane, so the next poll
+    // answers `not_modified` and carries no clause with it.
+    handle.wal.purgeBodiesOutsideMandate = sweep;
+    narrowed.confirmed = true;
+    expect(await handle.refreshBundle()).toBe(false);
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(paths.pendingBodyPurge)).toBe(false);
+    expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
+      true,
+    );
+  });
+
   it("keeps queued bodies through a mandate it cannot establish, and ships them once it can", async () => {
     // Withholding and erasing are different triggers, and this is why. A
     // cached mandate that has outlived its signed window, with a control plane

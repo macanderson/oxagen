@@ -104,3 +104,32 @@ export const NO_RETENTION: RetentionMandate = {
   mode: "digest_only",
   classes: [],
 };
+
+/**
+ * The mandate that keeps only what both of these keep.
+ *
+ * A host that accepted a narrowing and has not finished erasing under it holds
+ * that clause on disk until the sweep succeeds. If a second verified bundle
+ * arrives first, the host owes both erasures, and one clause that owes both is
+ * the intersection: `content_exact` only where both say so, and only the
+ * classes both name. Taking the newer clause alone would drop the older debt,
+ * and a bundle that narrows one class while widening another would then leave
+ * the first class's bytes on disk with nothing left that names them.
+ *
+ * Intersecting only ever erases more, never less, which is the direction a
+ * retention mandate is allowed to err in.
+ */
+export function narrowestOf(
+  a: RetentionMandate,
+  b: RetentionMandate,
+): RetentionMandate {
+  return {
+    mode:
+      a.mode === "content_exact" && b.mode === "content_exact"
+        ? "content_exact"
+        : "digest_only",
+    classes: a.classes.filter((contentClass) =>
+      b.classes.includes(contentClass),
+    ),
+  };
+}
