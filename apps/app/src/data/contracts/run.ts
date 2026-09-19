@@ -12,7 +12,6 @@
 // build them: the Proof tab and the witness run's own tab set (`witnessFor`,
 // spec §8.5), which #2955 owns.
 import { z } from "zod";
-import { PublicId } from "./common";
 import { Cost } from "./money";
 import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
 
@@ -274,8 +273,12 @@ const ChainCheckpoint = z.object({
   eventCount: Count,
   signedAt: z.iso.datetime({ offset: true }),
   deviceKeyFingerprint: z.string(),
-  /** Null until the platform has countersigned. */
-  platformKeyId: PublicId.nullable(),
+  /**
+   * The platform key that countersigned, as the capability wrote it. Not a
+   * PublicId: the contract accepts any string (including shapes like `pk:1`),
+   * so the field is named without an `Id` suffix and kept as plain text.
+   */
+  platformKey: z.string().nullable(),
   countersignedAt: z.iso.datetime({ offset: true }).nullable(),
   /** The external anchor it was published into; null when none. */
   anchorRoot: z.string().nullable(),
