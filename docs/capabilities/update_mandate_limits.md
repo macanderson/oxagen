@@ -23,12 +23,39 @@ refuses it.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `mandateId` | `string` | `mnd_…` |
-| `limits` | `MandateLimits?` | Replaces the limits as a whole. |
+| `limits` | `MandateLimits?` | Replaces the limits as a whole. The only way to delete a measure's bound. Mutually exclusive with `limitChanges`. |
+| `limitChanges` | `MandateLimitChanges?` | Change these measures, leave the rest. Measure → a partial bound (`perCall`, `perPeriod`, `period`, `currencyOrUnit`, each optional, at least one present). Mutually exclusive with `limits`. |
 | `targets` | `MandateTargets?` | Replaces the targets as a whole. |
 | `approval` | `MandateApproval?` | Replaces the approval rule. |
 | `validTo` | `string?` | ISO instant after `validFrom`. |
 
-At least one field is named.
+At least one field is named, and `limits` and `limitChanges` are never sent
+together: they state two intentions for one field, so both is invalid rather
+than one of them winning.
+
+## Atomicity
+
+`limitChanges` is merged over the stored record **inside the transaction that
+locks the mandate row** (`lockMandate`, `SELECT … FOR UPDATE`), at two depths:
+a measure the change does not name keeps its bound, and within a named measure
+a field the change does not carry keeps its stored value, `period` included
+(ADR-102). So two operators changing different bounds on one mandate each keep
+the other's change.
+
+Merging outside the handler is not safe, which is why this input exists. A
+caller that reads the mandate, lays its edit over the stored `limits` and posts
+the whole record back holds a snapshot nothing locked: one request lowers an
+amount cap while another changes a calls cap, and the second write restores the
+old, wider amount cap. A restored bound is authority nobody granted.
+
+The merged record is validated as a whole, so a change that would leave a bound
+with no figure or no unit is refused (`limit_incomplete`) rather than stored.
+That is reachable only for a measure the record does not hold yet; a bound for a
+new measure takes `daily` as its window when the change names none.
+
+`limits` replacement keeps exactly the semantics it always had, for the same
+reason: a caller that holds the whole record is stating the whole record, and
+it is the only way to delete a bound.
 
 ## Output
 
@@ -37,12 +64,10 @@ The mandate.
 ## App surface
 
 The Change limits dialog in the mandate page's header,
-`/{org}/{ws}/mandates/{mandate}`. Because this capability **replaces** `limits`
-rather than merging into it, the app reads the mandate first (`get_mandate`,
-`ledgerLimit: 1`) and lays the edited measure over the stored record, so every
-bound the operator did not touch is resubmitted exactly as recorded. A field left
-blank in the dialog therefore leaves that measure's bound as it is; removing a
-limit altogether means sending a `limits` record without it, which is this
+`/{org}/{ws}/mandates/{mandate}`. It sends `limitChanges` and makes exactly one
+call: the merge is the handler's, under the lock. A field left blank in the
+dialog therefore leaves that measure's bound as it is; removing a limit
+altogether means sending a whole `limits` record without it, which is this
 capability over the API or MCP.
 
 The dialog writes counts only and stores each figure exactly as typed: whether a
@@ -67,8 +92,10 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 | `conflict` | `mandate_ended` | Only an active mandate changes. |
 | `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
-| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs. |
+| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs, against the merged record. |
+| `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
 
 ## SPEC references
 
-- §6.9 part 3 (Change limits), App. E; ADR-059
+- §6.9 part 3 (Change limits), App. E; ADR-059; ADR-102 (`limitChanges` merges
+  under the row lock)
