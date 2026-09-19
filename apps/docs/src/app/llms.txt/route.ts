@@ -7,7 +7,7 @@ const BASE_URL = "https://docs.oxagen.sh";
 
 const SITE_NAME = "Oxagen docs";
 const SITE_DESCRIPTION =
-  "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.";
+  "Mission Control for your autonomous agents. Docs for the CLI, the REST API, the MCP server, and the web app.";
 
 // Page-tree node type, inferred from the loader output so it stays in sync with
 // fumadocs-core without importing internal type paths.

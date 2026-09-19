@@ -8,8 +8,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Oxagen docs",
-    short_name: "Oxagen docs",
+    name: "Oxagen",
+    short_name: "Oxagen",
     description: "Mission Control for your autonomous agents.",
     lang: "en",
     dir: "ltr",
@@ -20,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "any",
     background_color: "#09090B",
     theme_color: "#09090B",
-    categories: ["developer", "productivity", "education"],
+    categories: ["developer", "productivity", "business"],
     icons: [
       {
         src: "/pwa/icon-192.png",
