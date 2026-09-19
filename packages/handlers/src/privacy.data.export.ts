@@ -111,14 +111,14 @@ export const privacyDataExportHandler: CapabilityHandler<
         publicId: generatePublicId("prexp"),
         userId: ctx.userId!,
         orgId,
-        // The workspace whose `export_data` policy just governed this queue.
+        // The scope whose `export_data` policy just governed this queue.
         // `get_export_status` asks that policy again before it hands over an
-        // organization archive, wherever the download is requested from. The
-        // org-only sentinel is no workspace, so it is stored as none.
-        workspaceId:
-          ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
-            ? ctx.workspaceId
-            : null,
+        // organization archive, wherever the download is requested from. A
+        // queue made in no workspace is recorded as the org-only sentinel
+        // (ADR-068), never as null: null is reserved for rows written before
+        // this column existed, whose governing scope is unknown, and an
+        // organization archive with an unknown scope is refused.
+        workspaceId: ctx.workspaceId || ORG_ONLY_WORKSPACE_ID,
         scope: input.scope,
         status: "queued",
       })

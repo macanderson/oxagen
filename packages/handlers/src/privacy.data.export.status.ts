@@ -138,16 +138,30 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     // one the download arrives through. The download route is mounted under
     // any workspace slug, so a deny written in the queuing workspace A would
     // otherwise be stepped around by downloading through workspace B, whose
-    // policy never governed the export. So the queuing workspace is asked first
-    // and the calling scope second, and either one refusing refuses the read.
-    // A row with no recorded workspace (queued in no workspace, or written
-    // before the column existed) is asked in the calling scope alone.
+    // policy never governed the export. So the queuing scope is asked first and
+    // the calling scope second, and either one refusing refuses the read. A
+    // queue made in no workspace records the org-only sentinel, which asks at
+    // organization scope.
+    //
+    // A row with no recorded scope at all was written before the column
+    // existed. Which workspace governed it is not known, so a deny written
+    // there cannot be checked, and the archive holds everyone's data. It is
+    // refused rather than released on a check that might be asking the wrong
+    // workspace. The way forward is a new export, which records its scope.
+    if (row.workspaceId === null) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_export_scope_unknown",
+        message:
+          "This organization export was queued before its workspace was recorded, so its access rules cannot be checked. Request a new export.",
+      });
+    }
     const revoked = {
       reason: "org_export_not_permitted",
       message:
         "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
     };
-    if (row.workspaceId && row.workspaceId !== ctx.workspaceId) {
+    if (row.workspaceId !== ctx.workspaceId) {
       await assertCapabilityNotRevoked(
         privacyDataExport,
         { ...ctx, workspaceId: row.workspaceId },
