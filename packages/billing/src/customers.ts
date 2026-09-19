@@ -16,6 +16,13 @@ import { logger } from "./logger";
  * eventually consistent: two quick purchases by a subscription-less org
  * would each create a customer without it.
  *
+ * A stored id is verified against the live Stripe account before it is
+ * returned. After a key rotation onto a different account (the 2026-09-13
+ * sandbox cutover, docs/ops/stripe-sandbox-mode.md), rows still naming the
+ * previous account's `cus_…` make every Checkout fail with
+ * `resource_missing`. Those ids are dropped and a customer is re-created
+ * on the account the secret key points at.
+ *
  * `opts.system` routes the reads and the write through `withSystemDb` for
  * callers with no tenant scope — the close job and the platform-operator
  * handler — the switch `getOrgBillingSettings` carries. Request paths leave
@@ -57,13 +64,58 @@ export async function ensureStripeCustomer(
   );
 
   if (!tenant) throw new Error(`tenant ${orgId} not found`);
-  if (settingsCustomerId !== null) return settingsCustomerId;
 
-  const customerId =
-    subscriptionCustomerId ?? (await resolveOrCreateCustomer(tenant));
+  const provider = billingProvider();
+  const candidates = uniqueIds(settingsCustomerId, subscriptionCustomerId);
+  for (const candidate of candidates) {
+    if (await provider.customerExists(candidate)) {
+      if (candidate !== settingsCustomerId) {
+        return storeCustomerId(runner, orgId, candidate, {
+          keepExisting: true,
+        });
+      }
+      return candidate;
+    }
+    logger.warn(
+      { orgId, customerId: candidate },
+      "billing: stored Stripe customer is missing on this account; recreating",
+    );
+  }
 
-  // The write keeps a value a concurrent caller stored first, so two racing
-  // creations converge on one id for the org.
+  const customerId = await resolveOrCreateCustomer(tenant);
+  // Overwrite any stale id the loop just rejected. The coalesce path would
+  // keep the missing cus_… and every Checkout would keep failing.
+  return storeCustomerId(runner, orgId, customerId, {
+    keepExisting: settingsCustomerId === null,
+  });
+}
+
+function uniqueIds(
+  ...ids: Array<string | null | undefined>
+): readonly string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+type DbRunner = typeof withTenantDb | typeof withSystemDb;
+
+/**
+ * Persist the org's Stripe customer id. `keepExisting` uses coalesce so a
+ * concurrent first write wins; otherwise the new id overwrites a stale one.
+ */
+async function storeCustomerId(
+  runner: DbRunner,
+  orgId: string,
+  customerId: string,
+  opts: { keepExisting: boolean },
+): Promise<string> {
   const [written] = await runner((tx) =>
     tx
       .insert(schema.orgBillingSettings)
@@ -71,7 +123,9 @@ export async function ensureStripeCustomer(
       .onConflictDoUpdate({
         target: schema.orgBillingSettings.orgId,
         set: {
-          stripeCustomerId: sql`coalesce(${schema.orgBillingSettings.stripeCustomerId}, excluded.stripe_customer_id)`,
+          stripeCustomerId: opts.keepExisting
+            ? sql`coalesce(${schema.orgBillingSettings.stripeCustomerId}, excluded.stripe_customer_id)`
+            : customerId,
           updatedAt: new Date(),
         },
       })
@@ -100,11 +154,19 @@ async function resolveOrCreateCustomer(tenant: {
   // still cheaper than always creating duplicates when our DB row is missing.
   const found = await provider.findCustomerByOrgId(tenant.id);
   if (found) {
-    logger.debug(
+    // A search hit can still be from a previous account's index lag, or a
+    // deleted customer Stripe has not purged from search. Verify before reuse.
+    if (await provider.customerExists(found.id)) {
+      logger.debug(
+        { orgId: tenant.id, customerId: found.id },
+        "billing: found existing customer via metadata search",
+      );
+      return found.id;
+    }
+    logger.warn(
       { orgId: tenant.id, customerId: found.id },
-      "billing: found existing customer via metadata search",
+      "billing: metadata search returned a customer missing on this account; creating a new one",
     );
-    return found.id;
   }
 
   const customerId = await provider.createCustomer({

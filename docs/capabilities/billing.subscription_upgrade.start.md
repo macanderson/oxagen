@@ -34,6 +34,10 @@ Org Owner or Billing, checked in the handler with `assertOrgRole` for the
 signed-in user or the API key's creator. The kernel's IAM check allows every
 capability on a non-enterprise org, so the handler owns this gate.
 
+`noBillingGate: true` (INV-27): starting Checkout is never refused for lack of
+GAUs. A prepaid organisation at `remaining = 0` is the one that needs to
+upgrade; metering this invoke as a governed action blocked that path.
+
 ## Input
 
 | Field | Type | Description |

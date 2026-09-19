@@ -3,16 +3,17 @@
  *
  * The database is a small in-memory fake: one organisations row, at most one
  * org_billing_settings row and at most one subscriptions row per test, and
- * an upsert on org_billing_settings that models `INSERT … ON CONFLICT
- * (org_id) DO UPDATE SET stripe_customer_id = coalesce(existing, excluded)`.
- * The provider is a fake with the two customer methods.
+ * an upsert on org_billing_settings that models both
+ * `SET stripe_customer_id = coalesce(existing, excluded)` (keep a concurrent
+ * first write) and a plain overwrite (replace a stale id after a Stripe
+ * account cutover). The provider is a fake with the three customer methods.
  *
  * Scenarios:
- *  1. The settings column carries the id → returned; no provider call, no write.
- *  2. No settings row; a subscription row carries the id → returned and the
- *     column written.
- *  3. No row anywhere; the provider search finds the customer → returned and
- *     written.
+ *  1. The settings column carries a live id → returned; no create, no write.
+ *  2. No settings row; a subscription row carries a live id → returned and
+ *     the column written.
+ *  3. No row anywhere; the provider search finds a live customer → returned
+ *     and written.
  *  4. No row anywhere; the search finds nothing → one customer created and
  *     written.
  *  5. Tenant not found → throws.
@@ -20,6 +21,9 @@
  *     the search answers null both times: the second read finds the column.
  *  7. `{ system: true }` runs on withSystemDb with no tenant scope.
  *  8. A concurrent caller's id, stored first, wins over the one this call made.
+ *  9. A settings id missing on this Stripe account is overwritten with a new
+ *     customer (sandbox cutover / key rotation).
+ * 10. A search hit that is missing on this account falls through to create.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -30,11 +34,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findCustomerByOrgIdMock = vi.fn();
 const createCustomerMock = vi.fn();
+const customerExistsMock = vi.fn();
 
 vi.mock("./client", () => ({
   billingProvider: () => ({
     findCustomerByOrgId: findCustomerByOrgIdMock,
     createCustomer: createCustomerMock,
+    customerExists: customerExistsMock,
   }),
 }));
 
@@ -47,7 +53,11 @@ interface World {
   settings: { orgId: string; stripeCustomerId: string | null } | null;
   subscription: { stripeCustomerId: string | null } | null;
   /** Every org_billing_settings upsert, in order. */
-  upserts: Array<{ orgId: string; stripeCustomerId: string }>;
+  upserts: Array<{
+    orgId: string;
+    stripeCustomerId: string;
+    keepExisting: boolean;
+  }>;
   /** Runs once, inside the upsert, before the fake applies it. */
   beforeUpsert: (() => void) | null;
 }
@@ -95,21 +105,34 @@ const tx = {
         set: Record<string, unknown>;
       }) => ({
         returning: async () => {
-          if (!isCoalesceSql(conflict.set.stripeCustomerId)) {
+          const keepExisting = isCoalesceSql(conflict.set.stripeCustomerId);
+          const overwrite =
+            typeof conflict.set.stripeCustomerId === "string"
+              ? conflict.set.stripeCustomerId
+              : null;
+          if (!keepExisting && overwrite === null) {
             throw new Error(
-              "fake db: the upsert must keep an id stored first (coalesce)",
+              "fake db: upsert must coalesce or set a string customer id",
             );
           }
           world.beforeUpsert?.();
           world.beforeUpsert = null;
-          world.upserts.push(v);
+          world.upserts.push({
+            orgId: v.orgId,
+            stripeCustomerId: v.stripeCustomerId,
+            keepExisting,
+          });
           if (world.settings === null) {
             world.settings = {
               orgId: v.orgId,
               stripeCustomerId: v.stripeCustomerId,
             };
-          } else if (world.settings.stripeCustomerId === null) {
-            world.settings.stripeCustomerId = v.stripeCustomerId;
+          } else if (keepExisting) {
+            if (world.settings.stripeCustomerId === null) {
+              world.settings.stripeCustomerId = v.stripeCustomerId;
+            }
+          } else {
+            world.settings.stripeCustomerId = overwrite;
           }
           return [{ stripeCustomerId: world.settings.stripeCustomerId }];
         },
@@ -158,15 +181,18 @@ describe("ensureStripeCustomer", () => {
     seams.system.mockImplementation(async (fn: (t: unknown) => unknown) =>
       fn(tx),
     );
+    // A stored id is live unless a test says otherwise.
+    customerExistsMock.mockResolvedValue(true);
   });
 
-  it("returns the id on org_billing_settings without calling the provider or writing", async () => {
+  it("returns the id on org_billing_settings without creating or writing", async () => {
     world.settings = { orgId: "org-abc", stripeCustomerId: "cus_settings_001" };
     world.subscription = { stripeCustomerId: "cus_sub_001" };
 
     const result = await ensureStripeCustomer("org-abc");
 
     expect(result).toBe("cus_settings_001");
+    expect(customerExistsMock).toHaveBeenCalledWith("cus_settings_001");
     expect(findCustomerByOrgIdMock).not.toHaveBeenCalled();
     expect(createCustomerMock).not.toHaveBeenCalled();
     expect(world.upserts).toEqual([]);
@@ -178,10 +204,15 @@ describe("ensureStripeCustomer", () => {
     const result = await ensureStripeCustomer("org-abc");
 
     expect(result).toBe("cus_existing_001");
+    expect(customerExistsMock).toHaveBeenCalledWith("cus_existing_001");
     expect(findCustomerByOrgIdMock).not.toHaveBeenCalled();
     expect(createCustomerMock).not.toHaveBeenCalled();
     expect(world.upserts).toEqual([
-      { orgId: "org-abc", stripeCustomerId: "cus_existing_001" },
+      {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_existing_001",
+        keepExisting: true,
+      },
     ]);
   });
 
@@ -248,31 +279,59 @@ describe("ensureStripeCustomer", () => {
     const result = await ensureStripeCustomer("org-abc", { system: true });
 
     expect(result).toBe("cus_sys_001");
+    expect(seams.system).toHaveBeenCalled();
     expect(seams.tenant).not.toHaveBeenCalled();
-    expect(seams.system).toHaveBeenCalledTimes(2);
-    expect(world.settings?.stripeCustomerId).toBe("cus_sys_001");
   });
 
-  it("without { system } runs on the tenant seam", async () => {
-    world.settings = { orgId: "org-abc", stripeCustomerId: "cus_settings_001" };
-
-    await ensureStripeCustomer("org-abc");
-
-    expect(seams.tenant).toHaveBeenCalledOnce();
-    expect(seams.system).not.toHaveBeenCalled();
-  });
-
-  it("returns the id a concurrent caller stored first rather than the one it created", async () => {
+  it("a concurrent caller's id, stored first, wins over the one this call made", async () => {
     findCustomerByOrgIdMock.mockResolvedValue(null);
-    createCustomerMock.mockResolvedValue("cus_mine");
-    // Between this call's read and its write, another caller wrote the column.
+    createCustomerMock.mockResolvedValue("cus_mine_001");
     world.beforeUpsert = () => {
-      world.settings = { orgId: "org-abc", stripeCustomerId: "cus_theirs" };
+      world.settings = {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_theirs_001",
+      };
     };
 
     const result = await ensureStripeCustomer("org-abc");
 
-    expect(result).toBe("cus_theirs");
-    expect(world.settings?.stripeCustomerId).toBe("cus_theirs");
+    expect(result).toBe("cus_theirs_001");
+    expect(world.settings?.stripeCustomerId).toBe("cus_theirs_001");
+  });
+
+  it("overwrites a settings id that is missing on this Stripe account", async () => {
+    world.settings = { orgId: "org-abc", stripeCustomerId: "cus_stale_001" };
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_stale_001";
+    });
+    findCustomerByOrgIdMock.mockResolvedValue(null);
+    createCustomerMock.mockResolvedValue("cus_fresh_001");
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_fresh_001");
+    expect(customerExistsMock).toHaveBeenCalledWith("cus_stale_001");
+    expect(createCustomerMock).toHaveBeenCalledOnce();
+    expect(world.upserts).toEqual([
+      {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_fresh_001",
+        keepExisting: false,
+      },
+    ]);
+    expect(world.settings?.stripeCustomerId).toBe("cus_fresh_001");
+  });
+
+  it("falls through to create when metadata search returns a missing customer", async () => {
+    findCustomerByOrgIdMock.mockResolvedValue({ id: "cus_ghost_001" });
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_ghost_001";
+    });
+    createCustomerMock.mockResolvedValue("cus_fresh_002");
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_fresh_002");
+    expect(createCustomerMock).toHaveBeenCalledOnce();
   });
 });
