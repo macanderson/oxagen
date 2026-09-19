@@ -431,32 +431,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ARCHITECTURE.md §6.3 describes a fail-closed gate here: a same-repo
-      # push or pull request must run pay.spec.ts against a real Stripe
-      # test-mode account, never the placeholder sk_test_ci this workflow's
-      # top-level env sets, and only a fork pull request (which cannot hold
-      # the secret) may skip. This step cannot confirm `STRIPE_TEST_SECRET_KEY`
-      # is actually configured as a repository secret, so failing the job
-      # outright on a same-repo run with no secret would turn every e2e run
-      # red for every contributor the moment this merges, not just this
-      # branch's. Until that secret's presence is confirmed, the step
-      # degrades to a named, visible skip instead: STRIPE_E2E stays 0 and
-      # pay.spec.ts explains why in the job summary rather than failing the
-      # whole suite. Once `STRIPE_TEST_SECRET_KEY` is confirmed set in this
-      # repository, the `else` branch below should be changed to `exit 1` to
-      # arm the fail-closed gate ARCHITECTURE.md describes. STRIPE_E2E and
-      # STRIPE_SECRET_KEY must both stay in turbo.json's test:e2e env list
-      # (turbo strips unlisted workflow env) for pay.spec.ts to see them.
+      # Fail-closed (ARCHITECTURE.md §6.3): a same-repo push or pull request
+      # runs pay.spec.ts against a real Stripe test-mode account, never the
+      # placeholder sk_test_ci this workflow's top-level env sets. Only a
+      # fork pull request, which GitHub gives no secrets, may skip. The
+      # repository secret STRIPE_TEST_SECRET_KEY is configured, so a missing
+      # value on a trusted run means it was removed or renamed, and the job
+      # fails rather than going green without the one real Checkout check.
+      # STRIPE_E2E and STRIPE_SECRET_KEY must both stay in turbo.json's
+      # test:e2e env list (turbo strips unlisted workflow env).
       - name: Stripe test key present
         env:
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          IS_FORK_PR: ${{ github.event.pull_request.head.repo.fork == true }}
         run: |
           if [ -n "$STRIPE_TEST_SECRET_KEY" ]; then
             echo "STRIPE_SECRET_KEY=$STRIPE_TEST_SECRET_KEY" >> "$GITHUB_ENV"
             echo "STRIPE_E2E=1" >> "$GITHUB_ENV"
-          else
+          elif [ "$IS_FORK_PR" = "true" ]; then
             echo "STRIPE_E2E=0" >> "$GITHUB_ENV"
-            echo "::warning::STRIPE_TEST_SECRET_KEY is not set in this repository's secrets; pay.spec.ts will skip until it is added. This is a degraded skip, not the fail-closed gate ARCHITECTURE.md describes (see the comment above this step)."
+            echo "::notice::Fork pull request: no Stripe test key, so pay.spec.ts skips."
+            echo "pay.spec.ts skipped: fork pull request, no Stripe test key." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::STRIPE_TEST_SECRET_KEY is empty on a trusted run. Set the repository secret to a Stripe test-mode key; pay.spec.ts cannot run without it."
+            exit 1
           fi
 
       - name: Compute turbo filter
