@@ -2,6 +2,7 @@
 // (Fleet) or one run (Run), mapped into approval items, with a refusal passed
 // through and an unmappable record reported once.
 import { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
+import { agentApprovalListResolved } from "@oxagen/oxagen/contracts/agent.approval.list_resolved";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -92,6 +93,75 @@ describe("approvals.pending", () => {
       readOk({ items: [{ ...item, tool: "" }], nextCursor: null }),
     );
     expect(await approvals.pending(ctx, { runId: null })).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("approvals.resolved (#3153)", () => {
+  const resolvedItem = {
+    id: "apr_q8t1",
+    runId: "arun_7k2m9q",
+    tool: "stripe__create_payment",
+    requester: null,
+    createdAt: "2026-09-18T10:00:00.000Z",
+    expiresAt: "2026-09-18T10:05:00.000Z",
+    resolvedAt: "2026-09-18T10:00:01.000Z",
+    resolution: "approved" as const,
+    resolvedBy: "policy:small-vendor-payments",
+    autoRuleId: "small-vendor-payments",
+    autoEligibility: {
+      ruleId: "small-vendor-payments",
+      ok: true,
+      reasons: [],
+      floor: false,
+    },
+    mandateId: null,
+    chain: { agentKey: null, rule: null },
+  };
+
+  it("reads a run's resolved approvals and maps the rule that released one with no person", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ items: [resolvedItem], nextCursor: null }),
+    );
+    expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
+      readOk([
+        {
+          id: "apr_q8t1",
+          runId: "arun_7k2m9q",
+          tool: "stripe__create_payment",
+          requester: null,
+          createdAt: "2026-09-18T10:00:00.000Z",
+          expiresAt: "2026-09-18T10:05:00.000Z",
+          resolvedAt: "2026-09-18T10:00:01.000Z",
+          resolution: "approved",
+          resolvedBy: "policy:small-vendor-payments",
+          autoRuleId: "small-vendor-payments",
+        },
+      ]),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: agentApprovalListResolved,
+      input: { runId: "arun_7k2m9q", limit: 100 },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a failed read through (negative)", async () => {
+    const down = readError("run_index_unavailable", 503);
+    kernelRead.mockResolvedValue(down);
+    expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
+      down,
+    );
+  });
+
+  it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ items: [{ ...resolvedItem, tool: "" }], nextCursor: null }),
+    );
+    expect(await approvals.resolved(ctx, { runId: "arun_7k2m9q" })).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();

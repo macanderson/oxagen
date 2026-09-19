@@ -2654,6 +2654,7 @@ The current repository registers 229 real contracts (244 names minus test fixtur
 | `get_run` | get_tacho_session, get_execution_trace, get_message_execution | run with turns, steps, frames, receipts, cost |
 | `export_run` | export_data (run part) | signed bundle with verifier |
 | `list_approvals` | (new; approvals had no list) | queue with the four-hop chain |
+| `list_resolved_approvals` | (new; a resolved approval had no reader, #3153) | the resolved ledger, most recently resolved first: what a person approved or denied, and what a decision rule released with no person, with the rule id and `get_auto_eligibility`'s id on the row |
 | `resolve_approval` | resolve_approval, resolve_mcp_consent | approve or deny, mints the token |
 | `send_message` | (new) | message to `@<agent-slug>`, `@agents`, or a run id, with a delivery mode; reaches `applied` at the model request that carried it (§7.3, §7.6) |
 | `list_messages` | (new) | sent and received, with delivery outcome |

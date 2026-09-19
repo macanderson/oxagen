@@ -1109,21 +1109,31 @@ describe("chain and seal", () => {
 });
 
 describe("approvals on the run", () => {
-  it("reads list_approvals narrowed to this run, and only when its tab is open", async () => {
+  it("reads list_approvals and list_resolved_approvals narrowed to this run, and only when its tab is open", async () => {
     const { calls } = await renderRun(
-      { detail: ok(runDetail()), approvals: ok([]) },
+      {
+        detail: ok(runDetail()),
+        approvals: ok([]),
+        resolvedApprovals: ok([]),
+      },
       { tab: "approvals" },
     );
     expect(calls.approvals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
+    expect(calls.resolvedApprovals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
     expect(calls.transcript).toHaveLength(0);
   });
 
   it("says nothing is parked rather than drawing an empty strip (negative)", async () => {
     await renderRun(
-      { detail: ok(runDetail()), approvals: ok([]) },
+      {
+        detail: ok(runDetail()),
+        approvals: ok([]),
+        resolvedApprovals: ok([]),
+      },
       { tab: "approvals" },
     );
     expect(screen.queryByTestId("approval")).toBeNull();
+    expect(screen.queryByTestId("resolved-approval")).toBeNull();
   });
 
   it("draws one card per approval recorded on the run", async () => {
@@ -1142,11 +1152,55 @@ describe("approvals on the run", () => {
             expiresAt: new Date(NOW + 3_600_000).toISOString(),
           },
         ]),
+        resolvedApprovals: ok([]),
       },
       { tab: "approvals" },
     );
     const [card] = screen.getAllByTestId("approval");
     expect(card).toHaveTextContent("create_release");
+  });
+
+  // #3153: the receipt a decision rule leaves when it releases a call with
+  // no person, read back for the first time.
+  it("draws the resolved section, naming the rule that released a call with no person", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok([]),
+        resolvedApprovals: ok([
+          {
+            id: "apr_2",
+            runId: "tse_7k2m9q",
+            tool: "stripe__create_payment",
+            requester: null,
+            createdAt: new Date(NOW - 60_000).toISOString(),
+            expiresAt: new Date(NOW + 3_600_000).toISOString(),
+            resolvedAt: new Date(NOW - 30_000).toISOString(),
+            resolution: "approved",
+            resolvedBy: "policy:small-vendor-payments",
+            autoRuleId: "small-vendor-payments",
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    const [card] = screen.getAllByTestId("resolved-approval");
+    expect(card).toHaveTextContent("stripe__create_payment");
+    expect(screen.getByTestId("resolved-approver")).toHaveTextContent(
+      "small-vendor-payments",
+    );
+  });
+
+  it("names its own failure when the resolved read is refused (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok([]),
+        resolvedApprovals: DOWN,
+      },
+      { tab: "approvals" },
+    );
+    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
   });
 });
 

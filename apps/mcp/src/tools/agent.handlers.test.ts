@@ -148,6 +148,90 @@ describe("agent.approval.list handler", () => {
   });
 });
 
+// ── agent.approval.list_resolved (#3153) ───────────────────────────────────
+
+import handler_agentApprovalListResolved, {
+  schema as agentApprovalListResolvedSchema,
+  metadata as agentApprovalListResolvedMetadata,
+} from "./agent.approval.list_resolved";
+
+describe("agent.approval.list_resolved handler", () => {
+  const validOutput = {
+    items: [
+      {
+        id: "apr_0123456789abcdefghjkmn",
+        runId: null,
+        tool: "stripe__create_payment",
+        requester: null,
+        createdAt: "2026-09-13T10:00:00.000Z",
+        expiresAt: "2026-09-13T10:05:00.000Z",
+        resolvedAt: "2026-09-13T10:00:01.000Z",
+        resolution: "approved",
+        resolvedBy: "policy:small-vendor-payments",
+        autoRuleId: "small-vendor-payments",
+        autoEligibility: {
+          ruleId: "small-vendor-payments",
+          ok: true,
+          reasons: [],
+          floor: false,
+        },
+        mandateId: null,
+        chain: { agentKey: null, rule: null },
+      },
+    ],
+    nextCursor: null,
+  };
+
+  it("exports the contract's schema and read-only metadata", () => {
+    expect(Object.keys(agentApprovalListResolvedSchema).sort()).toEqual([
+      "cursor",
+      "limit",
+      "runId",
+      "since",
+      "until",
+    ]);
+    expect(agentApprovalListResolvedMetadata.name).toBe(
+      "list_resolved_approvals",
+    );
+    expect(agentApprovalListResolvedMetadata.annotations?.readOnlyHint).toBe(
+      true,
+    );
+  });
+
+  it("calls buildContext then invoke with 'list_resolved_approvals', the args and surface 'mcp'", async () => {
+    mocks.invoke.mockResolvedValue(validOutput);
+    const args = {
+      runId: undefined,
+      since: undefined,
+      until: undefined,
+      limit: 20,
+      cursor: undefined,
+    };
+    const result = await handler_agentApprovalListResolved(args);
+    expect(mocks.buildContext).toHaveBeenCalledOnce();
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "list_resolved_approvals",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+    expect(result).toEqual(validOutput);
+  });
+
+  it("propagates invoke errors", async () => {
+    mocks.invoke.mockRejectedValue(new Error("invoke failed"));
+    await expect(
+      handler_agentApprovalListResolved({
+        runId: undefined,
+        since: undefined,
+        until: undefined,
+        limit: 50,
+        cursor: undefined,
+      }),
+    ).rejects.toThrow("invoke failed");
+  });
+});
+
 // ── agent.approval.resolve ────────────────────────────────────────────────────
 
 import handler_agentApprovalResolve, {

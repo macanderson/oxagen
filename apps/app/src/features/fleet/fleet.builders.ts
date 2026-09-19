@@ -113,6 +113,9 @@ export function fleetSource(reads: FleetReads) {
         calls.approvals.push(args);
         return Promise.resolve(reads.approvals);
       },
+      // Fleet reads only the pending approvals; the resolved ledger is a Run
+      // page read (#3153).
+      resolved: refuse,
     },
     agents: {
       list: refuse,

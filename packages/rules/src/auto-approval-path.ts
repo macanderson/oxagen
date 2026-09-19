@@ -94,28 +94,36 @@ export async function autoApproveParkedCall(
   return {
     ...outcome,
     commit: async () => {
-      await withTenantDb((tx) =>
-        tx.insert(schema.approvalRequests).values({
-          orgId: args.ctx.orgId,
-          workspaceId: args.ctx.workspaceId,
-          capabilityName: args.capability,
-          inputPreview: (args.input ?? {}) as object,
-          // The declared tool's grade: `ok` is unreachable without one,
-          // because a capability with no declared tool is a floor.
-          riskLevel: evaluated.riskLevel,
-          ruleIds: [args.verdict.ruleId],
-          inputDigest: digest,
-          autoRuleId: outcome.ruleId,
-          resolvedReasons: [],
-          resolution: "approved",
-          resolvedAt: at,
-          resolvedByPolicy: policyApprover(outcome.ruleId),
-          // The token is minted and spent by the call this decision releases;
-          // an approval nobody has to act on never waits.
-          tokenUsedAt: at,
-          expiresAt: at,
-          createdById: args.ctx.userId ?? undefined,
-        }),
+      // `.returning()` is not read back for its own read path. That is
+      // `list_resolved_approvals` (#3153, ADR-109), which queries the row
+      // fresh rather than trusting a value threaded through the call stack.
+      // It is logged here so the id this insert used to discard is visible
+      // on the write path too, the instant the receipt is written.
+      const [row] = await withTenantDb((tx) =>
+        tx
+          .insert(schema.approvalRequests)
+          .values({
+            orgId: args.ctx.orgId,
+            workspaceId: args.ctx.workspaceId,
+            capabilityName: args.capability,
+            inputPreview: (args.input ?? {}) as object,
+            // The declared tool's grade: `ok` is unreachable without one,
+            // because a capability with no declared tool is a floor.
+            riskLevel: evaluated.riskLevel,
+            ruleIds: [args.verdict.ruleId],
+            inputDigest: digest,
+            autoRuleId: outcome.ruleId,
+            resolvedReasons: [],
+            resolution: "approved",
+            resolvedAt: at,
+            resolvedByPolicy: policyApprover(outcome.ruleId),
+            // The token is minted and spent by the call this decision releases;
+            // an approval nobody has to act on never waits.
+            tokenUsedAt: at,
+            expiresAt: at,
+            createdById: args.ctx.userId ?? undefined,
+          })
+          .returning({ publicId: schema.approvalRequests.publicId }),
       );
       emitAutoApproved(args);
       logger.info(
@@ -123,6 +131,7 @@ export async function autoApproveParkedCall(
           capability: args.capability,
           rule: args.verdict.ruleId,
           autoRule: outcome.ruleId,
+          approvalId: row?.publicId,
         },
         "auto-approval: the call proceeded with no person",
       );

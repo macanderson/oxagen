@@ -245,7 +245,7 @@ export function agentsSource(reads: AgentReads) {
       transcript: refuse,
       chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
