@@ -519,6 +519,42 @@ describe("sealing an OTLP export", () => {
     };
   }
 
+  /** One OTLP metrics export carrying a single data point. */
+  function metricExportOf(name: string, attrs: Record<string, unknown>) {
+    return {
+      resourceMetrics: [
+        {
+          resource: {
+            attributes: [
+              kv("os.type", "linux"),
+              kv("service.version", "2.1.263"),
+            ],
+          },
+          scopeMetrics: [
+            {
+              metrics: [
+                {
+                  name: `claude_code.${name}`,
+                  sum: {
+                    dataPoints: [
+                      {
+                        timeUnixNano: TS,
+                        asInt: "1",
+                        attributes: Object.entries(attrs).map(([k, v]) =>
+                          kv(k, v),
+                        ),
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   it("seals a plugin MCP connection and keeps the model call exported with it", () => {
     // Claude Code 2.1.277 sends plugin attribution on its MCP connection
     // records. The strict body refused them, and the throw took the whole
@@ -596,5 +632,147 @@ describe("sealing an OTLP export", () => {
     // The chain stays dense: the next seal follows directly.
     const next = r.sealCollectorEvent("oxagen:hook_health", {});
     expect(next.seq).toBe(event.seq + 1);
+  });
+
+  describe("a refused record does not poison the recorder's sticky fields", () => {
+    // Regression coverage for #3438: `sealOtelDraft` used to merge a record's
+    // standard fields onto the recorder BEFORE `seal()` validated them, so a
+    // refused `user.account_uuid` (over the envelope's 512-char limit) stuck
+    // around and refused every later record that omitted it too.
+    const overLongAccountUuid = "a".repeat(513);
+
+    it("refuses only the one record in the same export, and seals the one after it", () => {
+      const r = recorder();
+      const events = r.ingestOtlp(
+        exportOf(
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 100,
+              output_tokens: 50,
+              request_id: "req_bad",
+              "user.account_uuid": overLongAccountUuid,
+            },
+          ],
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 200,
+              output_tokens: 75,
+              request_id: "req_good",
+            },
+          ],
+        ) as never,
+      );
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.body).toMatchObject({ input_tokens: 200 });
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
+
+    it("seals cleanly in a later, separate export after a refusal", () => {
+      const r = recorder();
+      const refusedExport = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_bad",
+          "user.account_uuid": overLongAccountUuid,
+        },
+      ]) as never;
+      expect(r.ingestOtlp(refusedExport)).toEqual([]);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+
+      const laterExport = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 300,
+          output_tokens: 90,
+          request_id: "req_good",
+        },
+      ]) as never;
+      const events = r.ingestOtlp(laterExport);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.body).toMatchObject({ input_tokens: 300 });
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+      expect(r.takeOtelRefusals()).toEqual([]);
+    });
+
+    it("does not poison sticky state on a subagent child recorder either", () => {
+      const r = recorder();
+      const events = r.ingestOtlp(
+        exportOf(
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 10,
+              output_tokens: 5,
+              request_id: "req_child_bad",
+              agent_id: "sub-1",
+              "user.account_uuid": overLongAccountUuid,
+            },
+          ],
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 20,
+              output_tokens: 8,
+              request_id: "req_child_good",
+              agent_id: "sub-1",
+            },
+          ],
+        ) as never,
+      );
+      const child = r.openChildren.get("sub-1");
+      expect(child).toBeDefined();
+      // `ingestOtlp`'s catch records the refusal on the recorder the export
+      // was fed to, not the child chain the draft routed to.
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+      const llmEvent = events.find((e) => e.kind === "llm_call");
+      expect(llmEvent?.body).toMatchObject({ input_tokens: 20 });
+      expect(llmEvent?.anthropic?.account_uuid).toBeUndefined();
+    });
+
+    it("refuses, and does not push, a metric whose standard fields the envelope would refuse", () => {
+      const r = recorder();
+      r.ingestOtlp(
+        metricExportOf("token.usage", {
+          "user.account_uuid": overLongAccountUuid,
+        }) as never,
+      );
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("metric:"),
+      ]);
+      expect(r.metrics).toEqual([]);
+
+      // The next log record must seal cleanly, unpoisoned by the metric's
+      // refused standard fields.
+      const events = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 42,
+            output_tokens: 7,
+            request_id: "req_after_metric",
+          },
+        ]) as never,
+      );
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
   });
 });
