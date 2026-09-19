@@ -11,6 +11,8 @@
  *   1. No authenticated user            → throws Unauthorized
  *   2. No orgId in context              → throws Forbidden
  *   3. org scope without input.orgId    → throws (orgId required)
+ *   3b. org scope naming another org    → throws Forbidden (the kernel and the
+ *      revocation re-check both govern ctx.orgId, so the target must match it)
  *   4. org scope, lowercase "owner"     → SUCCEEDS  ← regression guard for the
  *      "Owner" vs "owner" case bug that blocked every legitimate owner.
  *   5. org scope, non-owner ("admin")   → throws Forbidden
@@ -168,6 +170,24 @@ describe("privacy.data.erase handler", () => {
     await expect(
       privacyDataEraseHandler({ scope: "org", confirm: true }, makeCtx()),
     ).rejects.toThrow(/orgId is required/);
+  });
+
+  // The kernel resolves IAM against `ctx.orgId`, and so does the revocation
+  // re-check. An erasure aimed at a different org would therefore be decided in
+  // one tenant and executed against another, so a target org's explicit
+  // `erase_data` deny would never be read (discussion_r4051966251).
+  it("throws Forbidden for org scope when input.orgId is not the governed org", async () => {
+    roleResult = [{ role: "owner" }];
+    const OTHER_ORG_ID = "33333333-3333-4333-8333-333333333333";
+
+    await expect(
+      privacyDataEraseHandler(
+        { scope: "org", orgId: OTHER_ORG_ID, confirm: true },
+        makeCtx(),
+      ),
+    ).rejects.toThrow(/own context/);
+    expect(mockEventSend).not.toHaveBeenCalled();
+    expect(mockEmitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("REGRESSION: org scope succeeds for a lowercase 'owner' membership role", async () => {
