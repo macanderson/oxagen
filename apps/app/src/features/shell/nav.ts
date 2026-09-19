@@ -164,6 +164,9 @@ function currentNavKey(pathname: string): NavKey | null {
     return orgSegmentKey(head);
   }
   if (head === undefined || head === "runs") return "fleet";
+  // A mandate belongs to an agent and has no sidebar item of its own, so it
+  // lights Agents the same way a run with no Runs item lights Fleet above.
+  if (head === "mandates") return "agents";
   return (
     WORKSPACE_NAV.find(
       (key) => key !== "fleet" && WORKSPACE_SEGMENT[key] === head,
@@ -241,7 +244,7 @@ export function breadcrumbs(
   }
   const base = pathOf(org, ws);
   out.push({ kind: "name", text: names.ws ?? ws, href: base });
-  const [head, id, sub, subId] = rest;
+  const [head, id, sub] = rest;
   switch (head) {
     case undefined:
       out.push({ kind: "nav", key: "fleet", href: null });
@@ -257,9 +260,14 @@ export function breadcrumbs(
         out.push({ kind: "id", text: id, href: agentHref });
         if (sub === "source")
           out.push({ kind: "id", text: "source", href: null });
-        if (sub === "mandates" && subId !== undefined)
-          out.push({ kind: "id", text: subId, href: null });
       }
+      break;
+    case "mandates":
+      // Flat route (ARCHITECTURE.md §1.2): the mandate is not nested under
+      // its agent, but Agents is still the nav item it lights, so the trail
+      // ends at Agents → the mandate id, mirroring the runs → fleet case.
+      out.push({ kind: "nav", key: "agents", href: pathOf(org, ws, "agents") });
+      if (id !== undefined) out.push({ kind: "id", text: id, href: null });
       break;
     default: {
       const key = currentNavKey(pathname);

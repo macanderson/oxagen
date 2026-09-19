@@ -13,12 +13,15 @@ export const killSwitchItemSchema = z.object({
   scope: z.enum(["org", "workspace"]),
   on: z.boolean(),
   reason: z.string(),
-  /** User id of who flipped it on; null when written by another path. */
+  /**
+   * The `usr_…` public id of whoever flipped it on (#3147); null when
+   * written by another path or the user no longer resolves.
+   */
   flippedBy: z.string().nullable(),
   flippedAt: z.string(),
   /** When it was flipped off; null while on. */
   clearedAt: z.string().nullable(),
-  /** User id of who flipped it off; null while on. */
+  /** The `usr_…` public id of whoever flipped it off; null while on. */
   clearedBy: z.string().nullable(),
 });
 

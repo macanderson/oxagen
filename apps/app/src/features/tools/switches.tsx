@@ -37,10 +37,9 @@ export function switchesOn(switches: readonly KillSwitch[]): number {
  * The organization in view is the only one a switch can name, so an org switch
  * needs no id. A workspace switch is recorded org-wide (it reaches past the
  * workspace it was flipped in), so the board here also carries the workspace
- * switches of sibling workspaces — and for those the uuid is the only thing
+ * switches of sibling workspaces, and for those the uuid is the only thing
  * that says which workspace is denied, so it is printed. Every other kind
- * prints its target; for an operator that uuid is the only identification the
- * record carries.
+ * prints its target; for an operator that is their `usr_…` public id (#3147).
  */
 function headingNamesTarget(
   target: KillSwitch["target"],
@@ -76,12 +75,14 @@ function SwitchCard({
   item,
   canFlip,
   selfWorkspaceId,
+  members,
 }: {
   at: ToolsAt;
   denyGeneration: KillSwitchBoard["denyGeneration"];
   item: KillSwitch;
   canFlip: boolean;
   selfWorkspaceId: string;
+  members: readonly { id: string; name: string | null; email: string }[];
 }) {
   const t = useTranslations("tools.switches");
   const selfEvident = headingNamesTarget(item.target, selfWorkspaceId);
@@ -148,7 +149,12 @@ function SwitchCard({
         )}
       </Facts>
       {canFlip ? (
-        <FlipControls at={at} denyGeneration={denyGeneration} existing={item} />
+        <FlipControls
+          at={at}
+          denyGeneration={denyGeneration}
+          existing={item}
+          members={members}
+        />
       ) : null}
     </article>
   );
@@ -176,6 +182,7 @@ export function Switches({
   orgRole,
   canFlip,
   selfWorkspaceId,
+  members,
   read,
 }: {
   at: ToolsAt;
@@ -183,6 +190,8 @@ export function Switches({
   canFlip: boolean;
   /** The workspace in view, to tell its own switch from a sibling's. */
   selfWorkspaceId: string;
+  /** The org's members, for the operator level's picker (#3147). */
+  members: readonly { id: string; name: string | null; email: string }[];
   read: Read<KillSwitchBoard>;
 }) {
   const t = useTranslations("tools.switches");
@@ -211,6 +220,7 @@ export function Switches({
               at={at}
               denyGeneration={denyGeneration}
               existing={null}
+              members={members}
             />
           ) : null
         }
@@ -259,6 +269,7 @@ export function Switches({
                 item={item}
                 canFlip={canFlip}
                 selfWorkspaceId={selfWorkspaceId}
+                members={members}
               />
             ))}
           </div>
@@ -284,6 +295,7 @@ export function Switches({
                 item={item}
                 canFlip={canFlip}
                 selfWorkspaceId={selfWorkspaceId}
+                members={members}
               />
             ))}
           </div>

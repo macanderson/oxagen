@@ -39,7 +39,7 @@ A `class` switch matches a tool by its consequence tags, and a version carries t
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `target.kind` | enum | yes | `tool_version`, `tool_server`, `connection`, `agent`, `operator`, `workspace`, `org`, `class` |
-| `target.id` | string | yes | `tlv_…`, `mcs_…`, `mcrd_…`, `agt_…`, a user id, a workspace id, the organisation id, or the consequence tag |
+| `target.id` | string | yes | `tlv_…`, `mcs_…`, `mcrd_…`, `agt_…`, an operator's `usr_…` public id (their raw user uuid also works, kept for backward compatibility), a workspace id, the organisation id, or the consequence tag |
 | `on` | boolean | yes | |
 | `reason` | string | yes | 1-500 characters; recorded on the row as `reason` when flipping on and as `cleared_reason` when flipping off; not recorded when the switch is already on |
 
@@ -65,13 +65,13 @@ Writes `iam.emergency_denies` (insert on; `active = false`, `deactivated_at`, `c
 
 - `PUT /v1/{org}/{ws}/kill-switches`
 - MCP tool `set_kill_switch` (an API key acts as its creator at the role gate, ADR-072 decision 8)
-- App: **Tools → Kill switches → Flip a kill switch** at `/{org}/{ws}/tools?tab=switches` — the switch dialog states the blast radius and the deny-generation bump before the confirming button.
+- App: **Tools → Kill switches → Flip a kill switch** at `/{org}/{ws}/tools?tab=switches`: the switch dialog states the blast radius and the deny-generation bump before the confirming button. The operator level's target is a member picker backed by `list_members`, so the dialog never asks for a uuid.
 
 ## Errors
 
 | code | meaning |
 |---|---|
 | `forbidden` (403) | no signed-in user, not Owner or Admin, or an organisation other than the caller's (`other_org`) |
-| `not_found` (404) | the target does not exist in this scope (`<kind>_not_found`) |
+| `not_found` (404) | the target does not exist in this scope (`<kind>_not_found`); for an operator, an unknown id or one outside the caller's org |
 | `conflict` (409) | flipping off a switch that is not on (`switch_not_on`) |
 | `pending_approval` | on the agent surface, until a human approves |

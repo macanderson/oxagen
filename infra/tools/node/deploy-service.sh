@@ -193,7 +193,7 @@ config_prefix=$(field '.config_prefix // empty')
 # An empty command runs the image's own entrypoint, which is what an external
 # image such as the engine's wants: its binary is already the entrypoint, and
 # naming it again would hand it its own path as an argument. The tarball
-# services keep naming theirs, because node:22-alpine's entrypoint is a shell.
+# services keep naming theirs, because node:24-alpine's entrypoint is a shell.
 jq -e '.command | type == "array"' "$manifest" >/dev/null 2>&1 \
   || fail "oxagen-run.json: 'command' must be an array"
 mapfile -t command < <(jq -re '.command[]' "$manifest" 2>/dev/null || true)
