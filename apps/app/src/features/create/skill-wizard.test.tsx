@@ -105,6 +105,10 @@ async function toPullRequest(desc: string) {
   await screen.findByTestId("wizard-file");
   fireEvent.click(primary());
   await screen.findByTestId("pr-branch");
+  // The host reads the main repository as it opens; wait for the answer.
+  await waitFor(() => {
+    expect(screen.queryByText(t("skill.pr.repo.loading"))).toBeNull();
+  });
 }
 
 beforeEach(() => {
