@@ -3100,6 +3100,7 @@ type Messages = {
       mandates: string;
       switchesOn: string;
       switchesOnAtLeast: string;
+      autoapprovals: string;
     };
     gate: {
       open: string;
@@ -3360,6 +3361,16 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        consequenceRoleRequired: string;
+        noRoleCoversAllTags: string;
+        ruleIdTaken: string;
+        ruleChanged: string;
+        ruleNotFound: string;
+        noToolMatches: string;
+        ruleNotGated: string;
+        measureNotDeclared: string;
+        measureWrongType: string;
+        tooManyConsequences: string;
       };
     };
     mandates: {
@@ -3393,6 +3404,189 @@ type Messages = {
       partial: string;
       emptyListed: string;
       emptyListedDetail: string;
+    };
+    grant: {
+      open: string;
+      title: string;
+      body: string;
+      grantRequest: string;
+      grantRequestLabel: string;
+      titleRequest: string;
+      bodyRequest: string;
+      notCarried: string;
+      agentOption: string;
+      agentsPartial: string;
+      agentsUnavailable: string;
+      agentsEmpty: string;
+      consequenceOther: string;
+      consequenceTagsHint: string;
+      toolsHint: string;
+      limits: string;
+      limitsHint: string;
+      measureHint: string;
+      unitHint: string;
+      perPeriodHint: string;
+      period: string;
+      periods: {
+        daily: string;
+        weekly: string;
+        monthly: string;
+      };
+      targets: string;
+      targetsHint: string;
+      approval: string;
+      approvalHint: string;
+      alwaysHumanForHint: string;
+      humanAboveValueHint: string;
+      approversHint: string;
+      purposeHint: string;
+      validToHint: string;
+      confirm: string;
+      confirmRequest: string;
+      pending: string;
+      fields: {
+        agentId: string;
+        consequenceTags: string;
+        measure: string;
+        unit: string;
+        perCall: string;
+        perPeriod: string;
+        callsPerDay: string;
+        tools: string;
+        targetMeasure: string;
+        targetAllow: string;
+        targetDeny: string;
+        alwaysHumanFor: string;
+        humanAboveMeasure: string;
+        humanAboveValue: string;
+        approvers: string;
+        purpose: string;
+        validFrom: string;
+        validTo: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noRoleCoversAllTags: string;
+        noPrincipal: string;
+        agentNotFound: string;
+        agentHasNoPrincipal: string;
+        mandateNotFound: string;
+        notADraft: string;
+        noToolMatches: string;
+        measureNotDeclared: string;
+        measureUnitMismatch: string;
+        measureKindConflict: string;
+        agentRetired: string;
+        timeZoneUnavailable: string;
+        timeZoneUnsupported: string;
+        refused: string;
+        invalidField: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    autoApprovals: {
+      title: string;
+      lead: string;
+      floors: string;
+      counted: string;
+      on: string;
+      off: string;
+      written: string;
+      writtenUnattributed: string;
+      slug: string;
+      unstamped: string;
+      checkedAgainst: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      tiles: {
+        label: string;
+        on: {
+          title: string;
+          basis: string;
+        };
+        released: {
+          title: string;
+          basis: string;
+        };
+        held: {
+          title: string;
+          basis: string;
+        };
+      };
+      columns: {
+        rule: string;
+        appliesTo: string;
+        requires: string;
+        released: string;
+        held: string;
+        on: string;
+        actions: string;
+      };
+      requires: {
+        ceiling: string;
+        allow: string;
+        standing: string;
+        hours: string;
+        floorsOnly: string;
+      };
+      days: {
+        "1": string;
+        "2": string;
+        "3": string;
+        "4": string;
+        "5": string;
+        "6": string;
+        "7": string;
+      };
+      editor: {
+        openCreate: string;
+        openEdit: string;
+        titleCreate: string;
+        titleEdit: string;
+        id: string;
+        idHint: string;
+        name: string;
+        tools: string;
+        toolsHint: string;
+        maxMeasures: string;
+        maxMeasuresHint: string;
+        allowTargets: string;
+        allowTargetsHint: string;
+        standingMinutes: string;
+        standingMinutesHint: string;
+        hoursOn: string;
+        hours: string;
+        timezone: string;
+        timezoneHint: string;
+        start: string;
+        end: string;
+        enabled: string;
+        checks: string;
+        confirmCreate: string;
+        confirmEdit: string;
+        pending: string;
+        unreadable: {
+          maxMeasures: string;
+          allowTargets: string;
+        };
+      };
+      toggle: {
+        on: string;
+        off: string;
+      };
+      delete: {
+        open: string;
+        title: string;
+        body: string;
+        keep: string;
+        switchOff: string;
+        confirm: string;
+        pending: string;
+      };
     };
   };
   ui: {

@@ -1,9 +1,18 @@
 // Which Tools view a query asks for, and the link back to it: the default
 // tab, a value the page does not know, the category chip only on Registry,
 // the names toggle, and a cursor whose shape is checked before it goes back
-// to the kernel.
+// to the kernel. Also the `measure = value` lines the auto-approval dialog
+// writes its ceilings and allow lists in.
 import { describe, expect, it } from "vitest";
-import { parseToolsView, textValue, TOOLS_TABS, toolsLink } from "./view";
+import {
+  parseMeasureLines,
+  parseToolsView,
+  splitCommas,
+  textValue,
+  TOOLS_TABS,
+  toolsLink,
+  weekdayKey,
+} from "./view";
 
 const at = { org: "acme", ws: "core-platform" };
 
@@ -82,6 +91,9 @@ describe("toolsLink", () => {
     expect(toolsLink(at, { tab: "switches" })).toBe(
       "/acme/core-platform/tools?tab=switches",
     );
+    expect(toolsLink(at, { tab: "autoapprovals" })).toBe(
+      "/acme/core-platform/tools?tab=autoapprovals",
+    );
   });
 
   it("round-trips through parseToolsView", () => {
@@ -110,5 +122,66 @@ describe("textValue", () => {
     const form = new FormData();
     form.set("file", new Blob(["x"]), "x.txt");
     expect(textValue(form, "file")).toBe("");
+  });
+});
+
+describe("parseMeasureLines", () => {
+  it("reads one measure per line, trimmed, blank lines dropped, in order", () => {
+    expect(
+      parseMeasureLines(" amount = 50000000 \n\n recipients=10\r\n"),
+    ).toEqual([
+      ["amount", "50000000"],
+      ["recipients", "10"],
+    ]);
+    expect(parseMeasureLines("")).toEqual([]);
+  });
+
+  it("keeps everything after the first equals sign as the value", () => {
+    expect(parseMeasureLines("counterparty = cus_*, vendor:aws")).toEqual([
+      ["counterparty", "cus_*, vendor:aws"],
+    ]);
+  });
+
+  // A line the dialog cannot read refuses the whole draft. Dropping it would
+  // save a rule without a ceiling the person wrote, which releases more calls.
+  it.each([
+    ["no equals sign", "amount 500"],
+    ["no measure", "= 500"],
+    ["no value", "amount ="],
+    ["a measure named twice", "amount = 1\namount = 2"],
+  ])("refuses %s", (_what, raw) => {
+    expect(parseMeasureLines(raw)).toBeNull();
+  });
+});
+
+describe("splitCommas", () => {
+  it("splits on commas alone, trimmed, blanks dropped, each value once", () => {
+    expect(splitCommas(" cus_* , vendor:aws ,, cus_* ")).toEqual([
+      "cus_*",
+      "vendor:aws",
+    ]);
+    expect(splitCommas("   ")).toEqual([]);
+  });
+
+  // A glob is `z.string().min(1).max(256)`, so a space is inside one value.
+  // Splitting on it would leave `vendor:*`, which admits every vendor target.
+  it("keeps a glob that contains whitespace whole", () => {
+    expect(splitCommas("vendor:* prod, cus_*")).toEqual([
+      "vendor:* prod",
+      "cus_*",
+    ]);
+  });
+});
+
+describe("weekdayKey", () => {
+  it("keys ISO weekdays Monday first, as the catalogue holds them", () => {
+    const keys = ["1", "2", "3", "4", "5", "6", "7"];
+    expect([1, 2, 3, 4, 5, 6, 7].map(weekdayKey)).toEqual(keys);
+  });
+
+  // The contract bounds a rule's days to 1 to 7, so anything else is a bug
+  // upstream, and a thrown error names it rather than printing a raw key.
+  it.each([0, 8, 1.5])("refuses %s", (day) => {
+    expect(() => weekdayKey(day)).toThrow(RangeError);
   });
 });

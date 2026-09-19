@@ -102,7 +102,12 @@ async function renderRoles(
       contextPr: vi.fn(),
       freshness: vi.fn(),
     },
-    tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+    tools: {
+      versions: vi.fn(),
+      grants: vi.fn(),
+      killSwitches: vi.fn(),
+      approvalRules: vi.fn(),
+    },
   };
   const view = render(
     <IntlProvider>{await Roles({ ctx, source })}</IntlProvider>,

@@ -33,6 +33,26 @@ fact, always resolved: a limit written before ADR-108 has no stored `kind`
 and takes the documented fallback at read time, but nothing a `get_mandate` or
 `list_mandates` caller sees is ever unresolved.
 
+## App surface
+
+The Mandates ledger on the Tools page, `/{org}/{ws}/tools?tab=mandates`.
+**Grant a mandate** in the ledger header opens a blank grant with an agent
+picker. **Grant** on a requested row opens the same dialog on that draft and
+sends its id as `requestId`. Both controls are drawn for an org Owner, Admin,
+Billing, or Compliance member, the four roles a consequence can name. The
+handler still decides each grant by its tags.
+
+The dialog writes every limit and `humanAbove` threshold exactly as typed, in
+whole units, and refuses a unit that is a currency code. Whether a measure is
+money is a property of the tool version's declaration, which no read the app
+makes returns. Grant a money limit over the API or MCP. The dialog holds one
+counterparty rule and one `humanAbove` threshold. Grant more over the API or
+MCP. A requested draft that holds more than the dialog can carry (a money
+limit, a second limit, target rule or threshold, or a calls limit that is not a
+daily total) opens for review with no **Grant** button: the handler replaces
+the draft's body with the granter's, so granting it from the dialog would drop
+the part it cannot hold.
+
 ## Roles
 
 The org roles the workspace names for every consequence tag on the mandate

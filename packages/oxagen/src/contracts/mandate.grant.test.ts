@@ -19,6 +19,7 @@ describe("grant_mandate contract", () => {
       "mcp",
       "unit",
       "docs",
+      "app",
     ]);
   });
 

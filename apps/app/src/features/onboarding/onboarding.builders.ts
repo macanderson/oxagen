@@ -153,6 +153,7 @@ export function onboardingSource(reads: Reads): {
       versions: refuse("tools.versions"),
       grants: refuse("tools.grants"),
       killSwitches: refuse("tools.killSwitches"),
+      approvalRules: refuse("tools.approvalRules"),
     },
   };
   return { source, calls };

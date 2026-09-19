@@ -771,6 +771,24 @@ function emitException(
 }
 
 /**
+ * The value a `humanAbove` threshold compares, read from the call for a
+ * measure the mandate does not limit. Null when the tool does not declare
+ * the measure, declares it as text, or the call does not carry it as a
+ * value: the caller treats null as over the threshold.
+ */
+function humanAboveValue(
+  tool: Pick<DeclaredTool, "measures">,
+  input: unknown,
+  measure: string,
+): string | null {
+  if (isCallsMeasure(measure)) return readCallsMeasure().value;
+  const declaration = tool.measures[measure];
+  if (declaration === undefined || declaration.type === "text") return null;
+  const read = readMeasure(input, declaration);
+  return read.ok && read.measure.kind === "value" ? read.measure.value : null;
+}
+
+/**
  * Decide one agent call against the workspace's mandates. Runs the whole
  * decision in one tenant transaction under the mandate row lock and returns
  * the outcome; the gate turns it into a throw or a settlement.
@@ -1022,8 +1040,15 @@ export async function decideMandate(
     for (const [measure, above] of Object.entries(
       mandate.approval.humanAbove,
     )) {
-      const value = values[measure];
-      if (value !== undefined && exceeds(value, above)) {
+      // A threshold on a measure the mandate does not also limit was never
+      // read above, so it is read here. One this tool does not declare, or
+      // that this call does not carry as a value, goes to a person: the rule
+      // promises a person decides above the threshold, and a call that
+      // cannot be shown to be below it is not one this rule may wave
+      // through.
+      const value =
+        values[measure] ?? humanAboveValue(tool, args.input, measure);
+      if (value === null || exceeds(value, above)) {
         ruleIds.push(`mandate:${mandate.publicId}:human_above:${measure}`);
       }
     }
