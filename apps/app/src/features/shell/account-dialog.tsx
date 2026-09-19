@@ -93,14 +93,37 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // actually been received.
   const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
 
-  // The live rotation's identity, held here for the same reason the codes are.
-  // It was a ref inside `SecurityTab`, which is keyed on the tab and unmounted
-  // when the dialog closes: switching away mid-request and coming back gave
-  // the new instance a ref at zero, so both rotations believed they were the
-  // live one and the older answer could still overwrite the vault with codes
-  // the newer rotation had already invalidated. The token has to outlive the
-  // component for the same reason the codes do.
-  const rotation = useRef(0);
+  // The rotation itself is held here too, and for the same reason the codes
+  // are: every state the Security tab owns is destroyed by Cancel, by a tab
+  // switch and by a close, and a rotation that is in flight must survive all
+  // three. A `pending` flag inside the tab is discarded by any of them, and
+  // the next press starts a second rotation against a server that has already
+  // voided one set. The two calls can then settle in either order, and the
+  // loser's codes land in the vault after the winner's, so the set on screen is
+  // a set the later call already invalidated. Nothing says so at the time;
+  // the person saves it, and finds out when the authenticator is gone and the
+  // recovery codes are the only way in.
+  //
+  // So: one rotation at a time, held here. Two rotations never exist, which is
+  // why no response can ever be a superseded one. That is stronger than sorting
+  // the answers out after the fact, and it leaves no window to get wrong.
+  const rotatingRef = useRef(false);
+  const [rotating, setRotating] = useState(false);
+  // `rotatingRef`, not `rotating`, decides: two presses inside one render pass
+  // both read the same state value, so state alone lets the second through.
+  const rotation: CodeRotation = {
+    pending: rotating,
+    begin: () => {
+      if (rotatingRef.current) return false;
+      rotatingRef.current = true;
+      setRotating(true);
+      return true;
+    },
+    end: () => {
+      rotatingRef.current = false;
+      setRotating(false);
+    },
+  };
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
@@ -196,15 +219,25 @@ export function AccountDialog({ data }: { data: ShellData }) {
   );
 }
 
+/**
+ * The one rotation in flight, held above every state the Security tab owns, so
+ * that Cancel, a tab switch and a close cannot lose it and let a second start.
+ *
+ * `begin` claims the gate and answers false when a rotation is already running,
+ * in which case this one must not start. `end` releases it once that rotation
+ * has settled.
+ */
+type CodeRotation = {
+  pending: boolean;
+  begin: () => boolean;
+  end: () => void;
+};
+
 type CodeVault = {
   /** Codes issued and not yet acknowledged, held above the tab that shows them. */
   heldCodes: string[] | null;
   setHeldCodes: (codes: string[] | null) => void;
-  /**
-   * Which recovery-code rotation is the live one, held above the tab for the
-   * same reason: a request outlives the component that started it.
-   */
-  rotation: { current: number };
+  rotation: CodeRotation;
 };
 
 function AccountPanel({
@@ -672,9 +705,12 @@ type SessionsState =
   | { kind: "failed" }
   | { kind: "ready"; sessions: LiveSession[] };
 
+// No `pending` here: whether a rotation is running is the dialog's, not this
+// state's, because this state is thrown away by Cancel, by a tab switch and by
+// a close while the rotation outlives all three.
 type CodesState =
   | { kind: "closed" }
-  | { kind: "asking"; password: string; pending: boolean; refused: boolean }
+  | { kind: "asking"; password: string; refused: boolean }
   | { kind: "issued"; codes: string[] };
 
 /** "MacBook Pro · Chrome 141" from a user agent, or the raw string when nothing is recognised. */
@@ -725,12 +761,28 @@ function SecurityTab({
   const passwordId = useId();
   const [sessions, setSessions] = useState<SessionsState>({ kind: "loading" });
   // Seeded from the vault, so a return to this tab shows codes issued while
-  // it was unmounted rather than an empty panel over a rotated secret.
-  const [codes, setCodes] = useState<CodesState>(
-    heldCodes ? { kind: "issued", codes: heldCodes } : { kind: "closed" },
+  // it was unmounted rather than an empty panel over a rotated secret. A
+  // rotation still in flight is seeded too, so a remount mid-rotation shows the
+  // form working rather than a Regenerate button that would refuse the press.
+  const [codes, setCodes] = useState<CodesState>(() =>
+    heldCodes
+      ? { kind: "issued", codes: heldCodes }
+      : rotation.pending
+        ? { kind: "asking", password: "", refused: false }
+        : { kind: "closed" },
   );
   const [revoking, setRevoking] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
+
+  // The rotation that fills the vault can belong to an earlier mount of this
+  // tab: started here, left mid-flight, and returned to before it settled. That
+  // mount's own `setCodes` went nowhere, and the seed above already ran, so the
+  // vault filling is the only thing that can tell this mount the set arrived.
+  // Without this the codes would sit in the vault behind a form still saying it
+  // is issuing them.
+  useEffect(() => {
+    if (heldCodes) setCodes({ kind: "issued", codes: heldCodes });
+  }, [heldCodes]);
 
   useEffect(() => {
     let live = true;
@@ -775,44 +827,35 @@ function SecurityTab({
     }
   }
 
-  // `rotation` arrives from `AccountDialog` rather than being created here.
-  // `codes.pending` cannot identify the live rotation, because Cancel sets
-  // `codes` to `closed` and takes the pending flag with it while the request
-  // carries on: the person can start a second rotation, and Better Auth has
-  // now rotated twice. Responses can arrive in either order, so the valid set
-  // is the one the LAST request produced, not the one that answers last.
-  //
-  // A ref rather than state, so it survives the re-render Cancel causes
-  // without provoking one; and held above this component, because a tab
-  // switch or a closed dialog unmounts this one while the request continues.
-
   async function regenerate(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (codes.kind !== "asking" || codes.pending) return;
-    const mine = ++rotation.current;
-    setCodes({ ...codes, pending: true, refused: false });
+    if (codes.kind !== "asking") return;
+    // The gate, not a disabled button: the button is gone the moment the person
+    // presses Cancel or leaves the tab, and the rotation is not.
+    if (!rotation.begin()) return;
+    const { password } = codes;
+    setCodes({ kind: "asking", password, refused: false });
     try {
-      const result = await liveRegenerateBackupCodes(codes.password);
-      // Superseded: a later rotation was started, so this answer is about a
-      // set the server has already replaced. Dropping it is the point; the
-      // live rotation writes its own.
-      if (mine !== rotation.current) return;
+      const result = await liveRegenerateBackupCodes(password);
+      rotation.end();
       if (result.ok) {
         // The vault first, and deliberately: this component may already be
         // unmounted, in which case its own setState is a no-op and this write
         // to the still-mounted dialog is the only thing keeping the codes.
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
-      } else
-        setCodes({
-          kind: "asking",
-          password: "",
-          pending: false,
-          refused: true,
-        });
+      } else {
+        // A rotation that failed leaves the stored set unknowable from here:
+        // the refusal may have come before the server wrote anything or after.
+        // So nothing is displayed. A set left on screen would be a claim that
+        // it is the set stored, and that is the claim this cannot make.
+        setHeldCodes(null);
+        setCodes({ kind: "asking", password: "", refused: true });
+      }
     } catch {
-      if (mine !== rotation.current) return;
-      setCodes({ kind: "asking", password: "", pending: false, refused: true });
+      rotation.end();
+      setHeldCodes(null);
+      setCodes({ kind: "asking", password: "", refused: true });
     }
   }
 
@@ -875,15 +918,21 @@ function SecurityTab({
                   <button
                     type="submit"
                     data-testid="account-codes-confirm"
-                    aria-disabled={codes.pending || undefined}
+                    aria-disabled={rotation.pending || undefined}
                     className={buttonSmall}
                   >
-                    {codes.pending ? t("issuing") : t("issue")}
+                    {rotation.pending ? t("issuing") : t("issue")}
                   </button>
                   <button
                     type="button"
+                    data-testid="account-codes-cancel"
+                    aria-disabled={rotation.pending || undefined}
                     className={buttonSmall}
                     onClick={() => {
+                      // Cancel is honest or it is not offered. The rotation
+                      // cannot be called back once it has left, and closing the
+                      // form over one still running is what let a second start.
+                      if (rotation.pending) return;
                       setCodes({ kind: "closed" });
                     }}
                   >
@@ -937,12 +986,7 @@ function SecurityTab({
                   data-testid="account-codes-open"
                   className={buttonSmall}
                   onClick={() => {
-                    setCodes({
-                      kind: "asking",
-                      password: "",
-                      pending: false,
-                      refused: false,
-                    });
+                    setCodes({ kind: "asking", password: "", refused: false });
                   }}
                 >
                   {t("regenerate")}

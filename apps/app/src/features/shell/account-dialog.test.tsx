@@ -599,7 +599,7 @@ describe("Security", () => {
     expect(codes).toHaveTextContent("cccc-dddd");
   });
 
-  it("reads a refused password back and keeps the old codes (negative)", async () => {
+  it("reads a refused password back and shows no set at all (negative)", async () => {
     liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
@@ -607,6 +607,80 @@ describe("Security", () => {
     await user.click(screen.getByTestId("account-codes-confirm"));
     expect(await screen.findByTestId("account-codes-refused")).toBeTruthy();
     expect(screen.queryByTestId("account-codes")).toBeNull();
+  });
+
+  // A rotation voids the previous codes on the server the moment it lands, so
+  // two of them in flight settle in either order and the loser's set can be
+  // written over the winner's. The person then reads a set the server has
+  // already invalidated, with nothing on screen to say so, and finds out only
+  // once the authenticator is gone and the codes are the only way back in.
+  //
+  // What allowed two: the pending flag lived in the tab's own state, and
+  // Cancel, a tab switch and a close each throw that state away while the
+  // request carries on. Both bypasses are driven here.
+  it("runs one rotation at a time, through Cancel and through leaving the tab", async () => {
+    const settle: ((result: unknown) => void)[] = [];
+    liveRegenerateBackupCodes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          settle.push(resolve);
+        }),
+    );
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(settle).toHaveLength(1);
+
+    // Cancel, which used to close the form and drop the pending flag with it.
+    await user.click(screen.getByTestId("account-codes-cancel"));
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(settle).toHaveLength(1);
+
+    // Leaving the tab, which unmounts every state the tab holds.
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    expect(screen.queryByTestId("account-codes-open")).toBeNull();
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(settle).toHaveLength(1);
+
+    // One rotation ran, so there is one stored set, and it is the one shown, to
+    // the mount that returned as well as to the one that asked.
+    settle[0]?.({ ok: true, codes: ["kept-1111", "kept-2222"] });
+    const shown = await screen.findByTestId("account-codes");
+    expect(shown).toHaveTextContent("kept-1111");
+    expect(shown).toHaveTextContent("kept-2222");
+    expect(liveRegenerateBackupCodes).toHaveBeenCalledTimes(1);
+  });
+
+  // A refusal says nothing about whether the server wrote before it answered,
+  // so a set left on screen would be claiming to be the stored set without
+  // knowing it. Nothing is shown, nothing is vaulted, and the affordance is
+  // released rather than held shut by the rotation that failed.
+  it("leaves no set on screen or in the vault when a rotation fails (negative)", async () => {
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "wrong");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(await screen.findByTestId("account-codes-refused")).toBeTruthy();
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+
+    // And a second attempt is still possible: the gate is released, not stuck.
+    liveRegenerateBackupCodes.mockResolvedValue({
+      ok: true,
+      codes: ["next-1111", "next-2222"],
+    });
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(await screen.findByTestId("account-codes")).toHaveTextContent(
+      "next-1111",
+    );
   });
 
   // Better Auth rotates the codes server-side the moment the call lands, so
@@ -671,78 +745,11 @@ describe("Security", () => {
     expect(await screen.findByTestId("account-codes-open")).toBeTruthy();
   });
 
-  // Cancel drops the pending flag while the request carries on, so a person
-  // can start a second rotation. Better Auth has then rotated twice, and the
-  // valid set is the one the LAST request produced, whichever answers first.
-  // A stale first response overwriting the vault leaves someone holding
-  // recovery codes the server has already invalidated.
-  it("keeps the last rotation's codes when an earlier one answers late (negative)", async () => {
-    const answers: ((result: unknown) => void)[] = [];
-    liveRegenerateBackupCodes.mockImplementation(
-      () => new Promise((resolve) => answers.push(resolve)),
-    );
-    const { user } = await openDialog("security");
-
-    async function ask(password: string) {
-      await user.click(screen.getByTestId("account-codes-open"));
-      await user.type(screen.getByTestId("account-codes-password"), password);
-      await user.click(screen.getByTestId("account-codes-confirm"));
-    }
-
-    await ask("first");
-    // Cancel while it is in flight: the request is not aborted, and the
-    // Regenerate button comes back.
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await ask("second");
-
-    // The second answers first, then the first arrives late.
-    answers[1]?.({ ok: true, codes: ["second-1", "second-2"] });
-    answers[0]?.({ ok: true, codes: ["first-1", "first-2"] });
-
-    const shown = await screen.findByTestId("account-codes");
-    expect(shown).toHaveTextContent("second-1");
-    expect(shown).not.toHaveTextContent("first-1");
-  });
-
-  // The token has to outlive the tab for the same reason the codes do. When it
-  // lived in SecurityTab, switching away mid-request and back gave the new
-  // instance a counter at zero, so both rotations believed they were the live
-  // one and the older answer could still overwrite the vault.
-  it("keeps the last rotation's codes across a tab switch (negative)", async () => {
-    const answers: ((result: unknown) => void)[] = [];
-    liveRegenerateBackupCodes.mockImplementation(
-      () => new Promise((resolve) => answers.push(resolve)),
-    );
-    const { user } = await openDialog("security");
-
-    async function ask(password: string) {
-      await user.click(screen.getByTestId("account-codes-open"));
-      await user.type(screen.getByTestId("account-codes-password"), password);
-      await user.click(screen.getByTestId("account-codes-confirm"));
-    }
-
-    await ask("first");
-    // Away and back while it is in flight: SecurityTab unmounts and remounts.
-    await user.click(screen.getByTestId("account-tab-profile"));
-    await user.click(screen.getByTestId("account-tab-security"));
-    await ask("second");
-
-    answers[1]?.({ ok: true, codes: ["second-1", "second-2"] });
-    answers[0]?.({ ok: true, codes: ["first-1", "first-2"] });
-    expect(await screen.findByTestId("account-codes")).toHaveTextContent(
-      "second-1",
-    );
-
-    // The vault is where the stale write lands, not the rendered panel: the
-    // mounted tab already holds the second set in its own state and seeds from
-    // the vault only when it mounts. So the question is what a return to
-    // Security shows, which is what a person would actually come back to.
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "open security" }));
-    const onReturn = await screen.findByTestId("account-codes");
-    expect(onReturn).toHaveTextContent("second-1");
-    expect(onReturn).not.toHaveTextContent("first-1");
-  });
+  // The second rotation is never started, so no late first response can exist
+  // to be sorted out: "runs one rotation at a time" above is what closes this,
+  // and it also closes the tab-switch bypass, which a ticket held inside the
+  // tab cannot, since the switch destroys the ticket along with everything else
+  // the tab owns.
 
   it("offers enrolment, not codes, to a person without two-factor", async () => {
     await openDialog("security", viewerWith({ twoFactorEnabled: false }));
