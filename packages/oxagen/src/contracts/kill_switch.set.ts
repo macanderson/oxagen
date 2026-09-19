@@ -6,9 +6,10 @@ import { consequenceTagSchema } from "./tool.classification";
  * What a kill switch stops (MC spec §6.11). Every level is a deny that takes
  * effect at the next call boundary through the deny generation.
  *
- * The `id` is the public id of the target — `tlv_…`, `mcs_…`, `mcrd_…`,
- * `agt_…`, a user id, a workspace id, the organisation id — or, for a class,
- * the consequence tag every tool carrying it is stopped by.
+ * The `id` is the public id of the target: `tlv_…`, `mcs_…`, `mcrd_…`,
+ * `agt_…`, an operator's `usr_…` (or their raw user uuid, kept for backward
+ * compatibility), a workspace id, the organisation id, or, for a class, the
+ * consequence tag every tool carrying it is stopped by.
  */
 export const killSwitchTargetKindSchema = z.enum([
   "tool_version",
@@ -26,7 +27,11 @@ export const killSwitchTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("tool_server"), id: z.string().min(1) }),
   z.object({ kind: z.literal("connection"), id: z.string().min(1) }),
   z.object({ kind: z.literal("agent"), id: z.string().min(1) }),
-  z.object({ kind: z.literal("operator"), id: z.string().uuid() }),
+  // The operator's public id (`usr_…`, what `list_members` and every other
+  // surface print) or, kept for backward compatibility, their raw user uuid.
+  // The handler resolves either form to the user within the org and refuses
+  // an unknown or out-of-org id by name (#3147).
+  z.object({ kind: z.literal("operator"), id: z.string().min(1) }),
   z.object({ kind: z.literal("workspace"), id: z.string().uuid() }),
   z.object({ kind: z.literal("org"), id: z.string().uuid() }),
   z.object({ kind: z.literal("class"), id: consequenceTagSchema }),
