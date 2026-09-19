@@ -1,9 +1,9 @@
 /**
  * Writing into a file the user owns, and giving it back exactly.
  *
- * `enroll` edits four files that belong to someone else: Claude Code's
- * `settings.json`, Codex's `hooks.json`, Stella's `stella.toml` and Claude
- * Desktop's MCP config. The writers that compute the new document are pure
+ * `enroll` edits five files that belong to someone else: Claude Code's
+ * `settings.json`, Codex's `hooks.json`, Cursor's `hooks.json`, Stella's
+ * `stella.toml` and Claude Desktop's MCP config. The writers that compute the new document are pure
  * and already keep every foreign entry. What they cannot do is put the file
  * itself back: a parsed-and-re-serialized document loses the user's
  * indentation and key order, a temp-file-and-rename replaces a symlink into a

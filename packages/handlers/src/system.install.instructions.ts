@@ -74,26 +74,41 @@ function stepsForClaudeCode(_wsSlug: string | undefined): InstallStep[] {
 
 function stepsForCursor(_wsSlug: string | undefined): InstallStep[] {
   const mcpUrl = `${PROD_MCP_URL}/mcp`;
+  // Cursor reads remote MCP servers from `mcpServers` in ~/.cursor/mcp.json
+  // (every project) or .cursor/mcp.json (one project). A `url` entry is an
+  // HTTP server, and `headers` carries the bearer key. JSON expands nothing,
+  // so the key is a placeholder the reader replaces, not a shell variable.
+  const configEntry = JSON.stringify(
+    {
+      mcpServers: {
+        oxagen: {
+          url: mcpUrl,
+          headers: {
+            Authorization: `Bearer ${JSON_API_KEY_PLACEHOLDER}`,
+          },
+        },
+      },
+    },
+    null,
+    2,
+  );
   return [
     {
-      label: "Open Cursor Settings → MCP Servers",
-    },
-    {
-      label: "Click 'Add new server' and enter the Oxagen endpoint",
-      command: mcpUrl,
-    },
-    {
-      label: "Set transport to HTTP and save",
-    },
-    {
-      label: "Generate an API key at the Oxagen dashboard",
+      label: "Generate an API key",
       command: API_KEY_URL,
     },
     {
-      label: "Paste the API key into the Authorization header field in Cursor",
+      label:
+        "Open your Cursor MCP config: ~/.cursor/mcp.json for every project, or .cursor/mcp.json for this one",
+      command: "open ~/.cursor/mcp.json",
     },
     {
-      label: "Reload Cursor — the Oxagen tools appear in the agent tool list",
+      label: `Add the Oxagen server entry (merge into existing config) and replace ${JSON_API_KEY_PLACEHOLDER} with the key you just generated`,
+      command: configEntry,
+    },
+    {
+      label:
+        "Reload Cursor. The Oxagen tools appear in Cursor Settings under MCP and in the agent's tool list",
     },
   ];
 }
@@ -208,13 +223,30 @@ function stepsForVscode(_wsSlug: string | undefined): InstallStep[] {
   ];
 }
 
+/** The install clients Tacho wraps with hooks, and the binary each one runs. */
+type WrappedInstallClient = "claude-code" | "codex" | "cursor";
+
+const WRAPPED_CLIENT_BINARY: Record<WrappedInstallClient, string> = {
+  "claude-code": "claude",
+  codex: "codex",
+  // Cursor's CLI ships as `cursor-agent`. The Cursor IDE reads the same
+  // ~/.cursor/hooks.json, so a machine with only the IDE is covered too.
+  cursor: "cursor-agent",
+};
+
+function isWrappedInstallClient(
+  client: InstallClient,
+): client is WrappedInstallClient {
+  return Object.hasOwn(WRAPPED_CLIENT_BINARY, client);
+}
+
 /**
  * The wrap for a hook-based harness when the caller holds an enrollment token
  * (#2967): the scripted path spec §14.1 names. The token is single use and
  * expires, so the step says so.
  */
 function stepsForEnrollment(
-  client: "claude-code" | "codex",
+  client: WrappedInstallClient,
   token: string,
 ): InstallStep[] {
   return [
@@ -230,7 +262,7 @@ function stepsForEnrollment(
     {
       label:
         "Start a session — its first frame is what registers the agent on Fleet",
-      command: client === "claude-code" ? "claude" : "codex",
+      command: WRAPPED_CLIENT_BINARY[client],
     },
   ];
 }
@@ -252,8 +284,7 @@ export const systemInstallInstructionsHandler: CapabilityHandler<
   typeof systemInstallInstructions
 > = async (input, _ctx) => {
   const steps =
-    input.enrollmentToken !== undefined &&
-    (input.client === "claude-code" || input.client === "codex")
+    input.enrollmentToken !== undefined && isWrappedInstallClient(input.client)
       ? stepsForEnrollment(input.client, input.enrollmentToken)
       : STEP_BUILDERS[input.client](input.workspaceSlug);
 

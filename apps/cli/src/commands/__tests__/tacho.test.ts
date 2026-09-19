@@ -146,11 +146,15 @@ describe("oxagen tacho", () => {
     // enroll call behind it.
     await handleTachoEnroll({ harness: " codex, codex " }, writer);
     expect(calls.at(-1)?.args[0]).toMatchObject({ harnesses: ["codex"] });
+    await handleTachoEnroll({ harness: "claude-code,cursor" }, writer);
+    expect(calls.at(-1)?.args[0]).toMatchObject({
+      harnesses: ["claude-code", "cursor"],
+    });
     const before = calls.length;
     await expect(
-      handleTachoEnroll({ harness: "cursor" }, writer),
+      handleTachoEnroll({ harness: "vscode" }, writer),
     ).rejects.toThrow(
-      'unknown harness "cursor"; expected one of claude-code, codex, stella',
+      'unknown harness "vscode"; expected one of claude-code, codex, cursor, stella',
     );
     expect(calls.length).toBe(before);
     await expect(

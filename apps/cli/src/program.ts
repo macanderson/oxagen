@@ -749,7 +749,7 @@ export function buildProgram(): Command {
     .option("--force", "Enroll again even if already enrolled")
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code, codex, stella, or a comma list such as claude-code,stella",
+      "Harnesses to hook: claude-code, codex, cursor, stella, or a comma list such as claude-code,cursor",
     )
     .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(
@@ -946,7 +946,7 @@ export function buildProgram(): Command {
     .requiredOption("--name <name>", "Display name")
     .requiredOption(
       "--harness <harness>",
-      "stella | claude-code | claude-agent-sdk | custom",
+      "stella | claude-code | codex | cursor | claude-agent-sdk | custom",
     )
     .option("--description <text>", "What the agent is for")
     .option("--validity-days <n>", "Credential lifetime in days (1–365)")
@@ -1061,7 +1061,7 @@ export function buildProgram(): Command {
     )
     .option(
       "--harness <list>",
-      "Harnesses to hook: claude-code, codex, or claude-code,codex",
+      "Harnesses to hook: claude-code, codex, cursor, stella, or a comma list such as claude-code,cursor",
     )
     .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
     .option("--no-service", "Do not install the user service")

@@ -326,6 +326,7 @@ export type KillPoint =
   | "fetch"
   | "launchctl bootstrap"
   | "readCodexHooks"
+  | "readCursorHooks"
   | "readStellaHooks"
   | "writeClaudeDesktopConfig"
   | "daemonGet";
@@ -440,6 +441,10 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     osUser: "dev",
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
+    cursor: () => ({
+      path: "/usr/local/bin/cursor-agent",
+      version: "2026.09.16",
+    }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
     claudeDesktop: () => ({
       installed: true,
@@ -481,6 +486,8 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     writeSettings: guarded("writeSettings", real.writeSettings),
     readCodexHooks: guarded("readCodexHooks", real.readCodexHooks),
     writeCodexHooks: guarded("writeCodexHooks", real.writeCodexHooks),
+    readCursorHooks: guarded("readCursorHooks", real.readCursorHooks),
+    writeCursorHooks: guarded("writeCursorHooks", real.writeCursorHooks),
     readStellaHooks: guarded("readStellaHooks", real.readStellaHooks),
     writeStellaHooks: guarded("writeStellaHooks", real.writeStellaHooks),
     readClaudeDesktopConfig: guarded(

@@ -279,11 +279,13 @@ describe("wizard and de-register", () => {
     expect(HARNESSES).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
     ]);
     for (const h of HARNESSES) expect(HARNESS_LABEL[h]).toBeTruthy();
     expect(HARNESS_LABEL.stella).toBe("Stella");
+    expect(HARNESS_LABEL.cursor).toBe("Cursor");
   });
 
   it("gives every app a tier, and the two predicates agree with it", () => {
@@ -298,6 +300,7 @@ describe("wizard and de-register", () => {
       expect(isWrapped(h)).not.toBe(isConnected(h));
     }
     expect(HARNESS_TIER["claude-code"]).toBe("harness");
+    expect(HARNESS_TIER.cursor).toBe("harness");
     expect(HARNESS_TIER["claude-desktop"]).toBe("gateway");
   });
 

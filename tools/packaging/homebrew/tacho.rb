@@ -9,7 +9,7 @@
 # per-asset digest token that `tools/packaging/stamp.mjs` fills from the
 # release's .sha256 files; see tools/packaging/README.md for the flow.
 class Tacho < Formula
-  desc "Wrapper putting Claude Code and Codex under Oxagen control, plus the oxagen CLI"
+  desc "Wrapper putting coding agents under Oxagen control, plus the oxagen CLI"
   homepage "https://oxagen.sh/"
   version "{{version}}"
   license :cannot_represent
@@ -70,12 +70,12 @@ class Tacho < Formula
       Sign in, then enroll this machine (installs the tachod user service
       and the hooks for the harnesses you name):
         oxagen login
-        tacho enroll --harness claude-code,codex,stella
+        tacho enroll --harness claude-code,codex,cursor,stella
 
       Before `brew uninstall tacho`, run `tacho unenroll` so the hooks, the
       service and the enrollment on the control plane are removed with it.
       Managed machines enroll without a browser:
-        tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,stella
+        tacho enroll --token <apiKey> --org <org> --workspace <ws> --managed --harness claude-code,codex,cursor,stella
     EOS
   end
 

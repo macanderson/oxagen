@@ -16,6 +16,18 @@ describe("tachoEnrollmentCreate", () => {
     expect(parsed.managed).toBe(false);
   });
 
+  it("accepts a host that names every harness, cursor included", () => {
+    const all = ["claude-code", "codex", "cursor", "stella", "claude-desktop"];
+    const parsed = tachoEnrollmentCreate.input.parse({
+      hostname: "laptop.local",
+      osUser: "dev",
+      platform: "darwin",
+      devicePublicKey: KEY,
+      harnesses: all,
+    });
+    expect(parsed.harnesses).toEqual(all);
+  });
+
   it("refuses an unknown platform, a malformed key, an empty harness list, and a stray member", () => {
     const base = {
       hostname: "h",

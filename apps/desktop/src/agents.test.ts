@@ -115,6 +115,7 @@ describe("computeAgentRows: not wrapped", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
     ]);
@@ -122,6 +123,7 @@ describe("computeAgentRows: not wrapped", () => {
     // Every row carries its tier even when nothing is covered, so no surface
     // has to infer one (ADR-078).
     expect(rows.map((r) => r.tier)).toEqual([
+      "harness",
       "harness",
       "harness",
       "harness",
@@ -187,6 +189,34 @@ describe("computeAgentRows: hook presence", () => {
     const stella = rows.find((r) => r.key === "stella")!;
     expect(codex.details).toEqual(["Codex 0.9.0", "hooks complete"]);
     expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
+  });
+
+  it("reads cursor's hook presence and version from its own fields", () => {
+    const tacho: TachoStatus = {
+      enrolled: true,
+      codexHooks: { complete: true, present: ["Stop"], missing: [] },
+      cursorHooks: {
+        complete: false,
+        present: ["Stop"],
+        missing: ["PreToolUse"],
+      },
+    };
+    const s = state({
+      host: host({
+        harnesses: ["cursor"],
+        codex_version: "0.9.0",
+        cursor_version: "2026.09.10",
+      }),
+    });
+    const rows = computeAgentRows(s, tacho, NOW);
+    const cursor = rows.find((r) => r.key === "cursor")!;
+    expect(cursor.kind).toBe("harness");
+    expect(cursor.tier).toBe("harness");
+    expect(cursor.wrapped).toBe(true);
+    expect(cursor.details).toEqual([
+      "Cursor 2026.09.10",
+      "hooks missing: PreToolUse",
+    ]);
   });
 
   it("omits version and presence details when neither is known", () => {
@@ -357,6 +387,7 @@ describe("computeAgentRows: custom agents", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
       "my-script",
@@ -420,6 +451,7 @@ describe("computeAgentRows: custom agents", () => {
     expect(rows.map((r) => r.key)).toEqual([
       "claude-code",
       "codex",
+      "cursor",
       "stella",
       "claude-desktop",
       "custom:codex",

@@ -3,7 +3,7 @@
  *
  * First run (no enrollment on this machine): a five-step wizard — sign in,
  * pick the org and workspace the operator can see, register the agents the
- * machine has (Claude Code, Codex; detected, all ticked by default), the
+ * machine has (Claude Code, Codex, Cursor; detected, all ticked by default), the
  * outcome, then a recorded first run and the door to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
@@ -77,10 +77,14 @@ import { checkForUpdate, describeCheck, installUpdate } from "./updater";
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
 const DESKTOP_GUIDE_URL = "https://docs.oxagen.sh/docs/cli/desktop";
 
-/** Claude Code and Codex are npm packages; Stella installs from a script. */
+/**
+ * Claude Code and Codex are npm packages. Cursor's CLI and Stella install from
+ * a script.
+ */
 const INSTALL_HINT: Record<Harness, string> = {
   "claude-code": "npm i -g @anthropic-ai/claude-code",
   codex: "npm i -g @openai/codex",
+  cursor: "curl https://cursor.com/install -fsS | bash",
   stella:
     "curl -fsSL https://raw.githubusercontent.com/macanderson/stella/main/install.sh | sh",
   // A connected app is downloaded, not installed from a terminal. Sending a
@@ -979,8 +983,8 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      None of Claude Code, Codex, or Stella was found on your
-                      PATH. Install one, then rescan:{" "}
+                      None of Claude Code, Codex, Cursor, or Stella was found on
+                      your PATH. Install one, then rescan:{" "}
                       {HARNESSES.map((h, i) => (
                         <span key={h}>
                           {i > 0 && " · "}

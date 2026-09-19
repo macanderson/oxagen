@@ -417,6 +417,56 @@ describe("handleHookEvent over the recorded session", () => {
     });
   });
 
+  it("refuses a Cursor subagent start on a paused host", async () => {
+    const { deps } = harness({}, { hostStatus: "paused" });
+    const sub = loadFixtures().find((f) => f.name === "13-SubagentStart.json");
+    expect(sub).toBeDefined();
+    const outcome = await handleHookEvent(
+      (sub as Fixture).stdin,
+      (sub as Fixture).env,
+      deps,
+    );
+    expect(outcome.response).toMatchObject({
+      hookSpecificOutput: {
+        permissionDecision: "deny",
+        permissionDecisionReason: expect.stringMatching(/paused/),
+      },
+    });
+    expect(outcome.evaluation?.decision).toBe("deny");
+  });
+
+  it("refuses a subagent start on a suspended or revoked host and for a paused or cancelled session", async () => {
+    const sub = loadFixtures().find(
+      (f) => f.name === "13-SubagentStart.json",
+    ) as Fixture;
+    for (const status of ["suspended", "revoked"] as const) {
+      const { deps } = harness({}, { hostStatus: status });
+      const outcome = await handleHookEvent(sub.stdin, sub.env, deps);
+      expect(outcome.response).toMatchObject({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: expect.stringContaining(status),
+        },
+      });
+      expect(outcome.evaluation?.reason_code).toBe(`host_${status}`);
+    }
+    // Session state is the operator's other stop, and it reaches the same
+    // deny: an empty answer would translate to allow for Cursor.
+    for (const field of ["paused", "cancelled"] as const) {
+      const { deps, registry } = harness();
+      const start = loadFixtures()[0] as Fixture;
+      await handleHookEvent(start.stdin, start.env, deps);
+      const record = registry.get(String(start.stdin["session_id"]));
+      if (record === undefined) throw new Error("no record");
+      record.control[field] = "operator said stop";
+      const outcome = await handleHookEvent(sub.stdin, sub.env, deps);
+      expect(outcome.response).toMatchObject({
+        hookSpecificOutput: { permissionDecision: "deny" },
+      });
+      expect(outcome.evaluation?.reason_code).toBe(`session_${field}`);
+    }
+  });
+
   it("re-evaluates a stale bundle after a refresh, and fails closed without one", async () => {
     const { deps, view } = harness(
       {},
