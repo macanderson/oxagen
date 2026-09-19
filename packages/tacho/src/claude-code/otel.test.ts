@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { attrsOf, normalizeOtlp } from "./otel";
+import { SessionRecorder } from "./recorder";
 
 const TS = "1788861970750000000";
 
@@ -487,5 +488,83 @@ describe("OpenTelemetry normalization", () => {
       "vendor.oxagen.enforcement_tier": "kept",
       brand_new_upstream_attr: "kept",
     });
+  });
+});
+
+describe("sealing an OTLP export", () => {
+  function recorder() {
+    return new SessionRecorder({
+      context: {
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_test",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+          host_enrollment_id: "tch_test",
+        },
+        now: () => Date.parse("2026-09-08T10:07:00.000Z"),
+      },
+      harnessSessionId: "sess-otel",
+      scope: "tch_test",
+    });
+  }
+
+  /** One OTLP export carrying several log records, as Claude Code batches them. */
+  function exportOf(...records: Array<[string, Record<string, unknown>]>) {
+    return {
+      resourceLogs: records.flatMap(([name, attrs]) => log(name, attrs).resourceLogs),
+    };
+  }
+
+  it("seals a plugin MCP connection and keeps the model call exported with it", () => {
+    // Claude Code 2.1.277 sends plugin attribution on its MCP connection
+    // records. The strict body refused them, and the throw took the whole
+    // export down, including the api_request that carried the tokens.
+    const events = recorder().ingestOtlp(
+      exportOf(
+        [
+          "mcp_server_connection",
+          {
+            server_name: "gh",
+            status: "connected",
+            is_plugin: true,
+            plugin_id_hash: "abc",
+            "plugin.name": "github",
+          },
+        ],
+        [
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 100,
+            output_tokens: 50,
+            request_id: "req_1",
+          },
+        ],
+      ) as never,
+    );
+    expect(events.map((e) => e.kind)).toEqual([
+      "oxagen:mcp_connection",
+      "llm_call",
+    ]);
+    expect(events[0]?.body).toMatchObject({
+      plugin_name: "github",
+      plugin_id_hash: "abc",
+    });
+    expect(events[1]?.body).toMatchObject({ input_tokens: 100 });
+  });
+
+  it("keeps a body member its kind does not declare as an attribute instead of refusing the event", () => {
+    const r = recorder();
+    const event = r.sealCollectorEvent("oxagen:mcp_connection", {
+      mcp_server_name: "gh",
+      brand_new_member: "x",
+    });
+    expect(event.body).toEqual({ mcp_server_name: "gh" });
+    expect(event.attrs["body.brand_new_member"]).toBe("x");
+    // The chain stays dense: the next seal follows directly.
+    const next = r.sealCollectorEvent("oxagen:hook_health", {});
+    expect(next.seq).toBe(event.seq + 1);
   });
 });

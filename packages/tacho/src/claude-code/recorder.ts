@@ -127,6 +127,57 @@ function compact<T extends Record<string, unknown>>(value: T): T {
   return out as T;
 }
 
+/**
+ * Seal an event, keeping any body member its kind does not declare as an
+ * attribute rather than refusing the event.
+ *
+ * A harness adds attributes before this package learns their names: Claude
+ * Code began sending `plugin.name` and `plugin_id_hash` on its MCP connection
+ * records, and the strict body schema refused every such record, and with it
+ * the whole OTLP export it arrived in. The envelope stays strict about its
+ * typed members; an unknown one is kept verbatim in `attrs` under
+ * `body.<key>`, the same way `hooks.ts` and `otel.ts` keep what they do not
+ * promote. Any other refusal still throws.
+ */
+function sealWithUnknownBodyKeysAsAttrs(
+  unsealed: UnsealedTachoEvent,
+  cursor: ChainCursor,
+): ReturnType<typeof sealEvent> {
+  try {
+    return sealEvent(unsealed, cursor);
+  } catch (error) {
+    const issues = (error as { issues?: unknown }).issues;
+    if (!Array.isArray(issues)) throw error;
+    const unknown = new Set<string>();
+    for (const issue of issues as Array<{
+      code?: string;
+      path?: unknown[];
+      keys?: string[];
+    }>) {
+      if (
+        issue.code === "unrecognized_keys" &&
+        issue.path?.length === 1 &&
+        issue.path[0] === "body"
+      )
+        for (const key of issue.keys ?? []) unknown.add(key);
+    }
+    if (unknown.size === 0) throw error;
+    const body = { ...(unsealed.body as Record<string, unknown>) };
+    const attrs: Record<string, string> = { ...(unsealed.attrs ?? {}) };
+    for (const key of unknown) {
+      const value = body[key];
+      delete body[key];
+      if (value !== undefined)
+        attrs[`body.${key}`] =
+          typeof value === "string" ? value : JSON.stringify(value);
+    }
+    return sealEvent(
+      { ...unsealed, body, attrs } as UnsealedTachoEvent,
+      cursor,
+    );
+  }
+}
+
 export class SessionRecorder {
   readonly sessionUuid: string;
   readonly rootSessionUuid: string;
@@ -143,6 +194,7 @@ export class SessionRecorder {
    * event; they wait here for the daemon to write them next to it.
    */
   private pendingBodies: FrameBody[] = [];
+  private readonly otelRefusals: string[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -525,7 +577,7 @@ export class SessionRecorder {
       kind,
       body,
     }) as unknown as UnsealedTachoEvent;
-    const sealed = sealEvent(unsealed, this.cursor);
+    const sealed = sealWithUnknownBodyKeysAsAttrs(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
     const contentClass = contentClassOf(kind);
@@ -742,10 +794,25 @@ export class SessionRecorder {
         continue;
       const target = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
-      const sealed = target.sealOtelDraft(draft);
-      if (sealed !== undefined) out.push(sealed);
+      // One record the envelope refuses must not cost the rest of the export.
+      // The events already sealed in this loop have advanced the chain; had
+      // the throw escaped, they would never reach the WAL and the control
+      // plane would see a sequence gap on every chain the export touched.
+      try {
+        const sealed = target.sealOtelDraft(draft);
+        if (sealed !== undefined) out.push(sealed);
+      } catch (error) {
+        this.otelRefusals.push(
+          `${draft.kind}: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`,
+        );
+      }
     }
     return out;
+  }
+
+  /** OTel records this recorder could not seal, drained by the daemon's log. */
+  takeOtelRefusals(): string[] {
+    return this.otelRefusals.splice(0);
   }
 
   private routeOtel(draft: OtelDraft): SessionRecorder {
