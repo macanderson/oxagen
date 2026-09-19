@@ -10,7 +10,7 @@
 // a discriminated union rather than a bare number (INV-09).
 import { z } from "zod";
 import { type OrgRole, PublicId } from "./common";
-import { Money } from "./money";
+import { isCurrencyCode, Money } from "./money";
 
 const Instant = z.iso.datetime({ offset: true });
 
@@ -476,3 +476,132 @@ export const PURPOSE_MAX = 2000;
  */
 export const CONSEQUENCE_OTHER_MAX =
   MAX_CONSEQUENCE_TAGS * CONSEQUENCE_TAG_MAX + (MAX_CONSEQUENCE_TAGS - 1) * 2;
+
+/**
+ * `mandateApproverSchema`: `role:<org role>` or `user:<usr_…>`, either casing.
+ * The role names are the four `iam-provision.ts` gives every org.
+ */
+export const MANDATE_APPROVER =
+  /^(role:(Owner|Admin|Compliance|Billing)|user:usr_[0-9a-z]+)$/i;
+
+/** `mandateTargetSchema`: each allowed or denied target is 1 to 256 characters. */
+export const TARGET_MAX = 256;
+
+// ── The limits a mandate form writes ──────────────────────────────────────
+//
+// Two forms write a mandate body: the request on the agent page and the grant
+// on the Tools ledger. Both collect one measure limit and an optional cap on
+// the built-in `calls` measure, and both must refuse the same shapes for the
+// same reasons, so the rule lives here once rather than in two actions that
+// drift. `requestMandate` (features/agents/actions.ts) carries the full
+// reasoning; the short form is below.
+
+/** The one built-in measure (`CALLS_MEASURE`): every call draws exactly one. */
+const RESERVED_MEASURE = "calls";
+
+/** One measure's bound, as `mandateLimitSchema` takes it. */
+type MandateLimit = {
+  perCall?: string;
+  perPeriod?: string;
+  period: "daily" | "weekly" | "monthly";
+  currencyOrUnit: string;
+};
+
+/** The limit fields a mandate form collects, as typed. */
+export type MandateLimitFields = {
+  measure: string;
+  unit: string;
+  perCall: string;
+  perPeriod: string;
+  period: "daily" | "weekly" | "monthly";
+  callsPerDay: string;
+};
+
+/**
+ * The limits record a form's fields describe, or the field that is wrong.
+ *
+ * - **Verbatim.** A figure is stored as typed, never scaled to micros: whether
+ *   a measure is money is a property of the tool version's declaration, which
+ *   no contract the app may call answers. Scaling a count would store a
+ *   millionfold wider bound than the person entered.
+ * - **No currency unit.** A unit that is an ISO 4217 code reads back as money
+ *   while the figure is whole units, so it is refused in either casing.
+ * - **Not `calls`.** Every call draws one of those whatever a limit says, and
+ *   the grant handler exempts it from the declared-measure check, so a limit
+ *   filed under that name stops measuring what it names. The calls-per-day
+ *   field is the only writer of that limit.
+ * - **The measure is optional.** A cap on calls alone is a legal mandate and the
+ *   only one a tool that declares no numeric measure can carry. The four
+ *   measure fields stand or fall together.
+ *
+ * The checks run in a fixed order so a form names the same field for the same
+ * mistake wherever it is made.
+ */
+export function mandateLimitsOf(
+  fields: MandateLimitFields,
+):
+  | { ok: true; limits: Record<string, MandateLimit> }
+  | { ok: false; field: keyof MandateLimitFields } {
+  const measure = fields.measure.trim();
+  const unit = fields.unit.trim();
+  const perCall = fields.perCall.trim();
+  const perPeriod = fields.perPeriod.trim();
+  const callsPerDay = fields.callsPerDay.trim();
+  if (callsPerDay !== "" && !MEASURE_VALUE.test(callsPerDay))
+    return { ok: false, field: "callsPerDay" };
+
+  const wantsMeasure =
+    measure !== "" || unit !== "" || perCall !== "" || perPeriod !== "";
+  if (!wantsMeasure && callsPerDay === "")
+    return { ok: false, field: "perPeriod" };
+
+  const limits: Record<string, MandateLimit> = {};
+  if (wantsMeasure) {
+    if (measure === "" || measure === RESERVED_MEASURE)
+      return { ok: false, field: "measure" };
+    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
+      return { ok: false, field: "unit" };
+    if (perCall === "" && perPeriod === "")
+      return { ok: false, field: "perPeriod" };
+    if (perCall !== "" && !MEASURE_VALUE.test(perCall))
+      return { ok: false, field: "perCall" };
+    if (perPeriod !== "" && !MEASURE_VALUE.test(perPeriod))
+      return { ok: false, field: "perPeriod" };
+    limits[measure] = {
+      ...(perCall === "" ? {} : { perCall }),
+      ...(perPeriod === "" ? {} : { perPeriod }),
+      period: fields.period,
+      currencyOrUnit: unit,
+    };
+  }
+  if (callsPerDay !== "")
+    limits[RESERVED_MEASURE] = {
+      perPeriod: callsPerDay,
+      period: "daily",
+      currencyOrUnit: RESERVED_MEASURE,
+    };
+  return { ok: true, limits };
+}
+
+/**
+ * The consequence set a form names, deduplicated, or null when it is empty,
+ * too long, or holds a tag `consequenceTagSchema` refuses. A mandate covers a
+ * tool only when it names every tag the tool declares, so this is a set and not
+ * a choice.
+ */
+export function consequenceTagsOf(raw: string): string[] | null {
+  const tags = [...new Set(listOf(raw))];
+  return tags.length === 0 ||
+    tags.length > MAX_CONSEQUENCE_TAGS ||
+    !tags.every((tag) => CONSEQUENCE_TAG.test(tag))
+    ? null
+    : tags;
+}
+
+/** A comma-separated field as its trimmed, non-blank entries, in order. */
+export function listOf(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
+}

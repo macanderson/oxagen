@@ -12,11 +12,10 @@ import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
 import {
-  CONSEQUENCE_TAG,
-  MAX_CONSEQUENCE_TAGS,
-  MEASURE_VALUE,
+  consequenceTagsOf,
+  listOf,
+  mandateLimitsOf,
 } from "@/data/contracts/mandates";
-import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
@@ -151,17 +150,6 @@ export type MandateDraft = {
  */
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * The one built-in measure (`CALLS_MEASURE`, packages/oxagen/src/mandates/
- * schemas.ts): every call draws exactly one of it, and the gate reads it that
- * way whatever a limit says. So a limit on anything else filed under that name
- * stops measuring what it names — 50 rows per period becomes a ceiling of 50
- * calls — and the grant handler cannot catch it, because it exempts `calls`
- * from the measure a tool version must declare. The measure field refuses the
- * name, and the calls-per-day field is the only writer of that limit.
- */
-const RESERVED_MEASURE = "calls";
-
 function refuse(field: keyof MandateDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
@@ -217,8 +205,6 @@ export async function requestMandate(
   ws: string,
   draft: MandateDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
-  const unit = draft.unit.trim();
-  const measure = draft.measure.trim();
   // `findCoveringMandate` (packages/rules/src/mandates.ts) accepts a mandate
   // only when `tool.consequenceTags.every(t => mandate.consequenceTags.includes(t))`,
   // so a mandate naming one tag of a tool that declares two covers nothing —
@@ -230,75 +216,16 @@ export async function requestMandate(
   // measure declaration is behind (INV-05). Naming too few is the safe way to
   // be wrong here, since the mandate then covers nothing rather than more than
   // was meant, and the gate's denial names the tags it wanted.
-  const consequenceTags = [
-    ...new Set(
-      draft.consequenceTags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag !== ""),
-    ),
-  ];
-  if (
-    consequenceTags.length === 0 ||
-    consequenceTags.length > MAX_CONSEQUENCE_TAGS ||
-    !consequenceTags.every((tag) => CONSEQUENCE_TAG.test(tag))
-  )
-    return refuse("consequenceTags");
+  const consequenceTags = consequenceTagsOf(draft.consequenceTags);
+  if (consequenceTags === null) return refuse("consequenceTags");
 
-  // Verbatim: `MEASURE_VALUE` admits "0" and a figure with no leading zero, so
-  // what passes is already the digits the ledger records and there is nothing
-  // to normalise. The figure typed is the figure stored.
-  const limitValue = (typed: string): string | null =>
-    MEASURE_VALUE.test(typed) ? typed : null;
+  // Verbatim, no currency unit, never `calls`, and the measure optional beside
+  // a calls cap: `mandateLimitsOf` holds the rule for both mandate forms, the
+  // grant on the Tools ledger being the other, so they cannot drift apart.
+  const limits = mandateLimitsOf(draft);
+  if (!limits.ok) return refuse(limits.field);
 
-  const perCall = draft.perCall.trim();
-  const perPeriod = draft.perPeriod.trim();
-  // The same rule as any other limit, because it is one: `calls` is a measure
-  // limit and `measureValueSchema` governs its figure. A nine-digit cap here
-  // refused a ceiling of a billion calls that the ledger would have held.
-  const callsPerDay = draft.callsPerDay.trim();
-  if (callsPerDay !== "" && !MEASURE_VALUE.test(callsPerDay))
-    return refuse("callsPerDay");
-
-  // A mandate over the built-in measure alone is a legitimate shape and the
-  // only one available for a tool that carries a consequence and declares no
-  // numeric measure: `mandateLimitsSchema` needs one limit and `calls` is one,
-  // and `assertToolsDeclareMeasures` exempts it from the declared-measure
-  // check for exactly that reason. Requiring a measure limit as well shut that
-  // tool out entirely — blank fields refused here, an invented measure refused
-  // by the handler — so the measure entry is written only when it is asked
-  // for, and the four fields that make it stand or fall together.
-  const wantsMeasure =
-    measure !== "" || unit !== "" || perCall !== "" || perPeriod !== "";
-  if (!wantsMeasure && callsPerDay === "") return refuse("perPeriod");
-
-  let perCallValue: string | null = null;
-  let perPeriodValue: string | null = null;
-  if (wantsMeasure) {
-    if (measure === "" || measure === RESERVED_MEASURE)
-      return refuse("measure");
-    // A limit denominated in an ISO 4217 code reads back as money
-    // (`isCurrencyCode`, src/data/contracts/money.ts) while the figure beside
-    // it is whole units — the one shape this form must not write, since it is
-    // the shape it cannot scale. Refusing the code keeps the write and the
-    // read agreed: every limit this form writes is a count and reads back as
-    // one. The membership test is on the upper-cased name so that "usd" is
-    // refused beside "USD": an operator who meant money means it in either
-    // casing, and the refusal has to reach them both times. The unit itself is
-    // stored as typed.
-    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
-      return refuse("unit");
-    if (perCall === "" && perPeriod === "") return refuse("perPeriod");
-    perCallValue = perCall === "" ? null : limitValue(perCall);
-    if (perCall !== "" && perCallValue === null) return refuse("perCall");
-    perPeriodValue = perPeriod === "" ? null : limitValue(perPeriod);
-    if (perPeriod !== "" && perPeriodValue === null) return refuse("perPeriod");
-  }
-
-  const tools = draft.tools
-    .split(",")
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern !== "");
+  const tools = listOf(draft.tools);
   if (tools.length === 0) return refuse("tools");
 
   const purpose = draft.purpose.trim();
@@ -335,27 +262,7 @@ export async function requestMandate(
   const result = await kernelWrite(ctx, mandateRequest, {
     agentId: draft.agentId,
     consequenceTags,
-    limits: {
-      ...(wantsMeasure
-        ? {
-            [measure]: {
-              ...(perCallValue === null ? {} : { perCall: perCallValue }),
-              ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
-              period: draft.period,
-              currencyOrUnit: unit,
-            },
-          }
-        : {}),
-      ...(callsPerDay === ""
-        ? {}
-        : {
-            [RESERVED_MEASURE]: {
-              perPeriod: callsPerDay,
-              period: "daily" as const,
-              currencyOrUnit: RESERVED_MEASURE,
-            },
-          }),
-    },
+    limits: limits.limits,
     targets: {},
     tools,
     approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },

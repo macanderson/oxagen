@@ -13,12 +13,14 @@
 // strip: a count in navigation appears where something waits on a person, and
 // a switch that is denying is exactly that. The kernel seam serves one read
 // per request, so the switches tab does not pay for that count twice.
+import type { AgentPage } from "@/data/contracts/agents";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { panel } from "@/ui/control-styles";
 import { useTranslations } from "next-intl";
 import { Connections } from "./connections";
-import { MandatesLedger } from "./mandates-ledger";
+import { type LedgerGrant, MandatesLedger } from "./mandates-ledger";
 import { Registry } from "./registry";
 import { Switches, switchesOn } from "./switches";
 import { ToolsTabs } from "./tabs";
@@ -68,6 +70,58 @@ function canAdministerOrg(ctx: WsCtx): boolean {
  */
 function canImportTools(ctx: WsCtx): boolean {
   return canAdministerOrg(ctx);
+}
+
+/**
+ * An org Owner, Admin, Billing or Compliance member: every role a consequence
+ * can name. `grant_mandate` asserts, in its handler and on every org tier, an
+ * org role the workspace names for every tag on the mandate
+ * (`assertConsequenceRole`, INV-29), and both the defaults and the workspace's
+ * `consequence_roles` overrides draw only from those four
+ * (`consequenceRolesSchema`). So hiding the control from anyone else hides
+ * nothing the kernel would have allowed.
+ *
+ * It is wider than any one grant. A Billing member may grant `moves_money` and
+ * is refused `destroys_data`, and which tags a person will pick is not known
+ * until they pick them. The handler makes that call and the dialog names its
+ * refusal. The org role is the enforceable one here for the reason
+ * `canImportTools` gives.
+ */
+function canGrantMandates(ctx: WsCtx): boolean {
+  return (
+    ctx.orgRole === "owner" ||
+    ctx.orgRole === "admin" ||
+    ctx.orgRole === "billing" ||
+    ctx.orgRole === "compliance"
+  );
+}
+
+/**
+ * What the grant dialog's picker offers, from one page of `list_agents`. A
+ * retired identity is left out and remembered, so its requested drafts are
+ * offered no Grant: retirement suspends the principal, and a mandate granted
+ * after it can never be drawn. A read with a next page is marked partial, and
+ * the picker says so, rather than presenting the page as every agent.
+ */
+function grantableAgents(read: Read<AgentPage>): LedgerGrant {
+  if (!read.ok) return { agents: { ok: false }, retired: new Set() };
+  const live = read.value.agents.filter((agent) => agent.status !== "retired");
+  return {
+    agents: {
+      ok: true,
+      agents: live.map((agent) => ({
+        id: agent.id,
+        slug: agent.slug,
+        name: agent.name,
+      })),
+      partial: read.value.nextCursor !== null,
+    },
+    retired: new Set(
+      read.value.agents
+        .filter((agent) => agent.status === "retired")
+        .map((agent) => agent.id),
+    ),
+  };
 }
 
 async function TabBody({
@@ -128,8 +182,23 @@ async function TabBody({
       // ledger is what the accountable office reads across agents. `orgRole`
       // goes in because an unaccountable reader is answered a narrowed list
       // and the section must say so rather than present it as the whole.
-      const read = await source.mandates.list(ctx, { agentId: null });
-      return <MandatesLedger read={read} orgRole={ctx.orgRole} />;
+      //
+      // A reader who may grant also gets the agents read, which the picker
+      // needs; anyone else is not charged for it.
+      const [read, agents] = await Promise.all([
+        source.mandates.list(ctx, { agentId: null }),
+        canGrantMandates(ctx)
+          ? source.agents.list(ctx, { cursor: null })
+          : Promise.resolve(null),
+      ]);
+      return (
+        <MandatesLedger
+          read={read}
+          orgRole={ctx.orgRole}
+          at={at}
+          grant={agents === null ? null : grantableAgents(agents)}
+        />
+      );
     }
   }
 }

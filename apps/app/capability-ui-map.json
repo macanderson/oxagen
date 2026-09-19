@@ -686,6 +686,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "grant_mandate": {
+      "route": "/[org]/[ws]/tools?tab=mandates",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools?tab=mandates — Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
+      "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
+    },
     "revoke_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",

@@ -25,6 +25,22 @@ returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
 
+## App surface
+
+The Mandates ledger on the Tools page, `/{org}/{ws}/tools?tab=mandates`.
+**Grant a mandate** in the ledger header opens a blank grant with an agent
+picker. **Grant** on a requested row opens the same dialog on that draft and
+sends its id as `requestId`. Both controls are drawn for an org Owner, Admin,
+Billing, or Compliance member, the four roles a consequence can name. The
+handler still decides each grant by its tags.
+
+The dialog writes every limit and `humanAbove` threshold exactly as typed, in
+whole units, and refuses a unit that is a currency code. Whether a measure is
+money is a property of the tool version's declaration, which no read the app
+makes returns. Grant a money limit over the API or MCP. The dialog holds one
+counterparty rule and one `humanAbove` threshold. Grant more over the API or
+MCP.
+
 ## Roles
 
 The org roles the workspace names for every consequence tag on the mandate
