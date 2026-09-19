@@ -50,6 +50,15 @@ type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
 
+/** A sighting's attrs (undefined: a repeat not to seal) and its commit. */
+interface LlmCallSightingAttrs {
+  attrs: Record<string, string> | undefined;
+  commit: () => void;
+}
+
+/** What a row that is not an `llm_call` takes part in: nothing. */
+const NO_SIGHTING: LlmCallSightingAttrs = { attrs: {}, commit: () => {} };
+
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -127,6 +136,57 @@ function compact<T extends Record<string, unknown>>(value: T): T {
   return out as T;
 }
 
+/**
+ * Seal an event, keeping any body member its kind does not declare as an
+ * attribute rather than refusing the event.
+ *
+ * A harness adds attributes before this package learns their names: Claude
+ * Code began sending `plugin.name` and `plugin_id_hash` on its MCP connection
+ * records, and the strict body schema refused every such record, and with it
+ * the whole OTLP export it arrived in. The envelope stays strict about its
+ * typed members; an unknown one is kept verbatim in `attrs` under
+ * `body.<key>`, the same way `hooks.ts` and `otel.ts` keep what they do not
+ * promote. Any other refusal still throws.
+ */
+function sealWithUnknownBodyKeysAsAttrs(
+  unsealed: UnsealedTachoEvent,
+  cursor: ChainCursor,
+): ReturnType<typeof sealEvent> {
+  try {
+    return sealEvent(unsealed, cursor);
+  } catch (error) {
+    const issues = (error as { issues?: unknown }).issues;
+    if (!Array.isArray(issues)) throw error;
+    const unknown = new Set<string>();
+    for (const issue of issues as Array<{
+      code?: string;
+      path?: unknown[];
+      keys?: string[];
+    }>) {
+      if (
+        issue.code === "unrecognized_keys" &&
+        issue.path?.length === 1 &&
+        issue.path[0] === "body"
+      )
+        for (const key of issue.keys ?? []) unknown.add(key);
+    }
+    if (unknown.size === 0) throw error;
+    const body = { ...(unsealed.body as Record<string, unknown>) };
+    const attrs: Record<string, string> = { ...(unsealed.attrs ?? {}) };
+    for (const key of unknown) {
+      const value = body[key];
+      delete body[key];
+      if (value !== undefined)
+        attrs[`body.${key}`] =
+          typeof value === "string" ? value : JSON.stringify(value);
+    }
+    return sealEvent(
+      { ...unsealed, body, attrs } as UnsealedTachoEvent,
+      cursor,
+    );
+  }
+}
+
 export class SessionRecorder {
   readonly sessionUuid: string;
   readonly rootSessionUuid: string;
@@ -143,6 +203,7 @@ export class SessionRecorder {
    * event; they wait here for the daemon to write them next to it.
    */
   private pendingBodies: FrameBody[] = [];
+  private readonly otelRefusals: string[] = [];
   private context: Context = {};
   private host: Host = {};
   private anthropic: Anthropic = {};
@@ -338,11 +399,12 @@ export class SessionRecorder {
     // A proxy frame is the first sighting of its call by construction (it
     // is sealed as the response ends); noting it is what lets the transcript
     // and OTel sightings that follow be stamped as its duplicates.
-    const duplicate =
+    const sighting =
       kind === "llm_call"
-        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ?? {})
-        : {};
-    return this.seal(kind, body, {
+        ? this.llmCallSighting(body, fields.source ?? "collector")
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs ?? {};
+    const event = this.seal(kind, body, {
       ts: fields.ts ?? this.now(),
       source: fields.source ?? "collector",
       ...(fields.hook_event_name !== undefined
@@ -353,6 +415,8 @@ export class SessionRecorder {
       ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
     });
+    sighting.commit();
+    return event;
   }
 
   get hasStarted(): boolean {
@@ -525,7 +589,7 @@ export class SessionRecorder {
       kind,
       body,
     }) as unknown as UnsealedTachoEvent;
-    const sealed = sealEvent(unsealed, this.cursor);
+    const sealed = sealWithUnknownBodyKeysAsAttrs(unsealed, this.cursor);
     this.cursor = sealed.next;
     this.events.push(sealed.event);
     const contentClass = contentClassOf(kind);
@@ -558,17 +622,20 @@ export class SessionRecorder {
   /**
    * The attrs an `llm_call` carries when another source already sealed the
    * same call, or undefined when this sighting is a repeat from the same
-   * source and must not be sealed at all. See `llm-call-dedupe.ts`.
+   * source and must not be sealed at all; and the ledger registration to
+   * commit once the row has sealed. A row the envelope refuses never
+   * commits, so the next sighting of the call is not stamped a duplicate of
+   * a row the chain does not hold. See `llm-call-dedupe.ts`.
    */
-  private llmCallDuplicateAttrs(
+  private llmCallSighting(
     body: Record<string, unknown>,
     source: string,
-  ): Record<string, string> | undefined {
-    const verdict = this.llmCalls.note(body, source);
-    if (verdict.kind === "repeat") return undefined;
+  ): LlmCallSightingAttrs {
+    const { verdict, commit } = this.llmCalls.judge(body, source);
+    if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
-      return { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of };
-    return {};
+      return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
+    return { attrs: {}, commit };
   }
 
   /** Ingest one hook payload with the hook process environment. */
@@ -742,10 +809,25 @@ export class SessionRecorder {
         continue;
       const target = this.routeOtel(draft);
       out.push(...this.pendingChildGenesis.splice(0));
-      const sealed = target.sealOtelDraft(draft);
-      if (sealed !== undefined) out.push(sealed);
+      // One record the envelope refuses must not cost the rest of the export.
+      // The events already sealed in this loop have advanced the chain; had
+      // the throw escaped, they would never reach the WAL and the control
+      // plane would see a sequence gap on every chain the export touched.
+      try {
+        const sealed = target.sealOtelDraft(draft);
+        if (sealed !== undefined) out.push(sealed);
+      } catch (error) {
+        this.otelRefusals.push(
+          `${draft.kind}: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}`,
+        );
+      }
     }
     return out;
+  }
+
+  /** OTel records this recorder could not seal, drained by the daemon's log. */
+  takeOtelRefusals(): string[] {
+    return this.otelRefusals.splice(0);
   }
 
   private routeOtel(draft: OtelDraft): SessionRecorder {
@@ -787,12 +869,16 @@ export class SessionRecorder {
     // Only the log record takes part: the control plane counts tokens from
     // `otel_log`, never from a span, so a span sealed first must not turn the
     // log record that follows into the duplicate.
-    const duplicate =
+    const sighting =
       draft.kind === "llm_call" && draft.source === "otel_log"
-        ? this.llmCallDuplicateAttrs(draft.body, draft.source)
-        : {};
-    if (duplicate === undefined) return undefined;
-    return this.seal(draft.kind, draft.body, {
+        ? this.llmCallSighting(draft.body, draft.source)
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs;
+    if (duplicate === undefined) {
+      sighting.commit();
+      return undefined;
+    }
+    const event = this.seal(draft.kind, draft.body, {
       ts: draft.ts,
       source: draft.source,
       otel_event_name: draft.otel_event_name,
@@ -810,6 +896,8 @@ export class SessionRecorder {
           ? { prompt_id: draft.standard.prompt_id }
           : {},
     });
+    sighting.commit();
+    return event;
   }
 
   /** Ingest one transcript line (parent transcript or a subagent's). */
@@ -829,10 +917,11 @@ export class SessionRecorder {
     for (const draft of drafts) {
       this.absorbContext(draft.context);
       let body = draft.body;
-      let duplicate =
+      const sighting =
         draft.kind === "llm_call"
-          ? this.llmCallDuplicateAttrs(draft.body, "transcript")
-          : {};
+          ? this.llmCallSighting(draft.body, "transcript")
+          : NO_SIGHTING;
+      let duplicate = sighting.attrs;
       if (duplicate === undefined) {
         // A later content block of a message the chain already holds: its
         // text still ships as a body, its usage does not count again.
@@ -849,6 +938,7 @@ export class SessionRecorder {
           turn: draft.turn ?? {},
         }),
       );
+      sighting.commit();
     }
     return out;
   }
