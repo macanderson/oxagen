@@ -1,12 +1,38 @@
-# Tacho — the agent flight recorder
+# Wrapping an agent
 
-`spec.md` (Proposed, 2026-09-06) is the Oxagen contract: `@oxagen/tacho`, the
-wrapper for every agent Oxagen does not run itself — Claude Code through hooks,
-Claude Agent SDK agents in-process, custom agents through `tacho.wrap(...)` —
-with one enrollment contract, one evidence contract and one control contract
-that Stella meets natively. `plan.md` sequences the build; `design/` is the
-product design (trace model, approval tokens, trust scoring, threat model,
-insurer API, and its three decision records `adr-0003..0005`).
+Oxagen governs agents; it does not run them (ADR-043). Wrapping is how it
+reaches the ones it does not run: the agent's own harness reports what it did,
+and Oxagen records, gates and evidences that from the outside. The thing has no
+product name. Doing it is wrapping an agent (spec §2.1).
+
+`spec.md` (Proposed, 2026-09-06) is the Oxagen contract for it. `@oxagen/tacho`
+is the package that implements the wrapper, with one enrollment contract, one
+evidence contract and one control contract that Stella meets natively. Four
+harnesses are wrapped as equals (`WRAPPED_HARNESSES`,
+`packages/tacho/src/wire.ts`, and ADR-101): Claude Code, Codex, Cursor and
+Stella, each through the hooks its harness reads, with Cursor's and Stella's
+payloads translated by `cursor-adapter.ts` and `stella-adapter.ts`. A custom
+agent wraps itself through `tacho.wrap(...)`. Claude Desktop is connected
+rather than wrapped (ADR-078).
+
+`plan.md` sequences the build. `design/` holds the product design (trace model,
+approval tokens, trust scoring, threat model, insurer API) and its three
+decision records, `adr-0003` through `adr-0005`.
+
+## The names that are still moving
+
+Spec §2.1 takes the old word off the surfaces, and ADR-103 lands that in phases
+because several of these names are recorded on machines that are already
+enrolled. Until those phases ship, the documents in this directory name what
+exists:
+
+| Name | What it is | Phase that moves it |
+|---|---|---|
+| `oxagen agent enroll \| status \| unenroll` | The commands. Already moved; `oxagen tacho` is hidden, still works, and prints one deprecation line. | 1a and 1b, shipped |
+| `tachod`, `tacho-hook` | A user service and a hook binary path, written into harness settings and into managed settings documents that MDM has distributed. | 4, new name alongside the old, migrating on the next enroll |
+| `oxagen.frame` | The envelope on the wire between hook, collector and server. | 5, both names accepted for one release |
+| `tacho_sessions` | The table, and its `tacho_sessions_runtime_check` constraint. | 6, by Atlas migration, after the runtime stops writing the old name |
+| `@oxagen/tacho`, `ingest_tacho_events` | A package name and a registered capability name. Internal identifiers, and an MCP tool name a customer's agent calls. | Neither. ADR-103 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback. |
 
 ## The Stella-side seam corpus (copied)
 
@@ -20,16 +46,16 @@ the Oxagen half. When Stella revises one, re-copy and bump the commit above.
 
 | File | What it defines | `spec.md` consumer |
 |---|---|---|
-| `oxagen-trace-drain.md` | Full-fidelity egress: `AgentEvent` journal → content-bearing drain → Oxagen's three storage planes, column-level mapping | §6 evidence contract, `ingest_run_evidence` |
+| `oxagen-trace-drain.md` | Full-fidelity egress: `AgentEvent` journal to content-bearing drain to Oxagen's three storage planes, column-level mapping | §6 evidence contract, `ingest_run_evidence` |
 | `session-telemetry-receipts-spec.md` | Per-session receipts: what was sent to the model, tool-call preimages, digests | evidence manifests, replay grade |
 | `enterprise-authority-telemetry.md` | Authority model (managed ceiling ∩ repo trust ∩ session grant), content-free rollup, signed enrollment | §5 enrollment, IAM delegation ceiling |
-| `witness-protocol.md` | The flip oracle (fail→pass of the same normalized command), tamper exclusion, deterministic-first ladder | the trace-level pass/fail stamp |
-| `verification-gate.md` | `Completed` vs failed/aborted/indeterminate | outcome on execution records; trust input |
+| `witness-protocol.md` | The flip oracle (fail to pass of the same normalized command), tamper exclusion, deterministic-first ladder | the trace-level pass/fail stamp |
+| `verification-gate.md` | `Completed` vs failed, aborted, or indeterminate | outcome on execution records; trust input |
 | `step-grading-and-productive-ratio.md` | Per-step grading and the productive ratio | `design/trust-scoring.md` |
 | `wrapper-socket.md` | The plugin socket a turn-loop wrapper plugs into | `design/examples/rust-stella.md` |
 | `agent-monitor-protocol.md` | One JSON line per detection from any run watcher to any supervisor | fleet monitor ingress |
 | `serve-observability.md` | What `stella serve` exposes for observation | §7 control contract (reverse-RPC tier) |
 
 Oxagen's ledger side of this seam is `docs/specs/run-evidence-ingress/spec.md`
-(Approved) and `@oxagen/run-ledger`; the excision that made the wrapper the
+(Approved) and `@oxagen/run-ledger`. The excision that made the wrapper the
 only agent surface is ADR-043.
