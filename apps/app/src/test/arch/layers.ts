@@ -92,8 +92,18 @@ const ALLOWED: Record<
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "server/viewer" || target === "server/session") return true;
-    // `kernelWrite` and `kernelRead`, only from a "use server" module; their
-    // types from anywhere. The read half is ADR-089.
+    // `kernelWrite`, `kernelRead` and `readToActionResult`, only from a
+    // "use server" module; their types from anywhere. The read half is ADR-089.
+    //
+    // `readToActionResult` completes that list rather than widening it. It is a
+    // pure mapper from a `Read` to an `ActionResult` — a switch over the four
+    // `Read` variants — and reaches neither the kernel nor a store. It lives in
+    // kernel.ts because it is the other end of the encoding `toRead` produces,
+    // and the two must be read together. An action that reads has to carry its
+    // `Read` across into INV-19's shape, so it is part of the same seam surface
+    // the two named calls are: it was written out by hand in
+    // features/shell/account-actions.ts and workspace-settings-actions.ts, and
+    // both copies collapsed every error to `unavailable`.
     //
     // `kernelRead` is here because a read that must happen ON DEMAND has
     // nowhere else to live. A page or layout read goes through a DataSource
@@ -112,7 +122,7 @@ const ALLOWED: Record<
       return (
         edge.typeOnly ||
         (from.directive === "use server" &&
-          onlyNames(edge, ["kernelWrite", "kernelRead"]))
+          onlyNames(edge, ["kernelWrite", "kernelRead", "readToActionResult"]))
       );
     }
     // The stream handler alone (§3.5).
@@ -233,6 +243,16 @@ const PLATFORM_ROWS: Readonly<Record<string, readonly string[]>> = {
   // auth barrel is server-only and a feature's internals are not importable
   // across lanes, so the shell keeps its own browser seam to the same client.
   "src/features/shell/session-client.ts": ["@oxagen/auth/client"],
+  // The shell's blob seam. A data export's archive is a private object, so the
+  // bytes are streamed by a route rather than linked. §2 leaves that route and
+  // its handler nowhere to get an object reader — the `app` row admits
+  // `server/viewer` and no other `server/*`, and the `features` row admits the
+  // viewer, session and kernel seams alone — so a `src/server/blob.ts` would
+  // have had to widen two layer rows to be reachable. The seam sits in the
+  // feature instead, as `session-client.ts` and `features/audit/filters.ts` do,
+  // and exports one narrow read: nothing downstream can write, delete or reach
+  // a second store through it.
+  "src/features/shell/export-storage.ts": ["@oxagen/storage"],
   // The emitted security event types the Audit filter offers (#2528, #3097):
   // a pure leaf package with no store and no kernel.
   "src/features/audit/filters.ts": ["@oxagen/compliance"],

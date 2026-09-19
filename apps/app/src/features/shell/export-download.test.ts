@@ -5,17 +5,17 @@
 // A link straight at storage would 404 on the filesystem driver and 401 on
 // Vercel Blob.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { StorageAdapter } from "@oxagen/storage";
 import { OrgCtx, type RouteViewer } from "@/server/viewer";
 import { unsafeMint } from "@/server/viewer.testing";
 import { handleExportDownload } from "./export-download";
+import type { ExportObject } from "./export-storage";
 
 const EXPORT_ID = "7a000000-0000-4000-8000-0000000000e1";
 const KEY = "privacy-exports/org-1/7a000000.zip";
 
 const resolveViewer = vi.fn<(org: string) => Promise<RouteViewer>>();
 const readStatus = vi.fn();
-const get = vi.fn<StorageAdapter["get"]>();
+const get = vi.fn<(key: string) => Promise<ExportObject>>();
 
 /** A signed-in viewer of acme. The handler switches on `kind` and never reads
  *  `ctx`, but the type asks for one, so it is minted rather than asserted. */
@@ -30,21 +30,10 @@ const OK_VIEWER: RouteViewer = {
   }),
 };
 
-/** The download route reads one object and writes none, so the two writers
- *  throw rather than returning a value nobody should be relying on. */
-const storageStub: StorageAdapter = {
-  driver: "test",
-  get,
-  put: () => {
-    throw new Error("the download route never writes");
-  },
-  delete: () => {
-    throw new Error("the download route never deletes");
-  },
-};
-
+/** The blob seam is one narrow read, so there is nothing to stub but that: the
+ *  handler cannot write or delete through it however it is called. */
 function deps() {
-  return { resolveViewer, readStatus, storage: () => storageStub };
+  return { resolveViewer, readStatus, readObject: get };
 }
 
 function call() {
@@ -76,7 +65,6 @@ beforeEach(() => {
   get.mockResolvedValue({
     body: bodyOf("zip-bytes"),
     contentType: "application/zip",
-    sizeBytes: 9,
   });
 });
 
@@ -151,11 +139,7 @@ describe("the bytes", () => {
   });
 
   it("falls back to application/zip when the store reports no type", async () => {
-    get.mockResolvedValue({
-      body: bodyOf("zip-bytes"),
-      contentType: null,
-      sizeBytes: null,
-    });
+    get.mockResolvedValue({ body: bodyOf("zip-bytes"), contentType: null });
     expect((await call()).headers.get("content-type")).toBe("application/zip");
   });
 });

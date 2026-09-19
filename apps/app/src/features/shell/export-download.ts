@@ -12,10 +12,15 @@
 // and `get_export_status` must say the bundle is this person's and ready. The
 // capability matches the row on the authenticated principal, so an id
 // belonging to someone else answers `not_found` and never reaches storage.
+//
+// The bytes come in through `readObject`, the narrow reader `export-storage.ts`
+// exports. This module holds no edge to `@oxagen/storage` of its own: the
+// handler is the gate order, and which store the archive sits in is the seam's
+// business, not the gate's.
 import "server-only";
-import type { StorageAdapter } from "@oxagen/storage";
 import type { ActionResult } from "@/server/kernel";
 import type { RouteViewer } from "@/server/viewer";
+import type { ExportObject } from "./export-storage";
 
 export type ExportDownloadDeps = {
   resolveViewer: (org: string) => Promise<RouteViewer>;
@@ -23,7 +28,7 @@ export type ExportDownloadDeps = {
     org: string,
     exportId: string,
   ) => Promise<ActionResult<{ ready: boolean; storageKey: string | null }>>;
-  storage: () => StorageAdapter;
+  readObject: (key: string) => Promise<ExportObject>;
 };
 
 function refusal(status: number, code: string): Response {
@@ -67,7 +72,7 @@ export async function handleExportDownload(
     return refusal(409, "not_ready");
   }
 
-  const object = await deps.storage().get(read.value.storageKey);
+  const object = await deps.readObject(read.value.storageKey);
   return new Response(object.body, {
     status: 200,
     headers: {

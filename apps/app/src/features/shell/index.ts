@@ -19,3 +19,4 @@ export { PageRecord } from "./page-record";
 // read that says whether the export is ready.
 export { readExportStatus } from "./account-actions";
 export { handleExportDownload } from "./export-download";
+export { readExportObject } from "./export-storage";
