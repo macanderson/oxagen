@@ -1105,5 +1105,46 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
     });
+
+    it("limits: a kind change is never refused for a legacy measure with no stored kind, even with an open reservation", async () => {
+      const m = await grant(billingUserId, body());
+      await seedReservation(m.id, "150000000", randomUUID());
+      // Strip the stored kind entirely, the pre-ADR-108 shape: a stored
+      // `limits.amount` with no `kind` key at all, not merely a wrong one.
+      // `parseMandateRow` resolves this via `legacyMeasureKindGuess`, and
+      // `locked.legacyKindMeasures` records that the resolved kind is a
+      // guess, not a fact this reservation was ever drawn against.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
   },
 );

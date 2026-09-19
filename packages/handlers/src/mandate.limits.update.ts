@@ -169,17 +169,31 @@ export async function assertPeriodChangeAllowed(
  * from then on. An open reservation matters regardless of which period key
  * it was filed under, the same as a period rename: a call parked past a
  * boundary still holds a row `hasOpenReservation` finds.
+ *
+ * `legacyKindMeasures` skips a measure whose "before" kind is
+ * `legacyMeasureKindGuess`'s fallback, not a real stamp: that guess never
+ * drove any enforcement arithmetic (`reserve`/`decideMandate` always read
+ * the raw value against the tool's actual current declaration, not the
+ * guess), so a ledger row under it already carries the right raw figure.
+ * Refreshing that measure's kind to what the declaration actually says is
+ * the same attrition ADR-108 §3 already documents for every other read, not
+ * a change that could mix an old interpretation into a new sum. Requiring
+ * an operator to wait out a live reservation before this attrition can land
+ * would refuse a routine `validTo`/`limitChanges` update for no
+ * corruption risk this check exists to prevent.
  */
 export async function assertKindChangeAllowed(
   tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
   mandateId: string,
   before: MandateLimits,
   after: MandateLimits,
+  legacyKindMeasures: ReadonlySet<string>,
   at: Date = new Date(),
 ): Promise<void> {
   for (const [measure, next] of Object.entries(after)) {
     const prev = before[measure];
     if (!prev || prev.kind === next.kind) continue;
+    if (legacyKindMeasures.has(measure)) continue;
     const drawn = await hasDrawnInCurrentPeriod(
       tx,
       mandateId,
@@ -291,7 +305,13 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
     // measure's kind never actually changes here, so it must never trip this
     // refusal, only a measure the operator explicitly touched into a new
     // kind can.
-    await assertKindChangeAllowed(tx, locked.id, locked.limits, stampedLimits);
+    await assertKindChangeAllowed(
+      tx,
+      locked.id,
+      locked.limits,
+      stampedLimits,
+      locked.legacyKindMeasures,
+    );
     const [updated] = await tx
       .update(schema.mandates)
       .set({

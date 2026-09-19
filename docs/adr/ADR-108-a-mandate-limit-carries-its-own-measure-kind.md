@@ -267,6 +267,11 @@ classification) and is unchanged.
   `assertPeriodChangeAllowed`'s `period_drawn` refusal exists to prevent for a
   period rename. The check is scoped to the ledger's current-period rows,
   not the whole history, matching how `readAuthority` sums for the gate.
+  It skips a measure in `legacyKindMeasures`: that measure's "old" kind was
+  never a persisted fact, and every ledger row against it was already
+  written against the raw value the tool call actually returned, not the
+  guess, so refreshing it carries no corruption risk and does not deserve
+  the same wait-for-the-window friction a real kind change does.
 - `legacyMeasureKindGuess` is deliberately not deleted the day a backfill
   might land, because a backfill is optional under this decision, not required
   by it: the fallback stays as documented, correct-by-construction cover for
