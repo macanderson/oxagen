@@ -19,6 +19,8 @@ describe("i18n request config", () => {
     const config = await factory(params);
 
     expect(config.locale).toBe("en");
+    // Pacific, the default the store and the shell fall back to.
+    expect(config.timeZone).toBe("America/Los_Angeles");
     expect(config.messages).toEqual(loadCatalogs(messagesDir));
     // en.json is always part of the merge, whatever page catalogs exist.
     expect(config.messages).toMatchObject(en);

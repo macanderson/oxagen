@@ -8,7 +8,7 @@
 // severity and no reference column, because no column behind them exists. A
 // refused read renders the denied state, never an empty record.
 import "server-only";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { AuditEvent, AuditPage, AuditQuery } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -25,6 +25,7 @@ import {
   hasAuditFilters,
   parseAuditQuery,
 } from "./filters";
+import { useFormatter } from "@/ui/formatter";
 
 /** An actor the record names, as the filter and the table print them. */
 type AuditActor = { id: string; name: string };

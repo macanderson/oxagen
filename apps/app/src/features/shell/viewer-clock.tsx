@@ -18,6 +18,7 @@ import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.rea
 import type { ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
 import type { OrgCtx } from "@/server/viewer";
+import { setViewerTimeZone } from "@/ui/formatter";
 import { TimeZoneProvider } from "./time-zone-provider";
 
 export async function ViewerClock({

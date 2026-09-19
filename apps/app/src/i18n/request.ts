@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { getRequestConfig } from "next-intl/server";
 import { DEFAULT_LOCALE, type Messages } from "./catalogs";
 import { loadCatalogs } from "./load-catalogs";
@@ -17,7 +18,13 @@ function messages(): Messages {
   return cached;
 }
 
+// The zone is the default, not the viewer's: this config is read while the
+// static shell prerenders (Cache Components), where a person's preference is
+// request data it may not touch. Under the organization layout the viewer's
+// own zone replaces it (features/shell/viewer-clock.tsx, ui/formatter.ts);
+// outside it (sign-in, the invitation page) dates read in Pacific time.
 export default getRequestConfig(() => ({
   locale: DEFAULT_LOCALE,
   messages: messages(),
+  timeZone: DEFAULT_TIME_ZONE,
 }));
