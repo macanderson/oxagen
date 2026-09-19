@@ -311,7 +311,7 @@ describe("archive_workspace", () => {
     expect(emitted).toHaveLength(0);
   });
 
-  // ADR-104: archival suspends the workspace's API keys and reports how many.
+  // ADR-105: archival suspends the workspace's API keys and reports how many.
 
   it("reports no suspended keys for a workspace that holds none", async () => {
     const out = await run();

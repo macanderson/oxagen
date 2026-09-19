@@ -43,7 +43,7 @@ describe("archive_workspace contract", () => {
   });
 
   it("refuses an answer that does not say what happened to the keys (negative)", () => {
-    // ADR-104: archival suspends the workspace's keys. A caller that is not
+    // ADR-105: archival suspends the workspace's keys. A caller that is not
     // told how many is not told the call had a credential effect at all.
     expect(
       workspaceArchive.output.safeParse({

@@ -163,7 +163,7 @@ export const apiKeyCreateHandler: CapabilityHandler<
   // whatever makes role checks transactional everywhere, not to this capability.
   const [inserted] = await withTenantDb(async (tx) => {
     // An archived workspace is wound down. Its existing keys stop
-    // authenticating (ADR-104) without being revoked, and the Organization ›
+    // authenticating (ADR-105) without being revoked, and the Organization ›
     // API keys page lists them so an operator can revoke one for good. Minting
     // a new one there would be a credential issued into a closed workspace —
     // dead the moment it is handed over, and alive again the moment the

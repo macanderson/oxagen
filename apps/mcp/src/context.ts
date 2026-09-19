@@ -69,7 +69,7 @@ export type McpAuthFailure =
   | "unauthenticated"
   | "invalid_token"
   | "expired_token"
-  /** The key is valid but its workspace is archived (ADR-104). */
+  /** The key is valid but its workspace is archived (ADR-105). */
   | "workspace_archived";
 
 /** Thrown when an MCP request carries no valid principal. Fails closed. */

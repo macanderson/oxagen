@@ -532,7 +532,7 @@ describe("api.key.create handler — archived workspace", () => {
   });
 
   // An archived workspace is wound down. Its existing keys stop authenticating
-  // (ADR-104) without being revoked, and the Organization › API keys page
+  // (ADR-105) without being revoked, and the Organization › API keys page
   // lists them so an operator can revoke one for good. Minting a new one there
   // is a credential that is dead on arrival and alive again the moment the
   // workspace is restored.

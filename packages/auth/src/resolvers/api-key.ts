@@ -24,7 +24,7 @@
  * is refused with `purpose_locked` rather than authorizing as its creator.
  * Every other key carries no user.
  *
- * A key never authenticates into an archived workspace (ADR-104). Archiving a
+ * A key never authenticates into an archived workspace (ADR-105). Archiving a
  * workspace retires it as a place work happens, so the machine credentials
  * bound to it stop being accepted here, at the one point where a raw key
  * becomes a tenant scope. The key rows are left alone: archival destroys no
@@ -79,7 +79,7 @@ export type ApiKeyResolutionError =
   | { kind: "purpose_locked" }
   /**
    * The workspace the key names is archived (or no longer resolvable), so the
-   * key no longer authenticates into it. The key itself is untouched (ADR-104).
+   * key no longer authenticates into it. The key itself is untouched (ADR-105).
    */
   | { kind: "workspace_archived" };
 
@@ -164,7 +164,7 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   }
 
   // The key names a workspace; an archived workspace no longer accepts machine
-  // authentication (ADR-104). This runs before either bearer branch, so every
+  // authentication (ADR-105). This runs before either bearer branch, so every
   // surface that resolves a key gets the same answer, and it applies to keys
   // minted long before the workspace was archived.
   // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)

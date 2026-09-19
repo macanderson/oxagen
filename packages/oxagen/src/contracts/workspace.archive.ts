@@ -14,7 +14,7 @@ import { registerCapability } from "../registry";
  * refuse runs in an archived workspace. Recorded as the `workspace.archived`
  * security event.
  *
- * Machine credentials stop at the door. Under ADR-104 an API key bound to an
+ * Machine credentials stop at the door. Under ADR-105 an API key bound to an
  * archived workspace no longer authenticates on any surface: `resolveApiKey`
  * refuses it. No key row is changed, so nothing is destroyed and restoring the
  * workspace restores the keys. `suspendedApiKeys` reports how many live keys

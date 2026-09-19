@@ -292,7 +292,7 @@ describe("resolveApiKey", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Every key names a workspace, and the resolver reads that workspace to
-    // see whether it is archived (ADR-104). The default here is the ordinary
+    // see whether it is archived (ADR-105). The default here is the ordinary
     // case — an active workspace — so each test below states only what it is
     // about. The archived and missing cases are driven explicitly.
     mockQuery.workspaces.findFirst.mockResolvedValue({
@@ -540,13 +540,13 @@ describe("resolveApiKey", () => {
   });
 
   // -------------------------------------------------------------------------
-  // ADR-104: a key does not authenticate into an archived workspace.
+  // ADR-105: a key does not authenticate into an archived workspace.
   // -------------------------------------------------------------------------
 
   it("refuses a key whose workspace is archived, however valid the key is", async () => {
     // The key hashes correctly, has no expiry and is not soft-deleted — the
     // exact shape that kept authenticating into an archived workspace before
-    // ADR-104 (#3123). Archiving the workspace is what ends it.
+    // ADR-105 (#3123). Archiving the workspace is what ends it.
     mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
       id: "aky_stranded",
       keyHash: sha256hex(RAW_KEY),

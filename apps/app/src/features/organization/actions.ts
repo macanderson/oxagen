@@ -175,7 +175,7 @@ export async function renameWorkspace(
 /**
  * Archives a workspace: it leaves the switcher, its slug stays taken and its
  * records stay readable. Its API keys stop authenticating while it is archived
- * and none is revoked (ADR-104); the capability answers with how many.
+ * and none is revoked (ADR-105); the capability answers with how many.
  */
 export async function archiveWorkspace(
   org: string,

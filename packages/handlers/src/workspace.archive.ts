@@ -17,7 +17,7 @@
 //      nothing and the call is refused with `already_archived`.
 //   5. Live API keys bound to the workspace are counted in the same
 //      transaction and returned as `suspendedApiKeys`. Archival does not touch
-//      the key rows: under ADR-104 `resolveApiKey` refuses a key whose
+//      the key rows: under ADR-105 `resolveApiKey` refuses a key whose
 //      workspace is archived, so those keys stop authenticating the moment the
 //      row is written and start working again if the workspace is restored.
 //      The count is what the operator is told, and what the audit trail keeps.
@@ -89,7 +89,7 @@ export const workspaceArchiveHandler: CapabilityHandler<
         // after the count below but before the write commits could acquire
         // its own lock, insert a key, and commit while this transaction still
         // waits — a key `suspendedApiKeys` and the audit log would then omit,
-        // even though ADR-104 still stops it from authenticating once this
+        // even though ADR-105 still stops it from authenticating once this
         // commits. The two `FOR UPDATE`s make the two capabilities queue for
         // the same row: whichever commits first is the order the other sees.
         await tx
@@ -118,7 +118,7 @@ export const workspaceArchiveHandler: CapabilityHandler<
           });
         }
         const archivedAt = new Date();
-        // Keys that would still authenticate today. ADR-104 stops them at
+        // Keys that would still authenticate today. ADR-105 stops them at
         // `resolveApiKey` once the row below is written; nothing here revokes
         // them, so the number is a report, not a destruction. An expired or
         // revoked key is already dead and is not counted.

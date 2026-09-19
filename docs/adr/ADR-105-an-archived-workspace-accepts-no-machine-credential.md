@@ -1,4 +1,4 @@
-# ADR-104: An archived workspace accepts no machine credential
+# ADR-105: An archived workspace accepts no machine credential
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
