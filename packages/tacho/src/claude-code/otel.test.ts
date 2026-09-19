@@ -621,6 +621,39 @@ describe("sealing an OTLP export", () => {
     expect(events[0]?.body).toMatchObject({ input_tokens: 100 });
   });
 
+  it("rolls back a sticky standard field when the record that carried it is refused", () => {
+    const r = recorder();
+    // Past the envelope's 512-character limit, so the row is refused.
+    const refused = exportOf([
+      "api_request",
+      {
+        model: "claude-opus-5",
+        input_tokens: 1,
+        output_tokens: 1,
+        request_id: "req_long_account",
+        "user.account_uuid": "a".repeat(600),
+      },
+    ]) as never;
+    expect(r.ingestOtlp(refused)).toEqual([]);
+    expect(r.takeOtelRefusals()).toHaveLength(1);
+    // A later record that omits the attribute must not inherit the refused
+    // value, or it would be refused too.
+    const events = r.ingestOtlp(
+      exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_after",
+        },
+      ]) as never,
+    );
+    expect(r.takeOtelRefusals()).toEqual([]);
+    expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+    expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+  });
+
   it("keeps a body member its kind does not declare as an attribute instead of refusing the event", () => {
     const r = recorder();
     const event = r.sealCollectorEvent("oxagen:mcp_connection", {
