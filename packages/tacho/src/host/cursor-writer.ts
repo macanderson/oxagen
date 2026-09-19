@@ -265,6 +265,9 @@ export function stripCursorHooks(
     if (Object.keys(hooks).length > 0) document.hooks = hooks;
     else delete document.hooks;
   }
+  const remaining = Object.keys(document);
+  if (remaining.length === 1 && remaining[0] === "version")
+    delete document.version;
   return { document, changed: JSON.stringify(document) !== before };
 }
 
