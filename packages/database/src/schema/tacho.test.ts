@@ -78,4 +78,12 @@ describe("tacho.sessions CHECK constraints match the schema lists", () => {
       "codex",
     );
   });
+
+  it("the runtime constraint admits cursor, so a Cursor session is not filed as custom", () => {
+    const { sql } = latestMigrationDefining("tacho_sessions_runtime_check");
+    expect(TACHO_RUNTIMES).toContain("cursor");
+    expect(checkedValues(sql, "tacho_sessions_runtime_check")).toContain(
+      "cursor",
+    );
+  });
 });

@@ -6,7 +6,7 @@
  * daemon restart continues every chain instead of forking it.
  *
  * It also keeps the agent roster: one entry per kind of agent this host has
- * run (`claude-code`, `codex`, `stella`, or a named custom agent), with when
+ * run (`claude-code`, `codex`, `cursor`, `stella`, or a named custom agent), with when
  * it was first and last seen and how many sessions it opened. The roster
  * outlives the sessions it counted — `forgetSealed` drops sealed sessions,
  * never roster entries — so the desktop app can show every agent the host
@@ -43,6 +43,7 @@ import {
 const RUNTIME_FOR_HARNESS: Record<WrappedHarness, TachoRuntime> = {
   "claude-code": "claude-code",
   codex: "codex",
+  cursor: "cursor",
   stella: "stella",
 };
 

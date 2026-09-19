@@ -27,6 +27,8 @@ import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 const AGENT_HARNESSES = [
   "stella",
   "claude-code",
+  "codex",
+  "cursor",
   "claude-agent-sdk",
   "custom",
 ] as const;

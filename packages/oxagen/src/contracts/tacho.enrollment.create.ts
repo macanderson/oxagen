@@ -49,7 +49,12 @@ export const tachoEnrollmentCreate = registerCapability({
       arch: z.string().max(32).optional(),
       /** Ed25519 public key, `ed25519:<base64 SPKI or raw 32 bytes>`. */
       devicePublicKey: z.string().regex(/^ed25519:[A-Za-z0-9+/=]{40,}$/),
-      harnesses: z.array(tachoHarnessSchema).min(1).max(4),
+      // Bounded by the enum itself, so a harness added to `@oxagen/tacho`
+      // cannot make a host that names all of them fail enrollment.
+      harnesses: z
+        .array(tachoHarnessSchema)
+        .min(1)
+        .max(tachoHarnessSchema.options.length),
       claudeVersion: z.string().max(32).optional(),
       claudeExecpath: z.string().max(1024).optional(),
       nodeVersion: z.string().max(32).optional(),

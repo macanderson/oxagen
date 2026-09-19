@@ -63,6 +63,7 @@ export const TACHO_RUNTIMES = [
   "stella",
   "proxy",
   "codex",
+  "cursor",
 ] as const;
 export const TACHO_SESSION_OUTCOMES = [
   "running",

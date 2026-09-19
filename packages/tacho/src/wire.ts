@@ -176,11 +176,15 @@ export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
  * runs through the same `tacho-hook` with a `--harness codex` tag. Stella's
  * does not: its payload names no session and its answers are
  * `{"action": ...}` decisions, so `--harness stella` routes the hook through
- * `claude-code/stella-adapter.ts` in both directions.
+ * `claude-code/stella-adapter.ts` in both directions. Cursor's does not
+ * either: its events are camelCase, its session is `conversation_id`, and it
+ * answers `{"permission": ...}`, so `--harness cursor` routes through
+ * `claude-code/cursor-adapter.ts` the same way.
  */
 export const tachoHarnessSchema = z.enum([
   "claude-code",
   "codex",
+  "cursor",
   "stella",
   "claude-desktop",
 ]);
@@ -190,6 +194,7 @@ export type TachoHarness = z.infer<typeof tachoHarnessSchema>;
 export const TACHO_HARNESS_LABELS: Record<TachoHarness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   stella: "Stella",
   "claude-desktop": "Claude Desktop",
 };
@@ -216,6 +221,7 @@ export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
   {
     "claude-code": "harness",
     codex: "harness",
+    cursor: "harness",
     stella: "harness",
     "claude-desktop": "gateway",
   };
@@ -229,7 +235,12 @@ export const TACHO_HARNESS_TIERS: Record<TachoHarness, "harness" | "gateway"> =
  * lists partition the enum and agree with the tier map, so a harness added
  * without being classified fails the build rather than defaulting to wrapped.
  */
-export const WRAPPED_HARNESSES = ["claude-code", "codex", "stella"] as const;
+export const WRAPPED_HARNESSES = [
+  "claude-code",
+  "codex",
+  "cursor",
+  "stella",
+] as const;
 export type WrappedHarness = (typeof WRAPPED_HARNESSES)[number];
 
 export const CONNECTED_HARNESSES = ["claude-desktop"] as const;

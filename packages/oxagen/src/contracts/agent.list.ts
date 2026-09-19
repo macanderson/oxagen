@@ -22,6 +22,8 @@ const instant = z.string().datetime({ offset: true });
 export const agentHarnessSchema = z.enum([
   "stella",
   "claude-code",
+  "codex",
+  "cursor",
   "claude-agent-sdk",
   "custom",
 ]);

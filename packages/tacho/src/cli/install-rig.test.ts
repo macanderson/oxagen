@@ -48,6 +48,7 @@ import { unenroll } from "./unenroll";
 const ALL: TachoHarness[] = [
   "claude-code",
   "codex",
+  "cursor",
   "stella",
   "claude-desktop",
 ];
