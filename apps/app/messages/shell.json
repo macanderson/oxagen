@@ -122,7 +122,8 @@
         "save": "Save",
         "saving": "Saving",
         "saved": "Saved.",
-        "invalid": "One of those values was refused. A locale is a BCP 47 tag and a time zone is an IANA name."
+        "invalid": "One of those values was refused. A locale is a BCP 47 tag and a time zone is an IANA name.",
+        "timeZoneInvalid": "That time zone was refused. Pick one from the list."
       },
       "security": {
         "signIn": "Sign-in",
