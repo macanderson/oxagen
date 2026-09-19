@@ -36,6 +36,17 @@ returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
 
+## App surface
+
+The mandate page, `/{org}/{ws}/mandates/{mandate}`: the four summary tiles, the
+ledger with its search, State facet and pager, the grant panel and the
+reconciliation panel. The read goes through `data/live/mandates.ts`. Two of the
+row's fields do not reach the page: `id` and `toolCallId` are raw database uuids
+and the view model admits neither (INV-11), so the ledger's *Call* column names
+the measure the movement drew and says under the table that nothing resolves the
+call to a tool version. `balanceAfter` is not rendered: the tiles carry the
+ledger's own accounting.
+
 ## Readers
 
 As `list_mandates`: the accountable office, or the operator of the agent.

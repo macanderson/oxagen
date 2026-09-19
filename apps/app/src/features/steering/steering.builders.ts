@@ -238,7 +238,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: {

@@ -1,0 +1,230 @@
+// The grant that created this mandate: who asked, who granted it and under
+// which role, what consequence it answers for, which counterparties and tools it
+// reaches, when a person has to answer, and how long it runs.
+//
+// It is the accountability record, so every field is what was recorded and
+// nothing is inferred. A field the contract may leave unset reads as unset:
+// `grantedBy` is null on a draft nobody has granted, and the panel then names
+// the operator who asked instead of printing a blank, because a ledger of drafts
+// that cannot say who sought the authority is not an accountability record. The
+// `roleAtGrant` is the role the granter held at the moment of the grant, not the
+// role they hold now: it is the fact the audit needs, and it is labelled as of
+// the grant so nobody reads it as current.
+//
+// The scope and the approval rule are the two fields a reader is most likely to
+// misread, so both are stated in full. `MandateScope` calls out a mandate scoped
+// to every tool rather than leaving a reader to spot one character in a list, and
+// the approval rule is spelled as sentences rather than as a JSON shape: an empty
+// `approvers` list is not "nobody", it is "the roles accountable for the
+// consequence", and printing it as empty would read as the opposite.
+import { useTranslations } from "next-intl";
+import type { ReactNode } from "react";
+import type { MandateRow } from "@/data/contracts/mandates";
+import { mono, panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
+import { MandateScope } from "@/ui/mandate-scope";
+import { useMeasureText } from "@/ui/measure";
+
+const term = "text-xs font-medium text-muted-foreground";
+const value = "text-sm text-foreground";
+
+function Row({
+  label,
+  basis,
+  children,
+}: {
+  label: string;
+  /**
+   * How to read the value, in the same block as the value. The tiles carry one
+   * on every money figure for the same reason: a number a reader cannot source
+   * is a number they have to trust.
+   */
+  basis?: string;
+  children: ReactNode;
+}) {
+  // A grouping `<div>` is fine under a `<dl>` (HTML5); a sibling `<p>` is not.
+  // Axe's definition-list rule fails the whole list when any group contains a
+  // non-dt/dd child, so the basis rides inside the `<dd>` with the value.
+  return (
+    <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
+      <dt className={term}>{label}</dt>
+      <dd className={value}>
+        {children}
+        {basis === undefined ? null : (
+          <p className="mt-0.5 text-xs text-muted-foreground">{basis}</p>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * The approval rule as sentences. `humanAbove` is a measure-keyed record of
+ * thresholds, `alwaysHumanFor` a list of consequence tags, and `approvers` the
+ * entries that narrow who may answer. Each is omitted when it is empty rather
+ * than printed as an empty list, except `approvers`: empty there means the
+ * consequence roles decide, which is a rule and not an absence.
+ */
+function Approval({ mandate }: { mandate: MandateRow }) {
+  const t = useTranslations("mandate.grant");
+  const measureText = useMeasureText();
+  const { approval } = mandate;
+  return (
+    <span className="flex flex-col gap-1">
+      {approval.humanAbove.map((threshold) => (
+        // A threshold in a form the mandate's limits establish is printed in
+        // that form; one whose form nothing records is printed as the digits
+        // the record holds, beside its measure. Neither is guessed into money.
+        <span key={threshold.measure} data-approval="above">
+          {t("approvalAbove", {
+            value:
+              threshold.value === null
+                ? threshold.recorded
+                : measureText(threshold.value),
+            measure: threshold.measure,
+          })}
+        </span>
+      ))}
+      {approval.alwaysHumanFor.length === 0 ? null : (
+        <span data-approval="always">
+          {t("approvalAlways", { tags: approval.alwaysHumanFor.join(", ") })}
+        </span>
+      )}
+      {/* Approvers only mean something once something can park a call. The gate
+          fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
+          `humanAbove` threshold and proceeds when it is empty
+          (`packages/rules/src/mandates.ts`), and the contract defaults both to
+          empty. Naming approvers on such a mandate described a review path that
+          does not exist, on the record an operator reads to know what it does. */}
+      {approval.humanAbove.length === 0 &&
+      approval.alwaysHumanFor.length === 0 ? (
+        <span data-approval="none">{t("approvalNone")}</span>
+      ) : (
+        <span data-approval="approvers">
+          {approval.approvers.length === 0
+            ? t("approvalConsequenceRoles")
+            : t("approvalApprovers", {
+                approvers: approval.approvers.join(", "),
+              })}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function MandateGrant({ mandate }: { mandate: MandateRow }) {
+  const t = useTranslations("mandate.grant");
+  const format = useFormatter();
+  return (
+    <section
+      aria-labelledby="mandate-grant"
+      data-testid="mandate-grant"
+      className={panel}
+    >
+      <h2 id="mandate-grant" className="px-4 pb-2 pt-4 text-base font-semibold">
+        {t("title")}
+      </h2>
+      <dl className="pb-2">
+        <Row label={t("agent")}>
+          <span className={mono}>{mandate.agentSlug}</span>
+        </Row>
+        <Row label={t("grantedBy")}>
+          {mandate.grantedBy === null ? (
+            <span className="flex flex-col gap-0.5">
+              <span className="text-muted-foreground">{t("notGranted")}</span>
+              {mandate.requestedBy === null ? null : (
+                <span
+                  data-requested-by={mandate.requestedBy}
+                  className="text-xs text-muted-foreground"
+                >
+                  {t("requestedBy", { user: mandate.requestedBy })}
+                </span>
+              )}
+            </span>
+          ) : (
+            <span className="flex flex-col gap-0.5">
+              <span className={`${mono} break-all`}>{mandate.grantedBy}</span>
+              {mandate.roleAtGrant === null ? null : (
+                <span className="text-xs text-muted-foreground">
+                  {t("roleAtGrant", { role: mandate.roleAtGrant })}
+                </span>
+              )}
+            </span>
+          )}
+        </Row>
+        <Row label={t("effect")}>
+          <span className={mono}>{mandate.consequenceTags.join(", ")}</span>
+        </Row>
+        <Row label={t("counterparties")}>
+          {mandate.targets.length === 0 ? (
+            <span className="text-muted-foreground">{t("anyTarget")}</span>
+          ) : (
+            <span className="flex flex-col gap-1">
+              {mandate.targets.map((rule) => (
+                <span
+                  key={rule.measure}
+                  data-target={rule.measure}
+                  className="flex flex-col"
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {rule.measure}
+                  </span>
+                  <span>
+                    {t("allow")}{" "}
+                    <span className={`${mono} break-all`}>
+                      {/* `targetAllowed` ends on `rule.allow.length === 0`, so an
+                          empty allow list permits every target the deny list does
+                          not name. Rendering it as "no pattern" said the mandate
+                          permitted nothing where enforcement permitted
+                          everything, which is the misreading an audit surface
+                          must not offer: it reads as tightly scoped. */}
+                      {rule.allow.length > 0
+                        ? rule.allow.join(", ")
+                        : rule.deny.length === 0
+                          ? t("allowAnyTarget")
+                          : t("anyNotDenied")}
+                    </span>
+                  </span>
+                  <span>
+                    {t("deny")}{" "}
+                    <span className={`${mono} break-all`}>
+                      {rule.deny.length === 0
+                        ? t("noPattern")
+                        : rule.deny.join(", ")}
+                    </span>
+                  </span>
+                </span>
+              ))}
+            </span>
+          )}
+        </Row>
+        <Row label={t("tools")}>
+          <MandateScope tools={mandate.tools} />
+        </Row>
+        <Row label={t("approval")}>
+          <Approval mandate={mandate} />
+        </Row>
+        <Row label={t("valid")} basis={t("validWindowBasis")}>
+          {/* The end instant carries its TIME and zone, not just its day. The
+              window is half-open, `[validFrom, validTo)`, because enforcement's
+              is (`isEffective`, data/contracts/mandates.ts, and
+              `findCoveringMandate` in packages/rules), and the API and MCP can
+              set `validTo` to any offset datetime. Printing the day alone and
+              calling it "through" said a mandate ending at midnight was good
+              for all of that day, when the gate had already stopped honouring
+              it. */}
+          {t("validWindow", {
+            from: format.dateTime(new Date(mandate.validFrom), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+            to: format.dateTime(new Date(mandate.validTo), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+          })}
+        </Row>
+      </dl>
+    </section>
+  );
+}

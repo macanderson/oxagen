@@ -19,7 +19,7 @@
 // initialized and which catalogs answered completely then. The cold-start
 // floor needs that set, and it cannot be read back off `price_entries`,
 // because a catalog whose every model lost to a higher-precedence source
-// contributed no row (ADR-102).
+// contributed no row (ADR-103).
 //
 // `findings` is the findings job's output (spec §12.8; ADR-062): one open row
 // per (workspace, kind, subject) the detectors see in the trailing window,
@@ -198,7 +198,7 @@ export const priceEntries = costSchema.table(
 // ── price_book_initializations ───────────────────────────────────────────────
 /**
  * One row per price book, recording that the book was initialized and which
- * catalogs answered completely at that instant (ADR-102).
+ * catalogs answered completely at that instant (ADR-103).
  *
  * The cold-start floor backdates a key the book has never priced to an
  * instant before every frame, so frames recorded before the first sync price

@@ -4,7 +4,7 @@ Read this before writing any headline, hero, tagline, ad, or opening sentence.
 
 ## The claim
 
-An autonomous agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
+An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
 
 Other layers each cover one part of the operator's job. Identity systems say who the agent is. Gateways say which tools it can call. Billing says what it consumed. Prompt repos say what it was told. Oxagen binds those decisions into one mandate per agent, applies the mandate to the actions routed through Oxagen, and keeps a record another person can read.
 
@@ -20,7 +20,7 @@ Use Mission Control in headlines and anywhere the reader will operate the produc
 
 **Fleet** is the name of the Fleet page and part of the operator's vocabulary. Fleet management describes the operator's job of seeing enrolled agents and acting on them. It is not a second category. Spend management is part of the same job: the budget, the meter, the rules, and the bill per agent, run, and person sit beside the agent, not in a separate finance tool.
 
-**Workforce** is the population of autonomous agents an organization runs. "Autonomous agents" is fine as a plain description of what Oxagen manages.
+**Workforce** is the population of agents an organization runs, autonomous or supervised. Oxagen governs both, so a headline does not narrow the claim to autonomous agents. "Autonomous agents" is fine in body copy as a plain description of some of what Oxagen manages.
 
 Do not name the category as observability, governance, evals, guardrails, a trust layer, or orchestration. Those words describe other products. Describe Oxagen by the operator's job and the mechanism a buyer can inspect.
 
@@ -86,9 +86,9 @@ The approved lines live in the message registry at `messages/` in `oxagenai/oxag
 
 | Line | Use it for |
 |---|---|
-| **The control plane for your agent workforce** | The homepage eyebrow |
-| **Mission Control for your autonomous agents.** | The homepage headline, the primary ad, decks |
-| **Oxagen is Mission Control for an autonomous agent workforce: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.** | The one-sentence definition, the first line of an overview, the docs introduction |
+| **The agent control plane** | The homepage eyebrow |
+| **Mission Control for agent operators.** | The homepage headline, the primary ad, decks |
+| **Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.** | The one-sentence definition, the first line of an overview, the docs introduction |
 | **Don't hand your agents the keys.** | The access section of the site, security outreach |
 | **Identity, authority, and a record you can inspect.** | The security page headline |
 | **See which agent spent what, and on whose behalf.** | The finance entry point, the Spend page, finance outreach |
@@ -117,7 +117,9 @@ Earlier held lines that are not carried into the registry: "Define done before t
 | Can you explain your AI bill? Neither can your provider. | 06 | Makes an unsupported comparison with every provider and argues about providers instead of attribution | See which agent spent what, and on whose behalf. |
 | Stop wasting money on AI. | 02 | Promises a lower bill without a measured workload or conditions | See which agent spent what, and on whose behalf. |
 | Never re-explain yourself to AI ever again. | 05 | Promises universal recall and breaks the rule against outcome absolutes | Give agents the business context their work requires. |
-| Agents that prove their work. A model you own. | 01, 02 | Makes proof the defining feature and implies every run is proven | Mission Control for your autonomous agents. |
+| Agents that prove their work. A model you own. | 01, 02 | Makes proof the defining feature and implies every run is proven | Mission Control for agent operators. |
+| Mission Control for your autonomous agents. | 07 | Narrows the claim to autonomous agents when Oxagen also governs supervised ones, and addresses the reader as an owner instead of naming the operator | Mission Control for agent operators. |
+| The control plane for your agent workforce (eyebrow) | 07 | Says the category the long way round | The agent control plane |
 | Run your agents as a fleet. | 07 | Competes with Mission Control as a second category name | Manage the workforce from Mission Control. |
 | Oxagen learns from every run, and the next one costs less. (subline) | 02 | Promises that every next run costs less, whatever the task or model | See what each recorded run costs. |
 | Teach Oxagen your business once. Every agent you run has it. (subline) | 05 | Implies universal distribution while the mandate restricts scope | Give agents the business context their work requires. |
@@ -126,7 +128,7 @@ Do not write new taglines. If a surface needs a line, pick a live one, or add an
 
 ## The pitch, one sentence
 
-Oxagen is Mission Control for an autonomous agent workforce: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
 
 ## The pitch, short
 
@@ -196,7 +198,7 @@ Hypothetical. These are the sentences the copy should make true. They are not te
 - The finance lead, reading the Spend page without translation: "I can say which agent spent what, on whose behalf, under which rule."
 - The engineering lead: "I set each agent's tools and skills in its mandate, and I can see which ones reached the work."
 
-The primary audience is the operators and platform teams accountable for an autonomous agent workforce. Security, finance, and engineering get their own entry points into the same control plane. Validate this language through interviews before treating any of it as the buyer's own words.
+The primary audience is the operators and platform teams accountable for an agent workforce. Security, finance, and engineering get their own entry points into the same control plane. Validate this language through interviews before treating any of it as the buyer's own words.
 
 ## The demo, in order
 

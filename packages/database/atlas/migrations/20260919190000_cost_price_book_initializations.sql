@@ -1,5 +1,5 @@
 -- One durable record of the price book's initialization: the instant, and the
--- catalogs that answered completely at it (ADR-102).
+-- catalogs that answered completely at it (ADR-103).
 --
 -- The cold-start floor backdates a key the book has never priced to
 -- 2020-01-01, so frames recorded before the first sync price at the first

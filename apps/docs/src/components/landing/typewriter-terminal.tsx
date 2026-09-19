@@ -67,7 +67,7 @@ function TranscriptLines({ lines }: { lines: Line[] }) {
         className={
           "lp-line break-all pl-4 " +
           (l.kind === "ok"
-            ? "text-[#38d39f]"
+            ? "text-[#57A97C]"
             : l.kind === "dim"
               ? "text-white/40"
               : "text-white/70")
@@ -167,9 +167,9 @@ export function TypewriterTerminal({
     <div className="lp-term w-full overflow-hidden rounded-xl text-left font-mono text-[12.5px] leading-relaxed sm:text-[13.5px]">
       {/* title bar */}
       <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
-        <span className="size-3 rounded-full bg-[#ff5f57]" />
-        <span className="size-3 rounded-full bg-[#febc2e]" />
-        <span className="size-3 rounded-full bg-[#28c840]" />
+        <span className="size-3 rounded-full bg-[#C0453C]" />
+        <span className="size-3 rounded-full bg-[#C66A4A]" />
+        <span className="size-3 rounded-full bg-[#57A97C]" />
         <span className="ml-3 select-none text-[11px] text-white/40">
           {title}
         </span>

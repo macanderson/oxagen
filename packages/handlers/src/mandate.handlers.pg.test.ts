@@ -28,7 +28,8 @@
  *   limits  — validTo before validFrom → validity_inverted; a change over an
  *             undeclared measure is refused; a change records and emits, and
  *             a per_period changed inside the period reports remaining
- *             against what the period already drew
+ *             against what the period already drew; two limitChanges to two
+ *             measures both survive, merged under the row lock (ADR-102)
  */
 import { randomUUID } from "node:crypto";
 import {
@@ -813,6 +814,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("org_role_required"));
       expect(doubles.events).toEqual([]);
 
+      // Renaming the window while 150 is reserved would orphan that draw under
+      // the old periodKey and make the new daily balance read as unused.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limits: {
+                amount: {
+                  perCall: "100000000",
+                  perPeriod: "500000000",
+                  period: "daily",
+                  currencyOrUnit: "USD",
+                },
+              },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("period_drawn"));
+
       // The same monthly period the 150 was drawn in: the new ceiling
       // applies to it, so remaining is 500 − 150.
       const out = await inScope(() =>
@@ -870,6 +892,71 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ),
         ),
       ).rejects.toSatisfy(conflict("mandate_ended"));
+    });
+
+    // The lost update ADR-102 closes, against the real row. Two operators
+    // change two different measures on one mandate. Each sends only what it
+    // changed, the handler merges it over the record its own lock returned, and
+    // both changes stand — where a read-merge-replace round trip would have let
+    // the second write restore the amount cap the first one lowered.
+    it("limits: two changes to different measures both survive, and an unnamed field is kept", async () => {
+      const m = await grant(billingUserId, body());
+      const lower = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perPeriod: "500000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      // Second depth: the per-call bound, the window and the currency were not
+      // named, so they stand. Dropping any of them is unbounded authority for
+      // that sublimit.
+      expect(lower.limits.amount).toEqual({
+        perCall: "250000000",
+        perPeriod: "500000000",
+        period: "monthly",
+        currencyOrUnit: "USD",
+      });
+      const capped = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          { mandateId: m.id, limitChanges: { calls: { perPeriod: "40" } } },
+          ctx(billingUserId),
+        ),
+      );
+      expect(capped.limits).toEqual({
+        // Still 500, not the 2,000 the record held when the calls change was
+        // composed.
+        amount: {
+          perCall: "250000000",
+          perPeriod: "500000000",
+          period: "monthly",
+          currencyOrUnit: "USD",
+        },
+        // First depth for the calls cap, and its window is kept: the change
+        // named a figure and said nothing about the period.
+        calls: { perPeriod: "40", period: "daily", currencyOrUnit: "calls" },
+      });
+      // The declared-measure and unit checks run on the merged record, so a
+      // change is refused exactly as a replacement is.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { currencyOrUnit: "EUR" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_unit_mismatch"));
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
     });
   },
 );

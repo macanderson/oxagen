@@ -1,4 +1,4 @@
-# ADR-102: The price book records its own initialization
+# ADR-103: The price book records its own initialization
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
@@ -9,7 +9,8 @@
   per-catalog retirement reads) and
   `20260919190000_cost_price_book_initializations.sql` (this record);
   `docs/capabilities/cost.price_entry.set.md`
-- **Numbering:** 102. ADR-101 is taken by the four first-class harnesses
+- **Numbering:** 103. ADR-102 was taken on `main` by the mandate limit-merge
+  decision while this branch was open
 - **Delivered by:** `cost.price_book_initializations`, `syncPriceBook` in
   `packages/billing/src/price-book.ts`, and the `cost.price-book-sync` job
 

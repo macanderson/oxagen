@@ -140,7 +140,7 @@ const source: DataSource = {
     apiKeys: vi.fn(),
     modelCredential: vi.fn(),
   },
-  mandates: { list: vi.fn() },
+  mandates: { list: vi.fn(), get: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
   steering: {

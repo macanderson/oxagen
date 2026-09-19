@@ -11,7 +11,12 @@
 // including this one. A second stub of the same seam is a second place for it
 // to fall behind `DataSource` — which is exactly what happened while the two
 // lanes were apart.
-import type { MandateList, MandateRow } from "@/data/contracts/mandates";
+import type {
+  MandateDetail,
+  MandateLedgerRow,
+  MandateList,
+  MandateRow,
+} from "@/data/contracts/mandates";
 import { type Read, readOk } from "@/data/read";
 
 const money = (micros: string) =>
@@ -46,6 +51,16 @@ export function mandateRow(overrides: Partial<MandateRow> = {}): MandateRow {
     roleAtGrant: "Billing",
     consequenceTags: ["moves_money"],
     tools: ["stripe__create_payment@*"],
+    targets: [
+      { measure: "amount", allow: ["vendor:aws", "vendor:github"], deny: ["*"] },
+    ],
+    approval: {
+      humanAbove: [
+        { measure: "amount", value: money("100000000"), recorded: "100000000" },
+      ],
+      alwaysHumanFor: ["moves_money"],
+      approvers: ["role:Billing"],
+    },
     purpose: "monthly infrastructure invoices, PO-4471",
     validFrom: "2026-09-01T00:00:00.000Z",
     validTo: "2026-12-31T00:00:00.000Z",
@@ -77,4 +92,41 @@ export function callsAuthority(): MandateRow["authority"][number] {
     settledRatio: 0.22,
     reservedRatio: 0.02,
   });
+}
+
+/**
+ * One ledger movement. The default is the settlement the demo record carries: an
+ * amount drawn against the monthly limit with the payment intent it recorded.
+ */
+export function mandateMovement(
+  overrides: Partial<MandateLedgerRow> = {},
+): MandateLedgerRow {
+  return {
+    kind: "settle",
+    measure: "amount",
+    value: money("884600000"),
+    externalEffectRef: "pi_3QaL8f2Xk",
+    periodKey: "2026-09",
+    at: "2026-09-04T08:40:19.000Z",
+    ...overrides,
+  };
+}
+
+/** One mandate with its ledger, as the mandate page reads it. */
+export function mandateDetail(
+  overrides: Partial<MandateDetail> = {},
+): MandateDetail {
+  return {
+    mandate: mandateRow(),
+    ledger: [mandateMovement()],
+    asOf: "2026-09-16T12:00:00.000Z",
+    readBound: null,
+    ...overrides,
+  };
+}
+
+export function mandateDetailRead(
+  overrides: Partial<MandateDetail> = {},
+): Read<MandateDetail> {
+  return readOk(mandateDetail(overrides));
 }
