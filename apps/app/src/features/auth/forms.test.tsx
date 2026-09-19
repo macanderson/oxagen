@@ -517,7 +517,7 @@ describe("InviteDecision", () => {
 
 describe("OAuthButtons", () => {
   it("starts social sign-in with the sanitised callback", async () => {
-    live.liveSignInSocial.mockResolvedValue(undefined);
+    live.liveSignInSocial.mockResolvedValue({ ok: true });
     renderWithIntl(<OAuthButtons callbackURL={routes.people("acme")} />);
     await userEvent.click(
       screen.getByRole("button", { name: "Continue with GitHub" }),
@@ -528,5 +528,19 @@ describe("OAuthButtons", () => {
         callbackURL: "/acme",
       });
     });
+  });
+
+  it("shows a catalog alert when social sign-in fails without leaving the page", async () => {
+    live.liveSignInSocial.mockResolvedValue({
+      ok: false,
+      outcome: "oauthFailed",
+    });
+    renderWithIntl(<OAuthButtons callbackURL={routes.root()} />);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Continue with Google" }),
+    );
+    expect(await screen.findByTestId("oauth-outcome")).toHaveTextContent(
+      "did not finish",
+    );
   });
 });

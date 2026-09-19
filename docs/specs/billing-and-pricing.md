@@ -38,7 +38,7 @@ Archived spec & plan — status: partially shipped (audited 2026-07-03).
 
 > Status: authoritative as of 2026-05-31.
 > Supersedes `pricing-and-metering.md`.
-> Owner: Mac Anderson (mac@oxagen.ai)
+> Owner: Mac Anderson (mac@oxagen.sh)
 
 ---
 
