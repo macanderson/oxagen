@@ -1,6 +1,8 @@
 # workspace.archive
 
-`archive_workspace`: archive a workspace (issue #2964). A workspace with a registered agent is refused: every `agent.agents` row in it that is not deleted, not `archived` and not the seeded `qa-chat` agent counts, and those agents are deregistered or moved first. Archiving records `workspace.workspaces.archived_at` and `archived_by_user_id` together. From then on the workspace leaves `list_workspaces` — the switcher and the CLI picker — unless the caller passes `includeArchived`; its runs, frames and records stay readable and its slug stays taken. Nothing else changes in this revision: a run admitted in an archived workspace is not refused by the kernel.
+`archive_workspace`: archive a workspace (issue #2964). A workspace with a registered agent is refused: every `agent.agents` row in it that is not deleted, not `archived` and not the seeded `qa-chat` agent counts, and those agents are deregistered or moved first. Archiving records `workspace.workspaces.archived_at` and `archived_by_user_id` together. From then on the workspace leaves `list_workspaces` — the switcher and the CLI picker — unless the caller passes `includeArchived`; its runs, frames and records stay readable and its slug stays taken. A run admitted in an archived workspace is not refused by the kernel.
+
+Machine credentials stop at the door. Under ADR-105 an API key bound to an archived workspace no longer authenticates on any surface: `resolveApiKey` refuses it with `workspace_archived`, which `apps/api` answers as 401 and `apps/mcp` carries as its own failure reason. No key row is written, so nothing is revoked and restoring the workspace restores the keys. `suspendedApiKeys` in the output reports how many live keys the call took out of service — keys that are soft-deleted or already expired are dead already and are not counted. Keys stranded by an archival that happened before ADR-105 are covered by the same check, with no migration; an operator who wants one gone for good reaches it through the `/{org}/api-keys` workspace picker, which keeps archived workspaces in the list.
 
 ## Mode
 
@@ -37,8 +39,10 @@ Org `Owner` or `Admin`, checked in the handler (INV-29). `noBillingGate` (a sett
 | `slug`       | string |                     |
 | `name`       | string |                     |
 | `archivedAt` | string | ISO-8601            |
+| `suspendedApiKeys` | number | live API keys in the workspace that stop authenticating while it is archived; none is revoked |
 
 ## Side effects
 
-- Postgres: `archived_at`, `archived_by_user_id`, `updated_at`, `updated_by_id` on the workspace row.
+- Postgres: `archived_at`, `archived_by_user_id`, `updated_at`, `updated_by_id` on the workspace row. Nothing else is written; `auth.api_keys` is read, never changed.
 - `security.security_events`: `workspace.archived`.
+- Every API key bound to the workspace stops resolving until the workspace is restored (ADR-105).

@@ -155,8 +155,11 @@
         "noToolMatches": "No declared tool matches this mandate's patterns, so a limit cannot be checked against a measure. Nothing was changed.",
         "measureNotDeclared": "A tool this mandate covers declares no such measure, so a limit on it could never be read from a call. Nothing was changed.",
         "measureUnitMismatch": "A tool this mandate covers declares that measure in another unit. Nothing was changed.",
+        "measureKindConflict": "Two tools this mandate covers declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Nothing was changed.",
         "periodDrawn": "This measure still has authority drawn in its current window, so the period cannot change until that draw is released or the window ends. Nothing was changed.",
+        "measureKindDrawn": "This measure still has authority drawn under its current kind, so what it counts cannot change yet. Release any open reservation and wait for the current window to close (a settlement alone does not clear this). Nothing was changed.",
         "noPrincipal": "This request carries no acting person, so no role can be resolved for it.",
+        "agentRetired": "This mandate's agent is retired. A retired agent's identity cannot draw on new or widened authority. Nothing was changed.",
         "timeZoneUnavailable": "Your time zone could not be read, and the last day you picked means a different instant in each zone. Nothing was changed. Try again.",
         "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the last day you picked cannot be placed in it. Nothing was changed. Pick a time zone again in your account settings.",
         "refused": "This write was refused: {code}. Nothing was changed.",
@@ -169,7 +172,7 @@
       "back": "Back to Fleet",
       "denied": {
         "title": "You cannot see this mandate",
-        "body": "The roles you hold on this organization are not accountable for mandates. An Owner, Admin, Billing or Compliance role reads every mandate in this workspace; without one of those, you read the mandates of agents you created yourself. An owner can grant an accountable role, and the grant is itself a governed action in the audit record.",
+        "body": "The roles you hold on this organization are not accountable for mandates. An Owner, Admin, Billing or Compliance role reads every mandate in this workspace; a workspace Owner or Member without one of those reads the mandates of agents they created and any mandate they requested themselves; any other built-in role reads no mandate at all. On an enterprise organization, an explicit IAM grant naming this capability (a custom role, a direct grant, or an enforced allow policy) reads the same narrowed set instead of nothing. An owner can grant an accountable role, and the grant is itself a governed action in the audit record.",
         "signedIn": "Signed in as: {role}",
         "needed": "Needed:",
         "decidedBy": "Decided by: the workspace’s decision rules. Deny wins over every allow."

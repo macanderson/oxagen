@@ -187,7 +187,7 @@ is unambiguous.
 
 **App ports**: `apps/app` → `:3000`, `apps/docs` → `:3300`, API → `:4000`, MCP → `:4100`.
 
-**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (the org dashboard, the usage/metering home). The workspace chat front door is `/{org}/{ws}/sessions`; other workspace surfaces are `knowledge`, `marketplace`, `workbench` (agents, environments, tools) and `settings`. Returning: `/login`.
+**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (Organization). The workspace root `/{org}/{ws}` is Fleet; the other workspace pages are `runs/[run]`, `mandates/[mandate]`, `agents`, `tools`, `steering`, `spend` and `skills`. CLAUDE.md's "App route map" has the full list. Returning: `/login`.
 
 ## CI Config
 
@@ -201,14 +201,22 @@ is unambiguous.
 
 `main` is shared and contested — never commit or push to it directly. Cut a branch from a fresh, synced `main`, push it immediately, commit and push frequently, and open a PR against `main`. Tests run in CI on every push/PR, not in git hooks. Full workflow: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-**Residue merges; it does not iterate.** A PR whose checks are green and whose only remaining review findings are **P2 or below merges now.** Every outstanding finding at P2 or below is carried into a residue issue, titled `Residue from #<PR>: <what is left>`, and the threads are resolved with a comment naming it. **One issue per PR is the default; never one per comment.** Split into more than one only where the findings cannot honestly share an issue — this repo requires exactly one `kind:` and one `job:` per issue and one full change per DoD (SCR-003), so residue spanning genuinely unrelated changes needs an issue each. Findings belonging to the same change stay together however many there are.
+**Residue merges; it does not iterate.** A PR whose checks are green and whose only remaining review findings are **P2 or below merges now.** Every outstanding finding at P2 or below is carried into a residue issue, titled `Residue from #<PR>: <what is left>`, and the threads are resolved with a comment naming it. **One issue per PR is the default; never one per comment.** Split into more than one only where the findings cannot honestly share an issue — this repo requires exactly one `kind:` and one `job:` per issue and one full change per DoD (SCR-003), so residue spanning genuinely unrelated changes needs an issue each. Findings belonging to the same change stay together however many there are. From a reviewer's fourth round the round rule below extends this to a P1.
 
-- **P0 and P1 never merge as residue.** They are fixed on the branch, or the PR waits. A P1 is the line: if one is open, the PR is not done.
+- **P0 and P1 never merge as residue.** They are fixed on the branch, or the PR waits. A P1 is the line: if one is open, the PR is not done. The round rule below is the one exception, and it opens only at a reviewer's fourth round.
 - **The severity is the reviewer's, not the author's.** Take the badge the review left. A finding with no severity is judged by the same bar, and the ticket says which was assigned and why.
 - **A residue ticket is a real handoff, not a receipt** — the finding verbatim, file path and line, why it is worth fixing, the pillar it moves, and a `- [ ]` DoD, to the same standard as any other issue here. Apply only the `triage` label (SCR-005).
 - **Resolving the thread is an acceptance, not a dismissal.** The comment says the finding stands and where it now lives.
 
-**This is repo-local and is not part of the SCR corpus.** It bounds the one case in which a review finding may be deferred at merge time; SCR-004's rule — fix what you find, file only what cannot ride the PR — is otherwise unchanged, and a P0 or P1 still rides the PR as SCR-004 requires. It is stated here as well as in `CLAUDE.md` so that both agents in this repo load the same rule: `CLAUDE.md` imports this file, and Stella reads this file directly. It is deliberately outside the "## Standing decisions" block below, which is a compiled mirror of `docs/scr/` and is checked bullet-for-bullet against the corpus (`scr-corpus-check.yml`). Promoting this rule into the corpus proper would edit `docs/scr/`, which is byte-identical across five repos and cannot be extended from this one — a cross-repo maintainer action, not something a session here can land.
+**Three rounds, then the rest is carried (round rule).** A reviewer that posts on every push can always find one more thing, so the rounds are counted and the count is bounded. Fix the findings of a reviewer's first three rounds on the branch. From its fourth round on, carry every remaining finding at P1 or below into that PR's residue issue and let the PR proceed, to the same standard a P2 already gets: the finding verbatim with its path and line, a `- [ ]` DoD, and a reply on the thread saying the finding stands and where it now lives.
+
+- **A P0 blocks at every round.** No count retires a P0. A fourth-round P0 is fixed on the branch, or the PR waits.
+- **A round is one submitted review, not one comment.** A review that posts nine findings is one round, counted per reviewer, so a reviewer that arrives late starts at its own first round.
+- **Carrying a P1 is a decision you record.** The residue issue names the round that carried it and says it was deferred under this rule.
+- **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed.
+- **Why three.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes while production carries the defects it fixes. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
+
+**This is repo-local and is not part of the SCR corpus.** It bounds the one case in which a review finding may be deferred at merge time; SCR-004's rule — fix what you find, file only what cannot ride the PR — is otherwise unchanged, and a P0 always rides the PR as SCR-004 requires, as does a P1 until the round rule's fourth round. Both it and the round rule above are stated here as well as in `CLAUDE.md` so that both agents in this repo load the same rules: `CLAUDE.md` imports this file, and Stella reads this file directly. It is deliberately outside the "## Standing decisions" block below, which is a compiled mirror of `docs/scr/` and is checked bullet-for-bullet against the corpus (`scr-corpus-check.yml`). Promoting this rule into the corpus proper would edit `docs/scr/`, which is byte-identical across five repos and cannot be extended from this one — a cross-repo maintainer action, not something a session here can land.
 
 ## Documentation
 

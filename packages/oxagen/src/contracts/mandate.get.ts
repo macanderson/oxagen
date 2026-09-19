@@ -6,9 +6,15 @@ import {
   mandateSchema,
 } from "../mandates/schemas";
 
-// get_mandate — one mandate with its ledger rows and remaining authority by
+// get_mandate: one mandate with its ledger rows and remaining authority by
 // measure (the mandate page: tiles, the ledger, the grant). Same readers as
-// list_mandates.
+// list_mandates: the accountable org roles read every mandate; a workspace
+// Owner or Member reads the mandates of agents they created, and the
+// mandates they requested themselves for any agent, matching
+// `list_mandates`' row-level narrowing exactly (`packages/handlers/src/
+// mandate.get.ts` checks both `agent.createdById` and `row.requestedBy`).
+// Without this, the page a list row links to refuses the very reader
+// list_mandates just admitted (ADR-107, #3138).
 export const mandateGet = registerCapability({
   name: "get_mandate",
   domain: "mandate",
@@ -30,7 +36,10 @@ export const mandateGet = registerCapability({
       Billing: "allow",
       Compliance: "allow",
     },
-    workspace: {},
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
+    },
   },
   input: z
     .object({

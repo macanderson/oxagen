@@ -6,6 +6,7 @@
 // Every lookup is workspace-scoped and runs in the caller's tenant
 // transaction; only public ids leave through the mapping.
 
+import { canAccessACL, resolveOrgTierDetailed } from "@oxagen/billing";
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
@@ -16,9 +17,11 @@ import {
   type MandateLimits,
   type MandateOut,
   type MandateTargets,
+  type MeasureKind,
   type OrgRoleName,
 } from "@oxagen/oxagen/mandates/schemas";
 import {
+  measureKindOf,
   parseMandateRow,
   readAuthority,
   toolMatches,
@@ -47,21 +50,43 @@ interface AgentRef {
   slug: string;
   principalId: string;
   createdById: string | null;
+  status: string;
 }
 
-/** The agent an `agt_…` id names in this workspace, with its delegated principal. */
+/** The agent an `agt_…` id names in this workspace, with its delegated principal.
+ *
+ * Deliberately does NOT refuse on `status === "archived"` (retired): this
+ * resolver is shared by the read and revoke paths (`list_mandates`,
+ * `get_mandate`, `revoke_mandate`) as well as the paths that create or widen
+ * authority (`request_mandate`, `grant_mandate`). The mandates a retired
+ * agent held are the record and must stay readable, and a mandate still
+ * active when its agent retires must stay revocable. The retirement refusal
+ * therefore belongs to the three capabilities that call `assertAgentActive`
+ * after this resolver returns, not here (ADR-106, #3124).
+ *
+ * `lock: true` takes the agent row `FOR SHARE`, which `request_mandate` and
+ * `grant_mandate` must pass. `retire_agent` locks the same row `FOR UPDATE`
+ * before it archives the agent and revokes its mandates, so the two
+ * serialize: a grant that locks first commits its mandate before retirement
+ * scans for live ones, and a grant that waits re-reads the row as archived
+ * and refuses. Without the lock, a grant could read `active`, retirement
+ * could commit around it, and the grant would insert an active mandate
+ * against a retired agent.
+ */
 export async function resolveAgent(
   tx: Tx,
   workspaceId: string,
   agentPublicId: string,
+  opts: { lock?: boolean } = {},
 ): Promise<AgentRef> {
-  const [row] = await tx
+  const query = tx
     .select({
       id: schema.agents.id,
       publicId: schema.agents.publicId,
       slug: schema.agents.slug,
       principalId: schema.agents.principalId,
       createdById: schema.agents.createdById,
+      status: schema.agents.status,
     })
     .from(schema.agents)
     .where(
@@ -72,6 +97,7 @@ export async function resolveAgent(
       ),
     )
     .limit(1);
+  const [row] = await (opts.lock ? query.for("share") : query);
   if (!row) {
     throw new HandlerError({
       code: "not_found",
@@ -90,12 +116,44 @@ export async function resolveAgent(
 }
 
 /**
+ * Refuse a capability that would create or widen a mandate's authority
+ * against a retired agent (ADR-106, #3124). A retired identity's principal
+ * is suspended and can never draw on a mandate bound to it, so granting one
+ * new authority — or activating a draft whose agent retired after the
+ * request was made — would write a ledger row that reads active and in
+ * effect but can never be used. `list_mandates`, `get_mandate`, and
+ * `revoke_mandate` do not call this: the record stays readable and a live
+ * mandate stays revocable after its agent retires.
+ */
+export function assertAgentActive(
+  agent: Pick<AgentRef, "slug" | "status">,
+): void {
+  if (agent.status === "archived") {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "agent_retired",
+      message: `Agent "${agent.slug}" is retired; it can never draw on a mandate`,
+    });
+  }
+}
+
+/**
  * Denied by construction (§6.9 rule 1): every tool pattern matches at least
  * one declared, enabled tool whose active version carries a consequence tag,
  * and every matched tool declares a measure for every limit and every target
  * the mandate names. `calls` is built in and needs no declaration. An
  * untagged tool is left out because the gate has no opinion on its calls
  * (`decideMandate`), so a mandate naming it would govern nothing.
+ *
+ * Returns `args.limits` with each entry's `kind` stamped from the matched
+ * declaration this pass already fetched and validated (ADR-108): `money`
+ * for a declared `amount`, `count` for `count` or the built-in `calls`. This
+ * is the only place that works the kind out; every caller stores the
+ * returned record rather than `args.limits`, so the fact is written once,
+ * at the moment it is known, and no reader downstream ever infers it from
+ * `currencyOrUnit`. When two matched tools declare the same measure with
+ * different types, the one case write time cannot resolve on its own, this
+ * refuses `measure_kind_conflict` rather than picking one silently.
  */
 export async function assertToolsDeclareMeasures(
   tx: Tx,
@@ -105,7 +163,7 @@ export async function assertToolsDeclareMeasures(
     limits: MandateLimits;
     targets: MandateTargets;
   },
-): Promise<void> {
+): Promise<MandateLimits> {
   const declared = await tx
     .select({
       slug: schema.tools.slug,
@@ -149,6 +207,13 @@ export async function assertToolsDeclareMeasures(
     });
   }
   const targetMeasures = Object.keys(args.targets);
+  // Every limit measure's kind (ADR-108), filled in as each matched tool's
+  // declaration is checked below. Every entry in `limitMeasures` is written
+  // here before this function returns: each pattern matches at least one
+  // tool (checked above) and that tool's declaration is checked for every
+  // name in `limitMeasures` (checked below), so a name that survives the
+  // loop without a declared measure has already thrown `measure_not_declared`.
+  const measureKinds: Partial<Record<string, MeasureKind>> = {};
   for (const pattern of args.tools) {
     // "Tagged" means EFFECTIVELY tagged — the declared column unioned with the
     // classified jsonb, through the one function every reader of this fact
@@ -199,6 +264,23 @@ export async function assertToolsDeclareMeasures(
             message: `${tool.slug}@${tool.version} declares measure "${name}" in ${d.unit}; the mandate denominates its limit in ${asked}`,
           });
         }
+        // Two matched tools naming the same measure with the same unit could
+        // still disagree on what it counts: a count and an amount can share
+        // a currency-code unit, which the unit check above cannot catch. The
+        // mandate's tool patterns must agree, because write time is the only
+        // moment with one answer (a mandate that matched both could enforce
+        // one tool's calls in the other's currency with no screen able to
+        // tell).
+        const kind = measureKindOf(d.type);
+        const existingKind = measureKinds[name];
+        if (existingKind !== undefined && existingKind !== kind) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_kind_conflict",
+            message: `Measure "${name}" is declared as ${existingKind} by one matched tool and ${kind} by ${tool.slug}@${tool.version}; a mandate's tool patterns must agree on what a limited measure counts`,
+          });
+        }
+        measureKinds[name] = kind;
       }
       for (const name of targetMeasures) {
         if (declaredMeasures[name] === undefined) {
@@ -211,13 +293,72 @@ export async function assertToolsDeclareMeasures(
       }
     }
   }
+  const stamped: MandateLimits = {};
+  for (const [measure, limit] of Object.entries(args.limits)) {
+    const kind = measure === CALLS_MEASURE ? "count" : measureKinds[measure];
+    if (kind === undefined) {
+      // Unreachable: every limit measure besides `calls` is in
+      // `limitMeasures`, and every tool pattern's matched tools were checked
+      // against it above, throwing `measure_not_declared` before this point
+      // if any tool lacked a declaration. Guarded rather than asserted with
+      // `!` because a stored kind silently defaulting to a guess is exactly
+      // the failure ADR-108 closes.
+      throw new HandlerError({
+        code: "conflict",
+        reason: "measure_not_declared",
+        message: `No matched tool declared measure "${measure}"'s kind`,
+      });
+    }
+    stamped[measure] = { ...limit, kind };
+  }
+  return stamped;
 }
 
 /**
- * Who may read: an accountable org role reads every mandate; any other
- * acting user (the signed-in user, or the API key's creator) reads the
- * mandates of agents they created. Returns null
- * for the office, or the user id to filter agents by.
+ * Who may read: an accountable org role reads every mandate; a workspace
+ * Owner or Member (the same set `request_mandate` admits) reads the
+ * mandates of agents they created, and the mandates they requested
+ * themselves for any agent (list_mandates, get_mandate). Returns null for
+ * the office, or the user id callers narrow both `agents.createdById` and
+ * `mandates.requestedBy` against.
+ *
+ * Both checks run through `assertOrgRole` explicitly, in two calls rather
+ * than one call naming both role sets, because the two admissions mean
+ * different things to the caller (the office sees everything; a narrowed
+ * reader sees only its own) and one combined call cannot say which leg
+ * passed. This matters beyond enterprise orgs: `checkIAM` allows every
+ * capability unconditionally on a non-enterprise tier (the `tier_gate`
+ * step in `packages/iam/src/check-iam.ts`), so a contract's `defaultRoles`
+ * is documentation there, not enforcement, and this handler-level check is
+ * the only gate a Free/Build/Scale org actually runs. Treating every
+ * signed-in user `assertOrgRole`'s org leg refused as a narrowed reader,
+ * without also checking the workspace leg, would admit a workspace Viewer,
+ * or an Owner/Member demoted after creating an agent, on those tiers.
+ *
+ * The workspace-role check runs only when the org's tier is the reason the
+ * call reached here at all (`tier_gate` bypassed IAM's resolver). On an
+ * enterprise org, `checkIAM` runs the full resolver, so a caller who is
+ * neither an accountable office role nor a built-in workspace Owner/Member
+ * can still legitimately reach the handler through any other explicit IAM
+ * allow path naming this capability (`packages/oxagen/src/iam/resolve.ts`):
+ * a custom `role_grants` entry, a workspace or organization direct grant,
+ * or an enforced org allow policy. Enforcing the built-in workspace roles
+ * unconditionally would refuse that configured grant and
+ * silently revoke access the enterprise org's own IAM setup deliberately
+ * gave (#3440 follow-on finding). Every caller who reaches this point has
+ * already cleared the kernel's real check on that tier, so they take the
+ * narrowed-reader scope without a second role assertion.
+ *
+ * The same skip applies to an agent-run call regardless of tier. `checkIAM`
+ * never gives an agent principal the non-enterprise `tier_gate` bypass
+ * (`packages/iam/src/check-iam.ts`'s agent-run branch runs the full
+ * delegation-ceiling resolver at every tier, before the tier check is even
+ * consulted): an agent explicitly authorized for this capability, whose
+ * invoking human holds a direct or custom grant rather than a built-in
+ * workspace role, already cleared the kernel on a Free/Build/Scale org the
+ * same way an enterprise custom grant clears it. Re-running the workspace
+ * check here for an agent run would refuse an authorized agent call the
+ * kernel already allowed (#3440 follow-on finding).
  */
 export async function readerFilter(
   ctx: CheckedContext,
@@ -230,15 +371,31 @@ export async function readerFilter(
     );
     return null;
   } catch (err) {
-    if (
-      err instanceof HandlerError &&
-      err.reason === "org_role_required" &&
-      actingUserId
-    ) {
-      return actingUserId;
+    if (!(err instanceof HandlerError && err.reason === "org_role_required")) {
+      throw err;
     }
-    throw err;
   }
+  const isAgentRun = ctx.agentRun?.principalKind === "agent";
+  if (!isAgentRun) {
+    const tierResolution = await resolveOrgTierDetailed(ctx.orgId);
+    if (!tierResolution.established || !canAccessACL(tierResolution.tier)) {
+      // Non-enterprise (or an org tier nothing established, which fails
+      // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
+      // admitted every signed-in human/service principal regardless of
+      // role, so this is the only place a Viewer is actually refused.
+      await assertOrgRole(
+        { ...ctx, userId: actingUserId },
+        { org: [], workspace: ["Owner", "Member"] },
+      );
+    }
+  }
+  // assertOrgRole refused a call with no acting user; on an enterprise org
+  // that ran the full resolver, reaching this line already means the
+  // kernel granted it, built-in role or custom role_grant alike.
+  if (actingUserId === null) {
+    throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+  }
+  return actingUserId;
 }
 
 /** Public ids of the users a set of mandate rows name. */
@@ -253,6 +410,36 @@ async function userPublicIds(
     .from(schema.users)
     .where(inArray(schema.users.id, wanted));
   return new Map(rows.map((r) => [r.id, r.publicId]));
+}
+
+/**
+ * The agent bound to a mandate's `agentPrincipalId`, for the retirement
+ * check `update_mandate_limits` runs (ADR-106, #3124): that capability
+ * locates its subject by mandate id, not agent id, so it has no agent row
+ * from `resolveAgent` to check `status` on.
+ *
+ * Unlocked on purpose. `update_mandate_limits` already holds the mandate's
+ * row lock, and `retire_agent` takes that same lock before revoking, so a
+ * widen that reads the agent as active commits first and is then revoked by
+ * the retirement waiting behind it. Locking the agent here would take the
+ * two locks in the opposite order to retirement and invite a deadlock.
+ */
+export async function resolveAgentByPrincipal(
+  tx: Tx,
+  workspaceId: string,
+  principalId: string,
+): Promise<Pick<AgentRef, "slug" | "status"> | null> {
+  const [row] = await tx
+    .select({ slug: schema.agents.slug, status: schema.agents.status })
+    .from(schema.agents)
+    .where(
+      and(
+        eq(schema.agents.workspaceId, workspaceId),
+        eq(schema.agents.principalId, principalId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /** Agents by principal id, for the rows' `agentId` and `agentSlug`. */

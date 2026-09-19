@@ -241,6 +241,12 @@
   -webkit-mask-composite: source-in;
   mask-composite: intersect;
 }
+/* The art is drawn on ink, and this one fades into the page instead of
+   sitting in a frame, so on paper it is inverted: white ground, ink lines. The
+   hue turn brings the gold back round to gold. */
+:root[data-theme="light"] .hero-art img {
+  filter: invert(1) hue-rotate(180deg);
+}
 @media (max-width: 720px) {
   .hero-art img {
     object-position: 76% 0;

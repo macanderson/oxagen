@@ -50,6 +50,22 @@ describe("withoutUsage", () => {
 });
 
 describe("LlmCallLedger", () => {
+  it("registers nothing until a judged sighting commits", () => {
+    const ledger = new LlmCallLedger();
+    const refused = ledger.judge(call(), "otel_log");
+    expect(refused.verdict).toEqual({ kind: "first" });
+    // The row was refused, so the sighting never commits: the next source
+    // is the first sighting, not a duplicate of a row the chain lacks.
+    expect(ledger.state()).toEqual({ keys: [] });
+    const landed = ledger.judge(call(), "transcript");
+    expect(landed.verdict).toEqual({ kind: "first" });
+    landed.commit();
+    expect(ledger.note(call(), "otel_log")).toEqual({
+      kind: "duplicate",
+      of: "transcript",
+    });
+  });
+
   it("names the first source on a duplicate and drops a repeat", () => {
     const ledger = new LlmCallLedger();
     expect(ledger.note(call(), "transcript")).toEqual({ kind: "first" });

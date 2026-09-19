@@ -1,4 +1,4 @@
-# ADR-104: The book has one manuscript, and its editions and migration are generated
+# ADR-109: The book has one manuscript, and its editions and migration are generated
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
@@ -8,6 +8,8 @@
   days); the migrations `20260919131000_seed_cms_book_editions.sql`,
   `20260919150000_update_page_flip_reader_edition.sql`, and
   `20260920100000_book_second_edition.sql`
+- **Numbering:** 109. ADR-104 to ADR-108 were taken on `main` while this branch
+  was open
 - **Delivered by:** `packages/database/seed-assets/books/manuscript/`,
   `tools/scripts/build-book-editions.mjs`, and
   `tools/scripts/build-book-editions.test.ts`

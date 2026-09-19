@@ -122,6 +122,12 @@ export type LlmCallVerdict =
   | { kind: "duplicate"; of: string }
   | { kind: "repeat" };
 
+/** A verdict, and the registration to apply once its row has landed. */
+export interface LlmCallSighting {
+  verdict: LlmCallVerdict;
+  commit: () => void;
+}
+
 interface Entry {
   /** The source sealed first, then every source seen since, in order. */
   sources: string[];
@@ -193,6 +199,20 @@ export class LlmCallLedger {
 
   /** Register a sighting and say what it is. */
   note(body: Record<string, unknown>, source: string): LlmCallVerdict {
+    const sighting = this.judge(body, source);
+    sighting.commit();
+    return sighting.verdict;
+  }
+
+  /**
+   * Say what a sighting is without registering it. The caller commits once
+   * the row that carries the verdict has landed on the chain: a sighting the
+   * envelope then refuses must leave no trace, or the next source to report
+   * the call is stamped a duplicate of a row that does not exist and the
+   * call's usage is never counted. Nothing else may touch the ledger
+   * between `judge` and `commit`.
+   */
+  judge(body: Record<string, unknown>, source: string): LlmCallSighting {
     const { ids, tuple } = llmCallKeys(body);
     const identified = ids.length > 0;
     let byId: Entry | undefined;
@@ -207,25 +227,29 @@ export class LlmCallLedger {
         byTuple = candidate;
     }
     const seen = byId ?? byTuple;
-    const entry: Entry = seen ?? { sources: [], identified };
-    const first = entry.sources[0];
-    const reported = entry.sources.includes(source);
-    if (!reported) entry.sources.push(source);
-    for (const key of [...ids, ...(tuple !== undefined ? [tuple] : [])]) {
-      if (!this.entries.has(key)) this.entries.set(key, entry);
-    }
-    while (this.entries.size > LLM_CALL_LEDGER_CAPACITY) {
-      const oldest = this.entries.keys().next().value;
-      if (oldest === undefined) break;
-      this.entries.delete(oldest);
-    }
-    if (first === undefined) return { kind: "first" };
+    const first = seen?.sources[0];
+    const reported = seen?.sources.includes(source) ?? false;
+    const commit = (): void => {
+      const entry: Entry = seen ?? { sources: [], identified };
+      if (!entry.sources.includes(source)) entry.sources.push(source);
+      for (const key of [...ids, ...(tuple !== undefined ? [tuple] : [])]) {
+        if (!this.entries.has(key)) this.entries.set(key, entry);
+      }
+      while (this.entries.size > LLM_CALL_LEDGER_CAPACITY) {
+        const oldest = this.entries.keys().next().value;
+        if (oldest === undefined) break;
+        this.entries.delete(oldest);
+      }
+    };
+    let verdict: LlmCallVerdict;
+    if (first === undefined) verdict = { kind: "first" };
     // A source reporting a call it already reported. Under an id that is a
     // re-read of a record the chain holds. Under a tuple alone it may be two
     // calls that happen to match, and a source that cannot tell them apart
     // must count both.
-    if (reported)
-      return byId !== undefined ? { kind: "repeat" } : { kind: "first" };
-    return { kind: "duplicate", of: first };
+    else if (reported)
+      verdict = byId !== undefined ? { kind: "repeat" } : { kind: "first" };
+    else verdict = { kind: "duplicate", of: first };
+    return { verdict, commit };
   }
 }

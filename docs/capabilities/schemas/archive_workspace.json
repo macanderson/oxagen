@@ -1,7 +1,7 @@
 {
   "name": "archive_workspace",
   "domain": "workspace",
-  "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
+  "description": "Archive a workspace: it leaves the workspace lists, its slug stays taken and everything recorded in it stays readable. Its API keys stop authenticating into it while it stays archived; no key is revoked, and restoring the workspace restores them. Refused when already archived or while an agent is registered in it; deregister or move those agents first.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -51,13 +51,19 @@
       "archivedAt": {
         "type": "string",
         "description": "ISO-8601"
+      },
+      "suspendedApiKeys": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Live API keys in the workspace that stop authenticating while it is archived. None is revoked."
       }
     },
     "required": [
       "id",
       "slug",
       "name",
-      "archivedAt"
+      "archivedAt",
+      "suspendedApiKeys"
     ],
     "additionalProperties": false
   }
