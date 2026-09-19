@@ -16,7 +16,11 @@
 // table rather than repeated on every row, and neither prints a uuid or a zero
 // in place of a fact nobody recorded.
 import { useFormatter, useTranslations } from "next-intl";
-import type { MandateDetail, MandateMovement } from "@/data/contracts/mandates";
+import {
+  isEffective,
+  type MandateDetail,
+  type MandateMovement,
+} from "@/data/contracts/mandates";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { Measure } from "@/ui/measure";
 import { SafeForm, SafeLink } from "@/ui/navigation";
@@ -149,7 +153,17 @@ export function MandateLedger({
         <div data-state="empty" className="flex flex-col gap-2 px-4 py-8">
           <h3 className="text-base font-semibold">{t("empty")}</h3>
           <p className="max-w-prose text-sm text-muted-foreground">
-            {t("emptyBody")}
+            {/* An empty ledger does not mean the limits are live authority.
+                Enforcement honours only an active mandate inside its half-open
+                window (`isEffective`), so a draft, revoked, expired or
+                not-yet-started mandate has no remaining authority however much
+                of its recorded period limit is undrawn. The stronger sentence
+                is reserved for the case where it is true. Deriving a Date from
+                the answer's own `asOf` is a pure read of a prop, not a clock
+                read in render. */}
+            {isEffective(detail.mandate, new Date(detail.asOf))
+              ? t("emptyBodyEffective")
+              : t("emptyBody")}
           </p>
         </div>
       ) : page.rows.length === 0 ? (

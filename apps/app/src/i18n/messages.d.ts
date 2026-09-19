@@ -1128,6 +1128,7 @@ type Messages = {
         older: string;
         end: string;
       };
+      emptyBodyEffective: string;
     };
     grant: {
       title: string;
@@ -1150,6 +1151,7 @@ type Messages = {
       approvalConsequenceRoles: string;
       valid: string;
       validWindow: string;
+      validWindowBasis: string;
     };
     reconciliation: {
       title: string;

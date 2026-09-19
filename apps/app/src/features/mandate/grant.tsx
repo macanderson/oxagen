@@ -27,11 +27,27 @@ import { useMeasureText } from "@/ui/measure";
 const term = "text-xs font-medium text-muted-foreground";
 const value = "text-sm text-foreground";
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+function Row({
+  label,
+  basis,
+  children,
+}: {
+  label: string;
+  /**
+   * How to read the value, in the same block as the value. The tiles carry one
+   * on every money figure for the same reason: a number a reader cannot source
+   * is a number they have to trust.
+   */
+  basis?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
       <dt className={term}>{label}</dt>
       <dd className={value}>{children}</dd>
+      {basis === undefined ? null : (
+        <p className="text-xs text-muted-foreground">{basis}</p>
+      )}
     </div>
   );
 }
@@ -161,13 +177,23 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
         <Row label={t("approval")}>
           <Approval mandate={mandate} />
         </Row>
-        <Row label={t("valid")}>
+        <Row label={t("valid")} basis={t("validWindowBasis")}>
+          {/* The end instant carries its TIME and zone, not just its day. The
+              window is half-open, `[validFrom, validTo)`, because enforcement's
+              is (`isEffective`, data/contracts/mandates.ts, and
+              `findCoveringMandate` in packages/rules), and the API and MCP can
+              set `validTo` to any offset datetime. Printing the day alone and
+              calling it "through" said a mandate ending at midnight was good
+              for all of that day, when the gate had already stopped honouring
+              it. */}
           {t("validWindow", {
             from: format.dateTime(new Date(mandate.validFrom), {
               dateStyle: "medium",
+              timeStyle: "short",
             }),
             to: format.dateTime(new Date(mandate.validTo), {
               dateStyle: "medium",
+              timeStyle: "short",
             }),
           })}
         </Row>

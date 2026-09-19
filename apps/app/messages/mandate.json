@@ -52,7 +52,7 @@
       "receiptBasis": "A receipt frame is written by the collector on each host, not by Mission Control. No read carries one yet, so no receipt opens from this table.",
       "readBound": "The newest {shown} movements, which is the most this page reads at once. This mandate has recorded at least that many, and this page cannot tell you whether it has recorded more.",
       "empty": "This mandate has never been drawn on",
-      "emptyBody": "Its ledger is empty, so remaining authority equals the full period limit.",
+      "emptyBody": "Its ledger is empty, so none of the period limit has been drawn.",
       "filteredEmpty": "No movement matches this search",
       "filteredEmptyBody": "Clear the search or widen the state to see the movements this mandate has recorded.",
       "search": "Search",
@@ -67,7 +67,8 @@
         "newer": "Newer",
         "older": "Older",
         "end": "The oldest movement read"
-      }
+      },
+      "emptyBodyEffective": "Its ledger is empty, so remaining authority equals the full period limit."
     },
     "grant": {
       "title": "The grant",
@@ -89,7 +90,8 @@
       "approvalApprovers": "Approvers: {approvers}.",
       "approvalConsequenceRoles": "Approvers are the org roles accountable for the consequence.",
       "valid": "Valid",
-      "validWindow": "{from} through {to}"
+      "validWindow": "{from} until {to}",
+      "validWindowBasis": "The window is half-open: the mandate stops being honoured at the instant it ends, not at the end of that day."
     },
     "reconciliation": {
       "title": "Reconciliation",
