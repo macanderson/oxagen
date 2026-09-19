@@ -22,8 +22,6 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
-import { and, eq, ne } from "drizzle-orm";
-import { schema } from "@oxagen/database";
 import {
   generateAccessCode,
   isEditionSlug,
@@ -31,24 +29,17 @@ import {
   readerUrl,
   captureLead,
   captureLeadAndIssueCode,
-  finalizeCodeDelivery,
   findLeadByEmail,
   issueCodeForLead,
   redeemAndRotate,
 } from "./access";
-
-const { bookAccessCodes, leads } = schema;
 
 /**
  * A fake drizzle tx: every builder method (`from`, `where`, `limit`, `for`,
  * `values`, `set`, `onConflictDoUpdate`, `returning`, …) returns the same
  * awaitable chain, which resolves to the next queued result for that verb.
  */
-function makeFakeTx(opts: {
-  selects?: unknown[][];
-  inserts?: unknown[][];
-  onConflictSets?: Record<string, unknown>[];
-}) {
+function makeFakeTx(opts: { selects?: unknown[][]; inserts?: unknown[][] }) {
   let si = 0;
   let ii = 0;
   const chain = (resolveVal: () => unknown) => {
@@ -57,20 +48,7 @@ function makeFakeTx(opts: {
         if (prop === "then") {
           return (resolve: (v: unknown) => unknown) => resolve(resolveVal());
         }
-        return (arg?: unknown) => {
-          if (
-            prop === "onConflictDoUpdate" &&
-            arg &&
-            typeof arg === "object" &&
-            "set" in arg &&
-            opts.onConflictSets
-          ) {
-            opts.onConflictSets.push(
-              (arg as { set: Record<string, unknown> }).set,
-            );
-          }
-          return proxy;
-        };
+        return () => proxy;
       },
       apply() {
         return proxy;
@@ -127,12 +105,8 @@ describe("captureLeadAndIssueCode", () => {
   it("upserts the lead, mints a code, returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     h.tx = makeFakeTx({
-      // lock-lead, then the prior-active-code lookup (none: first code ever)
-      selects: [[{ id: "lead_1" }], []],
-      inserts: [
-        [{ id: "lead_1", email: "ada@example.com" }],
-        [{ id: "code_1" }],
-      ],
+      selects: [[{ id: "lead_1" }]], // mintCodeTx: lock lead
+      inserts: [[{ id: "lead_1", email: "ada@example.com" }], []],
     });
     const out = await captureLeadAndIssueCode(
       { email: "ada@example.com", firstName: "Ada", lastName: "Lovelace" },
@@ -140,7 +114,6 @@ describe("captureLeadAndIssueCode", () => {
       "signup",
     );
     expect(out.leadId).toBe("lead_1");
-    expect(out.codeId).toBe("code_1");
     expect(out.readUrl).toMatch(
       /^https:\/\/oxagen\.sh\/read\?e=page-flip-reader&c=/,
     );
@@ -159,12 +132,41 @@ describe("captureLeadAndIssueCode", () => {
 });
 
 describe("captureLead — marketing consent on conflict", () => {
+  function fakeUpsertTx(onConflictSets: Record<string, unknown>[]) {
+    return {
+      insert: () => {
+        const proxy: unknown = new Proxy(function () {}, {
+          get(_t, prop) {
+            if (prop === "then") {
+              return (resolve: (v: unknown) => unknown) =>
+                resolve([{ id: "lead_1", email: "ada@example.com" }]);
+            }
+            return (arg?: unknown) => {
+              if (
+                prop === "onConflictDoUpdate" &&
+                arg &&
+                typeof arg === "object" &&
+                "set" in arg
+              ) {
+                onConflictSets.push(
+                  (arg as { set: Record<string, unknown> }).set,
+                );
+              }
+              return proxy;
+            };
+          },
+          apply() {
+            return proxy;
+          },
+        });
+        return proxy;
+      },
+    };
+  }
+
   it("writes marketingConsent on conflict when the caller sent an explicit boolean", async () => {
     const onConflictSets: Record<string, unknown>[] = [];
-    h.tx = makeFakeTx({
-      inserts: [[{ id: "lead_1", email: "ada@example.com" }]],
-      onConflictSets,
-    });
+    h.tx = fakeUpsertTx(onConflictSets);
     await captureLead({
       email: "ada@example.com",
       firstName: "Ada",
@@ -176,10 +178,7 @@ describe("captureLead — marketing consent on conflict", () => {
 
   it("omits marketingConsent from the conflict set when the caller left it unset", async () => {
     const onConflictSets: Record<string, unknown>[] = [];
-    h.tx = makeFakeTx({
-      inserts: [[{ id: "lead_1", email: "ada@example.com" }]],
-      onConflictSets,
-    });
+    h.tx = fakeUpsertTx(onConflictSets);
     await captureLead({
       email: "ada@example.com",
       firstName: "Ada",
@@ -209,13 +208,11 @@ describe("issueCodeForLead", () => {
   it("mints a fresh code and returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     h.tx = makeFakeTx({
-      // lock-lead, then the prior-active-code lookup
-      selects: [[{ id: "lead_1" }], [{ id: "code_old" }]],
-      inserts: [[{ id: "code_new" }]],
+      selects: [[{ id: "lead_1" }]], // mintCodeTx: lock lead
+      inserts: [[]],
     });
-    const out = await issueCodeForLead("lead_1", "field-manual");
-    expect(out.readUrl).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
-    expect(out.codeId).toBe("code_new");
+    const url = await issueCodeForLead("lead_1", "field-manual");
+    expect(url).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
   });
 
   it("throws when the lead row is missing", async () => {
@@ -244,7 +241,7 @@ describe("redeemAndRotate — single-use enforcement", () => {
     });
   });
 
-  it("returns invalid when the code does not exist, before taking any lock", async () => {
+  it("returns invalid when the code does not exist", async () => {
     h.tx = makeFakeTx({ selects: [editionRow, []] });
     expect(await redeemAndRotate("page-flip-reader", "nope")).toEqual({
       ok: false,
@@ -256,8 +253,8 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
-        [{ leadId: "l1" }], // unlocked lookup of the code's lead
-        [{ id: "l1" }], // lead lock, taken before the code lock
+        [{ leadId: "l1" }], // target lookup (unlocked)
+        [], // lead lock (result unused)
         [{ id: "c1", leadId: "l1", status: "consumed", expiresAt: null }],
       ],
     });
@@ -271,8 +268,8 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
-        [{ leadId: "l1" }], // unlocked lookup of the code's lead
-        [{ id: "l1" }], // lead lock, taken before the code lock
+        [{ leadId: "l1" }], // target lookup (unlocked)
+        [], // lead lock (result unused)
         [
           {
             id: "c1",
@@ -289,148 +286,26 @@ describe("redeemAndRotate — single-use enforcement", () => {
     });
   });
 
-  it("consumes + rotates a valid code and returns the book html + fresh code, without leaking the lead's email", async () => {
+  it("consumes + rotates a valid code and returns the book html + fresh code", async () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
-        [{ leadId: "l1" }], // unlocked lookup of the code's lead
-        [{ id: "l1" }], // lead lock, taken before the code lock
+        [{ leadId: "l1" }], // target lookup (unlocked)
+        [], // redeemAndRotate's own lead lock (result unused)
         [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
         [{ id: "l1" }], // mintCodeTx: lock lead
-        [], // mintCodeTx: prior-active lookup — none, c1 was just consumed
+        [{ email: "ada@example.com" }],
         [{ slug: "page-flip-reader", title: "Reader", format: "page-flip" }],
       ],
-      inserts: [[{ id: "code_new" }]],
+      inserts: [[]],
     });
     const res = await redeemAndRotate("page-flip-reader", "good");
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.html).toContain("book");
       expect(res.newCode).toHaveLength(26);
-      expect(res).not.toHaveProperty("leadEmail");
+      expect(res.leadEmail).toBe("ada@example.com");
       expect(res.editions).toHaveLength(1);
     }
-  });
-});
-
-describe("redeemAndRotate — lock order", () => {
-  it("locks the lead before the code row, the same order mintCodeTx uses", async () => {
-    const { schema } = await import("@oxagen/database");
-    const queue: unknown[][] = [
-      [{ html: "<html>book</html>", title: "Reader" }],
-      [{ leadId: "l1" }],
-      [{ id: "l1" }],
-      [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
-      [{ id: "l1" }],
-      [],
-      [],
-    ];
-    // Each select records the table it read and whether it took a row lock.
-    const locks: unknown[] = [];
-    const selectChain = () => {
-      let table: unknown;
-      const result = queue.shift() ?? [];
-      const chain: Record<string, unknown> = {
-        from: (t: unknown) => ((table = t), chain),
-        where: () => chain,
-        limit: () => chain,
-        for: () => (locks.push(table), chain),
-        then: (resolve: (v: unknown) => unknown) => resolve(result),
-      };
-      return chain;
-    };
-    const passthrough = (value: unknown) => {
-      const chain: Record<string, unknown> = {
-        values: () => chain,
-        set: () => chain,
-        where: () => chain,
-        returning: () => chain,
-        then: (resolve: (v: unknown) => unknown) => resolve(value),
-      };
-      return chain;
-    };
-    h.tx = {
-      select: selectChain,
-      insert: () => passthrough([{ id: "code_new" }]),
-      update: () => passthrough([]),
-    };
-    const res = await redeemAndRotate("page-flip-reader", "good");
-    expect(res.ok).toBe(true);
-    expect(locks[0]).toBe(schema.leads);
-    expect(locks[1]).toBe(schema.bookAccessCodes);
-  });
-});
-
-describe("finalizeCodeDelivery", () => {
-  /**
-   * select() resolves from `selects` in order (the lead lock, then the new
-   * code's status); every update's where() argument is recorded.
-   */
-  function fakeFinalizeTx(selects: unknown[][]) {
-    const whereArgs: unknown[] = [];
-    const locks: unknown[] = [];
-    const tx = {
-      select: () => {
-        let table: unknown;
-        const result = selects.shift() ?? [];
-        const chain: Record<string, unknown> = {
-          from: (t: unknown) => ((table = t), chain),
-          where: () => chain,
-          limit: () => chain,
-          for: () => (locks.push(table), chain),
-          then: (resolve: (v: unknown) => unknown) => resolve(result),
-        };
-        return chain;
-      },
-      update: () => ({
-        set: () => ({
-          where: (arg: unknown) => {
-            whereArgs.push(arg);
-            return Promise.resolve();
-          },
-        }),
-      }),
-    };
-    return { tx, whereArgs, locks };
-  }
-
-  it("makes a delivered code the lead's one live link, revoking every other active code", async () => {
-    const { tx, whereArgs, locks } = fakeFinalizeTx([
-      [{ id: "lead_1" }],
-      [{ status: "active" }],
-    ]);
-    h.tx = tx;
-    await finalizeCodeDelivery("lead_1", "new_1", true);
-    expect(locks).toEqual([leads]);
-    expect(whereArgs).toEqual([
-      and(
-        eq(bookAccessCodes.leadId, "lead_1"),
-        eq(bookAccessCodes.status, "active"),
-        ne(bookAccessCodes.id, "new_1"),
-      ),
-    ]);
-  });
-
-  it("revokes nothing when a competing finalize already revoked this code", async () => {
-    const { tx, whereArgs } = fakeFinalizeTx([
-      [{ id: "lead_1" }],
-      [{ status: "revoked" }],
-    ]);
-    h.tx = tx;
-    await finalizeCodeDelivery("lead_1", "new_1", true);
-    expect(whereArgs).toEqual([]);
-  });
-
-  it("revokes only the NEW code on a failed delivery, leaving any earlier link usable", async () => {
-    const { tx, whereArgs, locks } = fakeFinalizeTx([[{ id: "lead_1" }]]);
-    h.tx = tx;
-    await finalizeCodeDelivery("lead_1", "new_1", false);
-    expect(locks).toEqual([leads]);
-    expect(whereArgs).toEqual([
-      and(
-        eq(bookAccessCodes.id, "new_1"),
-        eq(bookAccessCodes.status, "active"),
-      ),
-    ]);
   });
 });

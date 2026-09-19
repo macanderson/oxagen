@@ -1,27 +1,55 @@
--- Seed cms.book_editions so the production Atlas apply path actually leaves
--- the redeem route with real content instead of an empty table.
--- seed-book-editions.ts / seedPlatform() reach a dev or CI database through
--- pnpm db:migrate, but the production runner
--- (infra/tools/run-db-migrations.sh --apply) packages only atlas/ and
--- atlas.hcl and calls only "atlas migrate apply", with no Node and no seed
--- script. A migration is the one artifact both paths execute, so the
--- editions are inserted here.
+-- Seed cms.book_editions with the two shipped book editions (ADR-102).
 --
--- Content is generated from packages/database/seed-assets/books/*.html with
--- the same transforms seed-book-editions.ts applies (stripLegacyGate,
--- rewriteFieldManualHref); regenerate with
--- tools/scripts/gen-book-edition-migration.mjs if a source file changes.
--- ON CONFLICT DO NOTHING: idempotent, and never overwrites a row the
--- app-level seed (or an editor) has already updated.
+-- Schema-only migrations do not reach production data: the production
+-- migration path (infra/tools/run-db-migrations.sh) runs `atlas migrate
+-- apply` only, and never invokes the Node seed at
+-- packages/database/src/seed-book-editions.ts. Without this migration,
+-- signup mints a redeemable code against an edition row that does not exist
+-- in production, and every redemption returns `unknown_edition`.
+--
+-- The HTML embedded below is the same content
+-- packages/database/src/seed-book-editions.ts writes locally (the
+-- field-manual copy has its legacy client-side redirect gate already
+-- stripped, matching that script's stripLegacyGate transform). Local dev and
+-- CI still run seed-book-editions.ts too (idempotent upsert on slug). This
+-- migration and that script write the same columns from the same source
+-- files, one at deploy time and one at seed time, so they stay in sync.
+-- A future edit to either seed-assets HTML file should land a follow-up
+-- migration alongside it if the change must reach production, the same way
+-- any other production data change would.
+--
+-- ON CONFLICT DO UPDATE is safe for re-runs / re-baseline and matches the
+-- seed script's own upsert semantics.
 
-INSERT INTO "cms"."book_editions" ("public_id", "slug", "book_slug", "format", "title", "html", "published")
+INSERT INTO cms.book_editions (
+  id,
+  public_id,
+  created_at,
+  updated_at,
+  created_by_id,
+  updated_by_id,
+  slug,
+  book_slug,
+  format,
+  title,
+  html,
+  published
+)
 VALUES (
-	'bed_ff7b174bb9ea4eaa9cba4b',
-	'field-manual',
-	'deterministic-ai-coding-agents',
-	'linear',
-	'Engineering Deterministic AI Coding Agents — Field Manual',
-	$oxagen_book_html$<!DOCTYPE html>
+  COALESCE(
+    CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+      THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
+    uuid_generate_v4()),
+  'bed_fieldmanualseed00001',
+  now(),
+  now(),
+  NULL,
+  NULL,
+  'field-manual',
+  'deterministic-ai-coding-agents',
+  'linear',
+  'Engineering Deterministic AI Coding Agents — Field Manual',
+  $html_body$<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1255,19 +1283,47 @@ g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6
 </script>
 </body>
 </html>
-$oxagen_book_html$,
-	true
+$html_body$,
+  true
 )
-ON CONFLICT ("slug") DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  book_slug = EXCLUDED.book_slug,
+  format = EXCLUDED.format,
+  title = EXCLUDED.title,
+  html = EXCLUDED.html,
+  published = EXCLUDED.published,
+  updated_at = now();
 
-INSERT INTO "cms"."book_editions" ("public_id", "slug", "book_slug", "format", "title", "html", "published")
+
+INSERT INTO cms.book_editions (
+  id,
+  public_id,
+  created_at,
+  updated_at,
+  created_by_id,
+  updated_by_id,
+  slug,
+  book_slug,
+  format,
+  title,
+  html,
+  published
+)
 VALUES (
-	'bed_4edeeccac20447ee8f94f6',
-	'page-flip-reader',
-	'deterministic-ai-coding-agents',
-	'page-flip',
-	'Engineering Deterministic AI Coding Agents — Reader',
-	$oxagen_book_html$<!DOCTYPE html>
+  COALESCE(
+    CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
+      THEN uuid_generate_v7() ELSE uuid_generate_v4() END,
+    uuid_generate_v4()),
+  'bed_pageflipreaderseed01',
+  now(),
+  now(),
+  NULL,
+  NULL,
+  'page-flip-reader',
+  'deterministic-ai-coding-agents',
+  'page-flip',
+  'Engineering Deterministic AI Coding Agents — Reader',
+  $html_body$<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -2642,9 +2698,7 @@ function updateChrome() {
   $("#live").textContent = `Page ${shown} of ${totalPages}`;
   // reflect chapter in URL for shareable position
   const id = nearestAnchorId();
-  // Keep ?e=&c= on the cover URL so a refresh re-redeems the rotated code
-  // instead of dropping the visitor back on the lead form.
-  if (id) history.replaceState(null, "", id === "cover" ? location.pathname + location.search : "#" + id);
+  if (id) history.replaceState(null, "", id === "cover" ? location.pathname : "#" + id);
   $("#edgeL").style.visibility = spread > 0 ? "visible" : "hidden";
   $("#edgeR").style.visibility = spread < maxSpread ? "visible" : "hidden";
   // highlight toc
@@ -2919,13 +2973,19 @@ addEventListener("hashchange", () => {
 <style>#stage,#bar,#prog,#pginfo,.edge{display:none}body{overflow:auto;background:#fff;color:#111}</style>
 <div style="max-width:44rem;margin:3rem auto;padding:0 1.2rem;font-family:Georgia,serif;font-size:17px;line-height:1.6">
   <p><b>Engineering Deterministic AI Coding Agents</b> — the interactive book needs JavaScript for its page-turn reader.
-  A scroll-friendly edition of the same manual lives at <a href="/read?e=field-manual">oxagen.sh/read?e=field-manual</a>.</p>
+  A scroll-friendly edition of the same manual lives at <a href="/field-manual">oxagen.sh/field-manual</a>.</p>
 </div>
 </noscript>
 </body>
 </html>
-$oxagen_book_html$,
-	true
+$html_body$,
+  true
 )
-ON CONFLICT ("slug") DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  book_slug = EXCLUDED.book_slug,
+  format = EXCLUDED.format,
+  title = EXCLUDED.title,
+  html = EXCLUDED.html,
+  published = EXCLUDED.published,
+  updated_at = now();
 

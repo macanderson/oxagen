@@ -1,12 +1,16 @@
--- Restore the cms schema that ADR-043 dropped with the agent runtime.
+-- Restore the cms schema for the oxagen.sh ebook lead gate (ADR-102).
 --
--- The marketing site still posts leads and redeems book codes at /v1/cms/*.
--- Those routes are marketing infrastructure, not agent runtime, and were
--- collateral damage of the excision. Recreate the schema to match the current
--- Drizzle definition (ADR-077 attribution columns, message on leads).
+-- ADR-043 dropped cms as collateral of the runtime excision. The marketing
+-- site still posts to /v1/cms/leads, so the schema, public routes, and seed
+-- return here. Matches the Drizzle schema in schema/cms.ts (attribution
+-- columns are created_by_id / updated_by_id per ADR-077; message lives on
+-- leads from the start; book_editions carries html only, no description /
+-- og_image_url).
 
+-- ── Schema ────────────────────────────────────────────────────────────────────
 CREATE SCHEMA IF NOT EXISTS "cms";
 
+-- ── Enums ─────────────────────────────────────────────────────────────────────
 CREATE TYPE "cms"."company_size" AS ENUM (
 	'1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10001+'
 );
@@ -15,6 +19,7 @@ CREATE TYPE "cms"."referral_source" AS ENUM (
 	'event_or_conference', 'advertisement', 'word_of_mouth', 'other'
 );
 
+-- ── cms.leads ─────────────────────────────────────────────────────────────────
 CREATE TABLE "cms"."leads" (
 	"id" uuid PRIMARY KEY DEFAULT COALESCE(
         CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
@@ -49,6 +54,7 @@ CREATE TABLE "cms"."leads" (
 CREATE INDEX "cms_leads_tracking_code_idx" ON "cms"."leads" USING btree ("tracking_code");
 CREATE INDEX "cms_leads_created_at_idx" ON "cms"."leads" USING btree ("created_at");
 
+-- ── cms.book_editions ─────────────────────────────────────────────────────────
 CREATE TABLE "cms"."book_editions" (
 	"id" uuid PRIMARY KEY DEFAULT COALESCE(
         CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
@@ -71,6 +77,7 @@ CREATE TABLE "cms"."book_editions" (
 );
 CREATE INDEX "cms_book_editions_book_idx" ON "cms"."book_editions" USING btree ("book_slug");
 
+-- ── cms.book_access_codes ─────────────────────────────────────────────────────
 CREATE TABLE "cms"."book_access_codes" (
 	"id" uuid PRIMARY KEY DEFAULT COALESCE(
         CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL
@@ -100,6 +107,10 @@ CREATE TABLE "cms"."book_access_codes" (
 CREATE INDEX "cms_book_access_codes_lead_idx" ON "cms"."book_access_codes" USING btree ("lead_id");
 CREATE INDEX "cms_book_access_codes_status_idx" ON "cms"."book_access_codes" USING btree ("status");
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- RLS — bypass-only. These tables are non-tenant public marketing data; the
+-- only legitimate access path is withSystemDb (which sets app.rls_bypass='on').
+-- ────────────────────────────────────────────────────────────────────────────
 ALTER TABLE cms.leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cms.leads FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS system_only ON cms.leads;
@@ -121,6 +132,9 @@ CREATE POLICY system_only ON cms.book_access_codes
   USING (current_setting('app.rls_bypass', true) = 'on')
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on');
 
+-- ────────────────────────────────────────────────────────────────────────────
+-- oxagen_app least-privilege grants (guarded — fresh clusters may lack the role).
+-- ────────────────────────────────────────────────────────────────────────────
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') THEN

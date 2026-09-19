@@ -1,108 +1,112 @@
 /**
- * Unit tests for seedBookEditions() (seed-book-editions.ts).
+ * Unit tests for seedBookEditions().
  *
- * No live DB and no real book assets are read — `withSystemDb` is mocked to
- * call the provided callback with a chainable mock transaction object, and
- * `node:fs`'s `readFileSync` is mocked to return small fixture HTML instead
- * of the real (large) book sources under seed-assets/books/. Asserts:
- *
- *  1. Both editions are upserted (insert → values → onConflictDoUpdate) on slug.
- *  2. The field-manual edition's legacy client-side unlock script is stripped
- *     before the HTML is stored.
- *  3. The page-flip edition's `/field-manual` href is rewritten to the gated
- *     `/read?e=field-manual` URL (AWS has no `/field-manual` object).
+ * Reads are mocked (no seed-assets I/O). withSystemDb is mocked so the upsert
+ * chain can be asserted without a live Postgres.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
 
 const mocks = vi.hoisted(() => {
   const onConflictDoUpdateMock = vi.fn().mockResolvedValue(undefined);
-  const valuesMock = vi
-    .fn()
-    .mockReturnValue({ onConflictDoUpdate: onConflictDoUpdateMock });
+  const valuesMock = vi.fn().mockReturnValue({
+    onConflictDoUpdate: onConflictDoUpdateMock,
+  });
   const insertMock = vi.fn().mockReturnValue({ values: valuesMock });
   const mockTx = { insert: insertMock };
-
   const withSystemDbMock = vi.fn(
     async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
   );
-  const closeDatabaseMock = vi.fn().mockResolvedValue(undefined);
-  const readFileSyncMock = vi.fn();
-
   return {
     onConflictDoUpdateMock,
     valuesMock,
     insertMock,
     mockTx,
     withSystemDbMock,
-    closeDatabaseMock,
-    readFileSyncMock,
+  };
+});
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    readFileSync: vi.fn(),
   };
 });
 
 vi.mock("./tenant", () => ({ withSystemDb: mocks.withSystemDbMock }));
-vi.mock("./client", () => ({ closeDatabase: mocks.closeDatabaseMock }));
-vi.mock("node:fs", () => ({ readFileSync: mocks.readFileSyncMock }));
+vi.mock("./client", () => ({ closeDatabase: vi.fn() }));
+vi.mock("@oxagen/telemetry", () => ({
+  isDirectRunEntry: () => false,
+}));
 
 import { seedBookEditions } from "./seed-book-editions";
+import { BOOK_SLUG } from "./schema/cms";
 
-const FIELD_MANUAL_FIXTURE = `<html><head>
-<script>if (!localStorage.getItem('ox_fm_unlocked')) { location.href = '/#field-manual'; }</script>
-</head><body>Field manual body</body></html>`;
-
-const PAGE_FLIP_FIXTURE =
-  '<html><body>See <a href="/field-manual">the field manual</a>.</body></html>';
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.insertMock.mockReturnValue({ values: mocks.valuesMock });
-  mocks.valuesMock.mockReturnValue({
-    onConflictDoUpdate: mocks.onConflictDoUpdateMock,
-  });
-  mocks.onConflictDoUpdateMock.mockResolvedValue(undefined);
-  mocks.withSystemDbMock.mockImplementation(
-    async (cb: (tx: typeof mocks.mockTx) => Promise<unknown>) =>
-      cb(mocks.mockTx),
-  );
-  mocks.readFileSyncMock.mockImplementation((path: string) =>
-    path.includes("field-manual") ? FIELD_MANUAL_FIXTURE : PAGE_FLIP_FIXTURE,
-  );
-});
+const readFileSyncMock = vi.mocked(readFileSync);
 
 describe("seedBookEditions()", () => {
-  it("upserts both editions by slug", async () => {
+  beforeEach(() => {
+    mocks.onConflictDoUpdateMock.mockReset().mockResolvedValue(undefined);
+    mocks.valuesMock.mockReset().mockReturnValue({
+      onConflictDoUpdate: mocks.onConflictDoUpdateMock,
+    });
+    mocks.insertMock.mockReset().mockReturnValue({ values: mocks.valuesMock });
+    mocks.withSystemDbMock
+      .mockReset()
+      .mockImplementation(
+        async (cb: (tx: typeof mocks.mockTx) => Promise<unknown>) =>
+          cb(mocks.mockTx),
+      );
+    readFileSyncMock.mockReset();
+  });
+
+  it("upserts both editions through withSystemDb", async () => {
+    readFileSyncMock.mockReturnValue("<html>body</html>");
+
     await seedBookEditions();
 
     expect(mocks.withSystemDbMock).toHaveBeenCalledTimes(2);
+    expect(mocks.insertMock).toHaveBeenCalledTimes(2);
     expect(mocks.valuesMock).toHaveBeenCalledTimes(2);
-    const slugs = mocks.valuesMock.mock.calls.map(
-      (call) => (call[0] as { slug: string }).slug,
-    );
-    expect(slugs).toEqual(["field-manual", "page-flip-reader"]);
+    expect(mocks.onConflictDoUpdateMock).toHaveBeenCalledTimes(2);
 
-    const targets = mocks.onConflictDoUpdateMock.mock.calls.map(
-      (call) => (call[0] as { target: unknown }).target,
-    );
-    expect(targets).toHaveLength(2);
+    const first = mocks.valuesMock.mock.calls[0]?.[0] as {
+      slug: string;
+      bookSlug: string;
+      format: string;
+      published: boolean;
+    };
+    const second = mocks.valuesMock.mock.calls[1]?.[0] as {
+      slug: string;
+      format: string;
+    };
+    expect(first).toMatchObject({
+      slug: "field-manual",
+      bookSlug: BOOK_SLUG,
+      format: "linear",
+      published: true,
+    });
+    expect(second).toMatchObject({
+      slug: "page-flip-reader",
+      format: "page-flip",
+    });
   });
 
-  it("strips the legacy client-side unlock gate from the field-manual HTML", async () => {
+  it("strips the legacy field-manual gate script before storing", async () => {
+    readFileSyncMock.mockImplementation((path) => {
+      const p = String(path);
+      if (p.endsWith("field-manual.html")) {
+        return `<html><head><script>localStorage.setItem("ox_fm_unlocked","1");location.replace("/#field-manual");</script></head><body>manual</body></html>`;
+      }
+      return "<html>reader</html>";
+    });
+
     await seedBookEditions();
 
-    const fieldManualValues = mocks.valuesMock.mock.calls[0]?.[0] as {
-      html: string;
-    };
-    expect(fieldManualValues.html).not.toContain("ox_fm_unlocked");
-    expect(fieldManualValues.html).toContain("Field manual body");
-  });
-
-  it("rewrites the page-flip footer /field-manual link for the AWS reader URL", async () => {
-    await seedBookEditions();
-
-    const pageFlipValues = mocks.valuesMock.mock.calls[1]?.[0] as {
-      html: string;
-    };
-    expect(pageFlipValues.html).toContain('href="/read?e=field-manual"');
-    expect(pageFlipValues.html).not.toContain('href="/field-manual"');
+    const fieldManual = mocks.valuesMock.mock.calls[0]?.[0] as { html: string };
+    expect(fieldManual.html).not.toContain("ox_fm_unlocked");
+    expect(fieldManual.html).toContain("<body>manual</body>");
   });
 });

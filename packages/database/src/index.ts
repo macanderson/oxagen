@@ -4,7 +4,8 @@ export * as schema from "./schema/index";
 // namespace) so the agent runtime + handlers can import the union type directly.
 export { PLUGIN_TYPES, type PluginType } from "./schema/plugin";
 // cms value sets + types — named exports (not just under `schema`) so the API
-// lead-gate routes can import the enums without pulling the whole schema bag.
+// routes, seed, and web-facing validation can import the ebook-gate constants
+// directly.
 export {
   BOOK_SLUG,
   EDITION_SLUGS,

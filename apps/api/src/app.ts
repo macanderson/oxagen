@@ -246,6 +246,7 @@ import { authCliTokenRoute } from "./routes/v1/auth.cli.token";
 import { telemetryUsageRoute } from "./routes/v1/telemetry.usage";
 import { telemetryStellaEnrollRoute } from "./routes/v1/telemetry.stella.enroll";
 import { telemetryStellaIngestRoute } from "./routes/v1/telemetry.stella.ingest";
+import { cmsRoute } from "./routes/v1/cms";
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
@@ -299,7 +300,6 @@ import { runCostGetRoute } from "./routes/v1/run.cost";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
-import { cmsRoute } from "./routes/v1/cms";
 
 export type AppEnv = {
   Variables: {
@@ -346,10 +346,11 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
 
-// Public marketing lead gate for oxagen.sh (demo form + ebook gate). No
-// session: Zod allowlist + per-IP rate limit inside the route are the
-// boundary. Mounted before the auth-gated /v1 groups so a visitor never
-// gets a 401 Missing credentials.
+// Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
+// security model as /v1/telemetry: no auth (callers are website visitors),
+// strict Zod validation + a per-IP rate limit inside the route. Mounted BEFORE
+// the auth-gated /v1 groups so authMiddleware never sees this path. Restored
+// by ADR-102 after ADR-043 dropped it as collateral of the runtime excision.
 app.route("/v1/cms", cmsRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.

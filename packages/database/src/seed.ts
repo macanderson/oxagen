@@ -88,10 +88,7 @@ export async function seedPlatform(): Promise<void> {
         });
     }
   });
-  // Book editions back the code-gated /v1/cms/book/redeem path. Without this,
-  // a migrate that only recreates cms.book_editions leaves the table empty and
-  // every redemption fails as unknown_edition until an operator finds the
-  // standalone db:seed-books command.
+  // Gated ebook HTML for the oxagen.sh lead forms. Idempotent upsert on slug.
   await seedBookEditions();
 }
 
@@ -102,7 +99,7 @@ export async function seedPlatform(): Promise<void> {
  * The rule is enforced, not merely documented: this file is a direct-run
  * entrypoint (`tsx packages/database/src/seed.ts`), so a shell that still has a
  * production DATABASE_URL exported would otherwise plant a real `oxagen-dev`
- * org and a `dev@oxagen.ai` user in the production tenant table — rows that are
+ * org and a `dev@oxagen.sh` user in the production tenant table — rows that are
  * then indistinguishable from a customer's. Production migrate calls
  * `seedPlatform()` only (tools/scripts/seed-platform.ts) and never reaches here.
  *
@@ -112,7 +109,7 @@ export async function seedDev(): Promise<void> {
   if (isProductionRuntime()) {
     throw new Error(
       "[seed] seedDev() seeds local development fixtures (the oxagen-dev org, " +
-        "dev@oxagen.ai, and a Playground workspace) and must never run against " +
+        "dev@oxagen.sh, and a Playground workspace) and must never run against " +
         "production. Production seeds platform defaults through seedPlatform() " +
         "only. Refusing to seed.",
     );
@@ -145,7 +142,7 @@ export async function seedDev(): Promise<void> {
     )[0];
     if (!orgRow) throw new Error("Failed to upsert dev org");
 
-    const userEmail = "dev@oxagen.ai";
+    const userEmail = "dev@oxagen.sh";
     await tx
       .insert(users)
       .values({ email: userEmail, displayName: "Dev User", status: "active" })
