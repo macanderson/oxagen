@@ -21,16 +21,16 @@ flowchart LR
   S2 --> S5
 ```
 
-Sessions 1, 2, and 3 can run at the same time on separate machines or in separate cloud sessions. They touch different feature lanes and their shared-file hunks (`capability-ui-map.json`, `messages/*.json`, `data/contracts/*`) are kept in per-lane blocks so `git merge` resolves them.
+Sessions 1, 2, and 3 can run at the same time on separate machines or in separate cloud sessions. They touch different feature lanes and their shared-file hunks (`capability-ui-map.json`, `messages/*.json`, `data/contracts/*`) are kept in per-lane blocks so `git merge` resolves them. Session 4 follows 1. Session 5 follows 2, because its Policy tab links every rule to the auto-approvals editor session 2 builds, and waits for PR #3479 to merge.
 
 | Session | Command | Owns | Class of work | Issues |
 |---|---|---|---|---|
 | 0 | `/mc-0-rebaseline` | Gap record, cut ADR, spec and architecture notes, twelve capability docs, parity gate proof check, two binding defects, PRs #3479 and #3459 to green | Docs and tooling | #2592, #2957, #3286 (refs) |
 | 1 | `/mc-1-decide-and-act` | Approve and deny with reason on Fleet and Run, four-hop chain, eligibility line, tier and verdict columns, no controls on observe runs, pause, resume, cancel from Fleet, steer with a delivery mode, unmetered caveat on Fleet | UI-only over live handlers, one ADR | #2950, #2953, #3285, #2970, #3286, #3304 |
-| 2 | `/mc-2-tools-governance` | Auto-approvals tab, grant a mandate, ledger links, mandate page in page-load, connections table and add connection, servers and register server, import from a picked server | UI-only over live handlers | #2970, #2957 |
+| 2 | `/mc-2-tools-governance` | Auto-approvals tab, grant a mandate, ledger links, mandate page in page-load, connections table and add connection, servers and register server, import from a picked server | UI-only, plus a digest on the rules contract | #2970, #2957 |
 | 3 | `/mc-3-agents-and-people` | Assign and revoke roles, revoke and mint enrollment, budget read on the agent, toolbelt input schemas, send an invitation | UI-only, plus one contract field | #2956, #2964, #2953 |
 | 4 | `/mc-4-run-evidence` | Proof tab, `get_run_export` and a download route, gateway outcomes on the transcript, tier basis line, cache tile and unmetered caveat on Spend | UI plus one new capability | #2952, #2955, #3304, #3299 |
-| 5 | `/mc-5-steering-hub` | Tabs as path segments, one record's page, Memory tab, Policy tab | UI-only over live handlers | #3297, #3395 |
+| 5 | `/mc-5-steering-hub` | Tabs as path segments, one record's page, Memory tab, Policy tab | UI-only, plus provenance fields on the memory contract | #3297, #3395 |
 
 ## Already built. Do not rebuild.
 
@@ -114,7 +114,7 @@ Done when:
 
 Lanes:
 
-- **rules.** The auto-approvals tab: list, create, edit, enable, disable, delete, explain eligibility. The write replaces the whole list; the action guards against a stale read.
+- **rules.** The auto-approvals tab: list, create, edit, enable, disable, delete, explain eligibility. The write replaces the whole list and the contract has no revision, so the lane first adds a digest to the list read and an `expectedDigest` the set handler checks under its lock, through the parity chain. A client-side id comparison cannot close that race.
 - **grant.** Grant a mandate from the Tools ledger and from a pending request on the agent page, prefilled, with the parked-for-approval state shown honestly. Ledger rows link to the mandate page. The mandate page joins page-load.
 - **connections.** A connections table with a detail drawer and add connection. Servers in the registry with register server, and import picks a server from the list.
 
@@ -168,12 +168,14 @@ Done when:
 
 **Why.** Spec §10.7 puts every gate and every memory on one screen. The tabs are query values today. The Memory tab is three registered capabilities with no page. The Policy tab is three lists that exist elsewhere.
 
+**Depends on session 2.** The Policy tab links every enabled rule to the auto-approvals editor that session 2 builds. Without it the link lands on a page that cannot edit the rule.
+
 **Freeze.** ADR-091 §6 forbids new governance ceremony until #2592 records a merged record seen in a real run. This session adds tabs and reads and hands "propose as a record" to the existing flow. It adds no proposal state, check, or review step.
 
 Lanes:
 
-- **segments.** Tabs as path segments with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, legacy query redirects, and a page for one published record (#3395).
-- **memory.** What agents remembered, with the frame that taught it. Retire, demote, propose as a record.
+- **segments.** Tabs as path segments through one optional catch-all that replaces `steering/page.tsx` (Next.js refuses both at the same level), with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, legacy query redirects, and a page for one published record (#3395).
+- **memory.** What agents remembered, with provenance as the record carries it. The memory record holds a free-text `source` and no frame id today, so the lane adds optional provenance fields to the contract where the store can fill them and renders NotRecorded where it cannot. Retire, demote, propose as a record.
 - **policy.** Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
 
 Done when:
