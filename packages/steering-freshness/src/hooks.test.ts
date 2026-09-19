@@ -260,3 +260,189 @@ describe("hookStatus", () => {
     expect((await hookStatus(ROOT, "codex", store)).installed).toBe(false);
   });
 });
+
+// Cursor and Stella joined Claude Code and Codex (ADR-101: no harness-facing
+// export is done until every wrapped harness can load it).
+const HOME = "/home/dev";
+const CURSOR = "/home/dev/.cursor/hooks.json";
+
+describe("hookConfigPath, cursor and stella", () => {
+  it("writes Cursor to the user hooks file, with no project scope", () => {
+    expect(hookConfigPath(ROOT, "cursor", {}, HOME)).toBe(CURSOR);
+    expect(hookConfigPath(ROOT, "cursor", {}, HOME)).not.toContain(ROOT);
+  });
+
+  it("prefers stella.toml, honouring STELLA_HOME", () => {
+    expect(hookConfigPath(ROOT, "stella", {}, HOME)).toBe(
+      "/home/dev/.stella/stella.toml",
+    );
+    expect(
+      hookConfigPath(ROOT, "stella", { STELLA_HOME: "/opt/stella" }, HOME),
+    ).toBe("/opt/stella/stella.toml");
+  });
+});
+
+describe("installHook / removeHook / hookStatus, cursor", () => {
+  it("installs a flat beforeSubmitPrompt entry with version: 1", async () => {
+    const store = io();
+    const result = await installHook(ROOT, "cursor", store, {}, HOME);
+    expect(result.outcome).toBe("installed");
+    const config = parse(store, CURSOR) as {
+      version: number;
+      hooks: { beforeSubmitPrompt: Array<{ command: string }> };
+    };
+    expect(config.version).toBe(1);
+    expect(config.hooks.beforeSubmitPrompt[0]!.command).toBe(
+      hookCommand("cursor"),
+    );
+  });
+
+  it("keeps a developer's other Cursor hooks and events untouched", async () => {
+    const store = io({
+      [CURSOR]: JSON.stringify({
+        version: 1,
+        hooks: {
+          beforeSubmitPrompt: [{ type: "command", command: "their-check" }],
+          stop: [{ type: "command", command: "their-stop" }],
+        },
+      }),
+    });
+    await installHook(ROOT, "cursor", store, {}, HOME);
+    const config = parse(store, CURSOR) as {
+      hooks: {
+        beforeSubmitPrompt: Array<{ command: string }>;
+        stop: unknown[];
+      };
+    };
+    expect(config.hooks.beforeSubmitPrompt).toHaveLength(2);
+    expect(config.hooks.stop).toHaveLength(1);
+  });
+
+  it("is idempotent, and removal leaves a foreign hook and version alone", async () => {
+    const store = io();
+    await installHook(ROOT, "cursor", store, {}, HOME);
+    const again = await installHook(ROOT, "cursor", store, {}, HOME);
+    expect(again.outcome).toBe("updated");
+
+    const removed = await removeHook(ROOT, "cursor", store, {}, HOME);
+    expect(removed.outcome).toBe("removed");
+    expect(parse(store, CURSOR)).toEqual({});
+  });
+
+  it("refuses a config that is not JSON, and writes nothing", async () => {
+    const store = io({ [CURSOR]: "{ not json" });
+    const result = await installHook(ROOT, "cursor", store, {}, HOME);
+    expect(result.outcome).toBe("refused");
+    expect(store.files[CURSOR]).toBe("{ not json");
+  });
+
+  it("reports status honestly across install and remove", async () => {
+    const store = io();
+    expect((await hookStatus(ROOT, "cursor", store, {}, HOME)).installed).toBe(
+      false,
+    );
+    await installHook(ROOT, "cursor", store, {}, HOME);
+    expect((await hookStatus(ROOT, "cursor", store, {}, HOME)).installed).toBe(
+      true,
+    );
+    await removeHook(ROOT, "cursor", store, {}, HOME);
+    expect((await hookStatus(ROOT, "cursor", store, {}, HOME)).installed).toBe(
+      false,
+    );
+  });
+});
+
+describe("installHook / removeHook / hookStatus, stella", () => {
+  const TOML = "/home/dev/.stella/stella.toml";
+  const JSON_PATH = "/home/dev/.stella/settings.json";
+
+  it("creates stella.toml when neither file exists", async () => {
+    const store = io();
+    const result = await installHook(ROOT, "stella", store, {}, HOME);
+    expect(result.outcome).toBe("installed");
+    expect(result.path).toBe(TOML);
+    expect(store.files[TOML]).toContain("[[hooks.UserPromptSubmit]]");
+    expect(store.files[TOML]).toContain(hookCommand("stella"));
+    expect(store.files[TOML]).toContain(
+      "oxagen steering gate (managed by oxagen; do not edit)",
+    );
+  });
+
+  it("appends after a developer's existing TOML rather than replacing it", async () => {
+    const store = io({
+      [TOML]:
+        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "their-stop"\n',
+    });
+    await installHook(ROOT, "stella", store, {}, HOME);
+    expect(store.files[TOML]).toContain('command = "their-stop"');
+    expect(store.files[TOML]).toContain("[[hooks.UserPromptSubmit]]");
+  });
+
+  it("is idempotent: installing twice leaves one managed block", async () => {
+    const store = io();
+    await installHook(ROOT, "stella", store, {}, HOME);
+    const again = await installHook(ROOT, "stella", store, {}, HOME);
+    expect(again.outcome).toBe("updated");
+    const occurrences = (
+      store.files[TOML]!.match(/\[\[hooks\.UserPromptSubmit\]\]/g) ?? []
+    ).length;
+    expect(occurrences).toBe(1);
+  });
+
+  it("refuses when UserPromptSubmit is already a table, rather than writing a duplicate key", async () => {
+    const store = io({
+      [TOML]: '[hooks.UserPromptSubmit]\ncommand = "mine"\n',
+    });
+    const result = await installHook(ROOT, "stella", store, {}, HOME);
+    expect(result.outcome).toBe("refused");
+    expect(store.files[TOML]).toBe(
+      '[hooks.UserPromptSubmit]\ncommand = "mine"\n',
+    );
+  });
+
+  it("prefers the legacy settings.json when only it exists", async () => {
+    const store = io({ [JSON_PATH]: "{}" });
+    const result = await installHook(ROOT, "stella", store, {}, HOME);
+    expect(result.path).toBe(JSON_PATH);
+    const config = parse(store, JSON_PATH) as {
+      hooks: {
+        UserPromptSubmit: Array<{
+          hooks: Array<{ command: string; timeoutMs: number }>;
+        }>;
+      };
+    };
+    expect(config.hooks.UserPromptSubmit[0]!.hooks[0]!.command).toBe(
+      hookCommand("stella"),
+    );
+    expect(config.hooks.UserPromptSubmit[0]!.hooks[0]!.timeoutMs).toBe(20_000);
+    // stella.toml never got created just because the install ran.
+    expect(store.files[TOML]).toBeUndefined();
+  });
+
+  it("removes the managed TOML block and nothing else", async () => {
+    const store = io({
+      [TOML]:
+        '[[hooks.Stop]]\n[[hooks.Stop.hooks]]\ntype = "command"\ncommand = "their-stop"\n',
+    });
+    await installHook(ROOT, "stella", store, {}, HOME);
+    const removed = await removeHook(ROOT, "stella", store, {}, HOME);
+    expect(removed.outcome).toBe("removed");
+    expect(store.files[TOML]).toContain('command = "their-stop"');
+    expect(store.files[TOML]).not.toContain("hooks.UserPromptSubmit");
+  });
+
+  it("reports status honestly across install and remove, for TOML", async () => {
+    const store = io();
+    expect((await hookStatus(ROOT, "stella", store, {}, HOME)).installed).toBe(
+      false,
+    );
+    await installHook(ROOT, "stella", store, {}, HOME);
+    expect((await hookStatus(ROOT, "stella", store, {}, HOME)).installed).toBe(
+      true,
+    );
+    await removeHook(ROOT, "stella", store, {}, HOME);
+    expect((await hookStatus(ROOT, "stella", store, {}, HOME)).installed).toBe(
+      false,
+    );
+  });
+});

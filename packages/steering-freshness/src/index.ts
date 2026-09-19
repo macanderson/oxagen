@@ -65,8 +65,10 @@ export {
 } from "./sync";
 export {
   renderBanner,
+  renderCursorBeforeSubmitPrompt,
   renderGate,
   renderJson,
+  renderStellaUserPromptSubmit,
   renderText,
   renderUserPromptSubmit,
   HARNESSES,

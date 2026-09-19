@@ -288,3 +288,69 @@ describe("syncSteering applying", () => {
     expect(restores).toHaveLength(3);
   });
 });
+
+// A slow `restore`, `rm`, or `clean` defaulting to the standalone 30-second
+// `timeoutMs` could alone outlive the installed hook's own 20-second
+// timeout, so the harness kills the gate before the blocking decision is
+// rendered and the prompt proceeds despite `blockStaleRuns`. `deadlineMs`
+// bounds every call this sync makes to whatever is left of a caller's own
+// shared budget instead.
+describe("syncSteering deadline clamping", () => {
+  it("clamps every git call's timeout to what is left of the deadline", async () => {
+    const seenTimeouts: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seenTimeouts.push(opts.timeoutMs);
+      return args[0] === "rev-parse" ? REMOTE_SHA : "";
+    };
+    const now = 1_000_000;
+    await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({
+        missing: [{ status: "added", path: ".oxagen/rules/a.toml" }],
+      }),
+      run,
+      timeoutMs: 30_000,
+      deadlineMs: now + 2_000,
+      now: () => now,
+    });
+    // Every call was clamped well under the standalone 30 s default.
+    expect(seenTimeouts.every((t) => t <= 2_000)).toBe(true);
+  });
+
+  it("floors a call at MIN_SYNC_SLICE_MS rather than handing it a zero timeout", async () => {
+    const seenTimeouts: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seenTimeouts.push(opts.timeoutMs);
+      return args[0] === "rev-parse" ? REMOTE_SHA : "";
+    };
+    const now = 5_000_000;
+    // The deadline has already passed by the time the sync starts.
+    await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({
+        missing: [{ status: "added", path: ".oxagen/rules/a.toml" }],
+      }),
+      run,
+      deadlineMs: now - 5_000,
+      now: () => now,
+    });
+    expect(seenTimeouts.every((t) => t === 1_000)).toBe(true);
+  });
+
+  it("leaves the plain timeoutMs alone when no deadline is given", async () => {
+    const seenTimeouts: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seenTimeouts.push(opts.timeoutMs);
+      return args[0] === "rev-parse" ? REMOTE_SHA : "";
+    };
+    await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({
+        missing: [{ status: "added", path: ".oxagen/rules/a.toml" }],
+      }),
+      run,
+      timeoutMs: 12_345,
+    });
+    expect(seenTimeouts.every((t) => t === 12_345)).toBe(true);
+  });
+});

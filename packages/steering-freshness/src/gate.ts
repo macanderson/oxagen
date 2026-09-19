@@ -25,6 +25,7 @@
  */
 import {
   checkSteeringFreshness,
+  DEFAULT_HOOK_BUDGET_MS,
   isStale,
   type CheckOptions,
   type FreshnessVerdict,
@@ -105,6 +106,17 @@ function tightenedBy(
 /** Check, optionally sync, and decide. */
 export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
   const { readOnly = false, reloadPolicy } = opts;
+  const now = opts.now ?? Date.now;
+  // The same deadline `checkSteeringFreshness` computes for its own local
+  // work (`hookBudgetMs`, sized from the installed hook's own timeout),
+  // started here so the automatic sync below — which runs after the check
+  // has already spent part of that budget — is clamped to whatever is left
+  // of the SAME shared deadline rather than to its own fixed 30-second
+  // default. See the P1 this closes: a slow `restore`/`rm`/`clean` could
+  // outlive the hook's timeout on its own, the harness would kill the
+  // process before the blocking decision was rendered, and the prompt
+  // proceeded despite `blockStaleRuns`.
+  const hookDeadline = now() + (opts.hookBudgetMs ?? DEFAULT_HOOK_BUDGET_MS);
   let policy = opts.policy;
   let verdict = await checkSteeringFreshness(opts);
   let sync: SyncResult | null = null;
@@ -144,6 +156,11 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
         // A sync only ever refuses when it is not safe, so it is never forced
         // from the automatic path however the developer configured things.
         force: false,
+        // Bound by what is left of the gate's own shared deadline, not the
+        // sync's standalone 30-second default — see the comment on
+        // `hookDeadline` above.
+        deadlineMs: hookDeadline,
+        now,
       });
     } catch (error) {
       // A sync that throws (a locked index, a permission error, a `restore`

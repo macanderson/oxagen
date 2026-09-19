@@ -163,7 +163,11 @@ describe("evaluateGate with a reloaded policy", () => {
 
   it("enforces a gate the fetch it just made published", async () => {
     const d = await gate(true, {}, { reloadPolicy: async () => blocking });
-    expect(d.verdict.fetch).toEqual({ attempted: true, ok: true, reason: null });
+    expect(d.verdict.fetch).toEqual({
+      attempted: true,
+      ok: true,
+      reason: null,
+    });
     expect(d.policy.blockStaleRuns).toBe(true);
     expect(d.policy.sources.blockStaleRuns).toBe("project");
     expect(d.action).toBe("block");
@@ -331,5 +335,36 @@ describe("evaluateGate with auto-sync", () => {
       now: () => 1,
     });
     expect(spy.mock.calls.some(([args]) => args[0] === "restore")).toBe(false);
+  });
+
+  // The auto-sync used to default to its own 30-second `timeoutMs` per git
+  // call, so several slow calls in sequence could together outlive the
+  // installed hook's own timeout on their own — the harness would kill the
+  // gate before the blocking decision was rendered, and the prompt would
+  // proceed despite `blockStaleRuns`. The sync is now bound by what is left
+  // of the SAME shared `hookBudgetMs` deadline the check itself is bound by.
+  it("bounds the automatic sync's git calls by what is left of the hook budget", async () => {
+    const { run } = stubRepo({ behind: true });
+    const restoreTimeouts: number[] = [];
+    const spy: GitRunner = async (args, opts) => {
+      if (args[0] === "restore") restoreTimeouts.push(opts.timeoutMs);
+      return run(args, opts);
+    };
+    await evaluateGate({
+      cwd: "/repo",
+      policy: resolveSteeringPolicy([
+        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
+      ]),
+      run: spy,
+      cacheIo: noCache,
+      now: () => 1,
+      // A tiny shared budget makes the standalone 30-second default
+      // impossible to reach by accident: only a clamp explains a timeout
+      // this small on the `restore` call. Above the sync's own
+      // `MIN_SYNC_SLICE_MS` floor, so the floor cannot be what produced it.
+      hookBudgetMs: 5_000,
+    });
+    expect(restoreTimeouts.length).toBeGreaterThan(0);
+    expect(restoreTimeouts.every((t) => t <= 5_000)).toBe(true);
   });
 });

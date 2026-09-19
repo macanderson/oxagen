@@ -32,6 +32,7 @@
  * developer who asked for it on the command line.
  */
 import {
+  clampContextToDeadline,
   execGit,
   git,
   isSafeRefName,
@@ -75,9 +76,34 @@ export interface SyncOptions {
   commit?: boolean;
   /** Do everything except write. */
   dryRun?: boolean;
+  /**
+   * An absolute deadline (as `now()` would report it) every git call this
+   * sync makes is clamped to.
+   *
+   * A caller running inside a shared hook budget — `evaluateGate`'s
+   * automatic sync — has already spent part of that budget on the check
+   * before this runs, and the sync itself makes several git calls in
+   * sequence (`restore`, `rm`, `clean`, `commit`). Each defaulting to the
+   * full `timeoutMs` on its own let a slow one alone outlive the installed
+   * hook's own timeout: the harness killed the process before the blocking
+   * decision was rendered, and the prompt proceeded despite
+   * `blockStaleRuns`, sometimes after only part of the sync had landed.
+   * Unset for a standalone `steering sync` invocation, which owns no shared
+   * budget and keeps the plain per-call `timeoutMs`.
+   */
+  deadlineMs?: number;
+  now?: () => number;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * The smallest slice a sync's git call may be given once its deadline is
+ * nearly spent — long enough for a call already in flight to have a real
+ * chance of finishing, matching the floor `checkSteeringFreshness` applies
+ * to its own local git work.
+ */
+const MIN_SYNC_SLICE_MS = 1_000;
 
 function refuse(refusal: SyncRefusal, message: string): SyncResult {
   return {
@@ -101,6 +127,8 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
     force = false,
     commit = false,
     dryRun = false,
+    deadlineMs,
+    now = Date.now,
   } = opts;
 
   if (verdict.status === "unknown") {
@@ -150,7 +178,14 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
     );
   }
 
-  const ctx: GitContext = { cwd, run, timeoutMs };
+  const baseCtx: GitContext = { cwd, run, timeoutMs };
+  // Only wrap when a caller handed us a shared budget. Clamping
+  // unconditionally would floor every standalone `steering sync` call's
+  // timeout to `MIN_SYNC_SLICE_MS` against a deadline nobody set.
+  const ctx: GitContext =
+    deadlineMs === undefined
+      ? baseCtx
+      : clampContextToDeadline(baseCtx, deadlineMs, MIN_SYNC_SLICE_MS, now);
   const target = verdict.branch
     ? `${verdict.remote}/${verdict.branch}`
     : verdict.remote;
