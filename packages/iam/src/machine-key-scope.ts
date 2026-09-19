@@ -103,11 +103,15 @@ export const MACHINE_KEY_CAPABILITIES: Readonly<
 > = {
   // The three calls `createControlClient` makes, and nothing else. A host
   // reports events, fetches its mandate, and polls for commands; it does not
-  // enroll, revoke, or read the fleet.
+  // enroll, revoke, or read the fleet. The command poll is `fetch_commands`
+  // since ADR-025 renamed it from `fetch_tacho_commands`; this list kept the
+  // old name, so every host's poll was refused and a pause or revoke never
+  // reached a running agent. machine-key-scope.test.ts now checks these names
+  // against the contracts themselves.
   [TACHO_HOST_PURPOSE]: new Set([
     "ingest_tacho_events",
     "get_tacho_bundle",
-    "fetch_tacho_commands",
+    "fetch_commands",
   ]),
   [STELLA_TELEMETRY_PURPOSE]: new Set(["ingest_stella_operational_telemetry"]),
 };
