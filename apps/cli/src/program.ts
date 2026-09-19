@@ -439,6 +439,42 @@ export function buildProgram(): Command {
       await handleTrace(executionId, opts);
     });
 
+  // ── approvals: the resolved approval ledger ─────────────────────────────────
+
+  const approvalsCmd = program
+    .command("approvals")
+    .description("Read the workspace's approval ledger");
+  approvalsCmd
+    .command("resolved")
+    .description(
+      "List resolved approvals, most recently resolved first, including a call a decision rule auto-approved with no person",
+    )
+    .option("--run <runId>", "Only approvals recorded on this run")
+    .option(
+      "--since <instant>",
+      "Only rows resolved at or after this instant (ISO-8601)",
+    )
+    .option(
+      "--until <instant>",
+      "Only rows resolved at or before this instant (ISO-8601)",
+    )
+    .option("--limit <n>", "Page size, 1 to 100", (v) => Number.parseInt(v, 10))
+    .option("--cursor <cursor>", "The nextCursor of the previous page")
+    .option("--json", "Output the raw contract payload as JSON", false)
+    .action(
+      async (opts: {
+        run?: string;
+        since?: string;
+        until?: string;
+        limit?: number;
+        cursor?: string;
+        json?: boolean;
+      }) => {
+        const { approvalsResolved } = await import("./commands/approval.js");
+        await approvalsResolved(opts);
+      },
+    );
+
   // ── graph: knowledge-graph search + pull + status ───────────────────────────
 
   const graph = program

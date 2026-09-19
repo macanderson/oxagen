@@ -2065,6 +2065,17 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "list_resolved_approvals",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "router",
       "name": "list_routing_stats",
       "reads": [],
@@ -3487,7 +3498,7 @@
       "writes": []
     }
   ],
-  "contentHash": "804758944a70dc3f59a56cac0811c11523ace1c768583c10bb260f5f50c18583",
+  "contentHash": "019c76503e686217499b4b1a3777a03bba9c752af80c9bc2c04790149499681d",
   "domains": [
     {
       "name": "agent",

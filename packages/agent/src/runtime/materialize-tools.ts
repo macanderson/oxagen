@@ -611,6 +611,12 @@ export async function materializeTools(
             }
             const result = await invoke(cap.name, input, ctx, {
               surface: "agent",
+              // Read fresh at call time, same reasoning as the manual-approval
+              // runId above: the in-app assistant opens its run only after
+              // materializing tools, so ctx.agentRun is unset when these
+              // closures are built (finding 9, #3370). Without this, an
+              // auto-approved call's receipt (#3153) attaches to no run.
+              runId: opts.runIdRef?.current ?? agentRun?.runId ?? null,
             });
             // every tool invocation lands one row in ClickHouse
             // `tool_invocations` with surface + provider. Failure-isolated.
