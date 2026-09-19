@@ -107,7 +107,9 @@ export function userPrompt(h: NotesHistory): string {
  * refused rather than published.
  */
 export function parseNotes(text: string): ReleaseNotes | null {
-  const trimmed = text.trim().replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/, "$1");
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/, "$1");
   const m = /^SUMMARY:\s*(.+?)\s*\n+(## What changed[\s\S]*)$/i.exec(trimmed);
   if (!m || m[1] === undefined || m[2] === undefined) return null;
   const summary = m[1].replace(/\s+/g, " ").trim();
@@ -149,7 +151,12 @@ export function retryPrompt(notes: ReleaseNotes, hits: string[]): string {
 export function fallbackNotes(h: NotesHistory): ReleaseNotes {
   const subjects = h.log
     .split("\n")
-    .map((l) => l.replace(/^- /, "").replace(/\s\(\w{7,}\)$/, "").trim())
+    .map((l) =>
+      l
+        .replace(/^- /, "")
+        .replace(/\s\(\w{7,}\)$/, "")
+        .trim(),
+    )
     .filter((l) => l.length > 0)
     .map((l) => sanitizeLine(l));
   const count = subjects.length;
@@ -160,7 +167,9 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
   const body = [
     "## What changed",
     "",
-    ...(count === 0 ? ["No commits since the previous release."] : subjects.slice(0, 40).map((s) => `- ${s}`)),
+    ...(count === 0
+      ? ["No commits since the previous release."]
+      : subjects.slice(0, 40).map((s) => `- ${s}`)),
     ...(count > 40 ? ["", `And ${count - 40} more, in the commit log.`] : []),
   ].join("\n");
   return { summary, body };
@@ -188,7 +197,8 @@ export function releasePageMdx(input: {
     "---",
     `title: v${input.version}`,
     `description: "${description}"`,
-    `date: ${input.date}`,
+    // Quoted: bare 2026-09-19 is a YAML timestamp, and the schema wants a string.
+    `date: "${input.date}"`,
     "---",
     "",
     `<ReleaseDownloads version="${input.version}" />`,
@@ -222,7 +232,9 @@ export function releasesMeta(existing: string | null, version: string): string {
   const versions = new Set(
     pages.filter((p) => /^v\d+\.\d+\.\d+$/.test(p)).concat(`v${version}`),
   );
-  const sorted = [...versions].sort((a, b) => compareSemverDesc(a.slice(1), b.slice(1)));
+  const sorted = [...versions].sort((a, b) =>
+    compareSemverDesc(a.slice(1), b.slice(1)),
+  );
   return `${JSON.stringify({ title: "Releases", pages: ["index", ...sorted] }, null, 2)}\n`;
 }
 

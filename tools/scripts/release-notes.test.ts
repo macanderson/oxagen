@@ -31,7 +31,8 @@ const GOOD =
 describe("the model's instructions", () => {
   it("are the two writing skills, read from the tree", () => {
     const skills = loadSkills(ROOT);
-    for (const rel of SKILL_FILES) expect(skills).toContain(`<skill path="${rel}">`);
+    for (const rel of SKILL_FILES)
+      expect(skills).toContain(`<skill path="${rel}">`);
     expect(skills).toContain("No em dashes");
     const system = systemPrompt(skills);
     expect(system).toContain("Mission Control for agent operators");
@@ -50,7 +51,9 @@ describe("the model's instructions", () => {
     expect(prompt).toContain(HISTORY.log);
     expect(prompt).toContain(HISTORY.stat);
     expect(prompt).toContain("```diff\n" + HISTORY.diff);
-    expect(userPrompt({ ...HISTORY, log: "", stat: "", diff: "" })).toContain("(none)");
+    expect(userPrompt({ ...HISTORY, log: "", stat: "", diff: "" })).toContain(
+      "(none)",
+    );
   });
 });
 
@@ -124,7 +127,10 @@ describe("fallbackNotes", () => {
   });
 
   it("caps a long log", () => {
-    const log = Array.from({ length: 45 }, (_, i) => `- change ${i} (0000000)`).join("\n");
+    const log = Array.from(
+      { length: 45 },
+      (_, i) => `- change ${i} (0000000)`,
+    ).join("\n");
     const notes = fallbackNotes({ ...HISTORY, log });
     expect(notes.body).toContain("- change 39");
     expect(notes.body).not.toContain("- change 40");
@@ -137,10 +143,12 @@ describe("what gets written", () => {
 
   it("is a docs page with frontmatter, the downloads block, then the notes", () => {
     const mdx = releasePageMdx({ version: "2.1.2", date: "2026-09-19", notes });
-    expect(mdx.startsWith("---\ntitle: v2.1.2\ndescription: \"")).toBe(true);
-    expect(mdx).toContain("\ndate: 2026-09-19\n---\n");
+    expect(mdx.startsWith('---\ntitle: v2.1.2\ndescription: "')).toBe(true);
+    expect(mdx).toContain('\ndate: "2026-09-19"\n---\n');
     expect(mdx).toContain('<ReleaseDownloads version="2.1.2" />');
-    expect(mdx.indexOf("<ReleaseDownloads")).toBeLessThan(mdx.indexOf("## What changed"));
+    expect(mdx.indexOf("<ReleaseDownloads")).toBeLessThan(
+      mdx.indexOf("## What changed"),
+    );
     // A double quote in the summary would end the YAML string early.
     const quoted = releasePageMdx({
       version: "1.0.0",
@@ -152,16 +160,28 @@ describe("what gets written", () => {
 
   it("is a changelog entry under the version heading", () => {
     const entry = changelogEntry("2.1.2", notes);
-    expect(entry.startsWith("## v2.1.2\n\n" + notes.summary + "\n\n- The Spend page")).toBe(true);
+    expect(
+      entry.startsWith(
+        "## v2.1.2\n\n" + notes.summary + "\n\n- The Spend page",
+      ),
+    ).toBe(true);
     expect(entry).not.toContain("## What changed");
   });
 
   it("orders the sidebar newest first, whatever the old order was", () => {
     const first = releasesMeta(null, "2.1.1");
-    expect(JSON.parse(first)).toEqual({ title: "Releases", pages: ["index", "v2.1.1"] });
+    expect(JSON.parse(first)).toEqual({
+      title: "Releases",
+      pages: ["index", "v2.1.1"],
+    });
     const next = releasesMeta(first, "2.10.0");
     const again = releasesMeta(next, "2.9.0");
-    expect(JSON.parse(again).pages).toEqual(["index", "v2.10.0", "v2.9.0", "v2.1.1"]);
+    expect(JSON.parse(again).pages).toEqual([
+      "index",
+      "v2.10.0",
+      "v2.9.0",
+      "v2.1.1",
+    ]);
     // Re-running a version does not duplicate it; junk is rewritten.
     expect(JSON.parse(releasesMeta(again, "2.9.0")).pages).toEqual([
       "index",
@@ -169,20 +189,19 @@ describe("what gets written", () => {
       "v2.9.0",
       "v2.1.1",
     ]);
-    expect(JSON.parse(releasesMeta("{not json", "1.0.0")).pages).toEqual(["index", "v1.0.0"]);
-    expect(JSON.parse(releasesMeta('{"pages":["index","stray",3]}', "1.0.0")).pages).toEqual([
+    expect(JSON.parse(releasesMeta("{not json", "1.0.0")).pages).toEqual([
       "index",
       "v1.0.0",
     ]);
+    expect(
+      JSON.parse(releasesMeta('{"pages":["index","stray",3]}', "1.0.0")).pages,
+    ).toEqual(["index", "v1.0.0"]);
   });
 
   it("compares versions numerically", () => {
-    expect(["2.9.0", "2.10.0", "10.0.0", "2.10.1"].sort(compareSemverDesc)).toEqual([
-      "10.0.0",
-      "2.10.1",
-      "2.10.0",
-      "2.9.0",
-    ]);
+    expect(
+      ["2.9.0", "2.10.0", "10.0.0", "2.10.1"].sort(compareSemverDesc),
+    ).toEqual(["10.0.0", "2.10.1", "2.10.0", "2.9.0"]);
     expect(compareSemverDesc("1.0.0", "1.0.0")).toBe(0);
   });
 });

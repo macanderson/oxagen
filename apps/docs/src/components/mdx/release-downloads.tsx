@@ -52,7 +52,10 @@ export function desktopInstallers(version: string): Platform[] {
       note: "x86_64. Install the package for your distribution.",
       installers: [
         { label: ".deb (Debian, Ubuntu)", file: `Oxagen_${version}_amd64.deb` },
-        { label: ".rpm (Fedora, RHEL)", file: `Oxagen-${version}-1.x86_64.rpm` },
+        {
+          label: ".rpm (Fedora, RHEL)",
+          file: `Oxagen-${version}-1.x86_64.rpm`,
+        },
         {
           label: "AppImage (any distribution)",
           file: `Oxagen_${version}_amd64.AppImage`,
@@ -162,86 +165,90 @@ export function ReleaseDownloads({
       </div>
 
       {cli ? (
-      <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-        <div className={card}>
-          <div className={label}>Command line, without the app</div>
-          <p className="text-sm text-fd-muted-foreground">
-            The same <code className="font-mono">tacho</code> and{" "}
-            <code className="font-mono">oxagen</code> executables the app links
-            onto your PATH, one file each, from the{" "}
-            <a className={link} href={urls.desktop}>
-              desktop-v{version} release
-            </a>
-            . Each has a <code className="font-mono">.sha256</code> beside it.
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-fd-border">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-fd-muted/40">
-                  <th className={`px-3 py-2 text-left ${label}`}>Platform</th>
-                  <th className={`px-3 py-2 text-left ${label}`}>tacho</th>
-                  <th className={`px-3 py-2 text-left ${label}`}>oxagen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {CLI_TARGETS.map((t) => (
-                  <tr key={t.triple} className="border-t border-fd-border">
-                    <td className="px-3 py-2 whitespace-nowrap">{t.name}</td>
-                    <td className="px-3 py-2">
-                      <a
-                        className={`${link} font-mono text-xs`}
-                        href={cliBinaryUrl(version, "tacho", t.triple, t.ext)}
-                      >
-                        tacho-{t.triple}
-                        {t.ext}
-                      </a>
-                    </td>
-                    <td className="px-3 py-2">
-                      <a
-                        className={`${link} font-mono text-xs`}
-                        href={cliBinaryUrl(version, "oxagen", t.triple, t.ext)}
-                      >
-                        oxagen-{t.triple}
-                        {t.ext}
-                      </a>
-                    </td>
+        <>
+          <div className={card}>
+            <div className={label}>Command line, without the app</div>
+            <p className="text-sm text-fd-muted-foreground">
+              The same <code className="font-mono">tacho</code> and{" "}
+              <code className="font-mono">oxagen</code> executables the app
+              links onto your PATH, one file each, attached to the{" "}
+              <a className={link} href={urls.desktop}>
+                desktop-v{version} release
+              </a>
+              . Each has a <code className="font-mono">.sha256</code> beside it.
+              Rename the file to <code className="font-mono">tacho</code> or{" "}
+              <code className="font-mono">oxagen</code>, make it executable, and
+              put it on your PATH.
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-fd-border">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-fd-muted/40">
+                    <th className={`px-3 py-2 text-left ${label}`}>Platform</th>
+                    <th className={`px-3 py-2 text-left ${label}`}>tacho</th>
+                    <th className={`px-3 py-2 text-left ${label}`}>oxagen</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {CLI_TARGETS.map((t) => (
+                    <tr key={t.triple} className="border-t border-fd-border">
+                      <td className="px-3 py-2">
+                        <div className="whitespace-nowrap">{t.name}</div>
+                        <div className={mono}>{t.triple}</div>
+                      </td>
+                      {(["tacho", "oxagen"] as const).map((name) => (
+                        <td key={name} className="px-3 py-2 align-top">
+                          <a
+                            className={`${link} font-mono text-xs whitespace-nowrap`}
+                            href={cliBinaryUrl(version, name, t.triple, t.ext)}
+                            title={`${name}-${t.triple}${t.ext}`}
+                          >
+                            {name}
+                            {t.ext}
+                          </a>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
 
-        <div className={card}>
-          <div className={label}>Also in this release</div>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
-            <li className="flex flex-col">
-              <a className={link} href={urls.npm}>
-                @oxagen/cli {version} on npm
-              </a>
-              <span className={mono}>npm install -g @oxagen/cli@{version}</span>
-            </li>
-            <li className="flex flex-col">
-              <a className={link} href={urls.platform}>
-                Platform release v{version}
-              </a>
-              <span className={mono}>tag v{version}</span>
-            </li>
-            <li className="flex flex-col">
-              <a className={link} href={`${DOWNLOADS}/`}>
-                downloads.oxagen.sh
-              </a>
-              <span className={mono}>the current version, every platform</span>
-            </li>
-          </ul>
-        </div>
-      </div>
+          <div className={card}>
+            <div className={label}>Also in this release</div>
+            <ul className="m-0 grid list-none gap-3 p-0 text-sm sm:grid-cols-3">
+              <li className="flex flex-col">
+                <a className={link} href={urls.npm}>
+                  @oxagen/cli {version} on npm
+                </a>
+                <span className={mono}>
+                  npm install -g @oxagen/cli@{version}
+                </span>
+              </li>
+              <li className="flex flex-col">
+                <a className={link} href={urls.platform}>
+                  Platform release v{version}
+                </a>
+                <span className={mono}>tag v{version}</span>
+              </li>
+              <li className="flex flex-col">
+                <a className={link} href={`${DOWNLOADS}/`}>
+                  downloads.oxagen.sh
+                </a>
+                <span className={mono}>
+                  the current version, every platform
+                </span>
+              </li>
+            </ul>
+          </div>
+        </>
       ) : (
         <p className="text-sm text-fd-muted-foreground">
           The bare <code className="font-mono">tacho</code> and{" "}
           <code className="font-mono">oxagen</code> executables and the npm
-          package were not published for {version}. The app links both onto
-          your PATH on first launch.
+          package were not published for {version}. The app links both onto your
+          PATH on first launch.
         </p>
       )}
     </section>
