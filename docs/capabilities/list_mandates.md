@@ -43,16 +43,26 @@ grant (Owner, Member, ADR-107): a workspace Owner or Member who may ask for a
 mandate reads the mandates of agents they created, and the mandates they
 requested themselves for any agent, so the person who requests a mandate can
 always read the draft they just made, even for an agent someone else
-created. Anyone else (no accountable
-office role and no workspace role `request_mandate` admits either) is
-refused before the handler runs. There is no org-scoped "Member" role in
-this system, so an org member with no workspace role is refused.
+created. There is no org-scoped "Member" role in this system, so an org
+member with no workspace role is refused.
+
+Anyone else (no accountable office role and no workspace role
+`request_mandate` admits either) is refused, but not always at the same
+point: on an enterprise org, `defaultRoles` refuses them before the handler
+runs. On a Free, Build or Scale org, IAM's tier gate admits every
+capability unconditionally regardless of `defaultRoles`, so this is the
+handler's own `readerFilter` that refuses them, with the same
+`forbidden`/`org_role_required` reason either way. A workspace Viewer is
+refused this second way even on an enterprise org, since `readerFilter`'s
+own workspace-role check runs after the accountable-role check fails,
+independent of what tier gated the call in.
 
 ## Errors
 
 | code | reason | meaning |
 | --- | --- | --- |
 | `forbidden` | `no_principal` | No signed-in user on the request. |
+| `forbidden` | `org_role_required` | Neither an accountable office role nor a workspace Owner/Member `request_mandate` would admit; refused by the kernel on an enterprise org, or by `readerFilter` itself on any tier (ADR-107). |
 
 ## SPEC references
 
