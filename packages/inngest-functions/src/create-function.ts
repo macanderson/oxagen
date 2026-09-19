@@ -96,6 +96,15 @@ function wrapHandler(handler: DurableFunctionHandler) {
 }
 
 /**
+ * The largest `batchEvents.maxSize` Inngest's plan accepts. Inngest checks it
+ * when the app syncs, and one function over it fails the sync for every
+ * function in the app. Production ran without `cost.run-rollup` for that
+ * reason: `cost.findings` asked for 100, the sync answered 400, and every
+ * `cost/run.sealed` event arrived with no function to run.
+ */
+export const MAX_BATCH_SIZE = 5;
+
+/**
  * Translates abstract DurableFunctionConfig into Inngest-native config.
  */
 function buildInngestConfig(
@@ -118,6 +127,11 @@ function buildInngestConfig(
     inngestConfig.timeouts = config.timeouts;
   }
   if (config.batchEvents) {
+    if (config.batchEvents.maxSize > MAX_BATCH_SIZE) {
+      throw new Error(
+        `${config.id}: batchEvents.maxSize ${config.batchEvents.maxSize} is over Inngest's limit of ${MAX_BATCH_SIZE}, and the sync would refuse every function in the app`,
+      );
+    }
     // Inngest-native shape: { maxSize, timeout, key? }.
     inngestConfig.batchEvents = config.batchEvents;
   }
