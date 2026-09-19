@@ -40,7 +40,17 @@ import {
   type MandateTargets,
   type MeasureKind,
 } from "@oxagen/oxagen/mandates/schemas";
-import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  isNull,
+  lte,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { evaluateAutoApproval } from "./auto-approval";
 import {
   buildAutoApprovalSubject,
@@ -290,6 +300,32 @@ export async function hasSettlementOverlappingPeriod(
     }
   }
   return false;
+}
+
+/**
+ * The kind the most recent ledger row for this measure was stamped under, or
+ * null when the measure has no ledger rows at all.
+ *
+ * `assertKindChangeAllowed` compares a mandate's stored `before` limit
+ * against the caller's `after`, but a whole-record `limits` replacement can
+ * delete a measure entirely and a later call can re-add it: `before` then
+ * carries no entry for that measure at all, even though the append-only
+ * ledger may still hold open or current-period rows stamped under the kind
+ * the measure counted as before it was removed. This reads the ledger's own
+ * stamp directly, for that one case `before` cannot see.
+ */
+export async function lastLedgerKind(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+): Promise<MeasureKind | null> {
+  const [row] = await tx
+    .select({ measureKind: l.measureKind })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)))
+    .orderBy(desc(l.createdAt))
+    .limit(1);
+  return (row?.measureKind as MeasureKind | null | undefined) ?? null;
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */

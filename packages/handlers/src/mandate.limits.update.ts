@@ -32,6 +32,7 @@ import {
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
   hasSettlementOverlappingPeriod,
+  lastLedgerKind,
 } from "@oxagen/rules";
 import {
   mandateLimitsSchema,
@@ -183,6 +184,14 @@ export async function assertPeriodChangeAllowed(
  * an operator to wait out a live reservation before this attrition can land
  * would refuse a routine `validTo`/`limitChanges` update for no
  * corruption risk this check exists to prevent.
+ *
+ * A measure absent from `before` is not necessarily a fresh one: a whole-
+ * record `limits` replacement can delete a measure while the append-only
+ * ledger still holds open or current-period rows for it, and a later call
+ * can re-add the same measure under a different kind. `before[measure]`
+ * cannot see that history, so this falls back to `lastLedgerKind`, the
+ * kind the ledger's own most recent row for the measure was stamped under,
+ * and refuses the same way a change from a present `before` entry would.
  */
 export async function assertKindChangeAllowed(
   tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
@@ -194,13 +203,21 @@ export async function assertKindChangeAllowed(
 ): Promise<void> {
   for (const [measure, next] of Object.entries(after)) {
     const prev = before[measure];
-    if (!prev || prev.kind === next.kind) continue;
-    if (legacyKindMeasures.has(measure)) continue;
+    const period = prev?.period ?? next.period;
+    let priorKind: MandateLimits[string]["kind"] | null;
+    if (prev) {
+      if (prev.kind === next.kind) continue;
+      if (legacyKindMeasures.has(measure)) continue;
+      priorKind = prev.kind;
+    } else {
+      priorKind = await lastLedgerKind(tx, mandateId, measure);
+      if (priorKind === null || priorKind === next.kind) continue;
+    }
     const drawn = await hasDrawnInCurrentPeriod(
       tx,
       mandateId,
       measure,
-      prev.period,
+      period,
       at,
     );
     const open = await hasOpenReservation(tx, mandateId, measure);
@@ -208,7 +225,7 @@ export async function assertKindChangeAllowed(
     throw new HandlerError({
       code: "conflict",
       reason: "measure_kind_drawn",
-      message: `Measure "${measure}" still has authority drawn as ${prev.kind} under its current window, or an open reservation recorded under it; a kind change would sum those rows into a ${next.kind} total. Wait for the window to close and every reservation to settle or release before changing what the measure counts.`,
+      message: `Measure "${measure}" still has authority drawn as ${priorKind} under its current window, or an open reservation recorded under it; a kind change would sum those rows into a ${next.kind} total. Wait for the window to close and every reservation to settle or release before changing what the measure counts.`,
     });
   }
 }

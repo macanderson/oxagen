@@ -47,6 +47,12 @@ const doubles = vi.hoisted(() => ({
    * can refuse a Tuesday daily-to-weekly rename when today's key is empty.
    */
   overlappingSettlement: false,
+  /**
+   * What `lastLedgerKind` answers for a measure absent from `before`: the
+   * kind the ledger's own most recent row for it was stamped under, or null
+   * for a measure with no ledger history at all.
+   */
+  lastLedgerKind: null as "money" | "count" | null,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -123,6 +129,7 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
   hasDrawnInCurrentPeriod: async () => doubles.drawn,
   hasOpenReservation: async () => doubles.openReservation,
   hasSettlementOverlappingPeriod: async () => doubles.overlappingSettlement,
+  lastLedgerKind: async () => doubles.lastLedgerKind,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -155,6 +162,7 @@ const {
   mandateLimitsUpdateHandler,
   applyLimitChanges,
   assertPeriodChangeAllowed,
+  assertKindChangeAllowed,
 } = await import("./mandate.limits.update");
 const { mandateLimitsUpdate } = await import(
   "@oxagen/oxagen/contracts/mandate.limits.update"
@@ -207,6 +215,7 @@ beforeEach(() => {
   doubles.drawn = false;
   doubles.openReservation = false;
   doubles.overlappingSettlement = false;
+  doubles.lastLedgerKind = null;
 });
 
 describe("update_mandate_limits, limitChanges", () => {
@@ -474,6 +483,75 @@ describe("assertPeriodChangeAllowed", () => {
         mandateId,
         { amount: AMOUNT },
         { amount: { ...AMOUNT, period: "daily" } },
+      ),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("assertKindChangeAllowed", () => {
+  const tx = {} as Parameters<typeof assertKindChangeAllowed>[0];
+  const mandateId = "11111111-1111-4111-8111-111111111111";
+  const legacy = new Set<string>();
+
+  it("refuses when `before` holds the measure and the current window still has authority drawn under the old kind", async () => {
+    doubles.drawn = true;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  // A whole-record `limits` replacement can delete a measure while the
+  // ledger still holds movements for it; a later call can re-add the same
+  // measure under a different kind with no `before` entry to compare
+  // against. `lastLedgerKind` is the fallback for exactly that gap.
+  it("refuses a re-added measure absent from `before` when the ledger's last stamp disagrees and authority is still drawn", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "money";
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  it("allows a re-added measure absent from `before` when the ledger has no history for it", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("allows a re-added measure absent from `before` when the ledger's last stamp already agrees with the new kind", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "count";
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        {},
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacy,
       ),
     ).resolves.toBeUndefined();
   });
