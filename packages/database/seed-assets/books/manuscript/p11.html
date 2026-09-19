@@ -1,0 +1,80 @@
+<h2 class="ch-title">Agents need working memory, not bigger context windows</h2>
+<p class="ch-thesis">You do not reread every book you own before fixing a bug, and your agent should not either.</p>
+
+<p class="lede">At turn 60, your agent's transcript still carries the file it read at turn 3, the dead-end approach it abandoned at turn 12, and the stack trace it resolved at turn 20. You are paying for all of it on every subsequent call, and it is competing for attention with the two hundred lines that matter now. The window is being asked to be four things at once: attention, notebook, library, and diary. Human cognition separates those, with a small working set over vast indexed stores and forgetting as a feature. The append-only transcript is the opposite design.</p>
+
+<h3>A memory hierarchy for agents</h3>
+<ul class="plain">
+  <li><strong>Working memory</strong> (the window). Only what the current step needs: the task frame, the active files, the last failure. Small by policy, not by accident.</li>
+  <li><strong>Task memory.</strong> Durable structured state for this job: the plan, the decisions made ("chose option B because of migration risk"), the files touched, the budget consumed. It lives in the workflow engine's state (Part 9), survives a crash, and pages in selectively.</li>
+  <li><strong>Episodic memory.</strong> Records of past runs. "We fixed a similar DecimalConversionError in March, and the fix was in the serializer config." Indexed by embeddings and entities, retrieved when relevant, absent otherwise.</li>
+  <li><strong>Semantic memory.</strong> The durable knowledge layer: the code graph (Part 4), domain dossiers (Part 5), the schema index (Part 8), test contracts (Part 10).</li>
+</ul>
+
+<div class="evidence">
+  <span class="tag">Evidence · The OS analogy is a working architecture</span>
+  <p><strong>MemGPT</strong> (Packer et al., Berkeley) made this concrete. Treat the context window as RAM and give the system OS-style virtual memory, paging information between the window and external storage with explicit memory-management operations. The approach let bounded-context models sustain coherent long-horizon behavior, including document analysis and multi-session conversation beyond the raw window, by managing what is resident rather than growing it.<sup class="cite"><a href="#r17">17</a></sup> The same conclusion arrives from the failure side. Chroma's results imply that even within a large window, keeping stale content resident harms performance,<sup class="cite"><a href="#r7">7</a></sup> and Anthropic's context-engineering guidance formalizes the remedies, naming compaction, structured note-taking outside the window, and just-in-time retrieval as the standard toolkit for long-horizon agents.<sup class="cite"><a href="#r19">19</a></sup></p>
+  <p class="src">Packer et al., arXiv:2310.08560 · Chroma, 2025 · Anthropic engineering, 2025</p>
+</div>
+
+<h3>Context aging, eviction, retrieval scheduling</h3>
+<p>Once memory is tiered, management becomes ordinary systems engineering with ordinary policies. <strong>Aging:</strong> a file read 30 turns ago decays to its signature, and a resolved sub-task collapses to a one-line decision record. <strong>Eviction:</strong> superseded attempts and dead-end explorations leave working memory, recoverable from task memory if needed, no longer taxing attention. <strong>Retrieval scheduling:</strong> each workflow node declares its context contract, so the patch node gets code and contracts, the migration node gets schema and lineage, and the review node gets the diff and the invariants. Nothing rides along just in case, because just in case is the distractor mass the research says hurts most.</p>
+
+<p>A context contract is a few lines of configuration per node. It is worth writing down because it turns an argument about what the model needs into a diff a reviewer can read.</p>
+
+<pre><code>nodes:
+  patch:
+    include: [task_frame, target_symbols, covering_tests, last_failure]
+    max_tokens: 24000
+  migrate:
+    include: [task_frame, schema_slice, column_lineage, prior_migrations]
+    max_tokens: 16000
+  review:
+    include: [task_frame, diff, invariants, covering_tests]
+    max_tokens: 12000
+
+on_overflow: drop lowest rank first, then fail the node
+</code></pre>
+
+<p>Aging needs a policy table rather than a paragraph, because each rule has to hold for a run you did not watch.</p>
+
+<div class="tablewrap"><table class="tbl">
+  <thead>
+    <tr><th>Item in working memory</th><th>Policy</th><th>Where it goes</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>File read, untouched for 20 turns</td><td>Decay to signature and docstring</td><td>Full text stays in semantic memory</td></tr>
+    <tr><td>Resolved sub-task</td><td>Collapse to a one-line decision record</td><td>Full transcript stays in task memory</td></tr>
+    <tr><td>Abandoned approach</td><td>Evict, keep the reason it failed</td><td>Task memory, one line</td></tr>
+    <tr><td>Superseded stack trace</td><td>Evict on the next green run</td><td>Run log, outside the window</td></tr>
+    <tr><td>Active target symbol</td><td>Pin until the node completes</td><td>Stays resident</td></tr>
+  </tbody>
+</table></div>
+
+<p>Every one of those policies is deterministic. What pages in, what decays, and what leaves are decidable by code against declared contracts. The window stops being a place things accumulate and becomes the small, hot set of what this step needs. A structured memory of entities, relations, and decisions is also most of the way to a knowledge graph, which is where this series goes next.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Measure what is resident.</strong> Instrument one long run to log, per turn, the token count by category: task frame, active files, stale files, resolved failures. Done looks like a chart showing how much of turn 60 is turn 3.</li>
+    <li><strong>Write a context contract for one node.</strong> Pick your patch node, declare its include list and a token ceiling, and reject anything outside the list. Done looks like a node whose input you can predict from its config.</li>
+    <li><strong>Add an aging rule.</strong> Decay any file untouched for N turns to its signature, keeping the full text one lookup away. Done looks like the same run finishing with a smaller peak window and the same outcome.</li>
+    <li><strong>Move decisions into task memory.</strong> When a sub-task resolves, write a one-line record to the workflow engine's state and evict the transcript from the window. Done looks like a crashed run resuming from its decisions rather than replaying the conversation.</li>
+    <li><strong>Add episodic recall behind a relevance gate.</strong> Index past run summaries by entity and error type, and retrieve one only when the current error matches. Done looks like recall firing on a repeat incident and staying quiet otherwise.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>resident_token_p95</code>: the 95th percentile window size across turns in a run. Log the prompt size per call. Down is good while outcomes hold.</li>
+    <li><code>stale_token_share</code>: tokens in the window belonging to items untouched for 20 or more turns, divided by total window tokens. Tag each item with its last-touch turn. Down is good.</li>
+    <li><code>context_contract_violations</code>: node inputs containing an item the node's include list does not name. Count them per run. Down is good, and zero means the contracts are enforced rather than advisory.</li>
+    <li><code>resume_success_rate</code>: crashed or halted runs that resume from task memory and finish, divided by all crashed runs. Up is good, and it is the clearest proof state lives outside the window.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Scale memory, not context. The window is RAM: small, fast, and expensive. Everything else belongs in indexed storage with deterministic paging policies.</p>
+</div>

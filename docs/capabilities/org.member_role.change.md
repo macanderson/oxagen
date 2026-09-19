@@ -1,4 +1,4 @@
-# org.member.role.change
+# change_member_role
 
 **Domain:** organization
 **Mode:** sync

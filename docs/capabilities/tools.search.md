@@ -1,4 +1,4 @@
-# tools.search
+# search_tools
 
 The belt search meta-tool and the ⌘K search over the workspace's own records (MC spec App. E, §6.6). One ranked index over four kinds, at most eight rows.
 

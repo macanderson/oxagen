@@ -110,6 +110,15 @@ as the proxy's upstream meanwhile, so a harness already pointed at a corporate
 gateway still reaches it. A managed settings file that sets
 `ANTHROPIC_BASE_URL` wins over yours, and the state reports it as `shadowedBy`.
 
+For Claude Code the same write also sets `env.ENABLE_TOOL_SEARCH` to `true`.
+Claude Code turns its MCP tool search off behind any base URL that is not an
+Anthropic host, and with it off every request carries the whole tool catalog.
+On a machine with a few hundred MCP tools that is about 500k tokens before the
+prompt, so the session auto-compacts three times and stops. The proxy forwards
+every request byte and header unchanged, so the search is safe to keep on. A
+value you already set that keeps it on (`true`, `auto`, `auto:N`) is left
+alone; one apply displaced is restored on unenroll.
+
 What standing in the path gives you:
 
 - **Observed metering.** One `llm_call` frame per model call, `fidelity: proxy`,

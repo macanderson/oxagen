@@ -1,4 +1,4 @@
-# conversation.export
+# export_conversation
 
 **Domain:** conversation
 **Mode:** sync
@@ -49,8 +49,8 @@ Two formats:
 ## Surfaces
 
 - **API:** `GET /v1/:org/:workspace/conversations/:conversationId/export?format=markdown|pdf`
-- **MCP:** `conversation.export` tool
-- **Agent:** invoked directly via `invoke("conversation.export", ...)` — no approval required
+- **MCP:** `export_conversation` tool
+- **Agent:** invoked directly via `invoke("export_conversation", ...)` — no approval required
 - **CLI:** `oxagen conversation export <id> [--format md|markdown|pdf] [-o <file>] [--json]`
 - **App:** `ConversationExportMenu` component → `GET /api/v1/conversations/:conversationId/export`
 

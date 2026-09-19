@@ -1,4 +1,4 @@
-# agent.definition.summarize
+# summarize_agent_def
 
 **Domain:** agent
 **Mode:** sync
@@ -8,7 +8,7 @@
 
 ## Intent
 
-Generate — or refresh — a short, LLM-inferred plain-text description of what an agent does, for display in list views and selectors. The summary is derived from the agent's name, author description, `agentType`, instructions (system prompt), equipped tools, and triggers.
+Generate or refresh a short, LLM-inferred plain-text description of what an agent does, for display in list views and selectors. The summary is derived from the agent's name, author description, `agentType`, instructions (system prompt), and equipped tools.
 
 The summary is cached against a SHA-256 checksum of the agent's current version config (the same canonicalization `agent_versions.checksum` uses). On each call the handler recomputes the checksum of the latest version config and compares it to the stored `summary_checksum`:
 

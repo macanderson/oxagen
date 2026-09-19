@@ -1,4 +1,4 @@
-# reference.search
+# search_references
 
 **Domain:** reference
 **Mode:** sync

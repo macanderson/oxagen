@@ -1,4 +1,4 @@
-# secret.value.unset
+# unset_secret_value
 
 **Domain:** secret
 **Mode:** sync
@@ -47,7 +47,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.value.unset`
+Tool name: `unset_secret_value`
 
 ## Errors
 

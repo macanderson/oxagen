@@ -1,4 +1,4 @@
-# agent.memory.promotion.dismiss
+# dismiss_memory_promotion
 
 **Domain:** agent
 **Mode:** sync

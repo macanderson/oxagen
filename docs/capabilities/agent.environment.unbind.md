@@ -9,10 +9,8 @@
 
 ## Intent
 
-Remove an agent's binding to an environment. When the removed binding was the
-agent's primary, resolution falls back to the workspace's default
-environment and that environment's default sandbox template — an agent is
-never left with no resolvable environment. Owner/Admin only.
+Remove an agent's binding to an environment. Only org Owners and Admins can
+remove bindings. The operation does not select a replacement primary binding.
 
 ## Input
 
@@ -30,10 +28,7 @@ never left with no resolvable environment. Owner/Admin only.
 ## Side effects
 
 Deletes the matching row from `environments.agent_environment_bindings`
-(PostgreSQL). If the deleted binding was primary, no replacement row is
-written — resolution falls back at read time to the workspace default
-environment and its default template. Metering, IAM, and audit run through
-the kernel.
+(PostgreSQL). Metering, IAM, and audit run through the kernel.
 
 ## API
 
@@ -52,16 +47,8 @@ Content-Type: application/json
 Tool name: `unbind_agent_environment`
 
 
-## CLI
-
-```
-oxagen agent env unbind <agent> --env <slug>
-```
-
-Removing the primary binding falls back to the workspace default environment and its default template.
-
 ## Errors
 
-- `validation_error` — missing/empty `agentId`/`environmentId`.
-- `unauthorized` — caller is not org Owner/Admin.
-- `not_found` — no binding exists for that `(agentId, environmentId)` pair.
+- `validation_error`: missing/empty `agentId`/`environmentId`.
+- `unauthorized`: caller is not org Owner/Admin.
+- `not_found`: no agent or environment with that id exists in the active workspace.

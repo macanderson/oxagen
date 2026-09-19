@@ -24,9 +24,9 @@ Mission Control for agent operators. Every agent gets its own identity and a man
 
 ## What It Does
 
-Oxagen does not run agents — Stella and any other agent do the work. Oxagen is where the company sets the terms under which that work may happen, and where it goes to find out what happened. Three teams each write one clause of an agent's **mandate**, and the platform enforces the whole thing on every run:
+Oxagen does not run agents — Stella and any other agent do the work. Oxagen is where the company sets the terms under which that work may happen, and where it goes to find out what happened. Three teams each write one clause of an agent's **mandate**, and the platform applies those terms to actions routed through Oxagen:
 
-1. **Access** — security sets the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, and the actions it is permitted. Every capability is a typed contract with IAM and entitlement enforcement, exposed with parity across API, MCP, CLI, and UI; there is no ungoverned tool surface.
+1. **Access** — security sets the identity the agent acts as, the systems it is connected to, the data and graph scope it may read, and the actions it is permitted. Typed capability contracts declare the supported surfaces and meet the gates installed by each surface bootstrap.
 2. **Budget & rules** — FinOps sets what it may spend, under which commercial terms, and the business rules it must obey. Every governed action is metered from ClickHouse through to Stripe.
 3. **Equipment** — engineering sets the knowledge it is handed (a Neo4j graph plus ontology, grounding answers in cited, time-aware context), the skills and tools it may use, and the steering it runs under.
 4. **Record** — the platform keeps one trace per run: who asked, what it read, what it changed, what proved it, what it cost.
@@ -40,9 +40,10 @@ graph LR
     A["Agent / customer action"] --> B["invoke() capability kernel"]
     B --> C["Typed contract (Zod schema)"]
     C --> D["IAM gate"]
-    D --> E["Entitlement gate"]
-    E --> F["Billing admission"]
-    F --> G["Handler"]
+    D --> E["Billing and budget admission"]
+    E --> F["Plugin entitlement"]
+    F --> K["Decision rules"]
+    K --> G["Handler"]
     G --> H["ClickHouse usage events"]
     H --> I["Stripe meters → invoices"]
     G --> J["Neo4j lineage + citations"]
@@ -54,9 +55,9 @@ graph LR
 
 ### The capability kernel
 
-Every feature is a **capability**: a verb-first snake_case name (`send_message`, `query_ontology`, `get_ontology_neighbors`; ADR-025) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. The kernel injects three gates on every call — IAM policy resolution, plugin entitlement, and billing admission — and emits metering and lineage as a side effect of execution.
+Every feature is a **capability**: a verb-first snake_case name (`send_message`, `query_ontology`, `get_ontology_neighbors`; ADR-025) declared once as a typed contract in `packages/oxagen/src/contracts/` and dispatched through a single `invoke()` path. Surface bootstraps install the kernel gates. Scoped calls pass IAM, billing and budget admission, entitlement, and decision rules before the handler where those gates apply. Billing admission skips `noBillingGate` contracts, and entitlement applies to plugin-claimed contracts. The kernel records the resulting activity through its configured sinks.
 
-Capabilities are exposed with parity across four surfaces: the REST API (`apps/api`), the MCP server (`apps/mcp`), the CLI (`apps/cli`), and the web app (`apps/app`). `pnpm check:manifest` verifies the parity.
+Contracts declare their supported API, MCP, agent, and CLI surfaces. The `app` layer records a UI promise separately. `pnpm check:manifest` checks declared artifacts, and `pnpm check:ui-parity` checks app bindings. A contract declaration alone does not prove that a surface is wired.
 
 ```mermaid
 graph TB
@@ -89,9 +90,11 @@ Connectors ingest fragmented sources (SaaS apps, databases, documents, events) t
 
 ### Steering, gating and the gateway
 
-What reaches a wrapped agent today is small, and the README should not imply otherwise. The wrapped tier is a recorder plus a kill switch: hooks deliver and record, client-attested and fail-open, and nothing at that tier is called enforced. No model proxy and no sandbox exist yet, the MCP gateway is server-enforced but registered only into Claude Desktop, and spend for Claude Code is self-reported while Codex and Stella report none. Published steering records start reaching a wrapped run with Phase 0 (PR #3289, ADR-091), which is in review.
+Published steering reaches supported wrapped runs through the host control envelope in [`tacho-host.ts`](packages/handlers/src/lib/tacho-host.ts). Steering is advisory context for the model. Kernel decision rules gate actions routed through Oxagen.
 
-The approved target (ADR-093 to ADR-097, 2026-09-18) has two planes that never merge. **Steering** is what the model reads: advisory, ranked, budgeted, may be dropped. **Gating** is what the kernel refuses: deterministic, never budgeted, works when Neo4j is down. One assembler, `assembleSteering(run, budget)`, decides what reaches the agent and records what it cut. `tachod` grows into the gateway (a loopback model proxy and an MCP aggregator), and the tier ladder is four words computed from what was actually routed: observe, harness, gateway, contained. The phase table and the diagram are in [`docs/CODEMAPS/architecture.md`](docs/CODEMAPS/architecture.md#steering-gating-and-the-gateway).
+The collector includes a loopback model proxy in [`model-proxy.ts`](packages/tacho/src/collector/model-proxy.ts), wired by [`daemon.ts`](packages/tacho/src/collector/daemon.ts). Its presence does not mean every harness routes model calls through it. Inspect the wrapper configuration and recorded routing evidence before claiming gateway coverage. Hook-only records remain client-attested.
+
+ADRs 093 through 097 describe the steering and gateway design. Use the [source map](docs/CODEMAPS/architecture.md#steering-gating-and-the-gateway) to find the implementation, and distinguish shipped behavior from the remaining design targets.
 
 ### Vendor neutrality
 
@@ -111,7 +114,7 @@ oxagen/
 │   ├── docs         Documentation site (Fumadocs) — docs.oxagen.sh
 │   └── web          Public website + research blog (static, built to dist/) — oxagen.sh
 │
-├── packages/        (30 workspace packages)
+├── packages/        Shared platform libraries
 │   ├── oxagen       Capability kernel, contracts, IAM resolution (source of truth)
 │   ├── handlers     Built-in capability handler implementations
 │   ├── agent        Governed in-app Q&A turn loop, MCP tool gateway, agent registry handlers
@@ -138,7 +141,8 @@ oxagen/
 │                    notifications, storage
 │
 │   (ADR-043 removed the agent runtime: agent-engine, agent-worker, sandbox,
-│   skills, agent-artifacts, and stella-engine-client packages are gone.)
+│   skills, and agent-artifacts packages are gone. stella-engine-client is a
+│   client for the external Stella engine; it does not embed that engine.)
 │
 ├── tools/           scripts (dev orchestration, CI checks), env-manager, codemods
 └── docs/            VISION.md, capability registry, ADRs, SCRs, specs
@@ -226,18 +230,20 @@ git switch main && git rebase origin/main       # if origin/main is ahead
 git switch -c feat/<slug>                       # cut your branch
 git push -u origin feat/<slug>                  # push it immediately
 # … commit small, push often, open a PR (draft early is fine) …
-pnpm gate                                       # full local gate before marking ready
+gh pr checks                                    # inspect checks for the final commit
 gh run watch                                    # confirm CI green
 ```
 
 ### The gate
 
-`pnpm gate` runs the same checks as CI against the packages changed since `origin/main`: ESLint (zero warnings) → TypeScript (strict, no `any`) → unit tests + coverage (ratchets, capped at 90) → build → `check:brand` → `check:manifest` (API↔MCP parity) → `check:ui-parity` → `check:mobile-parity` → `check:contracts` → `check:connector-schemas` → `check:contextgraph-fixtures` → `check:mcp-externals` → `env:check` → `db:lint-migrations` → `db:atlas-validate`. `pnpm gate:full` runs the same over every package and adds the Playwright e2e suite. CI additionally runs the SOC 2 audit-coverage check, the RLS and RDS integration jobs, and the **Vision Gate**, which judges the PR diff against [`docs/VISION.md`](docs/VISION.md).
+CI runs lint, typecheck, unit tests, coverage, builds, contract checks, and integration checks through [pipeline.yml](.github/workflows/pipeline.yml). The [Vision Gate](.github/workflows/vision-gate.yml) reviews the diff against `docs/VISION.md`.
+
+`pnpm gate` and `pnpm gate:full` are heavy verification entry points. Do not run them on the shared development machine. The local exception is one test file for code the task changed, in isolation. Lightweight integrity checks and git hooks still apply. See [CLAUDE.md](CLAUDE.md) for the full policy.
 
 ### Quality rules
 
 - **New code requires new tests.** Coverage thresholds are ratchets — they only go up.
-- **New user-facing flows require E2E tests** in `apps/app/e2e/` with screenshots of success states.
+- **Prove UI changes with component and action tests.** `apps/app/e2e/` has exactly `login`, `pay`, and `page-load`. See `apps/app/ARCHITECTURE.md` §6.3.
 - **New capabilities require the full parity stack**: contract → API route → MCP tool → CLI command → docs. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the step-by-step.
 - **Nothing merges unverified.** Always include proof: test output, CI status, or a rendered result.
 
@@ -424,7 +430,7 @@ the person who dispatched it goes away believing the work happened.
 
 ## Security
 
-Typed contracts with deny-by-default IAM on every capability, tenant isolation across all four stores, BYOK secrets, and audit lineage on every invocation. To report a vulnerability, see [`SECURITY.md`](SECURITY.md) — please do not open public issues for security reports.
+Read [SECURITY.md](SECURITY.md) for security reporting. Control scope depends on the configured runtime gates, tenant scope, and the actions routed through Oxagen. Report vulnerabilities through that private process.
 
 ---
 

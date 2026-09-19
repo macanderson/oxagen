@@ -1,6 +1,6 @@
 ---
 title: Local development
-description: How Oxagen detects a developer machine through OXAGEN_LOCAL_DEV and relaxes deployed-only controls the same way every time, without weakening a real deployment.
+description: How Oxagen detects a developer machine through OXAGEN_LOCAL_DEV and relaxes deployed-only controls the same way every time, and which signals must stay out of deployment configuration.
 ---
 
 ## Overview
@@ -38,21 +38,18 @@ When Oxagen resolves to a local or development environment, it:
 - does not require the OAuth-token-encryption master key
 - relaxes cookie and rate-limit hardening
 
-## It cannot weaken a real deployment
+## Deployment boundary
 
-The predicate that reads `OXAGEN_LOCAL_DEV` is gated on `process.env.VERCEL`, which
-every real Vercel deployment sets. **A deployed environment ignores the flag**,
-even if it leaks into a deployed env file, so the flag cannot relax production
-controls.
+`resolveIsLocalEnv` in `packages/auth/src/local-env.ts` evaluates these signals:
 
-A process counts as local when **any** of these hold:
+| Signal | Effect |
+|---|---|
+| `OXAGEN_LOCAL_DEV=1` or `true` | Local mode when `VERCEL` is unset |
+| `NODE_ENV=development` or `test` | Local mode |
+| `VERCEL_ENV=development` | Local mode |
+| `E2E_TEST=true` | Local mode when `VERCEL` is unset |
 
-| Signal | Set by |
-| --- | --- |
-| `OXAGEN_LOCAL_DEV=1` and **not** on a Vercel deploy | `pnpm dev` (`tools/scripts/dev.ts`) |
-| `NODE_ENV=development` or `NODE_ENV=test` | the runtime or test harness |
-| `VERCEL_ENV=development` | the Vercel "Development" environment |
-| `E2E_TEST=true` | the Playwright browser test harness |
+The `VERCEL` check only protects the first and last branches. It does not identify AWS deployments, and it does not guard the `NODE_ENV` branches. Keep these development signals out of deployed environments. An incorrect value can disable email verification and relax other authentication controls.
 
 ## When you set it by hand
 

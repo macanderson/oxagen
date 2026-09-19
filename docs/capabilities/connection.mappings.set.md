@@ -1,4 +1,4 @@
-# connection.mappings.set
+# set_connection_mappings
 
 **Domain:** connection
 **Mode:** sync

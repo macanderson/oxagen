@@ -1,4 +1,4 @@
-# billing.subscription.upgrade.start
+# start_subscription_upgrade
 
 **Domain:** billing
 **Mode:** sync

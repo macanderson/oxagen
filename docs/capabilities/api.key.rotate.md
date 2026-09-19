@@ -1,4 +1,4 @@
-# api.key.rotate
+# rotate_api_key
 
 **Domain:** api_key
 **Mode:** sync

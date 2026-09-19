@@ -1,4 +1,4 @@
-# iam.role.delete
+# delete_role
 
 `delete_role`: remove a custom IAM role nobody holds (ADR-063). The role row and its grants go; the kernel's `capability.invoke_*` audit rows and the `iam.role_*` security events keep the record of what it granted and when. A role is never deleted out from under a holder.
 

@@ -1,4 +1,4 @@
-# schema.reconcile.status
+# get_reconcile_status
 
 Poll the status and progress of a schema reconciliation job dispatched by `schema.reconcile.dispatch`.
 

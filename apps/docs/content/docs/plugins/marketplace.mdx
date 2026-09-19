@@ -1,78 +1,22 @@
 ---
-title: Plugin marketplace
-description: Browse and install MCP servers, integrations, and agent capabilities into your workspace.
+title: Plugin catalog
+description: "Browse and install workspace plugins through the capability API or MCP."
 ---
 
-## Overview
+Use `browse_plugin_catalog` to find a plugin, then `get_catalog_plugin` to inspect its tools and authentication requirements. The former Marketplace screen is not part of the current app.
 
-The **Marketplace** is where workspace Owners and Admins find and install plugins from the marketplace catalog. Every plugin is **workspace-scoped**: installing it makes its tools available only in the workspace you installed it into.
+## Install a plugin
 
-Open **Marketplace** from the workspace sidebar.
+Call `install_plugin` for one plugin or `install_plugins_bulk` for several. Use the input schema returned by your MCP client or the capability contract for the fields. Installation is workspace-scoped.
 
-## Marketplace sections
+MCP servers and integrations may need a separate credential before their tools can be used. See [Workspace plugins](/docs/plugins/workspace-plugins).
 
-The marketplace has two sides:
+## Custom servers and registries
 
-| Section | Plugin type | What you find there |
-|---|---|---|
-| **Agent Tools → MCP Servers** | `mcp_server` | Third-party tools served over the MCP protocol. |
-| **Agent Tools → Capabilities** | `agent_capability` | First-party capability packs, called inside Oxagen with no external endpoint. No built-in packs ship today (ADR-043). |
-| **Integrations** | `integration` | Platform connectors (SaaS APIs, data services) that ingest into the knowledge graph. |
+Use `register_mcp_server` for a workspace server. Use `add_plugin_registry` to add a discovery source, then browse its catalog. [MCP server registries](/docs/plugins/registries) explains registry URLs and removal.
 
-Use the search box to narrow results.
+The current **Tools** page manages tool versions, connection grants, kill switches, and mandates. It does not reproduce the retired Marketplace screens.
 
-The catalog also carries `agent_skill` and `knowledge_source` plugins, which you can list with `browse_plugin_catalog` over the API or MCP.
+## Remove a plugin
 
-## Installing a plugin
-
-### Single install
-
-1. Click a plugin card to open its detail panel.
-2. Read the description, the tools list, and the README.
-3. Click **Install to workspace**. The plugin installs and is enabled immediately.
-
-### Bulk install
-
-1. Select one or more plugin cards.
-2. Click **Install selected (n)**.
-
-Installed MCP servers appear under **Tools → MCP Servers**. Installed capability packs appear under **Tools → Capabilities**.
-
-## After install: the connection step (MCP servers and integrations)
-
-When an `mcp_server` or `integration` plugin needs authentication, it is installed, but its tools stay out of every agent's tool list until you connect it:
-
-- **OAuth**: click **Authenticate**, approve Oxagen on the provider's page, and return. The status changes to **Connected**.
-- **API key**: click **Enter API key**, paste the key, and click **Save key**. Oxagen encrypts it at rest.
-
-The credential stays in Oxagen, held by the workspace. The agent never sees it.
-
-Capability packs do not need a connection step.
-
-## Adding a custom MCP server
-
-1. Go to **Tools → MCP Servers** and open **Connect a custom MCP server**.
-2. Enter a name and the MCP endpoint URL.
-3. Choose the transport (Streamable HTTP, SSE, or stdio) and the authentication kind (No authentication, Secret / API key, or OAuth).
-4. Click **Connect server**. The server installs immediately.
-
-## Adding a custom registry
-
-[MCP server registries](/docs/plugins/registries) covers adding a registry that fills the marketplace catalog with more servers.
-
-## Uninstalling a plugin
-
-1. Go to **Tools → MCP Servers**.
-2. Find the server and uninstall it from its row.
-
-Uninstalling removes the plugin and its tools from the workspace immediately. Oxagen keeps any content the plugin generated (images, documents, videos) in your workspace.
-
-## Role requirements
-
-| Action | Required role |
-|---|---|
-| Browse marketplace | Org Owner or Org Admin |
-| Install / uninstall | Workspace Owner or Org Owner/Admin |
-| Connect OAuth / set API key | Org Owner or Org Admin |
-| Add custom server | Workspace Owner or Org Owner/Admin |
-| Add custom registry | Workspace Owner or Org Owner/Admin |
+Call `uninstall_plugin` in the workspace where it was installed. Review the capability input and role requirements before making the call. Existing audit records remain. See [Plugin governance](/docs/governance/plugins-governance).

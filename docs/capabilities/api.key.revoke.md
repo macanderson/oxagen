@@ -1,4 +1,4 @@
-# api.key.revoke
+# revoke_api_key
 
 **Domain:** api_key
 **Mode:** sync

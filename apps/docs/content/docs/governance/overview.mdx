@@ -60,7 +60,7 @@ Three properties of this path matter for a governance review:
 
 ### Role-based access control
 
-Seven built-in human roles cover most enterprise access patterns. Four are org-scoped (Owner, Admin, Compliance, and Billing), and three are workspace-scoped (Owner, Member, and Viewer). Agents get three roles of their own (Agent Observer, Agent Contributor, and Agent Operator). See [Agent roles](/docs/governance/agent-roles). **Governance → Policies** lists roles and their grants, read-only. There is no custom-role builder yet. See [RBAC and roles](/docs/governance/rbac).
+Seven built-in human roles cover most enterprise access patterns. Four are org-scoped (Owner, Admin, Compliance, and Billing), and three are workspace-scoped (Owner, Member, and Viewer). Agents get three roles of their own (Agent Observer, Agent Contributor, and Agent Operator). See [Agent roles](/docs/governance/agent-roles). **Organization → Roles** lists roles and permissions. Owners and Admins can create, edit, and delete custom roles. Built-in roles stay read-only. See [RBAC and roles](/docs/governance/rbac).
 
 ### Plugins
 
@@ -72,7 +72,7 @@ Your subscription plan decides which models are on offer. A workspace Owner or A
 
 ### Access reviews
 
-**Organization → Access → Reviews** lists every member with their role and last activity, with **Confirm** and **Revoke** actions. Each action writes an audit event, so the page is also the evidence for a quarterly access review.
+Review membership on the organization page and permissions under **Organization → Roles**. Query membership and role events with `query_audit_log`. The former Access Reviews screen is not part of the current app.
 
 ## What you cannot do from the app
 

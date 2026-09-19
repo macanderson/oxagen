@@ -1,0 +1,101 @@
+<h2 class="ch-title">Why coordinator agents don't scale</h2>
+<p class="ch-thesis">Most multi-agent systems pay a coordination tax and call it architecture.</p>
+
+<p class="lede">You split the work. A manager agent decomposes the ticket, three specialists execute, and the manager stitches the results back together. Then the token bill climbs, the wall clock stretches, and when the patch comes back wrong you read four transcripts to find which hand-off dropped the constraint. The org chart is not an architecture.</p>
+
+<h3>The tax, itemized</h3>
+<ul class="plain">
+  <li><strong>Token duplication.</strong> Each sub-agent needs enough context to act, so you re-send and re-bill the shared background once per agent, then re-serialize every result back through the coordinator's window.</li>
+  <li><strong>Latency amplification.</strong> Coordinator → worker → coordinator turns serialize model calls. A hand-off costs seconds, not microseconds.</li>
+  <li><strong>Lossy hand-offs.</strong> Each hand-off compresses intent into natural language. Errors compound across hops.</li>
+  <li><strong>Conflicts found at merge time.</strong> Parallel agents cannot see each other's decisions. You pay for both branches, then pay a model call to adjudicate the collision.</li>
+  <li><strong>Fan-out with no budget.</strong> A misbehaving branch multiplies cost recursively, and an instruction written in prose does not stop it.</li>
+</ul>
+
+<div class="evidence">
+  <span class="tag">Evidence · Three independent sources, one conclusion</span>
+  <p><strong>Anthropic</strong> runs multi-agent systems in production, so it is not a hostile witness. Its report: multi-agent systems consume ~<strong>15× the tokens</strong> of chat, are economical only where task value justifies it, and are explicitly "not a good fit" for domains with tight dependencies between agents. Their example of a poor fit is coding.<sup class="cite"><a href="#r3">3</a></sup></p>
+  <p><strong>Cognition</strong> (Devin) published "Don't Build Multi-Agents." In their production experience, parallel sub-agents with fragmented context make conflicting assumptions, and reliability comes from a single agent with continuous, fully-shared context. Context engineering, not agent proliferation.<sup class="cite"><a href="#r4">4</a></sup></p>
+  <p><strong>Berkeley</strong> (Cemri et al., NeurIPS 2025) annotated 1,600+ traces from 7 popular multi-agent frameworks. Performance gains over single agents were often minimal. The team catalogued <strong>14 recurring failure modes</strong> in 3 classes: specification failures, inter-agent misalignment, and verification failures. Most stem from <em>system design</em>, not model capability, and better models will not fix them.<sup class="cite"><a href="#r5">5</a></sup></p>
+  <p class="src">Anthropic engineering, 2025 · Cognition, 2025 · Cemri et al., MAST (the Berkeley failure taxonomy), NeurIPS 2025</p>
+</div>
+
+<h3>Deterministic orchestration, the boring alternative</h3>
+<p>Look at what the coordinator agent does all day: routing, sequencing, retrying, aggregating. None of those four needs judgment. All four have mature, deterministic machinery.</p>
+<div class="vs">
+  <div class="a">
+    <h4>◌ Coordinator agent</h4>
+    <ul>
+      <li>Control flow decided per run by inference, so it differs every time</li>
+      <li>State lives in a context window, and a crash loses it</li>
+      <li>Retries, timeouts, and budgets improvised in prose</li>
+      <li>Debugging means reading several transcripts and reconstructing the order</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● State machine / workflow engine</h4>
+    <ul>
+      <li>Control flow is code: explicit states, typed transitions, reviewable in a PR</li>
+      <li>State is durable and replayable (Temporal-class engines, LangGraph-style graphs)</li>
+      <li>Retries, timeouts, budgets, and circuit breakers are first-class primitives</li>
+      <li>Debugging means inspecting a state machine's history</li>
+    </ul>
+  </div>
+</div>
+
+<p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>. A workflow engine owns the graph, localize → retrieve → patch → test → review, and calls the model only inside the nodes where judgment is required. Event-driven orchestration handles fan-out where sub-tasks are independent, the one regime where even Anthropic's data says parallelism pays.<sup class="cite"><a href="#r3">3</a></sup> Where sub-agents do earn their keep, the framing to keep is Cognition's: the reliable ones are mostly read-only context gatherers, closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
+
+<p>Written down, the skeleton fits on a page. Every line below is code you can read in a diff, and the budget is a number the engine enforces rather than a sentence the model may ignore.</p>
+
+<pre><code>workflow fix_ticket:
+  budget tokens=120_000  wall_clock=8m  attempts=3
+
+  localize : deterministic   # parser and code graph, no model call
+  retrieve : deterministic   # graph traversal, sliced to budget
+  patch    : model           # judgment lives here
+  test     : deterministic   # test runner, structured failure
+  review   : model           # judgment lives here
+
+  on test.fail   → retry patch with the sliced failure, up to attempts
+  on budget.out  → halt, persist state, page a person
+</code></pre>
+
+<p>That leaves one question worth asking per node: does this step need a model at all?</p>
+
+<div class="tablewrap"><table class="tbl">
+  <thead>
+    <tr><th>Use a workflow node when</th><th>Use a sub-agent call when</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>The step has a decidable rule (route by file type, retry on exit code 1)</td><td>The step needs judgment over ambiguous text</td></tr>
+    <tr><td>The step's output is typed and checkable</td><td>The output is prose a person or a test will grade</td></tr>
+    <tr><td>Later steps depend on this one's exact result</td><td>The sub-task is independent and read-only</td></tr>
+    <tr><td>You want the same answer twice</td><td>You can afford variance and will verify the result</td></tr>
+  </tbody>
+</table></div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Draw the graph your coordinator improvises.</strong> Take ten recent multi-agent runs, write down the node sequence each one actually followed, and count how many distinct sequences you get. More than two or three for the same task class tells you the routing is inference, not design.</li>
+    <li><strong>Move routing into code.</strong> Replace the manager's decomposition prompt with a function that maps task type to a fixed node list. Done looks like a run whose node sequence you can predict before you start it.</li>
+    <li><strong>Port one task class to a workflow engine.</strong> Pick a durable engine (Temporal-class) or a graph library (LangGraph-style) and encode localize, retrieve, patch, test, and review as typed states. Done looks like a replayable run history you can open after a crash.</li>
+    <li><strong>Put the budget in the engine.</strong> Set a token ceiling, a wall-clock ceiling, and an attempt ceiling per run, and make the engine halt on breach. Done looks like a halted run with persisted state, not a surprise invoice.</li>
+    <li><strong>Demote the survivors.</strong> Any sub-agent still standing should be read-only. If it writes files or decides control flow, it is a node in disguise.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>coordination_token_share</code>: tokens spent on hand-off messages and re-sent background, divided by total tokens for the run. Tag each model call with its node, then sum the routing and aggregation nodes. Down is good.</li>
+    <li><code>handoff_count</code>: model calls whose input is mostly another model's output. Count them per completed task. Down is good, and a run with zero is a run with no telephone game in it.</li>
+    <li><code>path_entropy</code>: the number of distinct node sequences observed across runs of the same task class. Log the sequence on every run. Down is good, and 1 means the control flow is code.</li>
+    <li><code>budget_halt_rate</code>: runs the engine stopped on a ceiling, divided by all runs. You want this small and nonzero. Zero usually means no ceiling is set.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Coordination is a solved, deterministic problem: state machines, workflow engines, queues. Spend inference on judgment inside the nodes, and keep it off the edges between them.</p>
+</div>

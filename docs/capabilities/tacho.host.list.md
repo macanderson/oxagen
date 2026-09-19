@@ -1,4 +1,4 @@
-# tacho.host.list
+# list_tacho_hosts
 
 List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents). Cursor-paginated.
 

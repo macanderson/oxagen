@@ -1,4 +1,4 @@
-# schema.version.pin
+# pin_schema_version
 
 Point the workspace at a specific published schema version. Returns whether a downgrade occurred and whether reconciliation is recommended.
 

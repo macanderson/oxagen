@@ -1,4 +1,4 @@
-# agent.role.list (`list_agent_roles`)
+# list_agent_roles
 
 **Domain:** agent
 **Mode:** sync

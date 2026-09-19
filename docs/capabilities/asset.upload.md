@@ -1,4 +1,4 @@
-# asset.upload
+# upload_asset
 
 **Domain:** asset
 **Mode:** sync

@@ -1,4 +1,4 @@
-# agent.definition.get
+# get_agent_def
 
 **Domain:** agent
 **Mode:** sync
@@ -32,7 +32,7 @@ Fetch a single agent definition together with its active (or, if none is publish
 | `version` | `number \| null` | Resolved version number, or null when none. |
 | `isPublished` | `boolean` | Whether the resolved version is published. |
 | `managed` | `boolean` | True for product-managed built-in agents — viewable but read-only to customers. |
-| `config` | `AgentDefinitionConfig` | Parsed graph access, tools, triggers, and instructions. |
+| `config` | `AgentDefinitionConfig` | Parsed graph access, tools, and instructions. |
 
 ## Roles
 

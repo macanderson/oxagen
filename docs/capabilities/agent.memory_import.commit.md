@@ -1,4 +1,4 @@
-# agent.memory.import.commit
+# commit_memory_import
 
 **Domain:** agent
 **Mode:** sync (batch)

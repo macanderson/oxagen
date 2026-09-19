@@ -1,4 +1,4 @@
-# connection.pause
+# pause_connection
 
 **Domain:** connection
 **Mode:** sync

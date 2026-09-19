@@ -76,6 +76,8 @@
     "check:mcp-externals": "tsx tools/scripts/check-mcp-externals.ts",
     "check:inngest-senders": "tsx tools/scripts/check-inngest-senders.ts",
     "check:control-bytes": "node tools/scripts/check-control-bytes.mjs",
+    "book:build": "node tools/scripts/build-book-editions.mjs",
+    "book:check": "node tools/scripts/build-book-editions.mjs --check",
     "check:prose": "node tools/scripts/check-prose.mjs",
     "db:provision-enterprise": "tsx --env-file-if-exists=.env.local tools/scripts/provision-enterprise-org.ts"
   },

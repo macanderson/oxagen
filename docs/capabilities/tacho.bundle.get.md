@@ -1,4 +1,4 @@
-# tacho.bundle.get
+# get_tacho_bundle
 
 The signed policy bundle a host caches and evaluates locally (`docs/specs/tacho/spec.md` section 7.1). The bundle is signed with Ed25519 over its RFC 8785 canonical form; the host verifies it offline with the public key it received at enrollment and refuses one it cannot verify, so enforcement fails closed with the daemon and the network down. Send the cached `etag` to receive `not_modified` without a body.
 

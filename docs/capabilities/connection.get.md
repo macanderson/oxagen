@@ -1,4 +1,4 @@
-# connection.get
+# get_connection
 
 **Domain:** connection
 **Mode:** sync

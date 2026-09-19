@@ -1,4 +1,4 @@
-# repo.pr.get
+# get_pr
 
 Read a GitHub pull request's summary, diff stats, comments, and CI status.
 

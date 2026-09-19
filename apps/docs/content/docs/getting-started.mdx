@@ -1,141 +1,59 @@
 ---
 title: Getting started
-description: Sign up, create your organization and workspace, wrap one machine, and reach Oxagen over the API or MCP.
+description: "Create an organization and workspace, register an agent, and inspect its recorded work."
 ---
 
-Oxagen is Mission Control for the autonomous agents your organization runs: one mandate per agent, set by the teams accountable for it and checked on the actions routed through Oxagen. This page creates the organization that owns those mandates, wraps one machine so its runs land in the record, and gives you an Oxagen API key for the REST API and MCP.
+Give an agent an identity, then set its authority, budget, tools, and skills in its mandate. Oxagen checks actions routed through its control plane and records the result.
 
-## Sign up
+## Create your organization and workspace
 
-Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**. Enter your name, email address, and a password.
+1. Open [app.oxagen.sh](https://app.oxagen.sh) and choose **Sign up**.
+2. Enter your name, email, and password. Follow the verification email when the deployment requires it.
+3. Name your organization and its first workspace on the **New organization** screen.
+4. Review their slugs and create the organization.
 
-Oxagen emails you a verification link. Click it before you sign in. An unverified account cannot get past the login screen. If the email does not arrive, check your spam folder before you request another one.
+The first workspace opens at `/{org}/{workspace}`. This is Fleet. Local development skips email verification. See [Local development](/docs/configuration/local-development).
 
-Google and GitHub sign-in are on the same screen.
+## Find the right page
 
-Oxagen turns email verification off when you run it on your own machine, so local development does not need a working mail server. See [Local development](/docs/configuration/local-development) and [Email & SMTP](/docs/configuration/email).
+| Page | What you manage |
+|---|---|
+| Fleet, `/{org}/{workspace}` | Recorded agent activity and work awaiting attention |
+| Agents | Agent identities and enrollment |
+| A run | The recorded steps, decisions, and cost for that run |
+| A mandate | The authority and equipment assigned to an agent |
+| Tools | Tool registry, connections, kill switches, and the mandate ledger |
+| Steering | Instructions and rules |
+| Spend | Recorded usage and cost |
+| Skills | Skills assigned to agents |
+| Organization, `/{org}` | Workspaces and membership |
+| Organization → Roles | Roles and their permissions |
+| Organization → API keys | Keys scoped to a workspace |
+| Organization → Audit | Security event records |
+| Organization → Billing | Subscription and credits |
+| Organization → Model funding | Who pays for model calls |
 
-## Create your organization
+## Register and enroll an agent
 
-After signup you land on the **New organization** screen. You need one organization before you can do anything else. The organization is the top-level boundary. It owns billing, IAM policies, and audit logs.
+Open **Agents** and follow the registration flow. Run the enrollment command it gives you on the machine that runs the agent:
 
-1. Enter an organization name. Oxagen generates a URL-safe slug, and you can edit it.
-2. Click **Create organization**.
-
-Creating an organization also creates a default workspace inside it. Oxagen assigns you the **Owner** role in both.
-
-<Mermaid chart={`
-flowchart TD
-  O["Organization<br/>billing · IAM · audit logs"]:::accent --> W1[Default workspace]
-  O --> W2[More workspaces]
-  O --> M[Org members + org roles]
-  W1 --> WM[Workspace members + roles]
-  W1 --> K["API keys<br/>one org + one workspace each"]
-  W1 --> C[Conversations]
-`} />
-
-*Workspace membership is granted separately from the organization, and every API key is pinned to exactly one workspace.*
-
-## Explore the app shell
-
-After you create the organization, you land on the organization **Dashboard** at `/{orgSlug}`, the usage and metering home. The shell has three parts:
-
-- **Org and workspace switchers** in the top bar, to the right of the Oxagen mark. If you belong to more than one organization or workspace, switch between them here.
-- **Sidebar** with the workspace pages (Overview, Sessions, Knowledge, Agents, Tools, Environments, Marketplace, and Settings) and the organization pages (Dashboard, Workspaces, Members, Governance, Access, Security, Billing, Developer, and Settings).
-- **Ask bar**: the entry point to the in-app agent, on every screen. The agent knows which page you are on.
-
-## Wrap one machine
-
-The fastest way to see your own numbers is to put a machine you already run Claude Code on under Oxagen.
-
-```console title="Terminal"
-$ oxagen login
-$ oxagen tacho enroll
-$ oxagen tacho status
+```bash
+oxagen agent enroll --token <one-time-enrollment-token> --harness claude-code
+oxagen tacho status
 ```
 
-`enroll` writes the hooks into Claude Code's settings, installs the collector as a user service, and enrolls the host against your workspace. From then on, Oxagen records every run on that machine frame by frame. `oxagen tacho status` shows whether the collector is shipping, and `oxagen trace` reads one run as a tree. [The Oxagen app](/docs/cli/desktop) does the same from one window, and [the CLI reference](/docs/cli/commands) covers the rest of `oxagen tacho`.
+The token identifies the organization, workspace, and registered agent. It expires after 30 minutes and can be used once. Enrollment installs the collector and the selected harness hooks. See [Wrap an agent](/docs/cli/wrap-an-agent) for the recording boundary and custom agents.
 
-## Have your first agent conversation
+Run a task in the wrapped harness. Open Fleet to inspect the record that arrived. Observe mode records activity without enforcing it. Hook checks depend on the installed wrapper, and calls outside the routed boundary are not governed by Oxagen.
 
-1. Click **Sessions** in the sidebar, or use the Ask bar at the top of any page.
-2. Type a message and press Enter or click Send.
-3. The agent answers with the model tier your plan includes.
+## Use the CLI, API, or MCP
 
-Oxagen keeps every conversation under `/{orgSlug}/{workspaceSlug}/sessions`. Conversations persist. Archive or delete them from the conversation list.
+Run `oxagen login` for a browser-authorized CLI credential. For a script or MCP client, create a workspace-scoped key at **Organization → API keys** and copy it when shown.
 
-## Invite a teammate
-
-1. Go to **Organization → Members**.
-2. Click **Invite member**.
-3. Enter their email address and assign a role (Owner, Admin, Billing, Compliance, or a workspace role).
-4. They receive an invite email with an acceptance link.
-
-Workspace membership is granted separately from organization membership.
-
-## Connect via the REST API
-
-Every capability in the app is also reachable over the versioned REST API at `https://api.oxagen.sh/v1/`.
-
-**Create an API key:**
-
-1. Go to **Organization → Developer → Tokens**.
-2. Click **Create API key** and give it a name.
-3. Copy the key. Oxagen shows it only once.
-
-An Oxagen API key carries org and workspace scope and acts as the person who created it. It is for you, your scripts, and the MCP clients you run. It is not a credential to hand to an agent for the systems the agent reaches. Those stay in Oxagen, and the agent asks for them. Pass the key as a Bearer token:
-
-```http
-Authorization: Bearer ox_…
-```
-
-**Check that the key works.** Replace `acme/main` with your org and workspace slugs. A JSON body with a `tools` array means the key is valid. A `401` means it is not.
-
-```console title="Terminal"
-$ export OXAGEN_API_KEY="ox_…"
-$ curl -X POST "https://api.oxagen.sh/v1/acme/main/agent/tools" \
-    -H "Authorization: Bearer $OXAGEN_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d '{}'
-```
-
-See [API authentication](/docs/api/authentication) for the full reference, and the [API overview](/docs/api/overview) for the same request in TypeScript and Python.
-
-## Connect via MCP
-
-Oxagen exposes every capability as an MCP server at `https://mcp.oxagen.sh/mcp` over streamable HTTP. The API key carries the org and workspace scope, so the URL has no path segment for them.
-
-```bash tab="Claude Code"
-claude mcp add --transport http oxagen https://mcp.oxagen.sh/mcp \
-  --header "Authorization: Bearer $OXAGEN_API_KEY"
-```
-
-```jsonc tab="Claude Desktop"
-// claude_desktop_config.json — bridges to the HTTP endpoint via mcp-remote
-{
-  "mcpServers": {
-    "oxagen": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.oxagen.sh/mcp", "--header", "Authorization:${OXAGEN_AUTH_HEADER}"],
-      "env": { "OXAGEN_AUTH_HEADER": "Bearer ox_…" }
-    }
-  }
-}
-```
-
-```bash tab="Codex"
-codex mcp add oxagen --url https://mcp.oxagen.sh/mcp --bearer-token-env-var OXAGEN_API_KEY
-```
-
-**Connect from the unified install page:**
-
-Go to **Organization → Developer → MCP** for copy-ready snippets for Claude Code, Claude Desktop, and Cursor, pre-filled with your API key. [Connecting to the MCP server](/docs/mcp/connecting) covers Codex and VS Code.
-
-See [MCP overview](/docs/mcp/overview) and [Connecting to the MCP server](/docs/mcp/connecting) for details.
+[API authentication](/docs/api/authentication) explains the different key purposes. [The API overview](/docs/api/overview) provides a first request. [Connecting to MCP](/docs/mcp/connecting) provides client configuration.
 
 ## Next steps
 
-- [Security overview](/docs/security/overview): the controls your security team will ask about.
-- [RBAC and roles](/docs/governance/rbac): the roles your team holds and how a call is decided.
-- [Agent overview](/docs/agent/overview): what the in-app agent can request and how a rule answers.
-- [Enterprise use cases](/docs/enterprise/use-cases): what a CIO uses Oxagen for at org scale.
+- [CLI quickstart](/docs/cli/quickstart): inspect a budget, run, and workspace memory.
+- [Agent roles](/docs/governance/agent-roles): choose the authority an agent needs.
+- [Security overview](/docs/security/overview): inspect the controls and their scope.

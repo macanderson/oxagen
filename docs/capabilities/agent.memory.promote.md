@@ -1,4 +1,4 @@
-# agent.memory.promote
+# promote_memory
 
 **Domain:** agent
 **Mode:** sync

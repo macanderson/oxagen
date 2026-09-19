@@ -1,0 +1,105 @@
+<h2 class="ch-title">Keep a record another person can read</h2>
+<p class="ch-thesis">A log answers the engineer who wrote it. A record answers the person who was not there.</p>
+
+<p class="lede">Something an agent did is being reviewed. It might be an incident, an audit sample, or a customer question. The person reviewing was not on the run and does not know your logging conventions. They ask four things: what did the agent read, what did it change, who or what allowed it, and what did it cost? When an agent requests an action in a system another team owns, which rule answers it, and where is that answer recorded? If those answers live in four tools and a chat transcript, the review becomes an investigation.</p>
+
+<h3>Logs and records are different artifacts</h3>
+<p>Logs are for debugging. They are verbose, unstructured at the edges, sampled under load, and deleted after a few weeks. All of that is correct for debugging. A record has a different reader and a different job. It is complete for the actions it covers, structured so a query can answer a question, ordered so the sequence is not in doubt, and kept as long as the accountability lasts.</p>
+<div class="vs">
+  <div class="a">
+    <h4>◌ A log</h4>
+    <ul>
+      <li>Written for the author of the code</li>
+      <li>Free text with some fields</li>
+      <li>Sampled and rotated</li>
+      <li>Answers "why did this break?"</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● A record</h4>
+    <ul>
+      <li>Written for a reader who was not there</li>
+      <li>One typed row per event, with stable keys</li>
+      <li>Complete for governed actions, and retained</li>
+      <li>Answers "what happened, and under whose authority?"</li>
+    </ul>
+  </div>
+</div>
+
+<h3>What a run's record holds</h3>
+<p>Parts 14 to 18 each produced rows. The record is those rows in one sequence, keyed by the run.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Event</th><th>Fields</th><th>From</th></tr></thead>
+  <tbody>
+    <tr><td>Run opened</td><td>agent, operator, initiator, task, mandate version</td><td>Parts 14 and 15</td></tr>
+    <tr><td>Context read</td><td>what was retrieved, from which scope, at which source commit</td><td>Parts 3 to 5 and 18</td></tr>
+    <tr><td>Request</td><td>tool, action, resource, the answer, the rule id, and the approver when routed</td><td>Part 16</td></tr>
+    <tr><td>Step</td><td>model or tool call, tokens, cost, cost basis</td><td>Part 17</td></tr>
+    <tr><td>Change</td><td>files, rows, or resources written, with a diff or a reference</td><td>The tool that made it</td></tr>
+    <tr><td>Run closed</td><td>outcome, totals, and the checks that ran if the task was bounded</td><td>Part 20</td></tr>
+  </tbody>
+</table></div>
+<p>The important property is that the request, the rule that answered it, and the cost of the step sit in the same row family under the same keys. A reviewer follows one action back to its authority without joining systems by timestamp.</p>
+
+<h3>Order you can check</h3>
+<p>A record that can be edited quietly is an account, not evidence. Two inexpensive mechanisms raise the bar. First, chain the rows: each row stores a hash of the row before it, so a removed or altered row breaks the chain at a known point. Second, hash a canonical form. Two serializers can emit the same JSON object with keys in a different order, and the hashes will differ. RFC 8785 defines a canonical JSON serialization for this purpose, so that the same data yields the same bytes and the same digest everywhere.<sup class="cite"><a href="#r26">26</a></sup></p>
+<pre><code>row = {
+  "run": "run_7f3a", "seq": 41, "kind": "request",
+  "agent": "agt_refund_triage", "initiator": "dana.okafor",
+  "action": "github.push", "resource": "acme/billing@release/2026.09",
+  "answer": "routed", "rule": "release-branch", "approver": "priya.n",
+  "prev": "sha256:9c1e..."            # digest of row 40
+}
+digest = sha256(canonicalize(row))    # RFC 8785, then hash
+# At close, sign the last digest. A reviewer with the export can
+# recompute the chain without access to the system that wrote it.</code></pre>
+<p>This shows integrity, and only integrity. A valid chain means the rows are the rows that were written, in that order. It does not mean the agent's work was correct, and it does not cover an action that never passed through the recording layer.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · A shared written record changes what a review can do</span>
+  <p>Google's site reliability practice treats the written postmortem as the unit of learning from an incident: a record of the impact, the actions taken, the root causes, and the follow-up, kept blameless so that people contribute what they know.<sup class="cite"><a href="#r27">27</a></sup> The practice depends on a timeline that people accept as accurate. With agents, the timeline is the hard part, because the actor cannot be interviewed and the transcript is long. Part 13 instrumented the run to improve the architecture. The same instrumentation, kept and ordered, is what a review reads.</p>
+  <div class="src">Beyer et al., Site Reliability Engineering, chapter 15</div>
+</div>
+
+<h3>Write the record for its three readers</h3>
+<ul class="plain">
+  <li><strong>The operator</strong> wants the run as a sequence: what it is waiting on now, and what it did before that.</li>
+  <li><strong>The security reviewer</strong> wants requests grouped by answer and by rule, with every routed request showing who signed.</li>
+  <li><strong>The finance reader</strong> wants the same rows grouped by person and cost center.</li>
+</ul>
+<p>One set of rows serves all three when the keys are consistent. Three separate exports, built at three different times, will disagree with each other, and the review will be about the disagreement.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · A record holds what passed through it</span>
+  <p>State what the record covers. It holds governed activity: the calls that went through the layer that writes it. It does not hold what an agent did on a path around that layer, and it records an observe-mode call without having enforced anything on it. It also holds data that may be sensitive. Decide what is stored in full, what is stored as a digest, who can read which rows, and how long each kind is kept, before the first review asks.</p>
+</div>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>For governed activity, Oxagen keeps what the run read, what it changed, what it cost, and which rule answered each request. Every governed request is a row: who started the task, which agent asked, which tool it wanted, what data it would reach, which rule answered, and who signed. It is the same row the meter prices. Oxagen calls each recorded event in a run a frame. Every frame is hash-chained to the one before it, and the seal signs the close of the run, so a reviewer with the export can check its integrity outside the product.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Run a tabletop review.</strong> Pick one agent action from last week. Give a colleague who was not involved 30 minutes to answer the four questions in the opening. Write down where they got stuck.</li>
+    <li><strong>Pick the run id and thread it through.</strong> One id, created when the run opens, present on every log line, request, and cost row.</li>
+    <li><strong>Separate the record from the logs.</strong> Give it its own store, schema, and retention, even if the first version is one append-only table.</li>
+    <li><strong>Chain the rows.</strong> Add <code>seq</code> and <code>prev</code>, and canonicalize before hashing. Write the 20-line verifier at the same time, and run it nightly.</li>
+    <li><strong>Write the coverage sentence.</strong> "This record covers X. It does not cover Y." Put it at the top of the export.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>time_to_answer_review</code>: minutes for someone outside the team to answer the four questions for a sampled action. Measure it quarterly. This is the number the whole part exists to lower.</li>
+    <li><code>record_coverage</code>: write actions present in the record, over write actions seen by the target systems' own audit logs. The gap is the ungoverned path count from part 15, observed.</li>
+    <li><code>chain_breaks</code>: verifier failures per night. The expected value is 0, and any other value is worth a person's morning.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Keep one ordered, typed record per run that holds the request, the rule that answered it, the change, and the cost under the same keys. Make its order checkable, and say what it covers.</p>
+</div>

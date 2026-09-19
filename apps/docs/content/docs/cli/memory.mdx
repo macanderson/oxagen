@@ -93,7 +93,7 @@ oxagen memory dismiss mem_01H… --restore  # let it re-qualify later
 
 ### Citation analytics
 
-A workspace-wide rollup of which memories and graph nodes agents cite, how useful those citations were, and where agents break promoted rules. It is the terminal view of **Knowledge → Citations**:
+A workspace-wide rollup of which memories and graph nodes agents cite, how useful those citations were, and where agents break promoted rules. Read it with:
 
 ```bash
 oxagen memory citations                   # 30-day window, top 10 per list
@@ -109,11 +109,11 @@ oxagen memory import docs/conventions/*.md          # preview
 oxagen memory import docs/conventions/*.md --yes     # commit
 ```
 
-## How agents use memory automatically
+## How agents use memory
 
-You rarely call these commands by hand during a task. An agent that reaches Oxagen over MCP recalls relevant memories by meaning before it acts and adds them to its context. When a turn has to be corrected, the agent records a `gotcha` memory so the next run avoids the same mistake. Oxagen surfaces RULE-class memories with high enforcement as instructions the agent must follow.
+An agent can request `recall_memory` over MCP before it works and record a lesson with `write_memory` or `save_memory`. Configure that workflow in the harness or its instructions. Installing the CLI alone does not make an external agent recall or write memories.
 
-The CLI commands on this page are the **curation** surface for that loop: review what agents learned, promote what held up, and demote or delete what did not.
+Use the curation commands above to review the lessons, promote useful ones, and demote or delete stale ones. A memory's enforcement score is context for the agent, not a server-side denial rule.
 
 ## Governance
 
@@ -122,4 +122,4 @@ Memory writes pass the same IAM checks as every capability and leave an audit re
 ## Related
 
 - [Knowledge graph from the CLI](/docs/cli/knowledge-graph): the structural context memory sits alongside.
-- [In-app agent memory](/docs/agent/memory): the same memory, viewed and managed from the web app.
+- [Agent memory](/docs/agent/memory): the memory model and governance boundary.

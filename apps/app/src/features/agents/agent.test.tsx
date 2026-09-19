@@ -632,7 +632,7 @@ describe("Enrollment", () => {
     );
     const empty = screen.getByTestId("hosts-empty");
     expect(empty).toHaveTextContent("No host is enrolled under this agent");
-    expect(empty).toHaveTextContent("oxagen tacho enroll");
+    expect(empty).toHaveTextContent("oxagen agent enroll");
   });
 });
 

@@ -1,0 +1,70 @@
+<h2 class="ch-title">Why grep is the wrong retrieval engine</h2>
+<p class="ch-thesis">Searching is not understanding, and code already carries the structure you need.</p>
+
+<p class="lede">You ask your agent to change a function signature, and it starts grepping. Grep answers one question: which lines contain this string? The questions the change actually turns on are structural. Who calls this function? What implements this interface? What breaks if I change the signature? Where does this value come from? Text search approximates those answers over many noisy round trips. A code graph returns them in one query.</p>
+
+<h3>Code is already a graph, so stop flattening it</h3>
+<p>Compilers have modeled code as structure for decades: ASTs, symbol tables, call graphs, dependency graphs, cross-reference indexes. Your IDE resolves "go to definition" in milliseconds with that machinery, and no model is involved. The default agent loop discards all of it and hands the model a shell, which forces it to rebuild structural knowledge out of string matches:</p>
+
+<pre><code><span class="c"># The grep loop (typical agent run, abbreviated):</span>
+grep -rn "process_refund" .        <span class="c"># 47 matches, 31 in tests and comments</span>
+cat billing/processors.py           <span class="c"># 800 lines into context</span>
+grep -rn "RefundProcessor" .        <span class="c"># which of these are real call sites?</span>
+cat api/handlers/refunds.py         <span class="c"># another 600 lines</span>
+<span class="c"># ... more calls, and the call graph is still not in context</span>
+
+<span class="c"># The graph query:</span>
+g.callers(<span class="a">"process_refund"</span>, depth=<span class="k">2</span>)         <span class="c"># ranked call sites, 0 tokens</span>
+g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6000</span>) <span class="c"># minimal closed subgraph</span></code></pre>
+
+<p>One hundred greps approximate what one graph traversal computes. The grep version is not only slower. Each round trip is a model call that re-sends the conversation history, and most of the lines it returns are irrelevant to the change, which part 2 showed is the kind of noise that costs accuracy rather than just tokens. It also gives the model one more chance to take a wrong turn. The graph version is deterministic: the same query against the same index returns the same answer.</p>
+
+<h3>The index stack</h3>
+<ul class="plain">
+  <li><strong>AST layer</strong> (tree-sitter): language-aware parsing, with definitions, references, and signatures for most mainstream languages.</li>
+  <li><strong>Symbol index</strong>: every definition and every reference site, linked in both directions, which is what the Language Server Protocol (LSP) and the SCIP Code Intelligence Protocol (SCIP) already standardize.</li>
+  <li><strong>Dependency graph</strong>: imports, package boundaries, build targets.</li>
+  <li><strong>Call graph</strong>: who invokes whom, with edge weights from reference counts or runtime traces.</li>
+  <li><strong>Centrality ranking</strong>: PageRank over the reference graph tells you which symbols matter most for understanding any region of the code.</li>
+</ul>
+
+<div class="evidence">
+  <span class="tag">Evidence · Graph-ranked context in production tools</span>
+  <p><strong>Aider's repo map</strong> is the clearest proof this works at tool scale. It parses the whole repository with tree-sitter into definitions and references, builds a graph where files are nodes and symbol references are edges, then runs a <strong>PageRank-style algorithm</strong> to pick the most-referenced identifiers that fit a fixed token budget (around 1k tokens for an entire repository by default). The model receives a compressed structural map, with key signatures and the most-referenced symbols, instead of raw file dumps. Aider's own benchmarking found that this improves code-editing performance on large repositories.<sup class="cite"><a href="#r12">12</a></sup></p>
+  <p><strong>AutoCodeRover</strong> (Zhang et al., NUS) made the same bet in research. It replaced plain text retrieval with AST-based search APIs (search-class, search-method, search-code-in-file), letting the model query program structure instead of strings, and reported improved issue-resolution efficacy on SWE-bench against text-based navigation.<sup class="cite"><a href="#r13">13</a></sup></p>
+  <p class="src">Aider, "Building a better repository map with tree-sitter" · Zhang et al., ISSTA 2024</p>
+</div>
+
+<h3>Filesystem traversal against graph traversal</h3>
+<p>The reason graphs win is precision per token. A filesystem is organized for humans and build tools, by directory rather than by meaning. The code relevant to one change is scattered across handlers, models, migrations, and tests, and filesystem traversal makes the agent page through that scatter linearly. Graph traversal follows <em>edges of actual relationship</em>, and a two-hop neighborhood around a symbol is close to the minimal sufficient context for editing it. You are not searching a haystack. You are following a wire.</p>
+
+<div class="mcards">
+  <div class="mcard"><h5>Query the graph when</h5><p>The question names a symbol and asks about relationships: callers, implementers, overrides, the blast radius of a signature change, or which tests reach this line.</p></div>
+  <div class="mcard"><h5>Search text when</h5><p>The target is a string rather than a symbol: a log message, an error copy string, a feature flag name, a config key, a TODO, or a value in a file no parser understands.</p></div>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Index the repository with tree-sitter.</strong> Parse every file into definitions and references, and write them to a table keyed by symbol. The artifact is an index you can rebuild from a clean checkout in one command.</li>
+    <li><strong>Build the reference graph and rank it.</strong> Files or symbols are nodes, references are edges. Run PageRank over it and emit a repository map that fits a fixed token budget, then put that map in the cached prompt prefix.</li>
+    <li><strong>Expose three queries as tools.</strong> <code>callers(symbol, depth)</code>, <code>implementers(interface)</code>, and <code>slice(symbol, budget)</code>. Each returns a ranked, budgeted block, not a file.</li>
+    <li><strong>Keep text search, and scope it.</strong> Leave a search tool for string literals and config values, and say so in its description, so the model reaches for the graph when the question is structural.</li>
+    <li><strong>Reindex on change.</strong> Update the index from the files a commit touched rather than rebuilding it, and record how old the index was at query time.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>index_staleness_seconds</code>: age of the index at query time, at p99. Down is good. A stale index returns confident answers about code that moved.</li>
+    <li><code>context_precision</code>: lines in the assembled context that the final diff touched, divided by lines sent. Up is good, and it is the number that tells you whether the two-hop neighborhood is the right radius.</li>
+    <li><code>graph_query_share</code>: graph queries divided by all retrieval calls. Up is good while <code>context_precision</code> holds, and a fall usually means a query the graph cannot answer yet.</li>
+    <li><code>tokens_to_first_edit</code>: input tokens spent between the prompt and the first diff. Down is good.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Grep ×100 approximates what one graph query computes. Build the graph once, deterministically, and let the model spend its tokens on the change instead of on reconstructing the compiler's knowledge by string matching.</p>
+</div>

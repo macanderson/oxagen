@@ -1,4 +1,4 @@
-# cost.price_entry.set
+# set_price_entry
 
 Set this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). A negotiated row carries the organization's own `orgId` and wins over the list row for the same model and token class, so from `effectiveFrom` on, every frame that resolves to this model and class is priced at the contracted rate rather than the provider's published one.
 

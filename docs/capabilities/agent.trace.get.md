@@ -1,4 +1,4 @@
-# agent.trace.get
+# get_execution_trace
 
 **Domain:** agent
 **Mode:** sync
@@ -76,6 +76,6 @@ path like any capability.
 ## Surfaces
 
 - **API:** `GET /v1/{org}/{ws}/agent/trace/:executionId`
-- **MCP:** tool `agent.trace.get`
+- **MCP:** tool `get_execution_trace`
 - **CLI:** `oxagen trace <executionId> [--json]`
 - **App:** run-trace page under the workspace Activity section.

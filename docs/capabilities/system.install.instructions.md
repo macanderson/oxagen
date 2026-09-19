@@ -1,4 +1,4 @@
-# system.install.instructions
+# get_install_instructions
 
 **Domain:** system
 **Mode:** sync

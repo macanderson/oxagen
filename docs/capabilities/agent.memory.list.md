@@ -1,4 +1,4 @@
-# agent.memory.list
+# list_memories
 
 **Domain:** agent
 **Mode:** sync

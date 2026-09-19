@@ -5,7 +5,7 @@ description: "The governed workspace context graph: source facts, relationships,
 
 Every workspace has a **governed context graph**: a tenant-isolated Neo4j graph that holds approved entities and relationships from connected sources, agent memories, and stable provider metadata. Oxagen checks every read in workspace scope, so an agent can ground answers in shared context without Oxagen becoming a remote copy of a developer's checkout.
 
-Explore it in **Workspace → Knowledge**.
+Search it with `oxagen graph search` or the graph capabilities over API or MCP. The current app has no Knowledge explorer page.
 
 ## What lives in the graph
 
@@ -32,7 +32,7 @@ Until that evidence ledger exists, Oxagen does not infer or promote run-to-file 
 
 ## Sources
 
-**Knowledge → Sources** lists the governed data source connections that feed the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence: webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in one of three modes: connection only (keep data), data only (keep config), or full.
+`list_connections` lists the source connections that feed the graph. Each connection maps its source record types to your entity types (a mapping step you confirm at setup), then syncs on a cadence: webhook, polling, or manual. You can pause a connection, re-sync it incrementally or in full, or delete it in one of three modes: connection only (keep data), data only (keep config), or full.
 
 <Mermaid
   chart="
@@ -62,7 +62,7 @@ A future candidate system must carry attributable producer provenance, explicit 
 
 ## Citation analytics
 
-Every grounded answer records which memories and graph nodes it cited, and how much each one mattered. **Knowledge → Citations** rolls those citations up into a workspace dashboard (most-cited and least-useful memories, violated rules, and top cited entities), so you can promote what works and demote what does not. See [Citations](/docs/knowledge/citations).
+`get_citation_stats` summarizes recorded citations and their influence and compliance judgments. Run `oxagen memory citations` for the same data from the terminal. See [Citations](/docs/knowledge/citations).
 
 ## Governing the graph's shape
 
