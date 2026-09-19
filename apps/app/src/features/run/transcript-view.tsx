@@ -48,7 +48,7 @@ import {
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
-import type { Read } from "@/data/read";
+import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
@@ -74,6 +74,9 @@ import {
 } from "./transcript-model";
 
 type Place = { org: string; ws: string; runId: string };
+
+/** A page-read refusal the player shows under the transport. */
+type PageFailure = Extract<ActionResult<unknown>, { ok: false }>;
 
 const SPEEDS = [1, 1.5, 2, 4] as const;
 /** How often a followed live run re-reads itself. */
@@ -508,11 +511,14 @@ export function TranscriptView({
   // block below checks it and runs one more tail read once that request
   // settles, so a frame landing during an active read is never dropped.
   const pendingReadRef = useRef(false);
+  // Latest loadMore, so the finally block can request a follow-up without
+  // closing over the useCallback identity (React Compiler refuses that).
+  const loadMoreRef = useRef<() => Promise<void>>(async () => {});
   const [entries, setEntries] = useState<Frames>(first);
   const [cursor, setCursor] = useState<string | null>(transcript.cursor);
   const [complete, setComplete] = useState(transcript.complete);
   const [reading, setReading] = useState(false);
-  const [pageFailure, setPageFailure] = useState<Read<unknown> | null>(null);
+  const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
   const live = status === "live";
@@ -596,19 +602,19 @@ export function TranscriptView({
     } catch {
       setPageFailure({
         ok: false,
-        reason: "error",
+        reason: "unavailable",
         code: "unanswered",
-        status: 0,
       });
     } finally {
       readingRef.current = false;
       setReading(false);
       if (pendingReadRef.current) {
         pendingReadRef.current = false;
-        void loadMore();
+        void loadMoreRef.current();
       }
     }
   }, [kinds, org, runId, ws]);
+  loadMoreRef.current = loadMore;
 
   // A followed live run reads its tail when the stream says a frame landed.
   const stream = useRunStream({
@@ -911,7 +917,7 @@ export function TranscriptView({
         {pageFailure === null ? null : (
           <span data-testid="transcript-page-failed" className="basis-full">
             {!pageFailure.ok &&
-            pageFailure.reason === "error" &&
+            pageFailure.reason === "unavailable" &&
             pageFailure.code === "invalid_input"
               ? t("badCursor")
               : t("pageFailed")}

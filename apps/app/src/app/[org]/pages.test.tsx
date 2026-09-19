@@ -467,6 +467,7 @@ describe("the Run page", () => {
       runId: "arun_1",
       tab: "frames",
       zoom: "turns",
+      kinds: null,
       frames: "ZjoyMA",
       body: null,
     });
@@ -478,6 +479,7 @@ describe("the Run page", () => {
     expect(Run.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       zoom: null,
+      kinds: null,
       frames: null,
       body: null,
     });

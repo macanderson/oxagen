@@ -23,9 +23,17 @@ import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
+import type { ActionResult } from "@/server/kernel";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { mockupTranscript, runRow, runTranscript } from "./run.builders";
+
+/** A page-action refusal the player shows under the transport. */
+const pageFailed = (code: string): ActionResult<RunTranscript> => ({
+  ok: false,
+  reason: "unavailable",
+  code,
+});
 
 const { readTranscriptPage } = vi.hoisted(() => ({
   readTranscriptPage:
@@ -214,7 +222,7 @@ describe("paging past the cursor", () => {
   });
 
   it("names a cursor the capability did not write, and keeps every entry already read (negative)", async () => {
-    readTranscriptPage.mockResolvedValue(readError("invalid_input", 400));
+    readTranscriptPage.mockResolvedValue(pageFailed("invalid_input"));
     renderSection({ read: paged });
     const before = screen.getAllByTestId("transcript-frame").length;
     fireEvent.click(screen.getByTestId("transcript-more"));
@@ -227,9 +235,7 @@ describe("paging past the cursor", () => {
   });
 
   it("says a page failed for any other reason without claiming the cursor was bad (negative)", async () => {
-    readTranscriptPage.mockResolvedValue(
-      readError("frame_store_unreachable", 502),
-    );
+    readTranscriptPage.mockResolvedValue(pageFailed("frame_store_unreachable"));
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
     await waitFor(() => {
@@ -316,10 +322,10 @@ describe("following a live run", () => {
 
     // readTranscriptPage never resolves until the test tells it to, so the
     // second frame is guaranteed to land while the first read is in flight.
-    const pending: Array<(read: Read<RunTranscript>) => void> = [];
+    const pending: Array<(read: ActionResult<RunTranscript>) => void> = [];
     readTranscriptPage.mockImplementation(
       () =>
-        new Promise<Read<RunTranscript>>((resolve) => {
+        new Promise<ActionResult<RunTranscript>>((resolve) => {
           pending.push(resolve);
         }),
     );

@@ -154,7 +154,8 @@ const CASES: RouteCase[] = [
   {
     path: "/runs/transcript",
     contract: "get_run_transcript",
-    input: { runId: TACHO_ID, zoom: "steps" },
+    // kinds and limit carry the contract defaults the route's parse applies.
+    input: { runId: TACHO_ID, zoom: "steps", kinds: [], limit: 200 },
     output: { entries: [], complete: true },
     refused: {
       "zoom outside the three levels": { runId: TACHO_ID, zoom: "frames" },

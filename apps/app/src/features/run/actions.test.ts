@@ -365,6 +365,10 @@ describe("readTranscriptPage", () => {
         [],
         "not-a-cursor",
       ),
-    ).toEqual({ ok: false, reason: "error", code: "invalid_input", status: 400 });
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "invalid_input",
+    });
   });
 });

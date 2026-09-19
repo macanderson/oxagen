@@ -18,18 +18,43 @@ import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_DEFAULT,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
 import type {
   RunTranscript,
   TranscriptKind,
   TranscriptZoom,
 } from "@/data/contracts/run";
+import { RunTranscript as RunTranscriptSchema } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
-import { dataSource } from "@/data/source";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
+
+/**
+ * A read, as the player consumes it. INV-19 has every exported function of a
+ * `"use server"` module answer with an `ActionResult`, so the `Read` the seam
+ * produces is carried across in the same shape a write's refusal takes.
+ */
+function asActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return { ok: false, reason: "unavailable", code: read.code };
+  }
+}
 
 /** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
 export async function haltRun(
@@ -121,6 +146,11 @@ export async function exportRun(
  * The cursor is the one the previous page answered with. A cursor this
  * capability did not write is refused as invalid input, and the player says
  * that rather than starting the transcript again.
+ *
+ * Made on demand through `kernelRead` rather than a DataSource port: the
+ * player asks from the client after the page has rendered, so a port read on
+ * the route would either miss the cursor or re-render the whole page (§2,
+ * ADR-089).
  */
 export async function readTranscriptPage(
   org: string,
@@ -129,12 +159,28 @@ export async function readTranscriptPage(
   zoom: TranscriptZoom,
   kinds: readonly TranscriptKind[],
   after: string,
-): Promise<Read<RunTranscript>> {
+): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
-  return dataSource().runs.transcript(ctx, runId, zoom, {
-    kinds: [...kinds],
-    after,
+  const read = await kernelRead(ctx, {
+    contract: runTranscriptGet,
+    input: {
+      runId,
+      zoom,
+      kinds: [...kinds],
+      limit: TRANSCRIPT_ENTRY_DEFAULT,
+      after,
+    },
+    page: "run",
   });
+  if (!read.ok) return asActionResult(read);
+  // The contract output matches the view model for this read: the entry shape
+  // and the cost basis are the same vocabulary, so a parse at the boundary is
+  // the mapper (INV-09) without reaching into `data/live`.
+  const parsed = RunTranscriptSchema.safeParse(read.value);
+  if (!parsed.success) {
+    return { ok: false, reason: "unavailable", code: "record_unmappable" };
+  }
+  return { ok: true, value: parsed.data };
 }
 
 /**
