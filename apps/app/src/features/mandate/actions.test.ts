@@ -11,13 +11,15 @@
 // which is what the denied cases below pin — including that a refused revoke
 // sends exactly one call and gets no mandate back, so no ledger row could have
 // moved.
+//
+// `changeMandateLimits` sends ONE call, carrying only the measures the operator
+// changed (`limitChanges`, ADR-102). The merge over the stored record happens in
+// the handler under the row lock, so these cases assert what the form said, and
+// that nothing here reads the mandate first — the read it used to do was a
+// snapshot nobody locked, and two operators could each post a whole record back
+// and restore a bound the other had lowered.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ledgerOutput,
-  MANDATE_ID,
-  mandateGetOutput,
-  mandateOutput,
-} from "@/test/mandate-outputs";
+import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -66,25 +68,13 @@ const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
 
 /**
- * `changeMandateLimits` makes two kernel calls: it reads the mandate to get the
- * stored limits, then writes the merged record. The stub answers by capability
- * name so a test can say what is stored and what the write answered, and so a
- * test asserting the write's input is asserting the merge rather than the form.
+ * `changeMandateLimits` makes exactly ONE kernel call: it sends the operator's
+ * changes and the handler merges them over the stored record under the row lock
+ * (ADR-102). The stub answers that write, or refuses it, so a test asserting the
+ * call's input is asserting what the form said and nothing about a merge.
  */
-function kernelAnswers(options: {
-  stored?: Parameters<typeof mandateOutput>[0];
-  write?: unknown;
-  readThrows?: unknown;
-  writeThrows?: unknown;
-}) {
-  invoke.mockImplementation((name) => {
-    if (name === "get_mandate") {
-      if (options.readThrows !== undefined)
-        return Promise.reject(options.readThrows);
-      return Promise.resolve(
-        mandateGetOutput([ledgerOutput()], mandateOutput(options.stored)),
-      );
-    }
+function kernelAnswers(options: { write?: unknown; writeThrows?: Error }) {
+  invoke.mockImplementation(() => {
     if (options.writeThrows !== undefined)
       return Promise.reject(options.writeThrows);
     return Promise.resolve(options.write ?? mandateOutput());
@@ -92,7 +82,7 @@ function kernelAnswers(options: {
 }
 
 /** The one `update_mandate_limits` call's input. */
-function writtenLimits(): unknown {
+function written(): unknown {
   const call = invoke.mock.calls.find(
     ([name]) => name === "update_mandate_limits",
   );
@@ -118,110 +108,56 @@ describe("changeMandateLimits", () => {
     validTo: "2026-12-31",
   };
 
-  /** The stored record the fixture carries: one monthly amount limit in USD. */
-  const STORED_AMOUNT = {
-    perCall: "250000000",
-    perPeriod: "2000000000",
-    period: "monthly",
-    currencyOrUnit: "USD",
-  };
-
-  it("writes the edit merged over the stored record, with the window's last day", async () => {
+  it("sends the changes the operator made, with the window's last day", async () => {
     kernelAnswers({});
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: true, value: { mandateId: MANDATE_ID, status: "active" } },
     );
     expect(requireViewer).toHaveBeenCalledWith("a-intel", "core-platform");
-    expect(writtenLimits()).toEqual({
+    expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      limits: {
-        // Untouched, and resubmitted exactly as recorded.
-        amount: STORED_AMOUNT,
+      limitChanges: {
         rows: {
           perCall: "50",
           perPeriod: "1000",
           period: "monthly",
           currencyOrUnit: "rows",
         },
-        calls: {
-          perPeriod: "40",
-          period: "daily",
-          currencyOrUnit: "calls",
-        },
+        // No period: the form shows the calls cap as a bare number and exposes
+        // no period control, so the change says nothing about the window and
+        // the handler keeps the stored one.
+        calls: { perPeriod: "40", currencyOrUnit: "calls" },
       },
       // The last day runs through its end, so a window to 2026-12-31 expires
       // as that day ends rather than as it begins.
       validTo: "2026-12-31T23:59:59.999Z",
     });
+  });
+
+  // The defect this exists for. The action used to read the mandate, merge the
+  // edit over the stored record, and post the whole record back, and that read
+  // was a snapshot nobody held a lock on: two operators editing different bounds
+  // each sent a complete record, and the later write restored the bound the
+  // earlier one had lowered. One call carries no snapshot to be stale.
+  it("makes exactly one kernel call, and never reads the mandate", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", draft);
+    expect(invoke).toHaveBeenCalledTimes(1);
     expect(invoke).toHaveBeenCalledWith(
-      "get_mandate",
-      { mandateId: MANDATE_ID, ledgerLimit: 1 },
+      "update_mandate_limits",
+      expect.objectContaining({ mandateId: MANDATE_ID }),
       expect.objectContaining(TENANT),
     );
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "get_mandate"),
+    ).toHaveLength(0);
   });
 
-  // The defect this exists for: `update_mandate_limits` SETS `limits`, so an
-  // edit naming one measure would delete the bounds on the others, and a deleted
-  // bound is unbounded authority for that measure. Editing one measure of a
-  // two-measure mandate must leave the other's bound present and unchanged.
-  it("keeps every bound the edit did not name, digit for digit", async () => {
-    kernelAnswers({
-      stored: {
-        limits: {
-          amount: {
-            perCall: "250000000",
-            perPeriod: "2000000000",
-            period: "monthly",
-            currencyOrUnit: "USD",
-          },
-          recipients: {
-            perCall: "25",
-            perPeriod: "500",
-            period: "weekly",
-            currencyOrUnit: "recipients",
-          },
-        },
-      },
-    });
-    await changeMandateLimits("a-intel", "core-platform", {
-      ...draft,
-      measure: "recipients",
-      unit: "recipients",
-      perCall: "10",
-      perPeriod: "200",
-      period: "weekly",
-      callsPerDay: "",
-      validTo: "",
-    });
-    expect(writtenLimits()).toEqual({
-      mandateId: MANDATE_ID,
-      limits: {
-        // The money measure the form cannot express, carried through untouched.
-        amount: STORED_AMOUNT,
-        recipients: {
-          perCall: "10",
-          perPeriod: "200",
-          period: "weekly",
-          currencyOrUnit: "recipients",
-        },
-      },
-    });
-  });
-
-  it("keeps a sublimit the edit left blank, not just a sibling measure", async () => {
-    kernelAnswers({
-      stored: {
-        limits: {
-          recipients: {
-            perCall: "25",
-            perPeriod: "500",
-            period: "weekly",
-            currencyOrUnit: "recipients",
-          },
-        },
-      },
-    });
-    // The operator clears the per-call box and leaves the period figure.
+  // A blank box means "leave this bound as it is", which is what the dialog
+  // says. The change carries no key for it, so nothing can read it as a
+  // deletion, and a deleted sublimit is unbounded authority for that sublimit.
+  it("leaves a field the operator cleared out of the change entirely", async () => {
+    kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       ...draft,
       measure: "recipients",
@@ -232,102 +168,16 @@ describe("changeMandateLimits", () => {
       callsPerDay: "",
       validTo: "",
     });
-    expect(writtenLimits()).toEqual({
+    expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      limits: {
+      limitChanges: {
         recipients: {
-          // Still bounded per call. A blank box leaves the bound as it is, which
-          // is what the dialog says, and dropping it would be unbounded
-          // authority for that sublimit.
-          perCall: "25",
           perPeriod: "400",
           period: "weekly",
           currencyOrUnit: "recipients",
         },
       },
     });
-  });
-
-  it("keeps the stored window of a calls cap the form cannot express", async () => {
-    kernelAnswers({
-      stored: {
-        limits: {
-          calls: {
-            perPeriod: "10",
-            period: "weekly",
-            currencyOrUnit: "calls",
-          },
-        },
-      },
-    });
-    // The form shows the calls cap as a bare number with no period control, so
-    // this submission says nothing about the window. Ten a week must not become
-    // ten a day.
-    await changeMandateLimits("a-intel", "core-platform", {
-      ...draft,
-      measure: "",
-      unit: "",
-      perCall: "",
-      perPeriod: "",
-      callsPerDay: "10",
-      validTo: "",
-    });
-    expect(writtenLimits()).toEqual({
-      mandateId: MANDATE_ID,
-      limits: {
-        calls: { perPeriod: "10", period: "weekly", currencyOrUnit: "calls" },
-      },
-    });
-  });
-
-  it("does not read the record when there is no limit to merge into (negative)", async () => {
-    kernelAnswers({});
-    await changeMandateLimits("a-intel", "core-platform", {
-      ...draft,
-      measure: "",
-      unit: "",
-      perCall: "",
-      perPeriod: "",
-      callsPerDay: "",
-      validTo: "2027-01-31",
-    });
-    expect(
-      invoke.mock.calls.filter(([name]) => name === "get_mandate"),
-    ).toHaveLength(0);
-  });
-
-  // The merge is authoritative only if it comes from the store, so a read that
-  // did not answer stops the write rather than falling back to the edit alone.
-  it("writes nothing when the record could not be read (negative)", async () => {
-    kernelAnswers({
-      readThrows: new kernel.HandlerError({
-        code: "forbidden",
-        reason: "org_role_required",
-        message: "an accountable org role is required",
-      }),
-    });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "denied", code: "org_role_required" },
-    );
-    expect(
-      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
-    ).toHaveLength(0);
-  });
-
-  it("reports a mandate nobody recorded as not found, from the read (negative)", async () => {
-    kernelAnswers({
-      readThrows: new kernel.HandlerError({
-        code: "not_found",
-        reason: "mandate_not_found",
-        message: "no such mandate",
-      }),
-    });
-    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
-      { ok: false, reason: "not_found", code: "mandate_not_found" },
-    );
-    expect(
-      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
-    ).toHaveLength(0);
   });
 
   // The figure typed is the figure stored. Scaling one to micros is correct only
@@ -342,10 +192,9 @@ describe("changeMandateLimits", () => {
       callsPerDay: "",
       validTo: "",
     });
-    expect(writtenLimits()).toEqual({
+    expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      limits: {
-        amount: STORED_AMOUNT,
+      limitChanges: {
         rows: {
           perCall: "50",
           perPeriod: "1000",
@@ -356,7 +205,7 @@ describe("changeMandateLimits", () => {
     });
   });
 
-  it("changes the window alone, with no limits record, when only a date is given", async () => {
+  it("changes the window alone, with no limit change, when only a date is given", async () => {
     kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       mandateId: MANDATE_ID,
@@ -368,13 +217,13 @@ describe("changeMandateLimits", () => {
       callsPerDay: "",
       validTo: "2027-01-31",
     });
-    expect(writtenLimits()).toEqual({
+    expect(written()).toEqual({
       mandateId: MANDATE_ID,
       validTo: "2027-01-31T23:59:59.999Z",
     });
   });
 
-  it("writes a calls cap on its own, over the record's other measures", async () => {
+  it("changes a calls cap on its own, naming no other measure", async () => {
     kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       mandateId: MANDATE_ID,
@@ -386,16 +235,12 @@ describe("changeMandateLimits", () => {
       callsPerDay: "500",
       validTo: "",
     });
-    expect(writtenLimits()).toEqual({
+    expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      limits: {
-        amount: STORED_AMOUNT,
-        calls: {
-          perPeriod: "500",
-          period: "daily",
-          currencyOrUnit: "calls",
-        },
-      },
+      // Every other measure's bound is left to the handler, which keeps what it
+      // is not told to change. Sending a whole record from here is what made a
+      // concurrent edit able to restore a bound somebody lowered.
+      limitChanges: { calls: { perPeriod: "500", currencyOrUnit: "calls" } },
     });
   });
 
@@ -500,6 +345,19 @@ describe("changeMandateLimits", () => {
     });
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: false, reason: "denied", code: "org_role_required" },
+    );
+  });
+
+  it("reports a mandate nobody recorded as not found (negative)", async () => {
+    kernelAnswers({
+      writeThrows: new kernel.HandlerError({
+        code: "not_found",
+        reason: "mandate_not_found",
+        message: "no such mandate",
+      }),
+    });
+    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
+      { ok: false, reason: "not_found", code: "mandate_not_found" },
     );
   });
 
