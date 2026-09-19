@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { OxagenWordmark } from "@oxagen/ui";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 /**
  * Landing-group layout. Wraps the home marketing page with a lightweight,
@@ -144,9 +145,12 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
             <span>
               © <CopyrightYear /> Oxagen. All rights reserved.
             </span>
-            <span className="font-mono">
-              app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh
-            </span>
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="font-mono">
+                app.oxagen.sh · api.oxagen.sh · mcp.oxagen.sh
+              </span>
+              <ThemeSwitcher />
+            </div>
           </div>
         </div>
       </footer>
