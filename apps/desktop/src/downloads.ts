@@ -222,17 +222,22 @@ ${body}
     first === undefined
       ? ""
       : `<a class="btn" id="pick" href="${hrefOf(first.file)}" data-os="${first.os}">Download for ${first.os} (${escapeHtml(first.variant)})</a>`;
-  // What the script may pick per OS: the installer most machines want.
-  const preferred: ReadonlyArray<[Installer["os"], RegExp]> = [
-    ["macOS", /_aarch64\.dmg$/],
-    ["Windows", /_x64-setup\.exe$/],
-    ["Linux", /_amd64\.AppImage$/],
+  // What the script may pick per OS: the installer most machines want. A
+  // Mac's architecture is not in the user agent (Safari on Apple silicon
+  // says Intel), so macOS gets both: the script asks Chromium's high-entropy
+  // hints when they exist and otherwise offers Apple silicon with the Intel
+  // build one click away beside it, never as a second gold action.
+  const preferred: ReadonlyArray<[string, Installer["os"], RegExp]> = [
+    ["macOS", "macOS", /_aarch64\.dmg$/],
+    ["macOSIntel", "macOS", /_x64\.dmg$/],
+    ["Windows", "Windows", /_x64-setup\.exe$/],
+    ["Linux", "Linux", /_amd64\.AppImage$/],
   ];
   const picks: Record<string, { href: string; label: string }> = {};
-  for (const [os, re] of preferred) {
+  for (const [key, os, re] of preferred) {
     const entry = sorted.find((e) => e.os === os && re.test(e.file));
     if (entry !== undefined)
-      picks[os] = {
+      picks[key] = {
         href: hrefOf(entry.file),
         label: `${os} (${entry.variant})`,
       };
@@ -318,7 +323,7 @@ footer a{color:var(--muted)}
 <h1>Download the Oxagen app</h1>
 <p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
 <p class="meta"><span>Version <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">Release notes</a></span></p>
-<div class="cta">${primary}<span class="alt">Other platforms and architectures are listed below. Each file has a SHA-256.</span></div>
+<div class="cta">${primary}<span class="alt" id="alt">Other platforms and architectures are listed below. Each file has a SHA-256.</span></div>
 </section>
 <div class="grid">
 ${section("macOS", "macOS 12 or newer. Open the .dmg and drag Oxagen to Applications. Builds are not yet notarized, so the first launch is a right-click, then Open.")}
@@ -336,7 +341,11 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 <footer><a href="${links.notes}">What changed in ${version}</a><a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
 </div>
 <script>
-(function(){var picks=${picksJson};var el=document.getElementById("pick");if(!el)return;var ua=navigator.userAgent||"";var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";var os=/Win/i.test(p)||/Windows/i.test(ua)?"Windows":/Mac/i.test(p)||/Mac OS/i.test(ua)?"macOS":/Linux|X11/i.test(p+ua)?"Linux":null;var pick=os&&picks[os];if(!pick)return;el.href=pick.href;el.textContent="Download for "+pick.label;el.setAttribute("data-os",os);var panel=document.getElementById(os.toLowerCase());if(panel)panel.setAttribute("aria-current","true");})();
+(function(){var picks=${picksJson};var el=document.getElementById("pick");var alt=document.getElementById("alt");if(!el)return;var ua=navigator.userAgent||"";var uad=navigator.userAgentData;var p=(uad&&uad.platform)||navigator.platform||"";var os=/Win/i.test(p)||/Windows/i.test(ua)?"Windows":/Mac/i.test(p)||/Mac OS/i.test(ua)?"macOS":/Linux|X11/i.test(p+ua)?"Linux":null;if(!os)return;function apply(key,note){var pick=picks[key];if(!pick)return;el.href=pick.href;el.textContent="Download for "+pick.label;el.setAttribute("data-os",os);var panel=document.getElementById(os.toLowerCase());if(panel)panel.setAttribute("aria-current","true");if(alt&&note)alt.innerHTML=note;}
+if(os!=="macOS"){apply(os);return;}
+var intel=picks.macOSIntel;var intelNote=intel?'On an Intel Mac? <a href="'+intel.href+'">Download the Intel build</a>. Each file has a SHA-256.':"";
+apply("macOS",intelNote);
+if(uad&&uad.getHighEntropyValues){uad.getHighEntropyValues(["architecture"]).then(function(h){if(h&&/^(x86|x64)/i.test(h.architecture||""))apply("macOSIntel","Apple silicon? The macOS panel below has that build. Each file has a SHA-256.");}).catch(function(){});}})();
 </script>
 </body>
 </html>

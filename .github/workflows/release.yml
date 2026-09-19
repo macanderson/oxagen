@@ -136,6 +136,9 @@ jobs:
     if: "github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore(release): v')"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # A step's `if` cannot read `secrets`; it can read the job's `env`.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -207,9 +210,8 @@ jobs:
       # apps/cli/package.json itself would leak workspace:* deps. Same checks
       # as release.ts's publishCliToNpm, which this replaces in CI.
       - name: Publish @oxagen/cli to npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
+        if: env.NPM_TOKEN != ''
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           VERSION: ${{ steps.v.outputs.version }}
         run: |
           set -euo pipefail

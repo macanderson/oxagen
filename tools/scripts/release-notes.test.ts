@@ -126,6 +126,18 @@ describe("fallbackNotes", () => {
     expect(notes.body).toContain("No commits since the previous release.");
   });
 
+  it("leaves a subject the scanner still rejects in the commit log, and says so", () => {
+    const notes = fallbackNotes({
+      ...HISTORY,
+      log: "- make the gateway more robust (abc1234)\n- fix: a thing (def5678)\n- add observability hooks (0123456)",
+    });
+    expect(notes.body).toBe(
+      "## What changed\n\n- fix: a thing\n\nAnd 2 more, in the commit log.",
+    );
+    expect(notes.summary).toContain("carries 3 changes");
+    expect(proseHits(notes)).toEqual([]);
+  });
+
   it("caps a long log", () => {
     const log = Array.from(
       { length: 45 },

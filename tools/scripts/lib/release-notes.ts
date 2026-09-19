@@ -159,7 +159,16 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
     )
     .filter((l) => l.length > 0)
     .map((l) => sanitizeLine(l));
+  // The mechanical fixes above cannot rewrite a subject that carries a word
+  // from the avoid list ("robust", "observability"), and a page that fails
+  // the gate would block the release PR, which is what the fallback exists
+  // to prevent. Such a subject stays in the commit log and is counted here.
+  const clean = subjects.filter(
+    (l) => findHits(`- ${l}\n`, ".md").length === 0,
+  );
   const count = subjects.length;
+  const shown = clean.slice(0, 40);
+  const omitted = count - shown.length;
   const summary =
     count === 0
       ? `Version ${h.version} carries no changes since ${h.fromRef}.`
@@ -169,8 +178,8 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
     "",
     ...(count === 0
       ? ["No commits since the previous release."]
-      : subjects.slice(0, 40).map((s) => `- ${s}`)),
-    ...(count > 40 ? ["", `And ${count - 40} more, in the commit log.`] : []),
+      : shown.map((s) => `- ${s}`)),
+    ...(omitted > 0 ? ["", `And ${omitted} more, in the commit log.`] : []),
   ].join("\n");
   return { summary, body };
 }
