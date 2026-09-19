@@ -379,13 +379,22 @@ describe("mergePublishedPrices", () => {
           inputPer1M: 0.15,
           outputPer1M: 0.6,
         }),
-        // The same identity, one version segment on: still displaced, which is
-        // what the override is for.
+        // `turbo` is a separately priced product, not a release of `gpt-4`,
+        // so the override does not reach it either. Only a version or a date
+        // stamp inherits.
         published({
           model: "gpt-4-turbo",
           provider: "openai",
           inputPer1M: 10,
           outputPer1M: 30,
+        }),
+        // A date stamp IS a release of the family, so this one is displaced,
+        // which is what the override is for.
+        published({
+          model: "gpt-4-0613",
+          provider: "openai",
+          inputPer1M: 30,
+          outputPer1M: 60,
         }),
       ],
     ]);
@@ -393,13 +402,14 @@ describe("mergePublishedPrices", () => {
       "gpt-4",
       "gpt-4o",
       "gpt-4o-mini",
+      "gpt-4-turbo",
     ]);
     expect(merged.counts).toMatchObject({
       operator_override: 1,
-      in_code_card: 2,
+      in_code_card: 3,
     });
 
-    // And each of the three then prices its own calls, at its own rate.
+    // And each survivor then prices its own calls, at its own rate.
     const book: PriceEntry[] = seedsFromPublishedPrices(
       merged.prices,
       new Date("2026-09-01T00:00:00.000Z"),
@@ -419,6 +429,70 @@ describe("mergePublishedPrices", () => {
     expect(priced("gpt-4-0613")).toBe(usdPerMillionToMicros(1));
     expect(priced("gpt-4o-2026-08-01")).toBe(usdPerMillionToMicros(2.5));
     expect(priced("gpt-4o-mini-2026-08-01")).toBe(usdPerMillionToMicros(0.15));
+    // The regression this pins: the mini row survives AND wins its own calls,
+    // instead of the `gpt-4o`-shaped override's rate reaching it.
+    expect(priced("gpt-4o-mini")).toBe(usdPerMillionToMicros(0.15));
+    expect(priced("gpt-4-turbo")).toBe(usdPerMillionToMicros(10));
+  });
+
+  // The displacement half of the same finding: an installation override for
+  // `gpt-4o` used to discard the catalog's `gpt-4o-mini` row, because `-` is a
+  // separator. With the mini row gone, every mini call then resolved to the
+  // override and billed at roughly seventeen times its published rate.
+  it("leaves a lower source's separately priced product beneath an override", () => {
+    const override = published({
+      model: "gpt-4o",
+      provider: "openai",
+      inputPer1M: 2.5,
+      outputPer1M: 10,
+      source: "operator_override",
+    });
+    const merged = mergePublishedPrices([
+      [override],
+      [
+        published({
+          model: "gpt-4o-mini",
+          provider: "openai",
+          inputPer1M: 0.15,
+          outputPer1M: 0.6,
+        }),
+        // A dated release of the overridden model IS displaced by it.
+        published({
+          model: "gpt-4o-2026-08-01",
+          provider: "openai",
+          inputPer1M: 5,
+          outputPer1M: 20,
+        }),
+      ],
+    ]);
+    expect(merged.prices.map((p) => p.model)).toEqual([
+      "gpt-4o",
+      "gpt-4o-mini",
+    ]);
+    expect(merged.counts).toMatchObject({
+      operator_override: 1,
+      in_code_card: 1,
+    });
+
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((seed, i) => ({
+      ...seed,
+      id: `e-${i}`,
+      orgId: null,
+      source: "list" as const,
+    }));
+    const priced = (modelId: string) =>
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId,
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      })?.microsPerMillion;
+    expect(priced("gpt-4o-mini")).toBe(usdPerMillionToMicros(0.15));
+    expect(priced("gpt-4o")).toBe(usdPerMillionToMicros(2.5));
+    expect(priced("gpt-4o-2026-08-01")).toBe(usdPerMillionToMicros(2.5));
   });
 
   it("keeps a family and a specific model when the SAME source published both", () => {
@@ -685,22 +759,52 @@ describe("seedsFromPublishedPrices, provenance", () => {
   });
 });
 
-// The comparison the merge displaces on. A model id is a family plus segments
-// separated by `-`, `/`, `:`, `.`, `_` or `@`; anything that continues mid
-// segment is a different model, whatever it shares at the front.
+// The comparison the merge displaces on. Inheritance is restricted to what is
+// actually stated: an explicit alias, or a suffix that names a RELEASE of the
+// same product — a version, a date stamp, a snapshot ordinal, `latest`. A
+// suffix that names a different product (`mini`, `turbo`, `thinking`) is a
+// distinct identity, because punctuation cannot tell the two apart and the
+// safe direction is to leave a model unpriced rather than bill it another
+// product's rate.
 describe("isSameModelIdentity", () => {
-  it("is the same identity at a segment boundary or not at all", () => {
+  it("inherits a version, a date stamp or `latest`", () => {
     expect(isSameModelIdentity("gpt-4", "gpt-4")).toBe(true);
-    expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(true);
     expect(isSameModelIdentity("claude-sonnet-5", "claude-sonnet")).toBe(true);
-    expect(
-      isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5"),
-    ).toBe(true);
-    // A claimed name that already ends at a boundary is one.
-    expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
+    expect(isSameModelIdentity("claude-sonnet-5-20260901", "claude-sonnet")).toBe(
       true,
     );
+    expect(isSameModelIdentity("gpt-4o-2026-08-01", "gpt-4o")).toBe(true);
+    expect(isSameModelIdentity("gpt-4-0613", "gpt-4")).toBe(true);
+    expect(isSameModelIdentity("gemini-1.5-pro-002", "gemini-1.5-pro")).toBe(
+      true,
+    );
+    expect(isSameModelIdentity("claude-sonnet-5-latest", "claude-sonnet-5")).toBe(
+      true,
+    );
+    expect(isSameModelIdentity("gpt-5.2", "gpt-5")).toBe(true);
+  });
 
+  it("keeps a hyphenated product as a distinct identity", () => {
+    // The finding this rule exists for: `-` is a separator, so a boundary test
+    // let a negotiated `gpt-4o` price `gpt-4o-mini` at a tenth of the rate.
+    expect(isSameModelIdentity("gpt-4o-mini", "gpt-4o")).toBe(false);
+    expect(isSameModelIdentity("gpt-4o-mini-2026-08-01", "gpt-4o")).toBe(false);
+    expect(isSameModelIdentity("gpt-5-nano", "gpt-5")).toBe(false);
+    expect(isSameModelIdentity("gemini-1.5-flash", "gemini-1.5")).toBe(false);
+    // `turbo` is a product, not a release.
+    expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(false);
+    // A gateway variant is priced on its own, so it does not inherit either.
+    expect(isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5")).toBe(
+      false,
+    );
+    // Ending at a separator does not let a name own everything beneath it.
+    expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
+      false,
+    );
+  });
+
+  it("still holds the earlier rounds' cases", () => {
+    // Round two: leading characters are not an identity at all.
     expect(isSameModelIdentity("gpt-4o", "gpt-4")).toBe(false);
     expect(isSameModelIdentity("gpt-4o-mini", "gpt-4")).toBe(false);
     expect(isSameModelIdentity("claude-sonnet-50", "claude-sonnet-5")).toBe(
@@ -710,5 +814,10 @@ describe("isSameModelIdentity", () => {
     // longer match, so a family row below a specific override bypasses nothing.
     expect(isSameModelIdentity("gpt-4", "gpt-4-turbo")).toBe(false);
     expect(isSameModelIdentity("gpt-4o", "")).toBe(false);
+    // Round one: the gateway form binds as an EXPLICIT alias, which is the
+    // other relationship that inherits — see the alias tests above.
+    expect(
+      isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/claude-sonnet-5"),
+    ).toBe(true);
   });
 });
