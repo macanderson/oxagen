@@ -4,6 +4,7 @@
 // (or the gate) to regenerate after adding or removing a contract.
 
 import "./contracts/agent.approval.list";
+import "./contracts/agent.approval.list_resolved";
 import "./contracts/agent.approval.resolve";
 import "./contracts/agent.credential.rotate";
 import "./contracts/agent.debug.trace";

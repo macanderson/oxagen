@@ -27,7 +27,7 @@
       "targetUserId": {
         "type": "string",
         "minLength": 1,
-        "description": "The UUID of the user whose role to change"
+        "description": "The user whose role to change: their public id (usr_…) or their user uuid"
       },
       "newRole": {
         "type": "string",

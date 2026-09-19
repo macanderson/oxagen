@@ -92,8 +92,8 @@ export const agentApprovalList = registerCapability({
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
-    workspace: {},
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
   },
   input: z
     .object({

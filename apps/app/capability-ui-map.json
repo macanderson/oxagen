@@ -550,6 +550,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_resolved_approvals": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=approvals: the Resolved section reads list_resolved_approvals narrowed to the run, showing the rule that auto-approved a call with no person (features/run/resolved-approvals.tsx, features/run/run.tsx, data/live/approvals.ts)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session_011hCk8oPj1zX2ZgeBEfH1wT"
+    },
     "list_repositories": {
       "route": "/[org]/[ws]/repositories",
       "page": "apps/app/src/app/[org]/[ws]/repositories/[[...tab]]/page.tsx",

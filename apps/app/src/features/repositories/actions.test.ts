@@ -370,7 +370,7 @@ describe("listGithubInstallations", () => {
     expect(await listGithubInstallations("acme", "core-platform")).toEqual({
       ok: false,
       reason: "conflict",
-      code: "conflict",
+      code: "github_not_authorized",
     });
   });
 

@@ -9,15 +9,16 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**310 capabilities across 47 domains.**
+**324 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (57)
+## Agent (58)
 
 - [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
+- [agent.approval.list_resolved](agent.approval.list_resolved.md) — List the workspace's resolved approvals, most recently resolved first, cursor-paged, optionally narrowed to one run or a resolved-at time range, including the rule that auto-approved a call no person looked at
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
@@ -304,7 +305,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md) — Configure re-authentication alert preferences for the org
 - [plugin.version.list](plugin.version.list.md) — List version history with changelog and breaking-change flags
 
-## Privacy (2)
+## Privacy (3)
 
 - [privacy.data.erase](privacy.data.erase.md) — Request erasure of personal or organizational data under GDPR Article 17
 - [privacy.data.export](privacy.data.export.md) — Request a machine-readable ZIP archive of data under GDPR Article 20
@@ -457,7 +458,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [tools.load](tools.load.md) — Return the full definitions of capabilities the in-app agent may call, by name; a name outside that set is reported as unknown
 - [tools.search](tools.search.md) — Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals; at most eight rows with ids
 
-## User (4)
+## User (5)
 
 - [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
 - [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
