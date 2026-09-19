@@ -190,8 +190,48 @@ export async function readGitFacts(
   // Undefined here is a failed read, not a clean tree, so the field is left
   // off rather than asserting cleanliness nobody observed.
   if (status !== undefined) facts.dirty = status.trim().length > 0;
-  if (remote !== undefined) facts.remote_digest = digestBytes(remote);
+  if (remote !== undefined)
+    facts.remote_digest = digestBytes(canonicalRemote(remote));
   return facts;
+}
+
+/**
+ * The remote URL reduced to the repository it names, so two hosts working
+ * the same repository digest to the same value.
+ *
+ * The digest exists to tell repositories apart without saying which one, so
+ * it has to depend on the repository and nothing else. A remote often
+ * carries per-machine credentials in its userinfo
+ * (`https://user:token@host/acme/repo.git`), and hashing that raw made the
+ * identity depend on the token: two developers, or one developer after a
+ * rotation, produced different digests for the same repository and nothing
+ * downstream could correlate them.
+ *
+ * So the userinfo goes, the scheme and the `.git` suffix go, `scp` syntax
+ * (`git@host:acme/repo.git`) is folded onto the same shape as its URL form,
+ * and the host is lowercased. The path is not, because a repository name is
+ * case sensitive on most forges. None of this is reversible and none of it
+ * needs to be: nothing reads the digest back, it is only compared.
+ */
+export function canonicalRemote(remote: string): string {
+  let value = remote.trim();
+  // `git@host:acme/repo.git` is the same repository as
+  // `ssh://git@host/acme/repo.git`.
+  const scp = /^([^/@]+)@([^/:]+):(.+)$/.exec(value);
+  if (scp !== null && !value.includes("://"))
+    value = `ssh://${scp[2] ?? ""}/${scp[3] ?? ""}`;
+  value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
+  // Userinfo, which is where a token rides.
+  const at = value.indexOf("@");
+  const firstSlash = value.indexOf("/");
+  if (at !== -1 && (firstSlash === -1 || at < firstSlash))
+    value = value.slice(at + 1);
+  // Trailing slashes first: the `.git` anchor does not match with one after
+  // it, so the other order left `repo.git/` carrying its suffix.
+  value = value.replace(/\/+$/, "").replace(/\.git$/, "");
+  const slash = value.indexOf("/");
+  if (slash === -1) return value.toLowerCase();
+  return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
 }
 
 /** The index and worktree letters of a porcelain v1 entry, mapped to a status. */
@@ -362,7 +402,7 @@ async function untrackedLineCount(
  * `git diff` reports the unstaged half only, so an agent that ran `git add`
  * would have its work counted as zero lines, which is the same blindness
  * this pass exists to remove. A repository with no commits has no `HEAD` to
- * diff, and falls back to the unstaged form.
+ * diff, and names the empty tree in its place.
  *
  * The status listing gates everything else, so it is read on its own. The
  * numstat and the repository root are then read together: they answer
@@ -374,7 +414,18 @@ export async function readWorkingTreeChanges(
   exec: ExecAsync,
   cwd: string,
 ): Promise<GitWorkingTreeChange[] | undefined> {
-  const status = await git(exec, cwd, ["status", "--porcelain=v1", "-z"]);
+  const status = await git(exec, cwd, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    // Default `normal` mode collapses a new directory into one `?? dir/`
+    // entry, so an agent that created a directory of files had all of them
+    // recorded as a single synthetic path with zero lines. `all` names each
+    // file, which is what the run is supposed to show. Both bounds still
+    // apply above it: `parsePorcelainZ` stops at `MAX_CHANGED_PATHS`, and
+    // only `MAX_UNTRACKED_LINE_COUNTS` of the untracked files are probed.
+    "--untracked-files=all",
+  ]);
   // Undefined is a read that did not happen: a timeout, a non-zero exit, a
   // directory that is not a repository. An empty list is a read that did
   // happen and found nothing. Collapsing the two would seal
@@ -393,18 +444,18 @@ export async function readWorkingTreeChanges(
       // `git diff` then reports only what is unstaged, so a file already
       // staged in a fresh repository counted as zero added lines even
       // though `git status` reported it. The empty tree is what HEAD would
-      // be if it existed, so the cached diff against it gives the staged
-      // file its real count, and the unstaged diff still covers the rest.
-      const staged = await git(exec, cwd, [
-        "diff",
-        "--numstat",
-        "--cached",
-        EMPTY_TREE_OBJECT,
-      ]);
-      const unstaged = await git(exec, cwd, ["diff", "--numstat"]);
-      return [staged ?? "", unstaged ?? ""]
-        .filter((part) => part.length > 0)
-        .join("\n");
+      // be if it existed, so diffing against it asks the same question the
+      // `HEAD` form asks everywhere else.
+      //
+      // It is one diff, not a staged one plus an unstaged one. Those two
+      // overlap: a file staged and then edited again appears in both, and
+      // `parseNumstat` keys by path, so the second row replaced the first
+      // and the file was reported with the later edit's counts instead of
+      // its distance from nothing. Naming the tree without `--cached`
+      // compares the worktree to it directly, which is that distance.
+      return (
+        (await git(exec, cwd, ["diff", "--numstat", EMPTY_TREE_OBJECT])) ?? ""
+      );
     }),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);

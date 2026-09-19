@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
 import type { ExecAsync, ExecResult } from "../host/service";
 import {
+  canonicalRemote,
   MAX_UNTRACKED_LINE_COUNTS,
   parseNumstat,
   parsePorcelainZ,
@@ -53,7 +54,8 @@ describe("readGitFacts", () => {
       head_sha: "a".repeat(40),
       branch: "feature/one",
       dirty: true,
-      remote_digest: digestBytes("git@github.com:acme/widgets.git"),
+      // Canonical, so the ssh and https spellings of one repository agree.
+      remote_digest: digestBytes("github.com/acme/widgets"),
     });
   });
 
@@ -66,9 +68,27 @@ describe("readGitFacts", () => {
       "remote get-url origin": `${url}\n`,
     });
     const facts = await readGitFacts(exec, "/repo");
-    expect(facts?.remote_digest).toBe(digestBytes(url));
+    // The digest is of the canonical repository, not of the URL as this
+    // machine spells it. Hashing the raw URL made the identity depend on
+    // the credential in its userinfo, so the same repository digested
+    // differently on two machines and after every token rotation.
+    expect(facts?.remote_digest).toBe(digestBytes("github.com/acme/widgets"));
+    expect(facts?.remote_digest).not.toBe(digestBytes(url));
     expect(JSON.stringify(facts)).not.toContain("token");
     expect(JSON.stringify(facts)).not.toContain("github.com");
+
+    // The same repository over ssh, with no credential at all, is the same
+    // identity. That is the property the digest exists for.
+    const viaSsh = await readGitFacts(
+      fakeGit({
+        "rev-parse --abbrev-ref HEAD": "main\n",
+        "rev-parse HEAD": "b".repeat(40) + "\n",
+        "status --porcelain": "",
+        "remote get-url origin": "git@github.com:acme/widgets.git\n",
+      }),
+      "/repo",
+    );
+    expect(viaSsh?.remote_digest).toBe(facts?.remote_digest);
   });
 
   it("reports a clean tree as not dirty", async () => {
@@ -388,13 +408,14 @@ describe("readWorkingTreeChanges", () => {
     expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
   });
 
-  it("falls back to the unstaged diff in a repository with no commits", async () => {
+  it("diffs against the empty tree in a repository with no commits", async () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
         "status --porcelain=v1 -z": " M src/a.ts\0",
         "diff --numstat HEAD": FAIL,
-        "diff --numstat": "4\t1\tsrc/a.ts\n",
+        "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+          "4\t1\tsrc/a.ts\n",
         "rev-parse --show-toplevel": "/repo\n",
       },
       calls,
@@ -403,6 +424,53 @@ describe("readWorkingTreeChanges", () => {
       ((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.lines_added,
     ).toBe(4);
     expect(calls.some((call) => call.includes("HEAD"))).toBe(true);
+  });
+
+  it("measures a partly staged initial file against nothing, not twice", async () => {
+    // Staged at three lines, then one line replaced and one added. A staged
+    // diff says 3/0 and an unstaged diff says 2/1 for the same path, so
+    // reading both and keying by path kept whichever came last. The file's
+    // real distance from an empty repository is 4/0, and one diff naming
+    // the empty tree is what asks for it.
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": "A  src/a.ts\0",
+      "diff --numstat HEAD": FAIL,
+      "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+        "4\t0\tsrc/a.ts\n",
+      "diff --numstat --cached": "3\t0\tsrc/a.ts\n",
+      "diff --numstat": "2\t1\tsrc/a.ts\n",
+      "rev-parse --show-toplevel": "/repo\n",
+    });
+    const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
+    expect(only?.lines_added).toBe(4);
+    expect(only?.lines_removed).toBe(0);
+  });
+
+  it("asks git to name every file inside an untracked directory", async () => {
+    // Without `all`, git collapses a new directory into a single `?? dir/`
+    // entry, and the run records one synthetic path with no line counts
+    // instead of the files the agent actually created.
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "?? new/a.ts\0?? new/b.ts\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+        "--no-index": {
+          status: 1,
+          stdout: "7\t0\t/dev/null => /repo/new/a.ts\n",
+          stderr: "",
+        },
+      },
+      calls,
+    );
+    const changes = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
+    expect(changes.map((change) => change.repo_relative_path)).toEqual([
+      "new/a.ts",
+      "new/b.ts",
+    ]);
+    const statusCall = calls.find((call) => call.includes("--porcelain=v1"));
+    expect(statusCall).toContain("--untracked-files=all");
   });
 
   it("falls back to the repo-relative path when the root cannot be read", async () => {
@@ -501,5 +569,42 @@ describe("worktreeReconciledBody", () => {
     expect(body["observed_changes"]).toEqual([]);
     expect(body["observed_changes_total"]).toBe(0);
     expect(body["observed_changes_truncated"]).toBe(false);
+  });
+});
+
+describe("canonicalRemote", () => {
+  // The digest exists to tell repositories apart without naming them, so it
+  // has to depend on the repository and nothing else.
+  const forms = [
+    "https://github.com/acme/repo.git",
+    "https://github.com/acme/repo",
+    "https://user:ghp_secret@github.com/acme/repo.git",
+    "https://x-access-token:ghs_other@github.com/acme/repo.git",
+    "git@github.com:acme/repo.git",
+    "ssh://git@github.com/acme/repo.git",
+    "https://GitHub.com/acme/repo.git",
+    "https://github.com/acme/repo.git/",
+  ];
+
+  it("gives every form of one repository the same identity", () => {
+    const identities = new Set(forms.map(canonicalRemote));
+    expect(identities).toEqual(new Set(["github.com/acme/repo"]));
+  });
+
+  it("keeps different repositories apart", () => {
+    expect(canonicalRemote("https://github.com/acme/other.git")).not.toBe(
+      canonicalRemote("https://github.com/acme/repo.git"),
+    );
+    // A repository name is case sensitive on most forges, so the path is
+    // not folded even though the host is.
+    expect(canonicalRemote("https://github.com/acme/Repo.git")).not.toBe(
+      canonicalRemote("https://github.com/acme/repo.git"),
+    );
+  });
+
+  it("carries no credential into the identity", () => {
+    for (const secret of ["ghp_secret", "ghs_other", "user", "x-access-token"])
+      for (const form of forms)
+        expect(canonicalRemote(form)).not.toContain(secret);
   });
 });

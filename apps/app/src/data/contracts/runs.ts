@@ -35,8 +35,7 @@ export type RunSummary = z.infer<typeof RunSummary>;
  * operator name: an agent or a service has no person to name, while a `human`
  * with no name is a person whose record does not hold one.
  */
-export const OperatorKind = z.enum(["human", "agent", "service"]);
-export type OperatorKind = z.infer<typeof OperatorKind>;
+const OperatorKind = z.enum(["human", "agent", "service"]);
 
 /**
  * The model the run was served by. `provider` is the vendor that served the

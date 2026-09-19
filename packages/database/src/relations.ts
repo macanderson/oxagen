@@ -378,6 +378,21 @@ export const principalsRelations = relations(principals, ({ one, many }) => ({
     fields: [principals.orgId],
     references: [organizations.id],
   }),
+  /**
+   * The person a human principal acts for.
+   *
+   * Nullable on purpose, and not the same as "who created this principal".
+   * A delegated agent principal legitimately carries the `parent_user_id`
+   * of whoever built it, so a reader that wants the person who ran
+   * something has to require `kind = 'human'` as well. The partial unique
+   * index on (`org_id`, `parent_user_id`) in `schema/iam.ts` carries the
+   * same condition, which is where that rule is enforced rather than
+   * merely described.
+   */
+  parentUser: one(users, {
+    fields: [principals.parentUserId],
+    references: [users.id],
+  }),
   roleAssignments: many(principalRoleAssignments),
   accessRequests: many(accessRequests),
 }));
