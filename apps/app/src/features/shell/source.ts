@@ -28,6 +28,10 @@ export async function shellSource(
       name: user.name || null,
       email: user.email,
       avatarUrl: user.avatarUrl,
+      id: user.id,
+      orgRole: ctx.orgRole,
+      emailVerified: user.emailVerified,
+      twoFactorEnabled: user.twoFactorEnabled,
       // A clock is not worth an empty shell: a refused or failed preference
       // read falls back to the default zone, and the read's own refusal is
       // already reported by the kernel seam.

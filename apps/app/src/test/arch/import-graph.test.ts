@@ -254,6 +254,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
     { at: "src/data/live/audit.ts", expect: null },
     { at: "src/server/kernel.ts", expect: null },
   ],
+  "storage-client.ts": [
+    { at: "src/features/shell/export-storage.ts", expect: null },
+    { at: "src/features/shell/export-download.ts", expect: "platform" },
+    {
+      at: "src/app/[org]/account/export/[exportId]/route.ts",
+      expect: "platform",
+    },
+  ],
   "ui-library.ts": [{ at: "src/features/shell/sidebar.tsx", expect: null }],
   // INV-07: the layer matrix.
   "relative-feature-internals.ts": [
@@ -350,6 +358,14 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   // Without the directive it is not an action, so it never resolved a viewer.
   "kernel-read-no-directive.ts": [
     { at: "src/features/fleet/reads.ts", expect: "layer" },
+  ],
+  // The third name the kernel seam lends the `features` row: a pure mapper, on
+  // the same terms as the two calls.
+  "read-to-action-result-use-server.ts": [
+    { at: "src/features/shell/account-actions.ts", expect: null },
+  ],
+  "read-to-action-result-no-directive.ts": [
+    { at: "src/features/shell/shell-data.ts", expect: "layer" },
   ],
   "kernel-types-from-feature.ts": [
     { at: "src/features/fleet/approvals.tsx", expect: null },

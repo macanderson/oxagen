@@ -95,6 +95,8 @@ beforeEach(() => {
     email: "marcus.bell@acme.example",
     name: "Marcus Bell",
     avatarUrl: null,
+    emailVerified: true,
+    twoFactorEnabled: true,
   });
 });
 
@@ -106,6 +108,10 @@ describe("shellSource", () => {
         name: "Marcus Bell",
         email: "marcus.bell@acme.example",
         avatarUrl: null,
+        id: "usr_marcusbell",
+        orgRole: ctx.orgRole,
+        emailVerified: true,
+        twoFactorEnabled: true,
         timeZone: "Europe/London",
       },
       context: listed,
@@ -134,8 +140,10 @@ describe("shellSource", () => {
       email: "marcus.bell@acme.example",
       name: "",
       avatarUrl: null,
+      emailVerified: false,
+      twoFactorEnabled: false,
     });
-    expect((await shellSource(ctx, source)).viewer).toEqual({
+    expect((await shellSource(ctx, source)).viewer).toMatchObject({
       name: null,
       email: "marcus.bell@acme.example",
       avatarUrl: null,

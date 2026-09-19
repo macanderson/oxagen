@@ -11,6 +11,12 @@ export type ShellData = {
     name: string | null;
     email: string;
     avatarUrl: string | null;
+    /** The person's principal id, shown on the Profile tab beside their roles. */
+    id: string;
+    /** The viewer's role in this organization, lowercased (server/viewer.ts OrgRole). */
+    orgRole: string;
+    emailVerified: boolean;
+    twoFactorEnabled: boolean;
     /** The IANA zone the chrome's dates render in, and the Account dialog's current choice. */
     timeZone: string;
   };

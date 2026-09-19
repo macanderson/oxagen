@@ -16,6 +16,9 @@ type SessionUser = {
   email: string;
   name: string | null;
   image: string | null;
+  emailVerified: boolean;
+  /** Set by the twoFactor plugin (packages/auth/src/auth.ts); absent means not enrolled. */
+  twoFactorEnabled: boolean;
 };
 
 export type AppSession = { user: SessionUser };
@@ -25,8 +28,19 @@ async function readSession(): Promise<AppSession | null> {
   const { auth } = await import("@oxagen/auth/server");
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) return null;
-  const { id, email, name, image } = session.user;
-  return { user: { id, email, name: name || null, image: image ?? null } };
+  const { id, email, name, image, emailVerified } = session.user;
+  // The twoFactor plugin adds the column; the base session type does not name it.
+  const enrolled: unknown = Reflect.get(session.user, "twoFactorEnabled");
+  return {
+    user: {
+      id,
+      email,
+      name: name || null,
+      image: image ?? null,
+      emailVerified,
+      twoFactorEnabled: enrolled === true,
+    },
+  };
 }
 
 /** The request's session, memoized per request: one Better Auth lookup however many components ask. */
@@ -38,14 +52,24 @@ export type AuthUser = {
   name: string;
   /** Better Auth maps `image` to `auth.users.avatar_url` (packages/auth/src/auth.ts). */
   avatarUrl: string | null;
+  emailVerified: boolean;
+  twoFactorEnabled: boolean;
 };
 
 /** The signed-in person as the sign-in flows and the shell show them; null when signed out. */
 export async function getAuthUser(): Promise<AuthUser | null> {
   const session = await getSession();
   if (!session) return null;
-  const { id, email, name, image } = session.user;
-  return { id, email, name: name ?? "", avatarUrl: image };
+  const { id, email, name, image, emailVerified, twoFactorEnabled } =
+    session.user;
+  return {
+    id,
+    email,
+    name: name ?? "",
+    avatarUrl: image,
+    emailVerified,
+    twoFactorEnabled,
+  };
 }
 
 /** The Better Auth API route, with failed sign-ins audited (packages/auth/src/auth-route.ts). */

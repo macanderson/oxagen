@@ -223,6 +223,7 @@ import "./contracts/plugin.settings.set_auth_alerts";
 import "./contracts/plugin.version.list";
 import "./contracts/privacy.data.erase";
 import "./contracts/privacy.data.export";
+import "./contracts/privacy.data.export.status";
 import "./contracts/prompt.settings.read";
 import "./contracts/prompt.settings.write";
 import "./contracts/reference.cite";
