@@ -7,7 +7,7 @@ import {
 } from "./run.builders";
 import {
   buildTranscript,
-  frameBody,
+  soleBody,
   idsAt,
   openAtZoom,
   playDelay,
@@ -149,17 +149,29 @@ describe("the transport", () => {
   });
 });
 
-describe("frameBody", () => {
+describe("soleBody", () => {
   it("reads the half a frame carried: what came back, or what went out", () => {
     // A tool request records only the half that went out.
-    expect(frameBody(transcriptEntry({ response: null }))).toBeNull();
+    expect(soleBody(transcriptEntry({ response: null }))).toBeNull();
     const request = transcriptEntry({
       request: transcriptBody({ seq: "5" }),
       response: null,
     });
-    expect(frameBody(request)?.seq).toBe("5");
-    expect(frameBody(transcriptEntry())?.text).toBe(
+    expect(soleBody(request)?.seq).toBe("5");
+    expect(soleBody(transcriptEntry())?.text).toBe(
       "Cutting release/3.2 from main.",
     );
+  });
+
+  it("refuses an entry carrying both halves rather than picking one (negative)", () => {
+    // A folded step carries its input and its result. Answering either one
+    // here is how a tool's input ends up drawn where its result belongs, and
+    // nothing about the page looks wrong when it happens.
+    const folded = transcriptEntry({
+      kind: "tool_call",
+      request: transcriptBody({ seq: "20", text: '{"branch":"release/3.2"}' }),
+      response: transcriptBody({ seq: "21", text: '{"ok":true}' }),
+    });
+    expect(soleBody(folded)).toBeNull();
   });
 });

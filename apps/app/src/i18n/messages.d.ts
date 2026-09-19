@@ -1732,6 +1732,8 @@ type Messages = {
       request: string;
       response: string;
       decision: string;
+      calledWith: string;
+      noHalves: string;
     };
     frames: {
       title: string;
