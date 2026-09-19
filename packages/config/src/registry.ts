@@ -403,7 +403,7 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   BETTER_AUTH_TRUSTED_ORIGINS: {
     group: "Better Auth",
     description:
-      "Space-separated origins allowed cross-origin access to the auth API.",
+      "Comma-separated origins allowed cross-origin access to the auth API.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
@@ -461,20 +461,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GOOGLE_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
     description:
-      "Google LOGIN OAuth client id (social sign-in; minimal scopes).",
+      "Google LOGIN OAuth client id (social sign-in; minimal scopes). Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GOOGLE_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
-    description: "Google LOGIN OAuth client secret.",
+    description:
+      "Google LOGIN OAuth client secret. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GOOGLE_DATA_CLIENT_ID: {
@@ -502,20 +503,21 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   GITHUB_LOGIN_CLIENT_ID: {
     group: "OAuth providers",
     description:
-      "GitHub LOGIN OAuth client id (social sign-in; minimal scopes).",
+      "GitHub LOGIN OAuth App client id (social sign-in; minimal scopes). Not the GitHub App. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: false,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   GITHUB_LOGIN_CLIENT_SECRET: {
     group: "OAuth providers",
-    description: "GitHub LOGIN OAuth client secret.",
+    description:
+      "GitHub LOGIN OAuth App client secret. Checklist: docs/specs/social-login-oauth-apps.md.",
     secret: true,
     clientExposed: false,
     services: ["api", "app"],
-    requiredIn: [],
+    requiredIn: DEPLOYED,
     valueOrigin: "manual",
   },
   MCP_OAUTH_PREREGISTERED_CLIENTS: {

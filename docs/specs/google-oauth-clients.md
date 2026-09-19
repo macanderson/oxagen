@@ -33,15 +33,15 @@ Sources: [OAuth 2.0 Policies](https://developers.google.com/identity/protocols/o
 
 ## Client A — Login (`GOOGLE_LOGIN_CLIENT_ID` / `GOOGLE_LOGIN_CLIENT_SECRET`)
 
-Already built. Documented here as the pattern precedent for redirect-URI minimization.
+The live checklist for configuring and verifying this client (and the GitHub LOGIN OAuth App) is **`docs/specs/social-login-oauth-apps.md`**. Summary:
 
 - **Client type:** Web application
-- **Scopes:** `openid`, `profile`, `email` only — explicitly minimal (comment at `packages/auth/src/auth.ts:389-391`: "prevents Google Cloud Console pre-authorized scopes from silently expanding the consent screen"). Non-sensitive tier; no Google verification required.
+- **Scopes:** `openid`, `profile`, `email` only — explicitly minimal (comment at `packages/auth/src/auth.ts`). Non-sensitive tier; no Google verification required.
 - **Consumer:** Better Auth (`packages/auth/src/auth.ts`, `socialProviders.google`), mounted at `apps/app/src/app/api/auth/[...all]/`.
-- **Redirect URI — exactly ONE, registered against production only:**
-  `{OAUTH_PROXY_PRODUCTION_URL}/api/auth/callback/google` → `https://app.oxagen.sh/api/auth/callback/google`
-- **How previews and local work without extra redirect URIs:** Better Auth's OAuth Proxy (`OXA-1789`, `packages/auth/src/auth.ts:192-204`) relays social-login traffic for every preview deployment and local dev through the single production callback, using `OAUTH_PROXY_SECRET` to encrypt/decrypt the relay payload. This exists specifically because "a GitHub OAuth App (and a Google OAuth client) allows only ONE callback host" (comment at `auth.ts:195`) — Google forbids wildcard redirect URIs, so proxying beats registering N preview hostnames.
-- **Action needed:** none — already wired. Just confirm `GOOGLE_LOGIN_CLIENT_ID`/`SECRET` and `OAUTH_PROXY_SECRET` are set in Vercel prod + preview envs.
+- **Production / preview redirect URI (exactly one on the shared prod client):**
+  `https://app.oxagen.sh/api/auth/callback/google`
+- **How previews work without extra redirect URIs:** Better Auth's OAuth Proxy (`packages/auth/src/oauth-proxy-config.ts`) relays preview social-login traffic through the production callback. Production is a passthrough. Local **does not** use the proxy: local needs a separate client (or the same client with an added `http://localhost:3000/api/auth/callback/google` URI) and `GOOGLE_LOGIN_*` in `.env.local`.
+- **Secrets:** SSM `/oxagen/production/GOOGLE_LOGIN_*` (not Vercel; production runs on AWS). Required in preview and production.
 
 ## Client B — Data (`GOOGLE_DATA_CLIENT_ID` / `GOOGLE_DATA_CLIENT_SECRET`)
 

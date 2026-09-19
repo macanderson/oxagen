@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { LoginForm, OAuthButtons } from "@/features/auth";
-import { readNext, routes } from "@/shared/safe-path";
+import { oauthQueryOutcome } from "@/features/auth/auth-errors";
+import { firstParam, readNext, routes } from "@/shared/safe-path";
 import { AuthColumn, AuthFooter, AuthSkeleton } from "@/ui/auth-shell";
 import { linkText } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
@@ -29,6 +30,9 @@ async function Login({
   const params = await searchParams;
   // Only a same-origin relative path survives; anything else lands on "/".
   const next = readNext(params);
+  // Better Auth social failures land here as `?error=<code>` (errorCallbackURL
+  // and the proxy lift from `/?error=`). Map once so LoginForm can show it.
+  const initialOutcome = oauthQueryOutcome(firstParam(params.error));
   const [t, pages] = await Promise.all([
     getTranslations("auth"),
     getTranslations("pages"),
@@ -42,7 +46,7 @@ async function Login({
       />
       <div className="flex flex-col gap-4">
         <OAuthButtons callbackURL={next} />
-        <LoginForm next={next} />
+        <LoginForm next={next} initialOutcome={initialOutcome} />
       </div>
       <AuthFooter>
         {t("login.newHere")}{" "}

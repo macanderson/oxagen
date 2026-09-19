@@ -81,8 +81,16 @@ export async function liveVerifyTwoFactor(input: {
 export async function liveSignInSocial(input: {
   provider: "google" | "github";
   callbackURL: SafePath;
-}): Promise<void> {
-  await (await client()).signIn.social(input);
+}): Promise<ClientAuthResult> {
+  const reply: BetterAuthReply = await (await client()).signIn.social({
+    provider: input.provider,
+    callbackURL: input.callbackURL,
+    // Failed provider round-trips land on /login?error=<code> so the form can
+    // show them. Better Auth's default (`/?error=`) is gated and used to bury
+    // the code inside `next` until the proxy lift landed.
+    errorCallbackURL: "/login",
+  });
+  return fail(reply) ?? { ok: true };
 }
 
 export function rememberPendingNext(next: SafePath): void {
