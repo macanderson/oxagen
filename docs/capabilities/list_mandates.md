@@ -47,22 +47,28 @@ created. There is no org-scoped "Member" role in this system, so an org
 member with no workspace role is refused.
 
 Anyone else (no accountable office role and no workspace role
-`request_mandate` admits either) is refused, but not always at the same
-point: on an enterprise org, `defaultRoles` refuses them before the handler
-runs. On a Free, Build or Scale org, IAM's tier gate admits every
-capability unconditionally regardless of `defaultRoles`, so this is the
-handler's own `readerFilter` that refuses them, with the same
-`forbidden`/`org_role_required` reason either way. A workspace Viewer is
-refused this second way even on an enterprise org, since `readerFilter`'s
-own workspace-role check runs after the accountable-role check fails,
-independent of what tier gated the call in.
+`request_mandate` admits either) is refused by default, but not always at
+the same point, and not always at all. On a Free, Build or Scale org, IAM's
+tier gate admits every capability unconditionally regardless of
+`defaultRoles`, so a workspace Viewer (or any other role) reaches the
+handler and `readerFilter`'s own workspace-role check is what refuses them,
+`forbidden`/`org_role_required`. On an enterprise org, `defaultRoles`
+refuses a caller with no qualifying built-in role before the handler runs,
+the same reason, at the kernel instead. But an enterprise org can also grant
+an explicit custom `role_grants` entry naming `list_mandates` or
+`get_mandate` to a role that is neither an accountable office role nor a
+built-in workspace Owner/Member: that caller clears the kernel through the
+custom grant, and `readerFilter` does not re-check the built-in workspace
+roles on an established enterprise tier, so they are not refused. They take
+the same narrowed-reader scope a workspace Owner/Member gets (agents they
+created, mandates they requested), never the unnarrowed office view.
 
 ## Errors
 
 | code | reason | meaning |
 | --- | --- | --- |
 | `forbidden` | `no_principal` | No signed-in user on the request. |
-| `forbidden` | `org_role_required` | Neither an accountable office role nor a workspace Owner/Member `request_mandate` would admit; refused by the kernel on an enterprise org, or by `readerFilter` itself on any tier (ADR-107). |
+| `forbidden` | `org_role_required` | Neither an accountable office role, a workspace Owner/Member, nor (on an enterprise org) an explicit custom role grant admits the caller; refused by the kernel on an enterprise org with no such grant, or by `readerFilter` itself on a non-enterprise tier (ADR-107). |
 
 ## SPEC references
 

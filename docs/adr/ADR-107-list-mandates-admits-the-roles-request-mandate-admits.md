@@ -77,8 +77,11 @@ The read rule, stated once: an accountable org role (Owner, Admin, Billing,
 Compliance) reads every mandate in the workspace. A workspace Owner or Member
 (the same set `request_mandate` admits) reads the mandates of the agents
 they created, and the mandates they requested themselves for any agent.
-Anyone outside both sets is refused before the handler runs, exactly as
-before.
+Anyone outside both sets is refused by default. An enterprise org's own IAM
+configuration can widen that default with an explicit custom `role_grants`
+entry naming `list_mandates` or `get_mandate`: that caller clears the kernel
+on the strength of the grant alone, and takes the same narrowed-reader scope
+a workspace Owner or Member gets, per the follow-on fix below.
 
 This is enforcement matching a filter that was already written, not new
 narrowing logic: `readerFilter` and `blindSpotOf`'s `reader_scope` branch
@@ -103,6 +106,16 @@ check is the only gate a Free, Build or Scale org actually runs, and the
 earlier version admitted a workspace Viewer, or an Owner/Member demoted
 after creating an agent, as a narrowed reader on those tiers.
 
+The workspace-role check itself runs conditionally, not on every call: it
+resolves the org's tier (`resolveOrgTierDetailed`, `@oxagen/billing`) and
+only asserts Owner/Member when the tier is not an established enterprise
+one. An enterprise org runs `checkIAM`'s full resolver, so a caller who
+reaches this point without an accountable role already cleared either a
+built-in `defaultRoles` grant or an explicit custom `role_grants` entry
+naming the capability; enforcing the built-in workspace roles unconditionally
+would have refused that custom grant, an access-control regression the first
+version of this check introduced and a follow-up fixed the same day.
+
 ## Consequences
 
 - A workspace Owner or Member can now read the mandates of the agents they
@@ -114,9 +127,14 @@ after creating an agent, as a narrowed reader on those tiers.
   every such read to `createdById = actingUserId OR requestedBy =
   actingUserId`.
 - A workspace Viewer, or a role outside Owner/Member entirely, is refused on
-  every tier, not only an enterprise org: `readerFilter`'s own workspace
-  role check enforces it directly, since `defaultRoles` alone only gates an
-  enterprise org.
+  a non-enterprise tier (Free, Build, Scale): `readerFilter`'s own workspace
+  role check enforces it there, since `defaultRoles` alone only gates an
+  enterprise org. On an enterprise org the same Viewer is refused earlier,
+  by the kernel, unless an explicit custom `role_grants` entry names the
+  capability for their role, in which case `readerFilter` does not re-run
+  the workspace check and they read the narrowed scope (a follow-on fix,
+  below, closing a regression the first version of this workspace-role
+  check introduced).
 - `apps/app` needed no logic change: `blindSpotOf`'s `reader_scope` branch
   already tells a narrowed reader their view is limited instead of reporting
   "no mandate" when mandates are only hidden from them, and now renders on a
