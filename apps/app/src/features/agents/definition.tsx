@@ -3,7 +3,7 @@
 // renders it as a form (mockup agent.md: "every field on the Definition tab
 // is a view of the TOML file"). It reads the commit the last
 // commit_agent_definition cached, or seeds a file for an agent with none, and
-// hands the form the mandate count the irreversible side effect needs.
+// hands the form the mandate list the irreversible side effect is gated on.
 import { AGENT_DEFINITION_DIR } from "@oxagen/oxagen/contracts/agent.definition.commit";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
@@ -21,7 +21,7 @@ export function DefinitionSection({
   here,
 }: {
   detail: AgentDetail;
-  /** The agent's mandates; a failed read leaves the count unknown, not zero. */
+  /** The agent's mandates; a failed read leaves the form not knowing, rather than believing there are none. */
   mandates: Read<MandateList>;
   org: string;
   ws: string;
@@ -40,7 +40,7 @@ export function DefinitionSection({
       path={definition?.path ?? `${AGENT_DEFINITION_DIR}/${identity.slug}.toml`}
       base={definition?.source ?? definitionSeed(identity)}
       branch={definition?.branch ?? `agents/${identity.slug}`}
-      mandates={mandates.ok ? mandates.value.mandates.length : null}
+      mandates={mandates.ok ? mandates.value : null}
       editor={editor}
       after={here}
     />

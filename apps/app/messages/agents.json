@@ -265,8 +265,8 @@
           "sideEffects": "Side effects",
           "read": "May read through the gateway.",
           "write": "May write through the gateway; every write is a receipt.",
-          "irreversible": "Needs a mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
-          "irreversibleUnknown": "Needs a mandate. The mandate ledger did not answer, so the count is not known."
+          "irreversible": "Needs an active mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
+          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so the count is not known."
         },
         "instructions": {
           "title": "Instructions",

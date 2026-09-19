@@ -11,6 +11,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
+import { isEffective, type MandateList } from "@/data/contracts/mandates";
 import { diffStat } from "@/shared/line-diff";
 import type { SafePath } from "@/shared/safe-path";
 import { tomlLiteral, tomlMultiline, tomlSet } from "@/shared/toml-patch";
@@ -49,13 +50,62 @@ const table = (value: TomlValue | undefined): TomlTable | null =>
   typeof value === "object" && !Array.isArray(value) ? value : null;
 
 /**
- * Micros as the plain decimal a number input takes (`2.50`), locale-free by
- * the input's contract: it is a control's value, not money shown to a person,
- * which <Money> formats (INV-09).
+ * Micros as the plain decimal a number input takes, locale-free by the
+ * input's contract: it is a control's value, not money shown to a person,
+ * which <Money> formats (INV-09). It carries every micro the file stores
+ * (`2.500001`, never `2.50`) so that focusing and leaving the field reads
+ * back the integer it was drawn from. Rounded to cents, a blur re-parsed the
+ * rounded display, marked the form dirty, and turned a sub-cent budget into
+ * zero. Trailing zeros past the second decimal are dropped, so a whole
+ * number of cents still reads as money.
  */
 function usdInputValue(micros: number): string {
-  const cents = Math.round(micros / 10_000);
-  return `${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, "0")}`;
+  const whole = Math.floor(micros / 1_000_000);
+  const fraction = String(micros % 1_000_000)
+    .padStart(6, "0")
+    .replace(/(?<=\d{2})0+$/, "");
+  return `${String(whole)}.${fraction}`;
+}
+
+/** The dollars a person typed, as the integer micros the file stores; null when the text is not a non-negative number. */
+function parseUsdMicros(text: string): number | null {
+  const usd = Number.parseFloat(text);
+  if (!Number.isFinite(usd) || usd < 0) return null;
+  const micros = Math.round(usd * 1_000_000);
+  return Number.isSafeInteger(micros) ? micros : null;
+}
+
+const BUDGET_HEADER = /^\s*\[budget\]/m;
+const BUDGET_DOTTED = /^\s*budget\.per_run_micros\s*=/m;
+
+/**
+ * The draft with `budget.per_run_micros` set to `next` and every other budget
+ * key kept. The file may spell the table three ways, and the patcher works on
+ * lines, so the spelling decides which line is rewritten: a `[budget]` table
+ * gets its own key line, a dotted root key is replaced on its line, and an
+ * inline table (or no budget at all) is rewritten at the root with `siblings`
+ * carried across, the per-run key kept in the place it held. Writing
+ * `{ per_run_micros = next }` regardless replaced the whole table and
+ * silently dropped `per_day_micros`, `mode` and anything else beside it.
+ */
+function setPerRunMicros(
+  current: string,
+  siblings: TomlTable | null,
+  next: number,
+): string {
+  const literal = tomlLiteral(next);
+  if (BUDGET_HEADER.test(current))
+    return tomlSet(current, "budget", "per_run_micros", literal);
+  const firstHeader = current.search(/^\s*\[/m);
+  const root = firstHeader < 0 ? current : current.slice(0, firstHeader);
+  if (BUDGET_DOTTED.test(root))
+    return tomlSet(current, null, "budget.per_run_micros", literal);
+  return tomlSet(
+    current,
+    null,
+    "budget",
+    tomlLiteral({ ...(siblings ?? {}), per_run_micros: next }),
+  );
 }
 
 /** The draft's document: what parses, or the empty table with the line that stopped the parse. */
@@ -171,8 +221,8 @@ export function DefinitionForm({
   base: string;
   /** The branch the commit sheet proposes. */
   branch: string;
-  /** How many mandates the agent holds; null when the ledger could not say. */
-  mandates: number | null;
+  /** The agent's mandates and the instant they were read at; null when the ledger could not say. */
+  mandates: MandateList | null;
   /** The source editor for this file. */
   editor: SafePath;
   /** This tab, reloaded after a commit so the base is the committed file. */
@@ -186,6 +236,21 @@ export function DefinitionForm({
   const { doc, error } = useMemo(() => readDraft(draft), [draft]);
   const stat = useMemo(() => diffStat(base, draft), [base, draft]);
   const dirty = draft !== base;
+  // Irreversible effects need a mandate that authorizes something now, and
+  // only an active row inside its window does: a draft is a request nobody
+  // has granted, and revoked and expired rows are history. Counting rows
+  // unlocked the checkbox the moment an operator asked for a mandate, which
+  // is when they hold none. Judged at the ledger's own instant so the answer
+  // is the page's, not whenever this component happens to render.
+  const activeMandates = useMemo(
+    () =>
+      mandates === null
+        ? null
+        : mandates.mandates.filter((mandate) =>
+            isEffective(mandate, new Date(mandates.asOf)),
+          ).length,
+    [mandates],
+  );
 
   const set = (section: string | null, key: string, value: TomlValue) => {
     setDraft((current) => tomlSet(current, section, key, tomlLiteral(value)));
@@ -199,6 +264,7 @@ export function DefinitionForm({
     typeof micros === "number" && Number.isSafeInteger(micros) && micros >= 0
       ? micros
       : null;
+  const perRunUsd = perRunMicros === null ? "" : usdInputValue(perRunMicros);
   const tier = text(tomlGet(doc, "model_tier"));
   const tiers: readonly string[] =
     tier === "" || MODEL_TIERS.some((known) => known === tier)
@@ -390,23 +456,24 @@ export function DefinitionForm({
                   micros: perRunMicros === null ? "…" : String(perRunMicros),
                 })}
               >
+                {/* Any decimal: the stored value is a micro, and a step of a cent would flag the field invalid for the value the file itself holds. */}
                 <input
                   id={field("budget")}
                   type="number"
-                  step="0.01"
+                  step="any"
                   min="0"
                   inputMode="decimal"
-                  key={`budget:${perRunMicros === null ? "" : String(perRunMicros)}`}
-                  defaultValue={
-                    perRunMicros === null ? "" : usdInputValue(perRunMicros)
-                  }
+                  key={`budget:${perRunUsd}`}
+                  defaultValue={perRunUsd}
                   className={`${inputBase} ${mono}`}
                   onBlur={(event) => {
-                    const usd = Number.parseFloat(event.target.value);
-                    if (!Number.isFinite(usd) || usd < 0) return;
-                    const next = Math.round(usd * 1e6);
-                    if (next !== perRunMicros)
-                      set(null, "budget", { per_run_micros: next });
+                    // Untouched text is not an edit, whatever it parses to.
+                    if (event.target.value === perRunUsd) return;
+                    const next = parseUsdMicros(event.target.value);
+                    if (next === null || next === perRunMicros) return;
+                    setDraft((current) =>
+                      setPerRunMicros(current, budget, next),
+                    );
                   }}
                 />
               </Labelled>
@@ -455,7 +522,8 @@ export function DefinitionForm({
                 {t("tools.sideEffects")}
               </legend>
               {SIDE_EFFECTS.map((effect) => {
-                const locked = effect === "irreversible" && mandates === 0;
+                const locked =
+                  effect === "irreversible" && activeMandates === 0;
                 return (
                   <label
                     key={effect}
@@ -475,9 +543,11 @@ export function DefinitionForm({
                       <span className="text-xs text-muted-foreground">
                         {effect !== "irreversible"
                           ? t(`tools.${effect}`)
-                          : mandates === null
+                          : activeMandates === null
                             ? t("tools.irreversibleUnknown")
-                            : t("tools.irreversible", { count: mandates })}
+                            : t("tools.irreversible", {
+                                count: activeMandates,
+                              })}
                       </span>
                     </span>
                   </label>

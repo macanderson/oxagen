@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // The code editor: the textarea is the one control and carries the label, the
 // paint beneath it is hidden from assistive tech and holds the same text in
-// coloured spans, both set in the mono face on the code ground, and an edit
-// reaches onChange with the whole draft. Axe runs on the rendered editor.
+// coloured spans, both set in the mono face on the code ground, an edit
+// reaches onChange with the whole draft, and the two layers share one cell
+// that grows with the longest line so the frame scrolls them together. Axe
+// runs on the rendered editor.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -80,5 +82,36 @@ describe("CodeEditor", () => {
       ),
     ).toEqual(["live", "=", "true"]);
     expect(editor).toHaveAttribute("rows", "16");
+  });
+
+  it("sizes the shared cell to the painted line, not the frame, so a long line scrolls the paint and the textarea as one", () => {
+    const long = `# ${"x".repeat(400)}`;
+    render(<Harness onChange={vi.fn()} />);
+    const editor = screen.getByRole("textbox", {
+      name: "agents/release-bot.toml",
+    });
+    fireEvent.change(editor, { target: { value: long } });
+    const paint = screen.getByTestId("code-paint");
+    expect(paint.textContent).toBe(`${long}\n`);
+
+    // jsdom lays nothing out, so the contract is asserted on the classes that
+    // set it: the cell holding both layers is at least its content's width
+    // (`min-w-max`) rather than pinned to the frame (`min-w-0`), the textarea
+    // fills that cell and never scrolls on its own, and the frame is the one
+    // scroll container. With `min-w-0` the paint overflowed the cell while the
+    // textarea scrolled inside it, and the caret left its glyph.
+    const cell = paint.parentElement;
+    if (cell === null) throw new Error("the paint sits in the shared cell");
+    expect(cell.className).toContain("grid");
+    expect(cell.className).toContain("min-w-max");
+    expect(cell.className).not.toContain("min-w-0");
+    expect(editor.parentElement).toBe(cell);
+    expect(editor.className).toContain("w-full");
+    expect(editor.className).toContain("overflow-hidden");
+    expect(editor.className).toContain("whitespace-pre");
+    expect(paint.className).toContain("whitespace-pre");
+    expect(screen.getByTestId("code-editor").className).toContain(
+      "overflow-auto",
+    );
   });
 });

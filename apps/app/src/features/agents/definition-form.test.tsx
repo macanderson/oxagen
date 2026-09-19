@@ -2,14 +2,18 @@
 // The Configuration form over the file: each control patches one key of the
 // draft in place and the rest of the file is untouched, the bar reports the
 // draft against the commit with Discard and Save, Save opens the commit
-// sheet with the patched draft, and Discard returns to the base. Axe runs on
-// the clean and the dirty form.
+// sheet with the patched draft, and Discard returns to the base. The budget
+// field keeps its sibling keys and every stored micro, and the irreversible
+// side effect is locked unless a mandate is active at the ledger's instant.
+// Axe runs on the clean and the dirty form.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MandateList, MandateRow } from "@/data/contracts/mandates";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
   committedDefinition,
@@ -31,12 +35,23 @@ vi.mock("./actions", () => ({ commitAgentDefinition }));
 const { DefinitionForm } = await import("./definition-form");
 const { routes } = await import("@/shared/safe-path");
 
+/** The ledger's answer at noon on 2026-09-16, which the default row's window contains. */
+const AS_OF = "2026-09-16T12:00:00.000Z";
+const ledger = (mandates: MandateRow[]): MandateList => ({
+  mandates,
+  truncatedAt: null,
+  asOf: AS_OF,
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
 
-function renderForm(source = DEFINITION_SOURCE, mandates: number | null = 1) {
+function renderForm(
+  source = DEFINITION_SOURCE,
+  mandates: MandateList | null = ledger([mandateRow()]),
+) {
   const detail = agentDetail({ definition: committedDefinition(source) });
   const definition = detail.definition;
   if (definition === null) throw new Error("built with a definition");
@@ -62,6 +77,30 @@ function renderForm(source = DEFINITION_SOURCE, mandates: number | null = 1) {
 }
 
 const dirtyBar = () => screen.queryByTestId("definition-dirty");
+const budgetField = () =>
+  screen.getByRole("spinbutton", { name: "Per-run budget (USD)" });
+
+/** Saves the draft through the commit sheet and returns the source it sent. */
+async function committedSource(): Promise<string> {
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await screen.findByTestId("commit-definition");
+  let source = "";
+  commitAgentDefinition.mockImplementation(
+    (_org: string, _ws: string, input: { source: string }) => {
+      source = input.source;
+      return Promise.resolve({
+        ok: false,
+        reason: "not_found",
+        code: "agent_not_found",
+      });
+    },
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Commit and open a pull request" }),
+  );
+  await screen.findByTestId("commit-failure");
+  return source;
+}
 
 describe("DefinitionForm", () => {
   it("patches a text field on blur, keeps the rest of the file, and offers Discard and Save", async () => {
@@ -194,16 +233,122 @@ describe("DefinitionForm", () => {
   });
 
   it("locks the irreversible side effect for an agent with no mandate and says so when the ledger did not answer (negative)", () => {
-    renderForm(DEFINITION_SOURCE, 0);
+    renderForm(DEFINITION_SOURCE, ledger([]));
     const locked = screen.getByRole("checkbox", { name: /^irreversible/ });
     expect(locked).toBeDisabled();
-    expect(locked.closest("label")).toHaveTextContent("This agent holds none.");
+    expect(locked.closest("label")).toHaveTextContent(
+      "Needs an active mandate. This agent holds none.",
+    );
     cleanup();
     renderForm(DEFINITION_SOURCE, null);
     const unknown = screen.getByRole("checkbox", { name: /^irreversible/ });
     expect(unknown).toBeEnabled();
     expect(unknown.closest("label")).toHaveTextContent(
-      "The mandate ledger did not answer",
+      "Needs an active mandate. The mandate ledger did not answer",
+    );
+  });
+
+  it("counts only mandates that are active inside their window at the ledger's instant, so a draft, a revoked, an expired and a scheduled row do not unlock irreversible (negative)", () => {
+    renderForm(
+      DEFINITION_SOURCE,
+      ledger([
+        mandateRow({ id: "mnd_draft", status: "draft" }),
+        mandateRow({ id: "mnd_revoked", status: "revoked" }),
+        mandateRow({
+          id: "mnd_expired",
+          status: "expired",
+          validTo: "2026-09-01T00:00:00.000Z",
+        }),
+        // Granted, and its window closes at the ledger's own instant: the gate stops honouring it exactly then.
+        mandateRow({ id: "mnd_closing", validTo: AS_OF }),
+        mandateRow({ id: "mnd_later", validFrom: "2026-10-01T00:00:00.000Z" }),
+      ]),
+    );
+    const locked = screen.getByRole("checkbox", { name: /^irreversible/ });
+    expect(locked).toBeDisabled();
+    expect(locked.closest("label")).toHaveTextContent("This agent holds none.");
+    cleanup();
+
+    renderForm(
+      DEFINITION_SOURCE,
+      ledger([
+        mandateRow({ id: "mnd_draft", status: "draft" }),
+        mandateRow({ id: "mnd_now", validFrom: AS_OF }),
+        mandateRow({ id: "mnd_open" }),
+      ]),
+    );
+    const open = screen.getByRole("checkbox", { name: /^irreversible/ });
+    expect(open).toBeEnabled();
+    expect(open.closest("label")).toHaveTextContent("This agent holds 2.");
+  });
+
+  it("keeps the other budget keys when the per-run amount changes, in each spelling of the table", async () => {
+    const inline = DEFINITION_SOURCE.replace(
+      "budget = { per_run_micros = 2500000 }",
+      'budget = { mode = "hard", per_run_micros = 2500000, per_day_micros = 20000000 }',
+    );
+    renderForm(inline);
+    fireEvent.change(budgetField(), { target: { value: "5" } });
+    fireEvent.blur(budgetField());
+    expect(await committedSource()).toContain(
+      'budget = { mode = "hard", per_run_micros = 5000000, per_day_micros = 20000000 }\n',
+    );
+    cleanup();
+    vi.clearAllMocks();
+
+    const dotted = DEFINITION_SOURCE.replace(
+      "budget = { per_run_micros = 2500000 }",
+      "budget.per_day_micros = 20000000\nbudget.per_run_micros = 2500000 # a comment",
+    );
+    renderForm(dotted);
+    fireEvent.change(budgetField(), { target: { value: "5" } });
+    fireEvent.blur(budgetField());
+    expect(await committedSource()).toContain(
+      "budget.per_day_micros = 20000000\nbudget.per_run_micros = 5000000 # a comment\n",
+    );
+    cleanup();
+    vi.clearAllMocks();
+
+    const sectioned = `${DEFINITION_SOURCE.replace(
+      "budget = { per_run_micros = 2500000 }\n",
+      "",
+    )}\n[budget]\nper_run_micros = 2500000\nper_day_micros = 20000000\n`;
+    renderForm(sectioned);
+    fireEvent.change(budgetField(), { target: { value: "5" } });
+    fireEvent.blur(budgetField());
+    const source = await committedSource();
+    expect(source).toContain(
+      "[budget]\nper_run_micros = 5000000\nper_day_micros = 20000000\n",
+    );
+    expect(source).not.toContain("budget = {");
+  });
+
+  it("shows every stored micro, leaves the file alone when the field is left as drawn, and keeps a sub-cent amount", async () => {
+    renderForm(
+      DEFINITION_SOURCE.replace("per_run_micros = 2500000", "per_run_micros = 2500001"),
+    );
+    expect(budgetField()).toHaveValue(2.500001);
+    expect(budgetField()).toHaveAttribute("step", "any");
+    // Focus and leave: the text is the one drawn, so nothing is written.
+    fireEvent.focus(budgetField());
+    fireEvent.blur(budgetField());
+    expect(dirtyBar()).toBeNull();
+    // A whole number of cents still reads as money, and a blank or negative entry is not written.
+    cleanup();
+    renderForm();
+    expect(budgetField()).toHaveValue(2.5);
+    expect(budgetField()).toHaveAttribute("value", "2.50");
+    fireEvent.change(budgetField(), { target: { value: "" } });
+    fireEvent.blur(budgetField());
+    expect(dirtyBar()).toBeNull();
+    fireEvent.change(budgetField(), { target: { value: "-1" } });
+    fireEvent.blur(budgetField());
+    expect(dirtyBar()).toBeNull();
+    fireEvent.change(budgetField(), { target: { value: "0.004" } });
+    fireEvent.blur(budgetField());
+    expect(dirtyBar()).not.toBeNull();
+    expect(await committedSource()).toContain(
+      "budget = { per_run_micros = 4000 }\n",
     );
   });
 });

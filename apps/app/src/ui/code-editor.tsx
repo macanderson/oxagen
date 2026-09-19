@@ -4,7 +4,10 @@
 // syntax colours, and the two share one font, size, line height and padding
 // so each glyph sits exactly over its coloured twin. The grid cell takes its
 // width from the copy, so a long line widens the cell and the wrapper
-// scrolls, and the textarea never scrolls on its own. Monaspace Neon
+// scrolls both layers as one, and the textarea never scrolls on its own.
+// Pinned to the wrapper's width instead, the copy overflowed the cell while
+// the textarea scrolled inside it, and the caret drifted off its glyph on
+// any line wider than the viewport. Monaspace Neon
 // (`--font-mono`) sets both, with texture healing on, and the ground is the
 // code surface (`--code-bg`): a shade off the panel in either theme.
 import { type ReactNode, useMemo } from "react";
@@ -85,7 +88,7 @@ export function CodeEditor({
       >
         {Array.from({ length: lines }, (_, i) => String(i + 1)).join("\n")}
       </pre>
-      <div className="relative grid min-w-0 flex-1">
+      <div className="relative grid min-w-max flex-1">
         <pre
           aria-hidden="true"
           data-testid="code-paint"
