@@ -711,6 +711,7 @@ export async function startDaemon(
     );
     if (dropped.length === 0) return true;
     // Owed before attempted, so the debt survives what the attempt might not.
+    // The debt write must succeed, or the erase must.
     // This runs before `applyControlFacts` writes the new etag, and that order
     // is the point: once the etag is written every later poll answers
     // `not_modified` and nothing tells this host the clause narrowed, so a
@@ -726,6 +727,9 @@ export async function startDaemon(
       );
       return true;
     } catch (error) {
+      // Logged and not rethrown, on purpose. Throwing would abort the refresh
+      // from inside, losing the distinction the return value carries: whether
+      // the narrowing may be cached at all.
       log(
         `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
       );
