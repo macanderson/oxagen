@@ -1,3 +1,12 @@
+// audit-exempt: read-only. It selects one export row and returns its storage
+// key, and mutates nothing; the kernel's capability.invoke_* row records the
+// access, as it does for audit.events.export beside it. The organization-role
+// recheck below is an authorization guard on a read, not a privileged state
+// change. A refused read of an organization archive would be worth its own
+// row by the bar the secret lifecycle sets in security-event-types.ts, and no
+// type in that taxonomy fits one: adding it needs a taxonomy entry and a
+// migration widening the event_type constraint, so it is tracked rather than
+// invented here.
 // get_export_status: where one of the calling person's own exports has got to.
 //
 // `privacy.privacy_export_requests` is a person-keyed table with no
