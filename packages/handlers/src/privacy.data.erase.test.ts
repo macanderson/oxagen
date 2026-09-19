@@ -17,6 +17,12 @@
  *   6. org scope, no membership row     → throws Forbidden (IDOR guard)
  *   7. user scope                       → SUCCEEDS without any role check, revokes
  *      sessions, emits security event + Inngest job, returns queued.
+ *   8. org scope, input.orgId ≠ ctx.orgId → throws Forbidden  ← the recheck
+ *      evaluates the governed org, so a target naming another org had its own
+ *      erase_data deny skipped while being scheduled for hard-delete.
+ *   9. org scope, deny in the target org → throws Forbidden, and the IAM read
+ *      was made about the org being erased.
+ *  10. org scope, same org, nothing denying → still SUCCEEDS.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -58,9 +64,19 @@ const authz = vi.hoisted(() => ({
     policies: [] as unknown[],
   },
 }));
+// Keyed by the org `fetchAuthz` is asked about, so a test can write a rule in
+// one organisation and prove the handler reads the right one. Falls back to
+// `authz.value` for the single-org tests.
+const authzByOrg = vi.hoisted(
+  () => ({ value: {} }) as { value: Record<string, unknown> },
+);
+const fetchAuthzCalls = vi.hoisted(() => ({ orgIds: [] as string[] }));
 vi.mock("@oxagen/iam", () => ({
   emitAudit: () => Promise.resolve(),
-  fetchAuthz: () => Promise.resolve(authz.value),
+  fetchAuthz: (args: { orgId: string }) => {
+    fetchAuthzCalls.orgIds.push(args.orgId);
+    return Promise.resolve(authzByOrg.value[args.orgId] ?? authz.value);
+  },
 }));
 
 // ── @oxagen/database/security mock ───────────────────────────────────────────
@@ -115,6 +131,31 @@ const { privacyDataEraseHandler } = await import("./privacy.data.erase");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
+/** A second organisation the caller also owns. */
+const OTHER_ORG_ID = "33333333-3333-4333-8333-333333333333";
+
+/** An IAM read in which `roleGrants` carries one explicit effect for the owner. */
+function authzWithOwnerEffect(
+  orgId: string,
+  effect: "allow" | "deny" | "require_approval",
+) {
+  return {
+    principal: { id: "p_1", kind: "human", orgId, workspaceId: null },
+    grants: [],
+    roles: [
+      {
+        id: "r_1",
+        name: "Owner",
+        scopeKind: "org",
+        orgId,
+        principalIds: ["p_1"],
+        isSystemDefault: true,
+      },
+    ],
+    roleGrants: [{ roleId: "r_1", capabilityId: "erase_data", effect }],
+    policies: [],
+  };
+}
 
 function makeCtx(
   overrides: Partial<CapabilityContext> = {},
@@ -134,6 +175,8 @@ function makeCtx(
 beforeEach(() => {
   vi.clearAllMocks();
   roleResult = [];
+  authzByOrg.value = {};
+  fetchAuthzCalls.orgIds = [];
   authz.value = {
     principal: null,
     grants: [],
@@ -271,5 +314,66 @@ describe("privacy.data.erase handler", () => {
     );
     expect(mockEventSend).toHaveBeenCalledTimes(1);
     expect(firstArg<InngestEvent>(mockEventSend)?.data?.scope).toBe("user");
+  });
+
+  // ── The erasure target must be the governed organisation ──────────────────
+  //
+  // The recheck above evaluates `ctx.orgId`. Before the equality check, an
+  // owner of two organisations could invoke through A while naming B in the
+  // body: the policy of A decided, and B was scheduled for an irreversible
+  // hard-delete with its own explicit `erase_data` deny never read. Erasure
+  // does not come back, so a control that was not consulted is not a control.
+  it("REGRESSION: refuses an org erasure whose input.orgId is not the governed org", async () => {
+    roleResult = [{ role: "owner" }];
+    // Nothing revoked in the governed org; the deny lives in the target.
+    authzByOrg.value = {
+      [OTHER_ORG_ID]: authzWithOwnerEffect(OTHER_ORG_ID, "deny"),
+    };
+
+    await expect(
+      privacyDataEraseHandler(
+        { scope: "org", orgId: OTHER_ORG_ID, confirm: true },
+        makeCtx({ orgId: ORG_ID }),
+      ),
+    ).rejects.toThrow(/must be requested in that organization's own context/);
+
+    // Nothing was scheduled, and the policy of the governed org was never even
+    // consulted on another org's behalf.
+    expect(mockEventSend).not.toHaveBeenCalled();
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(fetchAuthzCalls.orgIds).toEqual([]);
+  });
+
+  it("REGRESSION: an explicit erase_data deny in the target org stops the erasure", async () => {
+    roleResult = [{ role: "owner" }];
+    authzByOrg.value = {
+      [ORG_ID]: authzWithOwnerEffect(ORG_ID, "deny"),
+    };
+
+    await expect(
+      privacyDataEraseHandler(
+        { scope: "org", orgId: ORG_ID, confirm: true },
+        makeCtx({ orgId: ORG_ID }),
+      ),
+    ).rejects.toThrow(/erase_data policy/);
+    // The question was asked about the organisation being erased.
+    expect(fetchAuthzCalls.orgIds).toEqual([ORG_ID]);
+    expect(mockEventSend).not.toHaveBeenCalled();
+  });
+
+  it("the same-org path still queues the erasure when nothing denies it", async () => {
+    roleResult = [{ role: "owner" }];
+    authzByOrg.value = {
+      [ORG_ID]: authzWithOwnerEffect(ORG_ID, "allow"),
+    };
+
+    const result = await privacyDataEraseHandler(
+      { scope: "org", orgId: ORG_ID, confirm: true },
+      makeCtx({ orgId: ORG_ID }),
+    );
+
+    expect(result.status).toBe("queued");
+    expect(fetchAuthzCalls.orgIds).toEqual([ORG_ID]);
+    expect(mockEventSend).toHaveBeenCalledTimes(1);
   });
 });
