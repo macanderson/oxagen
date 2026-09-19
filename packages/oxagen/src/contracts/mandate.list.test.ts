@@ -14,7 +14,6 @@ describe("list_mandates contract", () => {
       Admin: "allow",
       Billing: "allow",
       Compliance: "allow",
-      Member: "allow",
     });
     expect(mandateList.defaultRoles.workspace).toEqual({
       Owner: "allow",

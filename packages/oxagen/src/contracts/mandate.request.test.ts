@@ -15,6 +15,21 @@ describe("request_mandate contract", () => {
     });
   });
 
+  // The org branch names only real org-scoped roles: there is no org
+  // "Member" role in this system (tools/scripts/seed-iam-defaults.ts's
+  // ORG_ROLES is Owner/Admin/Compliance/Billing only), and it must match
+  // ACCOUNTABLE_ORG_ROLES, the set the handler's own assertOrgRole call
+  // admits — a narrower kernel-level grant would refuse an accountable
+  // caller before the handler's own check ever runs (ADR-104, #3138).
+  it("admits exactly the accountable org roles the handler's own assertOrgRole call does", () => {
+    expect(mandateRequest.defaultRoles.org).toEqual({
+      Owner: "allow",
+      Admin: "allow",
+      Billing: "allow",
+      Compliance: "allow",
+    });
+  });
+
   it("takes the same body as grant_mandate and no requestId", () => {
     expect(mandateRequest.input.parse(BODY).purpose).toBe(BODY.purpose);
     expect(

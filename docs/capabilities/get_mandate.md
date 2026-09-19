@@ -49,7 +49,8 @@ ledger's own accounting.
 
 ## Readers
 
-As `list_mandates`: the accountable office, or the operator of the agent.
+As `list_mandates` (ADR-104): the accountable office reads every mandate; a
+workspace Owner or Member reads the mandates of agents they created.
 
 ## Errors
 

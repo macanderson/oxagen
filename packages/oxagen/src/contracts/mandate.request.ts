@@ -19,8 +19,21 @@ export const mandateRequest = registerCapability({
   agent: { requiresApproval: false, riskLevel: "low", category: "governance" },
   sensitivity: "medium",
   defaultEffect: "deny",
+  // Matches the handler's own assertOrgRole call (ACCOUNTABLE_ORG_ROLES:
+  // Owner/Admin/Billing/Compliance; workspace Owner/Member) — the previous
+  // org set here (Owner, Admin, Member) both invented a nonexistent org
+  // "Member" role (tools/scripts/seed-iam-defaults.ts's ORG_ROLES has no
+  // such entry, so it seeded nothing) and left out Billing/Compliance, which
+  // the handler already admits. An enterprise-org Billing or Compliance
+  // user was refused by the kernel before ever reaching that check
+  // (ADR-104, #3138).
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
+    org: {
+      Owner: "allow",
+      Admin: "allow",
+      Billing: "allow",
+      Compliance: "allow",
+    },
     workspace: { Owner: "allow", Member: "allow" },
   },
   input: mandateBodySchema,
