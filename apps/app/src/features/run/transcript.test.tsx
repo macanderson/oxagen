@@ -207,6 +207,8 @@ describe("the filter chips", () => {
       constructor() {
         throw new Error("EventSource must not open for a sealed empty tab");
       }
+
+      close(): void {}
     }
     vi.stubGlobal("EventSource", FakeEventSource);
     try {
