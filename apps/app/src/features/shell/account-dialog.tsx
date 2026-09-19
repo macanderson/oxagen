@@ -349,15 +349,22 @@ type PrefsState =
 
 const THEMES: readonly Theme[] = ["system", "dark", "light"];
 
-/** The zones the browser knows, with the stored one kept even when it is not among them. */
+/** The zones the browser knows, plus UTC, with the stored one kept even when it is not among them. */
 function timeZones(current: string): string[] {
-  let zones: string[] = ["UTC"];
+  let zones: string[] = [];
   try {
     zones = Intl.supportedValuesOf("timeZone");
   } catch {
-    // An older engine lists nothing; the stored zone still appears below.
+    // An older engine lists nothing; UTC and the stored zone still appear.
   }
-  return zones.includes(current) ? zones : [current, ...zones];
+  // The engine's list does not contain UTC. Measured on this repo's Node: 418
+  // zones, no "UTC" and no "Etc/UTC", because ICU canonicalizes those away.
+  // UTC is this app's default and the zone every seeded account starts on, so
+  // replacing the fallback with the engine's list offered it only to someone
+  // already on it, and anyone who changed to another zone could never get
+  // back. Merged rather than replaced.
+  const offered = zones.includes("UTC") ? zones : ["UTC", ...zones];
+  return offered.includes(current) ? offered : [current, ...offered];
 }
 
 /** The same three figures under the draft's locale and zone, so a change is seen before it is saved. */
@@ -914,9 +921,14 @@ function PrivacyTab({ data }: { data: ShellData }) {
     }
   }
 
-  // Ask after a queued bundle until it settles. A read that refuses or throws
-  // leaves the state alone and the next tick tries again: a blip on one poll
-  // is not a failed export, and the person keeps the id either way.
+  // Ask after a queued bundle until it settles. A read that fails transiently
+  // or throws leaves the state alone and the next tick tries again: a blip on
+  // one poll is not a failed export, and the person keeps the id either way.
+  // A refusal is different, and it is not hypothetical: `get_export_status`
+  // re-checks Owner or Admin on an organization export at read time, so an
+  // Owner demoted while the bundle is being written starts being refused
+  // mid-poll. Retrying that every three seconds until the tab closes asks a
+  // question already answered, under a line still promising an update.
   const queuedId = state.kind === "queued" ? state.exportId : null;
   const queuedScope = state.kind === "queued" ? state.scope : null;
   const orgSlug = data.org.slug;
@@ -935,7 +947,12 @@ function PrivacyTab({ data }: { data: ShellData }) {
       // refusal: leave the state alone and try again on the next tick.
       try {
         const read = await readExportStatus(orgSlug, exportId);
-        if (!live || !read.ok) return;
+        if (!live) return;
+        if (!read.ok) {
+          // Terminal, and only this one: `denied` is a decision, not a blip.
+          if (read.reason === "denied") setState({ kind: "denied", scope });
+          return;
+        }
         if (read.value.ready) setState({ kind: "ready", scope, exportId });
         else if (read.value.status === "failed")
           setState({ kind: "expired", scope, exportId });

@@ -124,14 +124,15 @@ async function openDialog(
 // axe walks a node per option, which made this file's accessibility checks the
 // slowest in the app. They expired first at 15s and then at 30s on a loaded
 // runner. The list is a seam the dialog reads, not the subject of any test
-// here, so it is stubbed down to four real zones; that the select renders
+// here, so it is stubbed down to three real zones; that the select renders
 // whatever the engine reports is proven directly below.
-const ENGINE_ZONES = [
-  "UTC",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Asia/Tokyo",
-];
+//
+// UTC is deliberately absent, because the real engine omits it: measured on
+// this repo's Node, `Intl.supportedValuesOf("timeZone")` returns 418 zones
+// with no "UTC" and no "Etc/UTC", ICU having canonicalized them away. A stub
+// that included it would hide the defect the dialog has to handle, since UTC
+// is this app's default and every seeded account starts on it.
+const ENGINE_ZONES = ["America/Los_Angeles", "Europe/London", "Asia/Tokyo"];
 
 // The dialog renders under ShellStateProvider, which reads the theme from a
 // media query jsdom does not implement.
@@ -450,8 +451,34 @@ describe("Preferences", () => {
     const offered = within(zone)
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(offered).toEqual(["Mars/Olympus", ...ENGINE_ZONES]);
+    expect(offered).toEqual(["Mars/Olympus", "UTC", ...ENGINE_ZONES]);
     expect(zone).toHaveValue("Mars/Olympus");
+  });
+
+  // The engine's list has no UTC, so offering exactly what it reports would
+  // let a person move off UTC and never get back: it is the app's default and
+  // what every seeded account starts on.
+  it("offers UTC even though the engine does not list it", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "Europe/London", theme: "system" },
+    });
+    const { user } = await openDialog("preferences");
+    const zone = await screen.findByTestId("account-timezone");
+    expect(
+      within(zone)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["UTC", ...ENGINE_ZONES]);
+
+    // And it is choosable, not only drawn.
+    await user.selectOptions(zone, "UTC");
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(savePreferences).toHaveBeenCalledWith("acme", {
+      locale: "en",
+      timezone: "UTC",
+      theme: "system",
+    });
   });
 
   it("applies the theme to the page the moment it is chosen", async () => {
@@ -635,12 +662,31 @@ describe("Privacy", () => {
     }
   });
 
-  it("keeps the queued state when a poll refuses", async () => {
+  it("keeps the queued state when a poll is unavailable", async () => {
     readExportStatus.mockResolvedValue({ ok: false, reason: "unavailable" });
     const { user } = await openDialog("privacy");
     await user.click(screen.getByTestId("account-export-user"));
     expect(await screen.findByTestId("account-export-queued")).toBeTruthy();
     expect(screen.queryByTestId("account-export-expired")).toBeNull();
+  });
+
+  // Not a blip: `get_export_status` re-checks Owner or Admin on an
+  // organization export at read time, so an Owner demoted while the bundle is
+  // being written starts being refused mid-poll. Retrying that every three
+  // seconds until the tab closes asks a question already answered, under a
+  // line still promising an update.
+  it("stops polling and says so when a poll is denied (negative)", async () => {
+    readExportStatus.mockResolvedValue({ ok: false, reason: "denied" });
+    const { user } = await openDialog("privacy");
+    await user.click(screen.getByTestId("account-export-org"));
+    expect(await screen.findByTestId("account-export-denied")).toBeTruthy();
+    expect(screen.queryByTestId("account-export-queued")).toBeNull();
+
+    // Terminal: leaving the queued state clears the interval, so no further
+    // read is issued however long the tab stays open.
+    const asked = readExportStatus.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(readExportStatus.mock.calls.length).toBe(asked);
   });
 
   it("asks for the organization export as such, and reads a refusal back (negative)", async () => {
