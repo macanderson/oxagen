@@ -63,6 +63,7 @@ describe("messages/shell.json", () => {
       "userMenu",
     ]);
     expect(Object.keys(messages.commands).sort()).toEqual([
+      "create",
       "empty",
       "footer",
       "input",

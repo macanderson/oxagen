@@ -276,7 +276,7 @@ describe("sidebar", () => {
     nav.pathname = "/acme/billing";
     renderShell(shellData());
     const main = screen.getByRole("navigation", { name: "Main" });
-    expect(within(main).getAllByRole("link")).toHaveLength(9);
+    expect(within(main).getAllByRole("link")).toHaveLength(8);
     expect(within(main).getByRole("link", { name: "Billing" })).toHaveAttribute(
       "aria-current",
       "page",
@@ -353,7 +353,9 @@ describe("command menu", () => {
       "Billing",
       "Audit",
       "Create anything",
+      "New agent",
       "Add a skill",
+      "Write a context record",
     ]);
     expect(within(menu).queryAllByRole("group")).toEqual([]);
     await user.type(input, "api keys");

@@ -1295,7 +1295,6 @@ type Messages = {
       denied: string;
       unavailable: string;
       more: string;
-      version: string;
       risk: string;
       unclassified: string;
       effects: {

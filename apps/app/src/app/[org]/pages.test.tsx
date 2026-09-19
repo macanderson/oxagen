@@ -108,7 +108,12 @@ vi.mock("@/features/audit", () => ({ Audit, AuditSkeleton: () => null }));
 vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/run", () => ({ Run }));
-vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
+vi.mock("@/features/agents", () => ({
+  Agents,
+  Agent,
+  AgentSource,
+  AgentsCreate: () => <p data-testid="agents-create" />,
+}));
 vi.mock("@/features/steering", () => ({
   Steering,
   SteeringCreate: (props: { searchParams: Record<string, string> }) => (

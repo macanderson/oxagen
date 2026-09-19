@@ -93,7 +93,11 @@ function opened(overrides: Record<string, unknown> = {}) {
 async function toDescribe() {
   mount();
   await screen.findByTestId("create-skill");
-  fireEvent.click(screen.getByText(t("skill.source.describe.title")));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: (name) => name.startsWith(t("skill.source.describe.title")),
+    }),
+  );
   fireEvent.click(primary());
   return screen.findByTestId<HTMLTextAreaElement>("wizard-desc");
 }

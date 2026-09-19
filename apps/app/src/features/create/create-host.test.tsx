@@ -126,7 +126,11 @@ describe("CreateHost", () => {
     mount();
     open("skill");
     await screen.findByTestId("create-skill");
-    fireEvent.click(screen.getByText(t("skill.source.describe.title")));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: (name) => name.startsWith(t("skill.source.describe.title")),
+      }),
+    );
     fireEvent.click(screen.getByTestId("wizard-primary"));
     await screen.findByTestId("wizard-desc");
 
