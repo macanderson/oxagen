@@ -76,8 +76,17 @@ function readCapabilities() {
     )
     .map((file) => {
       const src = readFileSync(join(CAP_DIR, file), "utf8");
-      const nameMatch = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
-      const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
+      // `name` and `layers` are fields of registerCapability(...), so read them
+      // from that call and not from the whole file. A file-wide match takes the
+      // first `name:` anywhere, a doc comment included. That is not
+      // hypothetical: a sentence in run.list.ts reading "whose user record
+      // carries no name: `operatorKind` is what separates ..." renamed that
+      // contract to `operatorKind`, which had no UI binding and failed
+      // `--strict` in CI. check-naming.mjs anchors for the same reason.
+      const declStart = src.search(/registerCapability\s*\(/);
+      const decl = declStart === -1 ? "" : src.slice(declStart);
+      const nameMatch = decl.match(/name:\s*["'`]([^"'`]+)["'`]/);
+      const layersMatch = decl.match(/layers:\s*\[([^\]]*)\]/);
       // The exported identifier bound to registerCapability(...) — this is what
       // app code imports and invokes as `invoke(<ident>.name, ...)`.
       const identMatch = src.match(

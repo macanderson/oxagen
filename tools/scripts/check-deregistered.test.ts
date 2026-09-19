@@ -130,6 +130,27 @@ describe("artifacts a preserved contract declares", () => {
     expect(declaredName("nothing")).toBeNull();
   });
 
+  it("does not let a doc comment above the call rename the capability", () => {
+    // A sentence containing `name:` used to win, because the match ran over the
+    // whole file and took the first hit. In run.list.ts the prose "whose user
+    // record carries no name: `operatorKind` is what separates ..." renamed
+    // that contract to `operatorKind`; check_ui_parity then reported a
+    // capability that does not exist as an unbound `app` layer and failed
+    // --strict in CI, and the generated manifest carried wrong modes and
+    // dropped `app` from six capabilities' layers, which is worse, because a
+    // gate that skips a capability does not announce it.
+    const source = [
+      "/**",
+      " * A person's name, null for a principal that is not one: the field",
+      ' * name: "not_the_capability" is prose, not a registration.',
+      " */",
+      "export const listRuns = registerCapability({",
+      '  name: "list_runs",',
+      "});",
+    ].join("\n");
+    expect(declaredName(source)).toBe("list_runs");
+  });
+
   it("names the handler, route and tool a plugin-catalog contract promises", () => {
     const gone = derivedMissingFor(
       "/nowhere",

@@ -298,11 +298,21 @@ function readCapabilities() {
     )
     .map((file) => {
       const src = readFileSync(join(CAP_DIR, file), "utf8");
-      const nameMatch = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
-      const domainMatch = src.match(/domain:\s*["'`]([^"'`]+)["'`]/);
-      const modeMatch = src.match(/mode:\s*["'`]([^"'`]+)["'`]/);
-      const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
-      const surfacesMatch = src.match(/surfaces:\s*\[([^\]]*)\]/);
+      // Every one of these is a field of registerCapability(...), so read them
+      // from that call and not from the whole file. A file-wide match takes
+      // the first occurrence anywhere, including inside a doc comment: a
+      // sentence in run.list.ts reading "whose user record carries no name:
+      // `operatorKind` is what separates ..." renamed that contract to
+      // `operatorKind` for check_ui_parity, which then reported a phantom
+      // parity gap and failed CI. check-naming.mjs already anchors for the
+      // same reason.
+      const declStart = src.search(/registerCapability\s*\(/);
+      const decl = declStart === -1 ? "" : src.slice(declStart);
+      const nameMatch = decl.match(/name:\s*["'`]([^"'`]+)["'`]/);
+      const domainMatch = decl.match(/domain:\s*["'`]([^"'`]+)["'`]/);
+      const modeMatch = decl.match(/mode:\s*["'`]([^"'`]+)["'`]/);
+      const layersMatch = decl.match(/layers:\s*\[([^\]]*)\]/);
+      const surfacesMatch = decl.match(/surfaces:\s*\[([^\]]*)\]/);
       const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
       const domain = domainMatch ? domainMatch[1] : "unknown";
       const mode = modeMatch ? modeMatch[1] : "sync";

@@ -3151,7 +3151,7 @@
       "name": "set_data_plane",
       "file": "org.data_plane.set.ts",
       "domain": "org",
-      "mode": "dedicated",
+      "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
@@ -3292,7 +3292,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -3309,7 +3310,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -3326,7 +3328,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -3343,7 +3346,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -3797,7 +3801,7 @@
       "name": "search_references",
       "file": "reference.search.ts",
       "domain": "reference",
-      "mode": "slug",
+      "mode": "sync",
       "surfaces": [
         "api",
         "mcp",
@@ -5442,7 +5446,8 @@
         "api": true,
         "docs": true,
         "mcp": true,
-        "unit": true
+        "unit": true,
+        "app": true
       }
     },
     {
@@ -5459,7 +5464,8 @@
         "api": true,
         "mcp": true,
         "unit": true,
-        "docs": true
+        "docs": true,
+        "app": true
       }
     },
     {
