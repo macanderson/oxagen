@@ -70,13 +70,16 @@ describe("messages/shell.json", () => {
     ]);
     expect(Object.keys(messages.sidebar)).not.toContain("countLabel");
     // The mockup's user menu: the four Account tabs, the theme switch and
-    // sign out. Its onboarding demo item is not a product item.
+    // sign out, plus what sign out says while it runs and when it refuses. Its
+    // onboarding demo item is not a product item.
     expect(Object.keys(messages.userMenu).sort()).toEqual([
       "preferences",
       "privacy",
       "profile",
       "security",
       "signOut",
+      "signOutFailed",
+      "signingOut",
       "switchTheme",
       "themeNow",
     ]);

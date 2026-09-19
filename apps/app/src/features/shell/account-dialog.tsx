@@ -935,12 +935,19 @@ function SecurityTab({
         // to the still-mounted dialog is the only thing keeping the codes.
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
-      } else {
-        // Better Auth answered and refused, a wrong password for one. It
-        // answered, so this rotation did not happen. Nothing is displayed: a
-        // set left on screen would claim to be the stored set.
+      } else if (result.reason === "invalid") {
+        // Better Auth answered and refused the password, and it checks the
+        // password before it writes, so this rotation did not happen. Nothing
+        // is displayed: a set left on screen would claim to be the stored set.
         rotation.refuse();
         setCodes({ kind: "asking", password: "", refused: true });
+      } else {
+        // The seam could not establish that the server refused: a 5xx, a
+        // transport failure it reported rather than threw, or a success
+        // carrying no set. Each of those may sit after the write, so this is
+        // the lost-answer case below rather than a rejected password.
+        rotation.lose();
+        setCodes({ kind: "asking", password: "", refused: false });
       }
     } catch {
       // The call threw, so the answer is lost, and a lost answer is not a
@@ -990,6 +997,17 @@ function SecurityTab({
                   ? t("authenticatorOn")
                   : t("authenticatorOff")}
               </p>
+              {/* Outside the form on purpose. Cancel closes the form, and a
+                  rotation nobody heard back from is not cancelled by it, so a
+                  notice living inside the form would take the only thing on
+                  screen that says the codes may already be void off screen. */}
+              {rotation.uncertain && !rotation.pending ? (
+                <div className="mt-2">
+                  <FormAlert testId="account-codes-uncertain">
+                    {t("codesUncertain")}
+                  </FormAlert>
+                </div>
+              ) : null}
               {codes.kind === "asking" ? (
                 <form
                   className="mt-2 flex flex-wrap items-end gap-2"
@@ -1039,13 +1057,6 @@ function SecurityTab({
                     <div className="basis-full">
                       <FormAlert testId="account-codes-refused">
                         {t("codesRefused")}
-                      </FormAlert>
-                    </div>
-                  ) : null}
-                  {rotation.uncertain && !rotation.pending ? (
-                    <div className="basis-full">
-                      <FormAlert testId="account-codes-uncertain">
-                        {t("codesUncertain")}
                       </FormAlert>
                     </div>
                   ) : null}

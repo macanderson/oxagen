@@ -728,7 +728,10 @@ describe("Security", () => {
   });
 
   it("reads a refused password back and shows no set at all (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+    });
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
@@ -786,7 +789,10 @@ describe("Security", () => {
   // knowing it. Nothing is shown, nothing is vaulted, and the affordance is
   // released rather than held shut by the rotation that failed.
   it("leaves no set on screen or in the vault when a rotation fails (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+    });
     const { user } = await openDialog("security");
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
@@ -992,7 +998,10 @@ describe("Security", () => {
   // A refused rotation leaves nothing at stake, so the guard must release: the
   // old codes still work and there is no new set to lose.
   it("stops asking when a rotation is refused (negative)", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+    });
     const { user } = await openDialog("security");
     const asked = () =>
       !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
@@ -1024,7 +1033,10 @@ describe("Security", () => {
     expect(asked()).toBe(true);
 
     // A refusal now does not settle the earlier doubt.
-    liveRegenerateBackupCodes.mockResolvedValueOnce({ ok: false });
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: false,
+      reason: "invalid",
+    });
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
     await user.click(screen.getByTestId("account-codes-confirm"));
     await screen.findByTestId("account-codes-refused");
@@ -1042,6 +1054,47 @@ describe("Security", () => {
     await screen.findByTestId("account-codes");
     await user.click(screen.getByTestId("account-codes-saved"));
     expect(asked()).toBe(false);
+  });
+
+  // A lost answer does not always arrive as a throw. Better Auth answers a 5xx
+  // like any other status, and a proxy or a crash can lose the response after
+  // the write has committed. The seam reports what it can prove, so only a
+  // rejected password reads as a refusal, and every other ending holds the
+  // page at risk.
+  it("keeps it guarded for a failure the server did not confirm either (negative)", async () => {
+    liveRegenerateBackupCodes.mockResolvedValue({
+      ok: false,
+      reason: "failed",
+    });
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
+    expect(screen.queryByTestId("account-codes-refused")).toBeNull();
+    expect(asked()).toBe(true);
+  });
+
+  // Cancel closes the form, and a rotation nobody heard back from is not
+  // cancelled by it. So the notice lives on the two-factor row rather than in
+  // the form: inside it, Cancel took the only thing on screen that says the
+  // codes may already be void away, and left a Regenerate button that looks
+  // like any other.
+  it("keeps the notice up through Cancel and a tab switch", async () => {
+    liveRegenerateBackupCodes.mockRejectedValue(new Error("offline"));
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes-uncertain");
+
+    await user.click(screen.getByTestId("account-codes-cancel"));
+    expect(screen.getByTestId("account-codes-uncertain")).toBeTruthy();
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
   });
 
   // The second rotation is never started, so no late first response can exist
