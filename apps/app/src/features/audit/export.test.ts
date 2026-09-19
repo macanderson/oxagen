@@ -72,7 +72,12 @@ const source: DataSource = {
   onboarding: { state: refuse, firstFrame: refuse },
   skills: { inventory: refuse },
   mandates: { list: refuse },
-  steering: { records: refuse, proposals: refuse, contextPr: refuse },
+  steering: {
+    records: refuse,
+    proposals: refuse,
+    contextPr: refuse,
+    freshness: refuse,
+  },
   tools: { versions: refuse, grants: refuse, killSwitches: refuse },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };

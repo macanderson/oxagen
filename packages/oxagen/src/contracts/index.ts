@@ -235,6 +235,7 @@ import { contextProposalDismiss } from "./context.proposal.dismiss";
 import { contextPrOpen } from "./context.pr.open";
 import { contextPrGet } from "./context.pr.get";
 import { contextPrMerge } from "./context.pr.merge";
+import { contextSteeringFreshness } from "./context.steering.freshness";
 import { connectionList } from "./connection.list";
 import { connectionCreate } from "./connection.create";
 import { connectionGet } from "./connection.get";
@@ -739,6 +740,7 @@ export {
   contextRecordPromote,
   contextRecordsList,
   contextRecordsGet,
+  contextSteeringFreshness,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,
@@ -1073,6 +1075,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   contextRecordPromote,
   contextRecordsList,
   contextRecordsGet,
+  contextSteeringFreshness,
   contextRecordsAppend,
   contextProposalCreate,
   contextProposalList,

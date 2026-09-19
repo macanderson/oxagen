@@ -6,11 +6,13 @@
 import type { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import type { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import type { z } from "zod";
 import type {
   ContextPr,
   ProposalPage,
   RecordPage,
+  SteeringFreshness,
 } from "@/data/contracts/steering";
 import type { ContractOutput } from "@/server/kernel";
 
@@ -116,5 +118,22 @@ export function toContextPr(
             promotionEventId: out.merged.promotionEventId,
             recordId: out.merged.recordId,
           },
+  };
+}
+
+/** `get_steering_freshness` → the freshness panel's view model. */
+export function toSteeringFreshness(
+  out: ContractOutput<typeof contextSteeringFreshness>,
+): z.input<typeof SteeringFreshness> {
+  return {
+    version: out.steeringVersion,
+    headCommit: out.headCommit,
+    publishedAt: out.publishedAt,
+    repository: out.repository,
+    defaultBranch: out.defaultBranch,
+    gates: {
+      autoSync: out.policy.autoSync,
+      blockStaleRuns: out.policy.blockStaleRuns,
+    },
   };
 }

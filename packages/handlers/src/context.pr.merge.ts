@@ -6,15 +6,20 @@
 // production branch. The merge is pinned to that commit on GitHub
 // and the published body is the file at that commit. A merge GitHub already
 // holds (a retry after the publication failed) is resumed from its merge
-// commit. Only a merge GitHub confirmed publishes the record into the
-// registry, appends the promotion event to the hash-chained ledger — the
-// ledger length is the workspace's steering version — and emits
+// commit. The publication is stamped with the instant GitHub recorded, and a
+// call that cannot read that instant is refused rather than stamping the
+// record with its own clock. Only a merge GitHub confirmed publishes the
+// record into the registry, appends the promotion event to the hash-chained
+// ledger — the ledger length is the workspace's steering version — and emits
 // `steering.published`; the head branch is deleted before the publication so
 // the next proposal on the lineage branches from the production branch.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
-import { assertProductionBase } from "./context.steering.github";
+import {
+  assertProductionBase,
+  type SteeringRepository,
+} from "./context.steering.github";
 import {
   GOVERNANCE_PATH,
   mergeRefusal,
@@ -128,6 +133,22 @@ export function createMergeContextPrHandler(
     }
 
     let commitSha: string;
+    // The publication is stamped with the instant the commit landed on the
+    // production branch, not this call's clock. They differ on a retry, and
+    // the difference matters: `latestPublication` picks the newest
+    // `published_at` as the commit a checkout must reach, and the retry
+    // below can run after a later PR has published. Stamped with `now()`,
+    // the earlier merge sorted newest, and a checkout at that earlier
+    // commit read as current while it lacked the later record.
+    //
+    // The branch that performs the merge needs the same instant for the same
+    // reason. Two Context PRs merging at once are two calls to GitHub, and
+    // GitHub can land A before B while A's response comes back after B's; a
+    // local clock then stamps A newer than the commit that descends from it,
+    // and `latestPublication` names an ancestor as the tip a checkout must
+    // reach. So the pull request is read again after the merge and stamped
+    // with the instant GitHub recorded.
+    let mergedAt: Date;
     if (pr.merged) {
       // GitHub merged it on an earlier call whose publication did not land.
       if (!pr.mergeCommitSha) {
@@ -138,6 +159,7 @@ export function createMergeContextPrHandler(
         });
       }
       commitSha = pr.mergeCommitSha;
+      mergedAt = requireMergedAt(pr.mergedAt, row.prUrl);
     } else {
       commitSha = (
         await deps.github.mergePullRequest(repo, {
@@ -146,9 +168,12 @@ export function createMergeContextPrHandler(
           sha: row.headSha,
         })
       ).sha;
+      mergedAt = requireMergedAt(
+        await mergedAtOnGitHub(deps, repo, row.prNumber),
+        row.prUrl,
+      );
     }
     await deps.github.deleteBranch(repo, row.branch);
-    const mergedAt = deps.now();
     const result = await deps.store.publishMerge({
       scope,
       proposal: row,
@@ -205,6 +230,57 @@ export function createMergeContextPrHandler(
       },
     };
   };
+}
+
+/**
+ * The instant GitHub recorded, or a refusal the caller can retry.
+ *
+ * A local clock is not a substitute here. Two Context PRs can merge at once,
+ * and GitHub can land A before B while A's response comes back after B's:
+ * stamped with this call's time, the earlier commit sorts newest,
+ * `latestPublication` names it as the tip a checkout must reach, and a
+ * checkout stopped at that ancestor reads as current while it lacks the later
+ * record. That is the exact failure the GitHub instant exists to prevent, so
+ * a guess is worse than no publication at all.
+ *
+ * Refusing does not lose the merge. It has landed on GitHub by the time this
+ * runs, the proposal is still `checks_passed`, and the handler's resume path
+ * reads the merge commit and its instant off the pull request and publishes
+ * on the next call. That is the same path a publication that failed on the
+ * store already takes. A `conflict` says so: nothing was published and the
+ * merge is still there to publish.
+ */
+function requireMergedAt(mergedAt: Date | null, prUrl: string | null): Date {
+  if (mergedAt) return mergedAt;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "merge_time_unknown",
+    message: `${prUrl ?? "The pull request"} merged and GitHub has not said when, so nothing was published; merge again to publish it`,
+  });
+}
+
+/**
+ * The instant GitHub says the pull request merged. Null when GitHub reports
+ * none, and null when the re-read itself fails.
+ *
+ * The merge already happened by the time this runs, so a failure here must
+ * not throw out of the API client: the caller decides what an unknown instant
+ * means, and it turns this null into a refusal the next call can resume from.
+ */
+async function mergedAtOnGitHub(
+  deps: SteeringDeps,
+  repo: SteeringRepository,
+  prNumber: number,
+): Promise<Date | null> {
+  try {
+    return (await deps.github.getPullRequest(repo, prNumber)).mergedAt;
+  } catch (error) {
+    logger.warn(
+      { err: error, pr: prNumber },
+      "context.pr.merge: could not re-read the merged pull request; the publication is refused and retried rather than stamped with this call's clock",
+    );
+    return null;
+  }
 }
 
 export const mergeContextPrHandler = createMergeContextPrHandler(

@@ -253,6 +253,80 @@ export function buildProgram(): Command {
       const { repoUnlink } = await import("./commands/repo.js");
       await repoUnlink(bindingId, opts);
     });
+  // ── steering: is this checkout running on the records in force? ─────────────
+
+  const steeringCmd = program
+    .command("steering")
+    .description(
+      "Steering freshness: whether .oxagen/ carries the records merged on the production branch",
+    );
+  steeringCmd
+    .command("status")
+    .description(
+      "Compare .oxagen/ against the remote production branch and show the two gates",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { steeringStatus } = await import("./commands/steering.js");
+      await steeringStatus(opts);
+    });
+  steeringCmd
+    .command("sync")
+    .description(
+      "Take .oxagen/ from the remote production branch; refuses while it holds uncommitted or unmerged work",
+    )
+    .option("--force", "Overwrite local .oxagen/ changes")
+    .option(
+      "--commit",
+      "Commit the synced files instead of leaving them staged",
+    )
+    .option("--dry-run", "Show what would be taken, and write nothing")
+    .option("--json", "Output JSON")
+    .action(
+      async (opts: {
+        force?: boolean;
+        commit?: boolean;
+        dryRun?: boolean;
+        json?: boolean;
+      }) => {
+        const { steeringSync } = await import("./commands/steering.js");
+        await steeringSync(opts);
+      },
+    );
+  steeringCmd
+    .command("gate")
+    .description(
+      "The pre-prompt check an agent harness calls. Exit 0 allows, exit 2 refuses with the reason on stderr",
+    )
+    // Spelled out rather than imported so building the program stays free of
+    // module loads: `--help` introspection must not pull in the checker.
+    // `steering hooks status` prints the authoritative list at run time.
+    .option(
+      "--harness <name>",
+      "Render for this harness: claude-code, codex, text, json",
+      "text",
+    )
+    .option("--no-network", "Never contact the remote or the Oxagen API")
+    .action(async (opts: { harness?: string; network?: boolean }) => {
+      const { steeringGate } = await import("./commands/steering.js");
+      await steeringGate(opts);
+    });
+  steeringCmd
+    .command("hooks")
+    .argument("<action>", "install | remove | status")
+    .description("Install the pre-prompt gate into an agent harness")
+    .option(
+      "--harness <names>",
+      "claude-code, codex, a comma-separated list, or all",
+      "all",
+    )
+    .option("--json", "Output JSON")
+    .action(
+      async (action: string, opts: { harness?: string; json?: boolean }) => {
+        const { steeringHooks } = await import("./commands/steering.js");
+        await steeringHooks(action, opts);
+      },
+    );
 
   // ── run: the recorded run (export_run) ──────────────────────────────────────
 

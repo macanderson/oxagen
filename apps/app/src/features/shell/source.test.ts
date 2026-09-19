@@ -69,7 +69,12 @@ const source = {
   mandates: { list: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
-  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  steering: {
+    records: vi.fn(),
+    proposals: vi.fn(),
+    contextPr: vi.fn(),
+    freshness: vi.fn(),
+  },
   tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 const listed = readOk({
