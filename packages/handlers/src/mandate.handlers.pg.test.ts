@@ -1129,5 +1129,42 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
     });
+
+    it("list: a narrowed reader with no live agent to narrow by reads nothing, never every mandate in the workspace", async () => {
+      const m = await grant(billingUserId, body());
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      // Every agent in the workspace soft-deleted at once: `createdByOperator`
+      // and `livePrincipalIds` both resolve empty, the exact state that made
+      // `or(undefined, undefined)` collapse `readerScope` to `undefined` and
+      // fall through the surrounding `and(...)` to an unfiltered read.
+      // Restored in `finally` since `invoiceBotId`/`otherBotId` are shared
+      // fixtures every other test in this file depends on being live.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.workspaceId, workspaceId)),
+      );
+      try {
+        const asBystander = await inScope(() =>
+          mandateListHandler({ limit: 500 }, ctx(bystanderUserId)),
+        );
+        expect(asBystander.items).toEqual([]);
+      } finally {
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.agents)
+            .set({ deletedAt: null })
+            .where(eq(schema.agents.workspaceId, workspaceId)),
+        );
+      }
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
   },
 );

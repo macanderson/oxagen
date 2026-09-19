@@ -7,7 +7,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { mapMandates, readerFilter, requireWorkspace } from "./_mandate";
 
 export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
@@ -76,17 +76,27 @@ export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
       const livePrincipalIds = liveAgents
         .map((a) => a.principalId)
         .filter((id): id is string => id !== null);
-      readerScope = or(
-        createdByOperator.length > 0
-          ? inArray(schema.mandates.agentPrincipalId, createdByOperator)
-          : undefined,
-        livePrincipalIds.length > 0
-          ? and(
-              eq(schema.mandates.requestedBy, operatorId),
-              inArray(schema.mandates.agentPrincipalId, livePrincipalIds),
-            )
-          : undefined,
-      );
+      readerScope =
+        or(
+          createdByOperator.length > 0
+            ? inArray(schema.mandates.agentPrincipalId, createdByOperator)
+            : undefined,
+          livePrincipalIds.length > 0
+            ? and(
+                eq(schema.mandates.requestedBy, operatorId),
+                inArray(schema.mandates.agentPrincipalId, livePrincipalIds),
+              )
+            : undefined,
+        ) ??
+        // Drizzle's `or()` returns `undefined` when every operand is
+        // `undefined`, and `and()` treats an `undefined` member as absent
+        // rather than as "refuse everything", so a narrowed reader in a
+        // workspace with no live agents at all (every agent soft-deleted)
+        // would otherwise fall through to the unfiltered `and(...)` below
+        // and see every mandate in the workspace, accountable roles
+        // included. A narrowed reader with nothing to narrow by reads
+        // nothing, never everything.
+        sql`false`;
     }
 
     const rows = await tx
