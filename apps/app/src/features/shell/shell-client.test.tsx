@@ -56,7 +56,7 @@ vi.mock("next/navigation", () => ({
 
 // The Account dialog's tabs read on open; the shell test only needs them to
 // answer, not what they answer with (account-dialog.test.tsx covers that).
-const liveSignOut = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+const liveSignOut = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
 const liveRegenerateBackupCodes = vi.hoisted(() =>
   vi.fn((): Promise<unknown> => Promise.resolve({ ok: false })),
 );
@@ -465,6 +465,57 @@ describe("user menu", () => {
     );
     expect(liveSignOut).toHaveBeenCalledTimes(1);
     expect(nav.replace).toHaveBeenCalledWith("/login");
+  });
+
+  // Better Auth reports a refused sign-out by resolving with `error` set, not
+  // by rejecting, and the menu used to navigate from `finally` regardless. So
+  // a sign-out that never reached the server looked exactly like one that
+  // worked: the page left, the person believed the session was closed, and the
+  // cookie was still valid. Back would have put them into the app as
+  // themselves. This is the control people reach for on a machine they do not
+  // trust, so it may not claim an outcome it did not get.
+  it("stays put and says so when sign-out did not go through (negative)", async () => {
+    liveSignOut.mockResolvedValueOnce(false);
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    const menu = within(await screen.findByRole("menu"));
+    await user.click(menu.getByTestId("sign-out"));
+
+    expect(liveSignOut).toHaveBeenCalledTimes(1);
+    expect(nav.replace).not.toHaveBeenCalled();
+    // Said where the person is looking, inside the item itself, because a
+    // paragraph beside it would break `role="menu"`'s allowed children.
+    expect(await screen.findByTestId("sign-out-failed")).toHaveTextContent(
+      "still open",
+    );
+    // And announced, from a live region outside the menu.
+    expect(screen.getByRole("alert")).toHaveTextContent("still open");
+
+    // And the press can be repeated, rather than the menu being left dead.
+    liveSignOut.mockResolvedValueOnce(true);
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+    expect(nav.replace).toHaveBeenCalledWith("/login");
+  });
+
+  // A thrown call is the same outcome as a refused one: the session may still
+  // be open, so nothing may claim it closed.
+  it("stays put when the sign-out call throws (negative)", async () => {
+    liveSignOut.mockRejectedValueOnce(new Error("offline"));
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+    expect(nav.replace).not.toHaveBeenCalled();
+    expect(await screen.findByTestId("sign-out-failed")).toBeTruthy();
   });
 
   // Sign out leaves the shell through a client-side `replace`, which runs no

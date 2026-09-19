@@ -1913,6 +1913,8 @@ type Messages = {
       switchTheme: string;
       themeNow: string;
       signOut: string;
+      signingOut: string;
+      signOutFailed: string;
     };
     commands: {
       title: string;

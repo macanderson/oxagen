@@ -8,6 +8,7 @@
 // (src/ui/avatar.tsx), which falls back to initials when the person has set no
 // avatar or the stored value is malformed.
 import { Menu } from "@base-ui/react/menu";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { routes } from "@/shared/safe-path";
 import { Avatar } from "@/ui/avatar";
@@ -35,6 +36,9 @@ export function UserMenu({ data }: { data: ShellData }) {
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
 
+  const [signOutFailed, setSignOutFailed] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
   async function signOut() {
     // Signing out leaves the shell, which unmounts the Account dialog and the
     // only copy of a recovery-code set Better Auth has already swapped in for
@@ -45,14 +49,33 @@ export function UserMenu({ data }: { data: ShellData }) {
       openAccount("security");
       return;
     }
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutFailed(false);
+    let ended: boolean;
     try {
-      await liveSignOut();
+      ended = await liveSignOut();
+    } catch {
+      // A thrown call is the same outcome as a refused one: the session may
+      // still be open, so nothing may claim it closed.
+      ended = false;
     } finally {
-      // The session is gone either way once Better Auth answers; the login
-      // page is where a signed-out person belongs, and `replace` re-renders
-      // the server tree so no chrome for the old session survives.
-      navigate.replace(routes.login());
+      setSigningOut(false);
     }
+    if (ended) {
+      // `replace` re-renders the server tree, so no chrome for the old session
+      // survives, and the sign-in page is where a signed-out person belongs.
+      navigate.replace(routes.login());
+      return;
+    }
+    // It did NOT end. This used to navigate from `finally`, so a refused or
+    // unreachable sign-out looked identical to one that worked: the page left,
+    // the person believed the session was closed, and the cookie was still
+    // valid. Sign out is what someone reaches for when they do not trust the
+    // machine they are on, so saying it happened when it did not is the one
+    // failure this control cannot have. The menu stays open, says so, and the
+    // press can be repeated.
+    setSignOutFailed(true);
   }
 
   return (
@@ -107,13 +130,37 @@ export function UserMenu({ data }: { data: ShellData }) {
             <Menu.Item
               className={itemClass}
               data-testid="sign-out"
+              closeOnClick={false}
               onClick={() => void signOut()}
             >
-              <span className="flex-1">{t("userMenu.signOut")}</span>
+              <span className="flex-1">
+                {signingOut ? t("userMenu.signingOut") : t("userMenu.signOut")}
+                {/* Inside the item, not beside it: `role="menu"` may contain
+                    only menuitems, groups and separators, so a sibling
+                    paragraph here is an aria-required-children violation (the
+                    axe sweep in shell-client.test.tsx caught exactly that).
+                    The announcement is made by the live region outside the
+                    menu below, which is where a role that does not belong in a
+                    menu can live. */}
+                {signOutFailed ? (
+                  <span
+                    data-testid="sign-out-failed"
+                    className="mt-0.5 block text-xs text-destructive"
+                  >
+                    {t("userMenu.signOutFailed")}
+                  </span>
+                ) : null}
+              </span>
             </Menu.Item>
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>
+      {/* Outside the popup, so the menu keeps only the children its role
+          allows, and assertive because the person believes they have just
+          signed out on a machine they may not trust. */}
+      <p role="alert" aria-live="assertive" className="sr-only">
+        {signOutFailed ? t("userMenu.signOutFailed") : ""}
+      </p>
     </Menu.Root>
   );
 }

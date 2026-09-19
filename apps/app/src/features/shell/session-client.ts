@@ -13,9 +13,22 @@ async function client() {
   return authClient;
 }
 
-/** Ends this session; the caller then sends the browser to the sign-in page. */
-export async function liveSignOut(): Promise<void> {
-  await (await client()).signOut();
+/**
+ * Ends this session, and says whether it ended.
+ *
+ * Better Auth reports a refused call by resolving with `error` set rather than
+ * rejecting, so awaiting the promise says nothing: a sign-out that never
+ * reached the server, or that the server refused, looked exactly like one that
+ * worked. The caller then sent the browser to the sign-in page with the
+ * session cookie still valid, which is the worst way to get this wrong. Sign
+ * out is what a person reaches for when they do not trust the machine they are
+ * on, and Back would have put them straight back into the app as themselves.
+ *
+ * The other calls in this seam already read `error`; this one now does too.
+ */
+export async function liveSignOut(): Promise<boolean> {
+  const reply = await (await client()).signOut();
+  return !reply.error;
 }
 
 /** One of the person's sessions as the Security tab lists it. */
