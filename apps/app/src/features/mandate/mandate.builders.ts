@@ -13,7 +13,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
   const refuse = () => Promise.reject(new Error("not a Mandate read"));
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -54,7 +54,12 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
     },
     skills: { inventory: refuse },
     audit: { events: refuse, exportEvents: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
     mandates: {
       list: refuse,

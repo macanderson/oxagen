@@ -32,7 +32,10 @@
 // the API or MCP by a caller that holds the declaration. The app reads one back
 // as money either way.
 import type { z } from "zod";
-import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
+import {
+  mandateLimitsUpdate,
+  mandateLimitsUpdateFields,
+} from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
@@ -89,8 +92,13 @@ export type LimitsDraft = {
  * means the stored one is kept. The handler merges it under the row lock
  * (ADR-102).
  */
+// Derived from the field schema rather than from the contract's `input`. That
+// input is `.object().strict().refine(...)`, so it is a ZodEffects and indexing
+// `z.input<...>` on it answers `unknown`, which typechecks here and loses every
+// bound the moment it is written to. The field is exported for the same reason
+// the xmcp tool needs it.
 type MandateLimitChanges = NonNullable<
-  z.input<typeof mandateLimitsUpdate.input>["limitChanges"]
+  z.input<typeof mandateLimitsUpdateFields.limitChanges>
 >;
 
 /** The day a date input gives; `endOfZonedDay` turns it into an instant. */
