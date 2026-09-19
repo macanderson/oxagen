@@ -15,8 +15,9 @@ import type { AppEnv } from "../../app";
  * rejects anything but an API key before the body is read.
  */
 /**
- * The host's own ceiling (`TACHO_MAX_REQUEST_BYTES`): a batch carries frame
- * bodies as base64, and the shipper cuts batches against this same number.
+ * The request ceiling the host's shipper packs batches against. Bodies ride
+ * base64-encoded, so 1 MiB here refused any batch holding more than about
+ * 750 KiB of bodies, including a single body at the 1 MiB cap.
  */
 const MAX_BODY_BYTES = TACHO_MAX_REQUEST_BYTES;
 

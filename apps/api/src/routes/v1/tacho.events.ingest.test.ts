@@ -1,10 +1,10 @@
 import {
   GENESIS_CURSOR,
   type UnsealedTachoEvent,
-  sealEvent,
-  sessionUuid,
   TACHO_MAX_BODY_BYTES,
   TACHO_MAX_REQUEST_BYTES,
+  sealEvent,
+  sessionUuid,
 } from "@oxagen/tacho";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -209,8 +209,11 @@ describe("POST /v1/tacho/events", () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
   });
 
-  it("refuses a body over the host's request ceiling, and admits one retained body under it", async () => {
-    const huge = { ...VALID_BATCH, padding: "x".repeat(TACHO_MAX_REQUEST_BYTES + 1) };
+  it("refuses a body over the limit", async () => {
+    const huge = {
+      ...VALID_BATCH,
+      padding: "x".repeat(TACHO_MAX_REQUEST_BYTES + 1),
+    };
     expect((await post(huge)).status).toBe(413);
     expect(mocks.invoke).not.toHaveBeenCalled();
     // A single body at the recorder's 1 MiB cap is about 1.4 MiB as base64:
@@ -220,6 +223,14 @@ describe("POST /v1/tacho/events", () => {
       padding: "x".repeat(Math.ceil((TACHO_MAX_BODY_BYTES * 4) / 3)),
     };
     expect((await post(oneBody)).status).not.toBe(413);
+  });
+
+  it("admits a batch carrying a body at the 1 MiB cap", async () => {
+    const atCap = {
+      ...VALID_BATCH,
+      padding: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString("base64"),
+    };
+    expect((await post(atCap)).status).not.toBe(413);
   });
 });
 
