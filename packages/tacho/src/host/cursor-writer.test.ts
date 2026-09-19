@@ -231,3 +231,62 @@ describe("an invalid schema version", () => {
     ).toBe(1);
   });
 });
+
+describe("what an unenroll leaves behind", () => {
+  it("empties the file Tacho created, `version` included", () => {
+    // `mergeCursorHooks` is what wrote that `version` on a machine with no
+    // `hooks.json`, and `HarnessFiles.settle` removes a file Tacho created
+    // only when what is left says nothing. A leftover `{"version":1}` reads
+    // as a user edit, so the file and `~/.cursor` survived `unenroll --purge`
+    // and Cursor became the one wrapped harness that left something behind.
+    expect(
+      stripCursorHooks(mergeCursorHooks(undefined, CONFIG).document).document,
+    ).toEqual({});
+  });
+
+  it("keeps the user's own `version` while any of their hooks stay", () => {
+    const mine = { version: 1, hooks: { stop: [{ command: "mine" }] } };
+    expect(
+      stripCursorHooks(mergeCursorHooks(mine, CONFIG).document).document,
+    ).toEqual(mine);
+  });
+});
+
+describe("junk where an entry should be", () => {
+  // A user's file can hold anything in a hook list, and `isTachoEntry` reads
+  // `entry.type`, which throws on a `null`. Finding out that an entry is not
+  // ours must not crash `status`, `enroll` or `unenroll`.
+  const partial = {
+    version: 1,
+    hooks: {
+      preToolUse: [
+        null,
+        "junk",
+        {
+          type: "command",
+          command: `tacho hook --enrollment ${ENROLLMENT} --harness cursor`,
+          failClosed: true,
+        },
+      ],
+    },
+  };
+
+  it("is read past rather than thrown on", () => {
+    const presence = cursorHookPresence(partial, ENROLLMENT);
+    expect(presence.present).toEqual(["preToolUse"]);
+    expect(presence.missing).toContain("stop");
+    expect(presence.failOpenEnforcement).toEqual([]);
+  });
+
+  it("survives a merge and a strip untouched", () => {
+    expect(stripCursorHooks(partial, ENROLLMENT).document.hooks).toEqual({
+      preToolUse: [null, "junk"],
+    });
+    expect(
+      mergeCursorHooks(partial, CONFIG).document.hooks?.["preToolUse"]?.slice(
+        0,
+        2,
+      ),
+    ).toEqual([null, "junk"]);
+  });
+});

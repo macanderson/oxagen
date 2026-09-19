@@ -8,7 +8,6 @@ import { digestText } from "./context";
 import { hookInputSchema, normalizeHook } from "./hooks";
 import {
   parseAnswerBody,
-  tryParseAnswerBody,
   parsePsLine,
   psLookup,
   psStartInstance,

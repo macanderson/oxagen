@@ -194,6 +194,21 @@ export function cursorHookEntries(
   return out;
 }
 
+/**
+ * Whether one entry in a user's `hooks.json` is Tacho's. A user's file can
+ * hold anything where an entry should be, and whatever that is, it is not
+ * ours and it must not throw on the way to saying so. `isTachoEntry` reads
+ * `entry.type`, which throws on a `null` in a hook list, and `status` is the
+ * command that would have crashed on it.
+ */
+function isOurs(entry: unknown, enrollmentId?: string): boolean {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    isTachoEntry(entry as HookEntry, enrollmentId)
+  );
+}
+
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -236,7 +251,7 @@ export function mergeCursorHooks(
   const hooks = { ...(document.hooks ?? {}) };
   for (const [event, entries] of Object.entries(cursorHookEntries(config))) {
     const foreign = (hooks[event] ?? []).filter(
-      (entry) => !isTachoEntry(entry, config.enrollmentId),
+      (entry) => !isOurs(entry, config.enrollmentId),
     );
     hooks[event] = [...foreign, ...entries];
   }
@@ -244,7 +259,19 @@ export function mergeCursorHooks(
   return { document, changed: JSON.stringify(document) !== before };
 }
 
-/** Remove Tacho's entries (one enrollment, or any) and drop emptied events. */
+/**
+ * Remove Tacho's entries (one enrollment, or any) and drop emptied events.
+ *
+ * `version` stays while anything else in the document does, because the file
+ * is Cursor's and a user's remaining hooks need it. Where the strip empties
+ * the document, `version` goes too: `mergeCursorHooks` is what wrote it on a
+ * machine that had no `hooks.json` at all, and `HarnessFiles.settle` removes
+ * a file Tacho created only when what is left says nothing. Without this an
+ * `unenroll --purge` left `{"version":1}` behind, which `settle` reads as a
+ * user edit, so the file and the `.cursor` directory survived and Cursor was
+ * the one wrapped harness that failed the rig's standard: Tacho creates
+ * nothing it does not remove.
+ */
 export function stripCursorHooks(
   existing: unknown,
   enrollmentId?: string,
@@ -257,9 +284,7 @@ export function stripCursorHooks(
   if (document.hooks !== undefined) {
     const hooks: Record<string, HookEntry[]> = {};
     for (const [event, entries] of Object.entries(document.hooks)) {
-      const kept = entries.filter(
-        (entry) => !isTachoEntry(entry, enrollmentId),
-      );
+      const kept = entries.filter((entry) => !isOurs(entry, enrollmentId));
       if (kept.length > 0) hooks[event] = kept;
     }
     if (Object.keys(hooks).length > 0) document.hooks = hooks;
@@ -298,7 +323,7 @@ export function cursorHookPresence(
   const failOpenEnforcement: CursorHookEventName[] = [];
   for (const event of CURSOR_HOOK_EVENTS) {
     const entries = document.hooks?.[event] ?? [];
-    const ours = entries.filter((entry) => isTachoEntry(entry, enrollmentId));
+    const ours = entries.filter((entry) => isOurs(entry, enrollmentId));
     if (ours.length === 0) {
       missing.push(event);
       continue;
