@@ -96,7 +96,7 @@ function row(seq: number, kind: string, text?: string) {
     redactions: "",
     toolName: kind === "tool_call" ? "Read" : "",
     toolStatus: kind === "tool_call" ? "ok" : "",
-    toolUseId: "",
+    toolUseId: kind === "tool_call" ? `tu_${seq}` : "",
     model: kind === "llm_call" ? "haiku" : "",
     provider: "",
     policyDecision: "",
