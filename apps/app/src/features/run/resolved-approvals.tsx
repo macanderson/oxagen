@@ -3,6 +3,7 @@
 // `ApprovalsPanel` so the tab reads top to bottom as "what is waiting, then
 // what already happened," the receipt `autoApprovePath` writes for a call a
 // decision rule released with no person, read back for the first time.
+import { useTranslations } from "next-intl";
 import type { ResolvedApprovalItem } from "@/data/contracts/approvals";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
@@ -16,7 +17,13 @@ function approverLabel(resolvedBy: string | null): string {
   return resolvedBy;
 }
 
-function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
+function ResolvedApprovalRow({
+  item,
+  t,
+}: {
+  item: ResolvedApprovalItem;
+  t: ReturnType<typeof useTranslations<"run.resolvedApprovals">>;
+}) {
   return (
     <li
       data-testid="resolved-approval"
@@ -24,13 +31,13 @@ function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
     >
       <p className={`${mono} break-all font-semibold`}>{item.tool}</p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">Resolution</dt>
+        <dt className="text-muted-foreground">{t("resolution")}</dt>
         <dd>{item.resolution}</dd>
-        <dt className="text-muted-foreground">Resolved by</dt>
+        <dt className="text-muted-foreground">{t("resolvedBy")}</dt>
         <dd data-testid="resolved-approver" className={`${mono} break-all`}>
           {approverLabel(item.resolvedBy)}
         </dd>
-        <dt className="text-muted-foreground">Resolved at</dt>
+        <dt className="text-muted-foreground">{t("resolvedAt")}</dt>
         <dd>{item.resolvedAt}</dd>
       </dl>
     </li>
@@ -42,6 +49,7 @@ export function ResolvedApprovalsPanel({
 }: {
   approvals: Read<ResolvedApprovalItem[]>;
 }) {
+  const t = useTranslations("run.resolvedApprovals");
   return (
     <section
       aria-labelledby="run-resolved-approvals"
@@ -49,17 +57,17 @@ export function ResolvedApprovalsPanel({
     >
       <div className="pb-3">
         <h2 id="run-resolved-approvals" className="text-base font-semibold">
-          Resolved
+          {t("title")}
         </h2>
       </div>
       {!approvals.ok ? (
-        <ReadFailure read={approvals} section="Resolved" />
+        <ReadFailure read={approvals} section={t("title")} />
       ) : approvals.value.length === 0 ? (
-        <p className="text-sm">Nothing resolved for this run yet.</p>
+        <p className="text-sm">{t("empty")}</p>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
           {approvals.value.map((item) => (
-            <ResolvedApprovalRow key={item.id} item={item} />
+            <ResolvedApprovalRow key={item.id} item={item} t={t} />
           ))}
         </ul>
       )}
