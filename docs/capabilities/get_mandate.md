@@ -72,7 +72,7 @@ Readers section, which this capability shares in full.
 
 | code | reason | meaning |
 | --- | --- | --- |
-| `forbidden` | `org_role_required`, `no_principal` | Neither the office nor the agent's operator. |
+| `forbidden` | `org_role_required`, `no_principal` | Neither an accountable office role, a workspace Owner/Member reading an agent they created or a mandate they requested, nor (on an enterprise org) any other explicit IAM allow path admits the caller. |
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 
 ## SPEC references
