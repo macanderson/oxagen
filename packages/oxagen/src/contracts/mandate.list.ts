@@ -12,16 +12,16 @@ import {
 //
 // Readable by an accountable org role (Owner, Admin, Billing, Compliance),
 // who see every mandate in the workspace. `defaultRoles` otherwise matches
-// `request_mandate`'s real grants (workspace Owner, Member) — anyone who may
+// `request_mandate`'s real grants (workspace Owner, Member): anyone who may
 // ask for a mandate may read the mandates of agents they created, so the
 // requester of a draft can read the draft they just made. ADR-107: the two
 // capabilities disagreed (`request_mandate` admitted a workspace Member this
 // contract refused outright), and `readerFilter`
 // (`packages/handlers/src/_mandate.ts`) already narrows that reader to their
-// own agents — it was dead code until these roles matched it. There is no org
+// own agents; it was dead code until these roles matched it. There is no org
 // "Member" role in this system (`tools/scripts/seed-iam-defaults.ts`'s
 // `ORG_ROLES` is Owner/Admin/Compliance/Billing only), so this contract
-// grants none — the org branch stays the four accountable roles, unnarrowed.
+// grants none: the org branch stays the four accountable roles, unnarrowed.
 export const mandateList = registerCapability({
   name: "list_mandates",
   domain: "mandate",

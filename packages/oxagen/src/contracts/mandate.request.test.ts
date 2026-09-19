@@ -19,7 +19,7 @@ describe("request_mandate contract", () => {
   // "Member" role in this system (tools/scripts/seed-iam-defaults.ts's
   // ORG_ROLES is Owner/Admin/Compliance/Billing only), and it must match
   // ACCOUNTABLE_ORG_ROLES, the set the handler's own assertOrgRole call
-  // admits — a narrower kernel-level grant would refuse an accountable
+  // admits: a narrower kernel-level grant would refuse an accountable
   // caller before the handler's own check ever runs (ADR-107, #3138).
   it("admits exactly the accountable org roles the handler's own assertOrgRole call does", () => {
     expect(mandateRequest.defaultRoles.org).toEqual({

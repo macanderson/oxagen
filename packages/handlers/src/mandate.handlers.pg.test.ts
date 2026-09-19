@@ -626,7 +626,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // #3138 (ADR-107): request_mandate and list_mandates now admit the same
     // roles, so IAM lets a non-accountable reader reach the handler; this
-    // pins what readerFilter's creator-narrowing does with that admission —
+    // pins what readerFilter's creator-narrowing does with that admission:
     // a reader who created nothing reads nothing, not the whole ledger.
     it("list: a reader with no accountable role who created no agent reads nothing", async () => {
       const bystanderUserId = randomUUID();

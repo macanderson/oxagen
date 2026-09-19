@@ -6,11 +6,11 @@ import {
   mandateSchema,
 } from "../mandates/schemas";
 
-// get_mandate — one mandate with its ledger rows and remaining authority by
+// get_mandate: one mandate with its ledger rows and remaining authority by
 // measure (the mandate page: tiles, the ledger, the grant). Same readers as
 // list_mandates: the accountable org roles read every mandate; a workspace
 // Owner or Member reads the mandates of agents they created (`readerFilter`
-// in packages/handlers/src/_mandate.ts already narrows this way — the
+// in packages/handlers/src/_mandate.ts already narrows this way, the
 // handler was ready before this contract admitted the caller). Without this,
 // the page a list row links to refuses the very reader list_mandates just
 // admitted (ADR-107, #3138).

@@ -20,7 +20,7 @@ export const mandateRequest = registerCapability({
   sensitivity: "medium",
   defaultEffect: "deny",
   // Matches the handler's own assertOrgRole call (ACCOUNTABLE_ORG_ROLES:
-  // Owner/Admin/Billing/Compliance; workspace Owner/Member) — the previous
+  // Owner/Admin/Billing/Compliance; workspace Owner/Member); the previous
   // org set here (Owner, Admin, Member) both invented a nonexistent org
   // "Member" role (tools/scripts/seed-iam-defaults.ts's ORG_ROLES has no
   // such entry, so it seeded nothing) and left out Billing/Compliance, which
