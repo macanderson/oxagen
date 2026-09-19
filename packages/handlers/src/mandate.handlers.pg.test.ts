@@ -979,7 +979,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
-    // ── retirement (ADR-104, #3124) ─────────────────────────────────────────────
+    // ── retirement (ADR-106, #3124) ─────────────────────────────────────────────
     // A mandate does not survive its agent's retirement: request_mandate,
     // grant_mandate and update_mandate_limits refuse to create or widen
     // authority against a retired identity, while list_mandates, get_mandate

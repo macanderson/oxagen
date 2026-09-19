@@ -1,4 +1,4 @@
-# ADR-104: Retirement revokes what it scoped, rather than refusing while it exists
+# ADR-106: Retirement revokes what it scoped, rather than refusing while it exists
 
 - **Status:** Accepted
 - **Date:** 2026-09-19

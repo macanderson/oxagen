@@ -4,7 +4,7 @@
 // agent row, suspends the principal, soft-deletes every live credential,
 // revokes every live host through the writes `revoke_tacho_enrollment`
 // shares (lib/tacho-host-revoke.ts), and revokes every mandate still active
-// or drafted against the agent's principal (ADR-104, #3124) — an active
+// or drafted against the agent's principal (ADR-106, #3124) — an active
 // mandate does not survive retirement, so this list of what retirement
 // revokes carries the same member `request_mandate`, `grant_mandate` and
 // `update_mandate_limits` now refuse to widen. Nothing is
@@ -46,7 +46,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
     // Lock the agent row before reading its status. `request_mandate` and
     // `grant_mandate` take the same row `FOR SHARE`, so a grant either
     // commits before the mandate scan below sees it, or waits and then reads
-    // the agent as archived and refuses (ADR-104, #3124). The re-read also
+    // the agent as archived and refuses (ADR-106, #3124). The re-read also
     // makes two concurrent retirements answer one write and one `already`.
     const [locked] = await tx
       .select({ status: schema.agents.status })

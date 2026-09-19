@@ -3,7 +3,7 @@
 // agent row is archived, the principal suspended, every long-lived credential
 // soft-deleted, every enrolled host revoked, and every mandate still active
 // or drafted against the agent's principal revoked, in one transaction
-// (ADR-104, #3124) — an active mandate does not survive its agent's
+// (ADR-106, #3124) — an active mandate does not survive its agent's
 // retirement, because a suspended principal can never draw on it. The
 // definition file in git is not touched here; removing it is a pull request
 // through `commit_agent_definition` with an empty definition.

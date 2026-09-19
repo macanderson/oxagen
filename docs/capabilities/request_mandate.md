@@ -39,7 +39,7 @@ Any org Owner, Admin, Billing or Compliance, or a workspace Owner or Member.
 | `forbidden` | `org_role_required`, `no_principal` | Not a member of the workspace. |
 | `not_found` | `agent_not_found` | The agent is not in this workspace. |
 | `conflict` | `agent_has_no_principal`, `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | As `grant_mandate`: a request is checked by construction the same way, including that each limit is denominated in the unit its measure is declared in. |
-| `conflict` | `agent_retired` | The agent is retired (`status: archived`): its principal is suspended and can never draw on a mandate, so no new draft is recorded against it (ADR-104). |
+| `conflict` | `agent_retired` | The agent is retired (`status: archived`): its principal is suspended and can never draw on a mandate, so no new draft is recorded against it (ADR-106). |
 
 ## SPEC references
 

@@ -193,7 +193,7 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
     }
     // The agent behind this mandate may have retired since it was granted;
     // a retired identity's principal is suspended and can never draw on a
-    // widened limit (ADR-104, #3124).
+    // widened limit (ADR-106, #3124).
     const agent = await resolveAgentByPrincipal(
       tx,
       workspaceId,

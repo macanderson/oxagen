@@ -49,7 +49,7 @@ Owner, Admin, Compliance; the rest → Owner, Admin). Checked in the handler
 | `conflict` | `measure_not_declared` | A matched tool's active version declares no measure for a limit or target the mandate names: denied by construction (§6.9 rule 1). |
 | `conflict` | `measure_unit_mismatch` | A matched tool declares that measure in a different unit from the one the limit is denominated in. The gate reads a call in the unit the tool declares, so a limit in any other unit is enforced as a figure nobody entered — a `storage` measure declared in GB, limited at "50 bytes", would admit a call of 50 GB. |
 | `conflict` | `not_a_draft` | `requestId` names a mandate that is not a draft. |
-| `conflict` | `agent_retired` | The agent is retired (`status: archived`): its principal is suspended and can never draw on a mandate. Refused for a fresh grant and for activating a draft whose agent retired after the request was made (ADR-104). |
+| `conflict` | `agent_retired` | The agent is retired (`status: archived`): its principal is suspended and can never draw on a mandate. Refused for a fresh grant and for activating a draft whose agent retired after the request was made (ADR-106). |
 
 ## SPEC references
 

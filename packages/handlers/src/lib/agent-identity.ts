@@ -106,7 +106,7 @@ export async function mintAgentCredential(
 /**
  * Revoke every active or draft mandate bound to the agent's principal, the
  * same way `retire_agent` revokes credentials and host enrollments rather
- * than refusing while one exists (ADR-104, #3124): a retired identity's
+ * than refusing while one exists (ADR-106, #3124): a retired identity's
  * principal is suspended, so an authority it still held would read active
  * and in effect in the ledger but could never be used. Each mandate is
  * taken under its row lock, parked calls release their reservations the
