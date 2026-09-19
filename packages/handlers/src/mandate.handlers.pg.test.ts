@@ -860,6 +860,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
+          // Stamped from the declared `amount` measure (ADR-104), not
+          // supplied by this request.
+          kind: "money",
         },
       });
       expect(out.validTo).toBe("2027-01-31T00:00:00.000Z");
@@ -918,6 +921,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         perPeriod: "500000000",
         period: "monthly",
         currencyOrUnit: "USD",
+        kind: "money",
       });
       const capped = await inScope(() =>
         mandateLimitsUpdateHandler(
@@ -933,10 +937,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
+          kind: "money",
         },
         // First depth for the calls cap, and its window is kept: the change
-        // named a figure and said nothing about the period.
-        calls: { perPeriod: "40", period: "daily", currencyOrUnit: "calls" },
+        // named a figure and said nothing about the period. The built-in
+        // measure is always `count` (ADR-104).
+        calls: {
+          perPeriod: "40",
+          period: "daily",
+          currencyOrUnit: "calls",
+          kind: "count",
+        },
       });
       // The declared-measure and unit checks run on the merged record, so a
       // change is refused exactly as a replacement is.

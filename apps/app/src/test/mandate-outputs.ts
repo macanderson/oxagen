@@ -20,6 +20,9 @@ export function authorityOutput(
   return {
     measure: "amount",
     currencyOrUnit: "USD",
+    // ADR-104: the fact `assertToolsDeclareMeasures` stamped at write time,
+    // never guessed from `currencyOrUnit` here or in the mapper.
+    kind: "money",
     period: "monthly",
     periodKey: "2026-09",
     perCall: "250000000",
@@ -38,6 +41,7 @@ export function callsAuthorityOutput(
   return {
     measure: "calls",
     currencyOrUnit: "calls",
+    kind: "count",
     period: "daily",
     periodKey: "2026-09-16",
     perCall: null,
@@ -66,6 +70,7 @@ export function mandateOutput(
         perPeriod: "2000000000",
         period: "monthly",
         currencyOrUnit: "USD",
+        kind: "money",
       },
     },
     targets: {},

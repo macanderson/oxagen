@@ -204,7 +204,7 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: "validTo is after validFrom",
       });
     }
-    await assertToolsDeclareMeasures(tx, workspaceId, {
+    const stampedLimits = await assertToolsDeclareMeasures(tx, workspaceId, {
       tools: locked.tools,
       limits,
       targets,
@@ -215,7 +215,7 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
     const [updated] = await tx
       .update(schema.mandates)
       .set({
-        limits,
+        limits: stampedLimits,
         targets,
         approvalRules: input.approval ?? locked.approval,
         validTo:

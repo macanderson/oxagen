@@ -23,7 +23,7 @@ refuses it.
 | Field | Type | Notes |
 | --- | --- | --- |
 | `mandateId` | `string` | `mnd_…` |
-| `limits` | `MandateLimits?` | Replaces the limits as a whole. The only way to delete a measure's bound. Mutually exclusive with `limitChanges`. |
+| `limits` | `MandateLimits?` | Replaces the limits as a whole. The only way to delete a measure's bound. Mutually exclusive with `limitChanges`. `kind` is never taken from this field — the handler re-derives every measure's `kind` from the current tool declarations and persists that, not the caller's (ADR-104). |
 | `limitChanges` | `MandateLimitChanges?` | Change these measures, leave the rest. Measure → a partial bound (`perCall`, `perPeriod`, `period`, `currencyOrUnit`, each optional, at least one present). Mutually exclusive with `limits`. |
 | `targets` | `MandateTargets?` | Replaces the targets as a whole. |
 | `approval` | `MandateApproval?` | Replaces the approval rule. |
@@ -63,6 +63,14 @@ window still binds what is already drawn.
 `limits` replacement keeps exactly the semantics it always had, for the same
 reason: a caller that holds the whole record is stating the whole record, and
 it is the only way to delete a bound.
+
+Every write here — a `limits` replacement or a `limitChanges` merge, whether or
+not the operator touched a particular measure — re-runs
+`assertToolsDeclareMeasures` on the resulting record and persists its stamped
+output, so every measure's `kind` is refreshed against the tool's current
+declaration on every call, not only the measures the operator named (ADR-104).
+Editing any field of an old mandate's limits therefore also fills in `kind`
+for every other measure that mandate limits, if it had none stored.
 
 **Send only the fields you changed.** The merge applies every field a change
 carries, because that is the only reading a change has: it cannot tell an edit
@@ -111,11 +119,12 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `not_found` | `mandate_not_found` | Not in this workspace. |
 | `conflict` | `mandate_ended` | Only an active mandate changes. |
 | `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
-| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs, against the merged record. |
+| `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch`, `measure_kind_conflict` | Denied by construction, the same checks `grant_mandate` runs, against the merged record — including that matched tools agree on what a limited measure counts (ADR-104). |
 | `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
 | `conflict` | `period_drawn` | A measure's period cannot change while that measure still has reserved or settled authority in the current window. Ledger rows keep the old `periodKey`; renaming the window would hide the draw from `readAuthority` and `reserve`. |
 
 ## SPEC references
 
 - §6.9 part 3 (Change limits), App. E; ADR-059; ADR-102 (`limitChanges` merges
-  under the row lock)
+  under the row lock); ADR-104 (the measure kind is stamped and re-derived on
+  every write)

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   amountToMicros,
   exceeds,
+  legacyMeasureKindGuess,
+  measureKindOf,
   periodKey,
   periodKeyRange,
   periodKeysOverlap,
@@ -302,5 +304,34 @@ describe("readMeasure keeps a count exact", () => {
       ok: false,
       reason: "not_a_number",
     });
+  });
+});
+
+describe("measureKindOf (ADR-104)", () => {
+  it("maps a declared type to its kind", () => {
+    expect(measureKindOf("amount")).toBe("money");
+    expect(measureKindOf("count")).toBe("count");
+  });
+});
+
+describe("legacyMeasureKindGuess (ADR-104)", () => {
+  it("reads an ISO 4217 code as money", () => {
+    expect(legacyMeasureKindGuess("USD")).toBe("money");
+    expect(legacyMeasureKindGuess("EUR")).toBe("money");
+  });
+
+  it("reads a non-currency unit as a count", () => {
+    expect(legacyMeasureKindGuess("GAU")).toBe("count");
+    expect(legacyMeasureKindGuess("rows")).toBe("count");
+    expect(legacyMeasureKindGuess("calls")).toBe("count");
+  });
+
+  it("is the documented wrong answer for a count declared in a currency code — the exact case ADR-104 exists to close", () => {
+    // A tool may legitimately declare `{ type: "count", unit: "USD" }`; the
+    // fallback cannot see that and reads it as money. `measureKindOf` on the
+    // real declaration answers correctly, which is why every write path
+    // stores the real kind and the fallback is read time's last resort only.
+    expect(legacyMeasureKindGuess("USD")).toBe("money");
+    expect(measureKindOf("count")).toBe("count");
   });
 });

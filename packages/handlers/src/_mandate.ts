@@ -16,9 +16,11 @@ import {
   type MandateLimits,
   type MandateOut,
   type MandateTargets,
+  type MeasureKind,
   type OrgRoleName,
 } from "@oxagen/oxagen/mandates/schemas";
 import {
+  measureKindOf,
   parseMandateRow,
   readAuthority,
   toolMatches,
@@ -96,6 +98,16 @@ export async function resolveAgent(
  * the mandate names. `calls` is built in and needs no declaration. An
  * untagged tool is left out because the gate has no opinion on its calls
  * (`decideMandate`), so a mandate naming it would govern nothing.
+ *
+ * Returns `args.limits` with each entry's `kind` stamped from the matched
+ * declaration this pass already fetched and validated (ADR-104) — `money`
+ * for a declared `amount`, `count` for `count` or the built-in `calls`. This
+ * is the only place that works the kind out; every caller stores the
+ * returned record rather than `args.limits`, so the fact is written once,
+ * at the moment it is known, and no reader downstream ever infers it from
+ * `currencyOrUnit`. When two matched tools declare the same measure with
+ * different types — the one case write time cannot resolve on its own — this
+ * refuses `measure_kind_conflict` rather than picking one silently.
  */
 export async function assertToolsDeclareMeasures(
   tx: Tx,
@@ -105,7 +117,7 @@ export async function assertToolsDeclareMeasures(
     limits: MandateLimits;
     targets: MandateTargets;
   },
-): Promise<void> {
+): Promise<MandateLimits> {
   const declared = await tx
     .select({
       slug: schema.tools.slug,
@@ -149,6 +161,13 @@ export async function assertToolsDeclareMeasures(
     });
   }
   const targetMeasures = Object.keys(args.targets);
+  // Every limit measure's kind (ADR-104), filled in as each matched tool's
+  // declaration is checked below. Every entry in `limitMeasures` is written
+  // here before this function returns: each pattern matches at least one
+  // tool (checked above) and that tool's declaration is checked for every
+  // name in `limitMeasures` (checked below), so a name that survives the
+  // loop without a declared measure has already thrown `measure_not_declared`.
+  const measureKinds: Partial<Record<string, MeasureKind>> = {};
   for (const pattern of args.tools) {
     // "Tagged" means EFFECTIVELY tagged — the declared column unioned with the
     // classified jsonb, through the one function every reader of this fact
@@ -199,6 +218,23 @@ export async function assertToolsDeclareMeasures(
             message: `${tool.slug}@${tool.version} declares measure "${name}" in ${d.unit}; the mandate denominates its limit in ${asked}`,
           });
         }
+        // Two matched tools naming the same measure with the same unit could
+        // still disagree on what it counts — a count and an amount can share
+        // a currency-code unit, which the unit check above cannot catch. The
+        // mandate's tool patterns must agree, because write time is the only
+        // moment with one answer (a mandate that matched both could enforce
+        // one tool's calls in the other's currency with no screen able to
+        // tell).
+        const kind = measureKindOf(d.type);
+        const existingKind = measureKinds[name];
+        if (existingKind !== undefined && existingKind !== kind) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_kind_conflict",
+            message: `Measure "${name}" is declared as ${existingKind} by one matched tool and ${kind} by ${tool.slug}@${tool.version}; a mandate's tool patterns must agree on what a limited measure counts`,
+          });
+        }
+        measureKinds[name] = kind;
       }
       for (const name of targetMeasures) {
         if (declaredMeasures[name] === undefined) {
@@ -211,6 +247,25 @@ export async function assertToolsDeclareMeasures(
       }
     }
   }
+  const stamped: MandateLimits = {};
+  for (const [measure, limit] of Object.entries(args.limits)) {
+    const kind = measure === CALLS_MEASURE ? "count" : measureKinds[measure];
+    if (kind === undefined) {
+      // Unreachable: every limit measure besides `calls` is in
+      // `limitMeasures`, and every tool pattern's matched tools were checked
+      // against it above, throwing `measure_not_declared` before this point
+      // if any tool lacked a declaration. Guarded rather than asserted with
+      // `!` because a stored kind silently defaulting to a guess is exactly
+      // the failure ADR-104 closes.
+      throw new HandlerError({
+        code: "conflict",
+        reason: "measure_not_declared",
+        message: `No matched tool declared measure "${measure}"'s kind`,
+      });
+    }
+    stamped[measure] = { ...limit, kind };
+  }
+  return stamped;
 }
 
 /**

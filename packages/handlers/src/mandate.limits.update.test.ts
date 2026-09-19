@@ -130,7 +130,15 @@ vi.mock("./_mandate", async (importOriginal) => ({
     consequenceTags: ["moves_money"],
     limits: doubles.stale,
   }),
-  assertToolsDeclareMeasures: async () => undefined,
+  // Passthrough (ADR-104): the real function stamps `kind` from the tool
+  // declaration and returns the limits the handler persists. These cases are
+  // about the merge, not the kind, so the double hands back what it was given
+  // unchanged rather than fabricating a declaration.
+  assertToolsDeclareMeasures: async (
+    _tx: unknown,
+    _workspaceId: string,
+    args: { limits: MandateLimits },
+  ) => args.limits,
   mapMandates: async () => [{ id: "mnd_1", status: "active" }],
 }));
 
@@ -138,8 +146,11 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-const { mandateLimitsUpdateHandler, applyLimitChanges, assertPeriodChangeAllowed } =
-  await import("./mandate.limits.update");
+const {
+  mandateLimitsUpdateHandler,
+  applyLimitChanges,
+  assertPeriodChangeAllowed,
+} = await import("./mandate.limits.update");
 const { mandateLimitsUpdate } = await import(
   "@oxagen/oxagen/contracts/mandate.limits.update"
 );

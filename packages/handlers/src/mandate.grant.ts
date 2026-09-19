@@ -47,11 +47,11 @@ export const mandateGrantHandler: CapabilityHandler<
 
   const rows = await withTenantDb(async (tx) => {
     const agent = await resolveAgent(tx, workspaceId, input.agentId);
-    await assertToolsDeclareMeasures(tx, workspaceId, input);
+    const limits = await assertToolsDeclareMeasures(tx, workspaceId, input);
     const body = {
       agentPrincipalId: agent.principalId,
       consequenceTags: input.consequenceTags,
-      limits: input.limits,
+      limits,
       targets: input.targets,
       tools: input.tools,
       approvalRules: input.approval,

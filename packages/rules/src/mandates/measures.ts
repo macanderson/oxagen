@@ -13,6 +13,7 @@ import {
   MEASURE_VALUE,
   type MandatePeriod,
   type MeasureDeclaration,
+  type MeasureKind,
 } from "@oxagen/oxagen/mandates/schemas";
 import { matchGlob } from "@oxagen/mcp-config/permissions";
 
@@ -149,6 +150,35 @@ export function readMeasure(
       return { ok: true, measure: { kind: "target", target: raw } };
     }
   }
+}
+
+/**
+ * A declared measure's kind (ADR-104): an `amount` is money, a `count` is a
+ * count. `text` never reaches this — a limit cannot be denominated in a text
+ * measure, and `assertToolsDeclareMeasures` refuses `measure_not_declared`
+ * before this would run on one.
+ */
+export function measureKindOf(type: "amount" | "count"): MeasureKind {
+  return type === "amount" ? "money" : "count";
+}
+
+/**
+ * The guess a mandate limit written before ADR-104 forces on a reader that
+ * finds no stored `kind`: whether `currencyOrUnit` is one of this runtime's
+ * ISO 4217 codes. This is exactly the heuristic ADR-104 replaced — kept here,
+ * named as what it is, as the one documented fallback for a row the fact
+ * never reached. Wrong whenever a tool declares a **count** denominated in a
+ * currency code (`{ type: "count", unit: "USD" }`): the fact this function
+ * cannot see and the reason ADR-104 exists. Remove it once every stored
+ * mandate limit carries a `kind` — a backfill migration, or attrition as
+ * `update_mandate_limits` re-stamps each row it touches.
+ */
+const CURRENCY_CODES: ReadonlySet<string> = new Set(
+  Intl.supportedValuesOf("currency"),
+);
+
+export function legacyMeasureKindGuess(currencyOrUnit: string): MeasureKind {
+  return CURRENCY_CODES.has(currencyOrUnit) ? "money" : "count";
 }
 
 /** The built-in measure: every call counts one, with no declared path. */

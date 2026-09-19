@@ -36,6 +36,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureNotDeclared");
           case "measure_unit_mismatch":
             return t("measureUnitMismatch");
+          case "measure_kind_conflict":
+            return t("measureKindConflict");
           case "period_drawn":
             return t("periodDrawn");
           case "no_principal":

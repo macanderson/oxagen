@@ -53,6 +53,7 @@ import { loadRuleSetIn } from "./rule-store";
 import {
   exceeds,
   isCallsMeasure,
+  legacyMeasureKindGuess,
   periodKey,
   periodKeyRange,
   periodKeysOverlap,
@@ -99,6 +100,26 @@ export interface MandateRecord {
   validTo: Date;
 }
 
+/**
+ * Every stored limit with `kind` guaranteed present (ADR-104): a row written
+ * since ADR-104 already carries it, and a row written before takes the one
+ * documented fallback, `legacyMeasureKindGuess`. This is the only place that
+ * fallback runs — every reader downstream (`readAuthority`, `mapMandates`,
+ * the mapped `mandate.limits` a get/list response carries) takes `kind` as a
+ * fact already resolved, never guessing again from `currencyOrUnit` itself.
+ */
+function withResolvedKinds(limits: MandateLimits): MandateLimits {
+  return Object.fromEntries(
+    Object.entries(limits).map(([measure, limit]) => [
+      measure,
+      {
+        ...limit,
+        kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
+      },
+    ]),
+  );
+}
+
 export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
   return {
     id: row.id,
@@ -107,7 +128,7 @@ export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
     workspaceId: row.workspaceId,
     agentPrincipalId: row.agentPrincipalId,
     consequenceTags: row.consequenceTags,
-    limits: mandateLimitsSchema.parse(row.limits),
+    limits: withResolvedKinds(mandateLimitsSchema.parse(row.limits)),
     targets: mandateTargetsSchema.parse(row.targets),
     tools: row.tools,
     approval: mandateApprovalSchema.parse(row.approvalRules),
@@ -174,12 +195,7 @@ export async function hasDrawnInCurrentPeriod(
   period: MandatePeriod,
   at: Date = new Date(),
 ): Promise<boolean> {
-  const sums = await periodSums(
-    tx,
-    mandateId,
-    measure,
-    periodKey(period, at),
-  );
+  const sums = await periodSums(tx, mandateId, measure, periodKey(period, at));
   return sums.drawn > 0n;
 }
 
@@ -236,7 +252,10 @@ export async function hasSettlementOverlappingPeriod(
     if (BigInt(row.settled) <= 0n) continue;
     // An unparseable settled key is treated as overlapping: refuse rather
     // than hide a draw the destination window cannot query.
-    if (!periodKeyRange(row.periodKey) || periodKeysOverlap(row.periodKey, destKey)) {
+    if (
+      !periodKeyRange(row.periodKey) ||
+      periodKeysOverlap(row.periodKey, destKey)
+    ) {
       return true;
     }
   }
@@ -260,6 +279,10 @@ export async function readAuthority(
     out.push({
       measure,
       currencyOrUnit: limit.currencyOrUnit,
+      // `mandate.limits` is resolved by `withResolvedKinds` in
+      // `parseMandateRow` before it reaches here, so `limit.kind` is already
+      // the fact; the fallback below is defensive, not a second guessing site.
+      kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
       period: limit.period,
       periodKey: key,
       perCall: limit.perCall ?? null,

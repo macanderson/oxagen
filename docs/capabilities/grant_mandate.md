@@ -17,13 +17,21 @@ active with the granter's body.
 
 The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `consequenceTags`,
 `limits` (measure → `{ perCall?, perPeriod?, period: daily | weekly | monthly,
-currencyOrUnit }`, integer strings: micros for a currency, whole units
+currencyOrUnit, kind? }`, integer strings: micros for a currency, whole units
 otherwise), `targets` (measure → `{ allow, deny }` globs over a text measure),
 `tools` (globs over `slug@version` or `slug`), `approval` (`{ humanAbove,
 alwaysHumanFor, approvers }`), `purpose`, `validFrom`, `validTo`. Every read
 returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
+
+`limits[measure].kind` (`money` or `count`, ADR-104) is stamped by the
+handler from the tool declaration `assertToolsDeclareMeasures` already
+validates, never taken from the request: any `kind` a caller sends is
+discarded and recomputed. `authority[].kind` on every read carries the same
+fact, always resolved — a limit written before ADR-104 has no stored `kind`
+and takes the documented fallback at read time, but nothing a `get_mandate` or
+`list_mandates` caller sees is ever unresolved.
 
 ## Roles
 
@@ -48,6 +56,7 @@ Owner, Admin, Compliance; the rest → Owner, Admin). Checked in the handler
 | `conflict` | `no_tool_matches` | A tool pattern matches no declared, enabled tool carrying a consequence tag. |
 | `conflict` | `measure_not_declared` | A matched tool's active version declares no measure for a limit or target the mandate names: denied by construction (§6.9 rule 1). |
 | `conflict` | `measure_unit_mismatch` | A matched tool declares that measure in a different unit from the one the limit is denominated in. The gate reads a call in the unit the tool declares, so a limit in any other unit is enforced as a figure nobody entered — a `storage` measure declared in GB, limited at "50 bytes", would admit a call of 50 GB. |
+| `conflict` | `measure_kind_conflict` | Two tools matched by the mandate's patterns declare the same limited measure with different kinds (one `amount`, one `count`) — write time cannot resolve which governs, so the grant is refused rather than picking one (ADR-104). |
 | `conflict` | `not_a_draft` | `requestId` names a mandate that is not a draft. |
 
 ## SPEC references

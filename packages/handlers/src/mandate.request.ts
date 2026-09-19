@@ -32,7 +32,7 @@ export const mandateRequestHandler: CapabilityHandler<
 
   const [row] = await withTenantDb(async (tx) => {
     const agent = await resolveAgent(tx, workspaceId, input.agentId);
-    await assertToolsDeclareMeasures(tx, workspaceId, input);
+    const limits = await assertToolsDeclareMeasures(tx, workspaceId, input);
     return tx
       .insert(schema.mandates)
       .values({
@@ -41,7 +41,7 @@ export const mandateRequestHandler: CapabilityHandler<
         agentPrincipalId: agent.principalId,
         requestedBy: actingUserId,
         consequenceTags: input.consequenceTags,
-        limits: input.limits,
+        limits,
         targets: input.targets,
         tools: input.tools,
         approvalRules: input.approval,
