@@ -201,8 +201,22 @@
      * this product has to paint and neither is an error. */
     --_clay: var(--ox-st-failed-ink); /* #992F28 — a check that did not hold, on paper */
     --_clay-light: var(--ox-st-failed); /* #C0453C — the same, on ink */
-    --_clay-ink: var(--ox-st-failed-ink); /* failed as TEXT on paper */
-    --_clay-ink-light: var(--ox-st-failed); /* failed as TEXT on ink */
+    /* Failed as TEXT, which the kit does not ship a stop for.
+     *
+     * The kit gives each state two values, the bare one for a mark on ink and
+     * the `-ink` one for a mark on paper. Both are MARK colours for their
+     * ground, and a mark only has to clear 3:1. Body text has to clear 4.5:1 on
+     * every surface it sits on, and on the dark side the kit's own stop does
+     * not: #C0453C on the #18181B panel is 3.52:1. Taking it for `--error-ink`
+     * put validation text under the floor, and the value it replaced carried
+     * the measurements it was derived to hit.
+     *
+     * So text keeps a derived stop where the kit has none. On paper the kit's
+     * `-ink` value already clears it (#992F28 on white is 7.5:1) and is used
+     * directly; on ink the red is lifted in lightness on the same hue until it
+     * passes on the canvas, the panel and the popover alike. */
+    --_clay-ink: var(--ox-st-failed-ink); /* #992F28 — failed as text on paper, 7.5:1 on white */
+    --_clay-ink-light: oklch(0.7 0.16 25); /* failed as text on ink: 6.6:1 canvas, 6.3:1 panel, 5.8:1 popover */
     --_moss: var(--ox-st-allowed-ink); /* #2F7D52 — a request a rule allowed, on paper */
     --_moss-light: var(--ox-st-allowed); /* #57A97C — the same, on ink */
     /* The kit's denied stop is a clearly orange-red, well away from the gold,
@@ -494,7 +508,10 @@
     --accent: var(--_stone-800); /* #27272A — the hover/selected wash stays NEUTRAL */
     --accent-foreground: var(--_ink-white);
     --destructive: var(--ox-destructive); /* #D5584D — a destructive action, on ink */
-    --destructive-foreground: oklch(1 0 0);
+    /* Ink on the metal-side red, which is the pairing the kit's own Tailwind
+       layer uses. White on #D5584D is 3.92:1 and fails small text; ink on it is
+       4.92:1. A fill and its foreground are one decision and travel together. */
+    --destructive-foreground: var(--ox-ink);
     --border: var(--_stone-800); /* #27272A — the hairline on ink */
     --input: var(--ox-rule); /* #3F3F46 — the heavier rule on ink */
     --ring: var(--ox-ember); /* #D4AF37 — 9.5:1 on the canvas, no deep shade needed */
@@ -628,8 +645,12 @@
       --muted-foreground: var(--_stone-400);
       --accent: var(--_stone-800); /* #27272A — the hover/selected wash stays NEUTRAL */
       --accent-foreground: var(--_ink-white);
-      --destructive: var(--_clay-light);
-      --destructive-foreground: oklch(1 0 0);
+      /* Keep in sync with .dark: the same fill and the same foreground. This
+         block carried #C0453C with a white foreground while .dark carried
+         #D5584D with ink, so one destructive badge had two colours depending
+         on whether the reader set the theme or their OS did. */
+      --destructive: var(--ox-destructive); /* #D5584D — a destructive action, on ink */
+      --destructive-foreground: var(--ox-ink); /* 4.92:1; white on this fill is 3.92:1 */
       --border: var(--_stone-800); /* #27272A — the hairline on ink */
       --input: var(--ox-rule); /* #3F3F46 — the heavier rule on ink */
       --ring: var(--ox-ember); /* #D4AF37 — 9.5:1 on the canvas, no deep shade needed */
