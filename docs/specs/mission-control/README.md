@@ -33,4 +33,7 @@ Sources and copies:
 - Oxagen Desktop (the installer app) is specified separately in `docs/specs/oxagen-desktop/`.
 - `docs/mission-control/PLAN.md`, `TOOL-MATRIX.md`, and `TRACEABILITY.md` are the
   build-time decision log and traceability over this spec; they do not restate it.
+- `docs/mission-control/GAP-INVENTORY.md` is the 2026-09-19 page-by-page gap
+  inventory of `apps/app` against the canonical roadmap §14. Prefer it over
+  `PLAN.md` / `TRACEABILITY.md` for what is built today.
 - Build tracking: integration branch `app-rebuild`, PR #2894.
