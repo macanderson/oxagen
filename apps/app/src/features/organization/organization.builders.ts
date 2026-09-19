@@ -160,7 +160,12 @@ export function orgSource(reads: OrgReads): {
       contextPr: refuse,
       freshness: refuse,
     },
-    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+    },
   };
   return { source, calls };
 }

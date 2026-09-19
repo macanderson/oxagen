@@ -13,10 +13,16 @@
 // set", and one line above the rows says what is missing, so neither the empty
 // state nor the table asserts more than the read can support.
 //
+// Grant a mandate sits in the ledger's header, and a requested row carries its
+// own Grant, which opens the same dialog on that draft (`grant-mandate.tsx`).
+// Both are drawn only for a reader whose org role some consequence can name
+// (`canGrantMandates` in tools.tsx). A draft whose agent is retired is offered
+// no Grant: retirement suspends the principal, so authority granted to it
+// could never be drawn, and the handler would still record it (#3124).
+//
 // The registry, connections, kill switches and auto-approval rules are the
-// other tabs of this page and have no backing yet, so they are not drawn
-// (§3.6) and the page has no tab bar until the #2958 lane gives it a second
-// tab.
+// other tabs of this page, drawn by their own files; the tab bar is
+// `tabs.tsx`.
 import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
@@ -30,8 +36,25 @@ import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
 import { ReadFailure } from "@/ui/read-failure";
 import { useFormatter } from "@/ui/formatter";
+import { type AgentChoices, GrantMandate } from "./grant-mandate";
+import type { ToolsAt } from "./view";
 
-function Row({ mandate }: { mandate: MandateRow }) {
+/** What a reader who may grant is offered: the picker, and the agents it must not bind to. */
+export type LedgerGrant = {
+  agents: AgentChoices;
+  /** Public ids of retired agents the agents read returned. */
+  retired: ReadonlySet<string>;
+};
+
+function Row({
+  mandate,
+  at,
+  grant,
+}: {
+  mandate: MandateRow;
+  at: ToolsAt;
+  grant: LedgerGrant | null;
+}) {
   const t = useTranslations("tools.mandates");
   const format = useFormatter();
   return (
@@ -117,7 +140,16 @@ function Row({ mandate }: { mandate: MandateRow }) {
       <td className="whitespace-nowrap px-3 py-2">
         {format.dateTime(new Date(mandate.validTo), { dateStyle: "medium" })}
       </td>
-      <td className="px-3 py-2">{t(`status.${mandate.status}`)}</td>
+      <td className="px-3 py-2">
+        {t(`status.${mandate.status}`)}
+        {grant === null ||
+        mandate.status !== "draft" ||
+        grant.retired.has(mandate.agentId) ? null : (
+          <div className="mt-1">
+            <GrantMandate at={at} agents={grant.agents} request={mandate} />
+          </div>
+        )}
+      </td>
     </tr>
   );
 }
@@ -140,9 +172,14 @@ const COLUMNS = [
 export function MandatesLedger({
   read,
   orgRole,
+  at,
+  grant,
 }: {
   read: Read<MandateList>;
   orgRole: OrgRole;
+  at: ToolsAt;
+  /** Null for a reader no consequence role can name, who is offered no grant. */
+  grant: LedgerGrant | null;
 }) {
   const t = useTranslations("tools.mandates");
   const title = t("title");
@@ -150,12 +187,17 @@ export function MandatesLedger({
   const blindSpot = read.ok ? blindSpotOf(read.value, orgRole) : null;
   return (
     <section aria-labelledby="tools-mandates" className={`${panel} p-4`}>
-      <h2 id="tools-mandates" className="text-base font-semibold">
-        {title}
-      </h2>
-      <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-        {t("lead")}
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="tools-mandates" className="text-base font-semibold">
+            {title}
+          </h2>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+            {t("lead")}
+          </p>
+        </div>
+        {grant === null ? null : <GrantMandate at={at} agents={grant.agents} />}
+      </div>
       <div className="mt-3">
         {!read.ok ? (
           <ReadFailure read={read} section={title} />
@@ -210,7 +252,12 @@ export function MandatesLedger({
                   </thead>
                   <tbody>
                     {read.value.mandates.map((mandate) => (
-                      <Row key={mandate.id} mandate={mandate} />
+                      <Row
+                        key={mandate.id}
+                        mandate={mandate}
+                        at={at}
+                        grant={grant}
+                      />
                     ))}
                   </tbody>
                 </table>

@@ -133,6 +133,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "delete_approval_rule": {
+      "route": "/[org]/[ws]/tools?tab=autoapprovals",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Auto-approvals › Delete on a row (features/tools/approval-rule-controls.tsx RuleDelete, deleteApprovalRule in features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
+    },
     "delete_model_credential": {
       "route": "/[org]/model-funding",
       "page": "apps/app/src/app/[org]/model-funding/page.tsx",
@@ -434,6 +442,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "list_approval_rules": {
+      "route": "/[org]/[ws]/tools?tab=autoapprovals",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Auto-approvals: the rules table and its three totals (features/tools/auto-approvals.tsx, data/live/tools.ts, data/live/mappers/tools.ts)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
+    },
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
@@ -718,6 +734,14 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "grant_mandate": {
+      "route": "/[org]/[ws]/tools?tab=mandates",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "/[org]/[ws]/tools?tab=mandates — Grant a mandate in the ledger header, and Grant on a requested row (features/tools/grant-mandate.tsx → features/tools/grant-actions.ts)",
+      "proof": "apps/app/src/features/tools/grant-mandate.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
+    },
     "revoke_mandate": {
       "route": "/[org]/[ws]/mandates/[mandate]",
       "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
@@ -741,6 +765,23 @@
       "proof": "apps/app/src/features/organization/key-row.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "set_approval_rule_enabled": {
+      "route": "/[org]/[ws]/tools?tab=autoapprovals",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Auto-approvals › Switch on or Switch off on a row, and Switch off instead in the delete dialog (features/tools/approval-rule-controls.tsx RuleToggle and RuleDelete, setApprovalRuleEnabled in features/tools/actions.ts)",
+      "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
+    },
+    "set_approval_rules": {
+      "route": "/[org]/[ws]/tools?tab=autoapprovals",
+      "page": "apps/app/src/app/[org]/[ws]/tools/page.tsx",
+      "entry": "Tools › Auto-approvals › Create rule, and Edit on a row (features/tools/approval-rule-controls.tsx RuleEditor, saveApprovalRule in features/tools/actions.ts)",
+      "testid": "rule-create-open",
+      "proof": "apps/app/src/features/tools/approval-rule-controls.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-tools-gaps"
     },
     "set_auto_topup": {
       "route": "/[org]/billing",
