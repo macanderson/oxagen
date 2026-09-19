@@ -62,6 +62,11 @@ export const billingSubscriptionUpgradeStart = registerCapability({
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
   scoped: true,
+  // INV-27: changing plan is never refused for lack of GAUs. A prepaid org
+  // at remaining = 0 is the one that needs to upgrade; metering the Checkout
+  // start as a governed action blocked that path (apps/app/ARCHITECTURE.md
+  // §1.5). purchase_gau_bucket and purchase_credits already declare this.
+  noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "medium", category: "billing" },
   sensitivity: "high",
   defaultEffect: "deny",
