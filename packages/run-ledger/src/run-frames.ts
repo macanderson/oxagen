@@ -690,6 +690,24 @@ function absorb(current: TranscriptFold, frame: RunFrame): void {
   if (decision !== null) current.decision = decision;
 }
 
+/**
+ * Fold a policy frame held out of turn (`foldSteps`'s `pendingPolicy`) into
+ * `current`. It counts toward the fold's frames and cost and sets its
+ * decision like `absorb`, but it never moves `endSeq`: whichever step it
+ * lands on, by seq, the held frame is not that step's own extent. Attached
+ * to the step it precedes, it is always earlier than that step's opening
+ * frame. Attached as the end-of-run fallback, to the step that already
+ * closed, moving `endSeq` forward would stretch that step's displayed range
+ * past its own last frame to cover a decision about a call that never
+ * happened.
+ */
+function absorbPending(current: TranscriptFold, frame: RunFrame): void {
+  current.frames += 1;
+  current.costMicros = addCost(current.costMicros, frame.costMicros);
+  const decision = decisionOf(frame);
+  if (decision !== null) current.decision = decision;
+}
+
 function fold(
   frames: readonly RunFrame[],
   opens: (frame: RunFrame, index: number) => TranscriptEntryKind | null,
@@ -734,10 +752,22 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * intention and the terminal receipt — so the entry carries what the call was
  * made with and what it came back with. Folding them separately, as this did
  * before, showed one tool call as two entries, each with half the exchange.
+ *
+ * A policy frame that arrives once the current step already has its response
+ * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
+ * immediately before `tool_requested` (`hook-handler.ts`), so a wrapped
+ * session's decision names the call it is about to gate, not the call that
+ * just finished. Absorbing it on sight put the allow or deny on the previous
+ * step and left the step it actually governed with none. Held frames attach
+ * to the next step that opens, in the order recorded, so two decisions ahead
+ * of one call are both kept and the later one wins, the same as `absorb`'s
+ * own overwrite; a run that ends with one or more still pending falls back
+ * to the last step rather than dropping them.
  */
 function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
   const out: TranscriptFold[] = [];
   let current: TranscriptFold | null = null;
+  const pendingPolicy: RunFrame[] = [];
   for (const frame of frames) {
     if (current !== null && closesStep(current, frame)) {
       absorb(current, frame);
@@ -747,9 +777,18 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
     if (kind !== null || current === null) {
       current = open(frame, kind ?? "frame");
       out.push(current);
+      for (const pending of pendingPolicy) absorbPending(current, pending);
+      pendingPolicy.length = 0;
+      continue;
+    }
+    if (current.response !== null && POLICY_TYPES.has(frame.type)) {
+      pendingPolicy.push(frame);
       continue;
     }
     absorb(current, frame);
+  }
+  if (pendingPolicy.length > 0 && current !== null) {
+    for (const pending of pendingPolicy) absorbPending(current, pending);
   }
   return out;
 }
