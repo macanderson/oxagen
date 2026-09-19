@@ -336,7 +336,17 @@ export function cursorDocumentIsVestigial(
   document: CursorHooksDocument,
 ): boolean {
   const keys = Object.keys(document);
-  return keys.length === 1 && keys[0] === "version";
+  // The value, not only the key. `mergeCursorHooks` writes `version` only when
+  // the document does not already carry one, precisely so that an operator who
+  // pinned a future schema version keeps it — and then this predicate called
+  // the result our scaffolding and `settle` deleted their file with the pin in
+  // it. Tacho can only take back the value Tacho wrote; any other positive
+  // integer came from the operator and the file is theirs.
+  return (
+    keys.length === 1 &&
+    keys[0] === "version" &&
+    document.version === CURSOR_HOOKS_VERSION
+  );
 }
 
 export interface CursorHookPresence {
