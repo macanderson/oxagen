@@ -165,6 +165,27 @@ describe("get_repository_tree", () => {
     });
   });
 
+  it("refuses when the repository at those coordinates is a different one", async () => {
+    // Deleted and re-created under the same owner/name: a new immutable id.
+    const client = fakeGithub({
+      getRepoInfo: vi.fn(async () => ({
+        id: "99",
+        owner: "acme",
+        name: "widgets",
+        fullName: "acme/widgets",
+        htmlUrl: "https://github.com/acme/widgets",
+        defaultBranch: "trunk",
+      })),
+    } as unknown as Partial<GitHubClient>);
+    await expect(
+      handler(client)({ bindingId: "rpb_0a1b" }, makeCTX()),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      reason: "repository_not_installed",
+    });
+    expect(client.getTree).not.toHaveBeenCalled();
+  });
+
   it("passes any other GitHub failure through unchanged", async () => {
     const client = fakeGithub({
       getRepoInfo: vi.fn(async () => {

@@ -7,7 +7,8 @@
 //   2. A client for the workspace's installation
 //      (`conflict: github_not_connected`).
 //   3. The repository as GitHub reports it now, for its default branch; one
-//      the installation cannot see is `not_found: repository_not_installed`.
+//      the installation cannot see, and one whose immutable id is no longer
+//      the bound one, are both `not_found: repository_not_installed`.
 //   4. The production branch's head. A branch GitHub no longer has answers
 //      `head: null` and an empty tree rather than a refusal: it is a fact the
 //      page must show, and the repair (`set_production_branch`) is on the
@@ -28,9 +29,8 @@ import {
   parseGovernanceMode,
 } from "./context.steering.policy";
 import {
-  isGithubNotFound,
   readBoundRepository,
-  repositoryNotInstalled,
+  requireBoundRepoInfo,
   requireWorkspaceGithub,
   workspaceGithub,
   type WorkspaceGithub,
@@ -63,13 +63,12 @@ export function createRepositoryTreeGetHandler(
     const gh = await requireWorkspaceGithub(deps.github, scope);
     const at = { owner: bound.owner, repo: bound.name };
 
-    let githubDefaultBranch: string;
-    try {
-      githubDefaultBranch = (await gh.getRepoInfo(at)).defaultBranch;
-    } catch (err) {
-      if (isGithubNotFound(err)) throw repositoryNotInstalled(bound.fullName);
-      throw err;
-    }
+    // The repository GitHub holds at these coordinates, and that it is still
+    // the one this binding was made against: a repository deleted and
+    // re-created under the same owner/name would otherwise be reported, with
+    // its branch and its files, under this workspace's binding.
+    const githubDefaultBranch = (await requireBoundRepoInfo(gh, bound))
+      .defaultBranch;
 
     const branch = await gh.getBranch({
       ...at,

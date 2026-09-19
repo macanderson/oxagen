@@ -598,12 +598,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
   }): Promise<string[]> {
     const ref = args.ref ?? "main";
     const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
-    // Step 1 — resolve branch → tree SHA via the branches endpoint.
-    const branch = await request<GHBranch>(
+    // Step 1 — resolve the ref to its commit's tree SHA. `/commits/{ref}`
+    // takes a branch name, a tag or a commit SHA. `/branches/{ref}` takes a
+    // branch name and nothing else, so every caller that named a commit —
+    // which is what a caller does when it wants two reads to agree on one
+    // commit — was answered 404.
+    const commit = await request<GHBranchCommit>(
       "GET",
-      `${repoPath}/branches/${encodeURIComponent(ref)}`,
+      `${repoPath}/commits/${encodeURIComponent(ref)}`,
     );
-    const treeSha = branch.commit.commit.tree.sha;
+    const treeSha = commit.commit.tree.sha;
     // Step 2 — fetch the recursive tree.
     const treeData = await request<GHTreeResponse>(
       "GET",

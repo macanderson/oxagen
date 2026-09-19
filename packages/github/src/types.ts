@@ -240,8 +240,9 @@ export interface GitHubClient {
 
   /**
    * Return all blob paths in the repository tree at the given ref (defaults to
-   * the repository default branch). The returned paths are relative to the
-   * repository root (e.g. `"src/index.ts"`).
+   * the repository default branch). The ref may be a branch name, a tag or a
+   * commit SHA; name the commit when two reads have to agree on one. The
+   * returned paths are relative to the repository root (e.g. `"src/index.ts"`).
    */
   getTree(args: {
     owner: string;

@@ -52,6 +52,13 @@ const INPUT = {
 
 function fakeGithub(overrides: Partial<GitHubClient> = {}) {
   return {
+    getRepoInfo: vi.fn(async () => ({
+      id: "42",
+      owner: "acme",
+      name: "widgets",
+      fullName: "acme/widgets",
+      defaultBranch: "main",
+    })),
     findOpenPullRequest: vi.fn(async () => null),
     getBranch: vi.fn(async () => ({ name: "main", sha: "abc123" })),
     getTree: vi.fn(async () => ["README.md", ".gitignore"]),
@@ -253,6 +260,25 @@ describe("open_init_pr", () => {
     await expect(handler(client)(INPUT, makeCTX())).rejects.toMatchObject({
       reason: "repository_not_installed",
     });
+  });
+
+  it("refuses a repository re-created under the same name, before any write", async () => {
+    // A deleted-and-re-created repository keeps owner/name and gets a new id.
+    const client = fakeGithub({
+      getRepoInfo: vi.fn(async () => ({
+        id: "99",
+        owner: "acme",
+        name: "widgets",
+        fullName: "acme/widgets",
+        defaultBranch: "main",
+      })),
+    } as unknown as Partial<GitHubClient>);
+    await expect(handler(client)(INPUT, makeCTX())).rejects.toMatchObject({
+      reason: "repository_not_installed",
+    });
+    expect(client.createBranch).not.toHaveBeenCalled();
+    expect(client.putFile).not.toHaveBeenCalled();
+    expect(client.openPullRequest).not.toHaveBeenCalled();
   });
 
   it("carries GitHub's refusal of a push as github_refused", async () => {

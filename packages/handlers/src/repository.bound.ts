@@ -13,6 +13,7 @@ import {
   createGitHubClient,
   getInstallationToken,
   type GitHubClient,
+  type GitHubRepoInfo,
 } from "@oxagen/github";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq } from "drizzle-orm";
@@ -149,9 +150,7 @@ export async function requireWorkspaceGithub(
 
 /** True when a GitHub client error is GitHub answering 404. */
 export function isGithubNotFound(err: unknown): boolean {
-  return (
-    err instanceof Error && err.message.startsWith("GitHub API error 404")
-  );
+  return err instanceof Error && err.message.startsWith("GitHub API error 404");
 }
 
 /** The refusal for a repository the installation can no longer see. */
@@ -161,6 +160,34 @@ export function repositoryNotInstalled(fullName: string): HandlerError {
     reason: "repository_not_installed",
     message: `The workspace's GitHub App installation cannot reach ${fullName}`,
   });
+}
+
+/**
+ * The repository GitHub holds at this binding's coordinates, refusing when it
+ * is not the repository the binding was made against.
+ *
+ * Owner and name are a label a person can move: delete a repository and
+ * create another under the same `owner/name` and every stored coordinate
+ * still resolves — to somebody else's history. The immutable id is what the
+ * binding was made against, so every capability that reads or writes a bound
+ * repository compares it before the first read and before any write. Without
+ * this, `open_init_pr` would push governance files and open a pull request on
+ * the replacement.
+ */
+export async function requireBoundRepoInfo(
+  gh: GitHubClient,
+  bound: BoundRepository,
+): Promise<GitHubRepoInfo> {
+  let repo: GitHubRepoInfo;
+  try {
+    repo = await gh.getRepoInfo({ owner: bound.owner, repo: bound.name });
+  } catch (err) {
+    if (isGithubNotFound(err)) throw repositoryNotInstalled(bound.fullName);
+    throw err;
+  }
+  if (repo.id !== bound.providerRepositoryId)
+    throw repositoryNotInstalled(bound.fullName);
+  return repo;
 }
 
 /** Wrap a GitHub refusal as `conflict: github_refused` with GitHub's message. */

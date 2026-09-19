@@ -27,10 +27,9 @@ import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, desc, eq } from "drizzle-orm";
 import { logger } from "./logger";
 import {
-  isGithubNotFound,
   readBoundRepository,
-  repositoryNotInstalled,
   repositoryNotLinked,
+  requireBoundRepoInfo,
   requireWorkspaceGithub,
   selectBoundRepository,
   workspaceGithub,
@@ -175,18 +174,10 @@ export function createProductionBranchSetHandler(
     }
 
     const gh = await requireWorkspaceGithub(deps.github, scope);
-    let repo: GitHubRepoInfo;
-    try {
-      repo = await gh.getRepoInfo({ owner: bound.owner, repo: bound.name });
-    } catch (err) {
-      if (isGithubNotFound(err)) throw repositoryNotInstalled(bound.fullName);
-      throw err;
-    }
     // A repository deleted and re-created under the same name has a new id.
     // Writing its branch onto this binding would pin the old repository's
     // history to a different repository.
-    if (repo.id !== bound.providerRepositoryId)
-      throw repositoryNotInstalled(bound.fullName);
+    const repo: GitHubRepoInfo = await requireBoundRepoInfo(gh, bound);
 
     const branch = await gh.getBranch({
       owner: repo.owner,

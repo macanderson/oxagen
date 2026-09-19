@@ -7,8 +7,9 @@
 //      GitHub: governance.toml must parse and declare exactly the mode they
 //      chose (the Context PR gate reads it on every open and merge, and a file
 //      it cannot read refuses both), and workspace.toml must parse.
-//   3. The bound repository by its binding id, and a client for the
-//      workspace's installation.
+//   3. The bound repository by its binding id, a client for the workspace's
+//      installation, and the check that GitHub's repository at those
+//      coordinates is still the one the binding carries the id of.
 //   4. An init pull request already open is answered as it is.
 //   5. The production branch must not be `oxagen/init` itself, must exist,
 //      and must carry no `.oxagen/` yet.
@@ -37,6 +38,7 @@ import {
   isGithubNotFound,
   readBoundRepository,
   repositoryNotInstalled,
+  requireBoundRepoInfo,
   requireWorkspaceGithub,
   workspaceGithub,
   type WorkspaceGithub,
@@ -122,6 +124,14 @@ export function createInitPrOpenHandler(
     const gh = await requireWorkspaceGithub(deps.github, scope);
     const at = { owner: bound.owner, repo: bound.name };
     const openedAt = deps.now().toISOString();
+
+    // Before the first read, and long before the first write: the repository
+    // at these coordinates has to be the one this binding was made against.
+    // `owner/name` is a label a person can move — delete a repository, create
+    // another under the same name, and this handler would push governance
+    // files and open a pull request on a stranger's repository. The immutable
+    // id is what the binding holds, so it is what is checked.
+    await requireBoundRepoInfo(gh, bound);
 
     let existing;
     try {
