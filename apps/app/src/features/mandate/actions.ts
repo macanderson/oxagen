@@ -78,6 +78,9 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
 /** The stored `limits` record, as `get_mandate` answers it. */
 type StoredLimits = ContractOutput<typeof mandateGet>["mandate"]["limits"];
 
+/** One measure's stored bound inside that record. */
+type StoredMeasure = StoredLimits[string];
+
 /**
  * A read that did not answer, as the write it was part of reports it.
  *
@@ -176,13 +179,25 @@ export async function changeMandateLimits(
 
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
 
-  /** The measures this submission edits, and only those. */
-  const edited: StoredLimits = {
+  /**
+   * What this submission says about each measure it names, and nothing more.
+   *
+   * These are PATCHES, not records. A field the operator left blank is absent
+   * here rather than present and empty, so the merge below leaves the stored
+   * value alone — which is what the dialog's copy promises. Building whole
+   * measure records here is what made the first fix incomplete: the record-level
+   * merge kept sibling measures and the measure's own object still replaced the
+   * stored one, so clearing `perCall` while keeping `perPeriod` deleted the
+   * per-call cap. A deleted sublimit is unbounded authority for that sublimit,
+   * which is the same failure as a deleted measure one level down.
+   */
+  const patches: Record<string, Partial<StoredMeasure>> = {
     ...(wantsMeasure
       ? {
           [measure]: {
             ...(perCallValue === null ? {} : { perCall: perCallValue }),
             ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
+            // Both are on the form, so both are the operator's.
             period: draft.period,
             currencyOrUnit: unit,
           },
@@ -193,7 +208,12 @@ export async function changeMandateLimits(
       : {
           [RESERVED_MEASURE]: {
             perPeriod: callsPerDay,
-            period: "daily" as const,
+            // No period, deliberately: the form shows the calls cap as a bare
+            // number and exposes no period control for it, so this submission
+            // says nothing about the window and the stored one is kept below.
+            // Writing `daily` here turned a stored cap of ten calls a week into
+            // ten a day on any submission, including one that only changed a
+            // validity date.
             currencyOrUnit: RESERVED_MEASURE,
           },
         }),
@@ -205,8 +225,9 @@ export async function changeMandateLimits(
   // submission carrying only the measure this dialog exposes would delete every
   // other measure's bound — and deleting a bound widens the agent's authority
   // for that measure without anyone asking. The stored record is read first and
-  // the edited measures are laid over it, so every bound nobody touched is
-  // resubmitted exactly as recorded.
+  // the submission's patches are laid over it, so every bound nobody touched is
+  // resubmitted exactly as recorded — at both depths, per measure and per
+  // sublimit.
   //
   // It is read from the store rather than carried up from the page. The dialog
   // holds the mandate's authority and could reconstruct the record from it, but
@@ -215,7 +236,7 @@ export async function changeMandateLimits(
   // `ledgerLimit: 1` because the movements are not wanted; the contract's floor
   // is 1 and the mandate is the only part of the answer this uses.
   let stored: StoredLimits = {};
-  if (Object.keys(edited).length > 0) {
+  if (Object.keys(patches).length > 0) {
     const current = await kernelRead(ctx, {
       contract: mandateGet,
       input: { mandateId: draft.mandateId, ledgerLimit: 1 },
@@ -224,7 +245,22 @@ export async function changeMandateLimits(
     if (!current.ok) return fromRead(current);
     stored = current.value.mandate.limits;
   }
-  const limits: StoredLimits = { ...stored, ...edited };
+
+  // Two depths, because a bound can be deleted at either. The record keeps every
+  // measure this submission did not name, and each named measure keeps every
+  // field this submission did not carry: its other sublimit, and its window
+  // where the form does not expose one. `period` falls back to `daily` only for
+  // a calls cap that is not on the record yet, which is the one case where
+  // nothing is being widened because nothing was bounded.
+  const limits: StoredLimits = { ...stored };
+  for (const [name, patch] of Object.entries(patches)) {
+    const before = stored[name];
+    limits[name] = {
+      ...before,
+      ...patch,
+      period: patch.period ?? before?.period ?? "daily",
+    } as StoredMeasure;
+  }
 
   const result = await kernelWrite(ctx, mandateLimitsUpdate, {
     mandateId: draft.mandateId,

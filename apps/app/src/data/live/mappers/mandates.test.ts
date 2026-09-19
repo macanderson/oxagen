@@ -434,3 +434,19 @@ describe("toMandateDetail", () => {
     ).toBe(at.toISOString());
   });
 });
+
+describe("toMandateDetail, an empty recorded effect id", () => {
+  it("reads as nothing recorded rather than failing the whole page", () => {
+    // `packages/rules/src/mandates.ts` stores whatever the tool's configured
+    // effect-id path returned, an empty string included, and `get_mandate`
+    // answers it unchanged. The view model wants a non-empty string or null, so
+    // before this the page answered `record_unmappable` over one settlement.
+    const detail = toMandateDetail(
+      mandateGetOutput([ledgerOutput({ externalEffectId: "" })]),
+      500,
+      new Date("2026-09-19T00:00:00.000Z"),
+    );
+    expect(detail.ledger[0]?.externalEffectId).toBeNull();
+    expect(MandateDetail.safeParse(detail).success).toBe(true);
+  });
+});

@@ -208,6 +208,78 @@ describe("changeMandateLimits", () => {
     });
   });
 
+  it("keeps a sublimit the edit left blank, not just a sibling measure", async () => {
+    kernelAnswers({
+      stored: {
+        limits: {
+          recipients: {
+            perCall: "25",
+            perPeriod: "500",
+            period: "weekly",
+            currencyOrUnit: "recipients",
+          },
+        },
+      },
+    });
+    // The operator clears the per-call box and leaves the period figure.
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...draft,
+      measure: "recipients",
+      unit: "recipients",
+      perCall: "",
+      perPeriod: "400",
+      period: "weekly",
+      callsPerDay: "",
+      validTo: "",
+    });
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        recipients: {
+          // Still bounded per call. A blank box leaves the bound as it is, which
+          // is what the dialog says, and dropping it would be unbounded
+          // authority for that sublimit.
+          perCall: "25",
+          perPeriod: "400",
+          period: "weekly",
+          currencyOrUnit: "recipients",
+        },
+      },
+    });
+  });
+
+  it("keeps the stored window of a calls cap the form cannot express", async () => {
+    kernelAnswers({
+      stored: {
+        limits: {
+          calls: {
+            perPeriod: "10",
+            period: "weekly",
+            currencyOrUnit: "calls",
+          },
+        },
+      },
+    });
+    // The form shows the calls cap as a bare number with no period control, so
+    // this submission says nothing about the window. Ten a week must not become
+    // ten a day.
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...draft,
+      measure: "",
+      unit: "",
+      perCall: "",
+      perPeriod: "",
+      callsPerDay: "10",
+      validTo: "",
+    });
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        calls: { perPeriod: "10", period: "weekly", currencyOrUnit: "calls" },
+      },
+    });
+  });
+
   it("does not read the record when there is no limit to merge into (negative)", async () => {
     kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {

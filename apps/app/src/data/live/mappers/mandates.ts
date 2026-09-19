@@ -189,7 +189,17 @@ export function toMandateDetail(
       kind: row.kind,
       measure: row.measure,
       value: measureValue(row.value, row.unitOrCurrency),
-      externalEffectId: row.externalEffectId,
+      // Empty means "nothing recorded" here, not "a value of no length".
+      // `packages/rules/src/mandates.ts` stores whatever the tool's configured
+      // effect-id path returned, an empty string included, and `get_mandate`
+      // answers it unchanged. The view model requires a non-empty string or
+      // null, so passing one through failed `MandateDetail.safeParse` and the
+      // whole page answered `record_unmappable` over one settlement — a ledger
+      // withheld because one row named its transaction with nothing.
+      externalEffectId:
+        row.externalEffectId === null || row.externalEffectId.trim() === ""
+          ? null
+          : row.externalEffectId,
       periodKey: row.periodKey,
       at: row.at,
     })),

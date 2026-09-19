@@ -94,8 +94,8 @@
     "reconciliation": {
       "title": "Reconciliation",
       "body": "Every draw on a mandate is meant to carry a receipt, and a charge a connection reports with no receipt is money Oxagen did not govern.",
-      "notRecorded": "No read carries receipt frames yet, so this page cannot tell you whether a charge went unrecorded. The organization's audit record is where the governed actions on this mandate are listed.",
-      "openAudit": "Open on Audit"
+      "notRecorded": "No read carries receipt frames yet, so this page cannot tell you whether a charge went unrecorded. The organization's audit record lists every governed action, and it cannot be filtered to one mandate: its events carry the capability, the actor and the outcome, and no mandate id.",
+      "openAudit": "Open the audit record"
     },
     "actions": {
       "limits": {

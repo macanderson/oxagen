@@ -230,7 +230,7 @@ describe("Mandate › loaded", () => {
       panel.querySelector('[data-state="not-recorded"]'),
     ).toBeInTheDocument();
     expect(
-      within(panel).getByRole("link", { name: "Open on Audit" }),
+      within(panel).getByRole("link", { name: "Open the audit record" }),
     ).toHaveAttribute("href", "/a-intel/audit");
   });
 

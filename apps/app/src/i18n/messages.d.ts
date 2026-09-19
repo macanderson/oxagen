@@ -1110,7 +1110,7 @@ type Messages = {
       notRecorded: string;
       callBasis: string;
       receiptBasis: string;
-      truncated: string;
+      readBound: string;
       empty: string;
       emptyBody: string;
       filteredEmpty: string;
