@@ -21,11 +21,11 @@ export * from "./run-evidence-foundation";
 export * from "./schema-registry";
 export * from "./environments";
 export * from "./ai";
-export * from "./cms";
 export * from "./ratelimit";
 export * from "./tacho";
 export * from "./cost";
 export * from "./tools";
+export * from "./cms";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

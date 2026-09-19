@@ -49,6 +49,15 @@ function stripLegacyGate(html: string): string {
   );
 }
 
+/**
+ * The page-flip footer still points at `/field-manual`, a path that only the
+ * unused Vercel redirects map. AWS S3/CloudFront has no such object, so rewrite
+ * to the gated reader URL the seed already documents.
+ */
+function rewriteFieldManualHref(html: string): string {
+  return html.replaceAll('href="/field-manual"', 'href="/read?e=field-manual"');
+}
+
 const EDITIONS: EditionSeed[] = [
   {
     slug: "field-manual",
@@ -62,6 +71,7 @@ const EDITIONS: EditionSeed[] = [
     file: "page-flip-reader.html",
     format: "page-flip",
     title: "Engineering Deterministic AI Coding Agents — Reader",
+    transform: rewriteFieldManualHref,
   },
 ];
 
