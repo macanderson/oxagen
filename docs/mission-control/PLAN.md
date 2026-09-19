@@ -1,5 +1,7 @@
 # Oxagen Mission Control: build plan
 
+> The product name Mission Control was retired on 2026-09-19 by [ADR-102](../adr/ADR-102-workforce-management-leads-mission-control-is-retired.md); this folder keeps its name as a path, and this plan keeps its text.
+
 | | |
 |---|---|
 | **Status** | Draft |

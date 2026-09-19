@@ -1,6 +1,6 @@
 # Contributing
 
-Oxagen is Mission Control for an autonomous agent workforce and its agent control plane: every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
+Oxagen is workforce management for autonomous agents, on a shared agent control plane (ADR-102): every agent has its own identity and operates under a mandate — its access, its budget, its tools and skills, its rules — set by the teams accountable for it and enforced on the actions routed through Oxagen. It is sold to those teams. Every contribution is judged against that vision — read [`docs/VISION.md`](docs/VISION.md) before proposing a feature. CI runs a **Vision Gate** (`pnpm check:vision`) that LLM-judges every PR diff against it; routine fixes, tests, and tooling are neutral by definition, but strategic drift gets flagged.
 
 ## Prerequisites
 
