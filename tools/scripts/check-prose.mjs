@@ -122,6 +122,13 @@ export const AVOID = [
   "stop wasting money",
   "explain your ai bill",
   "mission control for your autonomous agents",
+  // Unqualified key-custody claims. positioning.md limits custody to mediated
+  // connections; the agent still holds its own identity. These phrases came
+  // back on the product page meta and Twitter description, so the scanner holds
+  // them rather than a reviewer.
+  "the agent never sees the key",
+  "the key never moves",
+  "nothing for the agent to leak",
 ];
 
 const AVOID_RE = new RegExp(

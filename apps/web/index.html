@@ -367,7 +367,7 @@
         <ul>
           <li>The request carries who started the task, which agent is asking, which tool it wants, and which data it would reach.</li>
           <li>A rule the owning team wrote answers it: allowed, denied, or routed to a named person. Allowed and denied requests settle inside the same call. Routed requests wait for the person, and the run waits with them.</li>
-          <li>The credential stays in Oxagen, and the agent never sees it. There is nothing for the agent to leak.</li>
+          <li>For a mediated connection, the credential stays in Oxagen. Oxagen uses it on the agent's behalf, and the agent does not receive it. The agent's own identity is separate.</li>
           <li>A tool that is not in the agent's mandate cannot be seen or found. Rules are deterministic and versioned, and every answer leaves a signed row in the record.</li>
           <li>Stopping an agent denies its next request and closes the connections behind it. Halting does not ask the agent to cooperate.</li>
         </ul>
