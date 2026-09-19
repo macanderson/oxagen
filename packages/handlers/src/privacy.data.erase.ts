@@ -1,4 +1,4 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
@@ -50,6 +50,26 @@ export const privacyDataEraseHandler: CapabilityHandler<
   if (input.scope === "org") {
     if (!input.orgId)
       throw new Error("orgId is required for org-scope erasure");
+    // The erasure target must be the org the kernel governed, the same rule
+    // `export_data` applies and for a sharper reason: the recheck below asks
+    // `ctx.orgId`'s policy, while the role read and the scheduled delete use
+    // `input.orgId`. With the two allowed to differ, an owner of both A and B
+    // could invoke in A and name B, and B's explicit `erase_data` deny would
+    // never be read while B's records were scheduled for hard-delete. The
+    // decision would be made in one tenant and executed in another, on the
+    // one capability where that is unrecoverable.
+    //
+    // So they must name the same org, and an owner erasing another
+    // organization invokes in that organization's context, where its own
+    // rules govern the request.
+    if (input.orgId !== ctx.orgId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_erasure_outside_governed_scope",
+        message:
+          "An organization erasure must be requested in that organization's own context, so its access rules govern the request",
+      });
+    }
     // Org-scope erasure: Owner only (enforced by IAM + explicit check here for
     // defense-in-depth). Owner alone, not Owner or Admin: erasing an
     // organization's data is not the same authority as exporting it.

@@ -235,6 +235,27 @@ describe("privacy.data.erase handler", () => {
     expect(mockEventSend).not.toHaveBeenCalled();
   });
 
+  // The recheck below asks ctx.orgId's policy while the role read and the
+  // scheduled delete use input.orgId. With the two free to differ, an owner of
+  // both could invoke in A, name B, and have B's explicit erase_data deny go
+  // unread while B's records were scheduled for hard-delete: decided in one
+  // tenant, executed in another, on the one capability where that cannot be
+  // undone.
+  it("throws Forbidden for an org scope naming an organization other than the governed one", async () => {
+    roleResult = [{ role: "owner" }];
+    await expect(
+      privacyDataEraseHandler(
+        {
+          scope: "org",
+          orgId: "33333333-3333-4333-8333-333333333333",
+          confirm: true,
+        },
+        makeCtx(),
+      ),
+    ).rejects.toThrow(/own context/);
+    expect(mockEventSend).not.toHaveBeenCalled();
+  });
+
   it("throws Forbidden for org scope when the member is not an owner", async () => {
     roleResult = [{ role: "admin" }];
     await expect(

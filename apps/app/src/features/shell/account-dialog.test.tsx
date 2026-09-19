@@ -570,6 +570,10 @@ describe("Security", () => {
     expect(sessions).toHaveTextContent("Mac · Chrome 141");
     expect(sessions).toHaveTextContent("this device");
     expect(sessions).toHaveTextContent("iPhone · Safari 26");
+    // The house vocabulary reserves "session" for an agent's run, so a human
+    // authentication record is a signed-in device. A customer who saw both
+    // words in one product could not tell which one this list was about.
+    expect(sessions).not.toHaveTextContent(/session/i);
     expect(
       within(sessions).getAllByTestId("account-session-revoke"),
     ).toHaveLength(1);
@@ -698,6 +702,46 @@ describe("Security", () => {
     const shown = await screen.findByTestId("account-codes");
     expect(shown).toHaveTextContent("second-1");
     expect(shown).not.toHaveTextContent("first-1");
+  });
+
+  // The token has to outlive the tab for the same reason the codes do. When it
+  // lived in SecurityTab, switching away mid-request and back gave the new
+  // instance a counter at zero, so both rotations believed they were the live
+  // one and the older answer could still overwrite the vault.
+  it("keeps the last rotation's codes across a tab switch (negative)", async () => {
+    const answers: ((result: unknown) => void)[] = [];
+    liveRegenerateBackupCodes.mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    const { user } = await openDialog("security");
+
+    async function ask(password: string) {
+      await user.click(screen.getByTestId("account-codes-open"));
+      await user.type(screen.getByTestId("account-codes-password"), password);
+      await user.click(screen.getByTestId("account-codes-confirm"));
+    }
+
+    await ask("first");
+    // Away and back while it is in flight: SecurityTab unmounts and remounts.
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    await ask("second");
+
+    answers[1]?.({ ok: true, codes: ["second-1", "second-2"] });
+    answers[0]?.({ ok: true, codes: ["first-1", "first-2"] });
+    expect(await screen.findByTestId("account-codes")).toHaveTextContent(
+      "second-1",
+    );
+
+    // The vault is where the stale write lands, not the rendered panel: the
+    // mounted tab already holds the second set in its own state and seeds from
+    // the vault only when it mounts. So the question is what a return to
+    // Security shows, which is what a person would actually come back to.
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "open security" }));
+    const onReturn = await screen.findByTestId("account-codes");
+    expect(onReturn).toHaveTextContent("second-1");
+    expect(onReturn).not.toHaveTextContent("first-1");
   });
 
   it("offers enrolment, not codes, to a person without two-factor", async () => {

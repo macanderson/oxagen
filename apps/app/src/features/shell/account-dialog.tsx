@@ -93,6 +93,15 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // actually been received.
   const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
 
+  // The live rotation's identity, held here for the same reason the codes are.
+  // It was a ref inside `SecurityTab`, which is keyed on the tab and unmounted
+  // when the dialog closes: switching away mid-request and coming back gave
+  // the new instance a ref at zero, so both rotations believed they were the
+  // live one and the older answer could still overwrite the vault with codes
+  // the newer rotation had already invalidated. The token has to outlive the
+  // component for the same reason the codes do.
+  const rotation = useRef(0);
+
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
   // Right to move between them and Home and End to reach the ends, and expects
@@ -179,6 +188,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
             data={data}
             heldCodes={heldCodes}
             setHeldCodes={setHeldCodes}
+            rotation={rotation}
           />
         </div>
       ) : null}
@@ -190,6 +200,11 @@ type CodeVault = {
   /** Codes issued and not yet acknowledged, held above the tab that shows them. */
   heldCodes: string[] | null;
   setHeldCodes: (codes: string[] | null) => void;
+  /**
+   * Which recovery-code rotation is the live one, held above the tab for the
+   * same reason: a request outlives the component that started it.
+   */
+  rotation: { current: number };
 };
 
 function AccountPanel({
@@ -197,6 +212,7 @@ function AccountPanel({
   data,
   heldCodes,
   setHeldCodes,
+  rotation,
 }: { tab: AccountTab; data: ShellData } & CodeVault) {
   if (tab === "preferences") return <PreferencesTab data={data} />;
   if (tab === "security")
@@ -205,6 +221,7 @@ function AccountPanel({
         data={data}
         heldCodes={heldCodes}
         setHeldCodes={setHeldCodes}
+        rotation={rotation}
       />
     );
   if (tab === "privacy") return <PrivacyTab data={data} />;
@@ -702,6 +719,7 @@ function SecurityTab({
   data,
   heldCodes,
   setHeldCodes,
+  rotation,
 }: { data: ShellData } & CodeVault) {
   const t = useTranslations("shell.account.security");
   const passwordId = useId();
@@ -757,19 +775,16 @@ function SecurityTab({
     }
   }
 
-  // Which rotation is the live one. `codes.pending` cannot answer this,
-  // because Cancel sets `codes` to `closed` and takes the pending flag with
-  // it while the request carries on: the person can then start a second
-  // rotation, and Better Auth has now rotated twice. Responses can arrive in
-  // either order, so the set that is actually valid is the one the LAST
-  // request produced, not the one that answers last. Without this the first
-  // response could land second and write the vault with codes the second
-  // rotation had already invalidated, leaving a person holding a recovery set
-  // that does not work and no way to know.
+  // `rotation` arrives from `AccountDialog` rather than being created here.
+  // `codes.pending` cannot identify the live rotation, because Cancel sets
+  // `codes` to `closed` and takes the pending flag with it while the request
+  // carries on: the person can start a second rotation, and Better Auth has
+  // now rotated twice. Responses can arrive in either order, so the valid set
+  // is the one the LAST request produced, not the one that answers last.
   //
-  // A ref rather than state: it must survive the re-render Cancel causes and
-  // must not cause one itself.
-  const rotation = useRef(0);
+  // A ref rather than state, so it survives the re-render Cancel causes
+  // without provoking one; and held above this component, because a tab
+  // switch or a closed dialog unmounts this one while the request continues.
 
   async function regenerate(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
