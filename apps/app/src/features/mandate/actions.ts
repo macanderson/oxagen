@@ -43,7 +43,7 @@ import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 import { viewerTimeZone } from "@/server/viewer-zone";
-import { endOfZonedDay } from "@/shared/calendar-day";
+import { endOfZonedDay, isCalendarDay } from "@/shared/calendar-day";
 
 /**
  * What the dialog had in the editable fields when it opened, as it rendered
@@ -100,9 +100,6 @@ export type LimitsDraft = {
 type MandateLimitChanges = NonNullable<
   z.input<typeof mandateLimitsUpdateFields.limitChanges>
 >;
-
-/** The day a date input gives; `endOfZonedDay` turns it into an instant. */
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The one built-in measure (`CALLS_MEASURE`): every call draws exactly one of
@@ -216,7 +213,11 @@ export async function changeMandateLimits(
     }
   }
 
-  if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
+  // The shape alone is not enough. `2027-02-31` matches a `\d{4}-\d{2}-\d{2}`
+  // pattern and `Date.UTC` rolls it forward to 3 March, so a day that does not
+  // exist bought three days of authority. `isCalendarDay` makes the value
+  // round-trip as the day it claims to be.
+  if (validTo !== "" && !isCalendarDay(validTo)) return refuse("validTo");
 
   /**
    * Whether this submission is editing the bound the dialog prefilled or has

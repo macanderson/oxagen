@@ -167,7 +167,7 @@
       "back": "Back to Fleet",
       "denied": {
         "title": "You cannot see this mandate",
-        "body": "The roles you hold on this organization do not include org.billing: a mandate is readable only by a finance role. An owner can grant it, and the grant is itself a governed action in the audit record.",
+        "body": "The roles you hold on this organization are not accountable for mandates. An Owner, Admin, Billing or Compliance role reads every mandate in this workspace; without one of those, you read the mandates of agents you created yourself. An owner can grant an accountable role, and the grant is itself a governed action in the audit record.",
         "signedIn": "Signed in as: {role}",
         "needed": "Needed:",
         "decidedBy": "Decided by: the workspace’s decision rules. Deny wins over every allow."

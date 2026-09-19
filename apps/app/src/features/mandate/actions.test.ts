@@ -641,6 +641,27 @@ describe("changeMandateLimits", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  // A shape check accepted this and `endOfZonedDay` rolled it to 3 March, so a
+  // day that does not exist was worth three extra days of authority. The check is
+  // `isCalendarDay`, shared with the audit filters, which already had it.
+  it("refuses a day-shaped value that is not a day (negative)", async () => {
+    for (const validTo of ["2027-02-31", "2027-02-29", "2026-99-99"]) {
+      invoke.mockClear();
+      expect(
+        await changeMandateLimits("a-intel", "core-platform", {
+          ...untouched,
+          validTo,
+        }),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "invalid_input",
+        field: "validTo",
+      });
+      expect(invoke).not.toHaveBeenCalled();
+    }
+  });
+
   it("refuses a date that is not a day (negative)", async () => {
     expect(
       await changeMandateLimits("a-intel", "core-platform", {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: agent control plane and agent fleet management</title>
-<meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices the model calls routed through it and attributes each one to the operator, answers an agent's request for a system or an action with the decision rules you wrote, routes matching requests to a person, and records every run frame by frame. The agent never sees the key.">
+<meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices the model calls routed through it and attributes each one to the operator, answers an agent's request for a system or an action with the decision rules you wrote, routes matching requests to a person, and records every run frame by frame. The agent never receives a connection credential.">
 <link rel="canonical" href="https://oxagen.sh/products/oxagen">
 <meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark">
@@ -17,7 +17,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
 <meta name="twitter:title" content="See which agent spent what, and on whose behalf.">
-<meta name="twitter:description" content="The agent asks, a rule you wrote answers, and the key never moves. Every dollar routed through Oxagen is attributed and reconciled to the cent.">
+<meta name="twitter:description" content="The agent asks, a rule you wrote answers, and the connection credential never moves. Every dollar routed through Oxagen is attributed and reconciled to the cent.">
 <meta name="twitter:image" content="https://oxagen.sh/og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -231,7 +231,7 @@
           <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
           <a class="btn btn-ghost ext" href="https://docs.oxagen.sh/install" target="_blank" rel="noopener">Wrap Claude Code</a>
         </div>
-        <p class="hero-note">Claude Code, Codex, and any harness with a base URL. The agent never sees the key.</p>
+        <p class="hero-note">Claude Code, Codex, and any harness with a base URL. The agent never receives a connection credential.</p>
       </div>
 
       <figure class="dg p-appr reveal" data-live role="img" aria-label="Illustration: a request for a 180 dollar refund, routed to a person. It shows the operator who started the run, the agent that asked, the exact call with its input digest, and the rule that routed it, with Allow for this run and Deny.">
@@ -265,7 +265,7 @@
           <p>Don't hand your agents the keys.</p>
           <ol>
             <li><a href="#top">Requests routed to a person</a></li>
-            <li><a href="#keys">The key never moves</a></li>
+            <li><a href="#keys">The connection credential never moves</a></li>
             <li><a href="#steer">Run your agents as a fleet</a></li>
             <li><a href="#mandates">Mandates for anything that matters</a></li>
             <li><a href="#more">Kill switches, simulation, taint</a></li>
@@ -315,7 +315,7 @@
         which agent is asking, which tool it wants, and which data it would reach.</p>
         <ul>
           <li><strong>A rule you wrote answers.</strong> The team that owns the system writes the rule. Reads of the public repo: allowed. A push to main: denied. A push to a release branch: routed to the release owner, who sees the request with the diff beside it and answers from the Access page. Allowed and denied requests settle inside the same call. Routed requests wait for the person, and the run waits with them.</li>
-          <li><strong>The key never moves.</strong> The credential stays in Oxagen, encrypted under a key you own. Oxagen makes the connection on the agent's behalf and closes it when the action is done. The agent never sees the key. The record shows every use: the request, the rule that answered it, and the person who signed it.</li>
+          <li><strong>The connection credential never moves.</strong> It stays in Oxagen, encrypted under a key you own. Oxagen uses it on the agent's behalf and closes the connection when the action is done. The agent never receives it, though it still holds its own identity. The record shows every use: the request, the rule that answered it, and the person who signed it.</li>
           <li>Each connection has a named owner and a review date, and Oxagen audits every read. For each call Oxagen uses the narrowest credential the provider allows, such as a Stripe restricted key or an AWS credential scoped to one bucket, for the call plus a margin and never more than an hour. Revoke a connection and Oxagen stops using it at the agent's next request.</li>
         </ul>
       </div>
