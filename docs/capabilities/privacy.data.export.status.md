@@ -8,8 +8,16 @@
 
 ## Intent
 
-Read where one of the calling person's own data exports has got to, and the
-link to the bundle once it is ready.
+Read where one of the calling person's own data exports has got to.
+
+It answers a status and, once the bundle exists, the storage key that names it.
+It does not answer a link, and no field in its output ever will: the archive is
+a private object, so it is fetched from the separate authenticated route
+`GET /v1/{org}/{workspace}/privacy/export/{exportId}/download`, which reads the
+key back and streams the bytes. A client polls this capability until `ready` is
+true, then calls that route. Waiting for a URL to appear here is waiting for
+something that never arrives. The reasoning is under "Why there is no download
+URL" below.
 
 `export_data` answers the moment it queues, with an id and the status `queued`;
 the archive is written later by the Inngest job
