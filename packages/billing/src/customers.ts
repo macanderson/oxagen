@@ -70,8 +70,12 @@ export async function ensureStripeCustomer(
   for (const candidate of candidates) {
     if (await provider.customerExists(candidate)) {
       if (candidate !== settingsCustomerId) {
+        // The settings row's own id (if any) is known bad: it either read
+        // null or it just failed customerExists above. Compare-and-swap on
+        // that value so we replace the stale id with this live one, but
+        // still defer to a concurrent writer that already moved the row on.
         return storeCustomerId(runner, orgId, candidate, {
-          keepExisting: true,
+          previousValue: settingsCustomerId,
         });
       }
       return candidate;
@@ -83,10 +87,11 @@ export async function ensureStripeCustomer(
   }
 
   const customerId = await resolveOrCreateCustomer(tenant);
-  // Overwrite any stale id the loop just rejected. The coalesce path would
-  // keep the missing cus_… and every Checkout would keep failing.
+  // Compare-and-swap on the settings value this call read. A concurrent
+  // caller that already replaced the same stale id wins; this call then
+  // returns that winner instead of splitting the org across two customers.
   return storeCustomerId(runner, orgId, customerId, {
-    keepExisting: settingsCustomerId === null,
+    previousValue: settingsCustomerId,
   });
 }
 
@@ -107,14 +112,19 @@ function uniqueIds(
 type DbRunner = typeof withTenantDb | typeof withSystemDb;
 
 /**
- * Persist the org's Stripe customer id. `keepExisting` uses coalesce so a
- * concurrent first write wins; otherwise the new id overwrites a stale one.
+ * Persist the org's Stripe customer id with a compare-and-swap on
+ * `opts.previousValue`, the settings value this call read before deciding
+ * `customerId` was the right replacement (null, or a stale id that just
+ * failed `customerExists`). The row is only overwritten while it still
+ * holds that same previous value; a concurrent caller that already moved
+ * the row on (to any id, not necessarily this one) wins, and that winner
+ * is returned instead of being clobbered.
  */
 async function storeCustomerId(
   runner: DbRunner,
   orgId: string,
   customerId: string,
-  opts: { keepExisting: boolean },
+  opts: { previousValue: string | null },
 ): Promise<string> {
   const [written] = await runner((tx) =>
     tx
@@ -123,9 +133,7 @@ async function storeCustomerId(
       .onConflictDoUpdate({
         target: schema.orgBillingSettings.orgId,
         set: {
-          stripeCustomerId: opts.keepExisting
-            ? sql`coalesce(${schema.orgBillingSettings.stripeCustomerId}, excluded.stripe_customer_id)`
-            : customerId,
+          stripeCustomerId: sql`case when ${schema.orgBillingSettings.stripeCustomerId} is not distinct from ${opts.previousValue} then excluded.stripe_customer_id else ${schema.orgBillingSettings.stripeCustomerId} end`,
           updatedAt: new Date(),
         },
       })

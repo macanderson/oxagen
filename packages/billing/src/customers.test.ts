@@ -3,10 +3,13 @@
  *
  * The database is a small in-memory fake: one organisations row, at most one
  * org_billing_settings row and at most one subscriptions row per test, and
- * an upsert on org_billing_settings that models both
- * `SET stripe_customer_id = coalesce(existing, excluded)` (keep a concurrent
- * first write) and a plain overwrite (replace a stale id after a Stripe
- * account cutover). The provider is a fake with the three customer methods.
+ * an upsert on org_billing_settings that models the production compare-and-
+ * swap: `SET stripe_customer_id = CASE WHEN existing IS NOT DISTINCT FROM
+ * previousValue THEN excluded ELSE existing END`. `previousValue` is the
+ * settings id this call read (null, or a stale id it just rejected), so the
+ * row is only overwritten while it still holds that same value; a
+ * concurrent caller that already moved the row on wins. The provider is a
+ * fake with the three customer methods.
  *
  * Scenarios:
  *  1. The settings column carries a live id → returned; no create, no write.
@@ -56,7 +59,7 @@ interface World {
   upserts: Array<{
     orgId: string;
     stripeCustomerId: string;
-    keepExisting: boolean;
+    previousValue: string | null;
   }>;
   /** Runs once, inside the upsert, before the fake applies it. */
   beforeUpsert: (() => void) | null;
@@ -73,18 +76,39 @@ const { seams, world } = vi.hoisted(() => ({
   } as unknown as World,
 }));
 
-function isCoalesceSql(v: unknown): boolean {
+/**
+ * Recognizes the production CASE/IS NOT DISTINCT FROM compare-and-swap
+ * expression and pulls out the `previousValue` it was built with.
+ *
+ * A drizzle `sql` template's `queryChunks` mixes raw text chunks (a
+ * `StringChunk`, `.value` a `string[]`) with the interpolated values: the
+ * column identifier (a `PgColumn`, twice) and `previousValue` once, as a
+ * bare JS primitive (a `string`, or the literal `null`). Skipping the
+ * `StringChunk`s and the column (an object that is neither a string nor
+ * `null`) leaves exactly the `previousValue` chunk.
+ */
+function parseCasSql(v: unknown): { previousValue: string | null } | null {
   if (typeof v !== "object" || v === null || !("queryChunks" in v)) {
-    return false;
+    return null;
   }
-  return (v as { queryChunks: unknown[] }).queryChunks.some(
+  const chunks = (v as { queryChunks: unknown[] }).queryChunks;
+  const isRawText = (chunk: unknown): chunk is { value: string[] } =>
+    typeof chunk === "object" &&
+    chunk !== null &&
+    "value" in chunk &&
+    Array.isArray((chunk as { value: unknown }).value);
+  const isCas = chunks.some(
     (chunk) =>
-      typeof chunk === "object" &&
-      chunk !== null &&
-      "value" in chunk &&
-      Array.isArray((chunk as { value: unknown }).value) &&
-      (chunk as { value: string[] }).value.join("").includes("coalesce("),
+      isRawText(chunk) &&
+      chunk.value.join("").toLowerCase().includes("is not distinct from"),
   );
+  if (!isCas) return null;
+  for (const chunk of chunks) {
+    if (isRawText(chunk)) continue;
+    if (chunk === null) return { previousValue: null };
+    if (typeof chunk === "string") return { previousValue: chunk };
+  }
+  return { previousValue: null };
 }
 
 const tx = {
@@ -105,35 +129,27 @@ const tx = {
         set: Record<string, unknown>;
       }) => ({
         returning: async () => {
-          const keepExisting = isCoalesceSql(conflict.set.stripeCustomerId);
-          const overwrite =
-            typeof conflict.set.stripeCustomerId === "string"
-              ? conflict.set.stripeCustomerId
-              : null;
-          if (!keepExisting && overwrite === null) {
-            throw new Error(
-              "fake db: upsert must coalesce or set a string customer id",
-            );
+          const cas = parseCasSql(conflict.set.stripeCustomerId);
+          if (!cas) {
+            throw new Error("fake db: upsert must set the CAS expression");
           }
           world.beforeUpsert?.();
           world.beforeUpsert = null;
           world.upserts.push({
             orgId: v.orgId,
             stripeCustomerId: v.stripeCustomerId,
-            keepExisting,
+            previousValue: cas.previousValue,
           });
           if (world.settings === null) {
             world.settings = {
               orgId: v.orgId,
               stripeCustomerId: v.stripeCustomerId,
             };
-          } else if (keepExisting) {
-            if (world.settings.stripeCustomerId === null) {
-              world.settings.stripeCustomerId = v.stripeCustomerId;
-            }
-          } else {
-            world.settings.stripeCustomerId = overwrite;
+          } else if (world.settings.stripeCustomerId === cas.previousValue) {
+            world.settings.stripeCustomerId = v.stripeCustomerId;
           }
+          // else: a concurrent write already moved the row past
+          // previousValue — the CAS is a no-op and that winner stands.
           return [{ stripeCustomerId: world.settings.stripeCustomerId }];
         },
       }),
@@ -211,7 +227,7 @@ describe("ensureStripeCustomer", () => {
       {
         orgId: "org-abc",
         stripeCustomerId: "cus_existing_001",
-        keepExisting: true,
+        previousValue: null,
       },
     ]);
   });
@@ -316,10 +332,53 @@ describe("ensureStripeCustomer", () => {
       {
         orgId: "org-abc",
         stripeCustomerId: "cus_fresh_001",
-        keepExisting: false,
+        previousValue: "cus_stale_001",
       },
     ]);
     expect(world.settings?.stripeCustomerId).toBe("cus_fresh_001");
+  });
+
+  it("replaces a stale settings id with a live subscription id instead of keeping it", async () => {
+    world.settings = { orgId: "org-abc", stripeCustomerId: "cus_stale_001" };
+    world.subscription = { stripeCustomerId: "cus_live_001" };
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_stale_001";
+    });
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_live_001");
+    expect(createCustomerMock).not.toHaveBeenCalled();
+    expect(world.upserts).toEqual([
+      {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_live_001",
+        previousValue: "cus_stale_001",
+      },
+    ]);
+    expect(world.settings?.stripeCustomerId).toBe("cus_live_001");
+  });
+
+  it("a concurrent replacement of the same stale id resolves to one winner, not a split customer", async () => {
+    world.settings = { orgId: "org-abc", stripeCustomerId: "cus_stale_001" };
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_stale_001";
+    });
+    findCustomerByOrgIdMock.mockResolvedValue(null);
+    createCustomerMock.mockResolvedValue("cus_mine_001");
+    world.beforeUpsert = () => {
+      // A concurrent request already replaced the same stale id with a
+      // different fresh customer before this call's upsert runs.
+      world.settings = {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_theirs_001",
+      };
+    };
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_theirs_001");
+    expect(world.settings?.stripeCustomerId).toBe("cus_theirs_001");
   });
 
   it("falls through to create when metadata search returns a missing customer", async () => {
