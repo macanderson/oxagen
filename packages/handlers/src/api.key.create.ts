@@ -162,12 +162,12 @@ export const apiKeyCreateHandler: CapabilityHandler<
   // widens that window rather than creating it, and narrowing it belongs to
   // whatever makes role checks transactional everywhere, not to this capability.
   const [inserted] = await withTenantDb(async (tx) => {
-    // An archived workspace is wound down. Its existing keys keep
-    // authenticating — `resolveApiKey` never consults archival — and the
-    // Organization › API keys page lists them for exactly one reason, which it
-    // states: so they can be revoked. Minting a new one there would be fresh
-    // machine access introduced after the workspace was closed, against a page
-    // that promises the opposite.
+    // An archived workspace is wound down. Its existing keys stop
+    // authenticating (ADR-105) without being revoked, and the Organization ›
+    // API keys page lists them so an operator can revoke one for good. Minting
+    // a new one there would be a credential issued into a closed workspace —
+    // dead the moment it is handed over, and alive again the moment the
+    // workspace is restored, which is fresh machine access nobody asked for.
     //
     // Refused the way `workspace.settings.write` refuses an edit to an
     // archived workspace.
