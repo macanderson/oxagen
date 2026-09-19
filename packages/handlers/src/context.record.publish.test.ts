@@ -90,6 +90,18 @@ const INPUT = {
 
 const BODY_CHECKSUM = sha256Hex(INPUT.body);
 
+// What the latest version row looks like once this handler has written it:
+// the body checksum plus the classification the caller supplied.
+const LATEST_MATCHING = {
+  id: "v1-uuid",
+  versionNumber: 2,
+  checksum: BODY_CHECKSUM,
+  kind: "rule",
+  force: "must",
+  constraintEffect: null,
+  statement: INPUT.statement,
+};
+
 function queueSelects(...results: unknown[]): void {
   for (const r of results) {
     mocks.selectResults.push(() => Promise.resolve(r));
@@ -152,10 +164,10 @@ describe("context.record.publish handler", () => {
     });
   });
 
-  it("is idempotent when the latest version already carries the checksum", async () => {
+  it("is idempotent when the latest version already carries the checksum and classification", async () => {
     queueSelects(
       [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
-      [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
+      [LATEST_MATCHING],
     );
 
     const out = await contextRecordPublishHandler(INPUT, CTX);
@@ -168,12 +180,72 @@ describe("context.record.publish handler", () => {
       published: false,
     });
     expect(mocks.insertedValues).toHaveLength(0);
+    expect(mocks.updateSets).toHaveLength(0);
+  });
+
+  it("publishes latest+1 when only the classification changed on an unchanged body", async () => {
+    // A record backfilled to memory/info, or one published with the wrong
+    // force: the checksum matches, so before this check the correction was
+    // reported as `published: false` and the record stayed invisible to
+    // `readWorkspaceSteering`.
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [{ ...LATEST_MATCHING, kind: "memory", force: "should" }],
+    );
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
+
+    const out = await contextRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toMatchObject({ version: 3, published: true });
+    expect(mocks.updateSets[0]).toMatchObject({ isLatest: false });
+    expect(mocks.insertedValues[0]).toMatchObject({
+      versionNumber: 3,
+      parentVersionId: "v1-uuid",
+      checksum: BODY_CHECKSUM,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+    expect(mocks.updateSets.at(-1)).toMatchObject({
+      activeVersionId: "v3-uuid",
+      kind: "rule",
+      force: "must",
+    });
+  });
+
+  it("publishes latest+1 onto a legacy version whose classification is NULL", async () => {
+    // Versions written before #3302 carry no classification at all.
+    queueSelects(
+      [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+      [
+        {
+          id: "v1-uuid",
+          versionNumber: 1,
+          checksum: BODY_CHECKSUM,
+          kind: null,
+          force: null,
+          constraintEffect: null,
+          statement: null,
+        },
+      ],
+    );
+    mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
+
+    const out = await contextRecordPublishHandler(INPUT, CTX);
+
+    expect(out).toMatchObject({ version: 2, published: true });
+    expect(mocks.insertedValues[0]).toMatchObject({
+      versionNumber: 2,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
   });
 
   it("publishes latest+1 when the body changed", async () => {
     queueSelects(
       [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
-      [{ id: "v1-uuid", versionNumber: 1, checksum: "0".repeat(64) }],
+      [{ ...LATEST_MATCHING, versionNumber: 1, checksum: "0".repeat(64) }],
     );
     mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
 

@@ -10,8 +10,9 @@ import { sha256Hex } from "./registry-digest";
  * Publish one steering context record into the workspace agent-asset
  * registry — the platform mirror of adding a .stella/rules/<record_id>.toml
  * file. Upserts agent.context_records by (workspace, record_id) and creates
- * a new immutable version row only when the body checksum changed; an
- * unchanged body is idempotent (published: false). Same shape as
+ * a new immutable version row only when the version content changed: the
+ * body checksum or any of kind, force, constraintEffect, statement. A publish
+ * that repeats all of them is idempotent (published: false). Same shape as
  * tool.declaration.publish.
  *
  * Writes the caller's classification (kind, force, constraintEffect,
@@ -89,7 +90,12 @@ export const contextRecordPublishHandler: CapabilityHandler<
   };
 
   // Version-publish path against an existing record row: idempotent when the
-  // latest version already carries this checksum, otherwise latest+1.
+  // latest version already carries this checksum AND this classification,
+  // otherwise latest+1. The checksum alone is not the key: a record backfilled
+  // to memory/info (or one whose classification was wrong) is corrected by
+  // republishing the unchanged body with the right kind/force, and that
+  // correction must land as a new version or the record never reaches
+  // `readWorkspaceSteering`.
   const publishVersionFor = async (existing: {
     id: string;
     publicId: string;
@@ -101,6 +107,10 @@ export const contextRecordPublishHandler: CapabilityHandler<
           id: schema.contextRecordVersions.id,
           versionNumber: schema.contextRecordVersions.versionNumber,
           checksum: schema.contextRecordVersions.checksum,
+          kind: schema.contextRecordVersions.kind,
+          force: schema.contextRecordVersions.force,
+          constraintEffect: schema.contextRecordVersions.constraintEffect,
+          statement: schema.contextRecordVersions.statement,
         })
         .from(schema.contextRecordVersions)
         .where(
@@ -112,10 +122,18 @@ export const contextRecordPublishHandler: CapabilityHandler<
         .limit(1),
     );
 
-    if (latest && latest.checksum === checksum) {
+    const unchanged =
+      latest !== undefined &&
+      latest.checksum === checksum &&
+      latest.kind === classification.kind &&
+      latest.force === classification.force &&
+      (latest.constraintEffect ?? null) === classification.constraintEffect &&
+      (latest.statement ?? null) === classification.statement;
+
+    if (latest && unchanged) {
       logger.info(
         { slug, publicId: existing.publicId, workspaceId },
-        "context.record.publish: idempotent — checksum unchanged",
+        "context.record.publish: idempotent — body and classification unchanged",
       );
       return {
         publicId: existing.publicId,
