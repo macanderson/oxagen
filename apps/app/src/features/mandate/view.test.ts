@@ -13,12 +13,7 @@ import {
   parseMandateView,
 } from "./view";
 
-const at = {
-  org: "a-intel",
-  ws: "core-platform",
-  agent: "invoice-bot",
-  mandate: "mnd_4f2a9c",
-};
+const at = { org: "a-intel", ws: "core-platform", mandate: "mnd_4f2a9c" };
 
 describe("MANDATE_ID", () => {
   it("accepts the public-id shape the contract accepts", () => {
@@ -81,16 +76,14 @@ describe("parseMandateView", () => {
 
 describe("mandateLink", () => {
   it("leaves off every default, so the plain route is the plain route", () => {
-    expect(mandateLink(at)).toBe(
-      "/a-intel/core-platform/agents/invoice-bot/mandates/mnd_4f2a9c",
-    );
+    expect(mandateLink(at)).toBe("/a-intel/core-platform/mandates/mnd_4f2a9c");
   });
 
   it("carries the search, the facet and the page when they are not the defaults", () => {
     expect(
       mandateLink(at, { search: "pi_3Qa", state: "settle", offset: 25 }),
     ).toBe(
-      "/a-intel/core-platform/agents/invoice-bot/mandates/mnd_4f2a9c?q=pi_3Qa&state=settle&offset=25",
+      "/a-intel/core-platform/mandates/mnd_4f2a9c?q=pi_3Qa&state=settle&offset=25",
     );
   });
 });

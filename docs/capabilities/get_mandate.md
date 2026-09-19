@@ -38,7 +38,7 @@ those two, floored at zero, the figure the gate reserves against.
 
 ## App surface
 
-The mandate page, `/[org]/[ws]/agents/[agent]/mandates/[mandate]`: the four summary tiles, the
+The mandate page, `/{org}/{ws}/mandates/{mandate}`: the four summary tiles, the
 ledger with its search, State facet and pager, the grant panel and the
 reconciliation panel. The read goes through `data/live/mandates.ts`. Two of the
 row's fields do not reach the page: `id` and `toolCallId` are raw database uuids

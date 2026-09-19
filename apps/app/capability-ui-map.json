@@ -263,9 +263,9 @@
       "verifiedBy": "session_01HbidmHc5LnutHpqyk2RsMh"
     },
     "get_mandate": {
-      "route": "/[org]/[ws]/agents/[agent]/mandates/[mandate]",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/mandates/[mandate] — the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the rev1 surface that invokes get_mandate (data/live/mandates.ts, data/live/mappers/mandates.ts)",
       "proof": "apps/app/src/features/mandate/mandate.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
@@ -635,9 +635,9 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "revoke_mandate": {
-      "route": "/[org]/[ws]/agents/[agent]/mandates/[mandate]",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/mandates/[mandate] — the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Revoke dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
       "proof": "apps/app/src/features/mandate/actions.test.ts",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"
@@ -740,9 +740,9 @@
       "verifiedBy": "session-m0-workspace-repositories"
     },
     "update_mandate_limits": {
-      "route": "/[org]/[ws]/agents/[agent]/mandates/[mandate]",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/mandates/[mandate]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/mandates/[mandate] — the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
+      "route": "/[org]/[ws]/mandates/[mandate]",
+      "page": "apps/app/src/app/[org]/[ws]/mandates/[mandate]/page.tsx",
+      "entry": "/[org]/[ws]/mandates/[mandate] — the Change limits dialog in the mandate header (features/mandate/mandate-actions.tsx → features/mandate/actions.ts)",
       "proof": "apps/app/src/features/mandate/actions.test.ts",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session_01XFBLXKxjWFj7obkt9rjLMS"

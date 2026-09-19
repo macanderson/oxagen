@@ -69,7 +69,6 @@ async function renderMandate(
   const element = await Mandate({
     ctx: options.as === undefined ? ctx : viewer(options.as),
     source,
-    agent: "invoice-bot",
     mandate: options.mandate ?? "mnd_4f2a9c",
     searchParams: query,
   });
@@ -175,6 +174,16 @@ describe("Mandate › loaded", () => {
     );
   });
 
+  it("links to the agent the record names, since the route carries no agent", async () => {
+    await renderMandate(mandateDetailRead());
+    expect(
+      screen.getByRole("link", { name: "invoice-bot" }),
+    ).toHaveAttribute(
+      "href",
+      "/a-intel/core-platform/agents/invoice-bot?tab=mandates",
+    );
+  });
+
   it("shows the grant: the agent, who granted it, the effect, the scope and the window", async () => {
     await renderMandate(mandateDetailRead());
     const grant = screen.getByTestId("mandate-grant");
@@ -225,10 +234,20 @@ describe("Mandate › loaded", () => {
     ).toHaveAttribute("href", "/a-intel/audit");
   });
 
-  it("says when the ledger filled the bound it read, so no match is not no movement", async () => {
-    await renderMandate(mandateDetailRead({ truncatedAt: 500 }));
-    const notice = document.querySelector('[data-state="truncated"]');
+  // What the read can establish, and no more: a ledger of exactly the bound
+  // looks the same as one of the bound plus a thousand, so the line says what it
+  // read and that it cannot tell whether there is more. Claiming truncation would
+  // be a false statement about an audit record.
+  it("says what the read bound was without claiming older movements exist", async () => {
+    await renderMandate(mandateDetailRead({ readBound: 500 }));
+    const notice = document.querySelector('[data-state="read-bound"]');
     expect(notice?.textContent).toContain("newest 500 movements");
+    expect(notice?.textContent).toContain("cannot tell you whether");
+  });
+
+  it("says nothing about the bound when the answer came back short of it", async () => {
+    await renderMandate(mandateDetailRead());
+    expect(document.querySelector('[data-state="read-bound"]')).toBeNull();
   });
 
   it("offers exactly one gold action, and both writes, on an active mandate", async () => {
@@ -297,7 +316,7 @@ describe("Mandate › error", () => {
     expect(panel.textContent).toContain("Nothing was changed");
     expect(
       within(panel).getByRole("link", { name: "Try again" }),
-    ).toHaveAttribute("href", "/a-intel/core-platform/agents/invoice-bot/mandates/mnd_4f2a9c");
+    ).toHaveAttribute("href", "/a-intel/core-platform/mandates/mnd_4f2a9c");
   });
 
   it("names the instant the read was attempted", async () => {
@@ -361,7 +380,6 @@ describe("Mandate › not found", () => {
       Mandate({
         ctx,
         source,
-        agent: "invoice-bot",
         mandate: "not-a-mandate",
         searchParams: {},
       }),

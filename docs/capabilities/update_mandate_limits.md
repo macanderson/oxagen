@@ -36,7 +36,7 @@ The mandate.
 
 ## App surface
 
-The Change limits dialog in the mandate page's header, `/[org]/[ws]/agents/[agent]/mandates/[mandate]`. The dialog collects the measure set as one
+The Change limits dialog in the mandate page's header, `/{org}/{ws}/mandates/{mandate}`. The dialog collects the measure set as one
 record, defaulted from what the mandate holds, because this capability replaces
 `limits` rather than merging into it. It writes counts only and stores each
 figure exactly as typed: whether a measure is money is a property of the tool

@@ -27,7 +27,7 @@ The mandate, status `revoked`.
 
 ## App surface
 
-The Revoke dialog in the mandate page's header, `/[org]/[ws]/agents/[agent]/mandates/[mandate]`, which collects the reason. The control is not
+The Revoke dialog in the mandate page's header, `/{org}/{ws}/mandates/{mandate}`, which collects the reason. The control is not
 offered on a mandate that has already ended, since this capability refuses any
 status but `active` or `draft`; a draft is declined from the agent's own
 Mandates section.

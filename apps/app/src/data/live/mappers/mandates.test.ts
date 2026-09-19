@@ -417,9 +417,14 @@ describe("toMandateDetail", () => {
     });
   });
 
-  it("says the ledger filled its bound, and says nothing when it did not", () => {
-    expect(detail([ledgerOutput()], 1).truncatedAt).toBe(1);
-    expect(detail([ledgerOutput()], 500).truncatedAt).toBeNull();
+  // `readBound` is what the read can establish and nothing more. A ledger of
+  // exactly the bound is indistinguishable from one of the bound plus a thousand,
+  // and `get_mandate` answers no total, no has-more flag and no cursor — so the
+  // field records the bound the answer filled, and the copy above the table says
+  // it cannot tell whether there is more rather than claiming truncation.
+  it("records the bound the answer filled, and nothing when it came back short", () => {
+    expect(detail([ledgerOutput()], 1).readBound).toBe(1);
+    expect(detail([ledgerOutput()], 500).readBound).toBeNull();
   });
 
   it("stamps the answer with the instant it was mapped", () => {
