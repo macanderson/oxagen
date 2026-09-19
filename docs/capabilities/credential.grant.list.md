@@ -1,4 +1,4 @@
-# credential.grant.list
+# list_credential_grants
 
 **Capability:** `list_credential_grants`
 **Domain:** credential

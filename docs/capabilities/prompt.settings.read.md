@@ -1,4 +1,4 @@
-# prompt.settings.read
+# get_prompt_settings
 
 **Domain:** workspace
 **Mode:** sync

@@ -1,4 +1,4 @@
-# agent.deploy
+# deploy_agent
 
 **Domain:** agent
 **Mode:** sync
@@ -8,7 +8,7 @@
 
 ## Intent
 
-Set an agent's deployment posture. Activating requires a published active version — otherwise a typed error is returned. Deactivating is always allowed and makes the agent's triggers dormant.
+Set an agent's stored deployment posture. Activating requires a published active version. This handler updates the registry record. It does not start an agent process or schedule triggers.
 
 ## Input
 
@@ -30,14 +30,14 @@ Org Owner, Org Admin, Workspace Owner, Workspace Member.
 
 ## Side effects
 
-- Postgres: updates the `agents` row `deploymentStatus`; activation makes bound triggers live, deactivation makes them dormant.
+- Postgres: updates the `agents` row `deploymentStatus` and `updatedById`.
 - ClickHouse: emits an `agent.deploy` audit/telemetry event.
 
 ## Errors
 
 | code | meaning |
 |---|---|
-| `no_published_version` | Activation requested but the agent has no published active version. |
+| `agent_deploy_requires_published_version` | Activation requested but the agent has no published active version. |
 | `not_found` | No agent matches `agentId` in this workspace. |
 | `validation_error` | Input failed Zod parse. |
 | `unauthorized` | Caller lacks the required org/workspace role. |

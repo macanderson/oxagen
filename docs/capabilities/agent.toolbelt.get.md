@@ -1,4 +1,4 @@
-# agent.toolbelt.get
+# get_agent_toolbelt
 
 **Capability:** `get_agent_toolbelt`
 **Domain:** agent

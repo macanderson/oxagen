@@ -1,4 +1,4 @@
-# billing.auto_topup.set
+# set_auto_topup
 
 **Capability:** `set_auto_topup`
 **Domain:** billing

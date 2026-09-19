@@ -1,4 +1,4 @@
-# plugin.org.install
+# install_plugin
 
 **Domain:** plugin
 **Mode:** sync

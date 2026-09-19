@@ -1,4 +1,4 @@
-# workspace.budget.policy.read
+# get_budget_policy
 
 **Domain:** workspace
 **Mode:** sync

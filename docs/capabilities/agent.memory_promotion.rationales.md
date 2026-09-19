@@ -1,4 +1,4 @@
-# agent.memory.promotion.rationales
+# suggest_promotion_rationales
 
 **Domain:** agent
 **Mode:** sync

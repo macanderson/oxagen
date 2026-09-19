@@ -545,7 +545,7 @@ describe("createFunction adapter", () => {
     it("passes batchEvents through to the inngest function config", () => {
       const config: DurableFunctionConfig = {
         id: "batch-fn",
-        batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
+        batchEvents: { maxSize: 5, timeout: "30s", key: "event.data.orgId" },
       };
       const trigger: DurableFunctionTrigger = { event: "test/batch" };
       const handler: DurableFunctionHandler = async () => undefined;
@@ -554,8 +554,22 @@ describe("createFunction adapter", () => {
 
       expect(capturedConfigs[0]).toMatchObject({
         id: "batch-fn",
-        batchEvents: { maxSize: 50, timeout: "30s", key: "event.data.orgId" },
+        batchEvents: { maxSize: 5, timeout: "30s", key: "event.data.orgId" },
       });
+    });
+
+    it("refuses a batch larger than Inngest's limit, which would fail the whole app's sync", () => {
+      const config: DurableFunctionConfig = {
+        id: "oversized-batch",
+        batchEvents: { maxSize: 100, timeout: "5m" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/batch" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      expect(() => createFunction(config, trigger, handler)).toThrow(
+        /oversized-batch: batchEvents.maxSize 100 is over Inngest's limit of 5/,
+      );
+      expect(capturedConfigs).toHaveLength(0);
     });
 
     it("omits batchEvents when not configured", () => {
@@ -571,7 +585,7 @@ describe("createFunction adapter", () => {
     it("exposes ctx.events (the full batch) to the handler", async () => {
       const config: DurableFunctionConfig = {
         id: "batch-fn",
-        batchEvents: { maxSize: 50, timeout: "30s" },
+        batchEvents: { maxSize: 5, timeout: "30s" },
       };
       const trigger: DurableFunctionTrigger = { event: "test/batch" };
       let seen: unknown;

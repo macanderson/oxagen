@@ -10,7 +10,7 @@ describe("buildProgram", () => {
   });
 });
 
-// ADR-111 phase 1, MC spec §2.1: the old word does not appear in the product,
+// ADR-112 phase 1, MC spec §2.1: the old word does not appear in the product,
 // and `--help` is the product. The commands themselves stay, because every
 // machine enrolled so far was enrolled with `oxagen tacho enroll` and that
 // string is in scripts, runbooks, and the managed settings documents MDM has
@@ -58,7 +58,7 @@ describe("the deprecated tacho group", () => {
   );
 });
 
-// ADR-111 phase 1b: the seven wrapping commands now also live on `oxagen agent`,
+// ADR-112 phase 1b: the seven wrapping commands now also live on `oxagen agent`,
 // which is the name §2.1 gives them. These assert the shape of the tree; which
 // handler each merged name reaches is asserted in agent-wrap-dispatch.test.ts.
 describe("the agent group after the wrapping commands moved onto it", () => {

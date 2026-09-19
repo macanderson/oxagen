@@ -13,7 +13,7 @@ Relational, queryable, and indexed for point lookups and compliance reporting.
 
 - **Retention:** 7 years, enforced by monthly RANGE partitions. Oxagen drops partitions older than 7 years.
 - **Schema:** `id`, `occurred_at`, `event_type`, `actor_user_id`, `org_id`, `workspace_id`, `capability`, `outcome`, `ip`, `user_agent`, `request_id`.
-- **Query surface:** **Organization → Security → Audit** (filtered UI), or the `query_audit_log` capability over the API.
+- **Query surface:** **Organization → Audit** (filtered UI), or the `query_audit_log` capability over the API.
 - **Use cases:** point lookups ("did this person call this capability?"), compliance dashboard queries, and access-review exports.
 
 ### ClickHouse: `audit_events`
@@ -28,7 +28,7 @@ Independent code paths write the two stores. For each `invoke()` call, the Postg
 
 ## Event taxonomy
 
-A single source of truth (`packages/compliance/src/security-event-types.ts`) defines 54 typed security event kinds. Both the Postgres CHECK constraint and the ClickHouse schema derive from this file, so schema drift fails CI. Eight of the 54 are reserved names that nothing emits yet. The tables mark them.
+The taxonomy in `packages/compliance/src/security-event-types.ts` defines the event names. The tables below describe common events and mark reserved names. Consult that file for additions.
 
 ### Auth lifecycle
 
@@ -159,8 +159,8 @@ Every `invoke()` call, from any surface (app, API, or MCP), emits either a `capa
 
 ### In the app
 
-**Organization → Security → Audit** is a filterable view of `security.security_events`. Filter by:
-- Event kind (any of the 54 above)
+**Organization → Audit** is a filterable view of `security.security_events`. Filter by:
+- Event kind
 - Acting principal
 - Time range
 - Outcome (allowed or denied)
@@ -199,7 +199,7 @@ The two stores have different schemas. A capability call produces a row in each.
   "actor_user_id": "uuid",
   "org_id": "uuid",
   "workspace_id": "uuid",
-  "capability": "org.member_role.change",
+  "capability": "change_member_role",
   "outcome": "deny",
   "ip": "192.0.2.1",
   "user_agent": "Mozilla/5.0 …",
@@ -215,7 +215,7 @@ The two stores have different schemas. A capability call produces a row in each.
   "event_id": "uuid",
   "org_id": "uuid",
   "workspace_id": "uuid",
-  "capability": "org.member_role.change",
+  "capability": "change_member_role",
   "scope_kind": "workspace",
   "scope_id": "uuid",
   "acting_principal_id": "uuid",

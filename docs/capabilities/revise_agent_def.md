@@ -11,8 +11,8 @@
 AI-driven edit of an **existing** agent definition — the edit counterpart to
 `suggest_agent_def` (AI-create). Takes a plain-language description of the change
 you want plus the agent's current config, has the model design the revised
-configuration (identity, instructions, graph access, tools, triggers) grounded in
-the same workspace candidates and `create-agent` skill as suggest, then persists
+configuration (identity, instructions, graph access, and tools) grounded in
+the same workspace candidates and authoring prompt as suggest, then persists
 the repaired config as a **new unpublished version** by composing
 `update_agent_def` (which bumps the version number).
 
@@ -38,7 +38,7 @@ be revised.
 | `rationale` | `string` | Why the model made these changes. |
 | `changeSummary` | `string[]` | Short bullets of what changed versus the prior version (diff line). |
 | `warnings` | `string[]` | Non-fatal validation adjustments (e.g. a hallucinated tool ref that was removed). |
-| `recommendations` | `{ kind, ref, name, reason }[]` | Tools the agent should have that are not available yet — catalog MCP servers to connect, or disabled skills to enable. Never equipped automatically. |
+| `recommendations` | `{ kind, ref, name, reason }[]` | Tools the agent should have that are not available yet — catalog MCP servers to connect. Never equipped automatically. |
 
 ## Roles
 

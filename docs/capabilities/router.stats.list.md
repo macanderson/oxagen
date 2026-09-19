@@ -1,4 +1,4 @@
-# router.stats.list
+# list_routing_stats
 
 **Capability name:** `list_routing_stats`
 **Domain:** router

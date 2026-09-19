@@ -1,4 +1,4 @@
-# privacy.data.export.status
+# get_export_status
 
 **Domain:** privacy
 **Mode:** sync

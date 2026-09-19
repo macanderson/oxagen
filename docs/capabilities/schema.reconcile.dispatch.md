@@ -1,4 +1,4 @@
-# schema.reconcile.dispatch
+# dispatch_schema_reconcile
 
 Dispatch an async reconciliation job to re-label existing graph nodes and relationships against the pinned schema version. Optionally prunes nodes and relationships that cannot be mapped to any schema label or type.
 

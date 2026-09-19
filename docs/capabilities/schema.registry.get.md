@@ -1,4 +1,4 @@
-# schema.registry.get
+# get_schema_registry
 
 Resolve a workspace's registry: pinned version, draft version, enforcement mode, per-schema enabled state, and the full label/relationship/property tree.
 

@@ -1,4 +1,4 @@
-# context.record.publish
+# publish_context_record
 
 **Domain:** context
 **Mode:** sync

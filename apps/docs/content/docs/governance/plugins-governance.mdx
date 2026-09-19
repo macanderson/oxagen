@@ -17,16 +17,9 @@ Org Owners and Admins can install plugins from the marketplace into any workspac
 
 ## Installing plugins
 
-See [Plugin marketplace](/docs/plugins/marketplace) for the full installation guide.
+Use `browse_plugin_catalog` and `get_catalog_plugin` to inspect a plugin. Call `install_plugin` to install it in the workspace. The current app has no Marketplace page.
 
-In summary:
-
-1. Open **Marketplace** from the workspace sidebar.
-2. Choose a section: **Agent Tools → MCP Servers**, **Agent Tools → Capabilities**, or **Integrations**.
-3. Review the plugin's tools, README, and authentication requirements.
-4. Click **Install to workspace**. The plugin is enabled immediately in this workspace.
-
-An MCP server or integration plugin that needs authentication also needs a connection step. Click **Authenticate** for OAuth, or **Enter API key** for a secret. Its tools stay out of every agent's tool list until the connection is done.
+An authenticated connection is a separate step. Use `reauth_plugin_credential` for OAuth or `set_plugin_secret` for a secret. See [Workspace plugins](/docs/plugins/workspace-plugins).
 
 ## Enable and disable
 
@@ -40,7 +33,7 @@ The credential a plugin needs stays in Oxagen, held by the workspace. The agent 
 
 ## Uninstalling
 
-Go to **Tools → MCP Servers** and uninstall the server from its row. Uninstalling stops every new call to the plugin's tools in this workspace immediately. The audit log keeps existing tool call records that reference the plugin. Oxagen does not delete content the plugin generated (images, documents, and videos).
+Call `uninstall_plugin` for the workspace installation. Existing tool-call audit records remain. Uninstalling a plugin is separate from deleting data it previously produced.
 
 ## The record
 

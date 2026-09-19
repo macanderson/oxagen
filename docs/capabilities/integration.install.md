@@ -1,4 +1,4 @@
-# integration.install
+# install_integration
 
 Install a plugin instance from the catalog or a custom URL. Fetches schema, validates config, and installs in workspace scope.
 

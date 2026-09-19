@@ -1,4 +1,4 @@
-# finding.evidence.get
+# get_finding_evidence
 
 The evidence behind one finding: the arithmetic the findings job wrote with it (Mission Control spec §12.8; ADR-062). Nothing is re-estimated on read.
 

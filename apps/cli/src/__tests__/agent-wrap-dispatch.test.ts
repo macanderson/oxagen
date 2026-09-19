@@ -1,7 +1,7 @@
 /**
  * `oxagen agent enroll | status | unenroll` each serve two scopes.
  *
- * ADR-111 §2.1 names three wrapping commands whose names were already taken by
+ * ADR-112 §2.1 names three wrapping commands whose names were already taken by
  * server-scoped operations, and decision 3 resolves the collision by argument
  * rather than by renaming either side. Which side a call lands on is the whole
  * of that decision, and it is invisible from the command tree's shape, so it is

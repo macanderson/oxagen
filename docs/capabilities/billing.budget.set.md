@@ -1,4 +1,4 @@
-# billing.budget.set
+# set_spend_budget
 
 **Domain:** billing
 **Mode:** sync

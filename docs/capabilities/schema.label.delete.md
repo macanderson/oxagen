@@ -1,4 +1,4 @@
-# schema.label.delete
+# delete_schema_label
 
 Remove a node label and all its properties from the current draft version. Does not affect published versions — publish a new version to make the deletion permanent.
 

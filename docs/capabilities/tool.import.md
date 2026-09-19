@@ -1,4 +1,4 @@
-# tool.import
+# import_tools
 
 **Capability:** `import_tools`
 **Domain:** tool

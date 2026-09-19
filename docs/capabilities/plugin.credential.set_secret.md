@@ -1,4 +1,4 @@
-# plugin.credential.set_secret
+# set_plugin_secret
 
 **Domain:** plugin
 **Mode:** sync

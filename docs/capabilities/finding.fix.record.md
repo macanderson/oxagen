@@ -1,4 +1,4 @@
-# finding.fix.record
+# record_finding_fix
 
 Record that the fix an open finding names was applied (Mission Control spec §12.8; ADR-062 §2). The four kinds the findings job detects have their fix in the agent's own code, harness or tool configuration, which Oxagen does not hold. Recording the change marks the finding `applied` with the request id of this invocation, which is the id its audit row carries, and the job cites only runs that start afterwards, so the saving is attributable on Spend.
 

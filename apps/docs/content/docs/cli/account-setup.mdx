@@ -5,17 +5,15 @@ description: Create an Oxagen account, mint an Oxagen API key, and authenticate 
 
 The CLI needs one credential: an **Oxagen API key** (`ox_…`) plus the org and workspace it acts in. The key identifies you, the person running the CLI, to the Oxagen API. The CLI makes no LLM calls of its own, so there is no model provider key to configure.
 
-`oxagen cost`, `oxagen logs`, and `oxagen telemetry` work with no credential. Everything else needs the steps below.
+`oxagen cost`, `oxagen logs`, and `oxagen telemetry` work without a credential. Most platform commands need authentication. `oxagen agent enroll` uses its one-time token instead of a CLI login.
 
 ## 1. Create your Oxagen account
 
-This takes a minute:
-
 1. Go to [app.oxagen.sh](https://app.oxagen.sh) and click **Sign up**.
 2. Enter your name, email, and a password, or use **Google** or **GitHub** sign-in. Oxagen emails you a verification link. Click it before you sign in.
-3. On the **New organization** screen, enter an organization name and click **Create organization**. Oxagen generates a URL-safe slug, and you can edit it. This also creates a default workspace, and you become the **Owner** of both.
+3. On **New organization**, name the organization and its first workspace, review their slugs, and create them.
 
-The app opens your organization at `/{org}`. Note your **org slug** and **workspace slug**. Workspace pages sit under `/{org}/{workspace}/…`, and the CLI needs both slugs.
+The app opens the first workspace at `/{org}/{workspace}`. Note your **org slug** and **workspace slug**. Workspace pages sit under `/{org}/{workspace}/…`, and the CLI needs both slugs.
 
 For a full tour of the app, see [Getting started](/docs/getting-started).
 
@@ -23,8 +21,8 @@ For a full tour of the app, see [Getting started](/docs/getting-started).
 
 The CLI authenticates to the platform with an API key (`ox_…`), not your password:
 
-1. In the app, go to **Organization → Developer → Tokens**.
-2. Click **Create API key**, give it a name, and select the scopes it needs (at minimum, the capabilities you call: graph read, memory, budgets, environments, and secrets).
+1. In the app, go to **Organization → API keys**.
+2. Select the workspace and create a named API key. Ordinary keys have no arbitrary per-capability allowlist. See [Authentication](/docs/api/authentication).
 3. **Copy the key now.** It is shown only once.
 
 API keys carry org and workspace scope. The CLI sends the key as a Bearer token.

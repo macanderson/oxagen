@@ -1,4 +1,4 @@
-# agent.definition.update
+# update_agent_def
 
 **Domain:** agent
 **Mode:** sync
@@ -19,7 +19,7 @@ Update an agent definition by snapshotting a NEW unpublished version with the up
 | `description?` | `string` | Optional new description. |
 | `config` | `object` | Versioned body — see below. |
 | `config.graph` | `GraphAccess` | Ontology binding, retrieval strategy, and traversal budget. |
-| `config.agentTools` | `AgentTool[]` | Loaded functions, MCP servers, skills, subagents. Default `[]`. |
+| `config.agentTools` | `AgentTool[]` | Platform functions and MCP servers. Default `[]`. |
 | `config.instructions` | `string?` | Optional system prompt baked into the definition. |
 
 ## Output

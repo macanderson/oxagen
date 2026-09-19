@@ -1,28 +1,13 @@
 ---
 title: Authentication
-description: How to create, use, rotate, and revoke the Oxagen API keys that people and services use to call the REST API and the MCP server.
+description: "Create, use, rotate, and revoke workspace API keys, and distinguish machine credentials from CLI logins."
 ---
 
-## API keys
+Create a workspace-scoped API key for a script or MCP client at **Organization → API keys** (`/{org}/api-keys`). Select the workspace, create the key, and copy it when shown. Oxagen stores a hash, so the raw key cannot be recovered.
 
-An Oxagen API key authenticates a call to the REST API or the MCP server. You create it, and it acts as you. It is the credential a person, a script, or a service you run uses to call Oxagen. It is not a key an agent holds to reach other systems: those connections stay in Oxagen, and the agent requests them at the moment of use.
+Keys use the `ox_` prefix followed by a base64url-encoded random value. Keep them in a secret store or environment variable.
 
-Each key is tied to one organization and one workspace when you create it. There is no org-only key that applies across workspaces.
-
-Keys use the format `ox_…` (the prefix `ox_` followed by a base64url-encoded 32-byte random value). There is no test-mode key variant.
-
-## Creating an API key
-
-1. Go to **Organization → Developer → Tokens**.
-2. Click **Create API key**.
-3. Enter a descriptive name (for example, "CI integration" or "Slack bot").
-4. Click **Create**. Copy the key. Oxagen shows it only once.
-
-A key acts with the roles of the person who created it. See [What a key is allowed to do](#what-a-key-is-allowed-to-do).
-
-## Using the key
-
-Send the key in every request as a Bearer token. Every capability route also carries your org and workspace slug in the path:
+## Use a key
 
 ```http
 POST /v1/{orgSlug}/{workspaceSlug}/agent/tools
@@ -33,56 +18,42 @@ Content-Type: application/json
 {}
 ```
 
-For the MCP server:
+For MCP, send the same Bearer header to `https://mcp.oxagen.sh/mcp`. The key resolves the organization and workspace. Use the matching slugs for API routes.
 
-```http
-POST /mcp
-Host: mcp.oxagen.sh
-Authorization: Bearer ox_…
-```
+## Key purposes
 
-## Scope and org/workspace resolution
+Not every `ox_` credential has the same authority:
 
-The key carries the org and workspace scope. You do not pass `orgId` or `workspaceId` in request bodies or query strings. The API resolves them from the key.
+| Kind | Authority |
+|---|---|
+| Ordinary API key | Workspace-scoped API principal. Enterprise IAM resolves the creator's grants. There is no arbitrary capability allowlist for this key. |
+| CLI login, `cli_session_v1` | Resolves to the person who authorized `oxagen login`. Authentication rechecks organization and workspace membership. |
+| Host key, `tacho_host_v1` | Event ingestion, policy-bundle reads, and command polling only |
+| Gateway key, `tacho_gateway_v1` | MCP-exposed, nonmutating capabilities that are not high-sensitivity |
+| Stella telemetry key | Operational telemetry ingestion only |
 
-When a request arrives with a key:
+Machine-purpose checks apply before the plan-dependent IAM resolver. An unknown purpose is denied. `create_api_key` refuses reserved purposes, so callers cannot mint a host, gateway, or CLI-login key through the generic create call.
 
-1. The API validates the key (signature, expiry).
-2. The API resolves the org and workspace tied to the key.
-3. IAM authorizes the capability call as the person who created the key (see below).
+The agent registration credential has its own purpose and exchange flow. It is not a general API or MCP bearer credential. The credential for a mediated downstream connection is separate again: Oxagen holds that credential and uses it on the agent's behalf.
 
-## Revoking a key
+[RBAC and roles](/docs/governance/rbac) explains the plan-dependent resolver. Do not assume a generic `scope` object creates a capability allowlist.
 
-Go to **Organization → Developer → Tokens** and click **Revoke** next to the key. Revocation takes effect at once: the next request with the revoked key returns `401 Unauthorized`. Oxagen writes an `api_key.revoked` security event.
+## Rotate or revoke
 
-You can also call the `revoke_api_key` capability:
+Use **Organization → API keys** to rotate or revoke a key. Rotation replaces the key and revokes its predecessor. Update the integration with the new value. Revocation causes subsequent authenticated requests with the old key to fail.
+
+The API also exposes `revoke_api_key`:
 
 ```http
 POST /v1/{orgSlug}/{workspaceSlug}/api-keys/revoke
 Authorization: Bearer ox_…
 Content-Type: application/json
 
-{
-  "keyId": "uuid"
-}
+{ "keyId": "uuid" }
 ```
 
-## What a key is allowed to do
+Inspect the key's expiry when creating or rotating it. Different provisioning flows set different lifetimes. Revocation writes `api_key.revoked` to the security record.
 
-A key has no permissions of its own. IAM authorizes every call made with it as the person who created the key:
+## Store credentials
 
-- **Enterprise organizations** run the full IAM resolver against that person's role grants. If the creator no longer resolves in the org (for example, they were removed), IAM denies every call with the key.
-- **Free, Build, and Scale organizations** do not restrict people at the IAM layer, so a key can call any capability its surface offers. Plan, credit, and budget checks still apply.
-
-A key cannot be narrowed to a subset of capabilities. The create call accepts a `scope` field, but the field is reserved and does not restrict what the key can call. Treat every key as carrying its creator's full roles, and create each key from an account whose role matches what the integration needs.
-
-## Key rotation
-
-Keys do not expire on their own. To rotate a key, click **Rotate** next to it in **Organization → Developer → Tokens**. Rotation issues a replacement key (shown once), carries over the old key's expiry, and revokes the old key in the same step. The old key stops working at once, so update your integration with the new key right away.
-
-## Security notes
-
-- Never commit an API key to source control. Use environment variables.
-- Keep keys out of client-side browser code. A key carries org and workspace scope and belongs on a server.
-- Never paste an Oxagen API key into an agent's prompt or configuration. An agent under Oxagen holds an identity and a mandate, not a key.
-- If you suspect someone has a copy of a key, revoke it and create a new one.
+Keep keys out of source control, browser bundles, prompts, and shared terminal output. Revoke a key if an unauthorized person may have copied it. Use `oxagen login` for a person's terminal access and the enrollment flow for a registered agent's host.

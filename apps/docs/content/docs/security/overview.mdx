@@ -3,7 +3,7 @@ title: Security overview
 description: How Oxagen decides every call at one boundary, keeps tenant data apart, holds credentials, and records every answer.
 ---
 
-Security sets the access clause of every agent's mandate, and this page shows how Oxagen enforces it. An agent holds an identity and a mandate, and nothing else. When a task needs a capability, the agent asks. A rule answers at the `invoke()` boundary (allowed, denied, or routed to a person), and the audit stores keep the answer. Connection credentials stay in Oxagen, encrypted, and the agent never sees them.
+Security sets the access clause of every agent's mandate, and this page shows how Oxagen enforces it. An agent has its own identity and mandate. When a task needs a capability, the agent asks. A rule answers at the `invoke()` boundary (allowed, denied, or routed to a person), and the audit stores keep the answer. Connection credentials stay in Oxagen, encrypted, and the agent never sees them.
 
 ## Four layers
 
@@ -33,11 +33,11 @@ flowchart TD
 
 *One request through all four layers. A denied call stops at IAM with an audit record. An allowed call reaches data only through a tenant-scoped seam. See [Tenant isolation and RLS](/docs/security/tenant-isolation-rls) for the policy SQL behind each seam.*
 
-The layers are independent. A misconfigured application-layer predicate does not leak data, because the database enforces isolation by itself. A stolen login cannot act beyond the roles assigned to that principal, because the IAM resolver runs inside the same `invoke()` boundary, and nothing bypasses it.
+The layers are independent. A misconfigured application-layer predicate does not leak data, because the database enforces isolation by itself. IAM behavior depends on the organization tier and principal. Machine-purpose checks apply separately. See [RBAC and roles](/docs/governance/rbac).
 
 ## The single capability chokepoint
 
-Every action a person or agent takes, every API call, and every MCP tool call passes through one function: `invoke()`. This is structural, not a convention. `defineContract()` captures the capability handler, and nothing reaches the handler except `invoke()`. There is no alternate call path.
+Capability routes and tools call `invoke()`. Contracts register metadata with `registerCapability`, and handlers register separately. The kernel governs calls routed through it. Authentication endpoints and other surface infrastructure are separate paths.
 
 At the `invoke()` boundary:
 
@@ -65,7 +65,7 @@ Client connections use TLS 1.2 or higher, terminated by Caddy on the application
 
 ## Data residency
 
-Oxagen runs in AWS `us-east-1` (US East). The application host, Postgres, Neo4j, and ClickHouse all run there. Customer data does not leave the United States in normal operation.
+Oxagen runs in AWS `us-east-1` (US East). The application host, Postgres, Neo4j, and ClickHouse all run there. External processors and model providers have their own processing locations. See [Data handling](/docs/security/data-handling).
 
 ## Roles and access control
 
@@ -101,6 +101,6 @@ Full sub-processor details, including DPA availability, are in [Data handling](/
 
 ## Security incident response
 
-There is no incident register in the app. **Organization → Security → Audit** holds the security event record, and MCP authentication alerts are set under **Governance → Policies**.
+There is no incident register in the app. **Organization → Audit** holds the security event record, and MCP authentication alerts can be configured with `set_auth_alerts`.
 
 For vulnerability disclosures, contact security@oxagen.sh.

@@ -1,45 +1,34 @@
 ---
-title: Custom agents
-description: "Define, version, publish, and deploy your own agents: instructions, graph scope, tools, triggers, and environment bindings."
+title: Agent identities
+description: "Register an agent identity and manage its mandate and environment bindings."
 ---
 
-Beyond the built-in workspace agent, you can define **custom agents**. A custom agent is a named agent with its own instructions, a scoped view of the graph, an explicit tool set, and triggers that start it. Manage them under **Agents** in the workspace sidebar.
+Register each agent that your team operates under its own identity. Open **Agents** in a workspace to register one, inspect its enrollment, and open its mandate.
 
-## Lifecycle
+## Register from the CLI
 
-An agent definition separates *identity* from *configuration*:
+```bash
+oxagen agent register --slug review-worker --name "Review worker" --harness claude-code
+oxagen agent status review-worker
+```
 
-1. **Draft**. Creating an agent inserts the identity (name and immutable slug) and a v1 config snapshot. Drafts are inactive and cannot be triggered.
-2. **Versioned edits**. Every config change snapshots a **new unpublished version**. Published versions are immutable and never edited in place.
-3. **Publish**. Publishing computes a SHA-256 checksum over the canonical config and makes that version the agent's active version.
-4. **Deploy**. Activation needs a published version. Deactivating is always allowed and makes the agent's triggers dormant.
+Registration requires an organization Owner or Admin. It creates the agent identity, delegated principal, default role, and a credential shown once. Treat that credential separately from an ordinary Oxagen API key. See [API authentication](/docs/api/authentication).
 
-For an audit, the version history shows what an agent was configured to do at any point in time.
+The registration flow can issue a one-time enrollment token for the host. [Wrap an agent](/docs/cli/wrap-an-agent) covers installation and recording.
 
-## Configuration
+## Definition and mandate
 
-| Section | What it controls |
-|---|---|
-| Instructions | The agent's system prompt, layered over the workspace baseline |
-| Graph access | Which ontology it can read (or extend), the retrieval strategy (semantic, lexical, hybrid, or explicit), and a traversal budget (max hops, max nodes, and min relevance) |
-| Tools | Explicitly equipped capabilities, skills, MCP servers, or other agents |
-| Triggers | What starts it: `manual`, `schedule` (cron), or `event` (source events, with branch and path-glob filters) |
-| Access | The agent's [role](/docs/governance/agent-roles), which is the ceiling on everything above. New agents start as **Agent Contributor**. |
+The agent definition lives in `.oxagen/agents/<slug>.toml` in the workspace repository. The `commit_agent_definition` capability commits the definition, and `get_agent` returns the cached definition of record alongside identity and enrollment details.
 
-Everything in that table except Access is the agent's **request**. The role is the **ceiling**. What the agent can do is the intersection of the two, so equipping a tool the role denies is inert rather than an error. The builder's Review step shows that intersection before you save. See [Agent roles](/docs/governance/agent-roles).
-
-Oxagen can draft the whole configuration. Describe the agent in plain language, and Oxagen proposes a complete config grounded in the workspace's real skills, ontologies, and capabilities. The draft includes the narrowest role that still lets the agent do its job. You review it and save. Revisions work the same way and always land as a new unpublished version, so a drafted edit never changes what is live without you.
-
-## Triggers
-
-A trigger binds an agent to a start condition. You enable or disable each trigger independently of the agent's deployment status:
-
-- `manual`: a person or an API call starts it.
-- `schedule`: a cron expression.
-- `event`: an event from a connected source (for example, a GitHub push), filtered by branches, path globs, or payload conditions.
-
-A trigger fires only when the agent is deployed **active**.
+Open the agent's mandate to inspect its authority, budget, equipment, and rules. [Agent roles](/docs/governance/agent-roles) describes the role ceiling. Registration and a definition do not start a scheduled runtime in Oxagen. Your harness runs the work.
 
 ## Environments
 
-An agent's **environment binding** names the secret scope its identity may draw on. Bind an agent to an [environment](/docs/configuration/environments-and-secrets), and mark one binding primary. Without a binding, the workspace's default environment applies. The binding is governance metadata on the agent registry, not run state. Oxagen has no engine of its own that injects those secrets into a run.
+Bind the identity to the secret scope it needs:
+
+```bash
+oxagen agent env bind review-worker --env development --primary
+oxagen agent env list review-worker
+```
+
+An environment binding is governance metadata. Without a binding, the workspace default applies. See [Environments and secrets](/docs/configuration/environments-and-secrets).

@@ -3,7 +3,6 @@
   "pages": [
     "index",
     "installation",
-    "desktop",
     "wrap-an-agent",
     "account-setup",
     "quickstart",

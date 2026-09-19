@@ -1,4 +1,4 @@
-# plugin.catalog.get
+# get_catalog_plugin
 
 **Domain:** plugin
 **Mode:** sync

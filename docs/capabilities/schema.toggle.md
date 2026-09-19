@@ -1,4 +1,4 @@
-# schema.toggle
+# toggle_schema
 
 Enable or disable a schema. Activation auto-publishes the current draft and auto-pins the resulting version — no separate publish/pin step is needed.
 

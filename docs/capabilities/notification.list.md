@@ -1,4 +1,4 @@
-# notifications.list
+# list_notifications
 
 **Domain:** notifications
 **Mode:** sync

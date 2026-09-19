@@ -1,4 +1,4 @@
-# cost.unpriced_model.list
+# list_unpriced_models
 
 The models this organization is running that nobody has stated a price for (Mission Control spec §12.2, App. A.7; ADR-060 §1). A frame whose model the price book cannot price is recorded `unpriced` by the rollup — no cost, no basis, deliberately never a zero — so the run comes back with a blank cost and no explanation. This is the explanation: the model, how much of it has been run in the window, and exactly which token classes are missing a price.
 
@@ -40,8 +40,9 @@ A model:
 | `calls` | number | model calls seen in the window. A wrapped agent's call is counted once whichever token-bearing sources (OTel log, collector, hook) recorded it: per session, only the highest-authority source that reported any model call is admitted |
 | `tokens` | number | total tokens across every class, the figure the list is ranked by |
 | `firstSeen`, `lastSeen` | string | RFC 3339; when the model first and last ran in the window |
-| `missingClasses` | enum[] | the token classes with no effective price entry, out of `input_uncached`, `cache_read`, `cache_write_5m` and `output`. `cache_write_1h` and `reasoning` are not required: a provider with no one-hour cache tier and no separately-metered reasoning tokens is not missing a price |
-| `fullyUnpriced` | boolean | true when the book prices none of the classes, so the run has no cost at all; false when some classes are priced, which the rollup records as `estimated` rather than unpriced |
+| `missingClasses` | enum[] | the token classes with no effective price entry covering the calls that used them, out of `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output` and `reasoning`. Every class is checked on the same footing: a class the model never sent a token in is never named here, even when the book has no row for it at all, but `cache_write_1h` and `reasoning` are checked exactly like the rest whenever the model actually used them |
+| `missingClassWindows` | object[] | one entry per class in `missingClasses`, each with `tokenClass`, `unpricedFrom` and `unpricedTo`: the span of that class's unpriced calls, so the Pricing tab can say when a class went unpriced rather than only that it did |
+| `fullyUnpriced` | boolean | true when every usage bucket the model actually sent tokens in came back unpriced, so the run has no cost at all. A class with both a priced and an unpriced bucket, such as a rate that lapsed and later came back, still names that class in `missingClasses`, but the model is not `fullyUnpriced`: it has real cost from the priced bucket, and the rollup records it `estimated` |
 
 At most 500 models are returned, the heaviest first: an organization running more distinct model ids than that has a naming problem, not a pricing one.
 

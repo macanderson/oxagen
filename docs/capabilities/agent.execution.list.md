@@ -1,4 +1,4 @@
-# agent.execution.list
+# list_executions
 
 **Domain:** agent
 **Mode:** sync
@@ -48,5 +48,5 @@ None — read-only.
 ## Surfaces
 
 - **API:** `GET /v1/{org}/{ws}/agent/executions?limit=&before=&status=`
-- **MCP:** tool `agent.execution.list`
+- **MCP:** tool `list_executions`
 - **App:** run Activity index under the workspace section.

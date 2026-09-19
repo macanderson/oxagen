@@ -1,4 +1,4 @@
-# schema.validate.relationship
+# validate_schema_relationship
 
 Validate a relationship's type and properties against the workspace schema. Returns a conformance score, field-level errors, and the outcome that would occur in the current enforcement mode. Pure validation — no writes to the graph.
 

@@ -1,4 +1,4 @@
-# ADR-111: The two §2.1 renames land on the surfaces, behind aliases, in phases
+# ADR-112: The two §2.1 renames land on the surfaces, behind aliases, in phases
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
@@ -7,14 +7,27 @@
   everywhere); ADR-025 (verb-first snake_case capability names, with no alias
   fallback); ADR-101 (four first-class harnesses); `docs/specs/tacho/spec.md`
   §5.1 (enrollment); `apps/cli/src/program.ts` (the command tree)
-- **Numbering:** 111. This record was written as ADR-103 on 2026-09-19 and
-  renumbered the same day: ADR-103 was already the price book recording its own
-  initialization, added at 07:50 UTC, and this one landed at 18:21. Two records
-  under one number left `packages/database/src/schema/cost.ts` and
-  `apps/cli/src/program.ts` citing "ADR-103" for different documents. The
-  earlier record keeps the number. A commit message or pull request body from
-  before the rename still says ADR-103; this line is the trail. ADR-102 and
-  ADR-109 are each taken twice and are not this record's to renumber.
+- **Numbering:** 112, after two collisions in one day, both resolved in favour
+  of the other record. It was written as ADR-103 at 18:21 UTC on 2026-09-19;
+  ADR-103 was already the price book recording its own initialization, added at
+  07:50, which left `packages/database/src/schema/cost.ts` and
+  `apps/cli/src/program.ts` citing one number for two documents. It became
+  ADR-111, and while it was in review another session merged its own ADR-111 to
+  `main`, on refusing an `amount` measure's unit at declaration. That one is
+  merged and heavily cited across `packages/oxagen`, `packages/handlers`,
+  `packages/rules` and `apps/app`, so it keeps the number and this record moved
+  again. A commit message or pull request body from earlier today says ADR-103 or
+  ADR-111 for this document; this line is the trail. ADR-102 and ADR-109 are each
+  taken twice and are not this record's to renumber.
+
+  Three numbers for one record in a day is not carelessness, it is what an
+  unsynchronised counter does when a dozen sessions write ADRs against the same
+  tree: the number is picked from the local tree and validated at merge, so two
+  branches cut an hour apart pick the same one and neither is wrong until one
+  merges. Nothing in the repository allocates ADR numbers, and `check:contracts`
+  does not look at them. A registry, or numbering by merge order rather than by
+  authoring order, is the fix; it is a maintainer decision about a shared counter
+  rather than something a session can settle from inside one branch.
 - **Delivered by:** this record and the phase order it sets; phase 1a, the
   hidden `tacho` group in `apps/cli/src/program.ts`; and phase 1b, the seven
   wrapping commands on `oxagen agent` with the three collisions resolved and

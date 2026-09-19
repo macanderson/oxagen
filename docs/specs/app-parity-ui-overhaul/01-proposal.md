@@ -1,5 +1,7 @@
 # 01 — Proposal
 
+> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+
 ## The problem, stated plainly
 
 You can do more from a terminal than from the product you pay for. That is backwards.

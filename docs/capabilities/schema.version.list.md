@@ -1,4 +1,4 @@
-# schema.version.list
+# list_schema_versions
 
 List all schema versions with version number, label, status, published timestamp, and change summary. Always includes the current draft as the first entry.
 
