@@ -11,6 +11,7 @@ import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import create from "../../messages/create.json";
 import createAgent from "../../messages/create-agent.json";
+import createRecord from "../../messages/create-record.json";
 import en from "../../messages/en.json";
 import fleet from "../../messages/fleet.json";
 import mandate from "../../messages/mandate.json";
@@ -32,6 +33,7 @@ export const messages = {
   ...billing,
   ...create,
   ...createAgent,
+  ...createRecord,
   ...fleet,
   ...mandate,
   ...onboarding,

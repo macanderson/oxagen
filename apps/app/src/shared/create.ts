@@ -15,11 +15,10 @@
 export type CreateKind = "agent" | "tool" | "skill" | "record";
 
 /**
- * The kinds offered today, in the chooser's order. The context record wizard
- * joins this list when its step module lands; the tool wizard is left out on
- * purpose until its importer and manifest steps are built.
+ * The kinds offered today, in the chooser's order. The tool wizard is left
+ * out on purpose until its importer and manifest steps are built.
  */
-export const CREATE_KINDS: readonly CreateKind[] = ["agent", "skill"];
+export const CREATE_KINDS: readonly CreateKind[] = ["agent", "skill", "record"];
 
 export const CREATE_EVENT = "oxagen:create";
 

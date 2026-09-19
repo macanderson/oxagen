@@ -40,6 +40,7 @@ describe("buildCommands", () => {
       { id: "create", label: "create:any", create: null },
       { id: "create:agent", label: "create:agent", create: "agent" },
       { id: "create:skill", label: "create:skill", create: "skill" },
+      { id: "create:record", label: "create:record", create: "record" },
     ]);
   });
 

@@ -5,10 +5,12 @@
 // behind it.
 import type { CreateKind } from "@/shared/create";
 import { agentWizard } from "./agent-wizard";
+import { recordWizard } from "./record-wizard";
 import { skillWizard } from "./skill-wizard";
 import { type AnyWizardKind, wizardKind } from "./wizard";
 
 export const WIZARDS: Partial<Record<CreateKind, AnyWizardKind>> = {
   agent: wizardKind(agentWizard),
   skill: wizardKind(skillWizard),
+  record: wizardKind(recordWizard),
 };

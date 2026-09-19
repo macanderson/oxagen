@@ -1,9 +1,8 @@
 // @vitest-environment jsdom
 // The Steering header's own entry into a creation wizard (roadmap
 // creation-spec §1): "Add a skill" on the Skills tab opens the skill wizard
-// over the page. Every other tab's "Write a context record" stays hidden until
-// the host carries the record wizard, so the header never offers a button
-// that opens nothing.
+// over the page, and every other tab's "Write a context record" opens the
+// context-record wizard. Each tab carries exactly one of the two.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CREATE_EVENT } from "@/shared/create";
@@ -42,16 +41,36 @@ describe("SteeringCreate", () => {
     }
   });
 
-  it("offers no record button while the record wizard is not carried (negative)", () => {
+  it("opens the context-record wizard from every tab but Skills", () => {
     const tabs: Record<string, string>[] = [
       {},
+      { tab: "records" },
       { tab: "proposals" },
       { tab: "prs" },
     ];
-    for (const tab of tabs) {
-      const { container } = mount(tab);
-      expect(container.querySelector("button")).toBeNull();
-      cleanup();
+    const heard = vi.fn();
+    window.addEventListener(CREATE_EVENT, heard);
+    try {
+      for (const tab of tabs) {
+        const { container } = mount(tab);
+        expect(container.querySelectorAll("button")).toHaveLength(1);
+        fireEvent.click(
+          screen.getByRole("button", { name: "Write a context record" }),
+        );
+        cleanup();
+      }
+      expect(heard).toHaveBeenCalledTimes(tabs.length);
+      for (const [event] of heard.mock.calls as [CustomEvent][])
+        expect(event.detail).toEqual({ kind: "record" });
+    } finally {
+      window.removeEventListener(CREATE_EVENT, heard);
     }
+  });
+
+  it("offers no record button on the Skills tab (negative)", () => {
+    mount({ tab: "skills" });
+    expect(
+      screen.queryByRole("button", { name: "Write a context record" }),
+    ).toBeNull();
   });
 });

@@ -874,6 +874,14 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-wizard-agent"
     },
+    "propose_record": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Write a context record (every tab but Skills), and ⌘K Create › Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/record-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-wizard-record"
+    },
     "propose_skill": {
       "route": "/[org]/[ws]/steering?tab=skills",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",

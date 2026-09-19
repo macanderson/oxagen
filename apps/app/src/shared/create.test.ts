@@ -9,7 +9,8 @@ import {
 
 const listeners: ((e: Event) => void)[] = [];
 afterEach(() => {
-  for (const l of listeners.splice(0)) window.removeEventListener(CREATE_EVENT, l);
+  for (const l of listeners.splice(0))
+    window.removeEventListener(CREATE_EVENT, l);
 });
 function listen() {
   const seen = vi.fn((e: Event) => createRequestOf(e));
@@ -33,8 +34,9 @@ describe("openCreate", () => {
 });
 
 describe("createRequestOf", () => {
-  it("offers the skill wizard today and keeps the tool kind out", () => {
+  it("offers the skill and context-record wizards today and keeps the tool kind out", () => {
     expect(CREATE_KINDS).toContain("skill");
+    expect(CREATE_KINDS).toContain("record");
     expect(CREATE_KINDS).not.toContain("tool");
   });
 
@@ -42,7 +44,9 @@ describe("createRequestOf", () => {
     expect(createRequestOf(new Event(CREATE_EVENT))).toBeNull();
     expect(createRequestOf(new CustomEvent(CREATE_EVENT))).toBeNull();
     expect(
-      createRequestOf(new CustomEvent(CREATE_EVENT, { detail: { kind: "tool" } })),
+      createRequestOf(
+        new CustomEvent(CREATE_EVENT, { detail: { kind: "tool" } }),
+      ),
     ).toBeNull();
     expect(
       createRequestOf(new CustomEvent(CREATE_EVENT, { detail: { kind: 7 } })),
