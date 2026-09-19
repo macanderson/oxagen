@@ -57,6 +57,13 @@ new measure takes `daily` as its window when the change names none.
 reason: a caller that holds the whole record is stating the whole record, and
 it is the only way to delete a bound.
 
+**Send only the fields you changed.** The merge applies every field a change
+carries, because that is the only reading a change has: it cannot tell an edit
+from a value echoed back unchanged. A caller that fills a form or a payload from
+a record it read, then submits all of it, restores whatever another caller
+narrowed in between, through this locked path rather than around it. A sparse
+change is what makes the lock worth having (ADR-102, amendment of 2026-09-19).
+
 ## Output
 
 The mandate.
@@ -69,6 +76,11 @@ call: the merge is the handler's, under the lock. A field left blank in the
 dialog therefore leaves that measure's bound as it is; removing a limit
 altogether means sending a whole `limits` record without it, which is this
 capability over the API or MCP.
+
+The dialog prefills the bound the mandate holds, and carries each prefill back in
+a hidden field so the action can tell an edit from an untouched prefill. A field
+the operator did not change is left out of `limitChanges`, and a submission that
+changed only the validity window sends no `limitChanges` at all.
 
 The dialog writes counts only and stores each figure exactly as typed: whether a
 measure is money is a property of the tool version's declaration, which no read

@@ -129,3 +129,44 @@ MCP.
   concurrent and no caller needs a retry loop. If a future capability needs
   stale-read detection across fields the lock does not cover, that is its own
   decision and this one does not pre-empt it.
+
+## Amendment 2026-09-19: the merge is necessary and not sufficient, so a change carries only what changed
+
+The decision above closes the race in the handler. It does not close it on its
+own, and a reader who stops at §2 would conclude that it does.
+
+`applyLimitChanges` merges under the lock, and an absent field keeps what is
+stored. Nothing in it can tell an edit from an echo: every field a request
+carries is applied as an explicit edit, because that is the only reading a
+change has. So the race is closed exactly as far as the request is honest about
+what the operator changed, and the app's request was not.
+
+`changeMandateLimits` is fed by a dialog that prefills the measure, the unit,
+the window, the per-call figure and the per-period figure from the mandate the
+page read, and the submission asserted all of them however few the operator
+touched. An operator who moved only the validity date, or only the calls cap,
+still sent the count bound this dialog read some minutes earlier. On a mandate a
+second operator had lowered in between, that bound was restored: the same
+widening §2 was written to prevent, arriving through the locked merge rather
+than around it. The atomicity claim in §2 and in the Consequences was therefore
+true of the handler and false of the write as a whole.
+
+**Amendment: a `limitChanges` request carries a field only when the caller
+changed it. That is part of the contract of using `limitChanges`, not a detail
+of one client.** For the app, the dialog emits each prefilled value as a hidden
+field beside the field it fills, both seeded from the same `measureDefaults`
+result in the same render, and the action carries a field into the change only
+when the submitted value differs from the prefill. An untouched field is absent,
+a cleared field is absent (clearing is not deletion, which §3 already settled),
+and a submission that changed nothing about the limits sends no `limitChanges`
+at all, so a change to the validity window alone is still one call. Validation
+runs on every value the form carries, prefills included, because a server action
+is reachable by anyone holding a session.
+
+No version token, for the reason §Context gives: a sparse change needs no
+snapshot to be checked, so there is nothing stale to detect. This amendment is
+the same rule as §2 applied one layer up. A change says what the operator said.
+
+Applied: `apps/app/src/features/mandate/actions.ts`,
+`apps/app/src/features/mandate/mandate-actions.tsx`, their two test files, and
+`apps/app/ARCHITECTURE.md` §9 (the entry of this date).

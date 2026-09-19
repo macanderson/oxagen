@@ -42,6 +42,13 @@ export const mandateLimitsUpdateFields = {
    *
    * It cannot delete a bound, by construction: an absent field means "leave
    * it". Deletion is `limits` replacement, above.
+   *
+   * **Carry only the fields you changed.** The merge applies every field a
+   * change carries, because that is the only reading a change has: it cannot
+   * tell an edit from a value echoed back unchanged. A caller that fills a
+   * payload from a record it read and submits all of it restores whatever
+   * another caller narrowed in between, through this locked path rather than
+   * around it (ADR-102, amendment of 2026-09-19).
    */
   limitChanges: mandateLimitChangesSchema.optional(),
   targets: mandateTargetsSchema.optional(),
