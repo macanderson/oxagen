@@ -563,6 +563,11 @@ export function TranscriptView({
   const heldRef = useRef<Frames>(first);
   const cursorRef = useRef<string | null>(transcript.cursor);
   const readingRef = useRef(false);
+  // A signal that arrived mid-read: set when a caller finds readingRef
+  // already true, so the request in flight cannot see it. The finally
+  // block below checks it and runs one more tail read once that request
+  // settles, so a frame landing during an active read is never dropped.
+  const pendingReadRef = useRef(false);
   const [entries, setEntries] = useState<Frames>(first);
   const [cursor, setCursor] = useState<string | null>(transcript.cursor);
   const [complete, setComplete] = useState(transcript.complete);
@@ -612,35 +617,53 @@ export function TranscriptView({
    * Read the page past the cursor and append it. Nothing already on screen is
    * replaced, so the scroll position and the playhead survive the read.
    */
+  const readPending = () => pendingReadRef.current;
+
   const loadMore = useCallback(async (): Promise<void> => {
-    // A sealed run stops when the page answers no cursor. A live run must
-    // keep a resume cursor from the handler so SSE can ask for the next page.
-    if (readingRef.current || cursorRef.current === null) return;
+    // A read already in flight cannot see a frame that lands while it runs,
+    // so record the signal and loop below for a follow-up read once that
+    // request settles, rather than dropping it or calling this function
+    // recursively (which React Compiler cannot memoize safely).
+    if (readingRef.current) {
+      pendingReadRef.current = true;
+      return;
+    }
     readingRef.current = true;
     setReading(true);
     try {
-      const read = await readTranscriptPage(
-        org,
-        ws,
-        runId,
-        "everything",
-        kinds,
-        cursorRef.current,
-      );
-      if (!read.ok) {
-        setPageFailure(read);
-        return;
-      }
-      setPageFailure(null);
-      const [firstNew, ...rest] = read.value.entries;
-      cursorRef.current = read.value.cursor;
-      setCursor(read.value.cursor);
-      setComplete(read.value.complete);
-      if (firstNew !== undefined) {
-        const next: Frames = [...heldRef.current, firstNew, ...rest];
-        heldRef.current = next;
-        setEntries(next);
-      }
+      do {
+        pendingReadRef.current = false;
+        // A sealed run stops when the page answers no cursor. A live run
+        // must keep a resume cursor from the handler so SSE can ask for
+        // the next page.
+        if (cursorRef.current === null) return;
+        const read = await readTranscriptPage(
+          org,
+          ws,
+          runId,
+          "everything",
+          kinds,
+          cursorRef.current,
+        );
+        if (!read.ok) {
+          setPageFailure(read);
+          return;
+        }
+        setPageFailure(null);
+        const [firstNew, ...rest] = read.value.entries;
+        cursorRef.current = read.value.cursor;
+        setCursor(read.value.cursor);
+        setComplete(read.value.complete);
+        if (firstNew !== undefined) {
+          const next: Frames = [...heldRef.current, firstNew, ...rest];
+          heldRef.current = next;
+          setEntries(next);
+        }
+        // Read through a function rather than the ref directly: the ref can
+        // flip true from the early-return branch above while this `await`
+        // is in flight, but TS's flow analysis cannot see that concurrent
+        // write and would otherwise narrow the property to always `false`.
+      } while (readPending());
     } catch {
       setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
     } finally {

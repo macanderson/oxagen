@@ -336,7 +336,6 @@ const ReplayLadderRung = z.object({
   met: z.boolean(),
   reason: z.string().min(1),
 });
-type ReplayLadderRung = z.infer<typeof ReplayLadderRung>;
 
 export const RunChain = z.object({
   /** How each frame is chained to the one before it; a verifier needs this and nothing else. */

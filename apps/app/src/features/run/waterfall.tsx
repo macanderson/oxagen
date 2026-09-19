@@ -46,10 +46,11 @@ type Bar = {
  * prefix sum. Taking it from anywhere else would let the bars and the running
  * totals disagree about the same run.
  *
- * @internal exported only for waterfall.test.tsx; not part of this module's
- * production surface (knip production mode drops `@internal` exports).
+ * Not exported: `Waterfall` is its only caller, and its coverage is proven
+ * through the rendered component (`waterfall.test.tsx`), not by calling this
+ * directly.
  */
-export function buildBars(
+function buildBars(
   turns: readonly TranscriptEntry[],
   steps: readonly TranscriptEntry[],
 ): { bars: Bar[]; total: TranscriptEntry["cumulativeCost"] } {

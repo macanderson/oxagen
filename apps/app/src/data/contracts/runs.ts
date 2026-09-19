@@ -50,7 +50,6 @@ const CompletenessGap = z.enum([
   "chain_break",
   "telemetry_gap",
 ]);
-type CompletenessGap = z.infer<typeof CompletenessGap>;
 
 export const RunRow = z.object({
   id: PublicId,
