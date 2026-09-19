@@ -23,7 +23,9 @@ const ENROLLED = {
     missing: ["Stop"],
   },
   codexHooks: { complete: true, present: ["PreToolUse"], missing: [] },
-  cursorHooks: { complete: false, present: ["stop"], missing: ["preToolUse"] },
+  cursorHooks: [
+    { complete: false, present: ["stop"], missing: ["preToolUse"] },
+  ],
   stellaHooks: { complete: false, present: [], missing: ["PreToolUse"] },
   wal: {
     sessions: 2,
