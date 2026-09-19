@@ -159,7 +159,6 @@ export function layout(o) {
 <meta name="description" content="${esc(o.description)}">
 <link rel="canonical" href="${esc(url)}">
 <meta name="theme-color" content="#09090B">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="${o.type ?? "website"}">
 <meta property="og:url" content="${esc(url)}">
