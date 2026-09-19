@@ -34,16 +34,19 @@ export interface DetectorDeps {
   /** Directories holding `<project>/<session uuid>.jsonl` transcripts. */
   transcriptRoots: string[];
   readSettings: () => unknown;
-  enrollmentId: string;
   /**
-   * Whether this host hooks Claude Code at all, read each tick. Absent means
-   * yes. A Codex-only, Stella-only or Claude Desktop-only host has no Claude
-   * Code hooks to lose, and without this the detector chained a severity-3
-   * `oxagen:hooks_removed` incident fifteen seconds after every start. It is
-   * a function so a `reassign` that drops the harness is seen without a
-   * restart.
+   * The enrollment id hooks are checked against, and whether this host
+   * hooks Claude Code at all, read together on every tick from the same
+   * host.json snapshot. A Codex-only, Stella-only or Claude Desktop-only
+   * host names no `"claude-code"` harness, so hook absence is not an
+   * incident there; without that check the detector chained a severity-3
+   * `oxagen:hooks_removed` incident fifteen seconds after every start
+   * (#3320). Reading the harness list and the enrollment id as one pair,
+   * rather than the id as a value fixed at construction, is what keeps a
+   * live `reassign` from pairing a fresh harness list with a stale
+   * enrollment id and reintroducing that same false incident (#3398).
    */
-  claudeCodeEnrolled?: () => boolean;
+  enrollment: () => { enrollmentId: string; harnesses: string[] };
   now: () => number;
   /** How long a transcript may advance unhooked before it is an incident. */
   graceMs?: number;
@@ -288,17 +291,15 @@ export class Detector {
   }
 
   private checkHooks(): TachoEvent[] {
-    if (this.deps.claudeCodeEnrolled?.() === false) {
+    const { enrollmentId, harnesses } = this.deps.enrollment();
+    if (!harnesses.includes("claude-code")) {
       this.hooksOk = undefined;
       this.lastPresence = undefined;
       return [];
     }
     let presence: HookPresence;
     try {
-      presence = tachoHookPresence(
-        this.deps.readSettings(),
-        this.deps.enrollmentId,
-      );
+      presence = tachoHookPresence(this.deps.readSettings(), enrollmentId);
     } catch (error) {
       presence = {
         complete: false,

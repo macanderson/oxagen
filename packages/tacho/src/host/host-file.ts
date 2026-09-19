@@ -304,17 +304,43 @@ export function readHostFileLenient(path: string): LenientHostRead {
   };
 }
 
+/** The harness list and the enrollment id they belong to, read as one pair. */
+export interface CurrentEnrollment {
+  harnesses: string[];
+  enrollmentId: string;
+}
+
 /**
- * The harnesses host.json enrolls now, read from disk on every call.
+ * The harness list host.json enrolls now, and the enrollment id that list
+ * belongs to, read together from the same on-disk snapshot on every call.
  *
  * The daemon's in-memory copy is the one it started with, and `reassign`
  * replaces the enrollment under a daemon that is still up, so a harness the
- * CLI dropped would otherwise stay "enrolled" until a restart. A missing or
- * invalid file falls back to the daemon's copy: a hand-edited host.json must
- * not make the daemon forget which agents it wraps.
+ * CLI dropped would otherwise stay "enrolled" until a restart, and the
+ * hook-presence check would keep validating hooks against the enrollment id
+ * the daemon booted with. Reading both fields out of one `readHostFileLenient`
+ * call, rather than two separate reads at two separate moments, is what
+ * keeps a live `reassign` from ever pairing the new harness list with the
+ * old enrollment id (#3398). A missing or invalid file falls back to the
+ * daemon's copy, in full: a hand-edited host.json must not make the daemon
+ * forget which agents it wraps, or which enrollment it wraps them under.
+ */
+export function currentEnrollment(
+  path: string,
+  fallback: HostFile,
+): CurrentEnrollment {
+  const host = readHostFileLenient(path).host ?? fallback;
+  return { harnesses: host.harnesses, enrollmentId: host.host_enrollment_id };
+}
+
+/**
+ * The harnesses host.json enrolls now, read from disk on every call.
+ *
+ * A thin projection of {@link currentEnrollment} for a caller that wants
+ * only the harness list, with no enrollment id to keep it paired with.
  */
 export function enrolledHarnesses(path: string, fallback: HostFile): string[] {
-  return (readHostFileLenient(path).host ?? fallback).harnesses;
+  return currentEnrollment(path, fallback).harnesses;
 }
 
 export function writeHostFile(path: string, host: HostFile): void {

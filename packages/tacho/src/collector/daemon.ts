@@ -30,7 +30,7 @@ import {
 } from "../host/fs";
 import {
   applyControlFacts,
-  enrolledHarnesses,
+  currentEnrollment,
   type HostFile,
   readHostFile,
   mcpEndpointFor,
@@ -469,12 +469,14 @@ export async function startDaemon(
     listProcesses: () => listClaudeProcesses(exec),
     transcriptRoots: options.transcriptRoots ?? [paths.claudeProjects],
     readSettings: () => readJsonFileIfExists(paths.claudeSettings) ?? {},
-    // A Codex-, Stella- or Claude Desktop-only host has no Claude Code hooks
-    // to lose; without this every such start chained a severity-3
-    // `oxagen:hooks_removed` incident fifteen seconds in (#3320).
-    claudeCodeEnrolled: () =>
-      enrolledHarnesses(paths.hostFile, host).includes("claude-code"),
-    enrollmentId: host.host_enrollment_id,
+    // The harness list and the enrollment id it belongs to, read together
+    // from disk on every tick so a live `reassign` can never pair a fresh
+    // harness list with the stale enrollment id this daemon started with
+    // (#3398). A Codex-, Stella- or Claude Desktop-only host has no Claude
+    // Code hooks to lose; without the harness check every such start
+    // chained a severity-3 `oxagen:hooks_removed` incident fifteen seconds
+    // in (#3320).
+    enrollment: () => currentEnrollment(paths.hostFile, host),
     now,
   });
 
