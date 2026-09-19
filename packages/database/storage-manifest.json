@@ -2360,6 +2360,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "propose_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "propose_record",
       "reads": [],
@@ -2367,6 +2376,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "skill",
+      "name": "propose_skill",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },

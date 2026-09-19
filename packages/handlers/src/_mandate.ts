@@ -13,7 +13,8 @@ import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classificati
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
-  measureDeclarationsSchema,
+  isIso4217Currency,
+  measureDeclarationsReadSchema,
   type MandateLimits,
   type MandateOut,
   type MandateTargets,
@@ -162,6 +163,17 @@ export async function assertToolsDeclareMeasures(
     tools: readonly string[];
     limits: MandateLimits;
     targets: MandateTargets;
+    // Codex P2 on #3484: `update_mandate_limits` merges an operator's
+    // partial `limitChanges` onto the mandate's existing `limits` before
+    // calling this function, so `limits` here can carry measures the
+    // operator never touched. Undefined (request_mandate, grant_mandate,
+    // and a full `limits` replacement) means every measure in `limits` was
+    // explicitly named, so the ISO 4217 check below runs on all of them, as
+    // before. A defined set restricts that check to the measures actually
+    // named by this call. An update that only changes validTo, targets or
+    // approval must not refuse on an untouched legacy limit it never asked
+    // about.
+    isoCheckedMeasures?: ReadonlySet<string>;
   },
 ): Promise<MandateLimits> {
   const declared = await tx
@@ -235,7 +247,9 @@ export async function assertToolsDeclareMeasures(
       });
     }
     for (const tool of matched) {
-      const measures = measureDeclarationsSchema.safeParse(tool.measures);
+      // Read-time schema (ADR-111): a tool published before the ISO 4217
+      // check landed can still carry a legacy non-ISO unit in this column.
+      const measures = measureDeclarationsReadSchema.safeParse(tool.measures);
       const declaredMeasures = measures.success ? measures.data : {};
       for (const name of limitMeasures) {
         const d = declaredMeasures[name];
@@ -244,6 +258,33 @@ export async function assertToolsDeclareMeasures(
             code: "conflict",
             reason: "measure_not_declared",
             message: `${tool.slug}@${tool.version} declares no measure "${name}" for the limit the mandate names`,
+          });
+        }
+        // Codex P1 on #3484: this function's declaration read is
+        // deliberately lax (ADR-111's read schema), so an unrelated legacy
+        // measure on the same tool never blocks a grant naming a different,
+        // validly-denominated one. But a NEW or CHANGED limit is a write,
+        // exactly the boundary ADR-111 gates, so the measure THIS limit
+        // actually denominates is checked here, per-measure, rather than at
+        // the whole-declaration parse: an "amount" measure whose declared
+        // unit predates ADR-111 and isn't ISO 4217 must be refused before a
+        // mandate limit is written against it, or the limit is created and
+        // then fails to map on the app's Money-typed surfaces the same way
+        // #3448 did for a bad declaration.
+        //
+        // Codex P2 on #3484: `isoCheckedMeasures`, when given, restricts
+        // this check to the measures this call actually named. Without it,
+        // update_mandate_limits' merged `limits` (existing + `limitChanges`)
+        // made this refuse an update to validTo, targets or approval alone,
+        // on the strength of an untouched legacy limit it never asked about.
+        const isoChecked =
+          args.isoCheckedMeasures === undefined ||
+          args.isoCheckedMeasures.has(name);
+        if (isoChecked && d.type === "amount" && !isIso4217Currency(d.unit)) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_unit_mismatch",
+            message: `${tool.slug}@${tool.version} declares measure "${name}" as an amount in ${d.unit}, which is not an ISO 4217 currency code; republish the tool's declaration with a valid unit before granting a limit against it`,
           });
         }
         // The unit is the third field of the same declaration, and the gate

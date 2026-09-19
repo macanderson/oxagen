@@ -15,7 +15,7 @@ export const approvalRuleEnabledSet = registerCapability({
   description: "Switch one auto-approval rule on or off",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: true,

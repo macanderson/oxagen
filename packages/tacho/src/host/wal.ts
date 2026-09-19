@@ -69,6 +69,16 @@ export class Wal {
   private readonly dir: string;
   private readonly cursorPath: string;
   private cursor: Cursor;
+  /**
+   * The highest seq this process has seen in each session's event file. A
+   * host running a few hundred sessions holds over a thousand files and
+   * hundreds of megabytes, nearly all of it shipped. Without this index,
+   * `unshipped` and `stats` parsed every file on every drain and every health
+   * probe, which blocked the event loop for seconds at a time, so the shipper
+   * fell behind and `tacho status` timed out on a live daemon. Filled lazily,
+   * one read per session per process, and kept current by `append`.
+   */
+  private readonly lastSeq = new Map<string, number>();
 
   constructor(dir: string) {
     this.dir = dir;
@@ -128,6 +138,9 @@ export class Wal {
       const lines = bySession.get(event.session_uuid) ?? [];
       lines.push(JSON.stringify(event));
       bySession.set(event.session_uuid, lines);
+      const known = this.lastSeq.get(event.session_uuid);
+      if (known !== undefined && event.seq > known)
+        this.lastSeq.set(event.session_uuid, event.seq);
       if (event.kind === "agent_stop") {
         this.cursor.sealed[event.session_uuid] = event.ts;
       }
@@ -254,6 +267,22 @@ export class Wal {
     return events[events.length - 1];
   }
 
+  /** The highest seq in a session's file, or -1 when it holds none. */
+  private lastSeqOf(sessionUuid: string): number {
+    const known = this.lastSeq.get(sessionUuid);
+    if (known !== undefined) return known;
+    let last = -1;
+    for (const event of this.read(sessionUuid))
+      if (event.seq > last) last = event.seq;
+    this.lastSeq.set(sessionUuid, last);
+    return last;
+  }
+
+  /** Whether a session's file holds an event past its shipped cursor. */
+  private hasUnshipped(sessionUuid: string): boolean {
+    return this.lastSeqOf(sessionUuid) > this.shippedThrough(sessionUuid);
+  }
+
   shippedThrough(sessionUuid: string): number {
     return this.cursor.shipped[sessionUuid] ?? -1;
   }
@@ -262,6 +291,7 @@ export class Wal {
   unshipped(limit: number): TachoEvent[] {
     const out: TachoEvent[] = [];
     for (const session of this.sessions()) {
+      if (!this.hasUnshipped(session)) continue;
       const through = this.shippedThrough(session);
       for (const event of this.read(session)) {
         if (event.seq <= through) continue;
@@ -283,6 +313,7 @@ export class Wal {
     let oldest: string | undefined;
     const sessions = this.sessions();
     for (const session of sessions) {
+      if (!this.hasUnshipped(session)) continue;
       const through = this.shippedThrough(session);
       for (const event of this.read(session)) {
         if (event.seq <= through) continue;
@@ -449,6 +480,7 @@ export class Wal {
         Math.max(Date.parse(sealedAt), statSync(this.fileFor(session)).mtimeMs);
       if (age < retainMs) continue;
       unlinkSync(this.fileFor(session));
+      this.lastSeq.delete(session);
       if (existsSync(this.bodyFileFor(session)))
         unlinkSync(this.bodyFileFor(session));
       delete this.cursor.shipped[session];
