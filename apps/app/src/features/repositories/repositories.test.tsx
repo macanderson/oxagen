@@ -839,7 +839,10 @@ describe("the init wizard", () => {
       bindingId: "rpb_link01",
       governanceMode: "regulated",
     });
-    expect(call?.[2].workspaceToml).toContain("# reviewed");
+    // The edit made on Review is what went out.
+    const sent: unknown = call?.[2];
+    expect(sent).toHaveProperty("workspaceToml");
+    expect(JSON.stringify(sent)).toContain("# reviewed");
     await expectNoAxe(wizard);
   });
 

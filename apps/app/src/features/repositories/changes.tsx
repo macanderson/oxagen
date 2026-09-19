@@ -71,7 +71,7 @@ export function Changes({
         >
           {changes.value.changes.map((change) => {
             const href = parseGitHubUrl(change.pullRequest.url);
-            const label = `${change.pullRequest.repository}#${change.pullRequest.number}`;
+            const label = `${change.pullRequest.repository}#${String(change.pullRequest.number)}`;
             return (
               <tr key={change.proposalId} data-change={change.proposalId}>
                 <td className={cell}>
@@ -105,7 +105,7 @@ export function Changes({
                 <td className={numericCell}>
                   {change.checks === null
                     ? t("checksPending")
-                    : `${change.checks.passed}/${change.checks.total}`}
+                    : `${String(change.checks.passed)}/${String(change.checks.total)}`}
                 </td>
                 <td className={`${cell} text-xs`}>
                   <time dateTime={change.openedAt}>

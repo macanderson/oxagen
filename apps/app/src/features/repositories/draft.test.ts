@@ -11,7 +11,8 @@ import {
 /** The parsed document, or a failure naming the line the parser stopped on. */
 function parse(text: string): TomlTable {
   const result = parseTomlSubset(text);
-  if (!result.ok) throw new Error(`${result.code} at line ${result.line}`);
+  if (!result.ok)
+    throw new Error(`${result.code} at line ${String(result.line)}`);
   return result.doc;
 }
 
@@ -60,9 +61,7 @@ describe("draftWorkspaceToml", () => {
         productionBranch: "main",
       }),
     );
-    expect((tree["workspace"] as Record<string, unknown>)["name"]).toBe(
-      'Say "hi" \\ bye',
-    );
+    expect(tree).toMatchObject({ workspace: { name: 'Say "hi" \\ bye' } });
   });
 });
 

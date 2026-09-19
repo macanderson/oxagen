@@ -26,12 +26,19 @@ export function draftGovernanceToml(mode: GovernanceMode): string {
   ].join("\n");
 }
 
+/** True for a character TOML forbids unescaped in a basic string: U+0000 to U+001F, and U+007F. */
+function isControl(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code <= 0x1f || code === 0x7f;
+}
+
 /** A TOML basic string: quotes and backslashes escaped, control characters dropped. */
 function tomlString(value: string): string {
-  const escaped = value
+  const escaped = Array.from(value)
+    .filter((char) => !isControl(char))
+    .join("")
     .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/[\u0000-\u001f\u007f]/g, "");
+    .replace(/"/g, '\\"');
   return `"${escaped}"`;
 }
 
@@ -64,6 +71,14 @@ export function draftWorkspaceToml(args: {
     "",
   ].join("\n");
 }
+
+/**
+ * The paths the page names. They are file names, not prose, so they live here
+ * rather than in the message catalogue.
+ */
+export const WORKSPACE_TOML = ".oxagen/workspace.toml";
+export const GOVERNANCE_TOML = ".oxagen/rules/governance.toml";
+export const WORKSPACE_JSON = ".oxagen/workspace.json";
 
 /** The files the init pull request carries, in the order the handler pushes them. */
 export const INIT_FILES = [

@@ -30,9 +30,11 @@ import {
   draftGovernanceToml,
   draftWorkspaceToml,
   GOVERNANCE_MODES,
+  GOVERNANCE_TOML,
   type GovernanceMode,
   INIT_BRANCH,
   INIT_FILES,
+  WORKSPACE_TOML,
 } from "./draft";
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { type Load, prose, sectionTitle } from "./parts";
@@ -133,8 +135,7 @@ export function InitWizard({
 
   const repository =
     candidates.find((candidate) => candidate.bindingId === picked) ?? null;
-  const tree =
-    repository === null ? undefined : trees[repository.bindingId];
+  const tree = repository === null ? undefined : trees[repository.bindingId];
   const ready = tree?.kind === "ready" ? tree.value : null;
   const index = WIZARD_STEPS.indexOf(step);
 
@@ -378,13 +379,13 @@ export function InitWizard({
         <div data-testid="init-wizard-review" className="flex flex-col gap-4">
           <p className={prose}>{t("review.about")}</p>
           <TomlField
-            label=".oxagen/workspace.toml"
+            label={WORKSPACE_TOML}
             testId="init-wizard-workspace-toml"
             value={workspaceToml}
             onChange={setWorkspaceToml}
           />
           <TomlField
-            label=".oxagen/rules/governance.toml"
+            label={GOVERNANCE_TOML}
             testId="init-wizard-governance-toml"
             value={governanceToml}
             onChange={setGovernanceToml}
@@ -440,7 +441,10 @@ export function PermissionTable() {
   return (
     <Table
       label={t("label")}
-      columns={[{ label: t("columns.permission") }, { label: t("columns.access") }]}
+      columns={[
+        { label: t("columns.permission") },
+        { label: t("columns.access") },
+      ]}
     >
       {APP_PERMISSIONS.map((permission) => (
         <tr key={permission.key} data-permission={permission.key}>

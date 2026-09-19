@@ -16,9 +16,16 @@ import type {
 import { mono } from "@/ui/control-styles";
 import { FormAlert } from "@/ui/form-feedback";
 import { useRepositoriesFailure } from "./failure";
-import { GOVERNANCE_MODES } from "./draft";
+import { GOVERNANCE_MODES, GOVERNANCE_TOML, WORKSPACE_TOML } from "./draft";
 import { shortSha } from "./repository-dialog";
-import { codeBlock, Dot, Explainer, type Load, prose, type Tone } from "./parts";
+import {
+  codeBlock,
+  Dot,
+  Explainer,
+  type Load,
+  prose,
+  type Tone,
+} from "./parts";
 
 const MODE_TONE: Record<DeclaredGovernanceMode, Tone> = {
   solo: "ok",
@@ -69,7 +76,7 @@ export function Configuration({
     <div data-testid="configuration" className="flex flex-col gap-4">
       <p className={prose}>{at}</p>
 
-      <Explainer title=".oxagen/workspace.toml" testId="configuration-workspace-toml">
+      <Explainer title={WORKSPACE_TOML} testId="configuration-workspace-toml">
         {value.workspaceToml === null ? (
           <p>{t("workspaceTomlMissing")}</p>
         ) : (
@@ -81,12 +88,12 @@ export function Configuration({
         <p>{t("drift.notRecorded")}</p>
       </Explainer>
 
-      <Explainer
-        title=".oxagen/rules/governance.toml"
-        testId="configuration-governance"
-      >
+      <Explainer title={GOVERNANCE_TOML} testId="configuration-governance">
         <p>
-          <Dot tone={MODE_TONE[value.governanceMode]} testId="configuration-mode">
+          <Dot
+            tone={MODE_TONE[value.governanceMode]}
+            testId="configuration-mode"
+          >
             {t(`mode.${value.governanceMode}`)}
           </Dot>
         </p>
