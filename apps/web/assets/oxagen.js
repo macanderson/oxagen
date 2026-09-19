@@ -19,6 +19,31 @@
     : "https://api.oxagen.sh";
   var CMS_LEADS_URL = API_BASE + "/v1/cms/leads";
 
+  /* Lead posts are bounded, matching /read's postJson(). A connection the API
+     accepts but never answers would otherwise leave the submit button
+     disabled for good; aborting rejects the promise into each form's catch,
+     which re-enables the button and shows the retry message. The timer keeps
+     running after the headers arrive so it also bounds a stalled body. */
+  var REQUEST_TIMEOUT_MS = 15000;
+  function postLead(payload) {
+    var controller =
+      typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller
+      ? setTimeout(function () {
+          controller.abort();
+        }, REQUEST_TIMEOUT_MS)
+      : null;
+    return fetch(CMS_LEADS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller ? controller.signal : undefined,
+    }).catch(function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
+
   /* The API caps trackingCode at 500 characters and rejects the whole lead if
      it is longer, so a campaign URL with a long utm_content would otherwise
      lose the lead rather than the attribution. Truncate here instead. */
@@ -315,11 +340,7 @@
 
       btn.disabled = true;
       setStatus(form, "Sending…");
-      fetch(CMS_LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+      postLead(payload)
         .then(function (res) {
           if (!res.ok) {
             throw new Error("status " + res.status);
@@ -352,11 +373,7 @@
 
       btn.disabled = true;
       setStatus(form, "Sending…");
-      fetch(CMS_LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
+      postLead(payload)
         .then(function (res) {
           return res.json().then(function (data) {
             return { status: res.status, data: data };
@@ -364,7 +381,12 @@
         })
         .then(function (r) {
           var data = r.data || {};
-          if (r.status >= 200 && r.status < 300 && data.ok) {
+          if (
+            r.status >= 200 &&
+            r.status < 300 &&
+            data.ok &&
+            data.delivered !== false
+          ) {
             form.reset();
             setStatus(form, "");
             form.hidden = true;
@@ -382,6 +404,19 @@
                 /* ignore */
               }
             }
+          } else if (r.status >= 200 && r.status < 300 && data.ok) {
+            /* The lead is saved but the email failed to send (data.delivered
+               === false). Keep the form visible and re-enabled so a retry
+               submits again, rather than hiding it behind a success panel
+               over a link that never went out. The homepage has no resend
+               control, so re-submitting the form is the retry path. */
+            btn.disabled = false;
+            setStatus(
+              form,
+              data.message ||
+                "We saved your details, but couldn't send the email. Please try again.",
+              true,
+            );
           } else {
             btn.disabled = false;
             setStatus(form, FAIL, true);

@@ -38,12 +38,30 @@ import {
 import {
   captureLead,
   captureLeadAndIssueCode,
+  finalizeCodeDelivery,
   findLeadByEmail,
   issueCodeForLead,
   redeemAndRotate,
 } from "../../lib/cms/access";
 import { logger } from "../../middleware/logger";
+import { extractClientIp } from "../../lib/context";
+import type { Context } from "hono";
 import type { AppEnv } from "../../app";
+
+/**
+ * Per-IP CMS ceilings keyed by the trusted edge address (ADR-083), enforced
+ * through the Postgres-backed distributed limiter so the ceiling holds
+ * across API replicas and process restarts instead of resetting per process.
+ * Degrades to the local in-process limiter if Postgres is unavailable.
+ */
+const cmsIpLimit = (keyPrefix: string, windowMs: number, max: number) =>
+  distributedRateLimiter({
+    keyPrefix,
+    windowMs,
+    max,
+    bucketKey: trustedClientIpBucketKey,
+    storeErrorPolicy: "degrade-to-local",
+  });
 
 export const cmsRoute = new Hono<AppEnv>();
 
@@ -53,13 +71,18 @@ const EDITION_TITLES: Record<EditionSlug, string> = {
   "page-flip-reader": "Page-flip reader",
 };
 
-/** User-facing success copy — the exact wording the product asked for. */
+/** User-facing success copy: the exact wording the product asked for. */
 const SENT_MESSAGE = "The link to the book has been sent to your email.";
-const DEMO_MESSAGE = "Thanks. We got it. We will be in touch shortly.";
+const DEMO_MESSAGE = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND_MESSAGE =
-  "We could not find that email. Please fill out the form to get the book.";
-const DELIVERY_FAILED_MESSAGE =
-  "We saved your details, but could not email the link just now. Please try the resend option in a moment.";
+  "We couldn't find that email. Please fill out the form to get the book.";
+// Two wordings: /leads has no resend control in front of it (the homepage
+// forms only ever submit once), while /book/resend IS the resend action, so
+// its own failure message can honestly point back at itself.
+const SIGNUP_DELIVERY_FAILED_MESSAGE =
+  "We saved your details, but couldn't send the email. Please try again.";
+const RESEND_DELIVERY_FAILED_MESSAGE =
+  "We couldn't send the email just now. Please try again in a moment.";
 
 const optionalTrimmed = (max: number) =>
   z
@@ -114,21 +137,25 @@ const resendSchema = z
   })
   .strict();
 
-function clientCtx(c: { req: { header: (n: string) => string | undefined } }) {
-  const forwarded = c.req.header("x-forwarded-for");
-  const ip = forwarded
-    ? forwarded.split(",")[0]!.trim()
-    : (c.req.header("x-real-ip") ?? null);
-  return { ip, userAgent: c.req.header("user-agent") ?? null };
+// Same trusted-IP derivation the rate limiters use (ADR-083), so an audit row
+// and the bucket it was counted against never disagree about who the caller
+// was. `x-forwarded-for` alone is caller-writable and, under the production
+// edge rewrite, identifies Caddy rather than the visitor.
+function clientCtx(c: Context<AppEnv>) {
+  return {
+    ip: extractClientIp(c),
+    userAgent: c.req.header("user-agent") ?? null,
+  };
 }
 
 /**
  * Send the reader link and report whether delivery actually happened.
  *
- * Never throws — a transport failure must not turn an already-captured lead
- * or already-minted code into a 500 — but it also must not lie: the caller
- * gets back whether the email went out, so a route can tell the visitor to
- * retry instead of claiming "sent" over a delivery that silently failed.
+ * Never throws — a transport failure must not turn an already-minted code
+ * into a 500 — but it also must not lie: the caller gets back whether the
+ * email went out, so a route can finalize the code rotation correctly
+ * (`finalizeCodeDelivery`) and tell the visitor to retry instead of
+ * claiming "sent" over a delivery that silently failed.
  */
 async function emailReaderLink(
   to: string,
@@ -152,13 +179,26 @@ async function emailReaderLink(
       editionTitle: EDITION_TITLES[edition],
       email: to,
     });
-    await sendEmail({
+    const result = await sendEmail({
       to,
       subject: tpl.subject,
       text: tpl.text,
       html: tpl.html,
     });
-    return true;
+    // sendEmail can resolve without throwing while the target address sits in
+    // `rejected` (bad mailbox, provider-side block, etc.), which is still a
+    // failed delivery, not a thrown error, so check `accepted` explicitly
+    // rather than trusting a non-throwing resolve.
+    const delivered = result.accepted.some(
+      (addr) => addr.toLowerCase() === to.toLowerCase(),
+    );
+    if (!delivered) {
+      logger.error(
+        { to, accepted: result.accepted, rejected: result.rejected },
+        "[cms] email transport rejected the recipient, delivery failed",
+      );
+    }
+    return delivered;
   } catch (err) {
     logger.error(
       { err, to },
@@ -169,20 +209,8 @@ async function emailReaderLink(
 }
 
 // ── POST /v1/cms/leads ────────────────────────────────────────────────────────
-// Generous but bounded: a handful of submissions per minute per IP. Keyed by
-// trustedClientIpBucketKey (never x-forwarded-for directly, which the caller
-// controls) and degrades to the per-process limiter if Postgres is down —
-// see distributed-rate-limit.ts.
-cmsRoute.use(
-  "/leads",
-  distributedRateLimiter({
-    keyPrefix: "cms-leads",
-    windowMs: 60_000,
-    max: 10,
-    bucketKey: trustedClientIpBucketKey,
-    storeErrorPolicy: "degrade-to-local",
-  }),
-);
+// Generous but bounded: a handful of submissions per minute per IP.
+cmsRoute.use("/leads", cmsIpLimit("cms-leads", 60_000, 10));
 cmsRoute.post("/leads", async (c) => {
   let raw: unknown;
   try {
@@ -238,19 +266,33 @@ cmsRoute.post("/leads", async (c) => {
       // Demo requests capture the lead only — no book code, no book email.
       await captureLead(leadInput);
     } else {
-      const edition: EditionSlug = data.edition ?? DEFAULT_EDITION_SLUG;
-      const { readUrl } = await captureLeadAndIssueCode(
+      // The homepage "Get the manual" form sends source: "field-manual" but
+      // no explicit edition; fall back to the edition its own source names
+      // rather than the generic default, or every field-manual signup is
+      // emailed the page-flip reader instead.
+      const edition: EditionSlug =
+        data.edition ??
+        (data.source === "field-manual"
+          ? "field-manual"
+          : DEFAULT_EDITION_SLUG);
+      const { readUrl, leadId, codeId } = await captureLeadAndIssueCode(
         leadInput,
         edition,
         "signup",
         clientCtx(c),
       );
       const delivered = await emailReaderLink(data.email, edition, readUrl);
+      await finalizeCodeDelivery(leadId, codeId, delivered);
       if (!delivered) {
-        // The lead and code are already persisted — only the email failed —
-        // so this is still a 200, just an honest one that permits a retry.
+        // The lead is already persisted and (if this was not the visitor's
+        // first code) their prior link is still live — only the email
+        // failed, so this stays 200 with an honest retry message.
         return c.json(
-          { ok: true, delivered: false, message: DELIVERY_FAILED_MESSAGE },
+          {
+            ok: true,
+            delivered: false,
+            message: SIGNUP_DELIVERY_FAILED_MESSAGE,
+          },
           200,
         );
       }
@@ -267,16 +309,7 @@ cmsRoute.post("/leads", async (c) => {
 
 // ── POST /v1/cms/book/redeem ──────────────────────────────────────────────────
 // Higher ceiling: legitimate readers open/refresh, and each rotates a code.
-cmsRoute.use(
-  "/book/redeem",
-  distributedRateLimiter({
-    keyPrefix: "cms-book-redeem",
-    windowMs: 60_000,
-    max: 60,
-    bucketKey: trustedClientIpBucketKey,
-    storeErrorPolicy: "degrade-to-local",
-  }),
-);
+cmsRoute.use("/book/redeem", cmsIpLimit("cms-book-redeem", 60_000, 60));
 cmsRoute.post("/book/redeem", async (c) => {
   let raw: unknown;
   try {
@@ -309,16 +342,7 @@ cmsRoute.post("/book/redeem", async (c) => {
 
 // ── POST /v1/cms/book/resend ──────────────────────────────────────────────────
 // Stricter: this triggers an email, so bound it tightly per IP.
-cmsRoute.use(
-  "/book/resend",
-  distributedRateLimiter({
-    keyPrefix: "cms-book-resend",
-    windowMs: 60_000,
-    max: 5,
-    bucketKey: trustedClientIpBucketKey,
-    storeErrorPolicy: "degrade-to-local",
-  }),
-);
+cmsRoute.use("/book/resend", cmsIpLimit("cms-book-resend", 60_000, 5));
 cmsRoute.post("/book/resend", async (c) => {
   let raw: unknown;
   try {
@@ -342,13 +366,21 @@ cmsRoute.post("/book/resend", async (c) => {
       // accepted trade-off for a public marketing funnel.
       return c.json({ ok: true, sent: false, message: NOT_FOUND_MESSAGE }, 200);
     }
-    const readUrl = await issueCodeForLead(lead.id, edition, clientCtx(c));
+    const { readUrl, codeId } = await issueCodeForLead(
+      lead.id,
+      edition,
+      clientCtx(c),
+    );
     const delivered = await emailReaderLink(lead.email, edition, readUrl);
+    await finalizeCodeDelivery(lead.id, codeId, delivered);
+    // On failure the prior code (if the lead had one) was left active by
+    // finalizeCodeDelivery above, so this is never worse than the resend
+    // never having happened.
     return c.json(
       {
         ok: true,
         sent: delivered,
-        message: delivered ? SENT_MESSAGE : DELIVERY_FAILED_MESSAGE,
+        message: delivered ? SENT_MESSAGE : RESEND_DELIVERY_FAILED_MESSAGE,
       },
       200,
     );
