@@ -77,6 +77,7 @@ vi.mock("./client", () => ({
     getCheckoutSessionCreditPacks: vi.fn(),
     findCustomerByOrgId: vi.fn().mockResolvedValue(null),
     createCustomer: vi.fn().mockResolvedValue("cus_new"),
+    customerExists: vi.fn().mockResolvedValue(true),
     getInvoice: vi.fn(),
     parseWebhookEvent: vi.fn(),
   }),

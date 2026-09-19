@@ -17,6 +17,10 @@ import { logger } from "./logger";
  * it, any member of a Free, Build or Scale org could open a plan-change
  * Checkout.
  *
+ * The contract declares `noBillingGate: true` (INV-27): a prepaid org at
+ * remaining = 0 is the one that needs to upgrade, and metering the Checkout
+ * start as a governed action refused it.
+ *
  * `createCheckoutSession` refuses with `ActiveSubscriptionError` when the org
  * already has an active or trialing subscription (`changeOrgPlan` is the
  * in-place swap); that refusal is reclassified below into a `HandlerError`

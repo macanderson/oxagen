@@ -85,11 +85,15 @@ describe("tenant policy manifest", () => {
     expect(tables).not.toContain("agent.mcp_servers"); // moved to mcp.mcp_servers
     expect(tables).not.toContain("workflow.automations");
     expect(tables).not.toContain("workflow.automation_runs");
-    // ADR-043 runtime excision: the whole workflow/content/cms/eval domains,
-    // plus the agent-runtime tables, are gone from the schema entirely.
+    // ADR-043 runtime excision: workflow/eval and the agent-runtime tables
+    // are gone. content.documents went with them; cms was restored later as
+    // marketing infrastructure (bypass-only RLS, not on this tenant manifest).
     expect(tables).not.toContain("workflow.playbooks");
     expect(tables).not.toContain("content.documents");
     expect(tables).not.toContain("eval.eval_runs");
+    expect(tables).not.toContain("cms.leads");
+    expect(tables).not.toContain("cms.book_editions");
+    expect(tables).not.toContain("cms.book_access_codes");
     expect(tables).not.toContain("agent.skills");
     expect(tables).not.toContain("agent.sandbox_sessions");
     expect(tables).not.toContain("agent.file_locks");

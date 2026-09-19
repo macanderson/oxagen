@@ -349,11 +349,10 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
 
-// Public, anonymous ebook lead gate for the marketing site (oxagen.sh). Same
-// security model as /v1/telemetry: no auth (callers are website visitors),
-// strict Zod validation + a per-IP rate limit inside the route. Mounted BEFORE
-// the auth-gated /v1 groups so authMiddleware never sees this path. Restored
-// by ADR-102 after ADR-043 dropped it as collateral of the runtime excision.
+// Public marketing lead gate for oxagen.sh (demo form + ebook gate). No
+// session: Zod allowlist + per-IP rate limit inside the route are the
+// boundary. Mounted before the auth-gated /v1 groups so a visitor never
+// gets a 401 Missing credentials.
 app.route("/v1/cms", cmsRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
