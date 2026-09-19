@@ -67,7 +67,7 @@ vi.mock("@oxagen/database", () => ({
 import { cmsRoute } from "./cms";
 
 const SENT = "The link to the book has been sent to your email.";
-const DEMO_SENT = "Thanks — we got it. We'll be in touch shortly.";
+const DEMO_SENT = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND =
   "We couldn't find that email. Please fill out the form to get the book.";
 

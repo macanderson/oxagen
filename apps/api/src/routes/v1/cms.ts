@@ -57,7 +57,7 @@ const EDITION_TITLES: Record<EditionSlug, string> = {
 
 /** User-facing success copy — the exact wording the product asked for. */
 const SENT_MESSAGE = "The link to the book has been sent to your email.";
-const DEMO_MESSAGE = "Thanks — we got it. We'll be in touch shortly.";
+const DEMO_MESSAGE = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND_MESSAGE =
   "We couldn't find that email. Please fill out the form to get the book.";
 
