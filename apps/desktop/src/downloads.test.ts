@@ -139,8 +139,12 @@ describe("page helpers", () => {
       '<a class="btn" id="pick" href="desktop/2.1.1/Oxagen_2.1.1_aarch64.dmg" data-os="macOS">Download for macOS (Apple silicon)</a>',
     );
     // The script chooses the installer most machines want on each OS.
-    expect(html).toContain('"Windows":{"href":"desktop/2.1.1/Oxagen_2.1.1_x64-setup.exe"');
-    expect(html).toContain('"Linux":{"href":"desktop/2.1.1/Oxagen_2.1.1_amd64.AppImage"');
+    expect(html).toContain(
+      '"Windows":{"href":"desktop/2.1.1/Oxagen_2.1.1_x64-setup.exe"',
+    );
+    expect(html).toContain(
+      '"Linux":{"href":"desktop/2.1.1/Oxagen_2.1.1_amd64.AppImage"',
+    );
     // Exactly one gold-filled action on the page.
     expect(html.match(/class="btn"/g)).toHaveLength(1);
     // Both themes ship: obsidian by default, white on the OS preference.
@@ -151,7 +155,11 @@ describe("page helpers", () => {
     // No em dash reaches a reader.
     expect(html).not.toContain("\u2014");
     // A version with no installers at all still renders without an action.
-    const empty = renderIndexHtml({ version: V, entries: [], publishedAt: "d" });
+    const empty = renderIndexHtml({
+      version: V,
+      entries: [],
+      publishedAt: "d",
+    });
     expect(empty).not.toContain('id="pick"');
   });
 
@@ -165,8 +173,14 @@ describe("page helpers", () => {
     expect(releaseLinks("2 1").notes).toBe(
       "https://docs.oxagen.sh/docs/releases/v2%201",
     );
-    const html = renderIndexHtml({ version: "2.1.1", entries: [], publishedAt: "d" });
-    expect(html).toContain('href="https://docs.oxagen.sh/docs/releases/v2.1.1"');
+    const html = renderIndexHtml({
+      version: "2.1.1",
+      entries: [],
+      publishedAt: "d",
+    });
+    expect(html).toContain(
+      'href="https://docs.oxagen.sh/docs/releases/v2.1.1"',
+    );
     expect(html).toContain(
       'href="https://github.com/macanderson/oxagen/releases/tag/desktop-v2.1.1"',
     );

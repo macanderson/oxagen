@@ -232,8 +232,7 @@ function collectHistory(
     "HEAD~1";
   const range = `${fromRef}..HEAD`;
   const log =
-    gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h)"]) ??
-    "";
+    gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h)"]) ?? "";
   const stat = gitSafe(["diff", "--stat", range]) ?? "";
   // Cap the unified diff so the prompt stays bounded on large releases.
   const fullDiff = gitSafe(["diff", range]) ?? "";
@@ -288,10 +287,15 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
   try {
     system = systemPrompt(loadSkills(ROOT));
   } catch (err) {
-    console.log(kleur.yellow(`[release] ${formatError(err)}; using commit-log notes.`));
+    console.log(
+      kleur.yellow(`[release] ${formatError(err)}; using commit-log notes.`),
+    );
     return fallback();
   }
-  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+  const messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [
     { role: "system", content: system },
     { role: "user", content: userPrompt(h) },
   ];
@@ -299,13 +303,19 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
     const first = await completeViaGateway(messages);
     if (first === null) {
       console.log(
-        kleur.yellow("[release] AI_GATEWAY_API_KEY not set; using commit-log notes."),
+        kleur.yellow(
+          "[release] AI_GATEWAY_API_KEY not set; using commit-log notes.",
+        ),
       );
       return fallback();
     }
     let notes = parseNotes(first);
     if (notes === null) {
-      console.log(kleur.yellow("[release] the model's answer was not in the expected shape; asking once more."));
+      console.log(
+        kleur.yellow(
+          "[release] the model's answer was not in the expected shape; asking once more.",
+        ),
+      );
       messages.push({ role: "assistant", content: first });
       messages.push({
         role: "user",
@@ -315,15 +325,24 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
       const second = await completeViaGateway(messages);
       notes = second === null ? null : parseNotes(second);
       if (notes === null) {
-        console.log(kleur.yellow("[release] still not in shape; using commit-log notes."));
+        console.log(
+          kleur.yellow("[release] still not in shape; using commit-log notes."),
+        );
         return fallback();
       }
     }
     let hits = proseHits(notes);
     if (hits.length > 0) {
-      console.log(kleur.yellow(`[release] prose scanner: ${hits.length} finding(s); asking for a rewrite.`));
+      console.log(
+        kleur.yellow(
+          `[release] prose scanner: ${hits.length} finding(s); asking for a rewrite.`,
+        ),
+      );
       for (const hit of hits) console.log(kleur.dim(`    ${hit}`));
-      messages.push({ role: "assistant", content: `SUMMARY: ${notes.summary}\n\n${notes.body}` });
+      messages.push({
+        role: "assistant",
+        content: `SUMMARY: ${notes.summary}\n\n${notes.body}`,
+      });
       messages.push({ role: "user", content: retryPrompt(notes, hits) });
       const rewritten = await completeViaGateway(messages);
       const parsed = rewritten === null ? null : parseNotes(rewritten);
@@ -346,11 +365,17 @@ async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
       );
       for (const hit of hits) console.log(kleur.yellow(`    ${hit}`));
     }
-    console.log(kleur.green("[release] release notes written by the model under the writing skills."));
+    console.log(
+      kleur.green(
+        "[release] release notes written by the model under the writing skills.",
+      ),
+    );
     return notes;
   } catch (err) {
     console.log(
-      kleur.yellow(`[release] AI Gateway failed (${formatError(err)}); using commit-log notes.`),
+      kleur.yellow(
+        `[release] AI Gateway failed (${formatError(err)}); using commit-log notes.`,
+      ),
     );
     return fallback();
   }
@@ -366,7 +391,10 @@ function writeNotes(
   const releasesDir = join(ROOT, "releases");
   mkdirSync(releasesDir, { recursive: true });
   const releaseFile = join(releasesDir, `v${version}.md`);
-  writeFileSync(releaseFile, `# v${version}\n\n${entry.replace(/^## v[^\n]*\n\n/, "")}`);
+  writeFileSync(
+    releaseFile,
+    `# v${version}\n\n${entry.replace(/^## v[^\n]*\n\n/, "")}`,
+  );
 
   // The changelog always carries exactly one `# Changelog` title, whether or not
   // the prior file had one; the newest release is inserted directly beneath it.
@@ -375,7 +403,10 @@ function writeNotes(
     ? readFileSync(changelogFile, "utf8")
     : "# Changelog\n";
   const rest = prior.replace(/^#\s*Changelog\s*\n?/, "");
-  writeFileSync(changelogFile, `# Changelog\n\n${entry.trim()}\n\n${rest.trimStart()}`);
+  writeFileSync(
+    changelogFile,
+    `# Changelog\n\n${entry.trim()}\n\n${rest.trimStart()}`,
+  );
 
   // The docs page, and the sidebar order that lists it first.
   mkdirSync(DOCS_RELEASES_DIR, { recursive: true });

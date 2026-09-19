@@ -216,20 +216,21 @@ ${body}
       ? ""
       : `<a class="btn" id="pick" href="${hrefOf(first.file)}" data-os="${first.os}">Download for ${first.os} (${escapeHtml(first.variant)})</a>`;
   // What the script may pick per OS: the installer most machines want.
-  const picks = JSON.stringify(
-    Object.fromEntries(
-      (
-        [
-          ["macOS", /_aarch64\.dmg$/],
-          ["Windows", /_x64-setup\.exe$/],
-          ["Linux", /_amd64\.AppImage$/],
-        ] as const
-      )
-        .map(([os, re]) => [os, sorted.find((e) => e.os === os && re.test(e.file))])
-        .filter((pair): pair is [string, PageEntry] => pair[1] !== undefined)
-        .map(([os, e]) => [os, { href: hrefOf(e.file), label: `${os} (${e.variant})` }]),
-    ),
-  );
+  const preferred: ReadonlyArray<[Installer["os"], RegExp]> = [
+    ["macOS", /_aarch64\.dmg$/],
+    ["Windows", /_x64-setup\.exe$/],
+    ["Linux", /_amd64\.AppImage$/],
+  ];
+  const picks: Record<string, { href: string; label: string }> = {};
+  for (const [os, re] of preferred) {
+    const entry = sorted.find((e) => e.os === os && re.test(e.file));
+    if (entry !== undefined)
+      picks[os] = {
+        href: hrefOf(entry.file),
+        label: `${os} (${entry.variant})`,
+      };
+  }
+  const picksJson = JSON.stringify(picks);
   const fontFaces = [
     ["Space Grotesk", "space-grotesk-latin-600.woff2", "600"],
     ["Space Grotesk", "space-grotesk-latin-700.woff2", "700"],
@@ -324,7 +325,7 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 <footer><a href="${links.notes}">What changed in ${version}</a><a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
 </div>
 <script>
-(function(){var picks=${picks};var el=document.getElementById("pick");if(!el)return;var ua=navigator.userAgent||"";var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";var os=/Win/i.test(p)||/Windows/i.test(ua)?"Windows":/Mac/i.test(p)||/Mac OS/i.test(ua)?"macOS":/Linux|X11/i.test(p+ua)?"Linux":null;var pick=os&&picks[os];if(!pick)return;el.href=pick.href;el.textContent="Download for "+pick.label;el.setAttribute("data-os",os);var panel=document.getElementById(os.toLowerCase());if(panel)panel.setAttribute("aria-current","true");})();
+(function(){var picks=${picksJson};var el=document.getElementById("pick");if(!el)return;var ua=navigator.userAgent||"";var p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||"";var os=/Win/i.test(p)||/Windows/i.test(ua)?"Windows":/Mac/i.test(p)||/Mac OS/i.test(ua)?"macOS":/Linux|X11/i.test(p+ua)?"Linux":null;var pick=os&&picks[os];if(!pick)return;el.href=pick.href;el.textContent="Download for "+pick.label;el.setAttribute("data-os",os);var panel=document.getElementById(os.toLowerCase());if(panel)panel.setAttribute("aria-current","true");})();
 </script>
 </body>
 </html>
