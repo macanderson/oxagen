@@ -596,6 +596,8 @@ type Messages = {
       alreadyRegistered: string;
       codeWrong: string;
       linkExpired: string;
+      oauthCancelled: string;
+      oauthFailed: string;
       unavailable: string;
       unknown: string;
     };

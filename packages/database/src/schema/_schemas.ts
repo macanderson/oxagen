@@ -59,3 +59,6 @@ export const costSchema = pgSchema("cost");
 // can carry append-only grants the way `evidence` and `tacho` do, and so the
 // registry, connections and switches the Tools page lane adds land beside it.
 export const toolsSchema = pgSchema("tools");
+// cms — public marketing surface for oxagen.sh (website lead capture + gated
+// ebook). Not tenant-scoped; bypass-only RLS. See schema/cms.ts and ADR-102.
+export const cmsSchema = pgSchema("cms");

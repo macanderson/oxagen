@@ -37,7 +37,7 @@ Both paths are covered by the `privacy.data.erase` contract (see `docs/capabilit
 | Response within 30 days (GDPR Art. 12.3) | Immediate session revocation; hard-delete within the configurable grace period (default 30 days; set `PRIVACY_ERASURE_GRACE_DAYS`). |
 | Notify data processors | `privacy/erasure.execute` Inngest event is the signal — subscribe downstream processors via webhook. |
 | Retain audit trail | `security.security_events` records the `privacy.erasure_requested` event permanently (immutable append-only table). The audit record is retained even after data erasure. |
-| Cannot fulfill if legal hold | Not yet implemented — contact `privacy@oxagen.ai` to freeze an erasure request. Track in Linear. |
+| Cannot fulfill if legal hold | Not yet implemented — contact `privacy@oxagen.sh` to freeze an erasure request. Track in Linear. |
 
 ---
 
@@ -57,7 +57,7 @@ Both paths are covered by the `privacy.data.erase` contract (see `docs/capabilit
 
 ### 4.2 Cancellation during grace period
 
-If the user contacts `privacy@oxagen.ai` within the grace period:
+If the user contacts `privacy@oxagen.sh` within the grace period:
 
 1. Support engineer verifies identity via the original account email.
 2. In the Inngest dashboard, cancel the pending `privacy/erasure.execute` event.

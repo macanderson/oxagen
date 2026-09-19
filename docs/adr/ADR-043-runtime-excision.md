@@ -1,6 +1,8 @@
 # ADR-043: Excise the agent runtime — Oxagen governs agents, it does not run them
 
-- **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the amendment at the end)
+- **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the
+  amendment at the end); amended 2026-09-19 by ADR-102 (cms marketing lead
+  gate restored, see the second amendment)
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** ADR-040 (governance-plane refocus — this ADR executes its
@@ -141,13 +143,15 @@ request a harness made and assembles nothing.
 
 ## Amendment 2026-09-19: marketing `cms.*` is restored
 
-The website lead forms (demo / contact and the field-manual ebook gate) still
-POST to `/v1/cms/leads`. Dropping `cms.*` with the runtime cut left those
-forms posting into auth middleware (401) and the CORS allowlist without a
-fallback for `oxagen.sh`. That was collateral damage, not a product decision
-to retire lead capture.
+Maintainer decision of 2026-09-19, recorded in ADR-102. The website lead
+forms (demo / contact and the field-manual ebook gate) still POST to
+`/v1/cms/leads`. Dropping `cms.*` with the runtime cut left those forms
+posting into auth middleware (401) and the CORS allowlist without a
+fallback for `oxagen.sh`. That was collateral damage, not a product
+decision to retire lead capture.
 
-The `cms` schema, `/v1/cms/*` routes, and `apps/web/read/` reader are restored
-as marketing infrastructure: no tenant scope, bypass-only RLS, no capability
-contract, no MCP/CLI parity. Everything else in this ADR stands — Oxagen still
-runs no agent runtime.
+The `cms` schema, `/v1/cms/*` routes, and `apps/web/read/` reader are
+restored as marketing infrastructure: no tenant scope, bypass-only RLS, no
+capability contract, no MCP/CLI parity. The ban on sandboxes, coding
+engines, workers, skill systems, eval harnesses, playbooks, browser tools,
+and content generators is unchanged.

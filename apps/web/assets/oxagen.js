@@ -346,7 +346,7 @@
             throw new Error("status " + res.status);
           }
           form.reset();
-          setStatus(form, "Thanks — we got it. We'll be in touch shortly. ✓");
+          setStatus(form, "Thanks. We got it. We will be in touch shortly.");
           btn.disabled = false;
         })
         .catch(function () {
