@@ -7,6 +7,8 @@
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
 import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
@@ -52,6 +54,9 @@ const ctx = unsafeMint(WsCtx, {
   wsName: "Core platform",
   wsRole: "member",
 });
+
+/** The shape `get_run_transcript` answers with, so a fixture cannot drift from it. */
+type TranscriptOutput = ContractOutput<typeof runTranscriptGet>;
 
 const RUN = "tse_7k2m9q";
 const TENANT = {
@@ -348,6 +353,59 @@ describe("readTranscriptPage", () => {
     );
   });
 
+  it("maps a page exactly as the port does, so a first page and a later one cannot disagree", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const out: TranscriptOutput = {
+      zoom: "steps",
+      kinds: [],
+      entries: [
+        {
+          seq: "11",
+          endSeq: "14",
+          at: "2026-09-15T08:10:00.000Z",
+          elapsedMs: 3000,
+          kind: "tool_call",
+          type: "tool_result",
+          label: "create_release ok",
+          kinds: ["tools"],
+          turn: 1,
+          request: null,
+          response: null,
+          decision: null,
+          frames: 4,
+          cost: {
+            micros: "18240",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+          cumulativeCost: {
+            micros: "4131265",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+        },
+      ],
+      cursor: "ZjoxMQ",
+      complete: false,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMA",
+    );
+    // The layer matrix keeps `features/*` out of `data/live`, so the action
+    // carries its own copy of the port's mapping. This is what stops the two
+    // drifting: a test may import both, and production may not.
+    expect(page).toEqual({
+      ok: true,
+      value: toRunTranscript(out),
+    });
+  });
+
   it("answers a cursor the capability did not write as a read error, not as a throw (negative)", async () => {
     invoke.mockRejectedValue(
       new kernel.CapabilityError(
@@ -365,6 +423,11 @@ describe("readTranscriptPage", () => {
         [],
         "not-a-cursor",
       ),
-    ).toEqual({ ok: false, reason: "error", code: "invalid_input", status: 400 });
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_cursor",
+      field: "after",
+    });
   });
 });

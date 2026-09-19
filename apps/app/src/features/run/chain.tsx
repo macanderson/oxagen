@@ -156,11 +156,11 @@ function Checkpoints({
                       timeStyle: "short",
                     })}
                   </time>
-                  {checkpoint.platformKeyId === null ? null : (
+                  {checkpoint.platformKey === null ? null : (
                     <span
                       className={`${mono} block break-all text-[11px] text-muted-foreground`}
                     >
-                      {checkpoint.platformKeyId}
+                      {checkpoint.platformKey}
                     </span>
                   )}
                 </>

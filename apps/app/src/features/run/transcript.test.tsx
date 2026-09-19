@@ -173,9 +173,10 @@ describe("paging past the cursor", () => {
 
   it("reads the next page from the cursor, through the same chips, and appends it", async () => {
     const more = mockupTranscript();
-    readTranscriptPage.mockResolvedValue(
-      readOk({ ...more, cursor: null, complete: true }),
-    );
+    readTranscriptPage.mockResolvedValue({
+      ok: true,
+      value: { ...more, cursor: null, complete: true },
+    });
     renderSection({ read: paged, kinds: ["tools"] });
     const before = screen.getAllByTestId("transcript-frame").length;
     fireEvent.click(screen.getByTestId("transcript-more"));
@@ -198,9 +199,10 @@ describe("paging past the cursor", () => {
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {
-    readTranscriptPage.mockResolvedValue(
-      readOk({ ...mockupTranscript(), cursor: null, complete: true }),
-    );
+    readTranscriptPage.mockResolvedValue({
+      ok: true,
+      value: { ...mockupTranscript(), cursor: null, complete: true },
+    });
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
     await waitFor(() => {
@@ -212,7 +214,12 @@ describe("paging past the cursor", () => {
   });
 
   it("names a cursor the capability did not write, and keeps every entry already read (negative)", async () => {
-    readTranscriptPage.mockResolvedValue(readError("invalid_input", 400));
+    readTranscriptPage.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_cursor",
+      field: "after",
+    });
     renderSection({ read: paged });
     const before = screen.getAllByTestId("transcript-frame").length;
     fireEvent.click(screen.getByTestId("transcript-more"));
@@ -225,9 +232,11 @@ describe("paging past the cursor", () => {
   });
 
   it("says a page failed for any other reason without claiming the cursor was bad (negative)", async () => {
-    readTranscriptPage.mockResolvedValue(
-      readError("frame_store_unreachable", 502),
-    );
+    readTranscriptPage.mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+      code: "frame_store_unreachable",
+    });
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
     await waitFor(() => {

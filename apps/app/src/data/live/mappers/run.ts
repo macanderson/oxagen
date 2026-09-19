@@ -226,7 +226,7 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       eventCount: checkpoint.eventCount,
       signedAt: checkpoint.signedAt,
       deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
-      platformKeyId: checkpoint.platformKeyId,
+      platformKey: checkpoint.platformKeyId,
       countersignedAt: checkpoint.countersignedAt,
       anchorRoot: checkpoint.anchorRoot,
       anchoredAt: checkpoint.anchoredAt,

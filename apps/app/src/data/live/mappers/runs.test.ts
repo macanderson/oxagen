@@ -88,6 +88,9 @@ describe("toRunPage", () => {
             model: "z-ai/glm-flash-latest",
           },
           replayGrade: "fork",
+          enforcementTier: "gateway",
+          completenessGaps: [],
+          canSummarize: true,
           startedAt: "2026-09-15T08:00:00.000Z",
           sealedAt: "2026-09-15T08:40:00.000Z",
         },
@@ -109,6 +112,12 @@ describe("toRunPage", () => {
       summary: null,
       replayGrade: null,
       sealedAt: null,
+      // An observe-tier live session: the row says where it was observed from,
+      // what the seal has not recorded, and that summarizing would be refused,
+      // so a page can disable the controls rather than offer four that fail.
+      enforcementTier: "observe",
+      completenessGaps: [],
+      canSummarize: false,
     });
     expect(page.nextCursor).toBeNull();
     expect(RunPage.safeParse(page).success).toBe(true);

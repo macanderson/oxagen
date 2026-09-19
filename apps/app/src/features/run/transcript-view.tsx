@@ -49,12 +49,13 @@ import {
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
-import type { Read } from "@/data/read";
+
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
 import { useRunStream } from "./use-run-stream";
@@ -79,6 +80,9 @@ const SPEEDS = [1, 1.5, 2, 4] as const;
 /** How often a followed live run re-reads itself. */
 /** How close to the end the playhead gets before the next page is read ahead of it. */
 const PREFETCH_WITHIN = 5;
+
+/** Why a later page did not arrive, in the shape the action answers with. */
+type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 const DOT: Record<StepNode, string> = {
   model: "border-info",
@@ -563,7 +567,7 @@ export function TranscriptView({
   const [cursor, setCursor] = useState<string | null>(transcript.cursor);
   const [complete, setComplete] = useState(transcript.complete);
   const [reading, setReading] = useState(false);
-  const [pageFailure, setPageFailure] = useState<Read<unknown> | null>(null);
+  const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
   const head = entries.length - 1;
   const turns = useMemo(() => buildTranscript(entries), [entries]);
   const live = status === "live";
@@ -636,12 +640,7 @@ export function TranscriptView({
         setEntries(next);
       }
     } catch {
-      setPageFailure({
-        ok: false,
-        reason: "error",
-        code: "unanswered",
-        status: 0,
-      });
+      setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
     } finally {
       readingRef.current = false;
       setReading(false);
@@ -948,9 +947,7 @@ export function TranscriptView({
         )}
         {pageFailure === null ? null : (
           <span data-testid="transcript-page-failed" className="basis-full">
-            {!pageFailure.ok &&
-            pageFailure.reason === "error" &&
-            pageFailure.code === "invalid_input"
+            {pageFailure.reason === "invalid"
               ? t("badCursor")
               : t("pageFailed")}
           </span>

@@ -18,18 +18,25 @@ import { runBisect } from "@oxagen/oxagen/contracts/run.bisect";
 import { runExport } from "@oxagen/oxagen/contracts/run.export";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
-import type {
+import {
+  runTranscriptGet,
+  TRANSCRIPT_ENTRY_DEFAULT,
+} from "@oxagen/oxagen/contracts/run.transcript.get";
+import type { z } from "zod";
+import { moneyFromMicros } from "@/data/contracts/money";
+import {
   RunTranscript,
-  TranscriptKind,
-  TranscriptZoom,
+  type TranscriptKind,
+  type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
-import { dataSource } from "@/data/source";
-import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
+
+type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
 /** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
 export async function haltRun(
@@ -113,14 +120,87 @@ export async function exportRun(
 }
 
 /**
- * One later page of the transcript, for the player's own pagination
- * (`get_run_transcript`). A read, not a write: it exists as a server action so
- * the player can append a page without a navigation, which is what keeps the
- * scroll position and the playhead where the person left them.
+ * A read carried in the shape a write's answer takes. Every caller of this
+ * module is a client component, and INV-19 has every exported function of a
+ * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
+ * across rather than returned: `denied` keeps the permission the page failure
+ * names, and an error keeps its code. The Workspace settings dialog does the
+ * same for its two on-demand reads; the layer matrix (INV-07) keeps
+ * `features/*` out of `data/live`, so each of the two owns its own copy.
  *
- * The cursor is the one the previous page answered with. A cursor this
- * capability did not write is refused as invalid input, and the player says
- * that rather than starting the transcript again.
+ * `invalid_input` becomes `invalid` rather than `unavailable`, because the
+ * only input a caller varies here is the cursor: the run, the zoom and the
+ * chips come from the page. That is what lets the view say "this resume point
+ * is not one the read wrote" instead of "something went wrong".
+ */
+function toTranscriptPage(
+  out: RunTranscriptGetOutput,
+): z.input<typeof RunTranscript> {
+  const cost = (value: RunTranscriptGetOutput["entries"][number]["cost"]) =>
+    value === null
+      ? null
+      : {
+          ...moneyFromMicros(value.micros, value.currency),
+          basis: value.basis,
+        };
+  return {
+    zoom: out.zoom,
+    kinds: out.kinds,
+    entries: out.entries.map((entry) => ({
+      seq: entry.seq,
+      endSeq: entry.endSeq,
+      at: entry.at,
+      elapsedMs: entry.elapsedMs,
+      kind: entry.kind,
+      type: entry.type,
+      label: entry.label,
+      kinds: entry.kinds,
+      turn: entry.turn,
+      request: entry.request,
+      response: entry.response,
+      decision: entry.decision,
+      frames: entry.frames,
+      cost: cost(entry.cost),
+      cumulativeCost: cost(entry.cumulativeCost),
+    })),
+    cursor: out.cursor,
+    complete: out.complete,
+  };
+}
+
+function asActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return read.code === "invalid_input"
+        ? { ok: false, reason: "invalid", code: "invalid_cursor", field: "after" }
+        : { ok: false, reason: "unavailable", code: read.code };
+  }
+}
+
+/**
+ * One later page of the transcript, for the player's own pagination
+ * (`get_run_transcript`).
+ *
+ * A read that must happen on demand has nowhere else to live (INV-07's
+ * `features` row): a page's reads go through a `DataSource` port and are made
+ * when the route renders, and a navigation is exactly what appending a page
+ * must not cost, because it would throw away the playhead and the scroll
+ * position. So this resolves its own viewer and reads through the kernel seam,
+ * as a write does.
+ *
+ * The mapping is the port's, written out here because the layer matrix keeps
+ * `features/*` out of `data/live`. `actions.test.ts` holds the two to the same
+ * answer for the same contract output, so the first page and a later one
+ * cannot come to disagree about one run.
  */
 export async function readTranscriptPage(
   org: string,
@@ -129,12 +209,24 @@ export async function readTranscriptPage(
   zoom: TranscriptZoom,
   kinds: readonly TranscriptKind[],
   after: string,
-): Promise<Read<RunTranscript>> {
+): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
-  return dataSource().runs.transcript(ctx, runId, zoom, {
-    kinds: [...kinds],
-    after,
+  const read = await kernelRead(ctx, {
+    contract: runTranscriptGet,
+    input: {
+      runId,
+      zoom,
+      kinds: [...kinds],
+      limit: TRANSCRIPT_ENTRY_DEFAULT,
+      after,
+    },
+    page: "run",
   });
+  if (!read.ok) return asActionResult(read);
+  const view = RunTranscript.safeParse(toTranscriptPage(read.value));
+  return view.success
+    ? { ok: true, value: view.data }
+    : { ok: false, reason: "unavailable", code: "record_unmappable" };
 }
 
 /**
