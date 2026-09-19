@@ -41,7 +41,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   // `auth.api_keys` is read twice with different projections: the role gate
   // asks who created the calling key, and the archival asks how many live keys
   // the workspace holds. The selected fields tell them apart.
-  const rowsFor = (table: unknown, fields?: Record<string, unknown>): unknown[] => {
+  const rowsFor = (
+    table: unknown,
+    fields?: Record<string, unknown>,
+  ): unknown[] => {
     if (table === real.schema.apiKeys) {
       if (fields && "n" in fields) return [{ n: db.liveApiKeyCount }];
       return tenant.keyCreator ? [{ createdById: tenant.keyCreator }] : [];
@@ -65,7 +68,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
               db.agentQueries.push(dialect.sqlToQuery(cond));
             if (table === real.schema.apiKeys && fields && "n" in fields)
               db.apiKeyQueries.push(dialect.sqlToQuery(cond));
-            return Object.assign(Promise.resolve(rowsFor(table, fields)), chain);
+            const withFor = Object.assign(
+              Promise.resolve(rowsFor(table, fields)),
+              chain,
+            );
+            // `.for("update")` is a lock hint Postgres applies to the same
+            // row set; the fake has no locking to model, so it just resolves
+            // to the same rows the unlocked select would.
+            return Object.assign(withFor, {
+              for: () => Promise.resolve(rowsFor(table, fields)),
+            });
           },
           limit: () => Promise.resolve(rowsFor(table, fields)),
         };

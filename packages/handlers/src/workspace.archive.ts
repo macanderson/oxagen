@@ -83,6 +83,20 @@ export const workspaceArchiveHandler: CapabilityHandler<
     },
     () =>
       withTenantDb(async (tx) => {
+        // Locks the workspace row for the rest of this transaction, the same
+        // way `create_api_key` locks it before checking `archivedAt`
+        // (`api.key.create.ts`). Without this, a `create_api_key` that starts
+        // after the count below but before the write commits could acquire
+        // its own lock, insert a key, and commit while this transaction still
+        // waits — a key `suspendedApiKeys` and the audit log would then omit,
+        // even though ADR-104 still stops it from authenticating once this
+        // commits. The two `FOR UPDATE`s make the two capabilities queue for
+        // the same row: whichever commits first is the order the other sees.
+        await tx
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.id, workspace.id))
+          .for("update");
         const [agents] = await tx
           .select({ n: count() })
           .from(schema.agents)
