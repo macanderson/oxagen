@@ -173,7 +173,7 @@ ${body}
 <title>Download Oxagen</title>
 <meta name="description" content="Oxagen desktop ${version}: installers for macOS, Windows and Linux.">
 <style>
-:root{--bg:#FFFFFF;--panel:#FFFFFF;--border:#E4E4E7;--text:#09090B;--body:#27272A;--muted:#71717A;--gold:#D4AF37;--link:#977017;color-scheme:light}
+:root{--bg:#FFFFFF;--panel:#FFFFFF;--border:#E4E4E7;--text:#09090B;--body:#27272A;--muted:#71717A;--gold:#D4AF37;--link:#8A7223;color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--body);font:16px/1.55 "Geist",system-ui,-apple-system,"Segoe UI",sans-serif;padding-inline:20px;padding-block:28px 72px}
 main{max-width:880px;margin:0 auto}
@@ -197,7 +197,7 @@ footer{margin-top:36px;color:var(--muted);font-size:14px}
 <main>
 <div class="wm">o<b>x</b>agen</div>
 <h1>Download Oxagen ${version}</h1>
-<p class="lede">The Oxagen app signs a machine in to your organization and registers the Claude Code, Codex, and Stella installs it finds, so every run they make is recorded and governed.</p>
+<p class="lede">The Oxagen app signs a machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds, so every run they make is recorded and governed.</p>
 ${section("macOS", "macOS 12 or newer. Open the .dmg and drag Oxagen to Applications before the first launch; while builds are unsigned, right-click the app and choose Open the first time.")}
 ${section("Windows", "Windows 10 or newer, x64. While builds are unsigned, SmartScreen asks once: More info, then Run anyway.")}
 ${section("Linux", "x86_64. Install the package for your distribution; the AppImage runs anywhere but must be installed or linked before registering agents.")}

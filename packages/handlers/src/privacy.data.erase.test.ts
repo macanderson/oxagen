@@ -59,6 +59,7 @@ const authz = vi.hoisted(() => ({
   },
 }));
 vi.mock("@oxagen/iam", () => ({
+  emitAudit: () => Promise.resolve(),
   fetchAuthz: () => Promise.resolve(authz.value),
 }));
 

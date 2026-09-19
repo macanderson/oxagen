@@ -153,9 +153,9 @@ describe("systemInstallInstructionsHandler", () => {
 
   // ── the wrap with a one-time enrollment token (#2967) ─────────────────────
 
-  it("answers the wrap steps for claude-code and codex when handed an enrollment token", async () => {
+  it("answers the wrap steps for claude-code, codex, and cursor when handed an enrollment token", async () => {
     const enrollmentToken = "oxe_1time_0123456789abcdefghjkmnpqrs";
-    for (const client of ["claude-code", "codex"] as const) {
+    for (const client of ["claude-code", "codex", "cursor"] as const) {
       const result = await systemInstallInstructionsHandler(
         { client, enrollmentToken },
         CTX,
@@ -171,16 +171,51 @@ describe("systemInstallInstructionsHandler", () => {
     }
   });
 
+  it("starts the wrapped session with each harness's own binary", async () => {
+    const enrollmentToken = "oxe_1time_0123456789abcdefghjkmnpqrs";
+    const binaries = {
+      "claude-code": "claude",
+      codex: "codex",
+      // Cursor's CLI is `cursor-agent`; a bare `cursor` opens the IDE.
+      cursor: "cursor-agent",
+    } as const;
+    for (const [client, binary] of Object.entries(binaries)) {
+      const result = await systemInstallInstructionsHandler(
+        { client: client as keyof typeof binaries, enrollmentToken },
+        CTX,
+      );
+      expect(result.steps.at(-1)?.command).toBe(binary);
+    }
+  });
+
+  it("configures cursor through ~/.cursor/mcp.json with a bearer header", async () => {
+    const result = await systemInstallInstructionsHandler(
+      { client: "cursor" },
+      CTX,
+    );
+    const text = result.steps
+      .map((s) => `${s.label}\n${s.command ?? ""}`)
+      .join("\n");
+    expect(text).toContain("~/.cursor/mcp.json");
+    const entryStep = result.steps.find((s) =>
+      s.command?.trimStart().startsWith("{"),
+    );
+    const server = JSON.parse(entryStep!.command!).mcpServers.oxagen;
+    expect(server.url).toMatch(/^https:\/\/.+\/mcp$/);
+    // JSON expands nothing, so the key is a placeholder, never `$OXAGEN_API_KEY`.
+    expect(server.headers.Authorization).toBe("Bearer <your-api-key>");
+  });
+
   it("ignores the token for a client that has no wrap", async () => {
     const withToken = await systemInstallInstructionsHandler(
       {
-        client: "cursor",
+        client: "vscode",
         enrollmentToken: "oxe_1time_0123456789abcdefghjkmnpqrs",
       },
       CTX,
     );
     const without = await systemInstallInstructionsHandler(
-      { client: "cursor" },
+      { client: "vscode" },
       CTX,
     );
     expect(withToken.steps).toEqual(without.steps);

@@ -297,6 +297,9 @@ export interface CliDeps {
   /** Codex CLI's `hooks.json`, undefined when absent. */
   readCodexHooks: () => unknown;
   writeCodexHooks: (document: unknown) => void;
+  /** Cursor's `hooks.json`, undefined when absent. */
+  readCursorHooks: () => unknown;
+  writeCursorHooks: (document: unknown) => void;
   /**
    * Stella's user-scope hooks file: `stella.toml` when it exists, else the
    * legacy `settings.json` when that exists, else a new `stella.toml`.
@@ -338,6 +341,13 @@ export interface CliDeps {
   };
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
+  /**
+   * Cursor's CLI, `cursor-agent`. Cursor also installs it as `agent`, a name
+   * too generic to probe: another tool's `agent --version` would read as
+   * Cursor. The IDE reads the same hooks file, so a machine with only the IDE
+   * is hooked all the same; this reports the CLI.
+   */
+  cursor: () => HarnessFacts;
   stella: () => HarnessFacts;
   /**
    * Whether Claude Desktop is installed. A connected app is a GUI bundle, not
@@ -572,7 +582,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     osVersion: release(),
     arch: osArch(),
     nodeVersion: process.version,
-    // Every one of these four files carries TACHO_LOCAL_TOKEN — the bearer the
+    // Every one of these harness files carries TACHO_LOCAL_TOKEN — the bearer the
     // loopback listener requires, and the one thing on this machine that lets a
     // process reach the daemon and, through the gateway, the host's own Oxagen
     // API key. So `HarnessFiles.write` holds each at 0600 while the machine is
@@ -589,6 +599,12 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     writeCodexHooks: (document) =>
       harnessFiles.write(
         paths.codexHooks,
+        `${JSON.stringify(document, null, 2)}\n`,
+      ),
+    readCursorHooks: () => harnessFiles.readJson(paths.cursorHooks),
+    writeCursorHooks: (document) =>
+      harnessFiles.write(
+        paths.cursorHooks,
         `${JSON.stringify(document, null, 2)}\n`,
       ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
@@ -616,6 +632,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
+    cursor: () => harnessFacts(exec, "cursor-agent", platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
     claudeDesktop: () => claudeDesktopFacts(platform, home, env),
     runtime: runtimeCommands(undefined, env, undefined, platform),

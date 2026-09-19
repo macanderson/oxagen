@@ -53,7 +53,7 @@
  *
  * Gold as INK on white is only 2.1:1, so — exactly as the kit specifies — the
  * light theme renders every gold *mark* (accent copy, links, the focus ring)
- * in the gold's own deep shade #977017 (4.5:1), and dark mode uses the gold
+ * in the gold's own deep shade #8A7223 (4.5:1), and dark mode uses the gold
  * itself (9.5:1). A gold FILL is unaffected: ink on gold is 9.5:1 in both.
  *
  * Card and table HEADERS stay flat — surface plus hairline, never shaded bars.
@@ -106,7 +106,7 @@
        apps/ and packages/ bind to these identifiers; a skin owns the values,
        not the names. All three stops are the kit's gold, unaltered. */
     --ox-surface: var(--ox-paper-panel); /* #FFFFFF — light card */
-    --ox-ember-deep: var(--ox-gold-deep); /* #977017 — gold as INK on paper (4.5:1) */
+    --ox-ember-deep: var(--ox-gold-deep); /* #8A7223 — gold as INK on paper (4.5:1) */
     --ox-ember: var(--ox-gold); /* #D4AF37 — the metal */
     --ox-ember-light: var(--ox-gold-bright); /* #F1CE65 — the shimmer highlight */
     --ox-ember-soft: oklch(0.25 0.035 88); /* gold at 14% over obsidian: a tinted fill on the dark canvas */
@@ -151,7 +151,7 @@
     --_amber-300: var(--ox-gold-bright); /* #F1CE65 */
     --_amber-400: var(--ox-gold); /* #D4AF37 — the metal */
     --_amber-500: oklch(0.66 0.125 88); /* between gold and gold-deep */
-    --_amber-600: var(--ox-gold-deep); /* #977017 — gold as ink on white */
+    --_amber-600: var(--ox-gold-deep); /* #8A7223 — gold as ink on white */
     --_amber-700: oklch(0.47 0.09 80); /* link hover on white */
     --_amber-800: oklch(0.38 0.07 80);
     --_amber-900: oklch(0.3 0.05 80);
@@ -159,7 +159,7 @@
     /* Brand mark gradient stops — the kit's own sheen, deep → metal → highlight.
        Used for the tab underline and any surface that shows the metal moving;
        the MARKS themselves never take it (a mark is one colour). */
-    --_ember-a: var(--ox-gold-deep); /* #977017 */
+    --_ember-a: var(--ox-gold-deep); /* #8A7223 */
     --_ember-b: var(--ox-gold); /* #D4AF37 */
     --_ember-c: var(--ox-gold-bright); /* #F1CE65 */
     --_ember-navy: var(--ox-ink); /* #09090B — the canvas black */
@@ -225,10 +225,10 @@
     --input: var(--_stone-300);
     /* The ring is a MARK on paper, not a fill, so it follows the kit's rule
        that gold on white becomes its deep shade: #D4AF37 is 2.1:1 here
-       and would fail WCAG 1.4.11 (3:1 for a focus indicator); #977017 is
+       and would fail WCAG 1.4.11 (3:1 for a focus indicator); #8A7223 is
        4.5:1. Dark mode keeps the metal itself at 9.5:1. */
     --ring: var(--ox-ember-deep);
-    --link: var(--ox-ember-deep); /* #977017 — gold as ink on paper (4.5:1); the metal itself is 2.1:1 */
+    --link: var(--ox-ember-deep); /* #8A7223 — gold as ink on paper (4.5:1); the metal itself is 2.1:1 */
     --link-hover: var(--_amber-700); /* a darker gold, on white */
 
     /* Status — semantic names (error == destructive). */
@@ -245,9 +245,9 @@
     /* Accent text ink — the shade of the gold that is legible as TEXT on the
        current background. #D4AF37 is the MARK colour and is only 2.1:1 on
        paper, so accent copy must not use it directly: light mode takes the
-       gold's own deep shade (#977017, 4.5:1) and dark mode the gold itself
+       gold's own deep shade (#8A7223, 4.5:1) and dark mode the gold itself
        (9.5:1). This is the kit's "gold as text on paper" rule. */
-    --ember-ink: var(--ox-ember-deep); /* #977017 — the kit's "gold as text on paper" */
+    --ember-ink: var(--ox-ember-deep); /* #8A7223 — the kit's "gold as text on paper" */
 
     /* The metal in motion — the kit's sheen (deep → metal → highlight), laid
        out horizontally for the tab underline and any rule that shows it. The
@@ -1134,7 +1134,7 @@
   .ox-grad-surface {
     background-image: linear-gradient(
       100deg,
-      var(--_ember-a, #977017) 0%,
+      var(--_ember-a, #8A7223) 0%,
       var(--_ember-b, #D4AF37) 46%,
       var(--_ember-c, #F1CE65) 100%
     );

@@ -44,7 +44,36 @@ describe("workspace.settings.read handler", () => {
         moves_money: ["Billing"],
         ships_code: ["Admin"],
       },
+      // Both steering-freshness gates are off until the workspace sets one.
+      steering: { autoSync: false, blockStaleRuns: false },
     });
+  });
+
+  it("reads the steering gates out of the settings bag", async () => {
+    mocks.findFirst.mockResolvedValue({
+      name: "Research",
+      slug: "research",
+      avatarUrl: null,
+      description: null,
+      consequenceRoles: {},
+      settings: { steering: { blockStaleRuns: true } },
+    });
+    const out = await workspaceSettingsReadHandler({}, CTX);
+    expect(out.steering).toEqual({ autoSync: false, blockStaleRuns: true });
+  });
+
+  // A bad value must not take out the checkboxes or the hook that reads them.
+  it("reads a steering block that does not parse as both gates off", async () => {
+    mocks.findFirst.mockResolvedValue({
+      name: "Research",
+      slug: "research",
+      avatarUrl: null,
+      description: null,
+      consequenceRoles: {},
+      settings: { steering: { blockStaleRuns: "yes please" } },
+    });
+    const out = await workspaceSettingsReadHandler({}, CTX);
+    expect(out.steering).toEqual({ autoSync: false, blockStaleRuns: false });
   });
 
   it("reads stored overrides that no longer parse as no overrides", async () => {

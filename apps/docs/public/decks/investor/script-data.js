@@ -2,7 +2,7 @@
 window.OX_SCRIPT = [
   {
     title: "Title · Oxagen",
-    say: "Thanks for the time. In ten minutes I want to show you a category that is opening right now, and why Oxagen is the company to own it. The title asks one question: can you explain your AI bill? Neither can your provider. Short version: agents are writing production code inside regulated companies, and no rule decides what those agents may read, spend, or do. Oxagen is the agent control plane that does. Let's go.",
+    say: "Thanks for the time. In ten minutes I want to show you a category that is opening right now, and why Oxagen is the company to own it. The title states the mission: Mission Control for your autonomous agents, so you can see which agent spent what, and on whose behalf. Short version: agents are writing production code inside regulated companies, and no rule decides what those agents may read, spend, or do. Oxagen is the agent control plane that does. Let's go.",
   },
   {
     title: "The shift already happened",

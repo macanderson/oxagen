@@ -3,6 +3,10 @@ import { registerCapability } from "../registry";
 import { workspaceSlug } from "../workspace-slug";
 import { avatarUrlSchema, avatarUrlOutputSchema } from "../avatar";
 import { consequenceRolesSchema } from "../mandates/schemas";
+import {
+  steeringGatePolicy,
+  steeringGatePolicyPatch,
+} from "./context.steering.freshness";
 
 // Partial update of a workspace's general settings. Every field optional:
 //   omit = unchanged, value = set, null = clear (description + avatar).
@@ -55,6 +59,11 @@ export const workspaceSettingsWrite = registerCapability({
     // Replaces the stored overrides as a whole; a tag left out falls back to
     // the defaults. Omit = unchanged.
     consequenceRoles: consequenceRolesSchema.optional(),
+    // The two steering-freshness gates, as a patch: a member left out is
+    // unchanged, so the UI can toggle one checkbox without resending the
+    // other and racing a second editor. Omitting `steering` entirely leaves
+    // both alone.
+    steering: steeringGatePolicyPatch.optional(),
   }),
   output: z.object({
     name: z.string(),
@@ -62,6 +71,7 @@ export const workspaceSettingsWrite = registerCapability({
     description: z.string().nullable(),
     avatarUrl: avatarUrlOutputSchema,
     consequenceRoles: consequenceRolesSchema,
+    steering: steeringGatePolicy,
   }),
 });
 

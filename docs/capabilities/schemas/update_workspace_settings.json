@@ -73,6 +73,20 @@
             ]
           }
         }
+      },
+      "steering": {
+        "type": "object",
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Pull .oxagen/ forward from the production branch without being asked, when the checkout is behind it"
+          },
+          "blockStaleRuns": {
+            "type": "boolean",
+            "description": "Refuse to run a prompt while .oxagen/ is behind the production branch"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "additionalProperties": false
@@ -121,6 +135,24 @@
             ]
           }
         }
+      },
+      "steering": {
+        "type": "object",
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Pull .oxagen/ forward from the production branch without being asked, when the checkout is behind it"
+          },
+          "blockStaleRuns": {
+            "type": "boolean",
+            "description": "Refuse to run a prompt while .oxagen/ is behind the production branch"
+          }
+        },
+        "required": [
+          "autoSync",
+          "blockStaleRuns"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [
@@ -128,7 +160,8 @@
       "slug",
       "description",
       "avatarUrl",
-      "consequenceRoles"
+      "consequenceRoles",
+      "steering"
     ],
     "additionalProperties": false
   }

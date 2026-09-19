@@ -55,7 +55,7 @@ import {
 } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { resolve } from "@oxagen/oxagen/iam";
-import { fetchAuthz } from "@oxagen/iam";
+import { emitAudit, fetchAuthz } from "@oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 
 /** The one field of a contract this guard reads. */
@@ -124,6 +124,20 @@ export async function capabilityRevocation(
     now: new Date(),
     clientIp: ctx.clientIp ?? null,
   });
+
+  // The re-evaluation goes on the record, the same stream the kernel's own
+  // check writes to, so a refusal is answerable afterwards rather than only
+  // observable as a 403. Fire-and-forget, like every other emitAudit caller: a
+  // decision that was made is not unmade by a failed log write, and this guard
+  // must not fail a read because ClickHouse is unreachable.
+  void emitAudit({
+    capability: capability.name,
+    ctx,
+    principal: authz.principal,
+    result,
+    trace: result.trace,
+    rawInputJson: JSON.stringify({ recheck: "capability_revocation" }),
+  }).catch(() => undefined);
 
   return {
     revoked: result.outcome !== "allow",

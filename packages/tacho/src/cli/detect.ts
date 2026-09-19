@@ -106,6 +106,7 @@ export function detect(
     harnesses: [
       wrapped("claude-code", deps.claude(), enrolledList),
       wrapped("codex", deps.codex(), enrolledList),
+      wrapped("cursor", deps.cursor(), enrolledList),
       wrapped("stella", deps.stella(), enrolledList),
       connected(
         "claude-desktop",

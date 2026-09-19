@@ -78,6 +78,29 @@ export function hashEnrollmentToken(token: string): string {
   return `sha256:${createHash("sha256").update(token, "utf8").digest("hex")}`;
 }
 
+/** The agent harnesses Tacho writes hooks for on an enrolled host. */
+const HOST_WRAPPED_HARNESSES: ReadonlySet<string> = new Set([
+  "claude-code",
+  "codex",
+  "cursor",
+  "stella",
+]);
+
+/**
+ * The scripted enroll command printed beside a one-time token (spec §14.1).
+ *
+ * A hook-based harness is named with `--harness`, because `tacho enroll`
+ * hooks Claude Code when the flag is absent: a Cursor agent enrolled without
+ * it would leave ~/.cursor/hooks.json unwritten and its runs unrecorded. Any
+ * other harness gets the bare command.
+ */
+export function enrollCommandFor(token: string, harness: string): string {
+  const base = `oxagen agent enroll --token ${token}`;
+  return HOST_WRAPPED_HARNESSES.has(harness)
+    ? `${base} --harness ${harness}`
+    : base;
+}
+
 const GITHUB_REMOTE = [
   // git@github.com:owner/name.git · ssh://git@github.com/owner/name
   /^(?:ssh:\/\/)?git@github\.com[:/]([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/,

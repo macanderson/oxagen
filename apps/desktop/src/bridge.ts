@@ -38,6 +38,8 @@ export interface HostView {
   claude_execpath: string | null;
   codex_version?: string | null;
   codex_execpath?: string | null;
+  cursor_version?: string | null;
+  cursor_execpath?: string | null;
   stella_version?: string | null;
   stella_execpath?: string | null;
   wrapper_version: string;
@@ -58,7 +60,7 @@ export interface HostView {
  */
 export interface DaemonAgentSummary {
   key: string;
-  runtime: "claude-code" | "codex" | "stella" | "custom" | string;
+  runtime: "claude-code" | "codex" | "cursor" | "stella" | "custom" | string;
   harness: string;
   label: string;
   first_seen_at: string;

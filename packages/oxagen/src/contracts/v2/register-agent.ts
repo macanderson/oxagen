@@ -108,6 +108,7 @@ export const registerAgentInputObject = z.object({
     "stella",
     "claude-code",
     "codex-cli",
+    "cursor",
     "openai-agents-sdk",
     "claude-agent-sdk",
     "custom",

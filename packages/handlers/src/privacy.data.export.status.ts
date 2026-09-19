@@ -2,9 +2,10 @@
 // key, and mutates nothing; the kernel's capability.invoke_* row records the
 // access, as it does for audit.events.export beside it. The two rechecks below,
 // the organization role and whether an explicit rule has revoked `export_data`,
-// are authorization guards on a read, not privileged state changes. A refused read of an organization archive would be worth its own
-// row by the bar the secret lifecycle sets in security-event-types.ts, and no
-// type in that taxonomy fits one: adding it needs a taxonomy entry and a
+// are authorization guards on a read, not privileged state changes. A refused
+// read of an organization archive would be worth its own row by the bar the
+// secret lifecycle sets in security-event-types.ts, and no type in that
+// taxonomy fits one: adding it needs a taxonomy entry and a
 // migration widening the event_type constraint, so it is tracked in #3391
 // rather than invented here. That residual now covers both refusals.
 //

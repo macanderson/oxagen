@@ -40,7 +40,16 @@ describe("register_agent contract", () => {
     }
   });
 
-  it("refuses a harness outside the four and a validity outside 1..365", () => {
+  it("accepts codex and cursor, the hook-based harnesses beside claude-code", () => {
+    for (const harness of ["codex", "cursor"]) {
+      expect(
+        agentRegister.input.safeParse({ ...input, harness }).success,
+        harness,
+      ).toBe(true);
+    }
+  });
+
+  it("refuses a harness outside the six and a validity outside 1..365", () => {
     expect(
       agentRegister.input.safeParse({ ...input, harness: "langchain" }).success,
     ).toBe(false);

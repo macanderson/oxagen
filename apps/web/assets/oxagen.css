@@ -30,7 +30,7 @@
   --st-rule: #3F3F46; /* section rules, boundaries */
   --st-gold: #D4AF37; /* the brand metal: actions, active, money, the mark */
   --st-gold-bright: #F1CE65; /* tiny live indicators only */
-  --st-gold-ink: #977017; /* gold as TEXT where the metal itself is illegible */
+  --st-gold-ink: #8A7223; /* gold as TEXT where the metal itself is illegible */
   --st-paper-text: #FFFFFF; /* primary text in dark */
   --st-text: #e8e8ec; /* cooler alternate ink */
   --st-silver-type: #bfc1cc; /* types, tertiary labels */
