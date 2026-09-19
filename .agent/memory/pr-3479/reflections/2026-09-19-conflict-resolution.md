@@ -15,3 +15,8 @@ A documentation format change turned two added entries into a whole-file conflic
 CI validates the automatically merged app changes. Local checks covered the manually resolved documentation and generated message types.
 ### Confidence in the result: high
 The index preserves main and adds both proposal entries with their declared API surfaces. Both focused checks passed.
+
+### CI follow-up
+CI at a1b68f47 reported 18 failures across eight app files. Updated stale page mocks, wizard selectors, option order, and shell expectations. Removed one unused catalog key and regenerated message types. The isolated skill wizard file passed all 12 tests. CI owns the remaining test files under the shared-machine verification policy.
+
+Two improvements for this follow-up: use an accessible-name prefix for a card whose body can vary, and verify the command working directory before creating dependency links. Local test startup first failed because the app link pointed at root dependencies. Correcting the link resolved startup without changing dependencies.

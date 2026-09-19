@@ -112,7 +112,7 @@ vi.mock("@/features/agents", () => ({
   Agents,
   Agent,
   AgentSource,
-  AgentsCreate: () => <p data-testid="agents-create" />,
+  AgentsCreate: () => null,
 }));
 vi.mock("@/features/steering", () => ({
   Steering,
