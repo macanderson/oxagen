@@ -1961,6 +1961,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "clickhouse,neo4j",
   },
+  DB_LINT_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "The ref `pnpm db:lint-migrations` compares new Atlas migrations against for its " +
+      "git-aware ordering check (#3387): a migration added since the merge base with this " +
+      "ref must sort after every migration already there. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
   PGSUPERUSER: {
     group: "Operator scripts",
     description:
