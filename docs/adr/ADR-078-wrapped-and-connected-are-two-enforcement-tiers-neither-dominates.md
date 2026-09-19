@@ -1,6 +1,6 @@
 # ADR-078: Wrapped and connected are two enforcement tiers, and neither dominates the other
 
-- **Status:** Accepted; §1 amended 2026-09-18 by ADR-095 (the ladder has four words and `gateway` is computed from what was routed)
+- **Status:** Accepted; §1 amended 2026-09-18 by ADR-095 (the ladder has four words and `gateway` is computed from what was routed); §4 amended 2026-09-19 (closes #3151: the identity a gateway-forwarded call is attributed to, in evidence, versus the identity its authorization decision runs against)
 - **Date:** 2026-09-16
 - **Owners:** platform
 - **Related:** `docs/specs/tacho/spec.md` §2 item 2 and §6.3 (the `enforcement_tier`
@@ -253,3 +253,100 @@ as a score or as "fully governed", and every surface states what the tier
 records and what it does not. §3 to §6 stand unchanged. At `main` the MCP
 gateway is still registered only into Claude Desktop
 (`CONNECTED_HARNESSES = ["claude-desktop"]`).
+
+## Amendment 2026-09-19: which model closes #3151, and the identity split it needed
+
+§4 named the fix: the gateway's own credential, plus `machineKeyDenial`'s
+purpose-based mandate. But #3151 asked a sharper question the original text
+did not settle: is the fix "give the host its own agent identity with a fixed
+mandate", or "refuse the machine key outright at the generic endpoint"? Answer:
+**neither, precisely.** The shipped model is a third option, and this
+amendment records it as the decision rather than leaving it to be inferred
+from the diff.
+
+**The decision.** A connected app is not modelled as its own agent principal
+with delegated role grants (option 1). Tacho hosts are not agent principals
+at all yet, and inventing one only for the gateway would duplicate the
+mandate mechanism this ADR already built. Nor is the generic MCP endpoint
+closed to purpose-scoped keys outright (option 2): that would take a
+connected app's toolbelt to zero, which is the outcome §2 says a security
+team must never be sold as a strengthening. The mandate stays a RULE
+evaluated by `machineKeyDenial` against the key's *purpose*, not against any
+principal's role grants, decided once, unconditionally, before `checkIAM`
+runs on any tier. That rule is what a connected app may reach:
+
+- **`tacho_gateway_v1`**: any capability on the `mcp` surface that does not
+  mutate and is not `sensitivity: "high"`. `set_model_credential` and
+  `delete_model_credential` fail both tests and are refused by name, at every
+  org tier, including non-enterprise (the tier `checkIAM`'s fast-path would
+  otherwise wave through with no policy consulted at all). `gatewayMayInvoke`
+  (`packages/iam/src/machine-key-scope.ts`) is the rule; nothing else decides
+  it.
+- **`tacho_host_v1`**: exactly the three calls the control client makes
+  (`ingest_tacho_events`, `get_tacho_bundle`, `fetch_commands`), enumerated
+  rather than derived, because a host's job is fixed at mint time.
+
+**The residual identity question, named rather than left implicit.** Closing
+`org.model_credential.set` did not by itself settle whose IDENTITY a
+*permitted* gateway call runs under. `fetchAuthz` still resolves a
+purpose-scoped key to its creator's role grants for the enterprise-tier full
+resolver. That is unchanged, and load-bearing: that inheritance is what lets a
+machine key pass the resolver on an enterprise org at all, since an API-key
+principal holds no `org_users` row of its own. The two remaining questions
+that inheritance raised are:
+
+1. *Does that mean a purpose-scoped key "acts for a person"?* No, and
+   `fetchAuthz`'s own docstring now says so, reconciled with
+   `resolveOperatorUserId`'s existing rule, which already refused a
+   purpose-scoped key for the operator-management handlers that call it
+   directly. Both functions now agree: inheriting a role grant to pass a
+   resolver is not the same act as a person requesting something, and
+   neither function was in a position to CHANGE that inheritance without
+   breaking the machine flows (`ingest_tacho_events`, `get_tacho_bundle`)
+   that `defaultEffect: "deny"` on non-enterprise tiers would otherwise
+   strand. The mandate rule above is what decides reachability; the
+   inheritance is only how an enterprise org's role grants apply on top of
+   it, and it can only narrow, never widen, what the mandate already
+   permits.
+2. *Does the evidence say so too?* Before this amendment, no. The audit row
+   for an allowed gateway call recorded the enroller's own principal, because
+   that is what `fetchAuthz` returned and `checkIAM` audited without
+   question. `checkIAM` now attributes such a call's audit row to the
+   credential (`tacho_gateway_v1` or `tacho_host_v1`), never the enroller,
+   on every tier, including the tier-bypass path, which previously recorded
+   an anonymous zero-id principal and now identifies the actual key. The
+   kernel's `resolvedPrincipal`, which feeds `runInTenantScope`'s RLS
+   GUC and is documented as a genuine `iam.principals.id`, is deliberately
+   untouched by this: an API key's id is not a row in that table, and
+   widening the swap to cover it would trade a real vulnerability for a
+   dangling foreign reference RLS predicates could misread. Evidence
+   attribution and role-grant resolution are answered by the same key, but
+   they are not required to be answered with the same VALUE, and after this
+   amendment they are not.
+
+**What a connected app may reach, stated plainly, because this is the claim
+an auditor tests.** Read-only, non-mutating, non-high-sensitivity `mcp`
+capabilities: nothing that changes workspace state, nothing that reveals a
+secret, credential, or audit record, and never an org-admin action such as
+`set_model_credential` regardless of which Owner or Admin enrolled the
+machine. Every call it does make is recorded against the gateway credential,
+so the fleet record shows what the connected app itself did, not what the
+enrolling operator could have done.
+
+## Alternatives considered (added 2026-09-19)
+
+**Model the host as its own agent principal with delegated role grants
+(candidate 1 from #3151).** Rejected for now: Tacho hosts carry no agent
+principal today, and building one only to re-derive the same mandate
+`machineKeyDenial` already enforces by rule would be a second mechanism
+answering a question the first already answers, with no capability gained:
+the mandate is already independent of any person's grants. Revisit if a
+connected app's mandate ever needs to vary per host rather than per
+organisation-wide rule.
+
+**Refuse `tacho_gateway_v1` outright at the generic MCP endpoint (candidate 2
+from #3151).** Rejected: it takes a connected app's toolbelt to zero, which
+is the "connected is a weaker wrapped" reading §2 already bans the product
+from implying. A control that leaves a security team with no governed
+surface for the AI apps they cannot hook is not a stronger control. It is
+an absent one dressed as caution.

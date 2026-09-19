@@ -90,10 +90,17 @@ const off: KillSwitchRow = {
   updatedById: OTHER,
 };
 
+const USER_PUBLIC_ID = "usr_flipper1";
+const OTHER_PUBLIC_ID = "usr_other2";
+
 function handlerOver(rows: KillSwitchRow[]) {
   const read = vi.fn(async (scope: { onlyOn: boolean; limit: number }) => ({
     generation: { org: 5, workspace: 2 },
     rows: rows.filter((r) => !scope.onlyOn || r.active).slice(0, scope.limit),
+    publicIdOf: new Map([
+      [USER, USER_PUBLIC_ID],
+      [OTHER, OTHER_PUBLIC_ID],
+    ]),
   }));
   return { handler: createKillSwitchListHandler({ read }), read };
 }
@@ -120,7 +127,7 @@ describe("list_kill_switches", () => {
         scope: "org",
         on: true,
         reason: "processor incident",
-        flippedBy: USER,
+        flippedBy: USER_PUBLIC_ID,
         flippedAt: "2026-09-15T00:00:00.000Z",
         clearedAt: null,
         clearedBy: null,
@@ -131,12 +138,24 @@ describe("list_kill_switches", () => {
         scope: "workspace",
         on: false,
         reason: "processor incident",
-        flippedBy: USER,
+        flippedBy: USER_PUBLIC_ID,
         flippedAt: "2026-09-15T00:00:00.000Z",
         clearedAt: "2026-09-15T02:00:00.000Z",
-        clearedBy: OTHER,
+        clearedBy: OTHER_PUBLIC_ID,
       },
     ]);
+  });
+
+  it("a user id the batch resolve does not carry renders as null, not the raw id", async () => {
+    const unresolved: KillSwitchRow = {
+      ...on,
+      id: "id_3",
+      publicId: "emd_3",
+      flippedByUserId: "0192d4a8-7c1e-7a00-8000-0000000005e9",
+    };
+    const { handler } = handlerOver([unresolved]);
+    const out = await handler({ onlyOn: false, limit: 100 }, ctx());
+    expect(out.switches[0]?.flippedBy).toBeNull();
   });
 
   it("onlyOn drops the cleared switches", async () => {

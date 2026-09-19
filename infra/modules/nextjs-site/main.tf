@@ -173,7 +173,7 @@ resource "aws_lambda_function" "server" {
   source_code_hash = var.bundle_hash
 
   handler       = "index.handler"
-  runtime       = "nodejs22.x"
+  runtime       = "nodejs24.x"
   architectures = ["arm64"]
 
   # Memory is the only performance dial Lambda exposes — CPU scales with it.

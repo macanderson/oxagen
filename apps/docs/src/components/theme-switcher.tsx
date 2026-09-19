@@ -18,7 +18,11 @@ import { useTheme } from "next-themes";
  * `themeSwitch` slot, which hands it a `className`.
  */
 
-const CHOICES: ReadonlyArray<{ value: string; label: string; icon: ReactNode }> = [
+const CHOICES: ReadonlyArray<{
+  value: string;
+  label: string;
+  icon: ReactNode;
+}> = [
   {
     value: "system",
     label: "System",
