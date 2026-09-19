@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+// The identity test moved to its own module so the resolver in `price-book`
+// can use the same one without the two files importing each other.
+import { isSameModelIdentity } from "./model-identity";
 import {
   deriveCacheWrite1h,
   fetchPublishedPrices,
   inCodeCardPrices,
-  isSameModelIdentity,
   mergePublishedPrices,
   MODELS_DEV_URL,
   OPENROUTER_MODELS_URL,
@@ -691,9 +693,9 @@ describe("isSameModelIdentity", () => {
     expect(isSameModelIdentity("gpt-4", "gpt-4")).toBe(true);
     expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(true);
     expect(isSameModelIdentity("claude-sonnet-5", "claude-sonnet")).toBe(true);
-    expect(isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5")).toBe(
-      true,
-    );
+    expect(
+      isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5"),
+    ).toBe(true);
     // A claimed name that already ends at a boundary is one.
     expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
       true,

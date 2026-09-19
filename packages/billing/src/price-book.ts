@@ -31,6 +31,7 @@ import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { isSameModelIdentity } from "./model-identity";
 import {
   IMAGE_RATE_CARD,
   PROVIDER_RATE_CARD,
@@ -237,11 +238,25 @@ function effectiveAt(entry: PriceEntry, at: Date): boolean {
   );
 }
 
-/** The longest of an entry's names that prefixes `modelId`, or null. */
+/**
+ * The longest of an entry's names that names the same model as `modelId`, or
+ * null.
+ *
+ * The test is {@link isSameModelIdentity}, not a raw `startsWith`. A prefix
+ * has to end on a segment boundary, because `gpt-4` prefixes `gpt-4o` and the
+ * two are different models at different prices. On leading characters alone an
+ * organization that negotiated `gpt-4` priced every `gpt-4o` call at the
+ * `gpt-4` rate: the resolver reads the organization's rows before the list
+ * rows and returns the first name that matched, so it never reached the more
+ * specific `gpt-4o` list row, and the frontier model was billed at the older
+ * model's contracted rate. `gpt-4-0613` and `claude-sonnet-5-20260901` are
+ * still the versions of their families they look like, which is what the
+ * prefix rule is for.
+ */
 function matchLength(entry: PriceEntry, modelId: string): number | null {
   let best: number | null = null;
   for (const name of [entry.model, ...entry.modelAliases]) {
-    if (modelId === name || modelId.startsWith(name)) {
+    if (isSameModelIdentity(modelId, name)) {
       if (best === null || name.length > best) best = name.length;
     }
   }
@@ -968,18 +983,36 @@ export async function syncPriceBook(args: {
     //
     // Only the gateway form is displaced. A bare row beside a gateway-form
     // seed still answers ids the seed cannot match, so it stays open.
+    //
+    // Displacement is per model and region, NOT per token class. A source that
+    // wins a model states what that model costs, in every class it prices and
+    // by omission in the classes it does not: `mergePublishedPrices` gives one
+    // model to one source outright, so no lower source's price for it survives
+    // into the seeds. Keyed by class as well as by name, an override for `foo`
+    // that stated input and output left the down catalog's `anthropic/foo`
+    // cache-read and cache-write rows open, and cached calls went on billing
+    // at the stale catalog rate the override had replaced. Those classes
+    // become `estimated`, which is the honest answer while the only source
+    // that prices them is the one the operator overrode.
     const sourceRank = (source: string | undefined): number =>
       source === "override" ? 1 : 0;
-    const nameKey = (tokenClass: string, region: string | null, name: string) =>
-      `${tokenClass}|${region ?? ""}|${name}`;
+    const nameKey = (region: string | null, name: string) =>
+      `${region ?? ""}|${name}`;
     const seedByName = new Map<string, PriceEntrySeed>();
     for (const seed of seeds)
       for (const name of [seed.model, ...seed.modelAliases]) {
-        const slot = nameKey(seed.tokenClass, seed.region, name);
+        const slot = nameKey(seed.region, name);
         const held = seedByName.get(slot);
         if (
           held === undefined ||
-          sourceRank(seed.source) > sourceRank(held.source)
+          sourceRank(seed.source) > sourceRank(held.source) ||
+          // One slot now holds every class a source priced for the model, so
+          // two seeds of equal rank can land on it. The later instant wins, so
+          // a displaced row is never closed at the cold-start floor while a
+          // seed at this run's boundary displaces it too: closing it at the
+          // floor would unprice every frame since the first sync.
+          (sourceRank(seed.source) === sourceRank(held.source) &&
+            seed.effectiveFrom.getTime() > held.effectiveFrom.getTime())
         )
           seedByName.set(slot, seed);
       }
@@ -1000,9 +1033,7 @@ export async function syncPriceBook(args: {
       for (const name of [row.model, ...row.modelAliases]) {
         const slash = name.indexOf("/");
         if (slash < 0) continue;
-        const seed = seedByName.get(
-          nameKey(row.tokenClass, row.region, name.slice(slash + 1)),
-        );
+        const seed = seedByName.get(nameKey(row.region, name.slice(slash + 1)));
         if (seed === undefined) continue;
         if (sourceRank(seed.source) < sourceRank(row.source)) continue;
         return seed;

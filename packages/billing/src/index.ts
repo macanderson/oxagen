@@ -22,6 +22,7 @@ export * from "./spend-budget";
 export * from "./spend-budget-store";
 export * from "./spend-budget-gate";
 export * from "./spend-counter";
+export * from "./model-identity";
 export * from "./price-book";
 export * from "./price-sources";
 export * from "./price-overrides";

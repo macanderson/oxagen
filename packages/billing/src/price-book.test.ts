@@ -189,6 +189,46 @@ describe("resolvePriceEntry", () => {
     ).toBe("aliased");
   });
 
+  // A negotiated `gpt-4` is not a rate for `gpt-4o`. The resolver reads the
+  // organization's rows before the list rows and returns the first name that
+  // matched, so on leading characters alone a `gpt-4o` call took the
+  // organization's `gpt-4` rate and never reached the more specific `gpt-4o`
+  // list row: a frontier model billed at an older model's contracted price,
+  // on every affected call. The prefix has to end on a segment boundary.
+  it("does not let a negotiated prefix price a distinct model", () => {
+    const negotiatedFour = entry({
+      id: "neg-gpt-4",
+      model: "gpt-4",
+      orgId: ORG,
+      source: "negotiated",
+      microsPerMillion: 1_000_000n,
+    });
+    const listFourO = entry({ id: "list-gpt-4o", model: "gpt-4o" });
+    const q = (modelId: string) =>
+      resolvePriceEntry([listFourO, negotiatedFour], {
+        orgId: ORG,
+        modelId,
+        tokenClass: "input_uncached",
+        at,
+      })?.id;
+    expect(q("gpt-4o")).toBe("list-gpt-4o");
+    expect(q("gpt-4o-mini")).toBe("list-gpt-4o");
+    // The versions of the family it did negotiate still take the rate, which
+    // is what the prefix rule exists for.
+    expect(q("gpt-4")).toBe("neg-gpt-4");
+    expect(q("gpt-4-0613")).toBe("neg-gpt-4");
+    // And with no row for the other model at all, it is unpriced rather than
+    // priced from the neighbour that shares a stem.
+    expect(
+      resolvePriceEntry([negotiatedFour], {
+        orgId: ORG,
+        modelId: "gpt-4o",
+        tokenClass: "input_uncached",
+        at,
+      }),
+    ).toBeNull();
+  });
+
   it("selects by the window the frame's instant falls in", () => {
     const old = entry({
       id: "old",
@@ -2419,6 +2459,66 @@ describe("syncPriceBook closes a row whose names another row now prices", () => 
     });
     expect(hit?.source).toBe("override");
     expect(hit?.microsPerMillion).toBe(1_000_000n);
+  });
+
+  // The class the override does not restate. An override that states input and
+  // output leaves the down catalog's cache rows behind, and keyed by class as
+  // well as by name nothing displaced them: cached calls went on billing at
+  // the stale catalog rate the override had replaced, under the same model the
+  // operator had just repriced. A source that wins a model states what it
+  // costs in every class, including by omission, so the classes it does not
+  // restate close at its instant and read `estimated` instead.
+  it("closes the classes an override omits, not only the ones it restates", async () => {
+    fake.rows.push(stale());
+    fake.rows.push(
+      priceRow({
+        provider: "openrouter",
+        model: "anthropic/foo",
+        catalog: "openrouter",
+        tokenClass: "cache_read",
+        microsPerMillion: 500_000n,
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      // Input and output only: the override says nothing about cache reads.
+      seeds: [
+        seed(),
+        seed({ tokenClass: "output", microsPerMillion: 3_000_000n }),
+      ],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override", "in_code_card"],
+    });
+    expect(result.retired).toBe(0);
+    expect(result.superseded).toBe(2);
+    for (const row of fake.rows.filter((r) => r.model === "anthropic/foo"))
+      expect(row.effectiveTo).toEqual(AT);
+    const book: PriceEntry[] = fake.rows.map((r) => ({
+      ...(r as unknown as PriceEntry),
+    }));
+    // The cache read is unpriced from the override's instant, which the rollup
+    // records as `estimated`. Billing it at the rate the override replaced is
+    // the thing this must not do.
+    expect(
+      resolvePriceEntry(book, {
+        orgId: ORG,
+        modelId: "anthropic/foo",
+        tokenClass: "cache_read",
+        at: AT,
+      }),
+    ).toBeNull();
+    // The classes the override did state are priced by the override.
+    expect(
+      resolvePriceEntry(book, {
+        orgId: ORG,
+        modelId: "anthropic/foo",
+        tokenClass: "output",
+        at: AT,
+      })?.microsPerMillion,
+    ).toBe(3_000_000n);
   });
 
   // The names a seed answers to include its aliases, because the resolver
