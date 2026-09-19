@@ -12,7 +12,12 @@
 // sends exactly one call and gets no mandate back, so no ledger row could have
 // moved.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
+import {
+  ledgerOutput,
+  MANDATE_ID,
+  mandateGetOutput,
+  mandateOutput,
+} from "@/test/mandate-outputs";
 
 const { invoke, requireViewer } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
@@ -59,6 +64,41 @@ const TENANT = {
 
 const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
+
+/**
+ * `changeMandateLimits` makes two kernel calls: it reads the mandate to get the
+ * stored limits, then writes the merged record. The stub answers by capability
+ * name so a test can say what is stored and what the write answered, and so a
+ * test asserting the write's input is asserting the merge rather than the form.
+ */
+function kernelAnswers(options: {
+  stored?: Parameters<typeof mandateOutput>[0];
+  write?: unknown;
+  readThrows?: unknown;
+  writeThrows?: unknown;
+}) {
+  invoke.mockImplementation((name) => {
+    if (name === "get_mandate") {
+      if (options.readThrows !== undefined)
+        return Promise.reject(options.readThrows);
+      return Promise.resolve(
+        mandateGetOutput([ledgerOutput()], mandateOutput(options.stored)),
+      );
+    }
+    if (options.writeThrows !== undefined)
+      return Promise.reject(options.writeThrows);
+    return Promise.resolve(options.write ?? mandateOutput());
+  });
+}
+
+/** The one `update_mandate_limits` call's input. */
+function writtenLimits(): unknown {
+  const call = invoke.mock.calls.find(
+    ([name]) => name === "update_mandate_limits",
+  );
+  if (!call) throw new Error("update_mandate_limits was not called");
+  return call[1];
+}
 
 beforeEach(() => {
   invoke.mockReset();
