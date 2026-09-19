@@ -53,6 +53,13 @@ describe("get_run contract", () => {
       source: "ledger",
       agentKey: null,
       operatorId: "prn_0123456789abcdefghjkmn",
+      // Nullable and required: the row carries the key even when the record
+      // holds nothing under it, so a reader can tell "not recorded" from a
+      // field the shape never had.
+      operatorKind: "human",
+      operatorName: null,
+      model: null,
+      machine: null,
       status: "live",
       turns: null,
       steps: 0,
