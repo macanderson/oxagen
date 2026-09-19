@@ -22,6 +22,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+import { eq } from "drizzle-orm";
+import { schema } from "@oxagen/database";
 import {
   generateAccessCode,
   isEditionSlug,
@@ -29,10 +31,13 @@ import {
   readerUrl,
   captureLead,
   captureLeadAndIssueCode,
+  finalizeCodeDelivery,
   findLeadByEmail,
   issueCodeForLead,
   redeemAndRotate,
 } from "./access";
+
+const { bookAccessCodes } = schema;
 
 /**
  * A fake drizzle tx: every builder method (`from`, `where`, `limit`, `for`,
@@ -122,8 +127,12 @@ describe("captureLeadAndIssueCode", () => {
   it("upserts the lead, mints a code, returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     h.tx = makeFakeTx({
-      selects: [[{ id: "lead_1" }]],
-      inserts: [[{ id: "lead_1", email: "ada@example.com" }], []],
+      // lock-lead, then the prior-active-code lookup (none: first code ever)
+      selects: [[{ id: "lead_1" }], []],
+      inserts: [
+        [{ id: "lead_1", email: "ada@example.com" }],
+        [{ id: "code_1" }],
+      ],
     });
     const out = await captureLeadAndIssueCode(
       { email: "ada@example.com", firstName: "Ada", lastName: "Lovelace" },
@@ -131,6 +140,8 @@ describe("captureLeadAndIssueCode", () => {
       "signup",
     );
     expect(out.leadId).toBe("lead_1");
+    expect(out.codeId).toBe("code_1");
+    expect(out.priorActiveCodeId).toBeNull();
     expect(out.readUrl).toMatch(
       /^https:\/\/oxagen\.sh\/read\?e=page-flip-reader&c=/,
     );
@@ -199,11 +210,14 @@ describe("issueCodeForLead", () => {
   it("mints a fresh code and returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     h.tx = makeFakeTx({
-      selects: [[{ id: "lead_1" }]],
-      inserts: [[]],
+      // lock-lead, then the prior-active-code lookup
+      selects: [[{ id: "lead_1" }], [{ id: "code_old" }]],
+      inserts: [[{ id: "code_new" }]],
     });
-    const url = await issueCodeForLead("lead_1", "field-manual");
-    expect(url).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
+    const out = await issueCodeForLead("lead_1", "field-manual");
+    expect(out.readUrl).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
+    expect(out.codeId).toBe("code_new");
+    expect(out.priorActiveCodeId).toBe("code_old");
   });
 
   it("throws when the lead row is missing", async () => {
@@ -278,11 +292,12 @@ describe("redeemAndRotate — single-use enforcement", () => {
       selects: [
         editionRow,
         [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
-        [{ id: "l1" }],
+        [{ id: "l1" }], // mintCodeTx: lock lead
+        [], // mintCodeTx: prior-active lookup — none, c1 was just consumed
         [{ email: "ada@example.com" }],
         [{ slug: "page-flip-reader", title: "Reader", format: "page-flip" }],
       ],
-      inserts: [[]],
+      inserts: [[{ id: "code_new" }]],
     });
     const res = await redeemAndRotate("page-flip-reader", "good");
     expect(res.ok).toBe(true);
@@ -292,5 +307,45 @@ describe("redeemAndRotate — single-use enforcement", () => {
       expect(res.leadEmail).toBe("ada@example.com");
       expect(res.editions).toHaveLength(1);
     }
+  });
+});
+
+describe("finalizeCodeDelivery", () => {
+  function fakeUpdateTx() {
+    const whereArgs: unknown[] = [];
+    const tx = {
+      update: () => ({
+        set: () => ({
+          where: (arg: unknown) => {
+            whereArgs.push(arg);
+            return Promise.resolve();
+          },
+        }),
+      }),
+    };
+    return { tx, whereArgs };
+  }
+
+  it("revokes the PRIOR code on a successful delivery, leaving the new one active", async () => {
+    const { tx, whereArgs } = fakeUpdateTx();
+    h.tx = tx;
+    await finalizeCodeDelivery("new_1", "prior_1", true);
+    expect(whereArgs).toHaveLength(1);
+    expect(whereArgs[0]).toEqual(eq(bookAccessCodes.id, "prior_1"));
+  });
+
+  it("revokes the NEW code on a failed delivery, leaving the prior one usable", async () => {
+    const { tx, whereArgs } = fakeUpdateTx();
+    h.tx = tx;
+    await finalizeCodeDelivery("new_1", "prior_1", false);
+    expect(whereArgs).toHaveLength(1);
+    expect(whereArgs[0]).toEqual(eq(bookAccessCodes.id, "new_1"));
+  });
+
+  it("is a no-op on a successful delivery with no prior code to revoke", async () => {
+    const updateSpy = vi.fn();
+    h.tx = { update: updateSpy };
+    await finalizeCodeDelivery("new_1", null, true);
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });

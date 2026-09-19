@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mocks = vi.hoisted(() => ({
   captureLead: vi.fn(),
   captureLeadAndIssueCode: vi.fn(),
+  finalizeCodeDelivery: vi.fn().mockResolvedValue(undefined),
   findLeadByEmail: vi.fn(),
   issueCodeForLead: vi.fn(),
   redeemAndRotate: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../lib/cms/access", () => ({
   captureLead: mocks.captureLead,
   captureLeadAndIssueCode: mocks.captureLeadAndIssueCode,
+  finalizeCodeDelivery: mocks.finalizeCodeDelivery,
   findLeadByEmail: mocks.findLeadByEmail,
   issueCodeForLead: mocks.issueCodeForLead,
   redeemAndRotate: mocks.redeemAndRotate,
@@ -70,6 +72,8 @@ const SENT = "The link to the book has been sent to your email.";
 const DEMO_SENT = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND =
   "We couldn't find that email. Please fill out the form to get the book.";
+const DELIVERY_FAILED =
+  "We saved your details, but couldn't email the link just now. Please try the resend option in a moment.";
 
 let ipCounter = 0;
 function freshIp(): string {
@@ -104,9 +108,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.sendEmail.mockResolvedValue({ ok: true });
   mocks.isEmailTransportConfigured.mockReturnValue(true);
+  mocks.finalizeCodeDelivery.mockResolvedValue(undefined);
   mocks.captureLeadAndIssueCode.mockResolvedValue({
     readUrl: "http://localhost:8080/read?e=page-flip-reader&c=abc",
     leadId: "lead_1",
+    codeId: "code_1",
+    priorActiveCodeId: null,
   });
 });
 
@@ -149,6 +156,32 @@ describe("POST /v1/cms/leads", () => {
     await post("/leads", { ...VALID_LEAD, edition: "field-manual" });
     expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe(
       "field-manual",
+    );
+  });
+
+  it("defaults to the field-manual edition when source names it but edition is unset", async () => {
+    await post("/leads", { ...VALID_LEAD, source: "field-manual" });
+    expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe(
+      "field-manual",
+    );
+  });
+
+  it("reports an honest delivery failure instead of claiming success", async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await post("/leads", VALID_LEAD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: false,
+      message: DELIVERY_FAILED,
+    });
+    // The lead and code are already persisted — only the email failed —
+    // and finalize revokes the new code rather than the (absent) prior one.
+    expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "code_1",
+      null,
+      false,
     );
   });
 
@@ -280,13 +313,48 @@ describe("POST /v1/cms/book/resend", () => {
       id: "lead_1",
       email: "ada@example.com",
     });
-    mocks.issueCodeForLead.mockResolvedValue(
-      "http://localhost:8080/read?e=page-flip-reader&c=xyz",
-    );
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+      priorActiveCodeId: "code_old",
+    });
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, sent: true, message: SENT });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    // Delivered: finalize revokes the PRIOR code, keeping the new one active.
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "code_2",
+      "code_old",
+      true,
+    );
+  });
+
+  it("reports an honest delivery failure and keeps the prior code usable", async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: "lead_1",
+      email: "ada@example.com",
+    });
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+      priorActiveCodeId: "code_old",
+    });
+    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await post("/book/resend", { email: "ada@example.com" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      message: DELIVERY_FAILED,
+    });
+    // Not delivered: finalize revokes the NEW code, so the prior link (the
+    // one the lead already knew worked) is left active, not both dead.
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "code_2",
+      "code_old",
+      false,
+    );
   });
 
   it("tells an unknown email to fill out the form (no email sent)", async () => {

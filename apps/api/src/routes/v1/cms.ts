@@ -36,11 +36,14 @@ import { trustedClientIpBucketKey } from "../../middleware/distributed-rate-limi
 import {
   captureLead,
   captureLeadAndIssueCode,
+  finalizeCodeDelivery,
   findLeadByEmail,
   issueCodeForLead,
   redeemAndRotate,
 } from "../../lib/cms/access";
 import { logger } from "../../middleware/logger";
+import { extractClientIp } from "../../lib/context";
+import type { Context } from "hono";
 import type { AppEnv } from "../../app";
 
 /** Per-IP CMS ceilings keyed by the trusted edge address (ADR-083). */
@@ -55,11 +58,14 @@ const EDITION_TITLES: Record<EditionSlug, string> = {
   "page-flip-reader": "Page-flip reader",
 };
 
-/** User-facing success copy — the exact wording the product asked for. */
+/** User-facing success copy: the exact wording the product asked for. */
 const SENT_MESSAGE = "The link to the book has been sent to your email.";
 const DEMO_MESSAGE = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND_MESSAGE =
   "We couldn't find that email. Please fill out the form to get the book.";
+const DELIVERY_FAILED_MESSAGE =
+  "We saved your details, but couldn't email the link just now. " +
+  "Please try the resend option in a moment.";
 
 const optionalTrimmed = (max: number) =>
   z
@@ -114,28 +120,37 @@ const resendSchema = z
   })
   .strict();
 
-function clientCtx(c: { req: { header: (n: string) => string | undefined } }) {
-  const forwarded = c.req.header("x-forwarded-for");
-  const ip = forwarded
-    ? forwarded.split(",")[0]!.trim()
-    : (c.req.header("x-real-ip") ?? null);
-  return { ip, userAgent: c.req.header("user-agent") ?? null };
+// Same trusted-IP derivation the rate limiters use (ADR-083), so an audit row
+// and the bucket it was counted against never disagree about who the caller
+// was. `x-forwarded-for` alone is caller-writable and, under the production
+// edge rewrite, identifies Caddy rather than the visitor.
+function clientCtx(c: Context<AppEnv>) {
+  return { ip: extractClientIp(c), userAgent: c.req.header("user-agent") ?? null };
 }
 
-/** Best-effort: send the reader link, log (never throw) on transport failure. */
+/**
+ * Send the reader link and report whether delivery actually happened.
+ *
+ * Never throws — a transport failure must not turn an already-minted code
+ * into a 500 — but it also must not lie: the caller gets back whether the
+ * email went out, so a route can finalize the code rotation correctly
+ * (`finalizeCodeDelivery`) and tell the visitor to retry instead of
+ * claiming "sent" over a delivery that silently failed.
+ */
 async function emailReaderLink(
   to: string,
   edition: EditionSlug,
   readUrl: string,
-): Promise<void> {
+): Promise<boolean> {
   if (!isEmailTransportConfigured()) {
     // In dev the SMTP transport is usually unconfigured — surface the link in
-    // logs so the flow is testable without a mail server.
+    // logs so the flow is testable without a mail server. Not a delivery
+    // failure to report to the visitor: this is the expected local state.
     logger.warn(
       { to, readUrl },
       "[cms] email transport not configured — reader link not emailed (dev)",
     );
-    return;
+    return true;
   }
   try {
     const tpl = bookAccessEmailTemplate({
@@ -150,11 +165,13 @@ async function emailReaderLink(
       text: tpl.text,
       html: tpl.html,
     });
+    return true;
   } catch (err) {
     logger.error(
       { err, to },
       "[cms] failed to send ebook access email — lead captured, delivery failed",
     );
+    return false;
   }
 }
 
@@ -216,14 +233,33 @@ cmsRoute.post("/leads", async (c) => {
       // Demo requests capture the lead only — no book code, no book email.
       await captureLead(leadInput);
     } else {
-      const edition: EditionSlug = data.edition ?? DEFAULT_EDITION_SLUG;
-      const { readUrl } = await captureLeadAndIssueCode(
-        leadInput,
-        edition,
-        "signup",
-        clientCtx(c),
-      );
-      await emailReaderLink(data.email, edition, readUrl);
+      // The homepage "Get the manual" form sends source: "field-manual" but
+      // no explicit edition; fall back to the edition its own source names
+      // rather than the generic default, or every field-manual signup is
+      // emailed the page-flip reader instead.
+      const edition: EditionSlug =
+        data.edition ??
+        (data.source === "field-manual"
+          ? "field-manual"
+          : DEFAULT_EDITION_SLUG);
+      const { readUrl, codeId, priorActiveCodeId } =
+        await captureLeadAndIssueCode(
+          leadInput,
+          edition,
+          "signup",
+          clientCtx(c),
+        );
+      const delivered = await emailReaderLink(data.email, edition, readUrl);
+      await finalizeCodeDelivery(codeId, priorActiveCodeId, delivered);
+      if (!delivered) {
+        // The lead is already persisted and (if this was not the visitor's
+        // first code) their prior link is still live — only the email
+        // failed, so this stays 200 with an honest retry message.
+        return c.json(
+          { ok: true, delivered: false, message: DELIVERY_FAILED_MESSAGE },
+          200,
+        );
+      }
     }
   } catch (err) {
     logger.error({ err }, "[cms] lead capture failed");
@@ -294,9 +330,24 @@ cmsRoute.post("/book/resend", async (c) => {
       // accepted trade-off for a public marketing funnel.
       return c.json({ ok: true, sent: false, message: NOT_FOUND_MESSAGE }, 200);
     }
-    const readUrl = await issueCodeForLead(lead.id, edition, clientCtx(c));
-    await emailReaderLink(lead.email, edition, readUrl);
-    return c.json({ ok: true, sent: true, message: SENT_MESSAGE }, 200);
+    const { readUrl, codeId, priorActiveCodeId } = await issueCodeForLead(
+      lead.id,
+      edition,
+      clientCtx(c),
+    );
+    const delivered = await emailReaderLink(lead.email, edition, readUrl);
+    await finalizeCodeDelivery(codeId, priorActiveCodeId, delivered);
+    // On failure the prior code (if the lead had one) was left active by
+    // finalizeCodeDelivery above, so this is never worse than the resend
+    // never having happened.
+    return c.json(
+      {
+        ok: true,
+        sent: delivered,
+        message: delivered ? SENT_MESSAGE : DELIVERY_FAILED_MESSAGE,
+      },
+      200,
+    );
   } catch (err) {
     logger.error({ err }, "[cms] resend failed");
     return c.json(
