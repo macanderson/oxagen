@@ -51,6 +51,10 @@ const at = { org: "acme", ws: "core-platform" };
 const TOOLS = "/acme/core-platform/tools";
 const SWITCHES = "/acme/core-platform/tools?tab=switches";
 const GENERATION = { org: 12, workspace: 4 };
+/** The operator level's picker (#3147): one member, so its option is unambiguous. */
+const MEMBERS = [
+  { id: "usr_finops1", name: "Priya Shah", email: "priya@acme.example" },
+];
 
 /** The nth record of a fixture page, or a failure naming which one was missing. */
 function nth<T>(items: readonly T[], index: number, what: string): T {
@@ -302,7 +306,12 @@ describe("FlipControls", () => {
       },
     });
     withIntl(
-      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     const dialog = await screen.findByTestId("tools-flip-dialog");
@@ -333,7 +342,12 @@ describe("FlipControls", () => {
 
   it("changes the blast radius with the level, and names what a connection switch also revokes", async () => {
     withIntl(
-      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     await screen.findByTestId("tools-flip-dialog");
@@ -366,6 +380,7 @@ describe("FlipControls", () => {
         at={at}
         denyGeneration={GENERATION}
         existing={classSwitch()}
+        members={MEMBERS}
       />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c1"));
@@ -396,6 +411,7 @@ describe("FlipControls", () => {
         at={at}
         denyGeneration={GENERATION}
         existing={clearedSwitch()}
+        members={MEMBERS}
       />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c3"));
@@ -423,7 +439,12 @@ describe("FlipControls", () => {
       },
     });
     withIntl(
-      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     const dialog = await screen.findByTestId("tools-flip-dialog");
@@ -450,6 +471,7 @@ describe("FlipControls", () => {
         at={at}
         denyGeneration={GENERATION}
         existing={classSwitch()}
+        members={MEMBERS}
       />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-emd_01k5c1"));
@@ -462,7 +484,12 @@ describe("FlipControls", () => {
 
   it("reads the generation off the level picked, not off the switch it has none of", async () => {
     withIntl(
-      <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
     );
     fireEvent.click(screen.getByTestId("tools-flip-open"));
     const dialog = await screen.findByTestId("tools-flip-dialog");
@@ -496,7 +523,12 @@ describe("FlipControls", () => {
         },
       });
       withIntl(
-        <FlipControls at={at} denyGeneration={GENERATION} existing={null} />,
+        <FlipControls
+          at={at}
+          denyGeneration={GENERATION}
+          existing={null}
+          members={MEMBERS}
+        />,
       );
       fireEvent.click(screen.getByTestId("tools-flip-open"));
       const dialog = await screen.findByTestId("tools-flip-dialog");
@@ -521,6 +553,48 @@ describe("FlipControls", () => {
       });
     },
   );
+
+  it("flips an operator switch from a member picked off the roster, submitting their usr_ id (#3147)", async () => {
+    flipKillSwitch.mockResolvedValue({
+      ok: true,
+      value: {
+        switchId: "emd_new",
+        on: true,
+        changed: true,
+        denyGeneration: { org: 13, workspace: 4 },
+        grantsRevoked: 0,
+      },
+    });
+    withIntl(
+      <FlipControls
+        at={at}
+        denyGeneration={GENERATION}
+        existing={null}
+        members={MEMBERS}
+      />,
+    );
+    fireEvent.click(screen.getByTestId("tools-flip-open"));
+    const dialog = await screen.findByTestId("tools-flip-dialog");
+    fireEvent.change(screen.getByLabelText("Level"), {
+      target: { value: "operator" },
+    });
+    // No free-text uuid field: a select of the org's members, so the value it
+    // submits is always a usr_ id the contract can resolve.
+    expect(screen.queryByRole("textbox", { name: "Target" })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Target"), {
+      target: { value: "usr_finops1" },
+    });
+    fill(/^Reason/, "Compromised laptop.");
+    fireEvent.submit(formOf(within(dialog).getByText("Deny now")));
+    await waitFor(() => {
+      expect(flipKillSwitch).toHaveBeenCalledWith("acme", "core-platform", {
+        kind: "operator",
+        target: "usr_finops1",
+        on: true,
+        reason: "Compromised laptop.",
+      });
+    });
+  });
 });
 
 describe("useActionFailure", () => {

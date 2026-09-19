@@ -23,6 +23,7 @@ import {
 } from "@/data/contracts/tools";
 import type { AgentPage, AgentStatus } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
+import type { MemberList } from "@/data/contracts/org";
 import { type Read, readOk } from "@/data/read";
 import {
   approvalRuleListOutput,
@@ -114,6 +115,8 @@ type ToolsReads = {
    */
   agents?: Read<AgentPage>;
   approvalRules?: Read<ApprovalRuleSet>;
+  /** The switches tab's operator picker (#3147). */
+  members?: Read<MemberList>;
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -125,6 +128,7 @@ export function toolsSource(reads: ToolsReads) {
     mandates: [],
     agents: [],
     approvalRules: [],
+    members: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -176,6 +180,7 @@ export function toolsSource(reads: ToolsReads) {
     },
     onboarding: { state: refuse, firstFrame: refuse },
     org: {
+      // Defaulted below the object literal, once `source` exists to reassign.
       members: refuse,
       roles: refuse,
       workspaces: refuse,
@@ -198,5 +203,15 @@ export function toolsSource(reads: ToolsReads) {
     },
     mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };
+  // The switches tab reads the org roster on every load, for the operator
+  // level's picker (#3147): the same as the switch board itself, which every
+  // test in this file already supplies. Defaulting to an empty roster here,
+  // rather than making every switches-tab test supply one, matches how
+  // little most of them care what it answers; a test that does overrides
+  // `reads.members`.
+  source.org.members = answer(
+    reads.members ?? readOk({ members: [], invitations: [] }),
+    "members",
+  );
   return { source, calls };
 }

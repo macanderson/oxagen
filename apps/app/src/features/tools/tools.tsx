@@ -169,13 +169,20 @@ async function TabBody({
       );
     }
     case "switches": {
-      const read = await source.tools.killSwitches(ctx);
+      // The operator level's picker needs the org roster (#3147); a failed
+      // members read leaves the picker with nothing to choose, which the
+      // control states rather than blocking the rest of the board.
+      const [read, members] = await Promise.all([
+        source.tools.killSwitches(ctx),
+        source.org.members(ctx),
+      ]);
       return (
         <Switches
           at={at}
           orgRole={ctx.orgRole}
           canFlip={canAdministerOrg(ctx)}
           selfWorkspaceId={ctx.workspaceId}
+          members={members.ok ? members.value.members : []}
           read={read}
         />
       );

@@ -3311,6 +3311,8 @@ type Messages = {
           agent: string;
           operator: string;
         };
+        targetOperatorPlaceholder: string;
+        targetOperatorEmpty: string;
         blastTitle: string;
         blastBody: string;
         restoreTitle: string;
