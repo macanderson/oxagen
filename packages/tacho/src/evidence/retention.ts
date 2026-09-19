@@ -58,6 +58,18 @@ export const RETENTION_CLASS_BY_KIND: Readonly<
   approval_request: "approval_receipt",
 };
 
+/**
+ * Every class a body on this host can belong to: the values of the table
+ * above, deduplicated, and not a second list beside it. A caller comparing
+ * two mandates to find what narrowed needs the set of classes to compare,
+ * and a hand-written copy of that set is the failure this table already has
+ * a paragraph about.
+ */
+export const HOST_RETENTION_CLASSES: readonly RetentionContentClass[] =
+  Object.freeze([
+    ...new Set(Object.values(RETENTION_CLASS_BY_KIND)),
+  ]) as readonly RetentionContentClass[];
+
 export interface RetentionMandate {
   mode: "digest_only" | "content_exact";
   classes: readonly string[];
