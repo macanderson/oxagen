@@ -26,11 +26,25 @@
  *   --no-npm      skip the CLI build + npm publish (even if NPM_TOKEN is available)
  *   --yes         (reserved) non-interactive; this script is already non-interactive
  *
- * Release notes are AI-generated from the commit log + diffstat between the last
- * release tag and the release commit, 100% through the Vercel AI Gateway
- * (AI_GATEWAY_API_KEY, model = OXAGEN_LLM_BALANCED, an Anthropic Claude model).
- * If no gateway key is reachable it falls back to a plain commit-log changelog
- * so a release never blocks on AI availability. No SDK dependency.
+ * Release notes are written by a model from the commit log, diffstat and diff
+ * between the last release tag and HEAD, through the Vercel AI Gateway
+ * (AI_GATEWAY_API_KEY, model = OXAGEN_LLM_BALANCED, an Anthropic Claude model),
+ * under the clear-prose and oxagen-branding skills, which are read from the
+ * tree and handed to the model as its instructions (tools/scripts/lib/
+ * release-notes.ts). The answer is checked with the docs' own prose scanner
+ * and retried once with the findings; if the gateway is unreachable or the
+ * model will not comply, a sanitised commit-log summary is written instead so
+ * a release never blocks on AI availability. No SDK dependency.
+ *
+ * The notes land in three places: `releases/v<version>.md`, the top of
+ * `CHANGELOG.md`, and `apps/docs/content/docs/releases/v<version>.mdx`, the
+ * page on docs.oxagen.sh that carries the notes and the downloads for that
+ * version (`releases/meta.json` is rewritten so the sidebar lists versions
+ * newest first).
+ *
+ * `.github/workflows/release.yml` runs this on `workflow_dispatch` with
+ * --no-git --no-vercel --no-npm and turns the result into a pull request; the
+ * merge of that PR tags the release and builds the desktop app.
  *
  * Vercel sync uses the REST API (VERCEL_TOKEN + VERCEL_TEAM_ID) because the
  * Vercel CLI can't set "all preview branches" non-interactively. PLATFORM_VERSION
@@ -50,6 +64,19 @@ import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
 import kleur from "kleur";
 import { formatError } from "./lib/format-error";
+import {
+  changelogEntry,
+  fallbackNotes,
+  loadSkills,
+  parseNotes,
+  proseHits,
+  releasePageMdx,
+  releasesMeta,
+  type ReleaseNotes,
+  retryPrompt,
+  systemPrompt,
+  userPrompt,
+} from "./lib/release-notes";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const DEFAULT_TEAM_ID = "team_DiMizWNDHKFFU5ajKe2ZVKl9";
@@ -205,7 +232,7 @@ function collectHistory(
     "HEAD~1";
   const range = `${fromRef}..HEAD`;
   const log =
-    gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h) — %an"]) ??
+    gitSafe(["log", range, "--no-merges", "--pretty=format:- %s (%h)"]) ??
     "";
   const stat = gitSafe(["diff", "--stat", range]) ?? "";
   // Cap the unified diff so the prompt stays bounded on large releases.
@@ -218,40 +245,12 @@ function collectHistory(
   return { fromRef, toRef: "HEAD", version, log, stat, diff };
 }
 
-function fallbackNotes(h: NotesInput): string {
-  const body = h.log.trim() || "- No commits since the last release.";
-  return `## v${h.version}\n\n_Changes since ${h.fromRef}._\n\n${body}\n`;
-}
-
-function notesPrompt(h: NotesInput): string {
-  return [
-    `You are writing the release notes for version ${h.version} of the Oxagen platform`,
-    `(a multi-tenant AI agent monorepo). Summarize what changed since the previous`,
-    `release (${h.fromRef}).`,
-    ``,
-    `Write clear, user-facing Markdown release notes. Start with a one-paragraph`,
-    `summary, then group the changes under "### Features", "### Fixes",`,
-    `"### Internal" (omit any empty group). Be specific and concise; reference`,
-    `commit short-hashes where useful. Do NOT invent changes that aren't supported`,
-    `by the commits/diff. Do not include a top-level "# vX" heading — start at "##".`,
-    ``,
-    `## Commit log`,
-    h.log || "(none)",
-    ``,
-    `## Diffstat`,
-    h.stat || "(none)",
-    ``,
-    `## Unified diff (may be truncated)`,
-    "```diff",
-    h.diff || "(none)",
-    "```",
-  ].join("\n");
-}
-
-/** Vercel AI Gateway (AI_GATEWAY_API_KEY) — the platform's single AI path. Hits
+/** Vercel AI Gateway (AI_GATEWAY_API_KEY): the platform's single AI path. Hits
  * an Anthropic Claude model (OXAGEN_LLM_BALANCED) via the gateway's
  * OpenAI-compatible endpoint. Returns null when no gateway key is configured. */
-async function notesViaGateway(prompt: string): Promise<string | null> {
+async function completeViaGateway(
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+): Promise<string | null> {
   const key = deQuote(env.AI_GATEWAY_API_KEY);
   if (!key) return null;
   const model = deQuote(env.OXAGEN_LLM_BALANCED) || "anthropic/claude-sonnet-5";
@@ -264,7 +263,8 @@ async function notesViaGateway(prompt: string): Promise<string | null> {
     body: JSON.stringify({
       model,
       max_tokens: NOTES_MAX_TOKENS,
-      messages: [{ role: "user", content: prompt }],
+      temperature: 0.2,
+      messages,
     }),
   });
   if (!res.ok) throw new Error(`gateway ${res.status} ${await res.text()}`);
@@ -277,44 +277,96 @@ async function notesViaGateway(prompt: string): Promise<string | null> {
   return text;
 }
 
-async function generateNotes(h: NotesInput): Promise<string> {
-  const prompt = notesPrompt(h);
-  // AI notes come 100% through the Vercel AI Gateway; a plain commit-log
-  // changelog is the only fallback so a release never blocks on AI availability.
+/**
+ * Notes from the model under the two writing skills, checked by the prose
+ * scanner and retried once with its findings; the commit-log fallback when
+ * the gateway is absent, fails, or answers in the wrong shape twice.
+ */
+async function generateNotes(h: NotesInput): Promise<ReleaseNotes> {
+  const fallback = () => fallbackNotes(h);
+  let system: string;
   try {
-    const text = await notesViaGateway(prompt);
-    if (text) {
+    system = systemPrompt(loadSkills(ROOT));
+  } catch (err) {
+    console.log(kleur.yellow(`[release] ${formatError(err)}; using commit-log notes.`));
+    return fallback();
+  }
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: system },
+    { role: "user", content: userPrompt(h) },
+  ];
+  try {
+    const first = await completeViaGateway(messages);
+    if (first === null) {
       console.log(
-        kleur.green("[release] release notes generated via AI Gateway."),
+        kleur.yellow("[release] AI_GATEWAY_API_KEY not set; using commit-log notes."),
       );
-      return `${text}\n`;
+      return fallback();
     }
-    console.log(
-      kleur.yellow(
-        "[release] AI_GATEWAY_API_KEY not set — using plain commit-log notes.",
-      ),
-    );
+    let notes = parseNotes(first);
+    if (notes === null) {
+      console.log(kleur.yellow("[release] the model's answer was not in the expected shape; asking once more."));
+      messages.push({ role: "assistant", content: first });
+      messages.push({
+        role: "user",
+        content:
+          "That is not the shape asked for. Answer again with exactly: a `SUMMARY:` line, a blank line, then `## What changed` and the notes. Nothing else.",
+      });
+      const second = await completeViaGateway(messages);
+      notes = second === null ? null : parseNotes(second);
+      if (notes === null) {
+        console.log(kleur.yellow("[release] still not in shape; using commit-log notes."));
+        return fallback();
+      }
+    }
+    let hits = proseHits(notes);
+    if (hits.length > 0) {
+      console.log(kleur.yellow(`[release] prose scanner: ${hits.length} finding(s); asking for a rewrite.`));
+      for (const hit of hits) console.log(kleur.dim(`    ${hit}`));
+      messages.push({ role: "assistant", content: `SUMMARY: ${notes.summary}\n\n${notes.body}` });
+      messages.push({ role: "user", content: retryPrompt(notes, hits) });
+      const rewritten = await completeViaGateway(messages);
+      const parsed = rewritten === null ? null : parseNotes(rewritten);
+      if (parsed !== null) {
+        const again = proseHits(parsed);
+        if (again.length <= hits.length) {
+          notes = parsed;
+          hits = again;
+        }
+      }
+    }
+    if (hits.length > 0) {
+      // The PR that carries these notes runs the same scanner in CI and fails
+      // on them, which is the right place for a person to read and fix a line
+      // a model could not. Say so here rather than hide it.
+      console.log(
+        kleur.yellow(
+          `[release] ${hits.length} prose finding(s) remain; the release PR's check:prose will name them:`,
+        ),
+      );
+      for (const hit of hits) console.log(kleur.yellow(`    ${hit}`));
+    }
+    console.log(kleur.green("[release] release notes written by the model under the writing skills."));
+    return notes;
   } catch (err) {
     console.log(
-      kleur.yellow(
-        `[release] AI Gateway failed (${err instanceof Error ? err.message : err}) — using plain commit-log notes.`,
-      ),
+      kleur.yellow(`[release] AI Gateway failed (${formatError(err)}); using commit-log notes.`),
     );
+    return fallback();
   }
-  return fallbackNotes(h);
 }
+
+const DOCS_RELEASES_DIR = join(ROOT, "apps/docs/content/docs/releases");
 
 function writeNotes(
   version: string,
-  notes: string,
-): { changelog: string; release: string } {
+  notes: ReleaseNotes,
+): { changelog: string; release: string; page: string } {
+  const entry = changelogEntry(version, notes);
   const releasesDir = join(ROOT, "releases");
   mkdirSync(releasesDir, { recursive: true });
   const releaseFile = join(releasesDir, `v${version}.md`);
-  writeFileSync(
-    releaseFile,
-    `# v${version}\n\n${notes.replace(/^#+\s/, "## ").trimStart()}`,
-  );
+  writeFileSync(releaseFile, `# v${version}\n\n${entry.replace(/^## v[^\n]*\n\n/, "")}`);
 
   // The changelog always carries exactly one `# Changelog` title, whether or not
   // the prior file had one; the newest release is inserted directly beneath it.
@@ -323,11 +375,25 @@ function writeNotes(
     ? readFileSync(changelogFile, "utf8")
     : "# Changelog\n";
   const rest = prior.replace(/^#\s*Changelog\s*\n?/, "");
+  writeFileSync(changelogFile, `# Changelog\n\n${entry.trim()}\n\n${rest.trimStart()}`);
+
+  // The docs page, and the sidebar order that lists it first.
+  mkdirSync(DOCS_RELEASES_DIR, { recursive: true });
+  const page = join(DOCS_RELEASES_DIR, `v${version}.mdx`);
   writeFileSync(
-    changelogFile,
-    `# Changelog\n\n${notes.trim()}\n\n${rest.trimStart()}`,
+    page,
+    releasePageMdx({
+      version,
+      date: new Date().toISOString().slice(0, 10),
+      notes,
+    }),
   );
-  return { changelog: changelogFile, release: releaseFile };
+  const meta = join(DOCS_RELEASES_DIR, "meta.json");
+  writeFileSync(
+    meta,
+    releasesMeta(existsSync(meta) ? readFileSync(meta, "utf8") : null, version),
+  );
+  return { changelog: changelogFile, release: releaseFile, page };
 }
 
 // ── Vercel PLATFORM_VERSION propagation (REST; all v2 projects × all envs) ────
@@ -649,7 +715,7 @@ async function main(): Promise<void> {
   if (!opts.dryRun) syncLocalEnv(next);
 
   // ── Release notes ──
-  let notes = "";
+  let notes: ReleaseNotes | null = null;
   if (opts.notes) {
     console.log(kleur.bold("\n  Release notes:"));
     const history = collectHistory(next, opts.fromRef);
@@ -659,14 +725,14 @@ async function main(): Promise<void> {
       const written = writeNotes(next, notes);
       console.log(
         kleur.green(
-          `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md`,
+          `    ✓ ${written.release.replace(ROOT + "/", "")}  +  CHANGELOG.md  +  ${written.page.replace(ROOT + "/", "")}`,
         ),
       );
     } else {
       console.log(
         kleur.dim(
           "\n" +
-            notes
+            `SUMMARY: ${notes.summary}\n\n${notes.body}`
               .split("\n")
               .map((l) => "    │ " + l)
               .join("\n"),
@@ -680,7 +746,8 @@ async function main(): Promise<void> {
     console.log(kleur.bold("\n  Git:"));
     git(["add", "-A"]);
     git(["commit", "-m", `chore(release): v${next}`]);
-    const tagBody = notes.trim() || `Release v${next}`;
+    const tagBody =
+      notes === null ? `Release v${next}` : changelogEntry(next, notes).trim();
     git(["tag", "-a", `v${next}`, "-m", tagBody]);
     console.log(kleur.green(`    ✓ committed + tagged v${next}`));
     console.log(kleur.dim("    (push with: git push && git push --tags)"));
