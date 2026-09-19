@@ -18,6 +18,16 @@
 // that nothing here reads the mandate first — the read it used to do was a
 // snapshot nobody locked, and two operators could each post a whole record back
 // and restore a bound the other had lowered.
+//
+// **The other half of that: the patch is sparse.** The dialog prefills every
+// limit field from the mandate the page read and carries each prefill back in a
+// hidden field, so the cases below pin which fields a submission puts in the
+// change and which it leaves out. A prefill sent back unchanged would be read by
+// the handler as an explicit edit, and on a mandate another operator narrowed
+// while the dialog was open, that edit restores a bound nobody entered — through
+// the locked merge rather than around it. An untouched field is absent, a cleared
+// field is absent, and a submission that changed only the validity window names
+// no measure at all.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
 
@@ -96,7 +106,47 @@ beforeEach(() => {
   requireViewer.mockResolvedValue(ctx);
 });
 
+/**
+ * A dialog that prefilled nothing: the mandate held no counted measure and no
+ * calls cap, so every value in the submission is one the operator typed and the
+ * whole of it is a change.
+ */
+const NO_PREFILL = {
+  measure: "",
+  unit: "",
+  period: "monthly" as const,
+  perCall: "",
+  perPeriod: "",
+  callsPerDay: "",
+};
+
+/**
+ * A dialog opened on a mandate bounded at 50 rows a call, 1000 rows a month and
+ * 40 calls a day: what `measureDefaults` puts in the visible fields and what the
+ * hidden fields beside them carry back.
+ */
+const PREFILLED = {
+  measure: "rows",
+  unit: "rows",
+  period: "monthly" as const,
+  perCall: "50",
+  perPeriod: "1000",
+  callsPerDay: "40",
+};
+
+/** That dialog submitted with nothing touched: every field still its prefill. */
+const untouched = {
+  mandateId: MANDATE_ID,
+  ...PREFILLED,
+  validTo: "",
+  baseline: PREFILLED,
+};
+
 describe("changeMandateLimits", () => {
+  /**
+   * An operator typing a whole bound into a dialog that prefilled nothing, so
+   * every field of this submission is a change and the whole of it is carried.
+   */
   const draft = {
     mandateId: MANDATE_ID,
     measure: "rows",
@@ -106,6 +156,7 @@ describe("changeMandateLimits", () => {
     period: "monthly" as const,
     callsPerDay: "40",
     validTo: "2026-12-31",
+    baseline: NO_PREFILL,
   };
 
   it("sends the changes the operator made, with the window's last day", async () => {
@@ -216,6 +267,7 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "",
       validTo: "2027-01-31",
+      baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -234,6 +286,7 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "500",
       validTo: "",
+      baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -242,6 +295,124 @@ describe("changeMandateLimits", () => {
       // concurrent edit able to restore a bound somebody lowered.
       limitChanges: { calls: { perPeriod: "500", currencyOrUnit: "calls" } },
     });
+  });
+
+  // The second half of the concurrency defect, and the one the atomic merge does
+  // not cover. The dialog opened with 50 rows a call, 1000 a month and 40 calls a
+  // day in its fields; the operator moved the validity date and touched nothing
+  // else. Asserting those three figures would tell the handler to store the
+  // record this dialog read, which on a mandate somebody narrowed in the meantime
+  // is a bound nobody entered, written through the locked merge.
+  it("sends no limit change at all when only the validity date moved", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      validTo: "2027-03-31",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      validTo: "2027-03-31T23:59:59.999Z",
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("names only the calls measure when only the calls cap moved", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      callsPerDay: "20",
+    });
+    // No `rows` key: the count bound is the handler's to keep. Restating it here
+    // is what would have put 1000 a month back over a colleague's lower figure.
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { calls: { perPeriod: "20", currencyOrUnit: "calls" } },
+    });
+  });
+
+  // Sparse within the measure too, not only across measures: the bound's other
+  // figure, its unit and its window are all still their prefills, so none of
+  // them is in the change and the handler keeps each as stored.
+  it("carries the one figure that moved, with exactly the digits typed", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      perPeriod: "800",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { rows: { perPeriod: "800" } },
+    });
+  });
+
+  // A cleared field and an untouched field produce the same patch, and they mean
+  // the same thing: leave the stored bound alone. Clearing is not deletion, which
+  // the dialog's copy says and this pins — the two cases are written apart so a
+  // change that started sending a cleared field as an edit fails one of them.
+  it("leaves a field the operator cleared out of the change, as it leaves a prefill", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      perCall: "",
+      perPeriod: "800",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { rows: { perPeriod: "800" } },
+    });
+  });
+
+  it("changes a bound's window without restating its figures", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      period: "weekly",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { rows: { period: "weekly" } },
+    });
+  });
+
+  // A different measure name is a different bound, one the record may not hold at
+  // all, so nothing typed against it can be a prefill left over from the old one:
+  // the figures, the unit and the window are all this operator's statement about
+  // the new measure, and a bound with no figure or no unit would be refused by
+  // the handler rather than stored.
+  it("carries every field when the operator names a different measure", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      measure: "recipients",
+      unit: "recipients",
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: {
+        recipients: {
+          perCall: "50",
+          perPeriod: "1000",
+          period: "monthly",
+          currencyOrUnit: "recipients",
+        },
+      },
+    });
+  });
+
+  // `update_mandate_limits` refuses a request that names no change, so a
+  // submission holding only its prefills is refused here instead, naming a field
+  // a person can act on. Reaching the kernel with an empty change would be a
+  // schema failure that names none.
+  it("refuses a submission that changed nothing (negative)", async () => {
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", untouched),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "perPeriod",
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   // A limit denominated in an ISO 4217 code reads back as money while the figure
@@ -307,12 +478,35 @@ describe("changeMandateLimits", () => {
         period: "monthly",
         callsPerDay: "",
         validTo: "",
+        baseline: NO_PREFILL,
       }),
     ).toEqual({
       ok: false,
       reason: "invalid",
       code: "invalid_input",
       field: "perPeriod",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // Validation runs on every value the form carries, not only on the ones that
+  // differ from their prefill. A server action is reachable by anyone holding a
+  // session, so "the dialog would not have prefilled that" is not a check; and a
+  // bound the form cannot write correctly has to stop the submission rather than
+  // be quietly left out of the change and sent anyway.
+  it("refuses a unit the form cannot write even when it equals the prefill (negative)", async () => {
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...untouched,
+        unit: "USD",
+        baseline: { ...PREFILLED, unit: "USD" },
+        callsPerDay: "20",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "unit",
     });
     expect(invoke).not.toHaveBeenCalled();
   });
