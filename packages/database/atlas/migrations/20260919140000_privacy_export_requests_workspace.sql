@@ -7,8 +7,11 @@
 -- through another workspace of the same organization. Recording the queuing
 -- workspace lets the recheck ask there as well.
 --
--- Nullable: a request made in no workspace has none, and rows written before
--- this column are left as they are. Those rows fall back to the check in the
--- calling scope, which is what they had before.
+-- A request made in no workspace records the org-only sentinel
+-- (00000000-0000-0000-0000-000000000000, ADR-068). Null is left only on rows
+-- written before this column, whose governing workspace is unknown.
+-- get_export_status refuses an organization archive on such a row rather than
+-- check a workspace that may not be the one that governed it. A personal
+-- export is unaffected: no workspace policy ever gated it.
 ALTER TABLE "privacy"."privacy_export_requests"
   ADD COLUMN IF NOT EXISTS "workspace_id" uuid;

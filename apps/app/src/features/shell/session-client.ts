@@ -99,58 +99,45 @@ export async function liveRevokeSession(token: string): Promise<boolean> {
   return !reply.error;
 }
 
-/**
- * What a rotation says about itself. `invalid` is the server answering that it
- * refused the password, which it does before it writes anything: nothing
- * rotated. `failed` is every other ending, and it means the outcome is
- * unknown, because Better Auth voids the old set the moment the write lands
- * and keeps only hashes of the new one. A request that left this page without
- * bringing an answer back may have rotated the codes into a set nobody holds.
- */
-export type RegenerateResult =
-  | { ok: true; codes: string[] }
-  | { ok: false; reason: "invalid" | "failed" };
-
 /** Issues a fresh set of two-factor recovery codes; the old set is void. Needs the password. */
+/**
+ * Rotates the recovery codes, and says whether a failure is one we can explain.
+ *
+ * `refused` separates two outcomes a single `ok: false` used to collapse. A
+ * 400, 401 or 403 is the server declining the password: it read the request and
+ * said no, so nothing was rotated and the stored set still works. Anything
+ * else, a 5xx or a call that never came back, says nothing about what the
+ * server did. Better Auth voids the old codes as soon as it commits, so an
+ * unexplained failure may well have committed and lost only the response, in
+ * which case the old set is already dead and the new one is gone.
+ *
+ * Reporting that as "the password was not accepted" is the dangerous reading:
+ * it tells the person nothing happened, so they carry on with codes that no
+ * longer work and find out when the authenticator is gone.
+ */
 export async function liveRegenerateBackupCodes(
   password: string,
-): Promise<RegenerateResult> {
+): Promise<{ ok: true; codes: string[] } | { ok: false; refused: boolean }> {
   try {
     const reply = await (await client()).twoFactor.generateBackupCodes({
       password,
     });
-    if (reply.error) return { ok: false, reason: refusal(reply.error) };
-    const codes = reply.data?.backupCodes;
-    // A success with no set is the worst of both: the server rotated and this
-    // page has nothing to show. It reads as unknown, not as a rotation done.
-    if (!Array.isArray(codes) || codes.length === 0)
-      return { ok: false, reason: "failed" };
-    return { ok: true, codes };
+    if (reply.error) {
+      // Read defensively rather than asserted, and through `unknown`: the
+      // client types the error loosely, and an unreadable status is an unknown
+      // outcome, not a refusal, which is the direction that fails safe.
+      const failure: unknown = reply.error;
+      const refused =
+        isRecord(failure) &&
+        (failure.status === 400 ||
+          failure.status === 401 ||
+          failure.status === 403);
+      return { ok: false, refused };
+    }
+    return { ok: true, codes: reply.data?.backupCodes ?? [] };
   } catch {
-    // Nothing came back, so nothing here knows whether the write landed.
-    return { ok: false, reason: "failed" };
+    // Never reached the server, or never came back from it. Either way the
+    // outcome is unknown, which is not the same as refused.
+    return { ok: false, refused: false };
   }
-}
-
-/**
- * Whether an error answer proves the password was rejected and no rotation
- * happened.
- *
- * Better Auth checks the password and the two-factor row first and answers 4xx
- * from there, so an answered client error is the one failure that proves the
- * stored set is untouched. A 5xx does not: the write may have landed and the
- * response may have died after it. Nor does a transport failure, which
- * better-fetch reports as status 500 with the status text "Fetch Error" rather
- * than by throwing when `catchAllError` is on.
- */
-function refusal(error: unknown): "invalid" | "failed" {
-  // Read off an unknown shape on purpose: Better Auth types this error as a
-  // message alone, and the status it carries at runtime is the only thing that
-  // separates an answer from a request that never got one.
-  if (!isRecord(error)) return "failed";
-  if (error.statusText === "Fetch Error") return "failed";
-  const { status } = error;
-  if (typeof status !== "number" || status < 400 || status >= 500)
-    return "failed";
-  return "invalid";
 }
