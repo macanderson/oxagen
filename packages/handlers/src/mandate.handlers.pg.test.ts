@@ -1064,6 +1064,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .from(schema.mandates)
           .where(eq(schema.mandates.publicId, m.id)),
       );
+      // `hasDrawnInCurrentPeriod` sums by the current monthly key, the same
+      // one `seedReservation` filed the reservation under: a release under
+      // any other key would leave that sum still seeing the reservation as
+      // drawn, refusing the change below all over again.
+      const releasedAt = new Date();
+      const monthly = `${releasedAt.getUTCFullYear()}-${String(releasedAt.getUTCMonth() + 1).padStart(2, "0")}`;
       await withSystemDb((tx) =>
         tx.insert(schema.mandateLedger).values({
           orgId,
@@ -1074,7 +1080,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           measure: "amount",
           value: "150000000",
           unitOrCurrency: "USD",
-          periodKey: "released",
+          periodKey: monthly,
           balanceAfter: "2000000000",
         }),
       );

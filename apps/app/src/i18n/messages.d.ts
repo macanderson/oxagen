@@ -1222,6 +1222,7 @@ type Messages = {
         measureUnitMismatch: string;
         measureKindConflict: string;
         periodDrawn: string;
+        measureKindDrawn: string;
         noPrincipal: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;

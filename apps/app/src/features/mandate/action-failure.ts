@@ -40,6 +40,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureKindConflict");
           case "period_drawn":
             return t("periodDrawn");
+          case "measure_kind_drawn":
+            return t("measureKindDrawn");
           case "no_principal":
             return t("noPrincipal");
           // Not a handler reason: the action itself refuses before it writes,
