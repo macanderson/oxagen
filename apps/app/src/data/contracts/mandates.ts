@@ -80,7 +80,6 @@ const MandateTargetRule = z.object({
   allow: z.array(z.string().min(1)),
   deny: z.array(z.string().min(1)),
 });
-type MandateTargetRule = z.infer<typeof MandateTargetRule>;
 
 /**
  * One threshold in the mandate's own approval rule: above this figure of this
@@ -100,9 +99,6 @@ const MandateApprovalThreshold = z.object({
   value: MeasureValue.nullable(),
   recorded: z.string().regex(/^\d+$/),
 });
-type MandateApprovalThreshold = z.infer<
-  typeof MandateApprovalThreshold
->;
 
 /**
  * The mandate's own approval rule (`mandateApprovalSchema`): when a person has
@@ -118,7 +114,6 @@ const MandateApproval = z.object({
   alwaysHumanFor: z.array(z.string().min(1)),
   approvers: z.array(z.string().min(1)),
 });
-type MandateApproval = z.infer<typeof MandateApproval>;
 
 export const MandateRow = z.object({
   id: PublicId,
