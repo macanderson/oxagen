@@ -109,6 +109,16 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
  */
 const RESERVED_MEASURE = "calls";
 
+/**
+ * The viewer's zone could not be read, so a picked day has no instant yet.
+ * Retryable: nothing was written.
+ */
+const TIME_ZONE_UNAVAILABLE: ActionResult<never> = {
+  ok: false,
+  reason: "unavailable",
+  code: "time_zone_unavailable",
+};
+
 function refuse(field: keyof LimitsDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
@@ -118,25 +128,27 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
  * the zone this app draws every date in.
  *
  * The zone comes from the viewer's own preference through the kernel seam, the
- * way the grant path reads it, and falls back to Pacific both when the read
- * fails and when the stored name is one this runtime cannot format in — because
- * the dates on screen fall back the same way, and a window that disagreed with
- * the dates beside it would be worse than one in the wrong zone.
+ * way the grant path reads it. A stored name this runtime cannot format in
+ * falls back to Pacific, because the dates on screen fall back the same way.
+ *
+ * A failed read returns `null`, and the caller refuses the change as
+ * retryable. Guessing a zone there would move an authority boundary: an
+ * operator in Tokyo who picked 31 January would get a window that ends 17
+ * hours after their day does.
  *
  * Returns a function rather than an instant so the caller reads the preference
  * once and only when a day was actually submitted.
  */
 async function endOfPickedDay(
   ctx: Awaited<ReturnType<typeof requireViewer>>,
-): Promise<(day: string) => string | null> {
+): Promise<((day: string) => string | null) | null> {
   const preferences = await kernelRead(ctx, {
     contract: userPreferencesRead,
     input: {},
     page: "mandates",
   });
-  const stored = preferences.ok
-    ? preferences.value.timezone
-    : DEFAULT_TIME_ZONE;
+  if (!preferences.ok) return null;
+  const stored = preferences.value.timezone;
   const timeZone = supportsTimeZone(stored) ? stored : DEFAULT_TIME_ZONE;
   return (day) => endOfZonedDay(day, timeZone);
 }
@@ -226,7 +238,8 @@ export async function changeMandateLimits(
     // while the figure beside it is whole units, which is the one shape this
     // form cannot write correctly. Refused in either casing, because an
     // operator who means money means it whichever way they type it.
-    if (unit === "" || isCurrencyCode(unit.toUpperCase())) return refuse("unit");
+    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
+      return refuse("unit");
     if (perCall === "" && perPeriod === "") return refuse("perPeriod");
     if (perCall !== "") {
       if (!MEASURE_VALUE.test(perCall)) return refuse("perCall");
@@ -318,9 +331,13 @@ export async function changeMandateLimits(
   //
   // Only read when there is a day to place in a zone, so a limit-only change
   // still makes exactly one kernel call.
-  const zoned = validTo === "" ? null : await endOfPickedDay(ctx);
-  const validToInstant = zoned === null ? null : zoned(validTo);
-  if (validTo !== "" && validToInstant === null) return refuse("validTo");
+  let validToInstant: string | null = null;
+  if (validTo !== "") {
+    const zoned = await endOfPickedDay(ctx);
+    if (zoned === null) return TIME_ZONE_UNAVAILABLE;
+    validToInstant = zoned(validTo);
+    if (validToInstant === null) return refuse("validTo");
+  }
 
   // One write, carrying only what changed. The handler merges it over the stored
   // record under the lock it already takes, at both depths: every measure this
@@ -361,7 +378,12 @@ export async function revokeMandate(
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
   const reason = input.reason.trim();
   if (reason === "")
-    return { ok: false, reason: "invalid", code: "invalid_input", field: "reason" };
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "reason",
+    };
   const ctx = await requireViewer(org, ws);
   const result = await kernelWrite(ctx, mandateRevoke, {
     mandateId: input.mandateId,

@@ -326,18 +326,19 @@ export async function requestMandate(
   // read from an action goes through the kernel seam exactly as its write does
   // (ADR-089), like the Workspace settings dialog's.
   //
-  // A failed preference read falls back to Pacific time, the same default the
-  // pages use, and so does a stored zone this runtime cannot format in: the
-  // dates on screen are drawn in that fallback, so the window written has to
-  // agree with them.
+  // A stored zone this runtime cannot format in falls back to Pacific time,
+  // the same default the pages draw dates in, so the window written agrees
+  // with them. A failed read is refused as retryable instead: guessing a zone
+  // there would move the edge of the grant by up to a day, and nothing was
+  // written yet.
   const preferences = await kernelRead(ctx, {
     contract: userPreferencesRead,
     input: {},
     page: "agents",
   });
-  const stored = preferences.ok
-    ? preferences.value.timezone
-    : DEFAULT_TIME_ZONE;
+  if (!preferences.ok)
+    return { ok: false, reason: "unavailable", code: "time_zone_unavailable" };
+  const stored = preferences.value.timezone;
   const timeZone = supportsTimeZone(stored) ? stored : DEFAULT_TIME_ZONE;
   const validFrom = startOfZonedDay(draft.validFrom, timeZone);
   const validTo = endOfZonedDay(draft.validTo, timeZone);

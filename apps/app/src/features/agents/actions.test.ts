@@ -480,7 +480,7 @@ describe("requestMandate", () => {
     });
   });
 
-  it("falls back to the default zone when the saved one cannot be read (negative)", async () => {
+  it("refuses as retryable when the saved zone cannot be read, and writes nothing (negative)", async () => {
     kernelRead.mockResolvedValue({
       ok: false,
       reason: "error",
@@ -488,17 +488,18 @@ describe("requestMandate", () => {
       status: 503,
     });
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
-    await requestMandate("acme", "core-platform", {
+    const result = await requestMandate("acme", "core-platform", {
       ...good,
       validFrom: "2026-01-15",
       validTo: "2026-01-15",
     });
-    // Pacific is the default every page prints in, so the window agrees with
-    // the dates on screen rather than silently becoming a UTC day.
-    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      validFrom: "2026-01-15T08:00:00.000Z",
-      validTo: "2026-01-16T07:59:59.999Z",
+    // A guessed zone would move both edges of the window by up to a day.
+    expect(result).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "time_zone_unavailable",
     });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("falls back to the default zone for a saved one this runtime cannot format in (negative)", async () => {
