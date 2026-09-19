@@ -637,6 +637,36 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(bystander.items).toEqual([]);
     });
 
+    // #3440: readerFilter's workspace leg must run its own assertOrgRole
+    // check against Owner/Member, not treat every signed-in user the org
+    // leg refused as a narrowed reader. This matters beyond enterprise
+    // orgs: checkIAM allows every capability unconditionally on a
+    // non-enterprise tier, so this handler-level check is the only gate a
+    // Free/Build/Scale org actually runs, and a workspace Viewer (or an
+    // Owner/Member demoted after creating an agent) must not pass it.
+    it("list/get: a workspace Viewer is refused, not treated as a narrowed reader", async () => {
+      const viewerUserId = randomUUID();
+      doubles.roles.set(viewerUserId, { org: null, workspace: "Viewer" });
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, ctx(viewerUserId))),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      const m = await grant(billingUserId, body());
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: m.id, ledgerLimit: 100 },
+            ctx(viewerUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
     it("get: the operator of another agent is refused; the office reads the ledger newest first; an unknown id is not found", async () => {
       const m = await grant(billingUserId, body());
       await seedReservation(m.id, "150000000", randomUUID());

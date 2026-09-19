@@ -93,6 +93,16 @@ admit a mandate row when the caller created its agent OR is the mandate's
 own `requestedBy`, two independent grants of visibility rather than one
 narrowed by the other.
 
+`readerFilter` (`packages/handlers/src/_mandate.ts`) runs its own workspace
+role check (`assertOrgRole(ctx, { org: [], workspace: ["Owner", "Member"] })`)
+rather than treating every caller its accountable-role check refuses as a
+narrowed reader. That distinction matters beyond an enterprise org:
+`checkIAM` allows every capability unconditionally on a non-enterprise tier
+(`packages/iam/src/check-iam.ts`'s `tier_gate` step), so this handler-level
+check is the only gate a Free, Build or Scale org actually runs, and the
+earlier version admitted a workspace Viewer, or an Owner/Member demoted
+after creating an agent, as a narrowed reader on those tiers.
+
 ## Consequences
 
 - A workspace Owner or Member can now read the mandates of the agents they
@@ -103,6 +113,10 @@ narrowed by the other.
   request themselves, or the workspace's full ledger: `readerFilter` narrows
   every such read to `createdById = actingUserId OR requestedBy =
   actingUserId`.
+- A workspace Viewer, or a role outside Owner/Member entirely, is refused on
+  every tier, not only an enterprise org: `readerFilter`'s own workspace
+  role check enforces it directly, since `defaultRoles` alone only gates an
+  enterprise org.
 - `apps/app` needed no change: `blindSpotOf`'s `reader_scope` branch already
   tells a narrowed reader their view is limited instead of reporting "no
   mandate" when mandates are only hidden from them, and now renders on a live

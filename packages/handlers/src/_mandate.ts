@@ -214,33 +214,42 @@ export async function assertToolsDeclareMeasures(
 }
 
 /**
- * Who may read: an accountable org role reads every mandate; any other
- * acting user (the signed-in user, or the API key's creator) reads the
+ * Who may read: an accountable org role reads every mandate; a workspace
+ * Owner or Member (the same set `request_mandate` admits) reads the
  * mandates of agents they created, and the mandates they requested
  * themselves for any agent (list_mandates, get_mandate). Returns null for
  * the office, or the user id callers narrow both `agents.createdById` and
  * `mandates.requestedBy` against.
+ *
+ * Both checks run through `assertOrgRole` explicitly, in two calls rather
+ * than one call naming both role sets, because the two admissions mean
+ * different things to the caller (the office sees everything; a narrowed
+ * reader sees only its own) and one combined call cannot say which leg
+ * passed. This matters beyond enterprise orgs: `checkIAM` allows every
+ * capability unconditionally on a non-enterprise tier (the `tier_gate`
+ * step in `packages/iam/src/check-iam.ts`), so a contract's `defaultRoles`
+ * is documentation there, not enforcement, and this handler-level check is
+ * the only gate a Free/Build/Scale org actually runs. Treating every
+ * signed-in user `assertOrgRole`'s org leg refused as a narrowed reader,
+ * without also checking the workspace leg, would admit a workspace Viewer,
+ * or an Owner/Member demoted after creating an agent, on those tiers.
  */
 export async function readerFilter(
   ctx: CheckedContext,
 ): Promise<string | null> {
   const actingUserId = await resolveActingUserId(ctx);
+  const actingCtx = { ...ctx, userId: actingUserId };
   try {
-    await assertOrgRole(
-      { ...ctx, userId: actingUserId },
-      { org: ACCOUNTABLE_ORG_ROLES },
-    );
+    await assertOrgRole(actingCtx, { org: ACCOUNTABLE_ORG_ROLES });
     return null;
   } catch (err) {
-    if (
-      err instanceof HandlerError &&
-      err.reason === "org_role_required" &&
-      actingUserId
-    ) {
-      return actingUserId;
+    if (!(err instanceof HandlerError && err.reason === "org_role_required")) {
+      throw err;
     }
-    throw err;
   }
+  await assertOrgRole(actingCtx, { org: [], workspace: ["Owner", "Member"] });
+  // assertOrgRole refused a call with no acting user or no qualifying role.
+  return actingUserId as string;
 }
 
 /** Public ids of the users a set of mandate rows name. */
