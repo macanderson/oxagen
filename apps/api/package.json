@@ -32,6 +32,7 @@
     "@oxagen/plugins": "workspace:*",
     "@oxagen/rules": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",
+    "@oxagen/storage": "workspace:*",
     "@oxagen/telemetry": "workspace:*",
     "@oxagen/tenancy": "workspace:*",
     "ai": "7.0.14",

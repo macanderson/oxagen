@@ -6,10 +6,15 @@ import { z } from "zod";
  * workspace.settings.read/write).
  *
  * An avatar value is a nullable text field that is EITHER:
- *  - an `https://` URL to a hosted image, OR
+ *  - an `https://` URL to a hosted image (the `photo` kind), OR
  *  - the platform designed-avatar spec string `avatar:v1:<json>`, where the
- *    JSON is `{"emoji":"🦊","bg":"#f59e0b","mode":"full"}` and `mode` is one of
- *    `full | mono-light | mono-dark`.
+ *    JSON is one of
+ *      `{"kind":"icon","icon":"rocket","tone":"solid"}`
+ *      `{"kind":"initials","text":"MB","font":"sans","tone":"soft"}`
+ *    `icon` is a name from the Lucide set the app ships, `text` is up to six
+ *    letters, `font` is `sans | serif | mono`, and `tone` is `solid | soft |
+ *    line`: three relations to the theme from the house scale, never a free
+ *    colour. The app's parser and constants are apps/app/src/ui/avatar-spec.ts.
  *
  * Capped at 512 chars — long enough for the spec string, short enough to keep it
  * out of "store a blob in a text column" territory. Validation here is a cheap

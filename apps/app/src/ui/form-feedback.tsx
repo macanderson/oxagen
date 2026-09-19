@@ -33,16 +33,24 @@ export function SubmitButton({
   pendingLabel,
   className,
   fullWidth = true,
+  form,
+  testId,
 }: {
   pending: boolean;
   label: string;
   pendingLabel: string;
   className?: string;
   fullWidth?: boolean;
+  /** The id of the form it submits when it is rendered outside that form (a dialog footer). */
+  form?: string;
+  testId?: string;
 }) {
   return (
     <button
       type="submit"
+      form={form}
+      data-testid={testId}
+      data-touch-target={form ? "" : undefined}
       aria-disabled={pending || undefined}
       className={`${buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >

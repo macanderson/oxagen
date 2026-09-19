@@ -1,7 +1,9 @@
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { withSystemDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { orgMembershipRole } from "./_org_membership";
+import { assertCapabilityNotRevoked } from "./lib/capability-policy-recheck";
 import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
@@ -48,30 +50,46 @@ export const privacyDataEraseHandler: CapabilityHandler<
   if (input.scope === "org") {
     if (!input.orgId)
       throw new Error("orgId is required for org-scope erasure");
-    // Org-scope erasure: Owner only (enforced by IAM + explicit check here for defense-in-depth)
-    const membership = await withSystemDb((tx) =>
-      tx
-        .select({ role: schema.orgUsers.role })
-        .from(schema.orgUsers)
-        .where(
-          and(
-            eq(schema.orgUsers.orgId, input.orgId!),
-            eq(schema.orgUsers.userId, ctx.userId!),
-          ),
-        )
-        .limit(1),
-    );
-    // org_users.role holds the membership role, NOT the capitalized
-    // SystemOrgRole ("Owner") the IAM defaultRoles layer uses — those are
-    // different concepts. It is written in both casings, though: lowercase by
-    // organization.create and the invite-accept path, TitleCase by
-    // workspace.invite.send's mapRole() and org.member.role.change. The column's
-    // CHECK is `lower(role) IN (...)`, so both are valid rows and a
-    // case-sensitive compare would deny a legitimately promoted owner.
-    const role = membership[0]?.role?.toLowerCase();
+    // The erasure target must be the org the kernel governed, the same rule
+    // `export_data` applies and for a sharper reason: the recheck below asks
+    // `ctx.orgId`'s policy, while the role read and the scheduled delete use
+    // `input.orgId`. With the two allowed to differ, an owner of both A and B
+    // could invoke in A and name B, and B's explicit `erase_data` deny would
+    // never be read while B's records were scheduled for hard-delete. The
+    // decision would be made in one tenant and executed in another, on the
+    // one capability where that is unrecoverable.
+    //
+    // So they must name the same org, and an owner erasing another
+    // organization invokes in that organization's context, where its own
+    // rules govern the request.
+    if (input.orgId !== ctx.orgId) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_erasure_outside_governed_scope",
+        message:
+          "An organization erasure must be requested in that organization's own context, so its access rules govern the request",
+      });
+    }
+    // Org-scope erasure: Owner only (enforced by IAM + explicit check here for
+    // defense-in-depth). Owner alone, not Owner or Admin: erasing an
+    // organization's data is not the same authority as exporting it.
+    const role = await orgMembershipRole(input.orgId, ctx.userId);
     if (role !== "owner") {
       throw new Error("Forbidden: org erasure requires owner role");
     }
+    // The role is one revocation path; an explicit `deny` written against
+    // `erase_data` itself is the other, and `org_users.role` cannot see it. The
+    // kernel does not see it either below the enterprise tier, where its gate
+    // answers `tier_gate → allow` before any policy is read. So an owner of an
+    // organisation that had explicitly denied erasure could still schedule the
+    // hard-delete of every record in it. Same guard as the export paths, same
+    // reason: an explicit deny that does not deny is worse than no control at
+    // all, because whoever wrote it believes the action is impossible.
+    await assertCapabilityNotRevoked(privacyDataErase, ctx, {
+      reason: "org_erasure_not_permitted",
+      message:
+        "An organization erasure is not permitted: the erase_data policy for this organization denies it",
+    });
   }
 
   const orgId = input.scope === "org" ? (input.orgId ?? ctx.orgId) : ctx.orgId;
