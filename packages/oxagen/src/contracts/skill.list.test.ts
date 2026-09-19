@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SKILL_CURSOR_MAX, skillList } from "./skill.list";
+import { SKILL_CURSOR_MAX, SKILL_HARNESS_CAP, skillList } from "./skill.list";
 
 const row = {
   name: "release-notes",
   sessions: 3,
   harnesses: ["claude-code"],
+  harnessCount: 1,
   firstSeenAt: "2026-09-01T09:00:00.000Z",
   lastSeenAt: "2026-09-14T09:00:00.000Z",
 };
@@ -73,13 +74,39 @@ describe("list_skills contract", () => {
     ).toBe(false);
   });
 
-  it("refuses a row no session reported, a row with no harness, and a field the record does not carry", () => {
+  it("refuses a row no session reported, a row with no harness, a non-positive harness count, and a field the record does not carry", () => {
     const withRow = (over: Record<string, unknown>) =>
       skillList.output.safeParse({ ...page, skills: [{ ...row, ...over }] })
         .success;
     expect(withRow({ sessions: 0 })).toBe(false);
     expect(withRow({ harnesses: [] })).toBe(false);
+    expect(withRow({ harnessCount: 0 })).toBe(false);
     expect(withRow({ name: "" })).toBe(false);
     expect(withRow({ version: "1.0.0" })).toBe(false);
+  });
+
+  it("admits an empty harness label and up to SKILL_HARNESS_CAP harnesses, and refuses one more (#3103)", () => {
+    const withRow = (over: Record<string, unknown>) =>
+      skillList.output.safeParse({ ...page, skills: [{ ...row, ...over }] })
+        .success;
+    expect(withRow({ harnesses: [""] })).toBe(true);
+    expect(
+      withRow({
+        harnesses: Array.from(
+          { length: SKILL_HARNESS_CAP },
+          (_, i) => `harness-${i}`,
+        ),
+        harnessCount: SKILL_HARNESS_CAP,
+      }),
+    ).toBe(true);
+    expect(
+      withRow({
+        harnesses: Array.from(
+          { length: SKILL_HARNESS_CAP + 1 },
+          (_, i) => `harness-${i}`,
+        ),
+        harnessCount: SKILL_HARNESS_CAP + 1,
+      }),
+    ).toBe(false);
   });
 });

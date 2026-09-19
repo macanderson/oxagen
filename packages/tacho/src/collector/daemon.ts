@@ -1694,6 +1694,8 @@ export async function startDaemon(
               `session ${sessionId} first seen through OTel; no hook stream yet`,
             );
           record(session.recorder.ingestOtlp(payload as OtlpPayload));
+          for (const refusal of session.recorder.takeOtelRefusals())
+            log(`OTel record not sealed for session ${sessionId}: ${refusal}`);
         }
       }),
     health: () => ({
