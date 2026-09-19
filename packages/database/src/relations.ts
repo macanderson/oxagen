@@ -418,6 +418,32 @@ export const operatorUserJoin = and(
   eq(principals.kind, "human"),
 );
 
+/**
+ * The person an AGENT acts for: the user who created it.
+ *
+ * The same two columns as `operatorUserJoin` above and the opposite `kind`,
+ * because the two answer different questions and only look alike.
+ *
+ * `operatorUserJoin` asks who started a run. A run started by an agent has an
+ * agent principal whose `parent_user_id` is whoever built that agent, and that
+ * person did not start the run, so the human filter is what keeps their name
+ * off it.
+ *
+ * This asks who an agent belongs to. An agent's own principal is `kind =
+ * 'agent'` by construction (`agent.definition.create` provisions it that way
+ * and its test says so), and its `parent_user_id` is the creating user — which
+ * is exactly the person the contract's `operatorId` names. Reusing the run
+ * join here matched nothing at all, so every agent reported no operator.
+ *
+ * Kept as two named joins rather than one parameterised by `kind`. The
+ * parameter would be the whole distinction, passed at each call site, and a
+ * call site is where this went wrong once already.
+ */
+export const agentCreatorUserJoin = and(
+  eq(users.id, principals.parentUserId),
+  eq(principals.kind, "agent"),
+);
+
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, {
     fields: [roles.orgId],
