@@ -133,6 +133,21 @@ describe("rateLimiter", () => {
     expect(rejected?.status).toBe(429);
   });
 
+  it("skips the limit when keyFn returns null", async () => {
+    const middleware = rateLimiter({
+      windowMs: 60_000,
+      max: 1,
+      keyFn: () => null,
+    });
+    const next = vi.fn().mockResolvedValue(undefined);
+
+    await middleware(fakeContext(), next);
+    const second = await middleware(fakeContext(), next);
+
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(second).toBeUndefined();
+  });
+
   it("keeps working across a window roll without leaking the previous window's keys", async () => {
     vi.useFakeTimers();
     try {

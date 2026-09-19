@@ -44,7 +44,7 @@
 <style>
 /* ============ tokens ============
    The Stella palette, re-declared because this page does not link
-   /assets/oxagen.css — it replaces its own document with the reader HTML the
+   /assets/oxagen.css. It replaces its own document with the reader HTML the
    API returns, so it carries everything it needs inline. Keep the values here
    in step with the --st-* table in /assets/oxagen.css.
    The `--ember-*` and `--indigo` names predate the Stella reskin; what they
@@ -159,7 +159,7 @@ main{flex:1;position:relative}
 }
 
 /* The [hidden] attribute must win over the display:grid/flex set on the
-   state panels below — otherwise `el.hidden = true` leaves them visible (the
+   state panels below, otherwise `el.hidden = true` leaves them visible (the
    UA's [hidden]{display:none} loses to an author display rule). */
 [hidden]{display:none!important}
 
@@ -427,8 +427,8 @@ main{flex:1;position:relative}
         <fieldset class="edition-pick">
           <legend>Which edition should we send?</legend>
           <div class="edition-opts">
-            <label class="edition-opt is-selected">
-              <input type="radio" name="edition" value="page-flip-reader" checked>
+            <label class="edition-opt">
+              <input type="radio" name="edition" value="page-flip-reader">
               <span class="edition-name">Page-flip reader</span>
               <span class="edition-desc">The premium reading experience</span>
             </label>
@@ -504,6 +504,27 @@ main{flex:1;position:relative}
   var LEADS_URL = API_BASE + "/v1/cms/leads";
   var REDEEM_URL = API_BASE + "/v1/cms/book/redeem";
   var RESEND_URL = API_BASE + "/v1/cms/book/resend";
+
+  /* Every API call here is bounded. A connection the API accepts but never
+     answers would otherwise leave the loading state or a disabled submit
+     button up forever; aborting rejects the promise, and each caller's
+     existing catch branch offers the retry. */
+  var REQUEST_TIMEOUT_MS = 15000;
+  function postJson(url, body) {
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
+    /* The timer is left running after the headers arrive: it also bounds a
+       body that stalls mid-read, and aborting a finished request is a no-op. */
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller ? controller.signal : undefined
+    }).catch(function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
   var EDITIONS = ["field-manual", "page-flip-reader"];
   var DEFAULT_EDITION = "page-flip-reader";
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -529,7 +550,7 @@ main{flex:1;position:relative}
   var trackingCode = buildTrackingCode();
 
   /* The gate form is reachable with a `c=` still in the URL (an expired or
-     already-used link lands here), and pagePath is stored on the lead row —
+     already-used link lands here), and pagePath is stored on the lead row,
      so drop the access code before recording where the visitor was. */
   function safePagePath() {
     var scrubbed = new URLSearchParams(location.search);
@@ -573,44 +594,59 @@ main{flex:1;position:relative}
   }
 
   function reasonMessage(reason) {
-    if (reason === "consumed") return "That link has already been used — links are single-use.";
+    if (reason === "consumed") return "That link has already been used. Links are single-use.";
     if (reason === "expired") return "That link has expired.";
     return "That link isn’t valid.";
+  }
+
+  function redeemFailureMessage(status, reason) {
+    if (status === 429) return "Too many attempts. Wait a moment and try again.";
+    if (status >= 500 || !reason) {
+      return "We couldn’t verify that link. Check your connection and try again.";
+    }
+    return reasonMessage(reason);
   }
 
   function replaceDocumentWithBook(edition, newCode, html) {
     try {
       history.replaceState(null, "", "/read?e=" + encodeURIComponent(edition) + "&c=" + encodeURIComponent(newCode));
-    } catch (_) { /* history API unavailable — proceed anyway */ }
+    } catch (_) { /* history API unavailable, proceed anyway */ }
     document.open();
     document.write(html);
     document.close();
   }
 
+  /* Sync the edition radios to ?e= before the form is shown, so /read?e=field-manual
+     without a code does not silently submit the page-flip default. */
+  var editionInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="edition"]'));
+  editionInputs.forEach(function (input) {
+    var match = input.value === effectiveEdition;
+    input.checked = match;
+    var opt = input.closest(".edition-opt");
+    if (opt) opt.classList.toggle("is-selected", match);
+  });
+
   if (code) {
     showLoading();
-    fetch(REDEEM_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edition: effectiveEdition, code: code })
-    }).then(function (res) {
-      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    postJson(REDEEM_URL, { edition: effectiveEdition, code: code }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; }).catch(function () {
+        return { status: res.status, data: {} };
+      });
     }).then(function (r) {
       var data = r.data || {};
       if (data.ok && data.html) {
         replaceDocumentWithBook(effectiveEdition, data.newCode, data.html);
         return;
       }
-      showGate(reasonMessage(data.reason));
+      showGate(redeemFailureMessage(r.status, data.reason));
     }).catch(function () {
-      showGate("We couldn’t verify that link — check your connection and try again.");
+      showGate("We couldn’t verify that link. Check your connection and try again.");
     });
   } else {
     showGate(null);
   }
 
   /* ---------- edition chooser ---------- */
-  var editionInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="edition"]'));
   editionInputs.forEach(function (input) {
     input.addEventListener("change", function () {
       editionInputs.forEach(function (i) {
@@ -630,7 +666,7 @@ main{flex:1;position:relative}
     el.classList.toggle("err", !!isErr);
   }
 
-  /* Anything the API sent us goes through here instead — it is text, not markup. */
+  /* Anything the API sent us goes through here instead. It is text, not markup. */
   function setStatusText(el, msg, isErr) {
     el.textContent = msg;
     el.classList.toggle("err", !!isErr);
@@ -666,11 +702,7 @@ main{flex:1;position:relative}
       btn.disabled = true;
       setStatus(statusEl, "Sending…");
 
-      fetch(LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).then(function (res) {
+      postJson(LEADS_URL, payload).then(function (res) {
         return res.json().then(function (data) { return { status: res.status, data: data }; });
       }).then(function (r) {
         var data = r.data || {};
@@ -733,11 +765,7 @@ main{flex:1;position:relative}
       btn.disabled = true;
       setStatus(statusEl, "Sending…");
 
-      fetch(RESEND_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, edition: edition })
-      }).then(function (res) {
+      postJson(RESEND_URL, { email: email, edition: edition }).then(function (res) {
         return res.json().then(function (data) { return { status: res.status, data: data }; });
       }).then(function (r) {
         var data = r.data || {};

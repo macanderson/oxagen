@@ -266,10 +266,7 @@ describe("TranscriptTailer", () => {
 
     await instance.tick();
     expect(agentA.lines.map((l) => l.line)).toEqual(["agent-a-1"]);
-    expect(agentB.lines.map((l) => l.line)).toEqual([
-      "agent-b-1",
-      "agent-b-2",
-    ]);
+    expect(agentB.lines.map((l) => l.line)).toEqual(["agent-b-1", "agent-b-2"]);
 
     // Agent A seals and drains; its tombstone must not key on the raw id.
     agentA.sealed = true;
