@@ -29926,7 +29926,7 @@
             },
             "bytes_base64": {
               "type": "string",
-              "maxLength": 819200
+              "maxLength": 1398104
             }
           },
           "required": [

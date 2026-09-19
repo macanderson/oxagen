@@ -345,6 +345,13 @@ export interface CliDeps {
   };
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
+  /**
+   * Cursor's CLI, `agent`. Cursor also installs it as that generic name;
+   * `cursorFacts` sanity-checks the version string before treating it as
+   * Cursor rather than an unrelated tool. The IDE reads the same hooks file,
+   * so a machine with only the IDE is hooked all the same; this reports the
+   * CLI.
+   */
   cursor: () => HarnessFacts;
   stella: () => HarnessFacts;
   /**
@@ -616,7 +623,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     osVersion: release(),
     arch: osArch(),
     nodeVersion: process.version,
-    // Every one of these four files carries TACHO_LOCAL_TOKEN — the bearer the
+    // Every one of these harness files carries TACHO_LOCAL_TOKEN — the bearer the
     // loopback listener requires, and the one thing on this machine that lets a
     // process reach the daemon and, through the gateway, the host's own Oxagen
     // API key. So `HarnessFiles.write` holds each at 0600 while the machine is

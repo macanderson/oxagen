@@ -18,6 +18,7 @@ import {
   stellaSessionId,
   stellaToolUseId,
   translateStellaPayload,
+  tryParseAnswerBody,
 } from "./stella-adapter";
 
 describe("stella pid", () => {

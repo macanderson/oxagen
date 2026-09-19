@@ -3,7 +3,7 @@
  *
  * First run (no enrollment on this machine): a five-step wizard — sign in,
  * pick the org and workspace the operator can see, register the agents the
- * machine has (Claude Code, Codex; detected, all ticked by default), the
+ * machine has (Claude Code, Codex, Cursor; detected, all ticked by default), the
  * outcome, then a recorded first run and the door to the workspace in Oxagen.
  *
  * Every later run (the machine is enrolled): the management pane — what the
@@ -1066,7 +1066,7 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      None of Claude Code, Codex, or Stella was found on your
+                      None of Claude Code, Codex, Cursor, or Stella was found on your
                       PATH. Install one, then rescan:{" "}
                       {HARNESSES.map((h, i) => (
                         <span key={h}>

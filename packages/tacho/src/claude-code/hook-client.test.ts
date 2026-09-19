@@ -8,6 +8,7 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
+import { RESERVED_AGENT_NAMES } from "../wire";
 import {
   agentFromArgv,
   decideLocally,
@@ -263,6 +264,7 @@ describe("runTachoHook", () => {
     expect(harnessFromArgv(["--harness", "claude-code"])).toBe("claude-code");
     expect(harnessFromArgv(["--harness", "cursor"])).toBe("cursor");
     expect(harnessFromArgv(["--harness", "not-a-harness"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness", "windsurf"])).toBe("claude-code");
     expect(harnessFromArgv(["--harness"])).toBe("claude-code");
     expect(harnessFromArgv([])).toBe("claude-code");
   });
@@ -369,6 +371,24 @@ describe("runTachoHook", () => {
       decideLocally(paused, parse("PermissionRequest"), now).response,
     ).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
     expect(decideLocally(active, parse("Stop"), now).response).toEqual({});
+    // Cursor's subagentStart is a permission event: a paused host must deny,
+    // or an empty answer becomes allow and the subagent launches anyway.
+    expect(
+      decideLocally(
+        paused,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).response,
+    ).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(
+      decideLocally(
+        active,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).evaluation?.decision,
+    ).toBeDefined();
     const read = decideLocally(
       active,
       parse("PreToolUse", {
@@ -708,14 +728,21 @@ describe("runTachoHook for Stella and custom agents", () => {
     }
     // Every built-in harness and runtime name is reserved, so a custom
     // agent can never be listed as one of them.
-    for (const reserved of [
+    const reservedNames = [
       "claude-code",
       "codex",
+      "cursor",
       "stella",
+      "claude-desktop",
       "claude-agent-sdk",
       "custom",
       "proxy",
-    ]) {
+    ];
+    // Every harness and runtime is reserved, so the list here is the whole
+    // set: a harness added without updating this test would drift the
+    // diagnostic every caller reads.
+    expect([...RESERVED_AGENT_NAMES]).toEqual(reservedNames);
+    for (const reserved of reservedNames) {
       const refused = await runTachoHook({
         paths,
         env: {},
@@ -731,7 +758,7 @@ describe("runTachoHook for Stella and custom agents", () => {
         exitCode: 0,
       });
       expect(refused.stderr).toBe(
-        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, cursor, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: ${reservedNames.join(", ")})\n`,
       );
     }
   });
@@ -787,11 +814,14 @@ describe("runTachoHook for Cursor", () => {
     expect(body.harness).toBe("cursor");
     expect(body.payload).toMatchObject({
       // Cursor issues both ids, so nothing is synthesized from a pid or a
-      // digest of the call the way Stella's are.
+      // digest of the call the way Stella's are. The tool is renamed to
+      // Claude Code's vocabulary so one policy rule governs both harnesses.
       session_id: "conv_01J8",
       hook_event_name: "PreToolUse",
       tool_use_id: "toolu_77",
-      tool_name: "Shell",
+      tool_name: "Bash",
+      cursor_tool_name: "Shell",
+      cwd: "/repo",
     });
     // The address Cursor sends on every hook never reaches the daemon.
     expect(seen[0]?.body).not.toContain("someone@example.com");
@@ -858,5 +888,123 @@ describe("runTachoHook for Cursor", () => {
     });
     expect(result.path).toBe("invalid");
     expect(result.stderr).toBe("tacho-hook: payload is not a Cursor hook\n");
+  });
+
+  it("refuses a Cursor tool call when the enrollment cannot be read, and allows one on a machine that is simply not enrolled", async () => {
+    // Cursor reads a malformed answer as a block, so "no opinion" is written
+    // as an explicit allow. That is right for a machine Oxagen does not
+    // govern and wrong when the file saying whether it governs this machine
+    // is unreadable: the tool would run with no policy evaluated.
+    const unreadable = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      readHost: () => {
+        throw new Error("corrupt");
+      },
+    });
+    expect(unreadable).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unreadable.stdout)).toMatchObject({
+      permission: "deny",
+    });
+    expect(unreadable.stderr).toContain("corrupt");
+
+    // A machine that was never enrolled is not a failure to evaluate, so it
+    // still answers allow and does not block the person's own tools.
+    const unenrolled = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+    });
+    expect(unenrolled).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unenrolled.stdout)).toEqual({ permission: "allow" });
+  });
+
+  it("refuses a Cursor subagent start while the host is blocked and allows one otherwise", async () => {
+    const CURSOR_SUBAGENT = JSON.stringify({
+      conversation_id: "conv-9",
+      hook_event_name: "subagentStart",
+      workspace_roots: ["/repo"],
+      subagent_id: "sa-1",
+      subagent_type: "explore",
+    });
+    const pathsWithStatus = (
+      status: "active" | "paused" | "suspended" | "revoked",
+    ) => {
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      writeHostFile(
+        paths.hostFile,
+        testHostFile(signer, signer.sign(unsignedBundle()), {
+          host_status: status,
+        }),
+      );
+      return paths;
+    };
+    // Cursor reads subagentStart as a permission event, and an empty answer
+    // translates to an explicit allow. An operator who paused, suspended or
+    // revoked the host said the agent stops, so the local evaluator decides
+    // rather than falling through to that allow.
+    for (const status of ["paused", "suspended", "revoked"] as const) {
+      const blocked = await runTachoHook({
+        paths: pathsWithStatus(status),
+        env: {},
+        stdin: CURSOR_SUBAGENT,
+        harness: "cursor",
+        platform: "linux",
+        post: async () => {
+          throw new Error("daemon down");
+        },
+      });
+      expect(blocked.path).toBe("local");
+      expect(JSON.parse(blocked.stdout)).toMatchObject({
+        permission: "deny",
+        agent_message: expect.stringContaining(status),
+      });
+    }
+    // An active host still launches subagents, so the refusal is the operator
+    // state and not a blanket block.
+    const allowed = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => {
+        throw new Error("daemon down");
+      },
+    });
+    expect(allowed.path).toBe("local");
+    expect(JSON.parse(allowed.stdout)).toEqual({ permission: "allow" });
+    // The daemon's own deny, which is where a cancelled session lands, reaches
+    // Cursor in the same shape.
+    const fromDaemon = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "SubagentStart",
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "This session was cancelled by its Oxagen operator.",
+          },
+        }),
+      }),
+    });
+    expect(fromDaemon.path).toBe("daemon");
+    expect(JSON.parse(fromDaemon.stdout)).toEqual({
+      permission: "deny",
+      user_message: "This session was cancelled by its Oxagen operator.",
+      agent_message: "This session was cancelled by its Oxagen operator.",
+    });
   });
 });

@@ -2,9 +2,9 @@
 
 The Oxagen app: a Tauri 2 shell over the two compiled CLIs. It installs
 `oxagen` and `tacho`, signs the machine in to an organization, enrolls the
-host under Tacho for Claude Code and Codex, and lets the operator see the
-connection, pick or change the workspace the host reports to, add or drop a
-wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.html`.
+host under Tacho for Claude Code, Codex, Cursor, and Stella, and lets the
+operator see the connection, pick or change the workspace the host reports
+to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.html`.
 
 The app owns no state. Every panel reads the files the CLIs write
 (`~/.config/oxagen/config.json`, `~/.config/oxagen/tacho/host.json`, the

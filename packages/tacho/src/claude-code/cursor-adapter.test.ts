@@ -1,8 +1,9 @@
 /**
  * The Cursor adapter is the only thing that knows Cursor's hook shape, so
- * these tests hold the three translations it owns: the session id the record
- * files a Cursor run under, the flat permission answer Cursor reads back, and
- * the `ask` that Cursor does not enforce at `preToolUse`.
+ * these tests hold what it owns in both directions: the session id and
+ * translated members the record files a Cursor run under, and the flat
+ * answer Cursor reads back for each event, including the `ask` that Cursor
+ * does not enforce at `preToolUse`.
  *
  * The payloads here are Cursor's documented shape (verified 2026-09-18
  * against https://cursor.com/docs/agent/hooks, fetched that day).
@@ -13,6 +14,7 @@ import {
   CURSOR_HOOK_EVENTS,
   CURSOR_TO_CLAUDE_EVENT,
   cursorAnswer,
+  cursorToolName,
   translateCursorPayload,
 } from "./cursor-adapter";
 import { hookInputSchema, normalizeHook } from "./hooks";
@@ -43,6 +45,10 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
     expect(translated["hook_event_name"]).toBe("PreToolUse");
     // Cursor issues the tool-use id, so nothing is derived from a digest.
     expect(translated["tool_use_id"]).toBe("toolu_77");
+    // A shell call is renamed to Bash so one policy rule governs both
+    // harnesses, and the original name survives as an attribute.
+    expect(translated["tool_name"]).toBe("Bash");
+    expect(translated["cursor_tool_name"]).toBe("Shell");
     expect(hookInputSchema.safeParse(translated).success).toBe(true);
   });
 
@@ -55,6 +61,7 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
     }) as Record<string, unknown>;
     expect(translated["session_id"]).toBe("conv_01J8");
     expect(translated["hook_event_name"]).toBe("SessionStart");
+    expect(translated["cursor_session_id"]).toBe("conv_01J8");
     // Only preToolUse carries a cwd, so the first workspace root stands in.
     expect(translated["cwd"]).toBe("/repo/one");
   });
@@ -86,7 +93,56 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
     );
     expect(draft?.kind).toBe("tool_requested");
     expect(draft?.body["effect_kind"]).toBe("git_push");
-    expect(draft?.body["tool_name"]).toBe("Shell");
+    expect(draft?.body["tool_name"]).toBe("Bash");
+  });
+
+  it("carries a tool's output, duration and subagent identity under Claude Code's names", () => {
+    const post = translateCursorPayload({
+      conversation_id: "conv-1",
+      hook_event_name: "postToolUse",
+      tool_name: "Read",
+      tool_input: { path: "a.ts" },
+      tool_output: "contents",
+      duration: 12,
+    }) as Record<string, unknown>;
+    expect(post).toMatchObject({
+      hook_event_name: "PostToolUse",
+      tool_name: "Read",
+      tool_response: "contents",
+      duration_ms: 12,
+    });
+    const sub = translateCursorPayload({
+      conversation_id: "conv-1",
+      hook_event_name: "subagentStart",
+      subagent_id: "sa-1",
+      subagent_type: "explore",
+    }) as Record<string, unknown>;
+    expect(sub).toMatchObject({ agent_id: "sa-1", agent_type: "explore" });
+  });
+
+  it("parses MCP arguments sent as a JSON string, and renames the tool", () => {
+    const out = translateCursorPayload({
+      conversation_id: "conv-1",
+      hook_event_name: "preToolUse",
+      tool_name: "MCP:search",
+      mcp_server_name: "linear",
+      tool_input: '{"query":"bug"}',
+    }) as Record<string, unknown>;
+    expect(out).toMatchObject({
+      tool_name: "mcp__linear__search",
+      cursor_tool_name: "MCP:search",
+      tool_input: { query: "bug" },
+    });
+    const junk = translateCursorPayload({
+      conversation_id: "conv-1",
+      hook_event_name: "preToolUse",
+      tool_name: "Delete",
+      tool_input: "not json",
+    }) as Record<string, unknown>;
+    expect(junk).toMatchObject({
+      tool_name: "Delete",
+      tool_input: { value: "not json" },
+    });
   });
 
   it("returns a document that is not a Cursor hook unchanged", () => {
@@ -96,6 +152,12 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
     const orphan = { hook_event_name: "preToolUse" };
     expect(translateCursorPayload(orphan)).toEqual(orphan);
     expect(hookInputSchema.safeParse(orphan).success).toBe(false);
+    // Cursor events Oxagen does not register (a tab edit, for instance) pass
+    // through unchanged rather than being coerced into a shape not theirs.
+    const tab = { conversation_id: "conv-1", hook_event_name: "afterTabFileEdit" };
+    expect(translateCursorPayload(tab)).toEqual(tab);
+    // Not a record at all.
+    expect(translateCursorPayload("text")).toBe("text");
   });
 
   it("every registered event has a Claude Code name", () => {
@@ -103,6 +165,16 @@ describe("a Cursor payload becomes a Claude Code payload", () => {
       expect(CURSOR_TO_CLAUDE_EVENT[event]).toBeTruthy();
     for (const event of CURSOR_ENFORCEMENT_EVENTS)
       expect(CURSOR_HOOK_EVENTS).toContain(event);
+  });
+});
+
+describe("cursorToolName", () => {
+  it("maps built-ins, keeps an MCP tool whose server is unknown as sent", () => {
+    expect(cursorToolName("Shell")).toBe("Bash");
+    expect(cursorToolName("Write")).toBe("Write");
+    expect(cursorToolName("MCP:search", "github")).toBe("mcp__github__search");
+    expect(cursorToolName("MCP:search")).toBe("MCP:search");
+    expect(cursorToolName("Delete")).toBe("Delete");
   });
 });
 
@@ -129,6 +201,10 @@ describe("a decision becomes the flat answer Cursor reads", () => {
 
   it("answers an allow explicitly, because failClosed counts no output as a failure", () => {
     expect(JSON.parse(cursorAnswer({}, "PreToolUse"))).toEqual({
+      permission: "allow",
+    });
+    // SubagentStart is a permission event too (see the module comment).
+    expect(JSON.parse(cursorAnswer({}, "SubagentStart"))).toEqual({
       permission: "allow",
     });
   });
@@ -194,6 +270,7 @@ describe("a decision becomes the flat answer Cursor reads", () => {
         ),
       ),
     ).toEqual({ additional_context: "Mandate: no pushes to main." });
+    expect(JSON.parse(cursorAnswer({}, "SessionStart"))).toEqual({});
     // Cursor's sessionStart answer has no veto field, so a suspended host is
     // told in prose and refused at every later tool call instead.
     const stopped = JSON.parse(
@@ -208,7 +285,25 @@ describe("a decision becomes the flat answer Cursor reads", () => {
     );
   });
 
-  it("answers a telemetry event with an empty document", () => {
-    expect(cursorAnswer({}, "PostToolUse")).toBe("{}\n");
+  it("turns a blocked stop into a follow-up message, and passes an empty answer through", () => {
+    expect(
+      JSON.parse(
+        cursorAnswer({ decision: "block", reason: "run the tests" }, "Stop"),
+      ),
+    ).toEqual({ followup_message: "run the tests" });
+    expect(cursorAnswer({}, "Stop")).toBe("{}\n");
+  });
+
+  it("passes post-tool context through and answers telemetry events with nothing", () => {
+    expect(
+      JSON.parse(
+        cursorAnswer(
+          { hookSpecificOutput: { additionalContext: "note" } },
+          "PostToolUse",
+        ),
+      ),
+    ).toEqual({ additional_context: "note" });
+    expect(JSON.parse(cursorAnswer({}, "PostToolUseFailure"))).toEqual({});
+    expect(cursorAnswer({}, "SessionEnd")).toBe("{}\n");
   });
 });

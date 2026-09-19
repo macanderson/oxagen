@@ -36,6 +36,7 @@ import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
 import { CURSOR_HOOK_EVENTS } from "../claude-code/cursor-adapter";
+import { cursorHookPresence } from "../host/cursor-writer";
 import {
   readStellaHooksFile,
   renderStellaTomlBlock,
@@ -1501,6 +1502,67 @@ describe("harnesses and reassign", () => {
     expect(d.lines.join("\n")).toContain("removed from");
   });
 
+  it("enrolls Cursor next to Claude Code, and unenroll strips it back to the user's own hooks", async () => {
+    const d = deps();
+    // scratchPaths sets CURSOR_CONFIG_DIR, so Oxagen writes both the resolved
+    // and the fallback file (see the "cursor" describe block below for the
+    // full two-file assertions); this test only exercises the primary one.
+    const [primary] = d.paths.cursorHooks as [string, string];
+    d.writeCursorHooks(primary, {
+      version: 1,
+      hooks: { preToolUse: [{ command: "./mine.sh" }] },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "cursor"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(d.requests[0]?.body).toMatchObject({
+      harnesses: ["claude-code", "cursor"],
+    });
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      harnesses: ["claude-code", "cursor"],
+      cursor_version: "2026.09.10",
+      cursor_execpath: "/usr/local/bin/agent",
+    });
+    const cursor = d.readCursorHooks(primary) as {
+      version: number;
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(cursor.version).toBe(1);
+    expect(cursor.hooks["preToolUse"]?.map((e) => e.command)).toEqual([
+      "./mine.sh",
+      `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+    ]);
+    expect(Object.keys(cursor.hooks).sort()).toEqual(
+      [...CURSOR_HOOK_EVENTS].sort(),
+    );
+    expect(cursorHookPresence(cursor, TEST_ENROLLMENT).complete).toBe(true);
+
+    const report = await status({ json: true }, d);
+    expect(report.cursorHooks?.every((entry) => entry.complete)).toBe(true);
+    expect(report.host?.cursor_version).toBe("2026.09.10");
+    expect(d.lines.join("\n")).toContain("Cursor");
+
+    const found = detect({ json: true }, d);
+    expect(found.harnesses.find((h) => h.harness === "cursor")).toMatchObject({
+      installed: true,
+      enrolled: true,
+    });
+
+    await unenroll({ token: "tok" }, d);
+    expect(d.readCursorHooks(primary)).toEqual({
+      version: 1,
+      hooks: { preToolUse: [{ command: "./mine.sh" }] },
+    });
+  });
+
   it("adds a harness to an enrolled host through a revoke and a fresh enrollment, so the control plane's record follows", async () => {
     const d = deps();
     await enroll(
@@ -2494,7 +2556,11 @@ describe("stella", () => {
     expect(d.lines.join("\n")).toContain(
       "Stella      complete: 8 present, 0 missing",
     );
-    expect(detect({ json: true }, d).harnesses[3]).toEqual({
+    // By name, not by index: the roster follows the harness enum, so a
+    // fifth harness must not silently move this assertion onto another row.
+    expect(
+      detect({ json: true }, d).harnesses.find((h) => h.harness === "stella"),
+    ).toEqual({
       harness: "stella",
       label: "Stella",
       installed: true,

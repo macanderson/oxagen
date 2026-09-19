@@ -26,7 +26,9 @@ const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
   // Cursor's CLI binary is `agent` (verified 2026-09-18 against
-  // https://cursor.com/docs/cli/installation, fetched that day).
+  // https://cursor.com/docs/cli/installation, fetched that day); the
+  // installer also links the legacy `cursor-agent` name, but `agent` is the
+  // one its own docs use.
   cursor: "agent",
   stella: "stella",
 };
@@ -45,9 +47,11 @@ const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
 
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`) and Stella (`stella run`) print
- * prose, so their session is matched as a chain the daemon did not have
- * before the turn ran, carrying the harness label.
+ * its session id; Codex CLI (`codex exec`), Cursor (`agent -p`) and Stella
+ * (`stella run`) are matched as a chain the daemon did not have before the
+ * turn ran, carrying the harness label. Cursor's JSON result does carry a
+ * `session_id`, but its hooks name the session by `conversation_id`, and
+ * nothing documents the two as the same value, so it is not parsed.
  */
 function headlessTurn(
   harness: TachoHarness,
@@ -59,17 +63,16 @@ function headlessTurn(
       parsesSession: false,
     };
   }
+  if (harness === "cursor") {
+    // `-p` (`--print`) runs one non-interactive turn (verified 2026-09-18
+    // against https://cursor.com/docs/cli/reference/parameters, fetched that
+    // day). The output is prose, so the session is matched the way Codex's
+    // and Stella's are: a chain the daemon did not have before the turn ran,
+    // carrying the harness label.
+    return { args: ["-p", prompt], parsesSession: false };
+  }
   if (harness === "stella") {
     return { args: ["run", prompt], parsesSession: false };
-  }
-  if (harness === "cursor") {
-    // `--print` runs one non-interactive turn and `--trust` takes the
-    // workspace prompt out of a headless run (verified 2026-09-18 against
-    // https://cursor.com/docs/cli/reference/parameters, fetched that day).
-    // The output is prose, so the session is matched the way Codex's and
-    // Stella's are: a chain the daemon did not have before the turn ran,
-    // carrying the harness label.
-    return { args: ["--print", "--trust", prompt], parsesSession: false };
   }
   return {
     args: ["-p", prompt, "--max-turns", "1", "--output-format", "json"],

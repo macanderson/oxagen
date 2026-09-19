@@ -16,17 +16,17 @@ import {
   mergeCodexHooks,
 } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
+import {
+  absoluteHookCommandProblem,
+  cursorHookPresence,
+  cursorHooksShapeProblem,
+  mergeCursorHooks,
+} from "../host/cursor-writer";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
 import type { ModelBaseUrlHarness } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
-import {
-  absoluteHookCommandProblem,
-  cursorHooksShapeProblem,
-  cursorHookPresence,
-  mergeCursorHooks,
-} from "../host/cursor-writer";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import {
   HOST_FILE_SCHEMA,
@@ -80,10 +80,10 @@ export interface EnrollOptions extends CredentialOptions {
 }
 
 /**
- * Parse a `--harness` flag (`claude-code`, `codex`, `cursor`, `stella`, or a comma
- * list). An
- * unknown name is a one-line error naming the choices, not a ZodError
- * (whose message is the JSON issues array) — both CLIs print it verbatim.
+ * Parse a `--harness` flag (`claude-code`, `codex`, `cursor`, `stella`, or
+ * a comma list). An unknown name is a one-line error naming the choices, not
+ * a ZodError (whose message is the JSON issues array) — both CLIs print it
+ * verbatim.
  */
 export function parseHarnesses(value: string | undefined): TachoHarness[] {
   if (value === undefined || value.trim().length === 0) return ["claude-code"];

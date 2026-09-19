@@ -1,6 +1,6 @@
 /**
  * The "Wrapped agents" panel's rows, as a pure function of the machine's
- * state: one row per known harness (Claude Code, Codex, Stella) plus one
+ * state: one row per known harness (Claude Code, Codex, Cursor, Stella) plus one
  * row per custom agent the collector has ever seen (`tacho hook --agent
  * <name>`, reported in `daemon.agents` with `runtime: "custom"` or any
  * other runtime string this build does not have a harness for).

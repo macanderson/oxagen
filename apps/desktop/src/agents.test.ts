@@ -191,6 +191,34 @@ describe("computeAgentRows: hook presence", () => {
     expect(stella.details).toEqual(["Stella 1.0.0", "hooks complete"]);
   });
 
+  it("reads cursor's hook presence and version from its own fields", () => {
+    const tacho: TachoStatus = {
+      enrolled: true,
+      codexHooks: { complete: true, present: ["Stop"], missing: [] },
+      cursorHooks: {
+        complete: false,
+        present: ["Stop"],
+        missing: ["PreToolUse"],
+      },
+    };
+    const s = state({
+      host: host({
+        harnesses: ["cursor"],
+        codex_version: "0.9.0",
+        cursor_version: "2026.09.10",
+      }),
+    });
+    const rows = computeAgentRows(s, tacho, NOW);
+    const cursor = rows.find((r) => r.key === "cursor")!;
+    expect(cursor.kind).toBe("harness");
+    expect(cursor.tier).toBe("harness");
+    expect(cursor.wrapped).toBe(true);
+    expect(cursor.details).toEqual([
+      "Cursor 2026.09.10",
+      "hooks missing: PreToolUse",
+    ]);
+  });
+
   it("omits version and presence details when neither is known", () => {
     const rows = computeAgentRows(
       state({ host: host({ claude_version: null }) }),

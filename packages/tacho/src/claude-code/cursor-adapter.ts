@@ -31,13 +31,20 @@
  * `conversation_id`; `preToolUse` carries `tool_name`, `tool_input`,
  * `tool_use_id`, `cwd` and `agent_message`. Cursor issues both the session id
  * and the tool-use id, so unlike Stella nothing has to be synthesized from a
- * pid or a digest of the call.
+ * pid or a digest of the call. `postToolUse` carries `tool_output`;
+ * `subagentStart`/`subagentStop` carry `subagent_id` and `subagent_type`.
+ * Cursor names its built-in tools `Shell`, `Read`, `Write`, `Grep`, `Delete`,
+ * `Task` and an MCP tool `MCP:<tool>`; the adapter renames them to Claude
+ * Code's names (`Bash` for `Shell`, the rest pass through or keep their
+ * name) so one policy rule (`Bash`, `mcp__server__*`) governs every harness.
+ * The original name stays on the event as `cursor_tool_name`.
  *
- * Out: `preToolUse` answers `{"permission": "allow"|"deny", "user_message",
- * "agent_message", "updated_input"}`. `beforeSubmitPrompt` answers
- * `{"continue": true|false, "user_message"}`. `sessionStart` answers
- * `{"env", "additional_context"}` and cannot veto. Every other event Oxagen
- * registers answers nothing, so it gets `{}`.
+ * Out: `preToolUse` and `subagentStart` answer `{"permission":
+ * "allow"|"deny", "user_message", "agent_message"}`. `beforeSubmitPrompt`
+ * answers `{"continue": true|false, "user_message"}`. `sessionStart`
+ * answers `{"env", "additional_context"}` and cannot veto. `stop` takes a
+ * `followup_message`. Every other event Oxagen registers answers nothing, so
+ * it gets `{}`.
  *
  * **`ask` does not survive here, and it is degraded to `deny`, never to
  * `allow`.** Cursor's docs say `ask` "is accepted by the schema but not
@@ -45,18 +52,35 @@
  * `beforeMCPExecution` do honour it, but they fire for two tool types that
  * `preToolUse` already covers, so registering there as well would record two
  * frames for one shell call and the trace oracles would read the second as a
- * replay. Oxagen therefore enforces at `preToolUse` alone and answers an
- * `ask` with a deny whose reason says a person has to approve it in Oxagen.
- * Letting an `ask` through as an allow would be a mandate that does not hold.
+ * replay. Oxagen therefore enforces at `preToolUse` (and, for a subagent
+ * launch, `subagentStart`) alone and answers an `ask` with a deny whose
+ * reason says a person has to approve it in Oxagen. Letting an `ask` through
+ * as an allow would be a mandate that does not hold.
  *
- * **The tool names are Cursor's, and they are not rewritten.** Cursor's are
- * `Shell`, `Read`, `Write`, `Grep`, `Delete`, `Task` and `MCP:<tool_name>`.
- * Claude Code's `Bash` is Cursor's `Shell`; both `Edit` and `Write` are
- * Cursor's `Write`; `Glob` has no Cursor equivalent. The record keeps the
- * name Cursor reported, and `classifyTool` (`./tools.ts`) understands both
- * vocabularies, so a `Shell` command still reaches the git-effect
- * classification that turns `git push` into `git_push`.
+ * **The tool names are translated, and the original is kept.** Claude Code's
+ * `Bash` is Cursor's `Shell`; the rest of Cursor's built-ins (`Read`,
+ * `Write`, `Grep`, `Task`) share Claude Code's name already. `Delete` and
+ * `Glob` have no counterpart in the other vocabulary and pass through
+ * unchanged. `classifyTool` (`./tools.ts`) reads the translated name, so a
+ * `Shell` command still reaches the git-effect classification that turns
+ * `git push` into `git_push`, and `cursor_tool_name` keeps the name Cursor
+ * actually reported for anyone reading the raw attributes.
+ *
+ * **A signed-in address is dropped, not passed through.** Cursor may send
+ * one as `user_email`; keeping it would land plaintext in every event's
+ * attributes and in `raw_source_digest`, which is the confirmation-oracle
+ * problem the Anthropic email scrub already prevents. `model_params` is
+ * dropped for the same reason it never reaches an attribute from Claude
+ * Code's path: it is a settings bag nothing here reads.
  */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
 
 /**
  * Cursor's hook events, and the Claude Code event each becomes. Only the
@@ -84,74 +108,124 @@ export const CURSOR_HOOK_EVENTS = Object.keys(
   CURSOR_TO_CLAUDE_EVENT,
 ) as CursorHookEventName[];
 
-/** The two events at which Cursor lets a hook refuse (see the module comment). */
+/**
+ * The events at which Cursor lets a hook refuse (see the module comment):
+ * a tool call, a subagent launch, and a prompt.
+ */
 export const CURSOR_ENFORCEMENT_EVENTS: readonly CursorHookEventName[] = [
   "beforeSubmitPrompt",
   "preToolUse",
+  "subagentStart",
 ];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+/** Cursor built-in tool → Claude Code tool, so one rule governs both. */
+const CURSOR_TOOL_NAMES: Record<string, string> = {
+  Shell: "Bash",
+  Read: "Read",
+  Write: "Write",
+  Grep: "Grep",
+  Task: "Task",
+};
 
-function str(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
+/**
+ * Cursor's tool name in Claude Code's vocabulary. `MCP:<tool>` becomes
+ * `mcp__<server>__<tool>` when the payload names the server, and stays as
+ * sent when it does not: inventing a server would attribute the call to one
+ * the agent never used. A name Claude Code has no counterpart for (`Delete`)
+ * passes through.
+ */
+export function cursorToolName(name: string, mcpServer?: unknown): string {
+  const mcp = /^MCP:(.+)$/.exec(name);
+  if (mcp !== null) {
+    return typeof mcpServer === "string" && mcpServer.length > 0
+      ? `mcp__${mcpServer}__${mcp[1]}`
+      : name;
+  }
+  return CURSOR_TOOL_NAMES[name] ?? name;
 }
 
 /**
  * Cursor's payload in Claude Code's hook shape. Renamed members are replaced
  * by their Claude Code names; every other member passes through so the
- * recorder keeps them as attributes. A document that is not a Cursor payload
+ * recorder keeps it as an attribute. A document that is not a Cursor payload
  * (no string `hook_event_name`, or no session to file it under) is returned
  * unchanged and fails the hook schema the way any junk does.
  *
  * Three members are dropped rather than passed through:
  *
- *   - `user_email`, because the address is not Oxagen's to keep. The
- *     envelope strips `user_email` from the Anthropic block on the way in as
- *     well as on the way out (`withoutAddressMembers`), and a member the
- *     recorder does not promote lands in `attrs` as plaintext, which would
- *     put the address into every sealed frame of the session.
- *   - `model_params`, which is a settings bag nothing here reads and which
- *     would be JSON-stringified into one attribute on every event.
+ *   - `user_email`, because the address is not Oxagen's to keep (see the
+ *     module comment);
+ *   - `model_params`, a settings bag nothing here reads and which would be
+ *     JSON-stringified into one attribute on every event;
  *   - `session_id` / `conversation_id` as separate members, since one of
- *     them becomes `session_id` and repeating the other adds no fact.
+ *     them becomes `session_id` and repeating the other adds no fact
+ *     (Cursor's own session id survives as `cursor_session_id`).
  */
 export function translateCursorPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
   const event = str(raw["hook_event_name"]);
-  if (event === undefined) return raw;
+  if (event === undefined || !(event in CURSOR_TO_CLAUDE_EVENT)) return raw;
   const {
     hook_event_name: _event,
     conversation_id: conversationId,
-    session_id: sessionId,
+    session_id: cursorSessionId,
     generation_id: generationId,
     user_email: _email,
     model_params: _modelParams,
     cwd,
+    tool_name: toolName,
+    tool_output: toolOutput,
+    tool_input: toolInput,
+    workspace_roots: workspaceRoots,
+    subagent_id: subagentId,
+    subagent_type: subagentType,
+    duration,
     ...rest
   } = raw;
   // `session_id` is documented as the same value as `conversation_id` and is
   // present only on sessionStart and sessionEnd, so the conversation id is
-  // what every event is filed under.
-  const id = str(conversationId) ?? str(sessionId);
+  // what every event is filed under. Cursor's own session id, when it sent
+  // one, survives as an attribute rather than being dropped.
+  const id = str(conversationId) ?? str(cursorSessionId);
   if (id === undefined) return raw;
-  const roots = rest["workspace_roots"];
   // Only preToolUse carries a cwd. The first workspace root is the directory
   // the other events are about, and without it the recorder has no repository
   // to attribute a session to. Cursor documents multi-root workspaces, so the
   // whole list stays as an attribute and only the first becomes the cwd.
-  const workspaceRoot = Array.isArray(roots) ? str(roots[0]) : undefined;
+  const workspaceRoot = Array.isArray(workspaceRoots)
+    ? str(workspaceRoots[0])
+    : undefined;
   const derivedCwd = str(cwd) ?? workspaceRoot;
-  return {
+  const out: Record<string, unknown> = {
     ...rest,
     session_id: id,
-    hook_event_name:
-      CURSOR_TO_CLAUDE_EVENT[event as CursorHookEventName] ?? event,
+    hook_event_name: CURSOR_TO_CLAUDE_EVENT[event as CursorHookEventName],
     ...(derivedCwd !== undefined ? { cwd: derivedCwd } : {}),
     // A generation "changes with every user message", which is a turn.
     ...(str(generationId) !== undefined ? { turn_id: str(generationId) } : {}),
   };
+  if (workspaceRoots !== undefined) out["workspace_roots"] = workspaceRoots;
+  if (str(cursorSessionId) !== undefined)
+    out["cursor_session_id"] = cursorSessionId;
+  if (typeof toolName === "string") {
+    out["tool_name"] = cursorToolName(toolName, raw["mcp_server_name"]);
+    out["cursor_tool_name"] = toolName;
+  }
+  if (isRecord(toolInput)) out["tool_input"] = toolInput;
+  else if (typeof toolInput === "string") {
+    // Cursor sends an MCP call's arguments as a JSON string.
+    try {
+      const parsed = JSON.parse(toolInput) as unknown;
+      out["tool_input"] = isRecord(parsed) ? parsed : { value: parsed };
+    } catch {
+      out["tool_input"] = { value: toolInput };
+    }
+  } else if (toolInput !== undefined) out["tool_input"] = { value: toolInput };
+  if (toolOutput !== undefined) out["tool_response"] = toolOutput;
+  if (typeof duration === "number") out["duration_ms"] = duration;
+  if (typeof subagentId === "string") out["agent_id"] = subagentId;
+  if (typeof subagentType === "string") out["agent_type"] = subagentType;
+  return out;
 }
 
 function reasonOf(value: unknown, fallback: string): string {
@@ -163,14 +237,15 @@ const ASK_SUFFIX =
 
 /**
  * Claude Code's answer as Cursor's stdout (JSON plus a newline), for the
- * Claude Code event name the translated payload carries. Precedence runs from
- * most to least restrictive, so a document carrying two answers never fails
- * open: deny > ask > stop > allow.
+ * Claude Code event name the translated payload carries. Precedence runs
+ * from most to least restrictive, so a document carrying two answers never
+ * fails open: deny > ask > stop > allow.
  *
- * An allow at `preToolUse` is written out as `{"permission": "allow"}` rather
- * than `{}`. Every hook Oxagen registers there sets `failClosed: true`, and
- * Cursor counts "no output" among the failures that block, so an empty
- * document is not a thing to rely on for an allow.
+ * An allow at a permission event (`PreToolUse`, `SubagentStart`) is written
+ * out as `{"permission": "allow"}` rather than `{}`. Every hook Oxagen
+ * registers there sets `failClosed: true`, and Cursor counts "no output"
+ * among the failures that block, so an empty document is not a thing to rely
+ * on for an allow.
  */
 export function cursorAnswer(
   response: Record<string, unknown>,
@@ -198,32 +273,50 @@ export function cursorAnswer(
       stopped ? "Stopped by Oxagen policy." : "Blocked by Oxagen policy.",
     );
 
-  if (claudeEvent === "PreToolUse") {
-    if (refusal !== undefined)
-      return emit({
-        permission: "deny",
-        user_message: refusal,
-        agent_message: refusal,
-      });
-    return emit({ permission: "allow" });
+  switch (claudeEvent) {
+    case "PreToolUse":
+    case "SubagentStart": {
+      if (refusal !== undefined)
+        return emit({
+          permission: "deny",
+          user_message: refusal,
+          agent_message: refusal,
+        });
+      return emit({ permission: "allow" });
+    }
+    case "UserPromptSubmit": {
+      if (refusal !== undefined)
+        return emit({ continue: false, user_message: refusal });
+      return emit({ continue: true });
+    }
+    case "SessionStart": {
+      // Cursor's sessionStart answer has no veto field, so a suspended host
+      // cannot be stopped here. It is told why in prose, and preToolUse
+      // refuses every call while the block holds.
+      if (refusal !== undefined)
+        return emit({
+          additional_context: `Oxagen: ${refusal} Tool calls will be refused.`,
+        });
+      const context = specific["additionalContext"];
+      return typeof context === "string" && context.length > 0
+        ? emit({ additional_context: context })
+        : emit({});
+    }
+    case "Stop": {
+      // Claude Code's `decision: "block"` on Stop means "keep going, because
+      // <reason>"; Cursor's counterpart is a follow-up message.
+      if (blocked && typeof response["reason"] === "string")
+        return emit({ followup_message: response["reason"] });
+      return emit({});
+    }
+    case "PostToolUse":
+    case "PostToolUseFailure": {
+      const context = specific["additionalContext"];
+      return typeof context === "string" && context.length > 0
+        ? emit({ additional_context: context })
+        : emit({});
+    }
+    default:
+      return emit({});
   }
-  if (claudeEvent === "UserPromptSubmit") {
-    if (refusal !== undefined)
-      return emit({ continue: false, user_message: refusal });
-    return emit({ continue: true });
-  }
-  if (claudeEvent === "SessionStart") {
-    // Cursor's sessionStart answer has no veto field, so a suspended host
-    // cannot be stopped here. It is told why in prose, and preToolUse refuses
-    // every call while the block holds.
-    if (refusal !== undefined)
-      return emit({
-        additional_context: `Oxagen: ${refusal} Tool calls will be refused.`,
-      });
-    const context = specific["additionalContext"];
-    return typeof context === "string" && context.length > 0
-      ? emit({ additional_context: context })
-      : emit({});
-  }
-  return emit({});
 }
