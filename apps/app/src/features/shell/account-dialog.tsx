@@ -71,14 +71,11 @@ import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";
 import type { Theme } from "./theme";
 
-// `timeZoneInvalid` is not Profile's. On main the Profile tab wrote the zone
-// itself through `updateTimeZone` and reported a refusal from that second
-// write; here the zone belongs to Preferences and Profile calls
-// `updateTimeZone` nowhere. Preferences is what reaches it: its one
-// `set_preferences` write names the field it refused, and without this member
-// a refused zone read the Profile tab's line, which names a display name that
-// form does not carry.
-type Outcome = "saved" | "invalid" | "timeZoneInvalid" | "denied" | "failed";
+// No `timeZoneInvalid`: on main the Profile tab wrote the zone itself through
+// `updateTimeZone` and had to report a refusal from that second write. Here the
+// zone belongs to Preferences, which reports its own outcome, and Profile calls
+// `updateTimeZone` nowhere — so the member would be a state nothing can reach.
+type Outcome = "saved" | "invalid" | "denied" | "failed";
 
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
@@ -644,16 +641,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
         // only when the zone actually moved, and at the URL already showing,
         // so the dialog stays open.
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
-      }
-      // The Profile tab's "invalid" line names the display name, which this
-      // form does not carry, so reusing it here told a person their name was
-      // refused when they had changed a zone. `set_preferences` names the field
-      // it refused, so the zone reads its own line. The locale and theme
-      // selectors offer closed sets, so a refusal naming either is a bug in this
-      // form rather than something the person can act on, and it keeps the
-      // general line.
-      else if (result.reason === "invalid")
-        setOutcome(result.field === "timezone" ? "timeZoneInvalid" : "invalid");
+      } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
     } catch {
