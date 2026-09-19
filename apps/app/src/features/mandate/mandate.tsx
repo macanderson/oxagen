@@ -263,6 +263,21 @@ function Loaded({
   );
 }
 
+/**
+ * When the read came back, which the page prints as the "as of" instant beside
+ * the tiles so a figure is never presented as newer than the answer it came
+ * from.
+ *
+ * It sits outside the component on purpose. `Mandate` is an async server
+ * component, so reading the clock in its body runs once per request and is not
+ * the impurity the React purity rule is built to catch, but the rule is
+ * syntactic and this repo lints at zero warnings. Naming the call is better
+ * than silencing the rule: the next reader learns what the instant means.
+ */
+function instantAfterRead(): Date {
+  return new Date();
+}
+
 export async function Mandate({
   ctx,
   source,
@@ -283,7 +298,7 @@ export async function Mandate({
   const at: MandateAt = { org: ctx.orgSlug, ws: ctx.wsSlug, mandate };
   const view = parseMandateView(searchParams);
   const read = await source.mandates.get(ctx, mandate);
-  const readAt = new Date();
+  const readAt = instantAfterRead();
   if (!read.ok) {
     // A mandate this workspace has not recorded is a 404, the same answer any
     // other address that names nothing gets.

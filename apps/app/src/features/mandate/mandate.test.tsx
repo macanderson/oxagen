@@ -143,10 +143,11 @@ describe("Mandate › loaded", () => {
   it("says a receipt is not recorded rather than offering one (negative)", async () => {
     await renderMandate(mandateDetailRead());
     const [row] = movements();
+    if (!row) throw new Error("the ledger rendered no movement row");
     expect(
-      row?.querySelector('[data-receipt="not-recorded"]')?.textContent,
+      row.querySelector('[data-receipt="not-recorded"]')?.textContent,
     ).toBe("not recorded");
-    expect(within(row!).queryByRole("button")).toBeNull();
+    expect(within(row).queryByRole("button")).toBeNull();
   });
 
   it("says the external effect is not recorded on a reservation (negative)", async () => {
@@ -187,7 +188,7 @@ describe("Mandate › loaded", () => {
   it("shows the grant: the agent, who granted it, the effect, the scope and the window", async () => {
     await renderMandate(mandateDetailRead());
     const grant = screen.getByTestId("mandate-grant");
-    const text = grant.textContent ?? "";
+    const text = grant.textContent;
     for (const fact of [
       "invoice-bot",
       "usr_priyanatarajan",
