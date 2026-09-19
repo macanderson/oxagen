@@ -2,13 +2,17 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { isHandlerError } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
-// The handler issues one read: select(...).from(exportRequests).where().limit(1).
-// The `where` is captured so the principal fence can be asserted rather than
-// assumed: a status read that matched on the id alone would hand one person
-// another's bundle.
+// The handler issues one read for a personal export:
+//   select(...).from(exportRequests).where().limit(1)
+// and a second for an organization one, the membership role behind
+// `_org_membership.ts`. `selects` is therefore a queue rather than a single
+// value, and every `where` is captured so the fences can be asserted rather
+// than assumed: a status read that matched on the id alone would hand one
+// person another's bundle, and one that skipped the role read would hand a
+// demoted owner the whole organization's archive.
 const mocks = vi.hoisted(() => ({
-  rows: [] as unknown[],
-  where: null as unknown,
+  selects: [] as unknown[][],
+  wheres: [] as unknown[],
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -17,8 +21,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     select: () => ({
       from: () => ({
         where: (clause: unknown) => {
-          mocks.where = clause;
-          return { limit: () => Promise.resolve(mocks.rows) };
+          mocks.wheres.push(clause);
+          return {
+            limit: () => Promise.resolve(mocks.selects.shift() ?? []),
+          };
         },
       }),
     }),
@@ -54,7 +60,7 @@ function ctx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
  * clause. Reading the values that reach Postgres rather than stringifying the
  * SQL, so the assertion is about what is actually matched.
  */
-function boundValues(): unknown[] {
+function boundValues(which = 0): unknown[] {
   const found: unknown[] = [];
   const seen = new Set<unknown>();
   const walk = (node: unknown): void => {
@@ -69,13 +75,31 @@ function boundValues(): unknown[] {
       else walk(value);
     }
   };
-  walk(mocks.where);
+  walk(mocks.wheres[which]);
   return found;
 }
 
+/** Queue one row set per select the handler is expected to issue, in order. */
+function queueSelects(...results: unknown[][]): void {
+  mocks.selects.length = 0;
+  for (const rows of results) mocks.selects.push(rows);
+}
+
+/** A personal export row, the shape the table hands back. */
+function personalRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: EXPORT_ID,
+    scope: "user",
+    status: "ready",
+    exportUrl: "privacy-exports/org/exp.zip",
+    completedAt: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
-  mocks.rows = [];
-  mocks.where = null;
+  mocks.selects.length = 0;
+  mocks.wheres.length = 0;
 });
 
 describe("get_export_status", () => {
@@ -93,13 +117,13 @@ describe("get_export_status", () => {
   });
 
   it("answers not_found for an id that is not this person's", async () => {
-    mocks.rows = [];
+    queueSelects([]);
     await expect(
       privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
     ).rejects.toSatisfy(
       (error: unknown) => isHandlerError(error) && error.code === "not_found",
     );
-    expect(mocks.where).not.toBeNull();
+    expect(mocks.wheres).toHaveLength(1);
   });
 
   // Three predicates, not one. IAM resolves this capability against
@@ -107,7 +131,7 @@ describe("get_export_status", () => {
   // through a membership in another organisation after the caller has lost
   // the one that governed the export.
   it("matches the export id, the person AND the governed organisation", async () => {
-    mocks.rows = [];
+    queueSelects([]);
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
       () => undefined,
     );
@@ -118,14 +142,7 @@ describe("get_export_status", () => {
 
   it("hands back the storage key once the bundle is ready", async () => {
     const completed = new Date("2026-09-18T22:00:00.000Z");
-    mocks.rows = [
-      {
-        id: EXPORT_ID,
-        status: "ready",
-        exportUrl: "privacy-exports/org/exp.zip",
-        completedAt: completed,
-      },
-    ];
+    queueSelects([personalRow({ completedAt: completed })]);
     const out = await privacyDataExportStatusHandler(
       { exportId: EXPORT_ID },
       ctx(),
@@ -140,14 +157,7 @@ describe("get_export_status", () => {
   });
 
   it("offers no link while the bundle is still being written", async () => {
-    mocks.rows = [
-      {
-        id: EXPORT_ID,
-        status: "processing",
-        exportUrl: null,
-        completedAt: null,
-      },
-    ];
+    queueSelects([personalRow({ status: "processing", exportUrl: null })]);
     const out = await privacyDataExportStatusHandler(
       { exportId: EXPORT_ID },
       ctx(),
@@ -164,14 +174,12 @@ describe("get_export_status", () => {
   // A url left on a row that later failed is not a bundle anyone should be
   // pointed at.
   it("offers no key for a failed export that still carries one", async () => {
-    mocks.rows = [
-      {
-        id: EXPORT_ID,
+    queueSelects([
+      personalRow({
         status: "failed",
         exportUrl: "privacy-exports/org/half-written.zip",
-        completedAt: null,
-      },
-    ];
+      }),
+    ]);
     const out = await privacyDataExportStatusHandler(
       { exportId: EXPORT_ID },
       ctx(),
@@ -179,6 +187,86 @@ describe("get_export_status", () => {
     expect(out.status).toBe("failed");
     expect(out.ready).toBe(false);
     expect(out.storageKey).toBeNull();
+  });
+});
+
+// An organization export is everyone's data, and `export_data` gates queueing
+// it on Owner or Admin. A queue is not a download: the ZIP lands minutes later,
+// and the authority that started it can be gone by then. Without a second check
+// the row still matches on id, person and org, so a demoted owner keeps the
+// key to the whole organization's archive.
+describe("reading an organization export", () => {
+  /** The row, then the membership role the re-check reads. */
+  function orgExport(role: string | null) {
+    queueSelects(
+      [personalRow({ scope: "org" })],
+      role === null ? [] : [{ role }],
+    );
+  }
+
+  it("refuses an owner who has since been demoted (negative)", async () => {
+    orgExport("member");
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_requires_admin",
+    );
+  });
+
+  it("refuses someone removed from the organization entirely (negative)", async () => {
+    orgExport(null);
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+  });
+
+  it("checks the membership against the governed org and this person", async () => {
+    orgExport("owner");
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(mocks.wheres).toHaveLength(2);
+    expect(boundValues(1)).toEqual(expect.arrayContaining([ORG_ID, USER_ID]));
+  });
+
+  it("hands the key to an owner who still holds the role", async () => {
+    orgExport("owner");
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+  });
+
+  it("hands the key to an admin as well", async () => {
+    orgExport("admin");
+    expect(
+      (await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()))
+        .ready,
+    ).toBe(true);
+  });
+
+  // org_users.role is written TitleCase by workspace.invite.send's mapRole()
+  // and org.member.role.change, lowercase elsewhere, and the column's CHECK
+  // accepts both. A case-sensitive compare would lock a legitimately promoted
+  // admin out of their own organization's export.
+  it("accepts the TitleCase spelling of the role", async () => {
+    orgExport("Owner");
+    expect(
+      (await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()))
+        .ready,
+    ).toBe(true);
+  });
+
+  // A personal export is the caller's own data and no role ever gated it, so
+  // the extra read must not happen at all.
+  it("reads no membership for a personal export", async () => {
+    queueSelects([personalRow()]);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(mocks.wheres).toHaveLength(1);
   });
 });
 
@@ -214,15 +302,12 @@ describe("reading a key out of what the row holds", () => {
   });
 
   it("hands the recovered key to the caller through the handler", async () => {
-    mocks.rows = [
-      {
-        id: EXPORT_ID,
-        status: "ready",
+    queueSelects([
+      personalRow({
         exportUrl:
           "https://abc123.blob.vercel-storage.com/privacy-exports/org-1/old.zip",
-        completedAt: null,
-      },
-    ];
+      }),
+    ]);
     const out = await privacyDataExportStatusHandler(
       { exportId: EXPORT_ID },
       ctx(),

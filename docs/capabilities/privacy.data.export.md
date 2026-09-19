@@ -51,7 +51,10 @@ Request a machine-readable ZIP archive of personal or organizational data under 
   another, with the target's own grants never consulted. To export another
   organization, invoke in that organization's context. The Owner/Admin rule
   itself is enforced in the handler, not by the role map, because it turns on an
-  input field.
+  input field. It is enforced again when the archive is read: `get_export_status`
+  re-checks the same role for a row whose scope is `org`, because the bundle is
+  assembled minutes later and the Owner who queued it can be demoted or removed
+  in between.
 
 ## Billing
 

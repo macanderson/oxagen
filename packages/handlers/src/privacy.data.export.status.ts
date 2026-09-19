@@ -13,6 +13,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
 
 /**
  * The canonical object key from whatever `export_url` holds.
@@ -50,6 +51,7 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     tx
       .select({
         id: schema.privacyExportRequests.id,
+        scope: schema.privacyExportRequests.scope,
         status: schema.privacyExportRequests.status,
         exportUrl: schema.privacyExportRequests.exportUrl,
         completedAt: schema.privacyExportRequests.completedAt,
@@ -75,6 +77,34 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
   const row = rows[0];
   if (!row) {
     throw new HandlerError({ code: "not_found", reason: "export_not_found" });
+  }
+
+  // An organization export is authorized at the moment it is read, not only at
+  // the moment it was queued.
+  //
+  // `export_data` refuses an org-scope request from anyone below Owner or
+  // Admin, and that is the only check there is: the contract's `defaultRoles`
+  // cannot read an input field, so the role rule lives in the handler. But a
+  // queue is not a download. The ZIP is assembled minutes later, and between
+  // the two an Owner can be demoted or removed. Matching the row on the id,
+  // the person and the org alone then hands a now-ordinary member the key to
+  // the full organization archive: everyone's data, on authority they no
+  // longer hold. `defaultEffect: "allow"` means the kernel does not catch it
+  // either, and both download routes trust this answer.
+  //
+  // So the authority is re-read here, against the org that governed the export
+  // and with the same Owner-or-Admin rule the queue applied. A personal export
+  // is untouched: it is the caller's own data and no role ever gated it.
+  if (row.scope === "org") {
+    const role = await orgMembershipRole(ctx.orgId, userId);
+    if (!isOrgAdministrator(role)) {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_export_requires_admin",
+        message:
+          "An organization export can only be read by an Owner or Admin of that organization",
+      });
+    }
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a
