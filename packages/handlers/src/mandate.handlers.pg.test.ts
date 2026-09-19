@@ -1080,7 +1080,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             orgId,
             workspaceId,
-            slug: "second-retiring-bot",
+            slug: "second-retiree-bot",
             name: "Second retiring bot",
             agentType: "custom",
             principalId: secondBotPrincipal,
@@ -1125,7 +1125,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             orgId,
             workspaceId,
-            slug: "racing-retiring-bot",
+            slug: "racing-retiree-bot",
             name: "Racing retiring bot",
             agentType: "custom",
             principalId: racePrincipal,
