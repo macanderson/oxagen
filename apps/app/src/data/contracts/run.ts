@@ -282,7 +282,7 @@ const ChainCheckpoint = z.object({
    * of thing as `deviceKeyFingerprint` beside it. A field spelled `…Id` here
    * must carry a `PublicId` (src/test/arch/public-ids.test.ts), and forcing
    * that shape on this one would refuse a real checkpoint whose key is not
-   * spelled like a public id.
+   * spelled like a public id (including shapes like `pk:1`).
    */
   platformKey: z.string().nullable(),
   countersignedAt: z.iso.datetime({ offset: true }).nullable(),

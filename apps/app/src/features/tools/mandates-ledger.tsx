@@ -17,7 +17,7 @@
 // other tabs of this page and have no backing yet, so they are not drawn
 // (§3.6) and the page has no tab bar until the #2958 lane gives it a second
 // tab.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
   blindSpotOf,
@@ -29,6 +29,7 @@ import { mono, panel } from "@/ui/control-styles";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
 import { ReadFailure } from "@/ui/read-failure";
+import { useFormatter } from "@/ui/formatter";
 
 function Row({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("tools.mandates");

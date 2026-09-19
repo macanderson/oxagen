@@ -175,6 +175,58 @@ describe("the filter chips", () => {
     );
   });
 
+  it("still opens the live stream when the filter matches nothing yet, so a later frame can fill the tab", () => {
+    class FakeEventSource {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSED = 2;
+      readyState = FakeEventSource.CONNECTING;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<string>) => void) | null = null;
+      onerror: (() => void) | null = null;
+      close(): void {
+        this.readyState = FakeEventSource.CLOSED;
+      }
+      addEventListener(): void {}
+      removeEventListener(): void {}
+      constructor() {
+        instances.push(this);
+      }
+    }
+    const instances: FakeEventSource[] = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+    try {
+      renderSection({
+        read: readOk(runTranscript({ entries: [] })),
+        kinds: ["errors"],
+        status: "live",
+      });
+      expect(screen.getByTestId("transcript-empty")).toBeInTheDocument();
+      expect(instances).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not open a stream for an empty sealed filter (negative)", () => {
+    class FakeEventSource {
+      constructor() {
+        throw new Error("EventSource must not open for a sealed empty tab");
+      }
+    }
+    vi.stubGlobal("EventSource", FakeEventSource);
+    try {
+      renderSection({
+        read: readOk(runTranscript({ entries: [] })),
+        kinds: ["errors"],
+        status: "sealed",
+      });
+      expect(screen.getByTestId("transcript-empty")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("passes an axe check with a filter applied", async () => {
     const { container } = renderSection({ kinds: ["tools", "errors"] });
     await expectNoAxe(container);

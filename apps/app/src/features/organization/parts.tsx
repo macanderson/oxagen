@@ -1,7 +1,7 @@
 // The pieces both Organization tabs draw from: an instant printed as a date,
 // and the class recipe for the line a section prints in place of a table it
 // has no rows for.
-import { useFormatter } from "next-intl";
+import { useFormatter } from "@/ui/formatter";
 
 export const emptyLine = "text-sm text-muted-foreground";
 

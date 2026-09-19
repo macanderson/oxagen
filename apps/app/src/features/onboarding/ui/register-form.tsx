@@ -3,7 +3,7 @@
 // harness that decides how it is wrapped. `register_agent` mints the identity,
 // its delegated principal and one long-lived credential, which is shown here
 // once and is never recoverable.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonPrimary, mono } from "@/ui/control-styles";
@@ -20,6 +20,7 @@ import {
 } from "../agent-form";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
 import { registerAgent } from "../actions";
+import { useFormatter } from "@/ui/formatter";
 
 type FieldErrors = Partial<Record<AgentField, AgentFormErrorKey>>;
 type Registered = {

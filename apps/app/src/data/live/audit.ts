@@ -2,10 +2,12 @@
 // organization's security audit events (query_audit_log) and the signed export
 // over the same filters (export_audit_events), both noBillingGate reads. The
 // page's filters become the contracts' input here: the actor is a public id,
-// and the UTC days `from` and `to` become an inclusive start instant and an
-// exclusive end instant the day after `to`. A refusal passes through as the
-// kernel classified it; an answer the view model refuses is reported once as
-// record_unmappable.
+// and the day range arrives already resolved as an inclusive start instant and
+// an exclusive end one (`since` and `until` of AuditWindow). Which instants a
+// civil day spans depends on the viewer's zone, and this layer has no viewer:
+// the feature that resolved one resolves the window too (ARCHITECTURE.md §2,
+// §3.3). A refusal passes through as the kernel classified it; an answer the
+// view model refuses is reported once as record_unmappable.
 import "server-only";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
@@ -14,8 +16,8 @@ import type { z } from "zod";
 import {
   AUDIT_PAGE_SIZE,
   AuditExport,
-  type AuditFilters,
   AuditPage,
+  type AuditWindow,
 } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
@@ -40,22 +42,15 @@ function toView<O, V extends z.ZodType>(
   return readError("record_unmappable", 502);
 }
 
-/** The instant a UTC day ends: midnight at the start of the next day. */
-function dayAfter(day: string): string {
-  const end = new Date(`${day}T00:00:00.000Z`);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return end.toISOString();
-}
-
-/** The filters as both contracts take them, an unset filter left out. */
-function contractFilters(f: AuditFilters) {
+/** The window as both contracts take it, an unset filter left out. */
+function contractFilters(f: AuditWindow) {
   return {
     ...(f.eventType === null ? {} : { eventType: f.eventType }),
     ...(f.outcome === null ? {} : { outcome: f.outcome }),
     ...(f.actor === null ? {} : { actorPublicId: f.actor }),
     ...(f.capability === null ? {} : { capability: f.capability }),
-    ...(f.from === null ? {} : { from: `${f.from}T00:00:00.000Z` }),
-    ...(f.to === null ? {} : { to: dayAfter(f.to) }),
+    ...(f.since === null ? {} : { from: f.since }),
+    ...(f.until === null ? {} : { to: f.until }),
   };
 }
 

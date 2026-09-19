@@ -48,7 +48,7 @@ async function renderWorkspaces(
   const workspaces = vi.fn<Read>().mockResolvedValue(read);
   const source = {
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
+    shell: { context: vi.fn(), preferences: vi.fn() },
     billing: {
       plan: vi.fn(),
       usageCredits: vi.fn(),
