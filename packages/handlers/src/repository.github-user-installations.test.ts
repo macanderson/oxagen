@@ -65,7 +65,11 @@ function pages(
 ): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn();
   for (const body of bodies) {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => body });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
   }
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -242,7 +246,9 @@ describe("githubUserInstallationsDeps", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/user/installations"),
       expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer ghu_stored" }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer ghu_stored",
+        }),
       }),
     );
   });

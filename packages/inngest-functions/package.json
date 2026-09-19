@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./env-check": "./src/env-check.ts",
     "./adapter": "./src/adapter.ts",
+    "./events": "./src/events.ts",
     "./client": "./src/inngest.ts"
   },
   "scripts": {

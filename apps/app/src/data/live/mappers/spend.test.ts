@@ -3,6 +3,8 @@
 // so neither a sample the contract would refuse nor a view the page would
 // refuse can make a test pass.
 import { billingBudgetGet } from "@oxagen/oxagen/contracts/billing.budget.get";
+import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import { findingEvidenceGet } from "@oxagen/oxagen/contracts/finding.evidence.get";
 import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
@@ -11,21 +13,25 @@ import { spendWasteList } from "@oxagen/oxagen/contracts/spend.waste";
 import { describe, expect, it } from "vitest";
 import {
   FleetSpend,
+  PriceBook,
   SpendBudgets,
   SpendDrill,
   SpendFindingEvidence,
   SpendFindings,
   SpendReport,
   SpendWaste,
+  UnpricedModels,
 } from "@/data/contracts/spend";
 import {
   toFleetSpend,
+  toPriceBook,
   toSpendBudgets,
   toSpendDrill,
   toSpendFindingEvidence,
   toSpendFindings,
   toSpendReport,
   toSpendWaste,
+  toUnpricedModels,
 } from "./spend";
 
 const tokens = {
@@ -384,5 +390,101 @@ describe("toSpendFindings", () => {
         counterfactual: { micros: "1120000", currency: "USD" },
       },
     ]);
+  });
+});
+
+describe("toPriceBook", () => {
+  const listRow = {
+    id: "9f1b7a2c-0000-4000-8000-000000000001",
+    orgId: null,
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    modelAliases: ["claude-sonnet-5-20260401"],
+    region: null,
+    tokenClass: "output",
+    unit: "token",
+    currency: "USD",
+    microsPerMillion: "15000000",
+    effectiveFrom: "2026-01-01T00:00:00.000Z",
+    effectiveTo: null,
+    source: "list",
+  };
+
+  it("reads the micros as money in the row's own currency and drops the row id", () => {
+    const out = costPriceEntryList.output.parse({
+      at: "2026-09-15T12:00:00.000Z",
+      entries: [listRow],
+    });
+    const view = PriceBook.parse(toPriceBook(out));
+    expect(view.entries[0]).toEqual({
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      modelAliases: ["claude-sonnet-5-20260401"],
+      region: null,
+      tokenClass: "output",
+      unit: "token",
+      ratePerMillion: { micros: "15000000", currency: "USD" },
+      effectiveFrom: "2026-01-01T00:00:00.000Z",
+      effectiveTo: null,
+      source: "list",
+      negotiated: false,
+    });
+    expect(view.entries[0]).not.toHaveProperty("id");
+    expect(view.entries[0]).not.toHaveProperty("orgId");
+  });
+
+  it("marks a row this organization owns as its own, which is what beats the list price", () => {
+    const out = costPriceEntryList.output.parse({
+      at: "2026-09-15T12:00:00.000Z",
+      entries: [
+        {
+          ...listRow,
+          orgId: "7a000000-0000-4000-8000-0000000000a1",
+          microsPerMillion: "2400000",
+          source: "negotiated",
+        },
+      ],
+    });
+    const view = PriceBook.parse(toPriceBook(out));
+    expect(view.entries[0]?.negotiated).toBe(true);
+    expect(view.entries[0]?.ratePerMillion.micros).toBe("2400000");
+  });
+});
+
+describe("toUnpricedModels", () => {
+  it("copies the window, the counts and the classes the book cannot price", () => {
+    const out = costUnpricedModelList.output.parse({
+      since: "2026-08-16T00:00:00.000Z",
+      at: "2026-09-15T12:00:00.000Z",
+      models: [
+        {
+          model: "acme-internal-7b",
+          provider: null,
+          calls: 1240,
+          tokens: 9400000,
+          firstSeen: "2026-08-20T00:00:00.000Z",
+          lastSeen: "2026-09-15T00:00:00.000Z",
+          missingClasses: ["input_uncached", "output"],
+          fullyUnpriced: true,
+        },
+      ],
+    });
+    const view = UnpricedModels.parse(toUnpricedModels(out));
+    expect(view).toEqual({
+      since: "2026-08-16T00:00:00.000Z",
+      at: "2026-09-15T12:00:00.000Z",
+      models: [
+        {
+          model: "acme-internal-7b",
+          provider: null,
+          calls: 1240,
+          tokens: 9400000,
+          firstSeen: "2026-08-20T00:00:00.000Z",
+          lastSeen: "2026-09-15T00:00:00.000Z",
+          missingClasses: ["input_uncached", "output"],
+          fullyUnpriced: true,
+        },
+      ],
+    });
   });
 });

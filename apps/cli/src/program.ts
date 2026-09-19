@@ -174,6 +174,70 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── price: the organization's negotiated rates (set_price_entry /
+  //    remove_price_entry). `oxagen cost` is the local projection; this is the
+  //    platform's price book. Owner/Admin/Billing only. ─────────────────────
+
+  const priceCmd = program
+    .command("price")
+    .description(
+      "The organization's negotiated rates in the price book — what runs are billed at",
+    );
+  priceCmd
+    .command("set")
+    .description(
+      "Set a negotiated rate for one model and token class — Owner/Admin/Billing only",
+    )
+    .requiredOption("--provider <provider>", "Provider, e.g. anthropic")
+    .requiredOption("--model <model>", "Model id, e.g. claude-sonnet-5")
+    .requiredOption(
+      "--token-class <class>",
+      "input_uncached | cache_read | cache_write_5m | cache_write_1h | output | reasoning | server_tool_request | embedding_input | rerank | image | video_second",
+    )
+    .requiredOption(
+      "--usd-per-million <usd>",
+      "Contracted price in USD per 1,000,000 units (2.40, not 2400000)",
+    )
+    // No `--region`: nothing on the pricing path resolves by region, so a
+    // regional rate would apply everywhere and `set_price_entry` refuses one.
+    // `price remove` keeps the flag, because it addresses a row that exists.
+    .option(
+      "--alias <model>",
+      "Extra model id the rate also prices; repeatable",
+      (value: string, previous: string[] = []) => [...previous, value],
+    )
+    .option(
+      "--effective-from <instant>",
+      "RFC 3339 instant the rate starts applying; omit for now",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: Record<string, unknown>) => {
+      const { priceSet } = await import("./commands/price.js");
+      await priceSet(opts as Parameters<typeof priceSet>[0]);
+    });
+  priceCmd
+    .command("remove")
+    .description(
+      "End a negotiated rate so the model returns to the list price — Owner/Admin/Billing only",
+    )
+    .requiredOption("--provider <provider>", "Provider, e.g. anthropic")
+    .requiredOption("--model <model>", "Model id, e.g. claude-sonnet-5")
+    .requiredOption("--token-class <class>", "The token class to end")
+    .option("--region <region>", "Region the rate applies to; omit for any")
+    .option(
+      "--at <instant>",
+      "RFC 3339 instant the rate stops applying; omit for now",
+    )
+    .option(
+      "--confirm-unpriced",
+      "Confirm ending this rate even if no list or override price covers the class, which would otherwise refuse and leave it UNPRICED",
+    )
+    .option("--json", "Output JSON")
+    .action(async (opts: Record<string, unknown>) => {
+      const { priceRemove } = await import("./commands/price.js");
+      await priceRemove(opts as Parameters<typeof priceRemove>[0]);
+    });
+
   // ── context: a steering proposal on a lineage (propose_record) ──────────────
 
   const contextCmd = program

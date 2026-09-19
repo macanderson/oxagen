@@ -18,6 +18,7 @@ import { SafeLink } from "@/ui/navigation";
 import {
   CostFigure,
   CountFigure,
+  Instant,
   MoneyFigure,
   NotRecordedValue,
   RatioFigure,
@@ -27,7 +28,6 @@ import {
 import { FixDialog } from "./fix-dialog";
 import { Empty, HeaderCell, Panel } from "./tables";
 import type { SpendAt } from "./view";
-import { useFormatter } from "@/ui/formatter";
 
 /** Findings named in the legend; the rest roll into one entry, since at forty a name per slice is unreadable. */
 const LEGEND_MAX = 8;
@@ -47,15 +47,6 @@ function sharesOf(
 ): (number | null)[] {
   return findings.map((finding) =>
     total === null ? null : ratioOfMicros(finding.saving, total),
-  );
-}
-
-function Instant({ iso }: { iso: string }) {
-  const format = useFormatter();
-  return (
-    <time dateTime={iso}>
-      {format.dateTime(new Date(iso), { dateStyle: "medium" })}
-    </time>
   );
 }
 

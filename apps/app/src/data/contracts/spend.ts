@@ -210,3 +210,83 @@ export const SpendBudgets = z.array(
   }),
 );
 export type SpendBudgets = z.infer<typeof SpendBudgets>;
+
+/**
+ * The token classes the price book prices (`list_price_entries`), in the order
+ * the page reads them: what a call sends, what it reads back out of the cache,
+ * what it wrote into one, what it answered, and the classes that are not
+ * tokens at all.
+ */
+export const PriceTokenClass = z.enum([
+  "input_uncached",
+  "cache_read",
+  "cache_write_5m",
+  "cache_write_1h",
+  "output",
+  "reasoning",
+  "server_tool_request",
+  "embedding_input",
+  "rerank",
+  "image",
+  "video_second",
+]);
+export type PriceTokenClass = z.infer<typeof PriceTokenClass>;
+
+/**
+ * One row of the price book. The entry's row id is deliberately not carried:
+ * nothing on the page addresses a row by it — a negotiated row is ended by its
+ * key (provider, model, class, region), the way `remove_price_entry` takes it —
+ * and a raw database id is not a view-model field (INV-11).
+ */
+const PriceEntry = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1),
+  /** Other names a frame's model id may arrive under, priced by this row. */
+  modelAliases: z.array(z.string()),
+  /** Null is the region-agnostic row. */
+  region: z.string().nullable(),
+  tokenClass: PriceTokenClass,
+  unit: z.enum(["token", "request", "image", "second"]),
+  /** The rate for one million units, as money — the micros the contract carried. */
+  ratePerMillion: Money,
+  effectiveFrom: Instant,
+  /** Null while the row is still in effect. */
+  effectiveTo: Instant.nullable(),
+  source: z.enum(["list", "negotiated", "override"]),
+  /** True where the row is this organization's own, which is what beats the list price. */
+  negotiated: z.boolean(),
+});
+export type PriceEntry = z.infer<typeof PriceEntry>;
+
+/** `list_price_entries`: the book this organization is priced against at `at`. */
+export const PriceBook = z.object({
+  at: Instant,
+  entries: z.array(PriceEntry),
+});
+export type PriceBook = z.infer<typeof PriceBook>;
+
+/**
+ * `list_unpriced_models`: the models the organization has run that the book
+ * cannot price. A fully unpriced model's runs carry no cost at all; a partly
+ * priced one's are recorded `estimated`. Neither is free, and neither is a zero.
+ */
+export const UnpricedModels = z.object({
+  /** The start of the window the models were observed over. */
+  since: Instant,
+  /** The instant the book was resolved at. */
+  at: Instant,
+  models: z.array(
+    z.object({
+      model: z.string().min(1),
+      /** Null where the frames name no vendor. */
+      provider: z.string().nullable(),
+      calls: Count,
+      tokens: Count,
+      firstSeen: Instant,
+      lastSeen: Instant,
+      missingClasses: z.array(PriceTokenClass),
+      fullyUnpriced: z.boolean(),
+    }),
+  ),
+});
+export type UnpricedModels = z.infer<typeof UnpricedModels>;

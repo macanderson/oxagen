@@ -1,0 +1,33 @@
+/**
+ * The plain condition objects a price-book test's `drizzle-orm` mock builds in
+ * place of `eq`, `isNull`, `and` and `or`, and that
+ * `test-utils/price-book-fake-tx.ts` evaluates. Kept import-free so a
+ * `vi.mock` factory can load it while `drizzle-orm` itself is still being
+ * mocked — the same reason `test-utils/gau-conditions.ts` is import-free.
+ */
+
+export type PriceCond =
+  | { op: "eq"; col: unknown; val: unknown }
+  | { op: "inArray"; col: unknown; vals: unknown[] }
+  | { op: "isNull"; col: unknown }
+  | { op: "and"; conds: PriceCond[] }
+  | { op: "or"; conds: PriceCond[] };
+
+export const priceConditionMocks = {
+  eq: (col: unknown, val: unknown): PriceCond => ({ op: "eq", col, val }),
+  inArray: (col: unknown, vals: readonly unknown[]): PriceCond => ({
+    op: "inArray",
+    col,
+    vals: [...vals],
+  }),
+  isNull: (col: unknown): PriceCond => ({ op: "isNull", col }),
+  // drizzle's `and`/`or` skip an undefined condition; so do these.
+  and: (...conds: (PriceCond | undefined)[]): PriceCond => ({
+    op: "and",
+    conds: conds.filter((c): c is PriceCond => c !== undefined),
+  }),
+  or: (...conds: (PriceCond | undefined)[]): PriceCond => ({
+    op: "or",
+    conds: conds.filter((c): c is PriceCond => c !== undefined),
+  }),
+};

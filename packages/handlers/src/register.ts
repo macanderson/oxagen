@@ -1227,6 +1227,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .priceEntryListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "list_unpriced_models",
+    async () =>
+      (await import("./cost.unpriced_model.list"))
+        .unpricedModelListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_price_entry",
+    async () =>
+      (await import("./cost.price_entry.set"))
+        .priceEntrySetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remove_price_entry",
+    async () =>
+      (await import("./cost.price_entry.remove"))
+        .priceEntryRemoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "list_tacho_hosts",
     async () =>
       (await import("./tacho.host.list"))

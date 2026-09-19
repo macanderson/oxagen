@@ -72,7 +72,8 @@ function b(value: unknown): boolean | undefined {
  * `thinking_tokens` on the frame, and not part of the message.
  */
 export function assistantMessageText(content: unknown): string | undefined {
-  if (typeof content === "string") return content.length > 0 ? content : undefined;
+  if (typeof content === "string")
+    return content.length > 0 ? content : undefined;
   if (!Array.isArray(content)) return undefined;
   const parts: string[] = [];
   for (const block of content) {

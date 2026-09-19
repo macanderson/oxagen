@@ -300,6 +300,9 @@ import { runCostGetRoute } from "./routes/v1/run.cost";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
+import { costPriceEntryRemoveRoute } from "./routes/v1/cost.price_entry.remove";
+import { costPriceEntrySetRoute } from "./routes/v1/cost.price_entry.set";
+import { costUnpricedModelListRoute } from "./routes/v1/cost.unpriced_model.list";
 
 export type AppEnv = {
   Variables: {
@@ -618,6 +621,9 @@ orgScoped.route("/runs/cost", runCostGetRoute);
 orgScoped.route("/runs/proof", runProofGetRoute);
 orgScoped.route("/evidence/disclosure-grain", evidenceDisclosureGrainSetRoute);
 orgScoped.route("/cost/price-entries", costPriceEntryListRoute);
+orgScoped.route("/cost/price-entries/set", costPriceEntrySetRoute);
+orgScoped.route("/cost/price-entries/remove", costPriceEntryRemoveRoute);
+orgScoped.route("/cost/unpriced-models", costUnpricedModelListRoute);
 orgScoped.route("/billing/gau-bucket", billingGauBucketGetRoute);
 orgScoped.route("/billing/invoices", billingInvoiceListRoute);
 orgScoped.route("/billing/auto-topup", billingAutoTopupSetRoute);

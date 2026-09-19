@@ -76,6 +76,7 @@ function run(
             reasoning: 0n,
           },
           basis: "gateway_observed",
+          hasUnpriced: false,
         },
       ],
       tools: [],

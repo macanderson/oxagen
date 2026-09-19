@@ -2,6 +2,8 @@ import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { costDailyRollup } from "./functions/cost.daily-rollup";
+import { costPriceBookSync } from "./functions/cost.price-book-sync";
+import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
 import { costFindings, costFindingsNightly } from "./functions/cost.findings";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
@@ -50,6 +52,8 @@ export const functions: any[] = [
   billingGauClose,
   costRunRollup,
   costDailyRollup,
+  costPriceBookSync,
+  costPriceBookReprice,
   costFindings,
   costFindingsNightly,
   securityAuditPartitionRollover,

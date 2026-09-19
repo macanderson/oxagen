@@ -53,6 +53,7 @@ import type { SkillInventory } from "./contracts/skills";
 import type {
   DayRange,
   FleetSpend,
+  PriceBook,
   SpendBudgets,
   SpendDrill,
   SpendDrillKind,
@@ -61,6 +62,7 @@ import type {
   SpendGroupKind,
   SpendReport,
   SpendWaste,
+  UnpricedModels,
 } from "./contracts/spend";
 import type {
   ContextPr,
@@ -229,6 +231,16 @@ export interface DataSource {
       ctx: WsCtx,
       findingId: string,
     ): Promise<Read<SpendFindingEvidence>>;
+    /**
+     * list_price_entries at the read instant: every provider list price and
+     * this organization's negotiated rows, the book the Pricing tab shows.
+     */
+    priceBook(ctx: WsCtx): Promise<Read<PriceBook>>;
+    /**
+     * list_unpriced_models over its default window: the models the book
+     * cannot price, which is why those runs come back with no cost.
+     */
+    unpricedModels(ctx: WsCtx): Promise<Read<UnpricedModels>>;
   };
   /**
    * The onboarding gate and the register flow (#2967, ADR-065).

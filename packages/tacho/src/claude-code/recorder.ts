@@ -340,8 +340,7 @@ export class SessionRecorder {
     // and OTel sightings that follow be stamped as its duplicates.
     const duplicate =
       kind === "llm_call"
-        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ??
-          {})
+        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ?? {})
         : {};
     return this.seal(kind, body, {
       ts: fields.ts ?? this.now(),

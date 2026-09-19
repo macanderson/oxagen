@@ -95,11 +95,26 @@ export interface ModelBreakdown {
   provider: string | null;
   calls: number;
   tokens: TokenCounts;
-  /** Null when no frame of the model was priced. */
+  /**
+   * The priced calls' total; non-null whenever at least one call priced,
+   * even when another call to this same model did not. A group with a
+   * mixed priced/unpriced history is still `costMicros !== null`, so a scan
+   * for incomplete cost reads {@link ModelBreakdown.hasUnpriced}, not this.
+   */
   costMicros: bigint | null;
   /** The same cost split by token class, each rounded once; a class the book priced nothing for is 0. */
   costByClass: Record<TokenClass, bigint>;
   basis: CostBasis | null;
+  /**
+   * True when any call to this model in the run went unpriced — including a
+   * group where some other call to the same model DID price, which leaves
+   * {@link ModelBreakdown.costMicros} non-null. `rollupRun` aggregates by
+   * model, not by call, so this is the only place a mixed group's gap
+   * survives; a later reprice scan that read `costMicros === null` alone
+   * would never revisit a run whose only gap is one call inside an
+   * otherwise-priced model group (#3271 residue G2).
+   */
+  hasUnpriced: boolean;
 }
 
 interface ToolBreakdown {
@@ -312,6 +327,7 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       scaled: bigint | null;
       scaledByClass: Record<TokenClass, bigint>;
       basis: CostBasis | null;
+      hasUnpriced: boolean;
     }
   >();
   const priced: { tokens: TokenCounts; scaled: bigint }[] = [];
@@ -330,14 +346,21 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       scaled: null,
       scaledByClass: zeroScaled(),
       basis: null,
+      hasUnpriced: false,
     };
     group.calls += 1;
     addTokens(group.tokens, frame.tokens);
     group.provider ??= frame.provider;
     byModel.set(frame.model, group);
     // An unpriced frame counts as a call and carries its tokens; it adds no
-    // figure and no basis to the run or its model group.
-    if (p.scaled === null || p.basis === null) continue;
+    // figure and no basis to the run or its model group, but it still marks
+    // the group as incomplete even when a sibling call to the same model
+    // did price (#3271 residue G2) — a later price cannot repair a run a
+    // scan never revisits.
+    if (p.scaled === null || p.basis === null) {
+      group.hasUnpriced = true;
+      continue;
+    }
     scaledTotal = (scaledTotal ?? 0n) + p.scaled;
     basis = foldBasis(basis, p.basis);
     group.scaled = (group.scaled ?? 0n) + p.scaled;
@@ -381,6 +404,7 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
             ]),
           ) as Record<TokenClass, bigint>,
           basis: g.scaled === null ? null : g.basis,
+          hasUnpriced: g.hasUnpriced,
         }))
         .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0)),
       tools: [...byTool.entries()]
