@@ -24,6 +24,7 @@ type Messages = {
     agents: string;
     agent: string;
     agentSource: string;
+    mandate: string;
     tools: string;
     skills: string;
     steering: string;
@@ -1055,6 +1056,173 @@ type Messages = {
         body: string;
         enroll: string;
         command: string;
+      };
+    };
+  };
+  mandate: {
+    eyebrow: string;
+    roles: {
+      owner: string;
+      admin: string;
+      member: string;
+      billing: string;
+      compliance: string;
+      viewer: string;
+    };
+    loading: string;
+    grantedBy: string;
+    notGranted: string;
+    requestedBy: string;
+    roleAtGrant: string;
+    status: {
+      draft: string;
+      active: string;
+      expired: string;
+      revoked: string;
+    };
+    tiles: {
+      label: string;
+      perCall: string;
+      perCallBasis: string;
+      perPeriod: string;
+      perPeriodBasis: string;
+      settled: string;
+      settledBasis: string;
+      remaining: string;
+      remainingBasis: string;
+    };
+    ledger: {
+      title: string;
+      label: string;
+      basis: string;
+      note: string;
+      columns: {
+        when: string;
+        call: string;
+        amount: string;
+        state: string;
+        external: string;
+        receipt: string;
+      };
+      kind: {
+        reserve: string;
+        settle: string;
+        release: string;
+      };
+      notRecorded: string;
+      callBasis: string;
+      receiptBasis: string;
+      truncated: string;
+      empty: string;
+      emptyBody: string;
+      filteredEmpty: string;
+      filteredEmptyBody: string;
+      search: string;
+      searchHint: string;
+      state: string;
+      anyState: string;
+      apply: string;
+      clear: string;
+      shown: string;
+      pager: {
+        label: string;
+        newer: string;
+        older: string;
+        end: string;
+      };
+    };
+    grant: {
+      title: string;
+      agent: string;
+      grantedBy: string;
+      effect: string;
+      counterparties: string;
+      allow: string;
+      deny: string;
+      anyTarget: string;
+      noPattern: string;
+      tools: string;
+      approval: string;
+      approvalAbove: string;
+      approvalAlways: string;
+      approvalApprovers: string;
+      approvalConsequenceRoles: string;
+      valid: string;
+      validWindow: string;
+    };
+    reconciliation: {
+      title: string;
+      body: string;
+      notRecorded: string;
+      openAudit: string;
+    };
+    actions: {
+      limits: {
+        open: string;
+        title: string;
+        body: string;
+        measure: string;
+        measureHint: string;
+        unit: string;
+        unitHint: string;
+        perCall: string;
+        perPeriod: string;
+        period: string;
+        periods: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
+        callsPerDay: string;
+        validTo: string;
+        validToHint: string;
+        confirm: string;
+        pending: string;
+      };
+      revoke: {
+        open: string;
+        title: string;
+        body: string;
+        reason: string;
+        reasonHint: string;
+        confirm: string;
+        pending: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noRoleCoversAllTags: string;
+        mandateNotFound: string;
+        mandateEnded: string;
+        validityInverted: string;
+        noToolMatches: string;
+        measureNotDeclared: string;
+        measureUnitMismatch: string;
+        noPrincipal: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
+    };
+    failure: {
+      back: string;
+      denied: {
+        title: string;
+        body: string;
+        signedIn: string;
+        needed: string;
+        decidedBy: string;
+      };
+      pending: {
+        title: string;
+        body: string;
+      };
+      error: {
+        title: string;
+        body: string;
+        code: string;
+        readAt: string;
+        retry: string;
       };
     };
   };

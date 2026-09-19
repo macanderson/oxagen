@@ -3,15 +3,17 @@
 // the meter draws come from the ledger's own figures, and a limit with no
 // per-period figure has neither a remaining nor a ratio.
 import { describe, expect, it } from "vitest";
-import { MandateList } from "@/data/contracts/mandates";
+import { MandateDetail, MandateList } from "@/data/contracts/mandates";
 import {
   authorityOutput,
   callsAuthorityOutput,
+  ledgerOutput,
   MANDATE_ID,
+  mandateGetOutput,
   mandateListOutput,
   mandateOutput,
 } from "@/test/mandate-outputs";
-import { toMandateList } from "./mandates";
+import { toMandateDetail, toMandateList } from "./mandates";
 
 const view = () => MandateList.parse(toMandateList(mandateListOutput(), 100));
 
@@ -298,5 +300,132 @@ describe("toMandateList overLimit", () => {
 
   it("marks a measure with no per-period limit as not over it (negative)", () => {
     expect(of("600000000", "600000000", null).overLimit).toBe(false);
+  });
+});
+
+describe("toMandateList grant scope", () => {
+  const one = (overrides: Parameters<typeof mandateOutput>[0]) =>
+    only(MandateList.parse(toMandateList(mandateListOutput([mandateOutput(overrides)]), 100)).mandates);
+
+  it("carries the counterparty rules as a list, keyed by the measure they bound", () => {
+    expect(
+      one({
+        targets: {
+          amount: { allow: ["vendor:aws"], deny: ["*"] },
+        },
+      }).targets,
+    ).toEqual([{ measure: "amount", allow: ["vendor:aws"], deny: ["*"] }]);
+  });
+
+  it("carries no counterparty rule when the grant named none", () => {
+    expect(one({ targets: {} }).targets).toEqual([]);
+  });
+
+  // `humanAbove` names a measure and an integer and no unit at all, so the only
+  // evidence for the form is the limit on the same measure.
+  it("prints an approval threshold in the form the mandate's own limit establishes", () => {
+    const approval = one({
+      approval: {
+        humanAbove: { amount: "100000000" },
+        alwaysHumanFor: ["moves_money"],
+        approvers: ["role:Billing"],
+      },
+    }).approval;
+    expect(approval.humanAbove).toEqual([
+      {
+        measure: "amount",
+        value: { kind: "money", money: { micros: "100000000", currency: "USD" } },
+        recorded: "100000000",
+      },
+    ]);
+    expect(approval.alwaysHumanFor).toEqual(["moves_money"]);
+    expect(approval.approvers).toEqual(["role:Billing"]);
+  });
+
+  it("leaves a threshold on an unlimited measure without a form rather than guessing one (negative)", () => {
+    const [threshold] = one({
+      approval: {
+        humanAbove: { rows: "25" },
+        alwaysHumanFor: [],
+        approvers: [],
+      },
+    }).approval.humanAbove;
+    expect(threshold).toEqual({
+      measure: "rows",
+      value: null,
+      recorded: "25",
+    });
+  });
+});
+
+describe("toMandateDetail", () => {
+  const detail = (
+    ledger = [ledgerOutput()],
+    ledgerLimit = 500,
+    mandate = mandateOutput(),
+  ) =>
+    MandateDetail.parse(
+      toMandateDetail(mandateGetOutput(ledger, mandate), ledgerLimit),
+    );
+
+  it("maps the mandate through the same row mapper the ledger tables read", () => {
+    expect(detail().mandate).toMatchObject({
+      id: MANDATE_ID,
+      agentSlug: "invoice-bot",
+      status: "active",
+    });
+  });
+
+  it("keeps each movement's measure, figure, state, external effect and window", () => {
+    const [row] = detail().ledger;
+    expect(row).toEqual({
+      kind: "settle",
+      measure: "amount",
+      value: {
+        kind: "money",
+        money: { micros: "884600000", currency: "USD" },
+      },
+      externalEffectId: "pi_3QaL8f2Xk",
+      periodKey: "2026-09",
+      at: "2026-09-04T08:40:19.000Z",
+    });
+  });
+
+  // INV-11: the ledger row's `id` and `toolCallId` are raw database uuids, and
+  // the view model admits neither. A regression here would put a uuid on screen.
+  it("carries no identifier out of the ledger row (negative)", () => {
+    const [row] = detail().ledger;
+    expect(row).not.toHaveProperty("id");
+    expect(row).not.toHaveProperty("toolCallId");
+    expect(JSON.stringify(row)).not.toContain("0199a0d4");
+  });
+
+  it("reads a count movement in whole units of its own measure", () => {
+    const [row] = detail([
+      ledgerOutput({
+        kind: "reserve",
+        measure: "calls",
+        value: "1",
+        unitOrCurrency: "calls",
+        externalEffectId: null,
+      }),
+    ]).ledger;
+    expect(row).toMatchObject({
+      kind: "reserve",
+      value: { kind: "count", count: "1", unit: "calls" },
+      externalEffectId: null,
+    });
+  });
+
+  it("says the ledger filled its bound, and says nothing when it did not", () => {
+    expect(detail([ledgerOutput()], 1).truncatedAt).toBe(1);
+    expect(detail([ledgerOutput()], 500).truncatedAt).toBeNull();
+  });
+
+  it("stamps the answer with the instant it was mapped", () => {
+    const at = new Date("2026-09-16T12:00:00.000Z");
+    expect(
+      toMandateDetail(mandateGetOutput(), 500, at).asOf,
+    ).toBe(at.toISOString());
   });
 });
