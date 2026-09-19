@@ -213,12 +213,11 @@ describe("redeemAndRotate — single-use enforcement", () => {
     });
   });
 
-  it("consumes + rotates a valid code and returns the book html + fresh code", async () => {
+  it("consumes + rotates a valid code and returns the book html + fresh code, without leaking the lead's email", async () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
         [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
-        [{ email: "ada@example.com" }],
         [{ slug: "page-flip-reader", title: "Reader", format: "page-flip" }],
       ],
       inserts: [[]],
@@ -228,7 +227,7 @@ describe("redeemAndRotate — single-use enforcement", () => {
     if (res.ok) {
       expect(res.html).toContain("book");
       expect(res.newCode).toHaveLength(26);
-      expect(res.leadEmail).toBe("ada@example.com");
+      expect(res).not.toHaveProperty("leadEmail");
       expect(res.editions).toHaveLength(1);
     }
   });

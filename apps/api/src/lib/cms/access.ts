@@ -245,7 +245,6 @@ export type RedeemResult =
       html: string;
       newCode: string;
       editions: { slug: string; title: string; format: string }[];
-      leadEmail: string;
     }
   | {
       ok: false;
@@ -327,12 +326,6 @@ export async function redeemAndRotate(
       userAgent: ctx.userAgent,
     });
 
-    const [lead] = await tx
-      .select({ email: leads.email })
-      .from(leads)
-      .where(eq(leads.id, codeRow.leadId))
-      .limit(1);
-
     const editionList = await tx
       .select({
         slug: bookEditions.slug,
@@ -347,7 +340,6 @@ export async function redeemAndRotate(
       html: edition.html,
       newCode,
       editions: editionList,
-      leadEmail: lead?.email ?? "",
     };
   });
 }
