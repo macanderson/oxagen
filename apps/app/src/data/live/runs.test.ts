@@ -34,23 +34,40 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+const model = {
+  id: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+
+const machine = {
+  hostname: "tycho",
+  platform: "darwin",
+  osVersion: "25.6.0",
+  arch: "arm64",
+  nodeVersion: "24.4.0",
+};
+
 const run = {
   id: "tse_4f0a",
   source: "tacho",
   agentKey: null,
   operatorId: null,
-  // Nullable but required: `RunRow` names each of these, so a fixture that
-  // omits one maps to `undefined` and `RunPage.safeParse` rejects the whole
-  // page as `record_unmappable`. A happy-path read then asserts a 502.
-  operatorKind: null,
-  operatorName: null,
-  model: null,
-  machine: null,
+  // Nullable but required, all four: `RunRow` names each of them, so a
+  // fixture omitting one maps to `undefined`, `RunPage.safeParse` rejects the
+  // whole page, and a happy-path read asserts a 502 (`record_unmappable`).
+  //
+  // All four are populated rather than null, because a real value also proves
+  // the mapping carries it through rather than merely tolerating the field.
+  operatorKind: "human",
+  operatorName: "Ada Lovelace",
   status: "live",
   turns: null,
   steps: 3,
   frames: 9,
   cost: null,
+  model,
+  machine,
   taskRef: null,
   name: null,
   summary: null,
@@ -76,15 +93,15 @@ describe("runs.list", () => {
             source: "tacho",
             agentKey: null,
             operatorId: null,
-            operatorKind: null,
-            operatorName: null,
-            model: null,
-            machine: null,
+            operatorKind: "human",
+            operatorName: "Ada Lovelace",
             status: "live",
             turns: null,
             steps: 3,
             frames: 9,
             cost: null,
+            model,
+            machine,
             taskRef: null,
             name: null,
             summary: null,
