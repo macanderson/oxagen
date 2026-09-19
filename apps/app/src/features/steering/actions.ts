@@ -8,6 +8,7 @@
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
+import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -55,4 +56,30 @@ export async function dismissProposal(
   return result.ok
     ? { ok: true, value: { status: result.value.status } }
     : result;
+}
+
+/**
+ * Set one of the two steering-freshness gates for the workspace.
+ *
+ * One gate per call, as a patch. Two checkboxes that each resent both values
+ * would let the second person to click overwrite the first person's change
+ * with the value their page happened to be rendered with, and a governance
+ * gate that silently switches back off is worse than one that was never
+ * offered. `update_workspace_settings` merges the named member into the
+ * stored block and leaves the other alone.
+ *
+ * The handler gates the role (INV-29): an org or workspace Owner or Admin
+ * writes, anyone else is answered `denied` with nothing changed.
+ */
+export async function setSteeringGate(
+  org: string,
+  ws: string,
+  gate: "autoSync" | "blockStaleRuns",
+  enabled: boolean,
+): Promise<ActionResult<{ autoSync: boolean; blockStaleRuns: boolean }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, workspaceSettingsWrite, {
+    steering: { [gate]: enabled },
+  });
+  return result.ok ? { ok: true, value: result.value.steering } : result;
 }
