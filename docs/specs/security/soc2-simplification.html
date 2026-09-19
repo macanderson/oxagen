@@ -939,10 +939,10 @@
       <div class="rec-section">
         <div class="rec-section-label">Proposed change (already detailed in OXA-1559)</div>
         <ul>
-          <li>Phase 1: Edge proxy + login page + <code class="mono">assertAdminUser()</code> helper gated to <code class="mono">@oxagen.ai</code> emails.</li>
+          <li>Phase 1: Edge proxy + login page + <code class="mono">assertAdminUser()</code> helper gated to <code class="mono">@oxagen.sh</code> emails.</li>
           <li>Phase 2: <code class="mono">/access-review</code> — paginated table of all orgs, per-org principal+role list, stale-grant flagging (last_active_at &gt; 90 days), CSV export as SOC2 evidence artifact. Satisfies OXA-927 without building a separate email job.</li>
           <li>Phase 3: Admin audit viewer (uses the same components as the tenant-side viewer from Rec 2).</li>
-          <li>Phase 4: RBAC within admin (owner/editor/viewer, <code class="mono">mac@oxagen.ai</code> hardcoded owner).</li>
+          <li>Phase 4: RBAC within admin (owner/editor/viewer, <code class="mono">mac@oxagen.sh</code> hardcoded owner).</li>
         </ul>
       </div>
       <div class="rec-section">
@@ -1257,7 +1257,7 @@
         <div class="mock-audit-row">
           <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
           <span class="mar-type">auth.sign_in</span>
-          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.sh</span>
           <span class="mar-actor">203.0.113.42</span>
           <span class="mar-time">2m ago</span>
         </div>
@@ -1271,7 +1271,7 @@
         <div class="mock-audit-row">
           <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
           <span class="mar-type">billing.credits_purchased · $50.00</span>
-          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.sh</span>
           <span class="mar-actor">—</span>
           <span class="mar-time">1h ago</span>
         </div>
@@ -1285,14 +1285,14 @@
         <div class="mock-audit-row">
           <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
           <span class="mar-type">org.member_invited · alice@acme.com → editor</span>
-          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.sh</span>
           <span class="mar-actor">—</span>
           <span class="mar-time">1d ago</span>
         </div>
         <div class="mock-audit-row">
           <span class="badge badge-done" style="font-size:10px;flex-shrink:0;">success</span>
           <span class="mar-type">api_key.created · key-prod-0001</span>
-          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.ai</span>
+          <span style="font-size:10px;color:var(--text-dim);flex-shrink:0;width:100px;text-align:center;">mac@oxagen.sh</span>
           <span class="mar-actor">—</span>
           <span class="mar-time">3d ago</span>
         </div>
@@ -1339,7 +1339,7 @@
         <span style="width:60px;text-align:right;">Status</span>
       </div>
       <div class="mock-ar-row">
-        <span class="mar-name">mac@oxagen.ai</span>
+        <span class="mar-name">mac@oxagen.sh</span>
         <span class="mar-role">owner</span>
         <span class="mar-last">2 min ago</span>
         <span class="flag-ok">Active</span>
