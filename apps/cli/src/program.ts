@@ -20,7 +20,10 @@
  */
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
-import { printRetiredNotice } from "./commands/retired.js";
+import {
+  printDeprecatedNotice,
+  printRetiredNotice,
+} from "./commands/retired.js";
 
 const { version } = pkg;
 
@@ -887,17 +890,37 @@ export function buildProgram(): Command {
       handleTelemetry(subcommand);
     });
 
-  // ── tacho: put this machine's Claude Code sessions under Oxagen control ──────
+  // ── tacho: wrap this machine's agent sessions under Oxagen control ───────────
+  //
+  // Hidden, and deprecated in favour of `oxagen agent` (ADR-103 phase 1, spec
+  // §2.1: the old word does not appear in the product). It still runs, and the
+  // subcommands below are unchanged, because every machine enrolled so far was
+  // enrolled with `oxagen tacho enroll` and that string is in scripts, runbooks,
+  // and the managed settings documents MDM has already pushed. Refusing it would
+  // turn a rename into an outage.
+  //
+  // Moving these seven onto `oxagen agent` is phase 1b, not this change. Three
+  // of the names are taken there by server-scoped operations (`enroll --token`
+  // wants a one-time enrollment token, `status <agent>` and `unenroll <agent>`
+  // act on one agent), so the move changes two governance command signatures and
+  // needs a review of its own. Until then the host-scoped commands are reachable
+  // here, which is why this group keeps its subcommands rather than forwarding.
   //
   // docs/specs/tacho/spec.md section 5.1. The work lives in @oxagen/tacho;
-  // these commands lend it the CLI's credentials so `oxagen tacho enroll`
+  // these commands lend it the CLI's credentials so enrolling this machine
   // needs no --token after `oxagen login`.
 
   const tacho = program
-    .command("tacho")
+    .command("tacho", { hidden: true })
     .description(
-      "Record and gate this machine's Claude Code sessions through Oxagen (Tacho)",
+      "Deprecated. Wrap this machine's agent sessions: record and gate them through Oxagen",
     );
+
+  // One line on the way past, naming the replacement. On stderr so it never
+  // lands in the output of `--json` subcommands that a script is parsing.
+  tacho.hook("preSubcommand", () => {
+    printDeprecatedNotice("`oxagen tacho`", "`oxagen agent`");
+  });
 
   tacho
     .command("enroll")
