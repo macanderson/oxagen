@@ -99,7 +99,8 @@ export async function writeRepositoryHead(
         id: schema.repositoryBindings.id,
         publicId: schema.repositoryBindings.publicId,
       });
-    if (!inserted) throw new Error("repository_bindings insert returned no row");
+    if (!inserted)
+      throw new Error("repository_bindings insert returned no row");
     binding = inserted;
   }
 

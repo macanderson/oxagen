@@ -10,18 +10,23 @@ import {
 } from "@oxagen/oxagen/mandates/schemas";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { readGatePolicy } from "./context.steering.freshness";
 
 // `description` and `avatarUrl` are real columns on workspace.workspaces
 // (description was promoted out of the settings JSONB bag — audit §1.7).
 // `consequenceRoles` holds the overrides; the read returns the effective map
 // over the defaults (ADR-059 decision 1). A stored value that no longer
 // parses reads as no overrides.
+// `steering` is the two freshness gates, read out of the settings JSONB bag
+// by the same parser `get_steering_freshness` uses, so Mission Control's
+// checkboxes and a developer's machine can never read one value two ways.
 export function mapWorkspaceSettingsRow(row: {
   name: string;
   slug: string;
   avatarUrl: string | null;
   description: string | null;
   consequenceRoles: unknown;
+  settings: unknown;
 }): WorkspaceSettingsReadOutput {
   const overrides = consequenceRolesSchema.safeParse(row.consequenceRoles);
   return {
@@ -32,6 +37,7 @@ export function mapWorkspaceSettingsRow(row: {
     consequenceRoles: effectiveConsequenceRoles(
       overrides.success ? overrides.data : {},
     ),
+    steering: readGatePolicy(row.settings),
   };
 }
 
@@ -57,6 +63,7 @@ export const workspaceSettingsReadHandler: CapabilityHandler<
         avatarUrl: true,
         description: true,
         consequenceRoles: true,
+        settings: true,
       },
     }),
   );

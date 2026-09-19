@@ -2,6 +2,7 @@ import { z } from "zod";
 import { registerCapability } from "../registry";
 import { avatarUrlOutputSchema } from "../avatar";
 import { consequenceRolesSchema } from "../mandates/schemas";
+import { steeringGatePolicy } from "./context.steering.freshness";
 
 const workspaceSettingsOutput = z.object({
   name: z.string(),
@@ -14,6 +15,12 @@ const workspaceSettingsOutput = z.object({
   // tag plus the workspace's own, each with the org roles that may grant,
   // change or revoke a mandate for it. Overrides applied over the defaults.
   consequenceRoles: consequenceRolesSchema,
+  // The two steering-freshness gates the workspace applies to every agent
+  // its members run: pull `.oxagen/` forward by itself, and refuse a prompt
+  // while it is behind the production branch. Both off by default. A
+  // developer's local settings may switch one ON and can never switch one
+  // OFF, so these are the floor for the workspace.
+  steering: steeringGatePolicy,
 });
 
 export const workspaceSettingsRead = registerCapability({

@@ -3033,7 +3033,13 @@ describe("observed metering from the model proxy", () => {
     const otelFirst = zero();
     const [a, b] = chain([
       unsealed("llm_call", usage, "otel_log"),
-      unsealed("llm_call", split, "transcript", CLAUDE_CODE, stamped("otel_log")),
+      unsealed(
+        "llm_call",
+        split,
+        "transcript",
+        CLAUDE_CODE,
+        stamped("otel_log"),
+      ),
     ]) as [TachoEvent, TachoEvent];
     foldDelta(otelFirst, a);
     foldDelta(otelFirst, b);
@@ -3049,7 +3055,13 @@ describe("observed metering from the model proxy", () => {
     const transcriptFirst = zero();
     const [c, d] = chain([
       unsealed("llm_call", split, "transcript"),
-      unsealed("llm_call", usage, "otel_log", CLAUDE_CODE, stamped("transcript")),
+      unsealed(
+        "llm_call",
+        usage,
+        "otel_log",
+        CLAUDE_CODE,
+        stamped("transcript"),
+      ),
     ]) as [TachoEvent, TachoEvent];
     foldDelta(transcriptFirst, c);
     foldDelta(transcriptFirst, d);
@@ -3064,7 +3076,13 @@ describe("observed metering from the model proxy", () => {
     // A transcript continuation block (usage stripped, stamped transcript) adds nothing.
     const continuation = zero();
     const [e] = chain([
-      unsealed("llm_call", { model: "claude-opus-5" }, "transcript", CLAUDE_CODE, stamped("transcript")),
+      unsealed(
+        "llm_call",
+        { model: "claude-opus-5" },
+        "transcript",
+        CLAUDE_CODE,
+        stamped("transcript"),
+      ),
     ]) as [TachoEvent];
     foldDelta(continuation, e);
     expect(continuation).toMatchObject({ numModelCalls: 0, inputTokens: 0 });

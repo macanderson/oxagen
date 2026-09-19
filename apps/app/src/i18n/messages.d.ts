@@ -2475,6 +2475,19 @@ type Messages = {
       previous: string;
       next: string;
     };
+    freshness: {
+      title: string;
+      lead: string;
+      version: string;
+      repository: string;
+      published: string;
+      unbound: string;
+      gatesLegend: string;
+      autoSync: string;
+      autoSyncHint: string;
+      blockStaleRuns: string;
+      blockStaleRunsHint: string;
+    };
     status: {
       proposed: string;
       pr_open: string;
@@ -2618,6 +2631,7 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        mergeTimeUnknown: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
