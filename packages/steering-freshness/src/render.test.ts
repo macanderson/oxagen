@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   HARNESS_RENDERERS,
   renderBanner,
+  renderCursorBeforeSubmitPrompt,
   renderGate,
   renderJson,
+  renderStellaUserPromptSubmit,
   renderText,
   renderUserPromptSubmit,
 } from "./render";
@@ -234,6 +236,67 @@ describe("renderUserPromptSubmit", () => {
   });
 });
 
+describe("renderCursorBeforeSubmitPrompt", () => {
+  it("blocks with continue: false and a user_message, exits 2", () => {
+    const out = renderCursorBeforeSubmitPrompt(
+      decision({ action: "block", exitCode: 2 }),
+    );
+    const payload = JSON.parse(out.stdout) as Record<string, unknown>;
+    expect(payload).toMatchObject({ continue: false });
+    expect(payload.user_message).toContain("behind origin/main");
+    expect(out.stderr).toContain("behind origin/main");
+    expect(out.exitCode).toBe(2);
+  });
+
+  // Cursor's beforeSubmitPrompt has nowhere to put a warning that still lets
+  // the prompt through, so a `warn` decision answers exactly like `allow`.
+  it("lets a warning through as continue: true, same as allow", () => {
+    const warn = renderCursorBeforeSubmitPrompt(decision({ action: "warn" }));
+    const allow = renderCursorBeforeSubmitPrompt(
+      decision({ action: "allow", verdict: verdict({ status: "current" }) }),
+    );
+    expect(JSON.parse(warn.stdout)).toEqual({ continue: true });
+    expect(JSON.parse(allow.stdout)).toEqual({ continue: true });
+    expect(warn.exitCode).toBe(0);
+    expect(allow.exitCode).toBe(0);
+  });
+
+  it("emits one line of JSON", () => {
+    const out = renderCursorBeforeSubmitPrompt(decision());
+    expect(out.stdout.trimEnd().split("\n")).toHaveLength(1);
+  });
+});
+
+describe("renderStellaUserPromptSubmit", () => {
+  it("denies with a reason and exits 2 when blocked", () => {
+    const out = renderStellaUserPromptSubmit(
+      decision({ action: "block", exitCode: 2 }),
+    );
+    const payload = JSON.parse(out.stdout) as Record<string, unknown>;
+    expect(payload).toMatchObject({ action: "deny" });
+    expect(payload.reason).toContain("behind origin/main");
+    expect(out.stderr).toContain("behind origin/main");
+    expect(out.exitCode).toBe(2);
+  });
+
+  // Stella's UserPromptSubmit has no veto for a warning, so it allows and
+  // the banner goes to the developer on stderr instead.
+  it("allows on a warning, with the banner on stderr", () => {
+    const out = renderStellaUserPromptSubmit(decision({ action: "warn" }));
+    expect(JSON.parse(out.stdout)).toEqual({ action: "allow" });
+    expect(out.stderr).toContain("behind origin/main");
+    expect(out.exitCode).toBe(0);
+  });
+
+  it("prints no stderr on a clean prompt", () => {
+    const out = renderStellaUserPromptSubmit(
+      decision({ action: "allow", verdict: verdict({ status: "current" }) }),
+    );
+    expect(JSON.parse(out.stdout)).toEqual({ action: "allow" });
+    expect(out.stderr).toBe("");
+  });
+});
+
 describe("renderJson", () => {
   it("carries the whole decision, including the banner", () => {
     const out = renderJson(decision());
@@ -255,6 +318,24 @@ describe("renderGate", () => {
       expect(out.stdout).toContain("hookSpecificOutput");
     },
   );
+
+  it("renders cursor through its own beforeSubmitPrompt shape", () => {
+    expect(HARNESS_RENDERERS["cursor"]).toBe("cursor-before-submit-prompt");
+    const out = renderGate(
+      decision({ action: "block", exitCode: 2 }),
+      "cursor",
+    );
+    expect(JSON.parse(out.stdout)).toMatchObject({ continue: false });
+  });
+
+  it("renders stella through its own UserPromptSubmit shape", () => {
+    expect(HARNESS_RENDERERS["stella"]).toBe("stella-user-prompt-submit");
+    const out = renderGate(
+      decision({ action: "block", exitCode: 2 }),
+      "stella",
+    );
+    expect(JSON.parse(out.stdout)).toMatchObject({ action: "deny" });
+  });
 
   // A harness this build has never heard of still gets the contract every
   // shell understands.

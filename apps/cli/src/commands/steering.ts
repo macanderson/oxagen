@@ -55,8 +55,6 @@ import {
   HARNESSES,
   HOOK_TIMEOUT_SECONDS,
   INSTALLABLE,
-  UNINSTALLABLE,
-  ungatedHarnessNotice,
   PROJECT_DIR_NAME,
   type FreshnessVerdict,
   type InstallableHarness,
@@ -1048,42 +1046,14 @@ export async function steeringGate(
 
 // ── hooks ────────────────────────────────────────────────────────────────────
 
-/**
- * `--harness` to the harnesses this command will write a config for.
- *
- * "all" means every harness with a config writer, which is two of the four
- * Oxagen wraps. It used to mean that silently. A team that ran the default
- * and read "all" had no way to learn that Cursor and Stella were left
- * ungated, so the caller now prints {@link ungatedHarnessNotice} alongside
- * the results, and a name from `UNINSTALLABLE` gets its own error rather than
- * being reported as a typo.
- */
-function parseHarnesses(
-  raw: string | undefined,
-): InstallableHarness[] | { error: string } {
+function parseHarnesses(raw: string | undefined): InstallableHarness[] | null {
   if (!raw || raw === "all") return [...INSTALLABLE];
   const names = raw.split(",").map((s) => s.trim());
   const bad = names.filter(
     (n) => !INSTALLABLE.includes(n as InstallableHarness),
   );
-  if (bad.length === 0) return names as InstallableHarness[];
-  const wrapped = bad.filter((n) =>
-    (UNINSTALLABLE as readonly string[]).includes(n),
-  );
-  if (wrapped.length === bad.length) {
-    return {
-      error: `error: the gate runs for ${wrapped.join(
-        " and ",
-      )}, but Oxagen has no hook config writer for either, so this command cannot install it there. ${ungatedHarnessNotice()}`,
-    };
-  }
-  return {
-    error: `error: --harness is one of ${INSTALLABLE.join(
-      ", ",
-    )}, a comma-separated list of them, or "all" (which is ${INSTALLABLE.join(
-      " and ",
-    )}, the harnesses with a config writer)`,
-  };
+  if (bad.length > 0) return null;
+  return names as InstallableHarness[];
 }
 
 export async function steeringHooks(
@@ -1093,18 +1063,14 @@ export async function steeringHooks(
   cwd: string = process.cwd(),
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
-  const parsed = parseHarnesses(opts.harness);
-  if (!Array.isArray(parsed)) {
-    writer.writeErr(parsed.error);
+  const harnesses = parseHarnesses(opts.harness);
+  if (!harnesses) {
+    writer.writeErr(
+      `error: --harness is one of ${INSTALLABLE.join(", ")}, a comma-separated list of them, or "all"`,
+    );
     process.exitCode = 2;
     return;
   }
-  const harnesses = parsed;
-  // Which wrapped harnesses this run leaves ungated. Reported on every
-  // install and every status, in the text output and in the JSON, because
-  // "all" covers two of the four harnesses Oxagen wraps and a team that is
-  // not told that believes it covers four.
-  const ungated = [...UNINSTALLABLE];
   const projectRoot = findProjectRoot(cwd);
 
   if (action === "status") {
@@ -1112,7 +1078,7 @@ export async function steeringHooks(
       harnesses.map((h) => hookStatus(projectRoot, h)),
     );
     if (out.isJson) {
-      out.data({ hooks: rows, ungated });
+      out.data({ hooks: rows });
       return;
     }
     for (const row of rows) {
@@ -1120,11 +1086,7 @@ export async function steeringHooks(
         `${row.harness.padEnd(12)} ${row.installed ? "installed" : "not installed"}  ${row.path}`,
       );
     }
-    for (const harness of ungated) {
-      writer.write(`${harness.padEnd(12)} no installer  wire the gate by hand`);
-    }
     writer.write("");
-    writer.write(ungatedHarnessNotice());
     writer.write(
       `Any other agent: run \`oxagen steering gate --harness <name>\` before each prompt. Exit 2 means refuse it, and the reason is on stderr. Supported --harness values: ${HARNESSES.join(", ")}.`,
     );
@@ -1145,12 +1107,9 @@ export async function steeringHooks(
     ),
   );
   if (out.isJson) {
-    out.data({ results, ungated });
+    out.data({ results });
   } else {
     for (const r of results) writer.write(r.message);
-    // Named on a remove too: what it took out is what it put in, and the two
-    // harnesses it never touched are still worth saying out loud.
-    writer.write(ungatedHarnessNotice());
   }
   if (results.some((r) => r.outcome === "refused")) process.exitCode = 1;
 }

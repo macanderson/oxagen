@@ -25,9 +25,8 @@
  */
 import {
   checkSteeringFreshness,
-  isStale,
   DEFAULT_HOOK_BUDGET_MS,
-  MIN_LOCAL_SLICE_MS,
+  isStale,
   type CheckOptions,
   type FreshnessVerdict,
 } from "./check";
@@ -108,21 +107,18 @@ function tightenedBy(
 export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
   const { readOnly = false, reloadPolicy } = opts;
   const now = opts.now ?? Date.now;
-  // One deadline for the whole gate, anchored before the check starts: the
-  // check, the optional sync, and the re-check after it all run inside the
-  // hook the harness kills after `HOOK_TIMEOUT_SECONDS`. The check has always
-  // had its own copy of this budget; the sync had none, so it could spend 30
-  // seconds per git call after the check had already spent most of the
-  // twenty, the harness killed the process, and the prompt ran unjudged with
-  // `.oxagen/` part-written.
+  // The same deadline `checkSteeringFreshness` computes for its own local
+  // work (`hookBudgetMs`, sized from the installed hook's own timeout),
+  // started here so the automatic sync below — which runs after the check
+  // has already spent part of that budget — is clamped to whatever is left
+  // of the SAME shared deadline rather than to its own fixed 30-second
+  // default. See the P1 this closes: a slow `restore`/`rm`/`clean` could
+  // outlive the hook's timeout on its own, the harness would kill the
+  // process before the blocking decision was rendered, and the prompt
+  // proceeded despite `blockStaleRuns`.
   const hookDeadline = now() + (opts.hookBudgetMs ?? DEFAULT_HOOK_BUDGET_MS);
-  const remaining = (): number =>
-    Math.max(MIN_LOCAL_SLICE_MS, hookDeadline - now());
   let policy = opts.policy;
-  let verdict = await checkSteeringFreshness({
-    ...opts,
-    hookBudgetMs: remaining(),
-  });
+  let verdict = await checkSteeringFreshness(opts);
   let sync: SyncResult | null = null;
 
   // The check has just fetched, so the ref the committed gates are read from
@@ -160,9 +156,9 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
         // A sync only ever refuses when it is not safe, so it is never forced
         // from the automatic path however the developer configured things.
         force: false,
-        // What is left of the hook's own timeout, so each git call the sync
-        // makes is clamped to it and the sync refuses rather than overrunning
-        // it. Without this the sync's default was 30 seconds per call.
+        // Bound by what is left of the gate's own shared deadline, not the
+        // sync's standalone 30-second default — see the comment on
+        // `hookDeadline` above.
         deadlineMs: hookDeadline,
         now,
       });
@@ -189,10 +185,7 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
       // Re-ask rather than assume. The sync wrote files; the cheapest way to
       // be sure the gate is judging the post-sync state is to look at it,
       // and the remote was already fetched, so this costs no network.
-      verdict = await checkSteeringFreshness({
-        ...opts,
-        hookBudgetMs: remaining(),
-      });
+      verdict = await checkSteeringFreshness(opts);
     }
   }
 

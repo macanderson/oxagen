@@ -1186,44 +1186,6 @@ describe("steering hooks", () => {
     expect(w.output()).toContain(".codex/hooks.json");
   });
 
-  // Finding 2. "all" is two of the four harnesses Oxagen wraps, and it used
-  // to say nothing about the other two: a team that ran the default believed
-  // their Cursor and Stella prompts were gated when nothing was checking
-  // them. The scope is now in the output, not only in the source.
-  it("names the harnesses it left ungated on an install", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
-    await mkdir(join(tmp, ".oxagen"), { recursive: true });
-    const w = captureWriter();
-    await steeringHooks("install", {}, w.writer, tmp);
-    expect(w.output()).toContain("cursor");
-    expect(w.output()).toContain("stella");
-    expect(w.output()).toContain("not gated");
-  });
-
-  it("lists them as uninstalled in the status listing", async () => {
-    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
-    const w = captureWriter();
-    await steeringHooks("status", {}, w.writer, tmp);
-    expect(w.output()).toContain("cursor");
-    expect(w.output()).toContain("no installer");
-  });
-
-  // A wrapped harness with no config writer is not a typo, and saying "one of
-  // claude-code, codex" to someone who asked for Cursor does not tell them
-  // that the gate itself runs there.
-  it("explains a wrapped harness it cannot install into", async () => {
-    const w = splitWriter();
-    await steeringHooks(
-      "install",
-      { harness: "cursor" },
-      w.writer,
-      process.cwd(),
-    );
-    expect(w.err()).toContain("no hook config writer");
-    expect(w.err()).toContain("oxagen steering gate --harness <name>");
-    expect(process.exitCode).toBe(2);
-  });
-
   it("rejects an unknown harness with a usage exit", async () => {
     const w = splitWriter();
     await steeringHooks(

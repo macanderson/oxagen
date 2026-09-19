@@ -36,7 +36,13 @@ import type { PathChange } from "./git";
  * neither. That is what makes a new agent an entry in the alias table rather
  * than a new code path.
  */
-export const RENDERER_NAMES = ["text", "user-prompt-submit", "json"] as const;
+export const RENDERER_NAMES = [
+  "text",
+  "user-prompt-submit",
+  "json",
+  "cursor-before-submit-prompt",
+  "stella-user-prompt-submit",
+] as const;
 export type RendererName = (typeof RENDERER_NAMES)[number];
 
 /** Harness name to renderer. Unknown names fall back to `text`. */
@@ -46,6 +52,8 @@ export const HARNESS_RENDERERS: Record<string, RendererName> = {
   "user-prompt-submit": "user-prompt-submit",
   "claude-code": "user-prompt-submit",
   codex: "user-prompt-submit",
+  cursor: "cursor-before-submit-prompt",
+  stella: "stella-user-prompt-submit",
 };
 
 /** Harness names an installer or a `--harness` flag accepts. */
@@ -134,7 +142,9 @@ export function renderBanner(decision: GateDecision): string {
     // way anyone learns a git failure or a refused remote name switched the
     // gate off for this prompt. Still exit 0.
     if (verdict.status === "unknown" && verdict.notes.length > 0) {
-      lines.push("Oxagen could not check steering freshness, so the prompt ran unchecked.");
+      lines.push(
+        "Oxagen could not check steering freshness, so the prompt ran unchecked.",
+      );
       for (const note of verdict.notes) lines.push(note);
       return lines.join("\n");
     }
@@ -261,6 +271,58 @@ export function renderUserPromptSubmit(decision: GateDecision): RenderedGate {
   };
 }
 
+/**
+ * Cursor's `beforeSubmitPrompt` hook contract (cursor.com/docs/agent/hooks,
+ * verified for `packages/tacho/src/claude-code/cursor-adapter.ts`'s
+ * `cursorAnswer`, the same wire shape by a different path). Cursor reads a
+ * flat `{"continue": bool}` document, with no field for a warning that lets
+ * the prompt through — so a `warn` decision still answers `continue: true`,
+ * the same as `allow`; only `block` has anywhere to put the reason.
+ */
+export function renderCursorBeforeSubmitPrompt(
+  decision: GateDecision,
+): RenderedGate {
+  const banner = renderBanner(decision);
+  if (decision.action === "block") {
+    return {
+      stdout: `${JSON.stringify({ continue: false, user_message: banner })}\n`,
+      stderr: `${banner}\n`,
+      exitCode: 2,
+    };
+  }
+  return {
+    stdout: `${JSON.stringify({ continue: true })}\n`,
+    stderr: "",
+    exitCode: 0,
+  };
+}
+
+/**
+ * Stella's `UserPromptSubmit` hook contract
+ * (`packages/tacho/src/claude-code/stella-adapter.ts`'s `stellaAnswer`,
+ * verified there against `crates/stella-core/src/hooks/decision.rs`). Stella
+ * reads `{"action": "allow" | "deny" | "require_approval", reason?}`; a
+ * `warn` decision has no veto to make, so it answers `allow` the same as a
+ * clean checkout, the banner going out on stderr for the developer.
+ */
+export function renderStellaUserPromptSubmit(
+  decision: GateDecision,
+): RenderedGate {
+  const banner = renderBanner(decision);
+  if (decision.action === "block") {
+    return {
+      stdout: `${JSON.stringify({ action: "deny", reason: banner })}\n`,
+      stderr: `${banner}\n`,
+      exitCode: 2,
+    };
+  }
+  return {
+    stdout: `${JSON.stringify({ action: "allow" })}\n`,
+    stderr: banner ? `${banner}\n` : "",
+    exitCode: 0,
+  };
+}
+
 /** The whole decision, for a harness that wants to render it itself. */
 export function renderJson(decision: GateDecision): RenderedGate {
   return {
@@ -301,6 +363,8 @@ const RENDERERS: Record<RendererName, (d: GateDecision) => RenderedGate> = {
   text: renderText,
   "user-prompt-submit": renderUserPromptSubmit,
   json: renderJson,
+  "cursor-before-submit-prompt": renderCursorBeforeSubmitPrompt,
+  "stella-user-prompt-submit": renderStellaUserPromptSubmit,
 };
 
 /**

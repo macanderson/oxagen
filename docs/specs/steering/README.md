@@ -213,11 +213,10 @@ Codex CLI both take it as a `UserPromptSubmit` hook, which
 turn as `additionalContext`, so it reaches the transcript and not only a
 terminal nobody is watching.
 
-`--harness all` is those two, and it says so. Oxagen wraps four harnesses
-(`WRAPPED_HARNESSES` in `@oxagen/tacho`); Cursor and Stella have no hook
-config Oxagen can write, so `install` names them as ungated and prints how to
-wire the gate by hand. The gate runs for either one already: a harness name it
-does not know renders as text and signals by exit code.
+`--harness all` covers every harness Oxagen wraps: Claude Code, Codex, Cursor,
+and Stella, each with its own config writer and its own output adapter. A
+harness name Oxagen does not know renders as text and signals by exit code,
+which is the contract any shell already understands.
 
 For an agent with no pre-prompt hook, the `get_steering_freshness` MCP tool
 is the reach that is guaranteed. It answers later, at the first tool call

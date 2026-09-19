@@ -168,6 +168,34 @@ export async function git(
   return out.trim();
 }
 
+/**
+ * `base`, with every call's timeout clamped to what is left of `deadline` at
+ * the moment the call is made, floored at `floorMs`.
+ *
+ * Shared by every caller that makes more than one git call in sequence
+ * against a budget owned by someone above it (the installed hook's own
+ * timeout): a per-call `timeoutMs` alone lets each call in the sequence
+ * spend the whole remainder, so several slow calls together outlive the
+ * caller's real deadline. The clamp lives on the runner, not on `timeoutMs`
+ * at construction, so a context handed to a function that makes several
+ * calls back to back still narrows on every one of them.
+ */
+export function clampContextToDeadline(
+  base: GitContext,
+  deadline: number,
+  floorMs: number,
+  now: () => number = Date.now,
+): GitContext {
+  return {
+    ...base,
+    run: (args, o) =>
+      base.run(args, {
+        ...o,
+        timeoutMs: Math.max(floorMs, Math.min(o.timeoutMs, deadline - now())),
+      }),
+  };
+}
+
 /** Run git, returning null instead of throwing. For questions with a "no" answer. */
 export async function gitOrNull(
   ctx: GitContext,

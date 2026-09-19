@@ -223,7 +223,7 @@ export const DEFAULT_HOOK_BUDGET_MS =
  * of the loop stops it as soon as the deadline has passed, so only the call
  * already in flight can run past it.
  */
-export const MIN_LOCAL_SLICE_MS = 250;
+const MIN_LOCAL_SLICE_MS = 250;
 
 /**
  * `base`, with every call's timeout clamped to what is left of `deadline` at
@@ -233,7 +233,7 @@ export const MIN_LOCAL_SLICE_MS = 250;
  * handed to functions that make more than one call in sequence, and a timeout
  * snapshotted at construction gives each of those the whole remainder.
  */
-export function clampedToDeadline(
+function clampedToDeadline(
   base: GitContext,
   deadline: number,
   floorMs: number,

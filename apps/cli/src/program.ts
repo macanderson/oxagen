@@ -303,7 +303,7 @@ export function buildProgram(): Command {
     // `steering hooks status` prints the authoritative list at run time.
     .option(
       "--harness <name>",
-      "Render for this harness: claude-code, codex, text, json. Any other name, cursor and stella included, renders as text and signals by exit code",
+      "Render for this harness: claude-code, codex, text, json",
       "text",
     )
     .option("--no-network", "Never contact the remote or the Oxagen API")
@@ -317,10 +317,7 @@ export function buildProgram(): Command {
     .description("Install the pre-prompt gate into an agent harness")
     .option(
       "--harness <names>",
-      // "all" is claude-code and codex: the harnesses with a config writer.
-      // Cursor and Stella are wrapped harnesses with no installer, and the
-      // command says so in its output as well as here.
-      "claude-code, codex, a comma-separated list, or all (claude-code and codex; cursor and stella have no installer)",
+      "claude-code, codex, a comma-separated list, or all",
       "all",
     )
     .option("--json", "Output JSON")

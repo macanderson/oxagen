@@ -20,7 +20,6 @@ export {
   publishedCommits,
   steeringPathspec,
   DEFAULT_HOOK_BUDGET_MS,
-  MIN_LOCAL_SLICE_MS,
   DEFAULT_NETWORK_BUDGET_MS,
   type CheckOptions,
   type FreshnessStatus,
@@ -67,8 +66,10 @@ export {
 } from "./sync";
 export {
   renderBanner,
+  renderCursorBeforeSubmitPrompt,
   renderGate,
   renderJson,
+  renderStellaUserPromptSubmit,
   renderText,
   renderUserPromptSubmit,
   HARNESSES,
@@ -86,10 +87,7 @@ export {
   HOOK_MARKER,
   HOOK_TIMEOUT_SECONDS,
   INSTALLABLE,
-  UNINSTALLABLE,
-  ungatedHarnessNotice,
   type InstallableHarness,
-  type UninstallableHarness,
   type InstallResult,
 } from "./hooks";
 export {

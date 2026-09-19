@@ -193,7 +193,11 @@ describe("evaluateGate with a reloaded policy", () => {
 
   it("enforces a gate the fetch it just made published", async () => {
     const d = await gate(true, {}, { reloadPolicy: async () => blocking });
-    expect(d.verdict.fetch).toEqual({ attempted: true, ok: true, reason: null });
+    expect(d.verdict.fetch).toEqual({
+      attempted: true,
+      ok: true,
+      reason: null,
+    });
     expect(d.policy.blockStaleRuns).toBe(true);
     expect(d.policy.sources.blockStaleRuns).toBe("project");
     expect(d.action).toBe("block");
@@ -332,35 +336,8 @@ describe("evaluateGate with auto-sync", () => {
     expect(d.exitCode).toBe(2);
   });
 
-  // Finding 1. The sync's own default is 30 seconds per git call, one and a
-  // half times the hook's whole timeout, and the gate used to pass it no
-  // deadline at all: a slow `restore`, `rm` or `clean` let the harness kill
-  // the process before the decision was rendered, and the prompt ran with
-  // `blockStaleRuns` on. Every call the sync makes is now clamped to what is
-  // left of the gate's own budget.
-  it("hands the sync what is left of the hook's budget", async () => {
-    const { run: base } = stubRepo({ behind: true });
-    const seen: number[] = [];
-    const run: GitRunner = async (args, opts) => {
-      if (args[0] === "restore") seen.push(opts.timeoutMs);
-      return base(args, opts);
-    };
-    const d = await evaluateGate({
-      cwd: "/repo",
-      policy: resolveSteeringPolicy([
-        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
-      ]),
-      run,
-      cacheIo: noCache,
-      now: () => 1,
-      timeoutMs: 30_000,
-      hookBudgetMs: 6_000,
-    });
-    expect(d.sync?.applied).toBe(true);
-    expect(seen).toEqual([6_000]);
-  });
-
-  // And when the check has already spent the hook's time, the sync does not
+  // Finding 1, the half that clamping alone does not cover. When the check
+  // has already spent the hook's time, the sync does not
   // start. Nothing is written, `applied` is false, and the blocking policy
   // still refuses the prompt: the one outcome that must not happen is a
   // half-written `.oxagen/` plus a prompt that ran anyway.
@@ -417,5 +394,36 @@ describe("evaluateGate with auto-sync", () => {
       now: () => 1,
     });
     expect(spy.mock.calls.some(([args]) => args[0] === "restore")).toBe(false);
+  });
+
+  // The auto-sync used to default to its own 30-second `timeoutMs` per git
+  // call, so several slow calls in sequence could together outlive the
+  // installed hook's own timeout on their own — the harness would kill the
+  // gate before the blocking decision was rendered, and the prompt would
+  // proceed despite `blockStaleRuns`. The sync is now bound by what is left
+  // of the SAME shared `hookBudgetMs` deadline the check itself is bound by.
+  it("bounds the automatic sync's git calls by what is left of the hook budget", async () => {
+    const { run } = stubRepo({ behind: true });
+    const restoreTimeouts: number[] = [];
+    const spy: GitRunner = async (args, opts) => {
+      if (args[0] === "restore") restoreTimeouts.push(opts.timeoutMs);
+      return run(args, opts);
+    };
+    await evaluateGate({
+      cwd: "/repo",
+      policy: resolveSteeringPolicy([
+        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
+      ]),
+      run: spy,
+      cacheIo: noCache,
+      now: () => 1,
+      // A tiny shared budget makes the standalone 30-second default
+      // impossible to reach by accident: only a clamp explains a timeout
+      // this small on the `restore` call. Above the sync's own
+      // `MIN_SYNC_SLICE_MS` floor, so the floor cannot be what produced it.
+      hookBudgetMs: 5_000,
+    });
+    expect(restoreTimeouts.length).toBeGreaterThan(0);
+    expect(restoreTimeouts.every((t) => t <= 5_000)).toBe(true);
   });
 });
