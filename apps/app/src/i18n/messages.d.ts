@@ -2445,6 +2445,13 @@ type Messages = {
         service: string;
       };
     };
+    resolvedApprovals: {
+      title: string;
+      resolution: string;
+      resolvedBy: string;
+      resolvedAt: string;
+      empty: string;
+    };
     tabs: {
       label: string;
       transcript: string;

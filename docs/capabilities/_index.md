@@ -9,15 +9,16 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**307 capabilities across 47 domains.**
+**308 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
 `toolPolicy.ontology` opt-in.
 
-## Agent (57)
+## Agent (58)
 
 - [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
+- [agent.approval.list_resolved](agent.approval.list_resolved.md) — List the workspace's resolved approvals, most recently resolved first, cursor-paged, optionally narrowed to one run or a resolved-at time range, including the rule that auto-approved a call no person looked at
 - [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
 - [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)

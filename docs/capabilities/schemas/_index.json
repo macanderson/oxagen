@@ -1,5 +1,5 @@
 {
-  "generatedCount": 330,
+  "generatedCount": 331,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2259,6 +2259,18 @@
     {
       "name": "list_repositories",
       "domain": "repository",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "list_resolved_approvals",
+      "domain": "agent",
       "surfaces": [
         "api",
         "mcp",
