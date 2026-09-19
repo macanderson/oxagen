@@ -1,7 +1,7 @@
 {
   "name": "retire_agent",
   "domain": "agent",
-  "description": "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
+  "description": "Retire an agent identity: archive the agent, suspend its principal, revoke every credential, host enrollment, and mandate. Runs keep their identity; nothing is deleted.",
   "mode": "sync",
   "surfaces": [
     "api"
@@ -55,6 +55,10 @@
         "type": "integer",
         "minimum": 0
       },
+      "revokedMandates": {
+        "type": "integer",
+        "minimum": 0
+      },
       "retiredAt": {
         "type": "string"
       }
@@ -64,6 +68,7 @@
       "status",
       "revokedCredentials",
       "revokedHosts",
+      "revokedMandates",
       "retiredAt"
     ],
     "additionalProperties": false

@@ -1224,6 +1224,7 @@ type Messages = {
         periodDrawn: string;
         measureKindDrawn: string;
         noPrincipal: string;
+        agentRetired: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;
         refused: string;

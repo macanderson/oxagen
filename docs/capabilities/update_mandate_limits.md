@@ -135,6 +135,7 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
 | `conflict` | `period_drawn` | A measure's period cannot change while that measure still has reserved or settled authority in the current window. Ledger rows keep the old `periodKey`; renaming the window would hide the draw from `readAuthority` and `reserve`. |
 | `conflict` | `measure_kind_drawn` | A measure's `kind` cannot change while that measure still has authority drawn in the current window or an open reservation under it (ADR-108 §4). `readAuthority` sums a period's rows regardless of which kind they were stamped under; letting an old-kind row sum with a new-kind reservation would corrupt the remaining figure. |
+| `conflict` | `agent_retired` | The mandate's agent is retired (`status: archived`): its principal is suspended and can never draw on a widened limit (ADR-106). In practice `retire_agent` already revoked this mandate, so `mandate_ended` is the more common refusal; this covers an agent archived by another path while a mandate stayed live. |
 
 ## SPEC references
 

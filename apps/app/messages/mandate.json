@@ -159,6 +159,7 @@
         "periodDrawn": "This measure still has authority drawn in its current window, so the period cannot change until that draw is released or the window ends. Nothing was changed.",
         "measureKindDrawn": "This measure still has authority drawn under its current kind, so what it counts cannot change yet. Release any open reservation and wait for the current window to close (a settlement alone does not clear this). Nothing was changed.",
         "noPrincipal": "This request carries no acting person, so no role can be resolved for it.",
+        "agentRetired": "This mandate's agent is retired. A retired agent's identity cannot draw on new or widened authority. Nothing was changed.",
         "timeZoneUnavailable": "Your time zone could not be read, and the last day you picked means a different instant in each zone. Nothing was changed. Try again.",
         "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the last day you picked cannot be placed in it. Nothing was changed. Pick a time zone again in your account settings.",
         "refused": "This write was refused: {code}. Nothing was changed.",

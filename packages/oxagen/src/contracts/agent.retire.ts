@@ -1,7 +1,10 @@
 // retire_agent — retire an agent identity (MC spec §6.2, App. E; #2956). The
 // principal is retired, never deleted, so its runs keep their identity: the
 // agent row is archived, the principal suspended, every long-lived credential
-// soft-deleted and every enrolled host revoked, in one transaction. The
+// soft-deleted, every enrolled host revoked, and every mandate still active
+// or drafted against the agent's principal revoked, in one transaction
+// (ADR-106, #3124) — an active mandate does not survive its agent's
+// retirement, because a suspended principal can never draw on it. The
 // definition file in git is not touched here; removing it is a pull request
 // through `commit_agent_definition` with an empty definition.
 //
@@ -14,7 +17,7 @@ export const agentRetire = registerCapability({
   name: "retire_agent",
   domain: "agent",
   description:
-    "Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment. Runs keep their identity; nothing is deleted.",
+    "Retire an agent identity: archive the agent, suspend its principal, revoke every credential, host enrollment, and mandate. Runs keep their identity; nothing is deleted.",
   mode: "sync",
   // The handler acts as the signed-in user or the API key's creator
   // (resolveActingUserId, assertOrgRole, INV-29). The write ships on the API
@@ -44,6 +47,7 @@ export const agentRetire = registerCapability({
       status: z.literal("retired"),
       revokedCredentials: z.number().int().nonnegative(),
       revokedHosts: z.number().int().nonnegative(),
+      revokedMandates: z.number().int().nonnegative(),
       retiredAt: z.string().datetime({ offset: true }),
     })
     .strict(),
