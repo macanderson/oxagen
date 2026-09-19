@@ -128,6 +128,17 @@ ${pillars.map((p) => `          <li><a href="${urls.pillar(p.slug)}">${esc(p.nam
           <li><a class="ext" href="https://github.com/oxagenai" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
       </nav>
+      <div class="foot-col">
+        <h4>Contact</h4>
+        <address>
+          Oxagen, Inc.<br>
+          2261 Market Street STE 87168<br>
+          San Francisco, CA 94114<br>
+          <a href="mailto:hello@oxagen.sh">hello@oxagen.sh</a><br>
+          <a href="mailto:success@oxagen.sh">success@oxagen.sh</a><br>
+          <a href="tel:+13102137912">+1 (310) 213-7912</a>
+        </address>
+      </div>
     </div>
     <div class="foot-base">
       <span>© ${new Date().getUTCFullYear()} Oxagen, Inc. All rights reserved.</span>

@@ -141,14 +141,17 @@ Both forms on `index.html` (field-manual gate + get-a-demo), plus the code
 redeem/resend calls on `read/index.html`, POST JSON to `{api}/v1/cms/leads`
 (and `/v1/cms/book/redeem`, `/v1/cms/book/resend`): `api.oxagen.sh` in
 production, `localhost:4000` when the page is served from localhost. The
-endpoint is the public, rate-limited route in `apps/api/src/routes/v1/cms.ts`;
-leads land in Postgres per the `cms_ebook_lead_gate` migration. The API's CORS
-allowlist must include the marketing origin (`MARKETING_URL`, defaults cover
-`https://oxagen.sh`).
+endpoint is the public, rate-limited route in `apps/api/src/routes/v1/cms.ts`
+(ADR-102); leads land in Postgres per the `restore_cms_ebook_lead_gate`
+migration. The API's CORS allowlist must include the marketing origin
+(`MARKETING_URL=https://oxagen.sh` in production).
 
 The ebook gate is a marketing gate, not access control: form success mints a
 single-use `/read?e=...&c=` link server-side and emails it. The reader never
 stores an unlock flag client-side.
+
+Contact on the site is `hello@oxagen.sh` (general), `success@oxagen.sh`
+(support), and `+1 (310) 213-7912`. Address is unchanged.
 
 ## The blog
 

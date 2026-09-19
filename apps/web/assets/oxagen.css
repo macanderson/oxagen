@@ -1048,7 +1048,7 @@ footer {
 }
 .foot-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
+  grid-template-columns: 1.4fr repeat(auto-fit, minmax(140px, 1fr));
   gap: 38px;
 }
 @media (max-width: 860px) {

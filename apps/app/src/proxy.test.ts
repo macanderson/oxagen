@@ -72,6 +72,15 @@ describe("proxy", () => {
     expect(res.headers.get("location")).toBe("http://localhost:3000/login");
   });
 
+  it("lifts a Better Auth OAuth error on / onto /login?error=", () => {
+    const res = proxy(request("/?error=please_restart_the_process"));
+    expect(res.status).toBe(307);
+    const target = new URL(res.headers.get("location") ?? "");
+    expect(target.pathname).toBe("/login");
+    expect(target.searchParams.get("error")).toBe("please_restart_the_process");
+    expect(target.searchParams.get("next")).toBeNull();
+  });
+
   it("accepts a Better Auth session cookie, secure prefix included", () => {
     expect(
       proxy(request("/acme", "better-auth.session_token=abc")).headers.get(

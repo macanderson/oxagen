@@ -14,8 +14,8 @@ await sendEmail({
   subject: "Reset your password",
   html: "<p>Click the link to reset your password.</p>",
   // text: "Plain-text alternative",   // text and/or html — at least one required
-  // from: '"Support" <help@oxagen.ai>',   // overrides the default From
-  // replyTo: "support@oxagen.ai",
+  // from: '"Support" <success@oxagen.sh>',   // overrides the default From
+  // replyTo: "success@oxagen.sh",
   // cc / bcc: "addr" | ["addr", ...]
 });
 ```

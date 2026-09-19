@@ -65,6 +65,6 @@ window.OX_SCRIPT = [
   },
   {
     title: "Thank you / contact",
-    say: "That's Oxagen: every agent under a mandate, every call priced, on your own keys. I'd like to scope a small pilot: one team, one runaway workflow, and the bill and the record explained in a week. What do you want answered first? Contacts are on screen: app.oxagen.sh, docs.oxagen.sh, and mac@oxagen.ai. Then open it up for questions.",
+    say: "That's Oxagen: every agent under a mandate, every call priced, on your own keys. I'd like to scope a small pilot: one team, one runaway workflow, and the bill and the record explained in a week. What do you want answered first? Contacts are on screen: app.oxagen.sh, docs.oxagen.sh, and mac@oxagen.sh. Then open it up for questions.",
   },
 ];
