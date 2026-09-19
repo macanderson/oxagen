@@ -48,16 +48,14 @@ type ShellState = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   /**
-   * True while a recovery-code rotation is in flight or a returned set is
-   * unsaved. It lives here rather than in the Account dialog because the thing
-   * that has to respect it is Sign out, which is in the user menu: a client
-   * transition to `/login` leaves the shell layout, unmounts the dialog, and
-   * takes the only plaintext copy of the codes with it. `beforeunload` does
-   * not fire for a Next.js client transition, so the page-level guard cannot
-   * see that exit at all.
+   * True while leaving the shell would lose recovery codes: a rotation is in
+   * flight, or its set is on screen and not yet saved. The Account dialog
+   * owns the codes and sets this; the shell's own exits (sign out, a link out
+   * of the organization) read it, because none of them unloads the page, so
+   * the browser's `beforeunload` prompt never runs for them.
    */
-  codesAtStake: boolean;
-  setCodesAtStake: (atStake: boolean) => void;
+  exitHeld: boolean;
+  setExitHeld: (held: boolean) => void;
 };
 
 const ShellStateContext = createContext<ShellState | null>(null);
@@ -101,7 +99,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     if (!open) setAccountTab("profile");
   }, []);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [codesAtStake, setCodesAtStake] = useState(false);
+  const [exitHeld, setExitHeld] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -136,8 +134,8 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setAssistantOpen,
       theme,
       setTheme,
-      codesAtStake,
-      setCodesAtStake,
+      exitHeld,
+      setExitHeld,
     }),
     [
       commandOpen,
@@ -151,7 +149,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       assistantOpen,
       theme,
       setTheme,
-      codesAtStake,
+      exitHeld,
     ],
   );
   return <ShellStateContext value={value}>{children}</ShellStateContext>;

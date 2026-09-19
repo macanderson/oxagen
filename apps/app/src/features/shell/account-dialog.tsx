@@ -81,7 +81,8 @@ export function AccountDialog({ data }: { data: ShellData }) {
     setAccountOpen,
     accountTab,
     setAccountTab,
-    setCodesAtStake,
+    openAccount,
+    setExitHeld,
   } = useShellState();
 
   // Recovery codes are shown exactly once, so they are held here rather than
@@ -172,24 +173,48 @@ export function AccountDialog({ data }: { data: ShellData }) {
     };
   }, [guardUnload]);
 
-  // And the same fact published to the shell, because `beforeunload` does not
-  // fire for a Next.js client transition and therefore cannot see the exit
-  // that actually costs the codes: Sign out in the user menu calls
-  // `router.replace("/login")`, which leaves this layout, unmounts this
-  // component and takes the vault with it. The old set is already void by
-  // then, so the person is left with no working recovery codes and nothing
-  // told them. The menu reads this and refuses while it holds.
+  // `beforeunload` covers a reload, a closed tab and a typed address. It does
+  // not run for a client-side transition, and two of those leave the shell
+  // and so unmount this dialog with the codes in it: signing out, and a link
+  // into another organization (the shell is mounted per organization). So
+  // while codes are at stake the shell holds its own exits too. Sign out reads
+  // `exitHeld`; a link click out of this organization is caught here, before
+  // the router sees it. Either one brings the person back to the codes. A link
+  // inside the organization keeps the shell, and the codes, mounted, so it is
+  // left alone.
+  const orgSlug = data.org.slug;
   useEffect(() => {
-    setCodesAtStake(guardUnload);
-  }, [guardUnload, setCodesAtStake]);
-
-  // Released on unmount as well, so a shell that tears this component down for
-  // any other reason cannot leave Sign out permanently refusing.
-  useEffect(() => {
-    return () => {
-      setCodesAtStake(false);
+    setExitHeld(guardUnload);
+    if (!guardUnload) return;
+    const hold = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      // A modified click opens a new tab or window and leaves this page alone.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest("a[href]");
+      if (!(link instanceof HTMLAnchorElement)) return;
+      if (link.target && link.target !== "_self") return;
+      if (link.hasAttribute("download")) return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname.split("/")[1] === orgSlug) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openAccount("security");
     };
-  }, [setCodesAtStake]);
+    document.addEventListener("click", hold, true);
+    return () => {
+      document.removeEventListener("click", hold, true);
+    };
+  }, [guardUnload, orgSlug, openAccount, setExitHeld]);
+  useEffect(
+    () => () => {
+      setExitHeld(false);
+    },
+    [setExitHeld],
+  );
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
