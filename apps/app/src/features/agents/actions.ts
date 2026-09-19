@@ -11,15 +11,18 @@ import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { mandateRequest } from "@oxagen/oxagen/contracts/mandate.request";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import {
   CONSEQUENCE_TAG,
   MAX_CONSEQUENCE_TAGS,
   MEASURE_VALUE,
 } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
+import { shell } from "@/data/live/shell";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
 
 /** Retires the current key and mints a replacement; the secret is returned once and never again. */
 export async function rotateAgentCredential(
@@ -305,15 +308,22 @@ export async function requestMandate(
 
   if (!DATE.test(draft.validFrom)) return refuse("validFrom");
   if (!DATE.test(draft.validTo)) return refuse("validTo");
-  // The dates a person picks are days, and the authority runs through the last
-  // of them: a mandate valid to 2026-12-31 expires as that day ends, not as it
-  // begins. The window is inclusive at both ends, so a single-day mandate is
-  // a day rather than nothing.
-  const validFrom = `${draft.validFrom}T00:00:00.000Z`;
-  const validTo = `${draft.validTo}T23:59:59.999Z`;
-  if (Date.parse(validTo) <= Date.parse(validFrom)) return refuse("validTo");
 
   const ctx = await requireViewer(org, ws);
+  // The dates a person picks are days on their clock. Convert through the
+  // saved zone so a Los Angeles Sep 20 starts at that local midnight and a
+  // Tokyo validTo runs through that local day's last millisecond. A failed
+  // preference read falls back to Pacific time, the same default the pages use.
+  const preferences = await shell.preferences(ctx);
+  const timeZone = preferences.ok
+    ? preferences.value.timeZone
+    : DEFAULT_TIME_ZONE;
+  const validFrom = startOfZonedDay(draft.validFrom, timeZone);
+  const validTo = endOfZonedDay(draft.validTo, timeZone);
+  if (validFrom === null) return refuse("validFrom");
+  if (validTo === null) return refuse("validTo");
+  if (Date.parse(validTo) <= Date.parse(validFrom)) return refuse("validTo");
+
   const result = await kernelWrite(ctx, mandateRequest, {
     agentId: draft.agentId,
     consequenceTags,

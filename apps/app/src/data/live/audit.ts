@@ -2,13 +2,15 @@
 // organization's security audit events (query_audit_log) and the signed export
 // over the same filters (export_audit_events), both noBillingGate reads. The
 // page's filters become the contracts' input here: the actor is a public id,
-// and the UTC days `from` and `to` become an inclusive start instant and an
-// exclusive end instant the day after `to`. A refusal passes through as the
-// kernel classified it; an answer the view model refuses is reported once as
-// record_unmappable.
+// and the calendar days `from` and `to` become an inclusive start instant and
+// an exclusive end instant the day after `to`, both in the viewer's zone so a
+// day that prints as Sep 18 stays the Sep 18 query and export. A refusal
+// passes through as the kernel classified it; an answer the view model refuses
+// is reported once as record_unmappable.
 import "server-only";
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
@@ -20,7 +22,13 @@ import {
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
+import type { OrgCtx } from "@/server/viewer";
+import {
+  startOfNextZonedDay,
+  startOfZonedDay,
+} from "@/shared/calendar-day";
 import { toAuditExport, toAuditPage } from "./mappers/audit";
+import { shell } from "./shell";
 
 function toView<O, V extends z.ZodType>(
   read: Read<O>,
@@ -40,33 +48,38 @@ function toView<O, V extends z.ZodType>(
   return readError("record_unmappable", 502);
 }
 
-/** The instant a UTC day ends: midnight at the start of the next day. */
-function dayAfter(day: string): string {
-  const end = new Date(`${day}T00:00:00.000Z`);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return end.toISOString();
+async function viewerZone(ctx: OrgCtx): Promise<string> {
+  const preferences = await shell.preferences(ctx);
+  return preferences.ok ? preferences.value.timeZone : DEFAULT_TIME_ZONE;
 }
 
 /** The filters as both contracts take them, an unset filter left out. */
-function contractFilters(f: AuditFilters) {
+function contractFilters(f: AuditFilters, timeZone: string) {
+  const from =
+    f.from === null ? undefined : (startOfZonedDay(f.from, timeZone) ?? undefined);
+  const to =
+    f.to === null
+      ? undefined
+      : (startOfNextZonedDay(f.to, timeZone) ?? undefined);
   return {
     ...(f.eventType === null ? {} : { eventType: f.eventType }),
     ...(f.outcome === null ? {} : { outcome: f.outcome }),
     ...(f.actor === null ? {} : { actorPublicId: f.actor }),
     ...(f.capability === null ? {} : { capability: f.capability }),
-    ...(f.from === null ? {} : { from: `${f.from}T00:00:00.000Z` }),
-    ...(f.to === null ? {} : { to: dayAfter(f.to) }),
+    ...(from === undefined ? {} : { from }),
+    ...(to === undefined ? {} : { to }),
   };
 }
 
 export const audit: DataSource["audit"] = {
   async events(ctx, q) {
     const { offset, ...filters } = q;
+    const timeZone = await viewerZone(ctx);
     const read = await kernelRead(ctx, {
       contract: auditLogQuery,
       input: {
         source: "security",
-        ...contractFilters(filters),
+        ...contractFilters(filters, timeZone),
         limit: AUDIT_PAGE_SIZE,
         offset,
       },
@@ -79,9 +92,10 @@ export const audit: DataSource["audit"] = {
   },
   async exportEvents(ctx, q) {
     const { format, ...filters } = q;
+    const timeZone = await viewerZone(ctx);
     const read = await kernelRead(ctx, {
       contract: auditEventsExport,
-      input: { format, ...contractFilters(filters) },
+      input: { format, ...contractFilters(filters, timeZone) },
       page: "audit",
     });
     return toView(read, AuditExport, toAuditExport, {

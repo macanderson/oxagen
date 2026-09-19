@@ -1,6 +1,6 @@
 // The audit port: one kernel read of query_audit_log for a page of the record
 // and one of export_audit_events for the signed file over the same filters,
-// with the page's UTC days turned into the instants the contracts take, a
+// with the page's calendar days turned into instants in the viewer's zone, a
 // refusal passed through, and an unmappable answer reported once.
 import { auditEventsExport } from "@oxagen/oxagen/contracts/audit.events.export";
 import { auditLogQuery } from "@oxagen/oxagen/contracts/audit.log.query";
@@ -9,14 +9,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /** Only the part of a kernelRead call this test reads back off the mock. */
 type KernelCall = { input: Record<string, unknown> };
 
-const { kernelRead, captureError } = vi.hoisted(() => ({
+const { kernelRead, captureError, preferences } = vi.hoisted(() => ({
   kernelRead: vi.fn<(ctx: unknown, call: KernelCall) => Promise<unknown>>(),
   captureError: vi.fn(),
+  preferences: vi.fn(),
 }));
 vi.mock("@/server/kernel", () => ({ kernelRead }));
 vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+vi.mock("./shell", () => ({
+  shell: { preferences },
+}));
 
 const { OrgCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -59,6 +63,8 @@ const event = {
 beforeEach(() => {
   kernelRead.mockReset();
   captureError.mockReset();
+  preferences.mockReset();
+  preferences.mockResolvedValue(readOk({ timeZone: "UTC" }));
 });
 
 describe("audit.events", () => {
@@ -104,6 +110,25 @@ describe("audit.events", () => {
       to: "2026-09-16T00:00:00.000Z",
       limit: 50,
       offset: 50,
+    });
+  });
+
+  it("bounds the day range in the viewer's zone, not UTC", async () => {
+    preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
+    kernelRead.mockResolvedValue(
+      readOk({ events: [], total: 0, hasMore: false, limit: 50, offset: 0 }),
+    );
+    await audit.events(ctx, {
+      ...NO_FILTERS,
+      from: "2026-01-15",
+      to: "2026-01-15",
+      offset: 0,
+    });
+    // PST (UTC-8): local midnight is 08:00 UTC; the next local day starts 08:00
+    // the day after.
+    expect(kernelRead.mock.calls[0]?.[1]?.input).toMatchObject({
+      from: "2026-01-15T08:00:00.000Z",
+      to: "2026-01-16T08:00:00.000Z",
     });
   });
 
