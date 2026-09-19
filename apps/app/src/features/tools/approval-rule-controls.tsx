@@ -35,8 +35,8 @@ import {
 } from "./actions";
 import {
   parseMeasureLines,
+  splitCommas,
   splitLines,
-  splitTags,
   textValue,
   type ToolsAt,
   toolsLink,
@@ -117,7 +117,7 @@ function draftOf(
       enabled: form.get("enabled") === "on",
       maxMeasures: Object.fromEntries(ceilings),
       allowTargets: Object.fromEntries(
-        allows.map(([measure, globs]) => [measure, splitTags(globs)]),
+        allows.map(([measure, globs]) => [measure, splitCommas(globs)]),
       ),
       standingWindowMs:
         minutes === "" ? null : Math.round(Number(minutes) * MINUTE_MS),
@@ -133,6 +133,26 @@ function draftOf(
           }
         : null,
     },
+  };
+}
+
+/**
+ * The rule as the editor received it, in the shape `saveApprovalRule` compares
+ * with the set it reads at the moment of the write. The dialog opens on a
+ * rendered rule and submits later, so this is the baseline that says whether
+ * anyone changed the rule in between; `replaces` cannot say it, because the
+ * action builds that from its own read, not from what the author saw.
+ */
+function renderedDraft(rule: ApprovalRule): ApprovalRuleDraft {
+  return {
+    id: rule.slug,
+    name: rule.name,
+    tools: rule.tools,
+    enabled: rule.enabled,
+    maxMeasures: rule.maxMeasures,
+    allowTargets: rule.allowTargets,
+    standingWindowMs: rule.standingWindowMs,
+    businessHours: rule.businessHours,
   };
 }
 
@@ -173,6 +193,7 @@ export function RuleEditor({
         at.ws,
         creating ? "create" : "edit",
         parsed.draft,
+        existing === null ? null : renderedDraft(existing),
       );
       if (result.ok) {
         setOpen(false);

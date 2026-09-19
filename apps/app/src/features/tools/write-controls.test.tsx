@@ -541,6 +541,16 @@ describe("useActionFailure", () => {
       { ok: false, reason: "conflict", code: "something_else" },
       "Refused: something_else.",
     ],
+    // Both concurrency refusals read the same to the person: reload the tab
+    // and make the change again over the rules as they are now.
+    [
+      { ok: false, reason: "conflict", code: "rule_changed" },
+      "changed this rule set while this dialog was open",
+    ],
+    [
+      { ok: false, reason: "conflict", code: "rule_set_changed" },
+      "changed this rule set while this dialog was open",
+    ],
     [
       { ok: false, reason: "invalid", code: "invalid_input" },
       "Check the values above",

@@ -469,7 +469,7 @@ describe("saveApprovalRule", () => {
   it("appends a new rule to the set as it stands now, trimmed", async () => {
     invoke.mockResolvedValueOnce(stored()).mockResolvedValueOnce(written());
     expect(
-      await saveApprovalRule("acme", "core-platform", "create", draft),
+      await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({ ok: true, value: { ruleId: "night-deploys" } });
     expect(invoke).toHaveBeenNthCalledWith(
       1,
@@ -510,10 +510,10 @@ describe("saveApprovalRule", () => {
       tools: ["deploy__release"],
       standingWindowMs: 7_200_000,
     };
+    const [first, rendered] = bodies();
     expect(
-      await saveApprovalRule("acme", "core-platform", "edit", edit),
+      await saveApprovalRule("acme", "core-platform", "edit", edit, rendered),
     ).toEqual({ ok: true, value: { ruleId: "repeat-deploys" } });
-    const [first] = bodies();
     expect(invoke).toHaveBeenLastCalledWith(
       "set_approval_rules",
       {
@@ -542,10 +542,13 @@ describe("saveApprovalRule", () => {
   it("refuses to create over an id already in the set, and writes nothing", async () => {
     invoke.mockResolvedValueOnce(stored());
     expect(
-      await saveApprovalRule("acme", "core-platform", "create", {
-        ...draft,
-        id: "small-refunds",
-      }),
+      await saveApprovalRule(
+        "acme",
+        "core-platform",
+        "create",
+        { ...draft, id: "small-refunds" },
+        null,
+      ),
     ).toEqual({ ok: false, reason: "conflict", code: "rule_id_taken" });
     expect(invoke).toHaveBeenCalledTimes(1);
   });
@@ -553,10 +556,13 @@ describe("saveApprovalRule", () => {
   it("says the rule is gone when the one being edited left the set", async () => {
     invoke.mockResolvedValueOnce(stored());
     expect(
-      await saveApprovalRule("acme", "core-platform", "edit", {
-        ...draft,
-        id: "deleted-meanwhile",
-      }),
+      await saveApprovalRule(
+        "acme",
+        "core-platform",
+        "edit",
+        { ...draft, id: "deleted-meanwhile" },
+        { ...draft, id: "deleted-meanwhile" },
+      ),
     ).toEqual({
       ok: false,
       reason: "not_found",
@@ -572,6 +578,7 @@ describe("saveApprovalRule", () => {
       "core-platform",
       "create",
       draft,
+      null,
     );
     expect(result).toEqual({
       ok: false,
@@ -584,7 +591,7 @@ describe("saveApprovalRule", () => {
   it("says the store did not answer when the read fails, and writes nothing", async () => {
     invoke.mockRejectedValueOnce(new Error("socket hang up"));
     expect(
-      await saveApprovalRule("acme", "core-platform", "create", draft),
+      await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({
       ok: false,
       reason: "unavailable",
@@ -602,8 +609,66 @@ describe("saveApprovalRule", () => {
         new kernel.HandlerError({ code: "conflict", reason: "rule_set_changed" }),
       );
     expect(
-      await saveApprovalRule("acme", "core-platform", "create", draft),
+      await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({ ok: false, reason: "conflict", code: "rule_set_changed" });
+  });
+
+  // The dialog rendered the rule before this read, so `replaces` cannot speak
+  // for the window the author had it open: it is built from the read. A rule
+  // someone switched off meanwhile would be switched back on by the stale
+  // editor body, which is the one change nobody asked for.
+  it("refuses an edit of a rule that moved since the editor rendered it", async () => {
+    invoke.mockResolvedValueOnce(stored());
+    const [, rendered] = bodies();
+    expect(
+      await saveApprovalRule(
+        "acme",
+        "core-platform",
+        "edit",
+        { ...rendered, name: "Repeat deploys" },
+        { ...rendered, enabled: true },
+      ),
+    ).toEqual({ ok: false, reason: "conflict", code: "rule_changed" });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  // Two reads of one rule may hand its records back in different key orders,
+  // which is not a change anyone made and must not refuse the save.
+  it("takes a rendered rule whose records came back in another key order", async () => {
+    const twoMeasures = approvalRuleListOutput({
+      items: [
+        {
+          id: "small-refunds",
+          name: "Small refunds to known customers",
+          tools: ["stripe__create_refund@*"],
+          enabled: true,
+          maxMeasures: { amount: "50000000", rows: "10" },
+          allowTargets: { counterparty: ["cus_*"], environment: ["prod"] },
+          standingWindowMs: null,
+          businessHours: null,
+          createdBy: "usr_01k5a1",
+          createdAt: "2026-09-12T10:00:00.000Z",
+          authoredConsequences: ["moves_money"],
+          hits30d: 0,
+          skipped30d: 0,
+        },
+      ],
+    });
+    invoke.mockResolvedValueOnce(twoMeasures).mockResolvedValueOnce(written());
+    const [onlyRule] = twoMeasures.items;
+    expect(
+      await saveApprovalRule(
+        "acme",
+        "core-platform",
+        "edit",
+        { ...onlyRule, name: "Small refunds" },
+        {
+          ...onlyRule,
+          maxMeasures: { rows: "10", amount: "50000000" },
+          allowTargets: { environment: ["prod"], counterparty: ["cus_*"] },
+        },
+      ),
+    ).toEqual({ ok: true, value: { ruleId: "small-refunds" } });
   });
 
   it("returns the handler's reason when the save is refused", async () => {
@@ -613,16 +678,19 @@ describe("saveApprovalRule", () => {
         new kernel.HandlerError({ code: "conflict", reason: "no_tool_matches" }),
       );
     expect(
-      await saveApprovalRule("acme", "core-platform", "create", draft),
+      await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({ ok: false, reason: "conflict", code: "no_tool_matches" });
   });
 
   it("is refused before the kernel writes when a ceiling is not an integer string", async () => {
     invoke.mockResolvedValueOnce(stored());
-    const result = await saveApprovalRule("acme", "core-platform", "create", {
-      ...draft,
-      maxMeasures: { amount: "12.50" },
-    });
+    const result = await saveApprovalRule(
+      "acme",
+      "core-platform",
+      "create",
+      { ...draft, maxMeasures: { amount: "12.50" } },
+      null,
+    );
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(invoke).toHaveBeenCalledTimes(1);
   });

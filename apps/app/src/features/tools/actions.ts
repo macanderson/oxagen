@@ -273,15 +273,43 @@ function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
 }
 
 /**
+ * One rule body as a string two equal bodies share: the record fields are
+ * written in key order, because two reads of the same rule may order them
+ * differently and that is not a change anyone made.
+ */
+function bodyKey(body: ReturnType<typeof bodyOf>): string {
+  const ordered = <T,>(record: Readonly<Record<string, T>>) =>
+    Object.fromEntries(
+      Object.entries(record).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ),
+    );
+  return JSON.stringify({
+    ...body,
+    maxMeasures: ordered(body.maxMeasures),
+    allowTargets: ordered(body.allowTargets),
+  });
+}
+
+/**
  * Creates or edits one auto-approval rule.
  *
  * `set_approval_rules` replaces the whole set, so this reads the set as it is
  * now and splices the one rule into it, rather than trusting the copy the page
  * rendered. A page loaded before another person's edit would otherwise write
- * that edit away. The gap between this read and the write is closed by
- * sending the read back as `replaces`: the handler compares it with the
- * stored set under its lock and refuses the write if they differ. Rules this
- * save does not change keep their stamp on the server.
+ * that edit away. Two windows are open between the page and the write, and
+ * each is closed separately:
+ *
+ * - **render to read.** The dialog opens on a rule it rendered and submits
+ *   whenever the author is done, so `rendered` carries the rule as they saw
+ *   it and an edit is refused as `rule_changed` when the read no longer
+ *   matches it. Without it, another person switching the rule off is undone
+ *   by a stale editor still carrying `enabled: true`.
+ * - **read to write.** The read goes back as `replaces`, and the handler
+ *   compares it with the stored set under its rule-set lock, refusing as
+ *   `rule_set_changed` when they differ.
+ *
+ * Rules this save does not change keep their stamp on the server.
  *
  * A rule's id is its audit citation (`policy:<id>`), so an edit keeps it and
  * a create refuses an id already in use rather than overwriting that rule.
@@ -291,6 +319,11 @@ export async function saveApprovalRule(
   ws: string,
   mode: "create" | "edit",
   draft: ApprovalRuleDraft,
+  /**
+   * The rule as the editor rendered it, and null when creating: a create
+   * writes over nothing, and the id check below refuses one already in use.
+   */
+  rendered: ApprovalRuleDraft | null,
 ): Promise<ActionResult<{ ruleId: string }>> {
   const ctx = await requireViewer(org, ws);
   const current = await kernelRead(ctx, {
@@ -306,12 +339,24 @@ export async function saveApprovalRule(
     name: draft.name.trim(),
     tools: draft.tools.map((glob) => glob.trim()).filter((g) => g !== ""),
   });
-  const exists = stored.some((rule) => rule.id === body.id);
-  if (mode === "create" && exists) {
+  const before = stored.find((rule) => rule.id === body.id);
+  if (mode === "create" && before !== undefined) {
     return { ok: false, reason: "conflict", code: "rule_id_taken" };
   }
-  if (mode === "edit" && !exists) {
-    return { ok: false, reason: "not_found", code: "approval_rule_not_found" };
+  if (mode === "edit") {
+    if (before === undefined) {
+      return {
+        ok: false,
+        reason: "not_found",
+        code: "approval_rule_not_found",
+      };
+    }
+    if (
+      rendered === null ||
+      bodyKey(bodyOf(rendered)) !== bodyKey(bodyOf(before))
+    ) {
+      return { ok: false, reason: "conflict", code: "rule_changed" };
+    }
   }
   const rules =
     mode === "create"

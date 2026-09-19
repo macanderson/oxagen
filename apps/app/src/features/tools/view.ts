@@ -170,6 +170,28 @@ export function splitTags(raw: string): string[] {
 }
 
 /**
+ * A comma-separated list as the values it names, in order, each trimmed, blank
+ * entries dropped, and each value once.
+ *
+ * A target glob is `z.string().min(1).max(256)`, so `vendor:* prod` is one
+ * legal glob. It cannot go through `splitTags`, which also splits on
+ * whitespace: that would turn the one glob into `vendor:*` and `prod`, and the
+ * first of those admits every vendor target the author did not write. The
+ * comma is the delimiter the allow-list hint documents and the one the editor
+ * writes the stored globs back with.
+ */
+export function splitCommas(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value !== ""),
+    ),
+  ];
+}
+
+/**
  * `measure = value` lines as the pairs they name, in order, or null when a
  * line has no `=`, an empty side, or repeats a measure.
  *

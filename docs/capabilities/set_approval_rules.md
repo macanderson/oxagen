@@ -6,7 +6,7 @@
 **Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, a settings write)
-**App:** Tools › Auto-approvals › Create rule, and Edit on a row. The app reads the set, splices the one rule in, and writes the whole set back with the read as `replaces` and the rule's id in `saving`.
+**App:** Tools › Auto-approvals › Create rule, and Edit on a row. The app reads the set, splices the one rule in, and writes the whole set back with the read as `replaces` and the rule's id in `saving`. An edit also carries the rule as the dialog rendered it, and the app refuses the save when the read no longer matches it, so a rule changed while the dialog was open is not written back from the stale editor.
 
 ## Intent
 

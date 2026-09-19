@@ -56,6 +56,25 @@ function rule(id: string) {
   return found;
 }
 
+/**
+ * The rule as the editor received it, the fifth argument `saveApprovalRule`
+ * compares with the set it reads: an edit of a rule someone else changed in
+ * the meantime is refused rather than written from the stale dialog.
+ */
+function rendered(id: string) {
+  const { slug, ...rest } = rule(id);
+  return {
+    id: slug,
+    name: rest.name,
+    tools: rest.tools,
+    enabled: rest.enabled,
+    maxMeasures: rest.maxMeasures,
+    allowTargets: rest.allowTargets,
+    standingWindowMs: rest.standingWindowMs,
+    businessHours: rest.businessHours,
+  };
+}
+
 const intl = ({ children }: { children: ReactNode }) => (
   <IntlProvider>{children}</IntlProvider>
 );
@@ -137,6 +156,7 @@ describe("RuleEditor › create", () => {
             end: "17:00",
           },
         },
+        null,
       );
     });
     expect(router.replace).toHaveBeenCalledWith(TAB);
@@ -166,6 +186,35 @@ describe("RuleEditor › create", () => {
           standingWindowMs: null,
           businessHours: null,
         },
+        null,
+      );
+    });
+  });
+
+  // A glob is one value that may hold a space, so the allow list splits on
+  // commas alone. Splitting on whitespace would leave `vendor:*` behind, which
+  // admits every vendor target the author did not write.
+  it("keeps an allow-list glob that contains a space whole", async () => {
+    saveApprovalRule.mockResolvedValue({
+      ok: true,
+      value: { ruleId: "vendor-payouts" },
+    });
+    withIntl(<RuleEditor at={at} existing={null} />);
+    const dialog = await openEditor("rule-create-open");
+    fill("Rule id", "vendor-payouts");
+    fill("Name", "Vendor payouts");
+    fill("Tools", "stripe__create_payment");
+    fill("Allow lists", "counterparty = vendor:* prod, cus_*");
+    fireEvent.submit(formOf(within(dialog).getByText("Create rule")));
+    await waitFor(() => {
+      expect(saveApprovalRule).toHaveBeenCalledWith(
+        "acme",
+        "core-platform",
+        "create",
+        expect.objectContaining({
+          allowTargets: { counterparty: ["vendor:* prod", "cus_*"] },
+        }),
+        null,
       );
     });
   });
@@ -283,6 +332,7 @@ describe("RuleEditor › edit", () => {
             end: "17:00",
           },
         },
+        rendered("small-refunds"),
       );
     });
     expect(router.replace).toHaveBeenCalledWith(TAB);
@@ -314,6 +364,7 @@ describe("RuleEditor › edit", () => {
           standingWindowMs: 5_400_000,
           businessHours: null,
         }),
+        rendered("repeat-deploys"),
       );
     });
   });

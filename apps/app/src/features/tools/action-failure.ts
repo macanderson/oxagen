@@ -33,6 +33,13 @@ export function useActionFailure(
             return t("noRoleCoversAllTags");
           case "rule_id_taken":
             return t("ruleIdTaken");
+          // Both concurrency refusals: `rule_changed` is the action finding the
+          // rule moved since the editor rendered it, `rule_set_changed` the
+          // handler finding the set moved under its lock. The person does the
+          // same thing about either one.
+          case "rule_changed":
+          case "rule_set_changed":
+            return t("ruleChanged");
           case "approval_rule_not_found":
             return t("ruleNotFound");
           case "no_tool_matches":

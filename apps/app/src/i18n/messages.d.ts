@@ -3364,6 +3364,7 @@ type Messages = {
         consequenceRoleRequired: string;
         noRoleCoversAllTags: string;
         ruleIdTaken: string;
+        ruleChanged: string;
         ruleNotFound: string;
         noToolMatches: string;
         ruleNotGated: string;

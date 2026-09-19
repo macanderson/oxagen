@@ -285,6 +285,7 @@
         "consequenceRoleRequired": "Saving this rule needs an organization Owner or Admin who also holds the role accountable for every consequence its tools carry. Nothing was changed.",
         "noRoleCoversAllTags": "No single organization role is accountable for every consequence these tools carry together. Split the rule by tool. Nothing was changed.",
         "ruleIdTaken": "A rule with that id already exists. Pick another id, or edit that rule. Nothing was changed.",
+        "ruleChanged": "Someone else changed this rule set while this dialog was open, so nothing was written. Reload the tab to see the rules as they are now, then make the change again.",
         "ruleNotFound": "That rule is no longer in this workspace’s rule set. Reload the tab to see the rules as they are now.",
         "noToolMatches": "A tool pattern matches no declared tool in this workspace. Nothing was changed.",
         "ruleNotGated": "A tool pattern matches a tool that Oxagen does not route through the decision rules, so a rule over it would never be enforced. Nothing was changed.",

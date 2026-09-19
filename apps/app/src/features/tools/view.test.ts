@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseMeasureLines,
   parseToolsView,
+  splitCommas,
   textValue,
   TOOLS_TABS,
   toolsLink,
@@ -150,6 +151,25 @@ describe("parseMeasureLines", () => {
     ["a measure named twice", "amount = 1\namount = 2"],
   ])("refuses %s", (_what, raw) => {
     expect(parseMeasureLines(raw)).toBeNull();
+  });
+});
+
+describe("splitCommas", () => {
+  it("splits on commas alone, trimmed, blanks dropped, each value once", () => {
+    expect(splitCommas(" cus_* , vendor:aws ,, cus_* ")).toEqual([
+      "cus_*",
+      "vendor:aws",
+    ]);
+    expect(splitCommas("   ")).toEqual([]);
+  });
+
+  // A glob is `z.string().min(1).max(256)`, so a space is inside one value.
+  // Splitting on it would leave `vendor:*`, which admits every vendor target.
+  it("keeps a glob that contains whitespace whole", () => {
+    expect(splitCommas("vendor:* prod, cus_*")).toEqual([
+      "vendor:* prod",
+      "cus_*",
+    ]);
   });
 });
 
