@@ -78,9 +78,18 @@ async function renderMandate(
 
 const movements = () => screen.getAllByTestId("ledger-movement");
 
+// `cleanup()` runs whether or not the axe check passes. Without the `finally`
+// one violation unmounts nothing, the next render appends beside the last, and
+// every test after it inherits the leftover markup: the violation is reported
+// again, `getByTestId` finds two panels, and a filtered ledger counts rows a
+// previous test rendered. One accessibility defect then reads as twelve
+// unrelated failures, which is what it did.
 afterEach(async () => {
-  await expectNoAxe(document.body);
-  cleanup();
+  try {
+    await expectNoAxe(document.body);
+  } finally {
+    cleanup();
+  }
 });
 
 describe("Mandate › loaded", () => {

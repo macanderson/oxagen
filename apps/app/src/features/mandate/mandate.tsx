@@ -218,23 +218,40 @@ function Reconciliation({ at }: { at: MandateAt }) {
   );
 }
 
-/** The skeleton: four tile blocks and a panel of seven rows, as the design shows. */
+/**
+ * The skeleton: four tile blocks and a panel of seven rows, as the design shows.
+ *
+ * `role="status"` is what carries the name. A skeleton has to say what is
+ * loading, and `aria-label` is prohibited on a plain `<div>`, which has no role
+ * and so nothing to name — axe fails it under `aria-prohibited-attr` and a
+ * screen reader announces nothing. `status` is the live region a reader already
+ * expects beside `aria-busy`, it permits a name, and it keeps the skeleton
+ * textless: the page must never flash a zero where a limit goes.
+ */
 export function MandateLoading() {
   const t = useTranslations("mandate");
   return (
-    <div data-state="loading" aria-busy="true" aria-label={t("loading")}>
+    <div
+      role="status"
+      data-state="loading"
+      aria-busy="true"
+      aria-label={t("loading")}
+    >
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((tile) => (
           <div key={tile} className={`${panel} flex flex-col gap-2 p-4`}>
-            <div className="h-3 w-1/3 animate-pulse rounded bg-muted" />
-            <div className="h-6 w-2/3 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-full animate-pulse rounded bg-muted" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+            <div className="h-6 w-2/3 animate-pulse rounded bg-muted motion-reduce:animate-none" />
+            <div className="h-3 w-full animate-pulse rounded bg-muted motion-reduce:animate-none" />
           </div>
         ))}
       </div>
       <div className={`${panel} mt-4 flex flex-col gap-3 p-4`}>
         {[0, 1, 2, 3, 4, 5, 6].map((row) => (
-          <div key={row} className="h-8 animate-pulse rounded-md bg-muted" />
+          <div
+            key={row}
+            className="h-8 animate-pulse rounded-md bg-muted motion-reduce:animate-none"
+          />
         ))}
       </div>
     </div>
