@@ -4,9 +4,9 @@ Finished prose per surface. Copy the structure, not the sentences, unless the se
 
 ## Website hero
 
-**Eyebrow.** The control plane for your agent workforce
+**Eyebrow.** The agent control plane
 
-**Headline.** Mission Control for your autonomous agents.
+**Headline.** Mission Control for agent operators.
 
 **Sub.** Give each agent an identity. Set its authority, budget, tools, and skills. Define completion when the work has an endpoint, and oversee ongoing work through its requests, activity, and spend. Oxagen keeps the record of the actions it governs.
 
@@ -152,7 +152,7 @@ Write one rule for each thing an agent may ask for. A rule names a capability, a
 
 ## Docs introduction
 
-Oxagen is Mission Control for an autonomous agent workforce: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
 
 To enroll Claude Code, open the Agents page and choose Wrap Claude Code. The installer writes the wrapper beside Claude Code and enrolls this machine. The page turns to connected when the first frame arrives. From then on, actions routed through Oxagen are checked against the agent's mandate and recorded on the run page. In observe mode they are recorded, not enforced.
 
@@ -160,7 +160,7 @@ For a bounded task with a definition of done, the wrapper also locks the dod whe
 
 ## Launch announcement
 
-An autonomous agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
+An agent workforce needs operators who can decide what each agent may do, equip it for the work, and inspect what happens. Oxagen is Mission Control for that workforce.
 
 Give each agent an identity. Set its authority and budget, assign tools and skills, and review requests that need a person's decision. The record connects governed actions to the agent, the rule, and the person responsible.
 
@@ -172,7 +172,7 @@ Explore Mission Control to follow an agent from its assigned mandate to a record
 
 Subject: Who sets the authority for your agents?
 
-When your team adds an autonomous agent, where do you set its identity, authority, tools, skills, and budget? Where do you review the actions it takes?
+When your team adds an agent, where do you set its identity, authority, tools, skills, and budget? Where do you review the actions it takes?
 
 Oxagen brings those decisions into Mission Control. A walkthrough follows one agent from its mandate through an approval request and the resulting record. It also shows how an operator defines completion for a bounded task and manages an ongoing responsibility.
 
@@ -231,7 +231,7 @@ For bounded tasks with a dod:
 Candidates for rendering from the message registry. They are not additional approved taglines or measured winners. The primary ad introduces the control plane. The others explain one operator decision each.
 
 **Primary.**
-Headline: Mission Control for your autonomous agents.
+Headline: Mission Control for agent operators.
 Support: Set identity, authority, tools, and skills. Oversee the work.
 Action: Explore Mission Control
 
