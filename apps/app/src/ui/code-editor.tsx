@@ -33,7 +33,7 @@ const TOKEN_CLASS: Record<TomlTokenKind, string | null> = {
 };
 
 /** The source as coloured spans; text outside a token is rendered as is. */
-export function highlight(source: string, language: CodeLanguage): ReactNode[] {
+function highlight(source: string, language: CodeLanguage): ReactNode[] {
   const tokens = SCANNERS[language](source);
   const painted: ReactNode[] = [];
   // A token's offset in the source is its identity; no two share one.
@@ -55,7 +55,7 @@ export function highlight(source: string, language: CodeLanguage): ReactNode[] {
 }
 
 /** The one type scale for code: the class every code surface shares so an editor and a read-only block set alike. */
-export const codeText =
+const codeText =
   "font-mono text-[13px] leading-5 [font-feature-settings:var(--ox-font-mono-features)]";
 
 export function CodeEditor({

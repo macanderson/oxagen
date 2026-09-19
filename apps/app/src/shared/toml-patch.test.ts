@@ -2,7 +2,7 @@
 // byte kept, a missing key or section appended where it belongs, and a
 // multi-line value the subset parser reads back to the same text.
 import { describe, expect, it } from "vitest";
-import { tomlLiteral, tomlMultiline, tomlSet, tomlString } from "./toml-patch";
+import { tomlLiteral, tomlMultiline, tomlSet } from "./toml-patch";
 import { parseTomlSubset } from "./toml-subset";
 
 const FILE = `# release-bot
@@ -22,7 +22,7 @@ color = "blue"
 
 describe("tomlLiteral", () => {
   it("writes strings, numbers, booleans, arrays and inline tables", () => {
-    expect(tomlString('a "b"\nc\\d')).toBe('"a \\"b\\"\\nc\\\\d"');
+    expect(tomlLiteral('a "b"\nc\\d')).toBe('"a \\"b\\"\\nc\\\\d"');
     expect(tomlLiteral(["x", 2, true])).toBe('["x", 2, true]');
     expect(tomlLiteral({ per_run_micros: 2500000 })).toBe(
       "{ per_run_micros = 2500000 }",
@@ -32,7 +32,7 @@ describe("tomlLiteral", () => {
 
 describe("tomlSet", () => {
   it("replaces a root key in place and keeps its trailing comment", () => {
-    const next = tomlSet(FILE, null, "name", tomlString("Releases"));
+    const next = tomlSet(FILE, null, "name", tomlLiteral("Releases"));
     expect(next).toBe(
       FILE.replace(
         'name = "Release bot" # shown on the list',
@@ -46,7 +46,7 @@ describe("tomlSet", () => {
       FILE,
       null,
       "description",
-      tomlString("Cuts releases."),
+      tomlLiteral("Cuts releases."),
     );
     expect(next.split("\n").slice(4, 7)).toEqual([
       'tools = ["github__*"]',
@@ -57,10 +57,10 @@ describe("tomlSet", () => {
 
   it("patches a key inside a section and appends a key a section lacks", () => {
     expect(
-      tomlSet(FILE, "harness.claude-code", "color", tomlString("gold")),
+      tomlSet(FILE, "harness.claude-code", "color", tomlLiteral("gold")),
     ).toContain('[harness.claude-code]\ncolor = "gold"\n');
     expect(
-      tomlSet(FILE, "harness.claude-code", "label", tomlString("bot")),
+      tomlSet(FILE, "harness.claude-code", "label", tomlLiteral("bot")),
     ).toContain('[harness.claude-code]\ncolor = "blue"\nlabel = "bot"\n');
   });
 

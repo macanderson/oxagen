@@ -8,7 +8,7 @@ const HEADER = /^\s*\[\[?([^\]]+)\]\]?/;
 const ANY_HEADER = /^\s*\[/;
 
 /** A basic string: escapes for backslash, quote and newline. */
-export function tomlString(value: string): string {
+function tomlString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
 
