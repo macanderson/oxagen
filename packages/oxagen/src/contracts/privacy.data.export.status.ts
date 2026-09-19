@@ -1,6 +1,6 @@
 /**
- * `get_export_status`: where a queued export has got to, and the link to it
- * once it is ready.
+ * `get_export_status`: where a queued export has got to, and the key its
+ * archive is served from once it is ready.
  *
  * `export_data` answers the moment it queues, with an id and the status
  * `queued`; the bundle is written later by
@@ -57,8 +57,13 @@ export const exportStatusValues = [
 export const privacyDataExportStatus = registerCapability({
   name: "get_export_status",
   domain: "privacy",
+  // No URL is promised, because none is returned. The archive is a private
+  // object, so the bytes come from an authenticated route that streams the
+  // key this read answers with. A description saying "download link" sent a
+  // generated client polling for a field that does not exist in the output
+  // schema beside it, and the published schema is what those clients read.
   description:
-    "Read the status of one of the calling user's own data exports, with the download link once it is ready.",
+    "Read the status of one of the calling user's own data exports. Answers a storage key rather than a URL: once ready, fetch the archive from GET /v1/{org}/{workspace}/privacy/export/{exportId}/download.",
   mode: "sync",
   surfaces: ["api"],
   layers: ["schema", "api", "unit", "docs", "app"],

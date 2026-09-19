@@ -49,7 +49,19 @@ export async function liveListSessions(): Promise<
   const c = await client();
   const [me, list] = await Promise.all([c.getSession(), c.listSessions()]);
   if (list.error || !Array.isArray(list.data)) return { ok: false };
-  const currentToken = me.data?.session.token ?? null;
+  // The current session's token is not decoration: it is what marks one row
+  // "this device" and takes its Revoke button away. `getSession()` returns a
+  // refusal as an error RESULT rather than by throwing, so reading
+  // `me.data?.session.token` alone turned a failed read into `null`, and a
+  // null token matches no row. Every session then rendered as another device
+  // with a Revoke button, including the one holding the page open: a person
+  // tidying up their sessions could sign themselves out through a control
+  // that does not mean that, with none of the sign-out path's handling.
+  //
+  // So a list that cannot say which session is the caller's is not a list
+  // worth rendering. The tab already has a failure state and shows it.
+  const currentToken = me.error ? null : text(me.data?.session.token);
+  if (currentToken === null) return { ok: false };
   const rows: unknown[] = list.data;
   const sessions: LiveSession[] = [];
   for (const row of rows) {

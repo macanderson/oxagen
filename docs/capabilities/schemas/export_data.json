@@ -1,7 +1,7 @@
 {
   "name": "export_data",
   "domain": "privacy",
-  "description": "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20 — right to data portability). Returns immediately with status 'queued'; poll via GET /v1/privacy/export/:exportId for the download URL.",
+  "description": "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20, the right to data portability). Returns immediately with status 'queued'; poll GET /v1/{org}/{workspace}/privacy/export/{exportId} until it answers ready, then fetch the archive from that path's /download. No URL is returned: the bundle is a private object served by an authenticated route.",
   "mode": "async",
   "surfaces": [
     "api",
