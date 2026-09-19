@@ -179,7 +179,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             id: runId,
             orgId,
             workspaceId,
-            surface: "api",
+            surface: "api-chat",
             spec: {},
           })
           .returning({ publicId: schema.agentRuns.publicId });
@@ -192,9 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await tx
           .delete(schema.approvalRequests)
           .where(eq(schema.approvalRequests.workspaceId, workspaceId));
-        await tx
-          .delete(schema.agentRuns)
-          .where(eq(schema.agentRuns.id, runId));
+        await tx.delete(schema.agentRuns).where(eq(schema.agentRuns.id, runId));
         for (const id of mandateIds) {
           await tx
             .delete(schema.mandateLedger)
