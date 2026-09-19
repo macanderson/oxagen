@@ -135,24 +135,38 @@ export const contextRecordPublishHandler: CapabilityHandler<
         CONTEXT_VERSION_CLASSIFICATION_COLUMN,
         await ambientPlaneKey(),
       );
-      const [row] = await tx
-        .select(
-          ready
-            ? {
-                id: schema.contextRecordVersions.id,
-                versionNumber: schema.contextRecordVersions.versionNumber,
-                checksum: schema.contextRecordVersions.checksum,
-                kind: schema.contextRecordVersions.kind,
-                force: schema.contextRecordVersions.force,
-                constraintEffect: schema.contextRecordVersions.constraintEffect,
-                statement: schema.contextRecordVersions.statement,
-              }
-            : {
-                id: schema.contextRecordVersions.id,
-                versionNumber: schema.contextRecordVersions.versionNumber,
-                checksum: schema.contextRecordVersions.checksum,
-              },
-        )
+      // Two concrete `.select()` calls rather than one with a ternary column
+      // object: drizzle cannot narrow a select() argument chosen at runtime
+      // into one clean row type, and the resulting `{}` fields broke every
+      // downstream read of `latest.id` / `latest.versionNumber`. Each branch
+      // is typed on its own, then normalized to one shape below.
+      if (ready) {
+        const [full] = await tx
+          .select({
+            id: schema.contextRecordVersions.id,
+            versionNumber: schema.contextRecordVersions.versionNumber,
+            checksum: schema.contextRecordVersions.checksum,
+            kind: schema.contextRecordVersions.kind,
+            force: schema.contextRecordVersions.force,
+            constraintEffect: schema.contextRecordVersions.constraintEffect,
+            statement: schema.contextRecordVersions.statement,
+          })
+          .from(schema.contextRecordVersions)
+          .where(
+            and(
+              eq(schema.contextRecordVersions.recordId, existing.id),
+              eq(schema.contextRecordVersions.isLatest, true),
+            ),
+          )
+          .limit(1);
+        return { latest: full, readAtLookup: ready };
+      }
+      const [partial] = await tx
+        .select({
+          id: schema.contextRecordVersions.id,
+          versionNumber: schema.contextRecordVersions.versionNumber,
+          checksum: schema.contextRecordVersions.checksum,
+        })
         .from(schema.contextRecordVersions)
         .where(
           and(
@@ -161,7 +175,16 @@ export const contextRecordPublishHandler: CapabilityHandler<
           ),
         )
         .limit(1);
-      return { latest: row, readAtLookup: ready };
+      const latest = partial
+        ? {
+            ...partial,
+            kind: null,
+            force: null,
+            constraintEffect: null,
+            statement: null,
+          }
+        : undefined;
+      return { latest, readAtLookup: ready };
     });
 
     // Codex P1 on #3486 (round 3): before the migration lands, this handler
