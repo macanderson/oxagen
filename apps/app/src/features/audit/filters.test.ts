@@ -3,16 +3,29 @@
 // contract, so a hand-edited URL opens the newest page instead of an error,
 // and the link builder carries exactly the filters that are set.
 import { EMITTED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
-import { describe, expect, it } from "vitest";
-import { AUDIT_PAGE_SIZE, type AuditQuery } from "@/data/contracts/audit";
+import { describe, expect, it, vi } from "vitest";
+import {
+  AUDIT_PAGE_SIZE,
+  type AuditFilters,
+  type AuditQuery,
+} from "@/data/contracts/audit";
+import type { DataSource } from "@/data/ports";
 import {
   AUDIT_EVENT_TYPES,
   AUDIT_OUTCOMES,
   auditQueryParams,
+  auditWindow,
   hasAuditFilters,
   parseAuditExportFormat,
   parseAuditQuery,
 } from "./filters";
+
+vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+
+const { OrgCtx } = await import("@/server/viewer");
+const { unsafeMint } = await import("@/server/viewer.testing");
+const { readError, readOk } = await import("@/data/read");
 
 const NONE: AuditQuery = {
   eventType: null,
@@ -164,5 +177,105 @@ describe("parseAuditExportFormat", () => {
     expect(parseAuditExportFormat({ format: "ndjson" })).toBe("ndjson");
     expect(parseAuditExportFormat({ format: "pdf" })).toBeNull();
     expect(parseAuditExportFormat({})).toBeNull();
+  });
+});
+
+describe("auditWindow", () => {
+  /** The filters alone: the window is built from these, never from the offset. */
+  const NO_DAYS: AuditFilters = {
+    eventType: null,
+    outcome: null,
+    actor: null,
+    capability: null,
+    from: null,
+    to: null,
+  };
+
+  const ctx = unsafeMint(OrgCtx, {
+    userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "owner",
+  });
+
+  const sourceWith = (
+    preferences: DataSource["shell"]["preferences"],
+  ): Pick<DataSource, "shell"> => ({
+    shell: {
+      context: () => Promise.reject(new Error("not a window read")),
+      preferences,
+    },
+  });
+
+  const zoned = (timeZone: string) =>
+    vi.fn<DataSource["shell"]["preferences"]>(() =>
+      Promise.resolve(readOk({ timeZone })),
+    );
+
+  it("resolves the days in the viewer's zone, the last day inclusive", async () => {
+    const preferences = zoned("Asia/Tokyo");
+    expect(
+      await auditWindow(ctx, sourceWith(preferences), {
+        ...NO_DAYS,
+        from: "2026-09-18",
+        to: "2026-09-18",
+      }),
+    ).toMatchObject({
+      // JST is UTC+9, so a Tokyo day starts at 15:00 UTC the day before.
+      since: "2026-09-17T15:00:00.000Z",
+      until: "2026-09-18T15:00:00.000Z",
+    });
+  });
+
+  it("carries the filters the days are not, and one bound on its own", async () => {
+    expect(
+      await auditWindow(ctx, sourceWith(zoned("UTC")), {
+        ...NO_DAYS,
+        outcome: "deny",
+        capability: "query_audit_log",
+        from: "2026-09-18",
+      }),
+    ).toEqual({
+      eventType: null,
+      outcome: "deny",
+      actor: null,
+      capability: "query_audit_log",
+      since: "2026-09-18T00:00:00.000Z",
+      until: null,
+    });
+  });
+
+  it("reads no zone when neither day is set", async () => {
+    const preferences = zoned("Asia/Tokyo");
+    expect(
+      await auditWindow(ctx, sourceWith(preferences), NO_DAYS),
+    ).toMatchObject({
+      since: null,
+      until: null,
+    });
+    expect(preferences).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the default zone when the preference cannot be read (negative)", async () => {
+    const preferences = vi.fn<DataSource["shell"]["preferences"]>(() =>
+      Promise.resolve(readError("control_plane_unavailable", 503)),
+    );
+    expect(
+      await auditWindow(ctx, sourceWith(preferences), {
+        ...NO_DAYS,
+        from: "2026-09-18",
+      }),
+      // Pacific is the default the pages print in: PDT, UTC-7 in September.
+    ).toMatchObject({ since: "2026-09-18T07:00:00.000Z" });
+  });
+
+  it("falls back to the default zone for one this runtime cannot format in (negative)", async () => {
+    expect(
+      await auditWindow(ctx, sourceWith(zoned("Mars/Olympus_Mons")), {
+        ...NO_DAYS,
+        from: "2026-09-18",
+      }),
+    ).toMatchObject({ since: "2026-09-18T07:00:00.000Z" });
   });
 });

@@ -171,6 +171,7 @@ describe("the user-menu trigger", () => {
         name: "Marcus Bell",
         email: "marcus.bell@acme.example",
         avatarUrl,
+        timeZone: "America/Los_Angeles",
       },
     });
   }
@@ -413,7 +414,12 @@ describe("user menu", () => {
   it("names a viewer with no recorded name by their email", () => {
     renderShell(
       shellData({
-        viewer: { name: null, email: "dana@acme.example", avatarUrl: null },
+        viewer: {
+          name: null,
+          email: "dana@acme.example",
+          avatarUrl: null,
+          timeZone: "America/Los_Angeles",
+        },
       }),
     );
     expect(

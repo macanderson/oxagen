@@ -31,6 +31,29 @@ export type AuditQuery = AuditFilters & { offset: number };
 
 export type AuditExportFormat = "csv" | "ndjson";
 
+/**
+ * The filters as the audit port takes them: the reader's calendar days already
+ * resolved to instants. A civil day is a pair of instants only once a zone is
+ * known, and the zone is the viewer's preference — which `src/data/live/**` has
+ * no way to ask for and no business knowing (ARCHITECTURE.md §2). So the feature
+ * that resolved the viewer resolves the window too, and the port takes the
+ * answer. The bounds are named apart from the day filters on purpose: the two
+ * types are otherwise the same shape, and this way a day handed to the port
+ * where an instant belongs does not compile.
+ */
+export type AuditWindow = Omit<AuditFilters, "from" | "to"> & {
+  /** The first instant of the `from` day in the viewer's zone, inclusive; null when unset. */
+  since: string | null;
+  /** The first instant of the day after `to` in that zone, exclusive; null when unset. */
+  until: string | null;
+};
+
+/** One page of the record, as the port takes it. */
+export type AuditPageQuery = AuditWindow & { offset: number };
+
+/** The signed export over the same window. */
+export type AuditExportQuery = AuditWindow & { format: AuditExportFormat };
+
 const AuditEvent = z.object({
   occurredAt: z.iso.datetime(),
   eventType: z.string().min(1),
