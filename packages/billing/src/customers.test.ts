@@ -27,9 +27,13 @@
  *  9. A settings id missing on this Stripe account is overwritten with a new
  *     customer (sandbox cutover / key rotation).
  * 10. A search hit that is missing on this account falls through to create.
+ * 11. A genuine CAS-won replacement retires the previous customer's payment
+ *     methods and clears the auto-reload override; a no-op CAS (no previous
+ *     value, or a concurrent writer's value winning) retires nothing.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { schema } from "@oxagen/database";
 
 // ---------------------------------------------------------------------------
 // BillingProvider mock
@@ -53,7 +57,11 @@ vi.mock("./client", () => ({
 
 interface World {
   org: { id: string; name: string; slug: string } | null;
-  settings: { orgId: string; stripeCustomerId: string | null } | null;
+  settings: {
+    orgId: string;
+    stripeCustomerId: string | null;
+    autoReloadPaymentMethodId?: string | null;
+  } | null;
   subscription: { stripeCustomerId: string | null } | null;
   /** Every org_billing_settings upsert, in order. */
   upserts: Array<{
@@ -63,6 +71,16 @@ interface World {
   }>;
   /** Runs once, inside the upsert, before the fake applies it. */
   beforeUpsert: (() => void) | null;
+  /**
+   * Every UPDATE `retireStaleCustomerData` issues, in order, tagged by which
+   * table it targeted. A genuine CAS-won replacement pushes exactly one
+   * "paymentMethods" record (the soft-delete) and one "orgBillingSettings"
+   * record (clearing the auto-reload override); a no-op CAS pushes neither.
+   */
+  updates: Array<{
+    table: "paymentMethods" | "orgBillingSettings" | "unknown";
+    values: Record<string, unknown>;
+  }>;
 }
 
 const { seams, world } = vi.hoisted(() => ({
@@ -73,6 +91,7 @@ const { seams, world } = vi.hoisted(() => ({
     subscription: null,
     upserts: [],
     beforeUpsert: null,
+    updates: [],
   } as unknown as World,
 }));
 
@@ -122,6 +141,33 @@ const tx = {
     },
     subscriptions: { findFirst: async () => world.subscription ?? undefined },
   },
+  // `retireStaleCustomerData` issues one UPDATE against payment_methods (the
+  // soft-delete) and one against org_billing_settings (clearing the
+  // auto-reload override). The fake identifies the target table by object
+  // identity against the real (unmocked) schema, and records each call
+  // rather than modeling the WHERE clause, since the tests below assert on
+  // whether retirement ran, not which specific rows it touched.
+  update: (table: unknown) => ({
+    set: (values: Record<string, unknown>) => ({
+      where: async () => {
+        const targetTable =
+          table === schema.paymentMethods
+            ? ("paymentMethods" as const)
+            : table === schema.orgBillingSettings
+              ? ("orgBillingSettings" as const)
+              : ("unknown" as const);
+        world.updates.push({ table: targetTable, values });
+        if (
+          targetTable === "orgBillingSettings" &&
+          world.settings &&
+          "autoReloadPaymentMethodId" in values
+        ) {
+          world.settings.autoReloadPaymentMethodId =
+            (values.autoReloadPaymentMethodId as string | null) ?? null;
+        }
+      },
+    }),
+  }),
   insert: () => ({
     values: (v: { orgId: string; stripeCustomerId: string }) => ({
       onConflictDoUpdate: (conflict: {
@@ -191,6 +237,7 @@ describe("ensureStripeCustomer", () => {
     world.subscription = null;
     world.upserts = [];
     world.beforeUpsert = null;
+    world.updates = [];
     seams.tenant.mockImplementation(async (fn: (t: unknown) => unknown) =>
       fn(tx),
     );
@@ -392,5 +439,73 @@ describe("ensureStripeCustomer", () => {
 
     expect(result).toBe("cus_fresh_002");
     expect(createCustomerMock).toHaveBeenCalledOnce();
+  });
+
+  it("retires the replaced customer's payment methods and clears the auto-reload override when the CAS wins", async () => {
+    world.settings = {
+      orgId: "org-abc",
+      stripeCustomerId: "cus_stale_001",
+      autoReloadPaymentMethodId: "pm_from_stale_account",
+    };
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_stale_001";
+    });
+    findCustomerByOrgIdMock.mockResolvedValue(null);
+    createCustomerMock.mockResolvedValue("cus_fresh_003");
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_fresh_003");
+    expect(world.updates).toEqual([
+      {
+        table: "paymentMethods",
+        values: expect.objectContaining({
+          deletedAt: expect.any(Date),
+          isDefault: false,
+        }),
+      },
+      {
+        table: "orgBillingSettings",
+        values: expect.objectContaining({ autoReloadPaymentMethodId: null }),
+      },
+    ]);
+    expect(world.settings?.autoReloadPaymentMethodId).toBeNull();
+  });
+
+  it("retires nothing when the settings column had no previous customer to replace", async () => {
+    findCustomerByOrgIdMock.mockResolvedValue(null);
+    createCustomerMock.mockResolvedValue("cus_new_002");
+
+    await ensureStripeCustomer("org-abc");
+
+    expect(world.updates).toEqual([]);
+  });
+
+  it("retires nothing when a concurrent caller's write wins the CAS", async () => {
+    world.settings = {
+      orgId: "org-abc",
+      stripeCustomerId: "cus_stale_001",
+      autoReloadPaymentMethodId: "pm_from_stale_account",
+    };
+    customerExistsMock.mockImplementation(async (id: string) => {
+      return id !== "cus_stale_001";
+    });
+    findCustomerByOrgIdMock.mockResolvedValue(null);
+    createCustomerMock.mockResolvedValue("cus_mine_002");
+    world.beforeUpsert = () => {
+      world.settings = {
+        orgId: "org-abc",
+        stripeCustomerId: "cus_theirs_002",
+        autoReloadPaymentMethodId: "pm_from_stale_account",
+      };
+    };
+
+    const result = await ensureStripeCustomer("org-abc");
+
+    expect(result).toBe("cus_theirs_002");
+    expect(world.updates).toEqual([]);
+    expect(world.settings?.autoReloadPaymentMethodId).toBe(
+      "pm_from_stale_account",
+    );
   });
 });

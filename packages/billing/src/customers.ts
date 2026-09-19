@@ -1,5 +1,5 @@
 import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
 
@@ -22,6 +22,12 @@ import { logger } from "./logger";
  * previous account's `cus_…` make every Checkout fail with
  * `resource_missing`. Those ids are dropped and a customer is re-created
  * on the account the secret key points at.
+ *
+ * When the replacement lands, `storeCustomerId` also retires the org's
+ * saved payment methods and auto-reload override that named the previous
+ * customer (`retireStaleCustomerData`), so `readDefaultPaymentMethod` and
+ * `maybeAutoReload` never combine the new customer id with an old `pm_…`
+ * from the account it was replaced on.
  *
  * `opts.system` routes the reads and the write through `withSystemDb` for
  * callers with no tenant scope — the close job and the platform-operator
@@ -119,6 +125,13 @@ type DbRunner = typeof withTenantDb | typeof withSystemDb;
  * holds that same previous value; a concurrent caller that already moved
  * the row on (to any id, not necessarily this one) wins, and that winner
  * is returned instead of being clobbered.
+ *
+ * When the CAS wins and replaces a *different*, non-null previous customer
+ * id, that previous id belonged to another Stripe account (a sandbox
+ * cutover or key rotation, see the module docstring). Its payment methods
+ * and any explicit auto-reload override now point at cards Stripe will
+ * reject once combined with the new customer id, so {@link
+ * retireStaleCustomerData} soft-deletes them and clears the override.
  */
 async function storeCustomerId(
   runner: DbRunner,
@@ -147,8 +160,56 @@ async function storeCustomerId(
       { orgId, customerId: stored, superseded: customerId },
       "billing: a concurrent caller stored the org's customer id first",
     );
+    return stored;
+  }
+  if (opts.previousValue && opts.previousValue !== customerId) {
+    await retireStaleCustomerData(runner, orgId, opts.previousValue);
   }
   return stored;
+}
+
+/**
+ * Soft-delete the org's `billing.payment_methods` rows recorded against
+ * `staleCustomerId` and clear a matching `auto_reload_payment_method_id`
+ * override, once {@link storeCustomerId} has confirmed the org's Stripe
+ * customer moved off that id.
+ *
+ * Both readers of a saved payment method, `readDefaultPaymentMethod` (the
+ * GAU recorder) and `maybeAutoReload`, key off the org's current customer
+ * id. A row or override still naming the replaced account combines with
+ * the new customer id into a `pm_...` Stripe does not recognise, and the
+ * top-up fails with `resource_missing`. Retiring both here, at the moment
+ * the swap lands, keeps every later read consistent without asking either
+ * reader to re-verify against Stripe.
+ */
+async function retireStaleCustomerData(
+  runner: DbRunner,
+  orgId: string,
+  staleCustomerId: string,
+): Promise<void> {
+  const now = new Date();
+  await runner((tx) =>
+    tx
+      .update(schema.paymentMethods)
+      .set({ deletedAt: now, isDefault: false, updatedAt: now })
+      .where(
+        and(
+          eq(schema.paymentMethods.orgId, orgId),
+          eq(schema.paymentMethods.stripeCustomerId, staleCustomerId),
+          isNull(schema.paymentMethods.deletedAt),
+        ),
+      ),
+  );
+  await runner((tx) =>
+    tx
+      .update(schema.orgBillingSettings)
+      .set({ autoReloadPaymentMethodId: null, updatedAt: now })
+      .where(eq(schema.orgBillingSettings.orgId, orgId)),
+  );
+  logger.warn(
+    { orgId, staleCustomerId },
+    "billing: retired payment methods and cleared the auto-reload override for a replaced Stripe customer",
+  );
 }
 
 async function resolveOrCreateCustomer(tenant: {
