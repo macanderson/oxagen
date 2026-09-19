@@ -13,9 +13,12 @@
  *  2. No duplicate ordinals — every migration owns a unique number.
  *  3. No gaps in the ordinal sequence, apart from the squashed range below.
  *
- * `lintAtlas()` lints the LIVE dir, packages/database/atlas/migrations — see
- * its own docblock.
+ * `lintAtlas()` lints the LIVE dir, packages/database/atlas/migrations (see
+ * its own docblock). `checkAtlasBaseline()` is the git-aware half of that
+ * lint (see its own docblock for why the filesystem-only checks above it
+ * cannot catch a migration stamped behind the branch it merges into, #3387).
  */
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +28,7 @@ const __filename = fileURLToPath(import.meta.url);
 const ROOT = resolve(__filename, "..", "..", "..");
 const MIGRATIONS_DIR = join(ROOT, "packages/database/drizzle");
 const ATLAS_DIR = join(ROOT, "packages/database/atlas/migrations");
+const ATLAS_MIGRATIONS_REL = "packages/database/atlas/migrations";
 
 const NAME_RE = /^(\d{4})_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/;
 
@@ -129,6 +133,212 @@ function main(): void {
  */
 const ATLAS_NAME_RE = /^(\d{14})_[a-z0-9]+(?:_[a-z0-9]+)*\.sql$/;
 
+/** The 14-digit version prefix, or null for a name `ATLAS_NAME_RE` rejects. */
+export function atlasVersionOf(file: string): string | null {
+  const m = ATLAS_NAME_RE.exec(file);
+  return m ? m[1]! : null;
+}
+
+/** The highest version prefix among `files`, or null if none is well-formed. */
+export function maxAtlasVersion(files: readonly string[]): string | null {
+  let max: string | null = null;
+  for (const f of files) {
+    const v = atlasVersionOf(f);
+    if (v !== null && (max === null || v > max)) max = v;
+  }
+  return max;
+}
+
+/** Runs a git subcommand from the repo root and returns its stdout. */
+export type GitRunner = (args: string[]) => string;
+
+export function defaultGitRunner(args: string[]): string {
+  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
+}
+
+/**
+ * The merge base of `headRef` and `baseRef`, or null when git cannot answer:
+ * a shallow clone, a tarball checkout with no `.git`, or a `baseRef` that was
+ * never fetched. Never throws.
+ */
+export function mergeBaseOf(
+  headRef: string,
+  baseRef: string,
+  run: GitRunner = defaultGitRunner,
+): string | null {
+  try {
+    return run(["merge-base", headRef, baseRef]).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The `.sql` filenames in the Atlas migrations directory AT `ref`, read from
+ * git's object store rather than the working tree, so it answers what the
+ * directory looked like at a past commit, not just what is checked out now.
+ * Null when `ref` cannot be read (git unavailable, or the path did not exist
+ * at that commit). Never throws.
+ */
+export function atlasFilesAtRef(
+  ref: string,
+  run: GitRunner = defaultGitRunner,
+): string[] | null {
+  try {
+    const out = run(["ls-tree", "--name-only", `${ref}:${ATLAS_MIGRATIONS_REL}`]);
+    return out
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((f) => f.endsWith(".sql"));
+  } catch {
+    return null;
+  }
+}
+
+export interface AtlasBaselineResult {
+  /** "degraded" means git could not establish a baseline (see `note`). */
+  status: "ok" | "degraded";
+  errors: string[];
+  warnings: string[];
+  note?: string;
+}
+
+/**
+ * The git-aware half of the Atlas lint (#3387): every migration a branch adds
+ * relative to its merge base with the default branch must sort AFTER the
+ * highest version already in that merge base.
+ *
+ * WHY THE FILENAME/COLLISION CHECKS ABOVE CANNOT CATCH THIS
+ *   `lintAtlas()`'s duplicate-prefix and atlas.sum checks are filesystem-only:
+ *   they know what is on disk right now and nothing about history. A migration
+ *   stamped behind the branch it will merge into collides with nothing and
+ *   drifts from nothing, so it passes both checks silently. Atlas keys
+ *   applied revisions by the version prefix, so a database that already
+ *   applied the later revisions never applies this one at all (#3387, the real
+ *   case: PR #3337 stamped a migration 20260918161000 while the branch's merge
+ *   base already carried migrations up to 20260918200000).
+ *
+ * TWO COMPARISONS, TWO SEVERITIES
+ *   - Against the MERGE BASE: fails. A migration stamped at or before the
+ *     merge base's own maximum was wrong the moment it was written. Nothing
+ *     that has happened to the default branch since is responsible for that.
+ *   - Against the default branch's CURRENT tip: warns. The default branch
+ *     moves under a long-lived PR, so a migration that cleared its merge base
+ *     can still fall behind by the time it merges. That is not an authoring
+ *     mistake, and blocking it would punish branch age rather than the defect
+ *     this check exists for; the merge-base comparison already caught that.
+ *
+ * "ADDED" IS A FILE-SET DIFF, NOT A LINE DIFF
+ *   `currentFiles` (the working tree) is compared against the merge base's
+ *   file SET, not against a line-oriented diff of the two. A migration a
+ *   rebase or a merge carries forward unchanged is in both sets and is never
+ *   reported, no matter what the diff between the two commits looks like.
+ *
+ * DEGRADING HONESTLY
+ *   `mergeBaseOf` and `atlasFilesAtRef` never throw; a git failure (shallow
+ *   clone, tarball checkout, an unfetched `baseRef`) returns `status:
+ *   "degraded"` with a `note` explaining why the ordering check did not run.
+ *   The caller prints that note rather than staying silent: a shallow clone
+ *   must never read as "ordering verified".
+ *
+ * WHY THE HEAD REF IS NOT ALWAYS LITERALLY "HEAD"
+ *   `actions/checkout` on a `pull_request` event checks out GitHub's synthetic
+ *   merge ref (`refs/pull/N/merge`) by default, so `HEAD` in CI is a merge
+ *   commit whose parents are the PR's real tip and the base branch's tip at
+ *   that moment, not the PR branch itself. `origin/main` is an ancestor of
+ *   that merge commit, so `git merge-base HEAD origin/main` degenerates to
+ *   `origin/main`'s current tip rather than the branch's real divergence
+ *   point, collapsing the two-tier fail/warn distinction above into one tier:
+ *   every added migration would be compared only against the moving target
+ *   the WARN case exists to protect against. `DB_LINT_HEAD_REF` (defaulting
+ *   to `HEAD` when unset) lets CI pass the PR's actual head SHA
+ *   (`github.event.pull_request.head.sha`) instead.
+ *
+ * Needs no database connection: `git merge-base` plus two `git ls-tree`
+ * listings, so this stays in the DB-less `checks` CI job.
+ */
+export function checkAtlasBaseline(
+  currentFiles: readonly string[],
+  opts: { headRef?: string; baseRef?: string; run?: GitRunner } = {},
+): AtlasBaselineResult {
+  // `|| "HEAD"`, not `??`: on a push event the workflow step still sets
+  // DB_LINT_HEAD_REF (to github.event.pull_request.head.sha, which GitHub
+  // Actions expands to an empty string outside a pull_request event), and an
+  // empty string is not the caller's request for a different ref.
+  const headRef =
+    opts.headRef ?? (process.env.DB_LINT_HEAD_REF || "HEAD");
+  const baseRef =
+    opts.baseRef ?? process.env.DB_LINT_BASE_REF ?? "origin/main";
+  const run = opts.run ?? defaultGitRunner;
+
+  const mergeBase = mergeBaseOf(headRef, baseRef, run);
+  if (mergeBase === null) {
+    return {
+      status: "degraded",
+      errors: [],
+      warnings: [],
+      note:
+        `could not establish a git baseline (\`git merge-base ${headRef} ${baseRef}\` ` +
+        "failed). The merge-base ordering check above did NOT run. This is expected " +
+        "in a shallow clone or a tarball checkout, and is not the same as passing: " +
+        "fetch full history (`git fetch --unshallow`, or CI's `fetch-depth: 0`) before " +
+        "trusting a new migration's timestamp ordering.",
+    };
+  }
+
+  const mergeBaseFiles = atlasFilesAtRef(mergeBase, run);
+  if (mergeBaseFiles === null) {
+    return {
+      status: "degraded",
+      errors: [],
+      warnings: [],
+      note:
+        `could not read the atlas migrations tree at merge base ${mergeBase}. ` +
+        "The ordering check above did NOT run.",
+    };
+  }
+
+  const mergeBaseSet = new Set(mergeBaseFiles);
+  const addedFiles = currentFiles.filter((f) => !mergeBaseSet.has(f));
+  const mergeBaseMax = maxAtlasVersion(mergeBaseFiles);
+
+  const headFiles = atlasFilesAtRef(baseRef, run);
+  const headMax = headFiles !== null ? maxAtlasVersion(headFiles) : null;
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  for (const file of addedFiles) {
+    const version = atlasVersionOf(file);
+    if (version === null) continue; // malformed name: lintAtlas() reports it
+
+    if (mergeBaseMax !== null && version <= mergeBaseMax) {
+      errors.push(
+        `${file}: stamped ${version}, at or before ${mergeBaseMax}, the latest ` +
+          `migration already on ${baseRef} where this branch diverged (merge base ` +
+          `${mergeBase.slice(0, 12)}). Atlas keys applied revisions by this prefix, so ` +
+          "a database that already applied the merge-base migrations would silently " +
+          "skip this one forever. Rename it to a later, unclaimed timestamp and " +
+          'regenerate the checksum: `atlas migrate hash --dir "file://atlas/migrations"` ' +
+          "from packages/database.",
+      );
+      continue;
+    }
+
+    if (headMax !== null && version <= headMax) {
+      warnings.push(
+        `${file}: stamped ${version}, at or before ${headMax}, the latest migration ` +
+          `on ${baseRef} right now. It cleared its merge base, so it was correctly ` +
+          `stamped when written; ${baseRef} has since moved past it. Not blocking, but ` +
+          "renaming to a later timestamp (and re-running `atlas migrate hash --dir " +
+          '"file://atlas/migrations"` from packages/database) avoids relying on merge order.',
+      );
+    }
+  }
+
+  return { status: "ok", errors, warnings };
+}
+
 function lintAtlas(): void {
   const files = readdirSync(ATLAS_DIR)
     .filter((f) => f.endsWith(".sql"))
@@ -190,6 +400,20 @@ function lintAtlas(): void {
     }
   }
 
+  // Git-aware ordering (#3387). See checkAtlasBaseline()'s own docblock.
+  // Filename shape and atlas.sum consistency, checked above, know nothing
+  // about history, so neither catches a migration stamped behind the branch
+  // it will merge into.
+  const baseline = checkAtlasBaseline(files);
+  if (baseline.status === "degraded") {
+    console.warn(kleur.yellow(`[db:lint-migrations] ⚠ ${baseline.note}`));
+  } else {
+    errors.push(...baseline.errors);
+    for (const w of baseline.warnings) {
+      console.warn(kleur.yellow(`[db:lint-migrations] ⚠ ${w}`));
+    }
+  }
+
   if (errors.length > 0) {
     console.error(kleur.red().bold("[db:lint-migrations] FAIL (atlas)"));
     for (const e of errors) console.error(kleur.red(`  ✗ ${e}`));
@@ -203,5 +427,14 @@ function lintAtlas(): void {
   );
 }
 
-main();
-lintAtlas();
+// Guarded so a test can import the exported functions above (atlasVersionOf,
+// checkAtlasBaseline, and the rest) without running the CLI, which shells
+// out to git and calls process.exit(1) on a violation.
+const isEntrypoint =
+  process.argv[1] !== undefined &&
+  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+
+if (isEntrypoint) {
+  main();
+  lintAtlas();
+}
