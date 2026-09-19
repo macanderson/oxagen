@@ -27,8 +27,9 @@ const BINARY: Record<WrappedHarness, string> = {
   codex: "codex",
   // Cursor's CLI binary is `agent` (verified 2026-09-18 against
   // https://cursor.com/docs/cli/installation, fetched that day); the
-  // installer also links the legacy `cursor-agent` name, but `agent` is the
-  // one its own docs use.
+  // installer also links `cursor-agent`, which `cursorFacts` probes first.
+  // This is only the name the messages use, and `agent` is the one Cursor's
+  // own docs use; what is actually spawned is the path the probe found.
   cursor: "agent",
   stella: "stella",
 };

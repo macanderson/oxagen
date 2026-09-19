@@ -512,10 +512,20 @@ export function claudeDesktopFacts(
 }
 
 /**
+ * The names Cursor's CLI answers to, most specific first. Its own docs call
+ * the binary `agent` and the installer also links `cursor-agent`, so both are
+ * probed: a machine carrying only one of the two is a machine Oxagen governs,
+ * and reporting it as having no CLI at all is the one answer that is wrong
+ * either way. `cursor-agent` goes first because it names Cursor
+ * unambiguously, so finding it means no generic name has to be trusted.
+ */
+export const CURSOR_CLI_NAMES = ["cursor-agent", "agent"] as const;
+
+/**
  * Cursor's CLI, verified 2026-09-18 against
- * https://cursor.com/docs/cli/installation (fetched that day): the binary is
- * `agent`, the installer puts it in `~/.local/bin`, and `agent --version`
- * reports the version. Two caveats the caller has to live with.
+ * https://cursor.com/docs/cli/installation (fetched that day): the installer
+ * puts the binary in `~/.local/bin` and `--version` reports the version.
+ * Two caveats the caller has to live with.
  *
  * `agent` is a generic name. Another program of that name earlier on PATH
  * would be found instead, so the version string is sanity-checked before this
@@ -537,14 +547,18 @@ export function cursorFacts(
   home?: string,
   exists?: (candidate: string) => boolean,
 ): HarnessFacts {
-  const facts =
-    exists === undefined
-      ? harnessFacts(exec, "agent", platform, env, home)
-      : harnessFacts(exec, "agent", platform, env, home, exists);
-  // `harnessFacts` sets `version` only when `--version` printed a dotted
-  // number, so an unrelated `agent` on PATH answers with no version and is
-  // not reported as an install.
-  return facts.version === undefined ? {} : facts;
+  for (const name of CURSOR_CLI_NAMES) {
+    const facts =
+      exists === undefined
+        ? harnessFacts(exec, name, platform, env, home)
+        : harnessFacts(exec, name, platform, env, home, exists);
+    // `harnessFacts` sets `version` only when `--version` printed a dotted
+    // number, so an unrelated `agent` on PATH answers with no version and is
+    // not reported as an install. Both names go through that check, so
+    // neither can report an install it did not find.
+    if (facts.version !== undefined) return facts;
+  }
+  return {};
 }
 
 export function claudeFacts(
