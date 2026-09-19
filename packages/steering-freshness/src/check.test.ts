@@ -306,7 +306,8 @@ describe("checkSteeringFreshness, when it cannot answer", () => {
   it("is unknown when the remote-tracking ref is not on disk", async () => {
     const v = await check(
       table({
-        "rev-parse --verify --quiet refs/remotes/origin/main^{commit}": new Error("none"),
+        "rev-parse --verify --quiet refs/remotes/origin/main^{commit}":
+          new Error("none"),
       }),
     );
     expect(v.status).toBe("unknown");

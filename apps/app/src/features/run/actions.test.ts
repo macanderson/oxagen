@@ -7,17 +7,20 @@
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
 import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, requireViewer } = vi.hoisted(() => ({
+const { invoke, requireViewer, captureError } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
   requireViewer: vi.fn(),
+  captureError: vi.fn(),
 }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
   invoke,
 }));
-vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -31,9 +34,15 @@ const kernel =
   await vi.importActual<typeof import("@oxagen/oxagen")>("@oxagen/oxagen");
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
-const { exportRun, haltRun, steerRun, summarizeRun } = await import(
-  "./actions"
-);
+const {
+  bisectRuns,
+  exportRun,
+  forkRun,
+  haltRun,
+  readTranscriptPage,
+  steerRun,
+  summarizeRun,
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -47,6 +56,9 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+/** The shape `get_run_transcript` answers with, so a fixture cannot drift from it. */
+type TranscriptOutput = ContractOutput<typeof runTranscriptGet>;
+
 const RUN = "tse_7k2m9q";
 const TENANT = {
   orgId: ctx.orgId,
@@ -56,10 +68,27 @@ const TENANT = {
 const denied = (name: string) =>
   new kernel.CapabilityError(name, "authz_denied", "denied");
 
+/**
+ * What a handler throws when it refuses: `code: "conflict"` with the refusal
+ * named in `reason`. The seam carries that word through as the action's
+ * `code`, and the dialog picks its sentence on it, so a test that threw a
+ * CapabilityError instead would prove the wrong path.
+ */
+class HandlerRefusal extends Error {
+  readonly code = "conflict";
+
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "HandlerRefusal";
+  }
+}
+const refused = (reason: string) => new HandlerRefusal(reason);
+
 beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
+  captureError.mockReset();
 });
 
 describe("haltRun", () => {
@@ -189,4 +218,232 @@ describe("exportRun", () => {
       reason: "denied",
     });
   });
+});
+
+describe("forkRun", () => {
+  it("mints the attempt at the frame it was given and answers which attempt it is", async () => {
+    invoke.mockResolvedValue({ attemptId: "arat_2", attemptNumber: 2 });
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toEqual({
+      ok: true,
+      value: { attemptId: "arat_2", attemptNumber: 2 },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "fork_run",
+      { runId: RUN, fromSeq: "412" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a branch point that is not a frame before the kernel sees it (negative)", async () => {
+    for (const seq of ["", "  ", "0", "-1", "4.5", "twelve", "9".repeat(20)]) {
+      expect(await forkRun("acme", "core-platform", RUN, seq)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "from_seq",
+        field: "fromSeq",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's conflict as a conflict, so the dialog can name it (negative)", async () => {
+    invoke.mockRejectedValue(refused("replay_grade_below_fork"));
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toMatchObject({
+      ok: false,
+      reason: "conflict",
+      code: "replay_grade_below_fork",
+    });
+  });
+
+  it("returns a denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("fork_run"));
+    expect(await forkRun("acme", "core-platform", RUN, "412")).toMatchObject({
+      ok: false,
+      reason: "denied",
+    });
+  });
+});
+
+describe("bisectRuns", () => {
+  it("compares this run against the other and answers where they part", async () => {
+    invoke.mockResolvedValue({
+      divergentSeq: "88",
+      keyA: "tool:create_release:ok",
+      keyB: "tool:create_release:error",
+      aligned: 87,
+    });
+    expect(
+      await bisectRuns("acme", "core-platform", RUN, "  arun_9f2a  "),
+    ).toEqual({
+      ok: true,
+      value: {
+        divergentSeq: "88",
+        keyA: "tool:create_release:ok",
+        keyB: "tool:create_release:error",
+        aligned: 87,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "bisect_runs",
+      { runA: RUN, runB: "arun_9f2a" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("carries a null divergence through as recorded, not as an error (negative)", async () => {
+    invoke.mockResolvedValue({
+      divergentSeq: null,
+      keyA: null,
+      keyB: null,
+      aligned: 431,
+    });
+    expect(await bisectRuns("acme", "core-platform", RUN, "arun_9f2a")).toEqual(
+      {
+        ok: true,
+        value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
+      },
+    );
+  });
+
+  it("refuses an empty second run, and this run compared with itself, before the kernel (negative)", async () => {
+    for (const other of ["", "   ", RUN]) {
+      expect(await bisectRuns("acme", "core-platform", RUN, other)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "run_b",
+        field: "runB",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("readTranscriptPage", () => {
+  it("reads the page past the cursor at the zoom and chips it was given", async () => {
+    invoke.mockResolvedValue({
+      zoom: "steps",
+      kinds: ["tools"],
+      entries: [],
+      cursor: null,
+      complete: true,
+    });
+    const read = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      ["tools"],
+      "ZjoxMQ",
+    );
+    expect(read).toEqual({
+      ok: true,
+      value: {
+        zoom: "steps",
+        kinds: ["tools"],
+        entries: [],
+        cursor: null,
+        complete: true,
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "get_run_transcript",
+      {
+        runId: RUN,
+        zoom: "steps",
+        kinds: ["tools"],
+        limit: 200,
+        after: "ZjoxMQ",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("maps a page exactly as the port does, so a first page and a later one cannot disagree", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const out: TranscriptOutput = {
+      zoom: "steps",
+      kinds: [],
+      entries: [
+        {
+          seq: "11",
+          endSeq: "14",
+          at: "2026-09-15T08:10:00.000Z",
+          elapsedMs: 3000,
+          kind: "tool_call",
+          type: "tool_result",
+          label: "create_release ok",
+          callId: "tc_1",
+          kinds: ["tools"],
+          turn: 1,
+          request: null,
+          response: null,
+          decision: null,
+          frames: 4,
+          cost: {
+            micros: "18240",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+          cumulativeCost: {
+            micros: "4131265",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+        },
+      ],
+      cursor: "ZjoxMQ",
+      complete: false,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMA",
+    );
+    // The layer matrix keeps `features/*` out of `data/live`, so the action
+    // carries its own copy of the port's mapping. This is what stops the two
+    // drifting: a test may import both, and production may not.
+    expect(page).toEqual({
+      ok: true,
+      value: toRunTranscript(out),
+    });
+  });
+
+  it("answers a cursor the capability did not write as a read error, not as a throw (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError(
+        "get_run_transcript",
+        "invalid_input",
+        "invalid_cursor",
+      ),
+    );
+    expect(
+      await readTranscriptPage(
+        "acme",
+        "core-platform",
+        RUN,
+        "steps",
+        [],
+        "not-a-cursor",
+      ),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_cursor",
+      field: "after",
+    });
+  });
+
+  // A page whose mapped shape the app's own `RunTranscript` schema refuses
+  // cannot be produced through this file's fake boundary: `kernelRead`'s real
+  // `contract.output.safeParse` already validates the mocked `invoke` result
+  // against the (`.strict()`, identically-shaped) contract schema before this
+  // module ever sees it, so a value that clears that gate always clears the
+  // app's looser view schema too. The `captureError` report on that branch is
+  // proved directly against `data/live/runs.ts`'s `view()` helper instead
+  // (`data/live/runs.test.ts`), which is the same defensive parse this file's
+  // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
 });

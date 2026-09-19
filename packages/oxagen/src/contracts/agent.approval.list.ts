@@ -8,12 +8,15 @@
 // lets the app's `kernelRead` accept it (INV-03).
 //
 // Every item field is either recorded on the approval row, joined from a row
-// the approval names, or null. The store records no run and no agent key on
-// an approval: `agent.approval_requests` carries `message_id`,
-// `execution_step_id` and `tool_call_id` and none of them names an
-// `agent_runs` or `tacho_sessions` row. The mandate hop and the rule that
-// parked the call are recorded on rows the mandate gate writes (ADR-059) and
-// null on the chat gate's rows.
+// the approval names, or null. `agent.approval_requests.run_public_id` records
+// the run a call was parked in (#3286), so `runId` both filters and comes back
+// on each item. It is a public id because both kinds of run this product
+// tracks have to be representable — `agent_runs` (`arun_…`) and
+// `tacho.sessions` (`tse_…`) — and no one table holds both. A row parked
+// outside any run records none, and a null is "not recorded", never "some
+// other run". The store records no agent key. The mandate hop and the rule
+// that parked the call are recorded on rows the mandate gate writes (ADR-059)
+// and null on the chat gate's rows.
 import { z } from "zod";
 import { autoEligibilitySchema } from "../approval-rules/schemas";
 import { registerCapability } from "../registry";
@@ -25,8 +28,9 @@ export const approvalListItem = z
     /** The approval's public id (`apr_…`). */
     id: z.string().regex(/^apr_[0-9a-z]+$/),
     /**
-     * The public id of the run the call belongs to. Null: the store records
-     * no run on an approval (see the header comment).
+     * The public id of the run the call was parked in (`arun_…` or `tse_…`);
+     * null when no run was in scope, or when the writer records none yet (the
+     * mandate gate and the MCP consent path do not thread a run through).
      */
     runId: z.string().nullable(),
     /** The capability the parked call asked for (`approval_requests.capability_name`). */

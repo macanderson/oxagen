@@ -1,6 +1,6 @@
 # run.transcript.get
 
-One run read as a transcript at one of three zoom levels (Mission Control spec §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-058). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
+One run read as a transcript at one of three zoom levels (Mission Control spec §8.4, §14 "the transcript at three zoom levels (turns, steps, everything)"; ADR-058). The transcript is derived on the server from the frames and the bodies the recorder kept; nothing is stored.
 
 ## Mode
 
@@ -21,33 +21,72 @@ One run read as a transcript at one of three zoom levels (Mission Control spec �
 |---|---|---|---|
 | `runId` | string | yes | `arun_…` or `tse_…` |
 | `zoom` | `turns` \| `steps` \| `everything` | yes | |
+| `kinds` | string[] | no | the chips pressed; empty (the default) keeps every frame |
+| `after` | string | no | an entry cursor from an earlier read |
+| `limit` | integer | no | 1–500, default 200 |
 
 ## Zoom levels
 
-- `everything`: one entry per frame.
-- `steps`: one entry per model call (`model.call_completed`, `llm_call`, `model.request`, `model.response`) and per tool call (`tool.call_completed`, `tool_call`, `tool_requested`); every other frame folds into the step before it, and frames before the first step fold into a leading `frame` entry.
+- `everything`: one entry per frame, so the two halves of a step are two entries, each with its own body. A decision frame is its own entry, with kind `policy`.
+- `steps`: one entry per model call (`model.call_completed`, `model.engine_call_started`, `model.engine_call_completed`, `llm_call`, `model.request`, `model.response`) and per tool call (`tool.call_completed`, `tool.engine_call_started`, `tool.engine_call_completed`, `tool_call`, `tool_requested`), with the request half and the response half folded into one entry; every other frame folds into the step before it, and frames before the first step fold into a leading `frame` entry.
 - `turns`: one entry per `turn_start` frame; when the recording carries no turn boundaries, one entry wherever the frames' turn index changes; a run with neither is one turn.
+
+### How the two halves pair
+
+A step is one request and one response wherever the producer writes two — the write-ahead intention and the terminal receipt. They pair on the call id the receipt records (`tool_call_id`, `model_call_id`); a wrapped session's rows carry no call id, so its halves pair on adjacency within the step kind. A producer that appends a single terminal receipt for the whole exchange records it as the `response`, because its body is the result, and `request` is then null.
+
+## Chips (`kinds`)
+
+| Chip | Frames it selects |
+|---|---|
+| `prompt` | the request half of a model call |
+| `responses` | the response half of a model call, or a single model receipt |
+| `tools` | either half of a tool call |
+| `policy` | a decision a rule or a person made: allow, deny, route |
+| `recall` | what was pulled into the model's context |
+| `usage` | a frame that carried a cost record |
+| `errors` | a call whose recorded outcome is failed, denied, cancelled, error, timeout or refused |
+
+The filter selects frames and the fold runs over what is left, so a filtered transcript is the transcript of those frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
+
+The Mission Control mockup also draws a `thinking` chip. Neither the ledger's event vocabulary nor a wrapped session's kinds records a reasoning segment in this revision, so there is no kind for it — a chip that can only ever answer "none" would be the placeholder §3.4 forbids. It arrives with the frame type that records reasoning content, not before.
 
 ## Output
 
 | Field | Type | Description |
 |---|---|---|
-| `zoom` | string | as asked |
-| `entries` | object[] | at most 2000 |
+| `zoom`, `kinds` | string, string[] | as asked |
+| `entries` | object[] | at most 500 |
 | `entries[].seq`, `endSeq` | string | the frame that opens the entry and the last frame folded into it |
 | `entries[].at` | string | RFC 3339, the opening frame's observation |
-| `entries[].kind` | `turn` \| `model_call` \| `tool_call` \| `frame` | |
+| `entries[].elapsedMs` | integer | milliseconds from the run's recorded start; clamped at zero |
+| `entries[].kind` | `turn` \| `model_call` \| `tool_call` \| `policy` \| `frame` | |
 | `entries[].type`, `label` | string | the opening frame's recorded type and its machine-derived label |
-| `entries[].text` | string or null | the opening frame's body as UTF-8, cut at 16 384 characters; null when no body was retained, the body is not text, the frame carried no content, or the stored bytes do not hash to the recorded digest |
-| `entries[].truncated` | boolean | true when `text` was cut |
-| `entries[].fidelity` | `full` \| `digest_only` | the opening frame's body fidelity, so a `digest_only` recording says so on every entry |
+| `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. Clients that rebuild steps at `everything` pair halves on this value rather than on adjacency |
+| `entries[].kinds` | string[] | the chips this entry answers to |
+| `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
+| `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
+| `entries[].{request,response}.seq`, `.type` | string | the frame that carried the half |
+| `entries[].{request,response}.digest`, `.bytesRef` | string or null | the recorded digest, and where the bytes were retained |
+| `entries[].{request,response}.redactions` | object[] | what was removed before the body was written |
+| `entries[].{request,response}.fidelity` | `full` \| `digest_only` | so a `digest_only` recording says so on every half |
+| `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, or the stored bytes do not hash to the recorded digest |
+| `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
+| `entries[].decision` | object or null | `{ seq, decision, type, at }` — the decision folded into the entry |
 | `entries[].frames` | integer | frames folded, the opening frame included |
-| `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
-| `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed (spec §8.4: cumulative cost is a prefix sum computed on read); null when none carried one. Ledger frames carry no cost record; spend is metered per run |
-| `complete` | boolean | false when the run has more than 10 000 frames or more entries than the transcript can carry |
+| `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. A client groups `everything` entries into turns by this value |
+| `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |
+| `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
+| `cursor` | string or null | the point to continue from; null when nothing lies past this page |
+| `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
+
+## How much body text a zoom carries
+
+`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
 
 ## Errors
 
 - `not_found` (404): no run with that id in the caller's workspace.
+- `invalid_input` (`invalid_cursor`): a cursor this capability did not write. A stale cursor is refused rather than treated as the start, which would silently restart and repeat the run.
 
 The interface renders the recorded fidelity word and never a stronger one (spec §8.4).

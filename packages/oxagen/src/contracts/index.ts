@@ -104,6 +104,7 @@ import { findingDismiss } from "./finding.dismiss";
 import { runGet } from "./run.get";
 import { runFrameBodyGet } from "./run.frame_body.get";
 import { runTranscriptGet } from "./run.transcript.get";
+import { runChainGet } from "./run.chain.get";
 import { runExport } from "./run.export";
 import { runBisect } from "./run.bisect";
 import { runFork } from "./run.fork";
@@ -634,6 +635,7 @@ export {
   runGet,
   runFrameBodyGet,
   runTranscriptGet,
+  runChainGet,
   runExport,
   runBisect,
   runFork,
@@ -976,6 +978,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runGet,
   runFrameBodyGet,
   runTranscriptGet,
+  runChainGet,
   runExport,
   runBisect,
   runFork,

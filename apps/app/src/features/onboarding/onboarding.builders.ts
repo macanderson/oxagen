@@ -110,6 +110,7 @@ export function onboardingSource(reads: Reads): {
       frameBody: refuse("runs.frameBody"),
       cost: refuse("runs.cost"),
       transcript: refuse("runs.transcript"),
+      chain: refuse("runs.transcript"),
     },
     approvals: { pending: refuse("approvals.pending") },
     billing: {

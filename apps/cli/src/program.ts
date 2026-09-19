@@ -451,7 +451,20 @@ export function buildProgram(): Command {
 
   const runCmd = program
     .command("run")
-    .description("The recorded run: export its signed evidence bundle");
+    .description(
+      "The recorded run: its chain and seal, and its signed evidence bundle",
+    );
+  runCmd
+    .command("chain")
+    .description(
+      "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runChain } = await import("./commands/run.js");
+      await runChain(runId, opts);
+    });
   runCmd
     .command("export")
     .description(

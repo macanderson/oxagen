@@ -94,6 +94,7 @@ export function toolsSource(reads: ToolsReads) {
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
     approvals: { pending: refuse },
     agents: {

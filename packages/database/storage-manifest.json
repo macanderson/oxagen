@@ -1293,6 +1293,16 @@
     },
     {
       "domain": "run",
+      "name": "get_run_chain",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_cost",
       "reads": [],
       "surfaces": [
@@ -3477,7 +3487,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0368273adff367382bebe5be22665b28e562869e90b5b82048a794723e099c06",
+  "contentHash": "ae7ff6d151822aa2ecf37cd35da648282ebc15462c9d850b4b7f10aea5c44563",
   "domains": [
     {
       "name": "agent",
@@ -6326,6 +6336,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "integer"
+        },
+        {
+          "name": "enforcement_tier",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
@@ -7455,6 +7471,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "capability_name",

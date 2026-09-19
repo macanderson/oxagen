@@ -13,7 +13,7 @@
 // spec §8.5), which #2955 owns.
 import { z } from "zod";
 import { Cost } from "./money";
-import { RunRow } from "./runs";
+import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -163,9 +163,71 @@ const TranscriptEntryKind = z.enum([
   "turn",
   "model_call",
   "tool_call",
+  "policy",
   "frame",
 ]);
 type TranscriptEntryKind = z.infer<typeof TranscriptEntryKind>;
+
+/** The chips the Transcript tab filters on, as `get_run_transcript` publishes them. */
+export const TRANSCRIPT_KINDS = [
+  "prompt",
+  "responses",
+  "tools",
+  "policy",
+  "recall",
+  "usage",
+  "errors",
+] as const;
+export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);
+export type TranscriptKind = z.infer<typeof TranscriptKind>;
+
+/**
+ * How many transcript entries one `get_run_transcript` page carries by
+ * default, mirrored from that contract's `limit` default so the client can
+ * tell a full page from the last one without importing the kernel's contract
+ * module. The mirror is asserted against the contract in `run.test.ts`.
+ *
+ * It is a mirror rather than a re-export because the contract module reaches
+ * `@oxagen/run-evidence` and the Context Graph SDK, which import Node
+ * builtins and cannot be bundled for the browser.
+ */
+export const TRANSCRIPT_ENTRY_DEFAULT = 200;
+
+/**
+ * One half of an exchange: the frame that carried it, and what it said.
+ * `request` is what went out, `response` is what came back — so one tool step
+ * shows the input it was called with and the result it returned, in one entry.
+ */
+export const TranscriptBody = z.object({
+  seq: z.string().regex(/^\d+$/),
+  type: z.string(),
+  /** sha256 over the redacted bytes; null when the frame carried no content. */
+  digest: z.string().nullable(),
+  /** Where the bytes were retained; null under `digest_only`. */
+  bytesRef: z.string().nullable(),
+  redactions: z.array(
+    z.object({
+      path: z.string(),
+      reason: z.string(),
+      originalDigest: z.string(),
+    }),
+  ),
+  fidelity: FrameFidelity,
+  /** The body text; null when none was retained or it is not UTF-8. */
+  text: z.string().nullable(),
+  /** True when the text was cut at the contract's ceiling. */
+  truncated: z.boolean(),
+});
+export type TranscriptBody = z.infer<typeof TranscriptBody>;
+
+/** A decision a rule or a person made about the call the entry records. */
+export const TranscriptDecision = z.object({
+  seq: z.string().regex(/^\d+$/),
+  decision: z.string(),
+  type: z.string(),
+  at: z.iso.datetime({ offset: true }),
+});
+export type TranscriptDecision = z.infer<typeof TranscriptDecision>;
 
 export const TranscriptEntry = z.object({
   /** The frame that opens the entry. */
@@ -173,29 +235,149 @@ export const TranscriptEntry = z.object({
   /** The last frame folded into it; equals `seq` for a single frame. */
   endSeq: z.string().regex(/^\d+$/),
   at: z.iso.datetime({ offset: true }),
+  /** Milliseconds from the run's recorded start; never negative. */
+  elapsedMs: z.number().int().nonnegative(),
   kind: TranscriptEntryKind,
   /** The opening frame's recorded type. */
   type: z.string(),
   /** A short machine-derived label, never prose. */
   label: z.string(),
-  /** The opening frame's body text; null when none was retained or it is not UTF-8. */
-  text: z.string().nullable(),
-  /** True when the text was cut at the contract's ceiling. */
-  truncated: z.boolean(),
-  fidelity: FrameFidelity,
+  /**
+   * The call the opening frame belongs to. Null when the producer recorded
+   * none. Named `callKey` and not `callId` because it is not a public id: the
+   * producer writes a free-text call identifier (`tool_call_id`,
+   * `model_call_id`, `toolUseId`), and a field spelled `Id` here must carry
+   * a `PublicId` (src/test/arch/public-ids.test.ts).
+   */
+  callKey: z.string().nullable(),
+  /** The chips this entry answers to. */
+  kinds: z.array(TranscriptKind),
+  request: TranscriptBody.nullable(),
+  response: TranscriptBody.nullable(),
+  decision: TranscriptDecision.nullable(),
   /** Frames folded into the entry, the opening frame included. */
   frames: z.number().int().positive(),
   /** The turn the opening frame falls in, 1-based; null before the run's first turn. */
   turn: z.number().int().positive().nullable(),
   cost: Cost.nullable(),
+  /** Every cost record of the run up to and including this entry. */
+  cumulativeCost: Cost.nullable(),
 });
 export type TranscriptEntry = z.infer<typeof TranscriptEntry>;
 
 /** `get_run_transcript` at one zoom level. */
 export const RunTranscript = z.object({
   zoom: TranscriptZoom,
+  kinds: z.array(TranscriptKind),
   entries: z.array(TranscriptEntry),
+  /** The point to continue from; null when nothing lies past this page. */
+  cursor: z.string().nullable(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
 });
 export type RunTranscript = z.infer<typeof RunTranscript>;
+
+/**
+ * `get_run_chain`: what makes the recording tamper-evident, and what it is
+ * missing (spec §8.3, §8.4). Read once, when the Chain and seal tab opens.
+ *
+ * `recordedGrade` is the grade the seal wrote, and it is the only grade a
+ * surface renders. The ladder below it says why each rung is or is not
+ * reached, computed from what the read could see, so a rung may read stronger
+ * than the recorded word. Nothing here raises the grade (§8.4).
+ */
+const ChainCheckpoint = z.object({
+  seq: z.string().regex(/^\d+$/),
+  /** The chain head the checkpoint committed to. */
+  chainHead: z.string(),
+  eventCount: Count,
+  signedAt: z.iso.datetime({ offset: true }),
+  deviceKeyFingerprint: z.string(),
+  /**
+   * The platform key that countersigned the checkpoint; null until one has.
+   *
+   * Named `platformKey` and not `platformKeyId` because it is not a public id:
+   * the store holds free text (`tacho_checkpoints.platform_key_id`), which is
+   * a signing-key identifier of whatever shape the signer uses (including
+   * shapes like `pk:1`), the same kind of thing as `deviceKeyFingerprint`
+   * beside it. A field spelled `…Id` here must carry a `PublicId`
+   * (src/test/arch/public-ids.test.ts), and forcing that shape on this one
+   * would refuse a real checkpoint whose key is not spelled like a public id.
+   */
+  platformKey: z.string().nullable(),
+  countersignedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** The external anchor it was published into; null when none. */
+  anchorRoot: z.string().nullable(),
+  anchoredAt: z.iso.datetime({ offset: true }).nullable(),
+});
+export type ChainCheckpoint = z.infer<typeof ChainCheckpoint>;
+
+const COMPLETENESS_GAPS = [
+  "digest_only",
+  "body_missing",
+  "tool_bodies",
+  "model_calls",
+  "hooks_partial",
+  "unobserved_tail",
+  "chain_break",
+  "telemetry_gap",
+] as const;
+
+const ChainGaps = z.object({
+  /** Runs of sequence numbers the recording does not hold, inclusive. */
+  missingSequences: z.array(
+    z.object({
+      from: z.string().regex(/^\d+$/),
+      to: z.string().regex(/^\d+$/),
+    }),
+  ),
+  missingFrameCount: Count,
+  /** Frames that carried content whose bytes were not retained. */
+  missingBodies: Count,
+  /** The gaps the seal itself recorded. */
+  recorded: z.array(z.enum(COMPLETENESS_GAPS)),
+});
+
+const ChainSeal = z.object({
+  sealedAt: z.iso.datetime({ offset: true }),
+  terminalStatus: z.string(),
+  eventCount: Count,
+  finalRunSeq: z.string().regex(/^\d+$/).nullable(),
+  finalEventDigest: z.string().nullable(),
+  eventStreamDigest: z.string().nullable(),
+  /** Null on a seal that predates the Merkle root. */
+  merkleRoot: z.string().nullable(),
+  archiveSegmentRef: z.string().nullable(),
+});
+
+/** One rung of the replay ladder, and the machine-readable reason it stands where it does. */
+const ReplayLadderRung = z.object({
+  grade: ReplayGrade,
+  met: z.boolean(),
+  reason: z.string().min(1),
+});
+
+export const RunChain = z.object({
+  /** How each frame is chained to the one before it; a verifier needs this and nothing else. */
+  hashRule: z.enum([
+    "tacho.sha256_prev_hash_v1",
+    "ledger.event_stream_digest_v1",
+  ]),
+  /** Frames the walk read. */
+  frameCount: Count,
+  firstSeq: z.string().regex(/^\d+$/).nullable(),
+  lastSeq: z.string().regex(/^\d+$/).nullable(),
+  /** Null while the run is unsealed. */
+  merkleRoot: z.string().nullable(),
+  /** A ledger run keeps none: it seals rather than checkpointing. */
+  checkpoints: z.array(ChainCheckpoint),
+  gaps: ChainGaps,
+  /** One seal per attempt, oldest first; empty while the run is unsealed. */
+  seals: z.array(ChainSeal),
+  enforcementTier: EnforcementTier,
+  recordedGrade: ReplayGrade.nullable(),
+  ladder: z.array(ReplayLadderRung),
+  /** False when the run has more frames than the walk read, so these are a prefix's gaps. */
+  complete: z.boolean(),
+});
+export type RunChain = z.infer<typeof RunChain>;

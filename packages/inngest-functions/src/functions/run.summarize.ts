@@ -60,11 +60,19 @@ interface RunSummarizeEventData {
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
-/** One step of the transcript as the model reads it. */
+/**
+ * One step of the transcript as the model reads it: what the call was made
+ * with, and what came back. A step is two frames wherever the producer writes
+ * two (`foldTranscript`), so reading only the frame that opens it would hand
+ * the model a tool call's INPUT and call it the result.
+ */
 interface SummaryStep {
   seq: string;
   kind: string;
   label: string;
+  /** The request half's body; null when there is none, or none was retained. */
+  input: string | null;
+  /** The response half's body — the result the summary describes. */
   text: string | null;
 }
 
@@ -80,26 +88,33 @@ export async function collectSummarySteps(
 ): Promise<{ steps: SummaryStep[]; total: number }> {
   const folds = foldTranscript(frames, "steps");
   const kept = folds.slice(0, SUMMARY_STEP_MAX);
+
+  /** A frame's retained body as text, or null. */
+  async function bodyText(frame: RunFrame | null): Promise<string | null> {
+    if (frame === null) return null;
+    const { bodyRef, bodyDigest } = frame.body;
+    if (bodyRef === null || bodyDigest === null) return null;
+    try {
+      const { bytes } = await getBody(scope, bodyRef);
+      if (digestBytes(bytes) !== bodyDigest) return null;
+      return decoder.decode(bytes).slice(0, SUMMARY_TEXT_MAX);
+    } catch {
+      return null;
+    }
+  }
+
   const steps: SummaryStep[] = [];
   for (const fold of kept) {
     const { opening } = fold;
-    let text: string | null = null;
-    const { bodyRef, bodyDigest } = opening.body;
-    if (bodyRef !== null && bodyDigest !== null) {
-      try {
-        const { bytes } = await getBody(scope, bodyRef);
-        if (digestBytes(bytes) === bodyDigest) {
-          text = decoder.decode(bytes).slice(0, SUMMARY_TEXT_MAX);
-        }
-      } catch {
-        text = null;
-      }
-    }
+    // The response half is the result; a producer that appends a single
+    // terminal receipt records it there too, so `opening` is only read when
+    // the fold has no response half at all.
     steps.push({
       seq: opening.seq,
       kind: fold.kind,
       label: opening.summary,
-      text,
+      input: await bodyText(fold.request),
+      text: await bodyText(fold.response ?? opening),
     });
   }
   return { steps, total: folds.length };
@@ -112,6 +127,7 @@ export function summaryPrompt(
   const lines = collected.steps.map((step) =>
     [
       `[${step.seq}] ${step.kind} ${step.label}`,
+      ...(step.input === null ? [] : [`called with: ${step.input}`]),
       step.text === null ? "(body not retained)" : step.text,
     ].join("\n"),
   );
