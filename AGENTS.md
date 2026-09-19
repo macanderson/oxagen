@@ -187,7 +187,7 @@ is unambiguous.
 
 **App ports**: `apps/app` → `:3000`, `apps/docs` → `:3300`, API → `:4000`, MCP → `:4100`.
 
-**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (the org dashboard, the usage/metering home). The workspace chat front door is `/{org}/{ws}/sessions`; other workspace surfaces are `knowledge`, `marketplace`, `workbench` (agents, environments, tools) and `settings`. Returning: `/login`.
+**Login**: Email+password only (no email verification locally). New user → `/signup` → `/new-organization` → create org → `/{org}` (Organization). The workspace root `/{org}/{ws}` is Fleet; the other workspace pages are `runs/[run]`, `mandates/[mandate]`, `agents`, `tools`, `steering`, `spend` and `skills`. CLAUDE.md's "App route map" has the full list. Returning: `/login`.
 
 ## CI Config
 
