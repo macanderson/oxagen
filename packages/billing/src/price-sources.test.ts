@@ -129,6 +129,58 @@ describe("inCodeCardPrices", () => {
     expect(gpt.provider).toBe("openai");
     expect(gpt.cacheWrite1hPer1M).toBe(2.5);
   });
+
+  it("aliases a hyphenated Anthropic release to its dotted and gateway forms", () => {
+    // Traffic arrives as anthropic/claude-haiku-4.5 (and claude-sonnet-4.6);
+    // the card keys those releases as claude-haiku-4-5 / claude-sonnet-4-6.
+    // isSameModelIdentity will not bridge the spellings, so the alias is the
+    // only way the in-code fallback prices a catalog-down cold start.
+    const card: RateCard = {
+      "claude-haiku-4-5": {
+        provider: "anthropic",
+        inputPer1M: 1,
+        outputPer1M: 5,
+        cachedInputPer1M: 0.1,
+        cacheWritePer1M: 1.25,
+      },
+      "claude-sonnet-4-6": {
+        provider: "anthropic",
+        inputPer1M: 3,
+        outputPer1M: 15,
+        cachedInputPer1M: 0.3,
+        cacheWritePer1M: 3.75,
+      },
+      "claude-opus-4-8": {
+        provider: "anthropic",
+        inputPer1M: 15,
+        outputPer1M: 75,
+        cachedInputPer1M: 1.5,
+        cacheWritePer1M: 18.75,
+      },
+      // A snapshot-style hyphenated id must NOT invent a dotted alias.
+      "gpt-4-0613": {
+        provider: "openai",
+        inputPer1M: 30,
+        outputPer1M: 60,
+        cachedInputPer1M: 15,
+        cacheWritePer1M: 30,
+      },
+    };
+    const byModel = new Map(inCodeCardPrices(card).map((p) => [p.model, p]));
+    expect(byModel.get("claude-haiku-4-5")!.aliases.sort()).toEqual([
+      "anthropic/claude-haiku-4.5",
+      "claude-haiku-4.5",
+    ]);
+    expect(byModel.get("claude-sonnet-4-6")!.aliases.sort()).toEqual([
+      "anthropic/claude-sonnet-4.6",
+      "claude-sonnet-4.6",
+    ]);
+    expect(byModel.get("claude-opus-4-8")!.aliases.sort()).toEqual([
+      "anthropic/claude-opus-4.8",
+      "claude-opus-4.8",
+    ]);
+    expect(byModel.get("gpt-4-0613")!.aliases).toEqual([]);
+  });
 });
 
 describe("parseOpenRouterCatalog", () => {
@@ -347,6 +399,42 @@ describe("mergePublishedPrices", () => {
         at: new Date("2026-09-02T00:00:00.000Z"),
       })?.microsPerMillion,
     ).toBe(usdPerMillionToMicros(1));
+  });
+
+  it("prices dotted gateway Claude releases from the in-code card alone", () => {
+    // Catalogs down, cold start: only the card seeds the book. Gateway traffic
+    // reports anthropic/claude-haiku-4.5 and anthropic/claude-sonnet-4.6; the
+    // card keys those as hyphenated releases. Without the dotted aliases the
+    // numeric-release identity rule leaves both unpriced.
+    const merged = mergePublishedPrices([[...inCodeCardPrices()]]);
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((s, i) => ({ ...s, id: `e-${i}`, orgId: null, source: "list" }));
+    const at = new Date("2026-09-02T00:00:00.000Z");
+    const orgId = "00000000-0000-4000-8000-000000000001";
+    expect(
+      resolvePriceEntry(book, {
+        orgId,
+        modelId: "anthropic/claude-haiku-4.5",
+        tokenClass: "input_uncached",
+        at,
+      })?.microsPerMillion,
+    ).toBe(usdPerMillionToMicros(1));
+    expect(
+      resolvePriceEntry(book, {
+        orgId,
+        modelId: "anthropic/claude-sonnet-4.6",
+        tokenClass: "input_uncached",
+        at,
+      })?.microsPerMillion,
+    ).toBe(usdPerMillionToMicros(3));
+    // The shorter family row must still not claim a distinct release via
+    // identity alone: a bare dotted id without the alias path is covered by
+    // the hyphenated row's explicit alias, not by anthropic/claude-haiku-4.
+    expect(
+      isSameModelIdentity("anthropic/claude-haiku-4.5", "anthropic/claude-haiku-4"),
+    ).toBe(false);
   });
 
   // The other half of that rule: leading characters are not an identity.

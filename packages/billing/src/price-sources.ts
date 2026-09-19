@@ -104,10 +104,39 @@ export function deriveCacheWrite1h(
 
 // ── The in-code card as a source ──────────────────────────────────────────────
 
-/** A vendor-prefixed id names the same model as its bare form, and vice versa. */
+/**
+ * Anthropic's rate card keys a dotted release with hyphens (`claude-haiku-4-5`
+ * for traffic that arrives as `claude-haiku-4.5` / `anthropic/claude-haiku-4.5`).
+ * {@link isSameModelIdentity} correctly refuses to treat the dotted form as a
+ * stamp of the hyphenated row or of the shorter `…-4` family, so without an
+ * explicit alias the in-code fallback leaves those calls unpriced when every
+ * catalog is down. Only the card's known equivalents live here; a general
+ * hyphen↔dot rewrite would invent aliases for snapshot stamps like `gpt-4-0613`.
+ */
+const DOTTED_RELEASE_ALIAS: Readonly<Record<string, string>> = {
+  "claude-haiku-4-5": "claude-haiku-4.5",
+  "claude-sonnet-4-6": "claude-sonnet-4.6",
+  "claude-opus-4-8": "claude-opus-4.8",
+};
+
+/**
+ * A vendor-prefixed id names the same model as its bare form, and a
+ * hyphenated Anthropic release names the same model as its dotted form.
+ */
 function aliasesFor(model: string): string[] {
+  const aliases: string[] = [];
   const slash = model.indexOf("/");
-  return slash >= 0 ? [model.slice(slash + 1)] : [];
+  const bare = slash >= 0 ? model.slice(slash + 1) : model;
+  if (slash >= 0) aliases.push(bare);
+  const dotted = DOTTED_RELEASE_ALIAS[bare];
+  if (dotted !== undefined) {
+    aliases.push(dotted);
+    // Claim the gateway spelling too so merge displacement and a direct
+    // resolvePriceEntry match both see it before the family fallback.
+    const vendor = slash >= 0 ? model.slice(0, slash) : "anthropic";
+    aliases.push(`${vendor}/${dotted}`);
+  }
+  return aliases;
 }
 
 function rateToPublished(
