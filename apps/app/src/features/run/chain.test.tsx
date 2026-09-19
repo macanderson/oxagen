@@ -35,7 +35,7 @@ const CHECKPOINT: ChainCheckpoint = {
 };
 
 describe("ChainSection", () => {
-  it("states the recorded grade even where the ladder shows a stronger rung met — the load-bearing honesty test", () => {
+  it("states the recorded grade even where the ladder shows a stronger rung met: the load-bearing honesty test", () => {
     const { container } = renderChain(
       readOk(runChain({ recordedGrade: "view" })),
     );

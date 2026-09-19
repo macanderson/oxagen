@@ -220,7 +220,7 @@ function FrameDetail({
   // result's: a step whose input was kept and whose result was not is a step
   // with no result to read. Where no result was recorded the outgoing half is
   // the only half, so it is the one named. This is a summary and never the
-  // only place the fidelity appears — each half below states its own — so it
+  // only place the fidelity appears. Each half below states its own, so it
   // is a deliberate choice of which to headline, not a pick between two
   // bodies. The bodies themselves are read by name.
   const headline = response ?? request;

@@ -1,6 +1,6 @@
 // The Run page while its reads are in flight (the page spec's loading state):
 // the shell stays, and the page body is replaced by a skeleton shaped like
-// what is coming — the header's figure tiles, then a panel of rows.
+// what is coming: the header's figure tiles, then a panel of rows.
 //
 // A skeleton in the shape of the answer is the point: a spinner in the middle
 // of the page would move every element once the reads land, and a person who
