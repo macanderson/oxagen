@@ -1,9 +1,30 @@
-import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { HandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import type { UnpricedModel } from "@oxagen/billing";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createUnpricedModelListHandler } from "./cost.unpriced_model.list";
 import { ctx, SCOPE } from "./spend.test-support";
+
+// The role gate reads iam.principal_role_assignments; matches
+// cost.price_entry.set.test.ts's pattern for the same gate.
+const gate = vi.hoisted(() => ({ refuse: false }));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (c: {
+    userId: string | null;
+    apiKeyId: string | null;
+  }) => c.userId ?? c.apiKeyId,
+  assertOrgRole: async () => {
+    if (gate.refuse)
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+    return "Member";
+  },
+}));
+afterEach(() => {
+  gate.refuse = false;
+});
 
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 const THIRTY_DAYS_BEFORE_NOW = new Date("2026-08-15T15:00:00.000Z");
@@ -39,6 +60,16 @@ function harness(models: UnpricedModel[]) {
 }
 
 describe("list_unpriced_models", () => {
+  it("is refused for a role the gate excludes, and reads nothing (#3271 P1)", async () => {
+    const h = harness([]);
+    gate.refuse = true;
+    await expect(h.handler({}, ctx())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(h.readUnpricedModels).not.toHaveBeenCalled();
+  });
+
   it("reads the last thirty days against the book as it stands now", async () => {
     const h = harness([]);
     const out = await h.handler({}, ctx());
