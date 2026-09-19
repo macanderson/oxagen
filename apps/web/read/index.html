@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Engineering Deterministic AI Coding Agents — Oxagen</title>
-<meta name="description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<title>Engineering Deterministic AI Coding Agents: Oxagen</title>
+<meta name="description" content="A free 14-part field manual on building deterministic AI coding agents that get the right answer the first time, from any model. By Mac Anderson.">
 <link rel="canonical" href="https://oxagen.sh/read">
 <meta name="theme-color" content="#0A0A0C">
 <meta name="color-scheme" content="dark">
 <meta property="og:type" content="book">
 <meta property="og:url" content="https://oxagen.sh/read">
 <meta property="og:site_name" content="Oxagen">
-<meta property="og:title" content="Engineering Deterministic AI Coding Agents — Oxagen">
-<meta property="og:description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<meta property="og:title" content="Engineering Deterministic AI Coding Agents: Oxagen">
+<meta property="og:description" content="A free 14-part field manual on building deterministic AI coding agents that get the right answer the first time, from any model. By Mac Anderson.">
 <meta property="og:image" content="https://oxagen.sh/research-assets/book-og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
-<meta name="twitter:title" content="Engineering Deterministic AI Coding Agents — Oxagen">
-<meta name="twitter:description" content="A free 14-part field manual on building deterministic AI coding agents — systems that get the right answer the first time, from any model. By Mac Anderson.">
+<meta name="twitter:title" content="Engineering Deterministic AI Coding Agents: Oxagen">
+<meta name="twitter:description" content="A free 14-part field manual on building deterministic AI coding agents that get the right answer the first time, from any model. By Mac Anderson.">
 <meta name="twitter:image" content="https://oxagen.sh/research-assets/book-og.png">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
@@ -44,7 +44,7 @@
 <style>
 /* ============ tokens ============
    The Stella palette, re-declared because this page does not link
-   /assets/oxagen.css — it replaces its own document with the reader HTML the
+   /assets/oxagen.css. It replaces its own document with the reader HTML the
    API returns, so it carries everything it needs inline. Keep the values here
    in step with the --st-* table in /assets/oxagen.css.
    The `--ember-*` and `--indigo` names predate the Stella reskin; what they
@@ -159,7 +159,7 @@ main{flex:1;position:relative}
 }
 
 /* The [hidden] attribute must win over the display:grid/flex set on the
-   state panels below — otherwise `el.hidden = true` leaves them visible (the
+   state panels below, otherwise `el.hidden = true` leaves them visible (the
    UA's [hidden]{display:none} loses to an author display rule). */
 [hidden]{display:none!important}
 
@@ -440,7 +440,7 @@ main{flex:1;position:relative}
           </div>
         </fieldset>
 
-        <p class="consent-copy">We’ll only use your details to send the book and follow up about Oxagen — no spam.</p>
+        <p class="consent-copy">We’ll only use your details to send the book and follow up about Oxagen. No spam.</p>
 
         <div class="hp-wrap" aria-hidden="true">
           <label for="g-website">Website</label>
@@ -529,7 +529,7 @@ main{flex:1;position:relative}
   var trackingCode = buildTrackingCode();
 
   /* The gate form is reachable with a `c=` still in the URL (an expired or
-     already-used link lands here), and pagePath is stored on the lead row —
+     already-used link lands here), and pagePath is stored on the lead row,
      so drop the access code before recording where the visitor was. */
   function safePagePath() {
     var scrubbed = new URLSearchParams(location.search);
@@ -573,15 +573,15 @@ main{flex:1;position:relative}
   }
 
   function reasonMessage(reason) {
-    if (reason === "consumed") return "That link has already been used — links are single-use.";
+    if (reason === "consumed") return "That link has already been used. Links are single-use.";
     if (reason === "expired") return "That link has expired.";
     return "That link isn’t valid.";
   }
 
   function redeemFailureMessage(status, reason) {
-    if (status === 429) return "Too many attempts — wait a moment and try again.";
+    if (status === 429) return "Too many attempts. Wait a moment and try again.";
     if (status >= 500 || !reason) {
-      return "We couldn’t verify that link — check your connection and try again.";
+      return "We couldn’t verify that link. Check your connection and try again.";
     }
     return reasonMessage(reason);
   }
@@ -589,7 +589,7 @@ main{flex:1;position:relative}
   function replaceDocumentWithBook(edition, newCode, html) {
     try {
       history.replaceState(null, "", "/read?e=" + encodeURIComponent(edition) + "&c=" + encodeURIComponent(newCode));
-    } catch (_) { /* history API unavailable — proceed anyway */ }
+    } catch (_) { /* history API unavailable, proceed anyway */ }
     document.open();
     document.write(html);
     document.close();
@@ -623,7 +623,7 @@ main{flex:1;position:relative}
       }
       showGate(redeemFailureMessage(r.status, data.reason));
     }).catch(function () {
-      showGate("We couldn’t verify that link — check your connection and try again.");
+      showGate("We couldn’t verify that link. Check your connection and try again.");
     });
   } else {
     showGate(null);
@@ -649,7 +649,7 @@ main{flex:1;position:relative}
     el.classList.toggle("err", !!isErr);
   }
 
-  /* Anything the API sent us goes through here instead — it is text, not markup. */
+  /* Anything the API sent us goes through here instead. It is text, not markup. */
   function setStatusText(el, msg, isErr) {
     el.textContent = msg;
     el.classList.toggle("err", !!isErr);
