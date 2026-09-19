@@ -307,14 +307,14 @@ describe("readMeasure keeps a count exact", () => {
   });
 });
 
-describe("measureKindOf (ADR-104)", () => {
+describe("measureKindOf (ADR-108)", () => {
   it("maps a declared type to its kind", () => {
     expect(measureKindOf("amount")).toBe("money");
     expect(measureKindOf("count")).toBe("count");
   });
 });
 
-describe("legacyMeasureKindGuess (ADR-104)", () => {
+describe("legacyMeasureKindGuess (ADR-108)", () => {
   it("reads an ISO 4217 code as money", () => {
     expect(legacyMeasureKindGuess("USD")).toBe("money");
     expect(legacyMeasureKindGuess("EUR")).toBe("money");
@@ -326,7 +326,7 @@ describe("legacyMeasureKindGuess (ADR-104)", () => {
     expect(legacyMeasureKindGuess("calls")).toBe("count");
   });
 
-  it("is the documented wrong answer for a count declared in a currency code — the exact case ADR-104 exists to close", () => {
+  it("is the documented wrong answer for a count declared in a currency code, the exact case ADR-108 exists to close", () => {
     // A tool may legitimately declare `{ type: "count", unit: "USD" }`; the
     // fallback cannot see that and reads it as money. `measureKindOf` on the
     // real declaration answers correctly, which is why every write path

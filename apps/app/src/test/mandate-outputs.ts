@@ -20,7 +20,7 @@ export function authorityOutput(
   return {
     measure: "amount",
     currencyOrUnit: "USD",
-    // ADR-104: the fact `assertToolsDeclareMeasures` stamped at write time,
+    // ADR-108: the fact `assertToolsDeclareMeasures` stamped at write time,
     // never guessed from `currencyOrUnit` here or in the mapper.
     kind: "money",
     period: "monthly",

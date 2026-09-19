@@ -5,15 +5,20 @@
 //
 // A limit names either an ISO 4217 currency or a unit of a count
 // (`mandates/schemas.ts`). Whether a given measure is money or a count is
-// carried on the wire as `kind` (ADR-104), stamped by the handler from the
-// declaration it validated at write time — the same fact `readMeasure`
+// carried on the wire as `kind` (ADR-108), stamped by the handler from the
+// declaration it validated at write time, the same fact `readMeasure`
 // (packages/rules/src/mandates/measures.ts) switches on to enforce the gate,
-// `switch (declaration.type)`, never guessed. **This mapper no longer guesses
-// either**: `measureValue` takes the stored `kind` and switches on it, the
-// same way the gate does. Before ADR-104 this branch called
+// `switch (declaration.type)`, never guessed. **This mapper reads that stored
+// kind instead of guessing**: `measureValue` takes it and switches on it, the
+// same way the gate does. A ledger row whose limit was later deleted
+// (`update_mandate_limits`' whole-record replacement) has no stored kind to
+// read, since the ledger is append-only and outlives the limit that once
+// bounded it; that one case falls back to `legacyMeasureKindGuess`, the same
+// guess a pre-ADR-108 row without a stored kind takes. Before ADR-108 this
+// branch called
 // `isCurrencyCode(currencyOrUnit)`, which read a declared **count**
-// denominated in a currency code (`{ type: "count", unit: "USD" }`) as money
-// — a whole-unit count of 50 printed as $0.00 while the gate enforced 50
+// denominated in a currency code (`{ type: "count", unit: "USD" }`) as money:
+// a whole-unit count of 50 printed as $0.00 while the gate enforced 50
 // counted units. `isCurrencyCode` still has one legitimate job, refusing a
 // currency-code unit on the request form in `actions.ts`, and stays there;
 // it decides nothing here any more. Every figure of one measure is carried
@@ -38,12 +43,13 @@ import {
   sumExceeds,
 } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
+import { legacyMeasureKindGuess } from "@oxagen/rules";
 
 type Out = ContractOutput<typeof mandateList>;
 type MandateOut = Out["items"][number];
 type AuthorityOut = MandateOut["authority"][number];
 type DetailOut = ContractOutput<typeof mandateGet>;
-// Not `@oxagen/oxagen/mandates/schemas`' `MeasureKind` — §2 keeps that module
+// Not `@oxagen/oxagen/mandates/schemas`' `MeasureKind`: §2 keeps that module
 // out of the app (`data/contracts/mandates.ts`), so this is derived from the
 // contract output already in scope, the same as every other type on this file.
 type MeasureKind = AuthorityOut["kind"];
@@ -98,7 +104,7 @@ function toAuthority(
  * measure the mandate does not limit therefore has no form, and `value` is null
  * rather than assumed: the rule is still in force, and the page prints the
  * recorded digits beside the measure's name. Guessing money or a count there
- * would be the mistake ADR-104 removed from `measureValue` above, one layer
+ * would be the mistake ADR-108 removed from `measureValue` above, one layer
  * further from the evidence.
  */
 function toApproval(
@@ -195,23 +201,19 @@ export function toMandateDetail(
     mandate: toMandateRow(out.mandate),
     ledger: out.ledger.map((row) => {
       // A ledger row draws against one of the mandate's own limits, so its
-      // kind is the limit's — never a fresh guess from `row.unitOrCurrency`.
-      // Read from `authority` rather than `mandate.limits` because
-      // `mandateAuthoritySchema.kind` is required, so this needs no fallback
-      // of its own. A row naming a measure the mandate's own record does not
-      // limit is an invariant this mapper cannot satisfy any other way — the
-      // ledger only ever draws against a limited measure — so it throws the
-      // same way `measureValue`'s own `moneyFromMicros` already throws on a
-      // micros string that is not an integer: a record this malformed is not
-      // one `record_unmappable`'s safeParse path was built to describe.
-      const authorityKind = out.mandate.authority.find(
-        (a) => a.measure === row.measure,
-      )?.kind;
-      if (authorityKind === undefined) {
-        throw new Error(
-          `[toMandateDetail] ledger row draws measure "${row.measure}" the mandate does not limit`,
-        );
-      }
+      // kind is normally the limit's, read from `authority` rather than
+      // `mandate.limits` because `mandateAuthoritySchema.kind` is required.
+      // But the ledger is append-only and a limit is not: a whole-record
+      // `limits` replacement (update_mandate_limits) can remove a measure
+      // that already has ledger movements, and `authority` then has nothing
+      // to look up for those old rows even though they are still valid
+      // history. Falling back to the same guess a pre-ADR-108 row without a
+      // stored kind takes (`legacyMeasureKindGuess`, from the row's own
+      // `unitOrCurrency`) keeps that history readable instead of failing the
+      // whole mandate page over one deleted limit.
+      const authorityKind =
+        out.mandate.authority.find((a) => a.measure === row.measure)?.kind ??
+        legacyMeasureKindGuess(row.unitOrCurrency);
       return {
         kind: row.kind,
         measure: row.measure,
@@ -222,7 +224,7 @@ export function toMandateDetail(
         // `get_mandate` answers it unchanged. The view model requires a
         // non-empty string or null, so passing one through failed
         // `MandateDetail.safeParse` and the whole page answered
-        // `record_unmappable` over one settlement — a ledger withheld
+        // `record_unmappable` over one settlement, a ledger withheld
         // because one row named its transaction with nothing.
         externalEffectRef:
           row.externalEffectId === null || row.externalEffectId.trim() === ""

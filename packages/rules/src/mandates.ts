@@ -101,10 +101,10 @@ export interface MandateRecord {
 }
 
 /**
- * Every stored limit with `kind` guaranteed present (ADR-104): a row written
- * since ADR-104 already carries it, and a row written before takes the one
+ * Every stored limit with `kind` guaranteed present (ADR-108): a row written
+ * since ADR-108 already carries it, and a row written before takes the one
  * documented fallback, `legacyMeasureKindGuess`. This is the only place that
- * fallback runs — every reader downstream (`readAuthority`, `mapMandates`,
+ * fallback runs; every reader downstream (`readAuthority`, `mapMandates`,
  * the mapped `mandate.limits` a get/list response carries) takes `kind` as a
  * fact already resolved, never guessing again from `currencyOrUnit` itself.
  */

@@ -7,8 +7,8 @@
 //
 // A measure is money or a count, which is why a value is a discriminated
 // union rather than a bare number (INV-09). Which one is not read from the
-// unit's spelling — `mappers/mandates.ts` switches on the `kind` the contract
-// carries (ADR-104), never on whether `currencyOrUnit` looks like an ISO 4217
+// unit's spelling: `mappers/mandates.ts` switches on the `kind` the contract
+// carries (ADR-108), never on whether `currencyOrUnit` looks like an ISO 4217
 // code: a tool may legitimately declare a count denominated in a currency
 // code, and a guess from the spelling gets that case wrong.
 import { z } from "zod";

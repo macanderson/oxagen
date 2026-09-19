@@ -1,10 +1,10 @@
 /**
- * `parseMandateRow`'s measure-kind resolution (ADR-104), unit-level: a pure
+ * `parseMandateRow`'s measure-kind resolution (ADR-108), unit-level: a pure
  * function over a plain row object, no database. The Postgres-integration
  * suite (`mandates.pg.test.ts`) proves `readAuthority` and the ledger against
- * a real store; this file is about the one thing that needs no store — a
+ * a real store; this file is about the one thing that needs no store: a
  * legacy row with no stored `kind` takes the documented fallback, and a row
- * written since ADR-104 keeps its real one.
+ * written since ADR-108 keeps its real one.
  */
 import { describe, expect, it } from "vitest";
 import { parseMandateRow } from "./mandates";
@@ -32,7 +32,7 @@ type Row = Parameters<typeof parseMandateRow>[0];
 const row = (limits: unknown): Row =>
   ({ ...BASE_ROW, limits }) as unknown as Row;
 
-describe("parseMandateRow, kind resolution (ADR-104)", () => {
+describe("parseMandateRow, kind resolution (ADR-108)", () => {
   it("keeps a stored kind unchanged", () => {
     const record = parseMandateRow(
       row({
@@ -44,7 +44,7 @@ describe("parseMandateRow, kind resolution (ADR-104)", () => {
         },
       }),
     );
-    // Stored kind wins even though `currencyOrUnit` looks like money — proof
+    // Stored kind wins even though `currencyOrUnit` looks like money, proof
     // this reads the fact and never re-derives it from the unit string.
     expect(record.limits.amount?.kind).toBe("count");
   });

@@ -100,13 +100,13 @@ export async function resolveAgent(
  * (`decideMandate`), so a mandate naming it would govern nothing.
  *
  * Returns `args.limits` with each entry's `kind` stamped from the matched
- * declaration this pass already fetched and validated (ADR-104) — `money`
+ * declaration this pass already fetched and validated (ADR-108): `money`
  * for a declared `amount`, `count` for `count` or the built-in `calls`. This
  * is the only place that works the kind out; every caller stores the
  * returned record rather than `args.limits`, so the fact is written once,
  * at the moment it is known, and no reader downstream ever infers it from
  * `currencyOrUnit`. When two matched tools declare the same measure with
- * different types — the one case write time cannot resolve on its own — this
+ * different types, the one case write time cannot resolve on its own, this
  * refuses `measure_kind_conflict` rather than picking one silently.
  */
 export async function assertToolsDeclareMeasures(
@@ -161,7 +161,7 @@ export async function assertToolsDeclareMeasures(
     });
   }
   const targetMeasures = Object.keys(args.targets);
-  // Every limit measure's kind (ADR-104), filled in as each matched tool's
+  // Every limit measure's kind (ADR-108), filled in as each matched tool's
   // declaration is checked below. Every entry in `limitMeasures` is written
   // here before this function returns: each pattern matches at least one
   // tool (checked above) and that tool's declaration is checked for every
@@ -219,7 +219,7 @@ export async function assertToolsDeclareMeasures(
           });
         }
         // Two matched tools naming the same measure with the same unit could
-        // still disagree on what it counts — a count and an amount can share
+        // still disagree on what it counts: a count and an amount can share
         // a currency-code unit, which the unit check above cannot catch. The
         // mandate's tool patterns must agree, because write time is the only
         // moment with one answer (a mandate that matched both could enforce
@@ -256,7 +256,7 @@ export async function assertToolsDeclareMeasures(
       // against it above, throwing `measure_not_declared` before this point
       // if any tool lacked a declaration. Guarded rather than asserted with
       // `!` because a stored kind silently defaulting to a guess is exactly
-      // the failure ADR-104 closes.
+      // the failure ADR-108 closes.
       throw new HandlerError({
         code: "conflict",
         reason: "measure_not_declared",

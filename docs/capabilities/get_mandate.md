@@ -36,9 +36,9 @@ returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
 
-`authority[].kind` (`money` or `count`, ADR-104) is always present and
-resolved: the fact the writing handler stamped from the tool declaration, or —
-for a mandate whose limits were written before ADR-104 — the documented
+`authority[].kind` (`money` or `count`, ADR-108) is always present and
+resolved: the fact the writing handler stamped from the tool declaration, or,
+for a mandate whose limits were written before ADR-108, the documented
 fallback, resolved before this read returns. Nothing downstream of this
 response should decide money-or-count from `currencyOrUnit`'s spelling; `kind`
 already answers it.
@@ -67,5 +67,5 @@ As `list_mandates`: the accountable office, or the operator of the agent.
 
 ## SPEC references
 
-- §6.9 part 3, §6.10; ADR-059; ADR-104 (the measure kind on `limits` and
+- §6.9 part 3, §6.10; ADR-059; ADR-108 (the measure kind on `limits` and
   `authority`)

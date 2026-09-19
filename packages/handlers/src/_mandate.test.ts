@@ -1,10 +1,10 @@
 /**
- * `assertToolsDeclareMeasures`'s measure-kind stamping (ADR-104), unit-level:
+ * `assertToolsDeclareMeasures`'s measure-kind stamping (ADR-108), unit-level:
  * no database, a fake `tx` whose `select().from().innerJoin().where()` chain
  * resolves to the declared-tool rows the test names. The declared-measure and
  * unit checks already have Postgres-integration coverage
  * (`mandate.handlers.pg.test.ts`); this file is about the one thing that
- * needs no store — what `kind` ends up on the limits this function returns,
+ * needs no store: what `kind` ends up on the limits this function returns,
  * and the one case it must refuse rather than guess.
  */
 import { describe, expect, it } from "vitest";
@@ -49,7 +49,7 @@ const PAYMENT_TOOL: DeclaredRow = {
   classification: null,
 };
 
-describe("assertToolsDeclareMeasures, kind (ADR-104)", () => {
+describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
   it("stamps money for a declared amount measure", async () => {
     const limits: MandateLimits = {
       amount: {
@@ -75,7 +75,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-104)", () => {
     });
   });
 
-  it("stamps count for a declared count measure denominated in a currency code — the exact case a guess from the unit gets wrong", async () => {
+  it("stamps count for a declared count measure denominated in a currency code, the exact case a guess from the unit gets wrong", async () => {
     // A tool may legitimately declare a count in a currency-code unit. The
     // handler accepts it (the unit check compares against the declaration,
     // not against `isCurrencyCode`), and the stamped kind must be `count`,
@@ -157,7 +157,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-104)", () => {
   it("refuses measure_kind_conflict when two matched tools declare the same measure with different kinds", async () => {
     // Same measure name, same unit (so the existing unit check cannot catch
     // it), different `type`. Write time is the only moment that can see
-    // both, per ADR-104.
+    // both, per ADR-108.
     const amountAsCount: DeclaredRow = {
       slug: "storage__deposit",
       version: 1,

@@ -35,9 +35,9 @@ returns the row plus `authority`: per limited measure the period key, the
 settled and reserved values this period and `remaining`: `perPeriod` less
 those two, floored at zero, the figure the gate reserves against.
 
-`authority[].kind` (`money` or `count`, ADR-104) is always present and
-resolved, the same as `get_mandate` — see that doc for the fallback a
-pre-ADR-104 row takes.
+`authority[].kind` (`money` or `count`, ADR-108) is always present and
+resolved, the same as `get_mandate`; see that doc for the fallback a
+pre-ADR-108 row takes.
 
 ## Readers
 
@@ -54,4 +54,4 @@ created.
 ## SPEC references
 
 - §6.9 part 3 (the ledger the accountable office reads), App. E; ADR-059;
-  ADR-104 (the measure kind on `limits` and `authority`)
+  ADR-108 (the measure kind on `limits` and `authority`)

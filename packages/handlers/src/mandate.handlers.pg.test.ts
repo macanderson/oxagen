@@ -860,7 +860,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           perPeriod: "500000000",
           period: "monthly",
           currencyOrUnit: "USD",
-          // Stamped from the declared `amount` measure (ADR-104), not
+          // Stamped from the declared `amount` measure (ADR-108), not
           // supplied by this request.
           kind: "money",
         },
@@ -941,7 +941,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         },
         // First depth for the calls cap, and its window is kept: the change
         // named a figure and said nothing about the period. The built-in
-        // measure is always `count` (ADR-104).
+        // measure is always `count` (ADR-108).
         calls: {
           perPeriod: "40",
           period: "daily",

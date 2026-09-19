@@ -127,8 +127,8 @@ export const measureDeclarationsSchema = z.record(
 export type MeasureDeclarations = z.infer<typeof measureDeclarationsSchema>;
 
 /**
- * Whether a measure's figures are money or a count (ADR-104). A stored limit
- * and the authority read from it carry this fact directly — it is worked out
+ * Whether a measure's figures are money or a count (ADR-108). A stored limit
+ * and the authority read from it carry this fact directly: it is worked out
  * once, from the tool's declared `type` (`amount` → `money`, `count` →
  * `count`), at the moment a mandate's limits are written, by
  * `assertToolsDeclareMeasures` (`packages/handlers/src/_mandate.ts`). No
@@ -155,10 +155,10 @@ const mandateLimitSchema = z
     /** A currency code for an amount, a unit name for a count. */
     currencyOrUnit: z.string().min(1).max(32),
     /**
-     * Money or a count (ADR-104), stamped by the handler from the declaration
-     * it already validated — never client-supplied and never re-derived from
+     * Money or a count (ADR-108), stamped by the handler from the declaration
+     * it already validated, never client-supplied and never re-derived from
      * `currencyOrUnit` downstream. Optional only because a limit written
-     * before ADR-104 has no such field in its stored jsonb; every write since
+     * before ADR-108 has no such field in its stored jsonb; every write since
      * carries it. A reader that finds it absent takes the documented legacy
      * fallback (`legacyMeasureKindGuess`, `packages/rules`), not a fresh
      * guess of its own.
@@ -319,7 +319,7 @@ const mandateAuthoritySchema = z
   .object({
     measure: measureNameSchema,
     currencyOrUnit: z.string(),
-    /** Money or a count (ADR-104); always present — `readAuthority` resolves the legacy fallback before this leaves the handler. */
+    /** Money or a count (ADR-108); always present, `readAuthority` resolves the legacy fallback before this leaves the handler. */
     kind: measureKindSchema,
     period: mandatePeriodSchema,
     periodKey: z.string(),

@@ -196,10 +196,10 @@ describe("toMandateList", () => {
     }
   });
 
-  it("reads a declared count denominated in a currency code as a count, not money (#3130, ADR-104)", () => {
+  it("reads a declared count denominated in a currency code as a count, not money (#3130, ADR-108)", () => {
     // A tool may legitimately declare `{ type: "count", unit: "USD" }`. Before
-    // ADR-104 the mapper guessed from `currencyOrUnit` alone (`isCurrencyCode`)
-    // and read this whole-unit count of 50 as 50 micros of a dollar — $0.00 —
+    // ADR-108 the mapper guessed from `currencyOrUnit` alone (`isCurrencyCode`)
+    // and read this whole-unit count of 50 as 50 micros of a dollar ($0.00)
     // while the gate enforced 50 counted units. The mapper now switches on the
     // stored `kind`, which is `count` here despite `currencyOrUnit` being
     // "USD".
@@ -483,7 +483,7 @@ describe("toMandateDetail", () => {
       ],
       500,
       // A ledger row's kind is read from the mandate's own `authority` for
-      // that measure (ADR-104), so the fixture must limit `calls` too, not
+      // that measure (ADR-108), so the fixture must limit `calls` too, not
       // only `amount`.
       mandateOutput({ authority: [authorityOutput(), callsAuthorityOutput()] }),
     ).ledger;

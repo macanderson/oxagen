@@ -311,7 +311,7 @@
         "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
         "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
         "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares.",
-        "measureKindConflict": "Two tools your patterns cover declare that measure differently — one as an amount, one as a count — so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts."
+        "measureKindConflict": "Two tools your patterns cover declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts."
       }
     },
     "source": {

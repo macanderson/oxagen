@@ -130,7 +130,7 @@ vi.mock("./_mandate", async (importOriginal) => ({
     consequenceTags: ["moves_money"],
     limits: doubles.stale,
   }),
-  // Passthrough (ADR-104): the real function stamps `kind` from the tool
+  // Passthrough (ADR-108): the real function stamps `kind` from the tool
   // declaration and returns the limits the handler persists. These cases are
   // about the merge, not the kind, so the double hands back what it was given
   // unchanged rather than fabricating a declaration.
