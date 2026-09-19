@@ -1353,13 +1353,21 @@ export const contextRecords = agentSchema.table(
       withTimezone: true,
       mode: "date",
     }),
-    // The six kinds of context-record/v0.1 (Stella's file surface). Required
-    // since migration `20260920130000` (#3302) — every writer now supplies
-    // one.
-    kind: text("kind").notNull(),
-    // How hard the record steers: must | should | may | info. Required since
-    // `20260920130000`: a record with no force can never reach an agent.
-    force: text("force").notNull(),
+    // The six kinds of context-record/v0.1 (Stella's file surface). Every
+    // write path has required one since #3302, enforced today at the
+    // application layer (contracts/context.record.publish.ts,
+    // context.steering.store.ts). The DB-level NOT NULL is a deliberate
+    // follow-up migration (see migration `20260920140000`'s comment,
+    // Codex round 3 on #3486): db-migrate.yml runs on no ordering guarantee
+    // against the deploy that ships this requirement, so a hard constraint
+    // here today could reject a write from an old container still in a
+    // rolling deploy.
+    kind: text("kind"),
+    // How hard the record steers: must | should | may | info. Every write
+    // path has required one since #3302; a record with no force can never
+    // reach an agent. See `kind`'s comment for why this stays nullable at
+    // the DB layer for now.
+    force: text("force"),
     // require | forbid on a constraint; NULL on every other kind. `allow` is
     // unrepresentable: a record never grants authority (spec §10.3).
     constraintEffect: text("constraint_effect"),

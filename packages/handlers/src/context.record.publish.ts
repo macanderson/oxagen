@@ -164,21 +164,26 @@ export const contextRecordPublishHandler: CapabilityHandler<
       return { latest: row, readAtLookup: ready };
     });
 
-    // Before the migration lands, this handler cannot compare a
-    // classification the version row has no columns for -- fall back to the
-    // pre-#3302 checksum-only idempotency for that window rather than
-    // guessing. Once the migration is applied, every republish is compared
-    // in full again.
+    // Codex P1 on #3486 (round 3): before the migration lands, this handler
+    // cannot compare a classification the version row has no columns for.
+    // Treating that as "unchanged" (the earlier, checksum-only fallback)
+    // let a genuine correction -- an unchanged body republished under a
+    // fixed kind/force -- return published: false without ever updating the
+    // record row, silently discarding the correction for the rest of the
+    // compatibility window. Unreadable therefore means CHANGED: this always
+    // takes the publish-new-version path below, which updates the record
+    // row's classification unconditionally (those columns predate the
+    // migration and always exist) even though the version row itself is
+    // written without the four columns until the migration lands.
     const unchanged =
       latest !== undefined &&
       latest.checksum === checksum &&
-      (!readAtLookup ||
-        ("kind" in latest &&
-          latest.kind === classification.kind &&
-          latest.force === classification.force &&
-          (latest.constraintEffect ?? null) ===
-            classification.constraintEffect &&
-          (latest.statement ?? null) === classification.statement));
+      readAtLookup &&
+      "kind" in latest &&
+      latest.kind === classification.kind &&
+      latest.force === classification.force &&
+      (latest.constraintEffect ?? null) === classification.constraintEffect &&
+      (latest.statement ?? null) === classification.statement;
 
     if (latest && unchanged) {
       logger.info(

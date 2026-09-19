@@ -315,23 +315,32 @@ describe("context.record.publish handler", () => {
       expect(mocks.insertedValues[1]).not.toHaveProperty("statement");
     });
 
-    it("falls back to checksum-only idempotency when it cannot read the version's classification", async () => {
+    // Codex P1 on #3486 (round 3): an unreadable classification must never
+    // be treated as "unchanged," even when the checksum matches. A record
+    // whose body is unchanged but whose classification is corrected (the
+    // classification-only-correction case this whole idempotency check
+    // exists for) must still update the record row during this window, or
+    // the correction is silently discarded for as long as the migration is
+    // pending.
+    it("always publishes a new version when it cannot read the version's classification, even with a matching checksum", async () => {
       mocks.classificationColumns = false;
       queueSelects(
         [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
         [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
       );
+      mocks.insertReturning.push(() => Promise.resolve([{ id: "v3-uuid" }]));
 
       const out = await contextRecordPublishHandler(INPUT, CTX);
 
-      expect(out).toEqual({
-        publicId: "ctr_1",
-        recordId: "no-bare-unwrap",
-        version: 2,
-        checksum: BODY_CHECKSUM,
-        published: false,
+      expect(out).toMatchObject({ version: 3, published: true });
+      // The record row's classification is still updated unconditionally.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v3-uuid",
+        kind: "rule",
+        force: "must",
       });
-      expect(mocks.insertedValues).toHaveLength(0);
+      // The version row's columns do not exist yet on this database.
+      expect(mocks.insertedValues[0]).not.toHaveProperty("kind");
     });
 
     it("publishes a new version without the classification columns when the body changed", async () => {

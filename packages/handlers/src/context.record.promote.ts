@@ -163,10 +163,9 @@ export const contextRecordPromoteHandler: CapabilityHandler<
           .where(eq(schema.contextRecordVersions.id, versionUuid))
           .limit(1);
         // A merge writes all four together, so `kind` alone tells a classified
-        // version from a legacy one -- but agent.context_records.kind and
-        // .force are NOT NULL since migration `20260920130000` (#3302), and
-        // narrowing on `kind` alone does not tell TypeScript `force` is
-        // non-null too, so it is named in the guard as well. Every real
+        // version from a legacy one -- but narrowing on `kind` alone does not
+        // tell TypeScript `force` is non-null too, so it is named in the
+        // guard as well. Every real
         // writer sets both together (`publishMerge`, `publish_context_record`
         // since #3302), so this never actually excludes a version `kind`
         // alone would have accepted. `constraintEffect` is copied even when

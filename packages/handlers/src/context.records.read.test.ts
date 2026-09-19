@@ -59,8 +59,9 @@ describe("list_records", () => {
     await publish(h, "ctx.a.forbid", "constraint", "forbid");
     // A record published through publish_context_record carries no commit or
     // path — that path writes no PR, so nothing merges it — but it always
-    // carries a real classification now (#3302): agent.context_records.kind
-    // and .force are NOT NULL since migration `20260920130000`.
+    // carries a real classification now (#3302): the contract requires
+    // kind and force on every call, even though the DB-level NOT NULL is a
+    // deliberate follow-up migration (see `20260920140000`'s comment).
     h.store.records.push({
       ...h.store.records[0]!,
       id: "direct-publish",

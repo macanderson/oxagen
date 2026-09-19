@@ -7,9 +7,8 @@
 --
 -- publish_context_record now requires kind, force and statement (and
 -- constraint_effect when kind is constraint) on every call, so no future
--- write to context_records can leave kind or force NULL. This backfills the
--- rows a prior, permissive call already wrote and tightens the record
--- table's check constraints to match.
+-- write from the deployed handler leaves kind or force NULL. This
+-- migration backfills the rows a prior, permissive call already wrote.
 --
 -- A pre-existing NULL row was written before classification existed at all,
 -- so there is no real kind or force to recover for it: inventing one (a
@@ -27,30 +26,19 @@ SET
   "statement" = coalesce("statement", "title")
 WHERE "kind" IS NULL OR "force" IS NULL;
 
-ALTER TABLE "agent"."context_records"
-  ALTER COLUMN "kind" SET NOT NULL,
-  ALTER COLUMN "force" SET NOT NULL;
-
-ALTER TABLE "agent"."context_records"
-  DROP CONSTRAINT "context_records_kind_check",
-  DROP CONSTRAINT "context_records_force_check";
-
-ALTER TABLE "agent"."context_records"
-  ADD CONSTRAINT "context_records_kind_check"
-    CHECK ("kind" = ANY (ARRAY['rule'::text, 'constraint'::text, 'procedure'::text, 'fact'::text, 'memory'::text, 'preference'::text])),
-  ADD CONSTRAINT "context_records_force_check"
-    CHECK ("force" = ANY (ARRAY['must'::text, 'should'::text, 'may'::text, 'info'::text]));
-
--- agent.context_record_versions keeps its four classification columns
--- nullable (migration `20260918160000`): a version is an immutable record of
--- a body as it was written, and a version the legacy publish_context_record
--- path wrote genuinely has no classification of its own -- that migration's
--- comment already documents this as the deliberate, permanent shape for a
--- legacy version, with the record row (now always classified) as its
--- fallback. This migration does not touch that table; it only closes the
--- live record row, which the registry, list_records and the Steering page
--- all read.
+-- Codex P1 on #3486 (round 3): this migration is applied by the manual
+-- db-migrate.yml workflow, on no ordering guarantee against deploy-node
+-- (which ships the code requiring kind/force on every write) -- an operator
+-- running the migration workflow first, or a rolling deploy that still has
+-- an old container serving traffic, would hit a NOT NULL violation on
+-- every publish from the code that has not shipped yet. The write-side
+-- requirement is enforced today at the application layer
+-- (packages/oxagen/src/contracts/context.record.publish.ts's schema); a
+-- follow-up migration adds ALTER COLUMN ... SET NOT NULL once this
+-- handler has been the only writer in production for a full deploy cycle,
+-- the same two-step (ship the writer, harden the column later) ADR-111
+-- used for measureDeclarationSchema's write boundary.
 COMMENT ON COLUMN "agent"."context_records"."kind" IS
-  'The kind the record''s active version declares. NOT NULL since migration 20260920130000 (#3302); every write path requires one.';
+  'The kind the record''s active version declares. Every write path requires one since #3302; the NOT NULL constraint is a deliberate follow-up migration (see 20260920140000''s comment).';
 COMMENT ON COLUMN "agent"."context_records"."force" IS
-  'How hard the record steers: must, should, may, or info. NOT NULL since migration 20260920130000 (#3302); only must/should ever reach an agent.';
+  'How hard the record steers: must, should, may, or info. Every write path requires one since #3302; only must/should ever reach an agent. The NOT NULL constraint is a deliberate follow-up migration (see 20260920140000''s comment).';
