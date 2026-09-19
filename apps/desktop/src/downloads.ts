@@ -187,6 +187,13 @@ export function renderIndexHtml(input: {
   version: string;
   entries: PageEntry[];
   publishedAt: string;
+  /**
+   * Whether the `desktop-v<version>` GitHub release with the bare `tacho`
+   * and `oxagen` executables exists. False for a version published before
+   * the release workflow attached them (2.1.1), so the page does not send a
+   * reader to a 404. Default true: a tagged build always has one.
+   */
+  cliRelease?: boolean;
 }): string {
   const version = escapeHtml(input.version);
   const sorted = sortInstallers(input.entries);
@@ -320,7 +327,11 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 </div>
 <section class="verify">
 <div><h2>Verify a download</h2><p>Every file in this version is listed in <a href="desktop/${encodeURIComponent(input.version)}/SHA256SUMS.txt">SHA256SUMS.txt</a>. Put it beside the file you downloaded and run:</p><pre>shasum -a 256 -c SHA256SUMS.txt</pre></div>
-<div><h2>Command line only</h2><p>The <code>tacho</code> and <code>oxagen</code> executables ship inside the app and link onto your PATH on first launch. To install them without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.</p></div>
+<div><h2>Command line only</h2><p>The <code>tacho</code> and <code>oxagen</code> executables ship inside the app and link onto your PATH on first launch.${
+    input.cliRelease === false
+      ? ""
+      : ` To install them without the app, take the bare binaries from the <a href="${links.githubRelease}">GitHub release</a> for ${version}.`
+  }</p></div>
 </section>
 <footer><a href="${links.notes}">What changed in ${version}</a><a href="${links.allReleases}">All releases</a><a href="https://docs.oxagen.sh/docs/cli/desktop">App guide</a><a href="https://oxagen.sh/">oxagen.sh</a></footer>
 </div>
