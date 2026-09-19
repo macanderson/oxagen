@@ -28,6 +28,134 @@ import {
 const { version } = pkg;
 
 /**
+ * The prefix of a single-use enrollment token, as `create_enrollment_token`
+ * mints it. `oxagen agent enroll` dispatches on it: `--token` is overloaded
+ * across the two scopes the command now serves, so the prefix — not the mere
+ * presence of a token — is what says which credential the operator holds
+ * (ADR-103 decision 3).
+ */
+const ENROLLMENT_TOKEN_PREFIX = "oxe_1time_";
+
+/**
+ * Refuse flags that belong to the other scope of a merged command, and say so.
+ *
+ * `agent enroll`, `agent status` and `agent unenroll` each serve two scopes,
+ * and each scope carries flags the other does not understand. Dropping one
+ * silently is the failure that matters here: an operator who passes `--purge`
+ * and reads a success line has been told a local spool was deleted when
+ * nothing went near it. Returns true when the caller should stop.
+ */
+function refusesMisplacedFlags(
+  command: string,
+  scope: string,
+  flags: readonly (readonly [flag: string, given: boolean])[],
+): boolean {
+  const offending = flags.filter(([, given]) => given).map(([flag]) => flag);
+  if (offending.length === 0) return false;
+  process.stderr.write(
+    `${offending.join(" and ")} ${offending.length === 1 ? "does" : "do"} not apply to \`${command}\` ${scope}.\n`,
+  );
+  return true;
+}
+
+/**
+ * The four wrapping subcommands whose names collide with nothing, attached to
+ * whichever group asks for them.
+ *
+ * ADR-103 phase 1b moves the wrapping commands onto `oxagen agent` and leaves
+ * the deprecated `oxagen tacho` working through the deprecation window, so both
+ * groups carry these four. They must not drift apart: a runbook that says
+ * `oxagen tacho hosts` and one that says `oxagen agent hosts` have to do the
+ * same thing, so there is one definition and both parents get it.
+ *
+ * The other three — `enroll`, `status`, `unenroll` — are not here because their
+ * shape differs by parent. On `agent` each also has to serve the server-scoped
+ * operation that already owns the name (ADR-103 decision 3); on `tacho` each
+ * keeps the host-only shape every enrolled machine was enrolled with.
+ */
+function addHostWrapCommands(parent: Command): void {
+  parent
+    .command("reassign")
+    .description(
+      "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
+    )
+    .option("--workspace <slug>", "Workspace slug to report to")
+    .option("--org <slug>", "Organization slug (default: the current one)")
+    .option(
+      "--token <apiKey>",
+      "Platform API token (default: the logged-in session)",
+    )
+    .option(
+      "--harness <list>",
+      "Replace the harness list (default: keep the current one)",
+    )
+    .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--default",
+      "Also make the new org and workspace the CLI default (config.json)",
+    )
+    .action(
+      async (opts: {
+        token?: string;
+        org?: string;
+        workspace?: string;
+        harness?: string;
+        reason?: string;
+        default?: boolean;
+      }) => {
+        const { handleTachoReassign } = await import("./commands/tacho.js");
+        if (!(await handleTachoReassign(opts))) process.exitCode = 1;
+      },
+    );
+
+  parent
+    .command("export")
+    .description("Export a session from the local WAL")
+    .option("--session <id>", "Claude Code session id or Tacho session uuid")
+    .option("--format <fmt>", "tacho | trace | otlp", "tacho")
+    .option("--out <file>", "Write to a file instead of stdout")
+    .option("--list", "List sessions in the WAL")
+    .action(
+      async (opts: {
+        session?: string;
+        format?: "tacho" | "trace" | "otlp";
+        out?: string;
+        list?: boolean;
+      }) => {
+        const { handleTachoExport } = await import("./commands/tacho.js");
+        if (!(await handleTachoExport(opts))) process.exitCode = 1;
+      },
+    );
+
+  parent
+    .command("verify")
+    .description("Run one headless Claude Code turn and confirm it was chained")
+    .action(async () => {
+      const { handleTachoVerify } = await import("./commands/tacho.js");
+      if (!(await handleTachoVerify())) process.exitCode = 1;
+    });
+
+  parent
+    .command("hosts")
+    .description(
+      "Every machine enrolled in this workspace, with the enforcement tier each of its apps reaches",
+    )
+    .option("--status <state>", "active | paused | suspended | revoked")
+    .option("--limit <n>", "How many to return", (v: string) => Number(v))
+    .option("--json", "Machine-readable output")
+    .action(
+      async (opts: {
+        status?: "active" | "paused" | "suspended" | "revoked";
+        limit?: number;
+        json?: boolean;
+      }) => {
+        const { handleTachoHosts } = await import("./commands/tacho.js");
+        if (!(await handleTachoHosts(opts))) process.exitCode = 1;
+      },
+    );
+}
+
+/**
  * Construct the full `oxagen` command tree. Pure: no parsing, no I/O, no
  * side effects — `index.ts` parses it, the REPL only introspects it.
  */
@@ -863,12 +991,17 @@ export function buildProgram(): Command {
   // and the managed settings documents MDM has already pushed. Refusing it would
   // turn a rename into an outage.
   //
-  // Moving these seven onto `oxagen agent` is phase 1b, not this change. Three
-  // of the names are taken there by server-scoped operations (`enroll --token`
-  // wants a one-time enrollment token, `status <agent>` and `unenroll <agent>`
-  // act on one agent), so the move changes two governance command signatures and
-  // needs a review of its own. Until then the host-scoped commands are reachable
-  // here, which is why this group keeps its subcommands rather than forwarding.
+  // All seven now also live on `oxagen agent` (ADR-103 phase 1b). Three of the
+  // names were taken there by server-scoped operations, and they resolve by
+  // argument rather than by renaming either side: `agent status` bare reports
+  // this machine and `agent status <agent>` reports that agent, the same split
+  // applies to `unenroll`, and `agent enroll` dispatches on the token's prefix
+  // (`oxe_1time_` is the single-use enrollment token, anything else or no token
+  // at all is the logged-in session). This group keeps its own definitions
+  // rather than forwarding, so the shape an enrolled machine's runbook already
+  // passes stays exactly as it was — a forwarded `tacho enroll` would land on
+  // the merged command and be re-parsed, which is a behaviour change dressed up
+  // as compatibility.
   //
   // docs/specs/tacho/spec.md section 5.1. The work lives in @oxagen/tacho;
   // these commands lend it the CLI's credentials so enrolling this machine
@@ -931,39 +1064,7 @@ export function buildProgram(): Command {
       },
     );
 
-  tacho
-    .command("reassign")
-    .description(
-      "Point this host at another workspace (or org): revoke, then enroll again keeping the device key",
-    )
-    .option("--workspace <slug>", "Workspace slug to report to")
-    .option("--org <slug>", "Organization slug (default: the current one)")
-    .option(
-      "--token <apiKey>",
-      "Platform API token (default: the logged-in session)",
-    )
-    .option(
-      "--harness <list>",
-      "Replace the harness list (default: keep the current one)",
-    )
-    .option("--reason <text>", "Reason recorded with the revoke")
-    .option(
-      "--default",
-      "Also make the new org and workspace the CLI default (config.json)",
-    )
-    .action(
-      async (opts: {
-        token?: string;
-        org?: string;
-        workspace?: string;
-        harness?: string;
-        reason?: string;
-        default?: boolean;
-      }) => {
-        const { handleTachoReassign } = await import("./commands/tacho.js");
-        if (!(await handleTachoReassign(opts))) process.exitCode = 1;
-      },
-    );
+  addHostWrapCommands(tacho);
 
   tacho
     .command("status")
@@ -986,52 +1087,6 @@ export function buildProgram(): Command {
       async (opts: { token?: string; purge?: boolean; reason?: string }) => {
         const { handleTachoUnenroll } = await import("./commands/tacho.js");
         if (!(await handleTachoUnenroll(opts))) process.exitCode = 1;
-      },
-    );
-
-  tacho
-    .command("export")
-    .description("Export a session from the local WAL")
-    .option("--session <id>", "Claude Code session id or Tacho session uuid")
-    .option("--format <fmt>", "tacho | trace | otlp", "tacho")
-    .option("--out <file>", "Write to a file instead of stdout")
-    .option("--list", "List sessions in the WAL")
-    .action(
-      async (opts: {
-        session?: string;
-        format?: "tacho" | "trace" | "otlp";
-        out?: string;
-        list?: boolean;
-      }) => {
-        const { handleTachoExport } = await import("./commands/tacho.js");
-        if (!(await handleTachoExport(opts))) process.exitCode = 1;
-      },
-    );
-
-  tacho
-    .command("verify")
-    .description("Run one headless Claude Code turn and confirm it was chained")
-    .action(async () => {
-      const { handleTachoVerify } = await import("./commands/tacho.js");
-      if (!(await handleTachoVerify())) process.exitCode = 1;
-    });
-
-  tacho
-    .command("hosts")
-    .description(
-      "Every machine enrolled in this workspace, with the enforcement tier each of its apps reaches",
-    )
-    .option("--status <state>", "active | paused | suspended | revoked")
-    .option("--limit <n>", "How many to return", (v: string) => Number(v))
-    .option("--json", "Machine-readable output")
-    .action(
-      async (opts: {
-        status?: "active" | "paused" | "suspended" | "revoked";
-        limit?: number;
-        json?: boolean;
-      }) => {
-        const { handleTachoHosts } = await import("./commands/tacho.js");
-        if (!(await handleTachoHosts(opts))) process.exitCode = 1;
       },
     );
 
@@ -1126,30 +1181,90 @@ export function buildProgram(): Command {
       },
     );
   agent
-    .command("status <agent>")
-    .description(
-      "Identity, credentials, roles, hosts and the definition of record for one agent (id or slug)",
+    .command("status")
+    .argument(
+      "[agent]",
+      "An agent id or slug. Omit it to report this machine instead",
     )
-    .option("--json", "Output JSON")
-    .action(async (agent: string, opts: { json?: boolean }) => {
-      const { agentStatus } = await import("./commands/agent.js");
-      await agentStatus(agent, opts);
-    });
-  agent
-    .command("unenroll <agent>")
     .description(
-      "Revoke the agent's live host enrollments (or one host with --host) — Owner/Admin only",
+      "With an agent: its identity, credentials, roles, hosts and definition of record. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
     )
-    .option("--host <tch_id>", "Only this host")
-    .option("--reason <text>", "Recorded on the host and in the revoke command")
     .option("--json", "Output JSON")
     .action(
+      async (agentHandle: string | undefined, opts: { json?: boolean }) => {
+        if (agentHandle === undefined) {
+          const { handleTachoStatus } = await import("./commands/tacho.js");
+          if (!(await handleTachoStatus(opts))) process.exitCode = 1;
+          return;
+        }
+        const { agentStatus } = await import("./commands/agent.js");
+        await agentStatus(agentHandle, opts);
+      },
+    );
+  agent
+    .command("unenroll")
+    .argument(
+      "[agent]",
+      "An agent id or slug. Omit it to unenroll this machine instead",
+    )
+    .description(
+      "With an agent: revoke its live host enrollments, or one host with --host — Owner/Admin only. Without one: remove this machine's hooks and service, revoke its enrollment, delete its host key",
+    )
+    .option("--host <tch_id>", "With an agent: only this host")
+    .option("--reason <text>", "Recorded on the host and in the revoke command")
+    .option("--json", "With an agent: output JSON")
+    .option(
+      "--token <apiKey>",
+      "Without an agent: operator token for the server-side revoke",
+    )
+    .option(
+      "--purge",
+      "Without an agent: also delete the local WAL, spool, and quarantine",
+    )
+    .action(
       async (
-        agent: string,
-        opts: { host?: string; reason?: string; json?: boolean },
+        agentHandle: string | undefined,
+        opts: {
+          host?: string;
+          reason?: string;
+          json?: boolean;
+          token?: string;
+          purge?: boolean;
+        },
       ) => {
+        if (agentHandle === undefined) {
+          if (
+            refusesMisplacedFlags(
+              "oxagen agent unenroll",
+              "without an agent argument",
+              [
+                ["--host", opts.host !== undefined],
+                ["--json", opts.json === true],
+              ],
+            )
+          ) {
+            process.exitCode = 1;
+            return;
+          }
+          const { handleTachoUnenroll } = await import("./commands/tacho.js");
+          if (!(await handleTachoUnenroll(opts))) process.exitCode = 1;
+          return;
+        }
+        if (
+          refusesMisplacedFlags(
+            "oxagen agent unenroll",
+            "with an agent argument",
+            [
+              ["--token", opts.token !== undefined],
+              ["--purge", opts.purge === true],
+            ],
+          )
+        ) {
+          process.exitCode = 1;
+          return;
+        }
         const { agentUnenroll } = await import("./commands/agent.js");
-        await agentUnenroll(agent, opts);
+        await agentUnenroll(agentHandle, opts);
       },
     );
 
@@ -1205,42 +1320,95 @@ export function buildProgram(): Command {
       await handleAgentEnvList(agentHandle, opts);
     });
 
-  // ── agent enroll: this machine becomes a registered agent's host (#2967) ────
+  // ── agent enroll: wrap this machine (#2967, ADR-103 phase 1b) ──────────────
   //
-  // The scripted path of the register flow (MC spec §14.1): the one-time
-  // enrollment token from the Agents page or `create_enrollment_token` is the
-  // credential, so no `oxagen login` is needed. The work is the same
-  // `@oxagen/tacho/cli` routine `oxagen tacho enroll` runs.
+  // One command over two scopes, because §2.1 names one. With a single-use
+  // enrollment token (the scripted path of the register flow, MC spec §14.1)
+  // this machine becomes that registered agent's host and no `oxagen login` is
+  // needed. With a platform API token, or with nothing, it wraps this machine
+  // under the logged-in session. Both end in the same `@oxagen/tacho/cli`
+  // routine; they differ in the credential presented.
+  //
+  // The dispatch is on the token's prefix rather than on whether a token was
+  // given, because `--token` means something different on each side and an
+  // operator holds one credential, not a preference between two commands.
   agent
     .command("enroll")
     .description(
-      "Enroll this machine as a registered agent's host with a one-time enrollment token: device key, host credential, tachod service, harness hooks",
+      "Wrap this machine: device key, host credential, tachod service, harness hooks. A single-use enrollment token (oxe_1time_…) enrolls it as that registered agent's host; anything else uses a platform API token or the logged-in session",
     )
-    .requiredOption(
+    .option(
       "--token <token>",
-      "The single-use enrollment token (oxe_1time_…), shown once at registration",
+      "A single-use enrollment token (oxe_1time_…) shown once at registration, or a platform API token (default: the logged-in session)",
     )
+    .option("--org <slug>", "Organization slug (default: the logged-in org)")
+    .option(
+      "--workspace <slug>",
+      "Workspace slug (default: the logged-in workspace)",
+    )
+    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
+    .option("--no-service", "Do not install the user service")
+    .option("--managed", "Also print the managed settings document for MDM")
+    .option(
+      "--print-managed",
+      "Only print the managed settings document; do not write user settings",
+    )
+    .option("--force", "Enroll again even if already enrolled")
     .option(
       "--harness <list>",
       "Harnesses to hook: claude-code, codex, cursor, stella, or a comma list such as claude-code,cursor",
     )
-    .option("--port <n>", "Loopback port for tachod", (v: string) => Number(v))
-    .option("--no-service", "Do not install the user service")
-    .option("--force", "Enroll again even if already enrolled")
+    .option("--verify", "Run a headless Claude Code turn afterwards")
     .action(
       async (opts: {
-        token: string;
-        harness?: string;
+        token?: string;
+        org?: string;
+        workspace?: string;
         port?: number;
         service?: boolean;
+        managed?: boolean;
+        printManaged?: boolean;
         force?: boolean;
+        harness?: string;
+        verify?: boolean;
       }) => {
-        const { handleAgentEnroll } = await import(
-          "./commands/agent-enroll.js"
-        );
-        if (!(await handleAgentEnroll(opts))) process.exitCode = 1;
+        const token = opts.token;
+        if (token !== undefined && token.startsWith(ENROLLMENT_TOKEN_PREFIX)) {
+          if (
+            refusesMisplacedFlags(
+              "oxagen agent enroll",
+              "with an enrollment token",
+              [
+                ["--org", opts.org !== undefined],
+                ["--workspace", opts.workspace !== undefined],
+                ["--managed", opts.managed === true],
+                ["--print-managed", opts.printManaged === true],
+                ["--verify", opts.verify === true],
+              ],
+            )
+          ) {
+            process.exitCode = 1;
+            return;
+          }
+          const { handleAgentEnroll } = await import(
+            "./commands/agent-enroll.js"
+          );
+          const enrolled = await handleAgentEnroll({
+            token,
+            harness: opts.harness,
+            port: opts.port,
+            service: opts.service,
+            force: opts.force,
+          });
+          if (!enrolled) process.exitCode = 1;
+          return;
+        }
+        const { handleTachoEnroll } = await import("./commands/tacho.js");
+        if (!(await handleTachoEnroll(opts))) process.exitCode = 1;
       },
     );
+
+  addHostWrapCommands(agent);
 
   // ── env: workspace environments ─────────────────────────────────────────────
 
