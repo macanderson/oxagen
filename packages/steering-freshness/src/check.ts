@@ -646,15 +646,29 @@ export async function checkSteeringFreshness(
     // Every commit published at the newest instant has to be in the ref. One
     // that git cannot answer for makes the whole question unanswered, and one
     // that is missing makes the ref too old, whatever the others say.
+    // Each call draws from the same shared network deadline as the earlier
+    // fetch/deepen calls (`networkCtx`), not `repoCtx`'s own fixed timeout.
+    // Otherwise several ancestry checks here could each spend their own full
+    // timeout and outlive the hook's, past what the earlier shared-budget fix
+    // bounded everywhere else. The loop also stops at the first commit found
+    // unreachable: the verdict is already decided, and later commits do not
+    // need to be asked no matter how many are published at that instant.
     const commits = publishedCommits(platform);
     let refHasPromotion: boolean | null = commits.length > 0;
     for (const commit of commits) {
-      const reachable = await isAncestor(repoCtx, commit, remoteHead);
+      const reachable = await isAncestor(
+        networkCtx(repoCtx),
+        commit,
+        remoteHead,
+      );
       if (reachable === null) {
         refHasPromotion = null;
         break;
       }
-      if (!reachable) refHasPromotion = false;
+      if (!reachable) {
+        refHasPromotion = false;
+        break;
+      }
     }
     // Git could not answer. Blocking here would stop a prompt over a plumbing
     // failure, not over staleness, so the verdict is `unknown`: the gate
