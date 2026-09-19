@@ -289,7 +289,17 @@ const RAW_KEY = "ox_AbCdEfGhIjKl-_MnOpQrStUvWxYz0123456789AbCd";
 const RAW_KEY_PREFIX = "ox_AbCdEfGhI"; // RAW_KEY.slice(0, 12) — 12 chars
 
 describe("resolveApiKey", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Every key names a workspace, and the resolver reads that workspace to
+    // see whether it is archived (ADR-105). The default here is the ordinary
+    // case — an active workspace — so each test below states only what it is
+    // about. The archived and missing cases are driven explicitly.
+    mockQuery.workspaces.findFirst.mockResolvedValue({
+      id: "wrk_xyz",
+      archivedAt: null,
+    });
+  });
 
   it("returns malformed when the key does not start with the ox_ marker", async () => {
     const result = await resolveApiKey("noseparatorhere");
@@ -527,6 +537,86 @@ describe("resolveApiKey", () => {
     });
     const result = await resolveApiKey(RAW_KEY);
     expect(result).toEqual({ ok: false, kind: "purpose_locked" });
+  });
+
+  // -------------------------------------------------------------------------
+  // ADR-105: a key does not authenticate into an archived workspace.
+  // -------------------------------------------------------------------------
+
+  it("refuses a key whose workspace is archived, however valid the key is", async () => {
+    // The key hashes correctly, has no expiry and is not soft-deleted — the
+    // exact shape that kept authenticating into an archived workspace before
+    // ADR-105 (#3123). Archiving the workspace is what ends it.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_stranded",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: {},
+      createdById: "user_operator",
+    });
+    mockQuery.workspaces.findFirst.mockResolvedValue({
+      id: "wrk_xyz",
+      archivedAt: new Date("2026-09-15T00:00:00.000Z"),
+    });
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "workspace_archived",
+    });
+  });
+
+  it("refuses a CLI session key into an archived workspace without reading membership", async () => {
+    // The archived check runs before the membership reads, so a CLI key into
+    // an archived workspace is refused on the same ground as any other key.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce(cliKeyRow("user_cli"));
+    mockQuery.workspaces.findFirst.mockResolvedValue({
+      id: "wrk_xyz",
+      archivedAt: new Date("2026-09-15T00:00:00.000Z"),
+    });
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "workspace_archived",
+    });
+    expect(mockQuery.orgUsers.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("refuses a key whose workspace row cannot be read at all", async () => {
+    // A scope that cannot be confirmed is not a scope. Failing closed here
+    // keeps a deleted or unreadable workspace from behaving like an active one.
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_orphan",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_gone",
+      expiresAt: null,
+      scope: {},
+      createdById: null,
+    });
+    mockQuery.workspaces.findFirst.mockResolvedValue(undefined);
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: false,
+      kind: "workspace_archived",
+    });
+  });
+
+  it("still resolves a key whose workspace is active", async () => {
+    mockQuery.apiKeys.findFirst.mockResolvedValueOnce({
+      id: "aky_live",
+      keyHash: sha256hex(RAW_KEY),
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      expiresAt: null,
+      scope: {},
+      createdById: "user_operator",
+    });
+    expect(await resolveApiKey(RAW_KEY)).toEqual({
+      ok: true,
+      apiKeyId: "aky_live",
+      orgId: "org_abc",
+      workspaceId: "wrk_xyz",
+      userId: null,
+    });
   });
 
   // -------------------------------------------------------------------------

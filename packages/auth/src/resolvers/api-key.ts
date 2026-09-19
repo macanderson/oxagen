@@ -24,6 +24,14 @@
  * is refused with `purpose_locked` rather than authorizing as its creator.
  * Every other key carries no user.
  *
+ * A key never authenticates into an archived workspace (ADR-105). Archiving a
+ * workspace retires it as a place work happens, so the machine credentials
+ * bound to it stop being accepted here, at the one point where a raw key
+ * becomes a tenant scope. The key rows are left alone: archival destroys no
+ * credential, and restoring the workspace restores them. A key whose workspace
+ * row is missing is refused for the same reason — a scope that cannot be
+ * confirmed is not a scope.
+ *
  * This function has no HTTP dependency — it can be called identically from
  * API middleware, MCP handler, CLI, or tests.
  */
@@ -68,7 +76,12 @@ export type ApiKeyResolutionError =
   | { kind: "invalid" }
   | { kind: "expired" }
   /** The key is locked to a purpose this surface does not serve. */
-  | { kind: "purpose_locked" };
+  | { kind: "purpose_locked" }
+  /**
+   * The workspace the key names is archived (or no longer resolvable), so the
+   * key no longer authenticates into it. The key itself is untouched (ADR-105).
+   */
+  | { kind: "workspace_archived" };
 
 function scopePurposeOf(scope: unknown): string | null {
   return typeof scope === "object" &&
@@ -148,6 +161,21 @@ export async function resolveApiKey(rawKey: string): Promise<ApiKeyResolution> {
   const purpose = scopePurposeOf(row.scope);
   if (purpose === AGENT_CREDENTIAL_SCOPE_PURPOSE) {
     return { ok: false, kind: "purpose_locked" };
+  }
+
+  // The key names a workspace; an archived workspace no longer accepts machine
+  // authentication (ADR-105). This runs before either bearer branch, so every
+  // surface that resolves a key gets the same answer, and it applies to keys
+  // minted long before the workspace was archived.
+  // tenancy: system bypass via withSystemDb (identity resolution before a tenant scope exists)
+  const workspace = await withSystemDb((tx) =>
+    tx.query.workspaces.findFirst({
+      where: eq(schema.workspaces.id, row.workspaceId),
+      columns: { id: true, archivedAt: true },
+    }),
+  );
+  if (!workspace || workspace.archivedAt !== null) {
+    return { ok: false, kind: "workspace_archived" };
   }
 
   if (purpose !== CLI_SESSION_SCOPE_PURPOSE) {
