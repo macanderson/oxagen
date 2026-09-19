@@ -65,7 +65,9 @@ export function ThemeSwitcher({ className = "" }: { className?: string }) {
       CHOICES.findIndex((c) => c.value === current),
     );
     const next = (at + step + CHOICES.length) % CHOICES.length;
-    setTheme(CHOICES[next].value);
+    const choice = CHOICES[next];
+    if (!choice) return;
+    setTheme(choice.value);
     e.currentTarget
       .querySelectorAll<HTMLButtonElement>("button")
       [next]?.focus();
