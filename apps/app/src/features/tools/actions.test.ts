@@ -466,6 +466,13 @@ describe("saveApprovalRule", () => {
       businessHours: rule.businessHours,
     }));
 
+  /** The nth stored rule body, as a value rather than a possibly-absent index. */
+  const body = (n: number) => {
+    const found = bodies()[n];
+    if (found === undefined) throw new Error(`the fixture holds no rule ${n}`);
+    return found;
+  };
+
   it("appends a new rule to the set as it stands now, trimmed", async () => {
     invoke.mockResolvedValueOnce(stored()).mockResolvedValueOnce(written());
     expect(
@@ -510,7 +517,8 @@ describe("saveApprovalRule", () => {
       tools: ["deploy__release"],
       standingWindowMs: 7_200_000,
     };
-    const [first, rendered] = bodies();
+    const first = body(0);
+    const rendered = body(1);
     expect(
       await saveApprovalRule("acme", "core-platform", "edit", edit, rendered),
     ).toEqual({ ok: true, value: { ruleId: "repeat-deploys" } });
@@ -606,7 +614,10 @@ describe("saveApprovalRule", () => {
     invoke
       .mockResolvedValueOnce(stored())
       .mockRejectedValueOnce(
-        new kernel.HandlerError({ code: "conflict", reason: "rule_set_changed" }),
+        new kernel.HandlerError({
+          code: "conflict",
+          reason: "rule_set_changed",
+        }),
       );
     expect(
       await saveApprovalRule("acme", "core-platform", "create", draft, null),
@@ -619,7 +630,7 @@ describe("saveApprovalRule", () => {
   // editor body, which is the one change nobody asked for.
   it("refuses an edit of a rule that moved since the editor rendered it", async () => {
     invoke.mockResolvedValueOnce(stored());
-    const [, rendered] = bodies();
+    const rendered = body(1);
     expect(
       await saveApprovalRule(
         "acme",
@@ -655,7 +666,8 @@ describe("saveApprovalRule", () => {
       ],
     });
     invoke.mockResolvedValueOnce(twoMeasures).mockResolvedValueOnce(written());
-    const [onlyRule] = twoMeasures.items;
+    const onlyRule = twoMeasures.items[0];
+    if (onlyRule === undefined) throw new Error("the fixture holds one rule");
     expect(
       await saveApprovalRule(
         "acme",
@@ -675,7 +687,10 @@ describe("saveApprovalRule", () => {
     invoke
       .mockResolvedValueOnce(stored())
       .mockRejectedValueOnce(
-        new kernel.HandlerError({ code: "conflict", reason: "no_tool_matches" }),
+        new kernel.HandlerError({
+          code: "conflict",
+          reason: "no_tool_matches",
+        }),
       );
     expect(
       await saveApprovalRule("acme", "core-platform", "create", draft, null),
