@@ -86,7 +86,14 @@ export interface UnpricedModel extends ObservedModel {
    * did — the answer to a rate that was added too late to cover every call.
    */
   missingClassWindows: MissingClassWindow[];
-  /** True when every class the model used is missing — the run has no cost at all. */
+  /**
+   * True when every usage bucket the model actually sent tokens in came back
+   * unpriced — the run has no cost at all. A class with both a priced and an
+   * unpriced bucket (a rate that expired and later came back) is NOT what
+   * this flag tracks: that model has real cost from its priced bucket, so it
+   * is `estimated`, not fully unpriced, even though the class itself appears
+   * once in {@link missingClasses}.
+   */
   fullyUnpriced: boolean;
 }
 
@@ -144,11 +151,18 @@ export function findUnpricedModels(args: {
   const byClass = indexPriceBookByClass(args.book);
   const out: UnpricedModel[] = [];
   for (const model of args.observed) {
-    const usedClasses = new Set<PriceTokenClass>();
+    // Counted per (class, bucket) usage occurrence, not per distinct class:
+    // a class with both a priced and an unpriced bucket (a rate that
+    // expired, then lapsed, then came back) must not read as "this class is
+    // missing" on the strength of its one unpriced bucket while its priced
+    // bucket's cost is ignored. `fullyUnpriced` below asks whether EVERY
+    // usage bucket missed, not whether every used class missed at least once.
+    let usageBucketCount = 0;
+    let missedUsageBucketCount = 0;
     const windowsByClass = new Map<PriceTokenClass, MissingClassWindow>();
     for (const usage of model.classes) {
       if (usage.tokens <= 0) continue;
-      usedClasses.add(usage.tokenClass);
+      usageBucketCount++;
       const classBook = byClass.get(usage.tokenClass) ?? [];
       const priced =
         resolvePriceEntryFromClassBook(classBook, {
@@ -159,6 +173,7 @@ export function findUnpricedModels(args: {
           at: usage.firstSeen,
         }) !== null;
       if (priced) continue;
+      missedUsageBucketCount++;
       const existing = windowsByClass.get(usage.tokenClass);
       if (!existing) {
         windowsByClass.set(usage.tokenClass, {
@@ -187,7 +202,7 @@ export function findUnpricedModels(args: {
       classes: model.classes,
       missingClasses: missingClassWindows.map((w) => w.tokenClass),
       missingClassWindows,
-      fullyUnpriced: missingClassWindows.length === usedClasses.size,
+      fullyUnpriced: missedUsageBucketCount === usageBucketCount,
     });
   }
   return out

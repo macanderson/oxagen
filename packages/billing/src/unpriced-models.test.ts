@@ -360,6 +360,72 @@ describe("findUnpricedModels", () => {
     expect(out.map((m) => m.model)).toEqual(["gapped"]);
   });
 
+  // A rate that priced a class, then lapsed, then came back: the model has
+  // two `output` buckets, one priced and one not. The old rule flagged
+  // `fullyUnpriced` on "every USED CLASS missed at least once" — since
+  // `output` is the model's only class and it missed once, that read as
+  // fully unpriced even though the model's other `output` bucket has real,
+  // priced cost. The correct rule is "every USAGE BUCKET missed."
+  it("is not fully unpriced when a class has both a priced and an unpriced bucket", () => {
+    const book = [
+      entry({
+        model: "lapsed-then-restored",
+        tokenClass: "output",
+        effectiveFrom: new Date("2026-09-01T00:00:00.000Z"),
+        effectiveTo: new Date("2026-09-05T00:00:00.000Z"),
+      }),
+      entry({
+        model: "lapsed-then-restored",
+        tokenClass: "output",
+        effectiveFrom: new Date("2026-09-12T00:00:00.000Z"),
+      }),
+    ];
+    const out = findUnpricedModels({
+      observed: [
+        observed({
+          model: "lapsed-then-restored",
+          firstSeen: new Date("2026-09-02T00:00:00.000Z"),
+          lastSeen: new Date("2026-09-13T00:00:00.000Z"),
+          classes: [
+            // Priced bucket: falls inside the first rate's effective span.
+            usage({
+              tokenClass: "output",
+              firstSeen: new Date("2026-09-02T00:00:00.000Z"),
+              lastSeen: new Date("2026-09-02T00:00:00.000Z"),
+            }),
+            // Unpriced bucket: falls in the lapse between the two rates.
+            usage({
+              tokenClass: "output",
+              firstSeen: new Date("2026-09-08T00:00:00.000Z"),
+              lastSeen: new Date("2026-09-08T00:00:00.000Z"),
+            }),
+            // Priced bucket again: falls inside the second rate's span.
+            usage({
+              tokenClass: "output",
+              firstSeen: new Date("2026-09-13T00:00:00.000Z"),
+              lastSeen: new Date("2026-09-13T00:00:00.000Z"),
+            }),
+          ],
+        }),
+      ],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.missingClasses).toEqual(["output"]);
+    // The lapse bucket is still named as a gap the customer should see...
+    expect(out[0]!.missingClassWindows).toEqual([
+      {
+        tokenClass: "output",
+        unpricedFrom: new Date("2026-09-08T00:00:00.000Z"),
+        unpricedTo: new Date("2026-09-08T00:00:00.000Z"),
+      },
+    ]);
+    // ...but the model is not blank-cost: two of its three buckets priced.
+    expect(out[0]!.fullyUnpriced).toBe(false);
+  });
+
   it("orders fully unpriced first, then by tokens run, then by model id", () => {
     const partial = [
       entry({ model: "partial-huge", tokenClass: "input_uncached" }),
