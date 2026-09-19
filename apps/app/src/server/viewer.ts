@@ -44,7 +44,11 @@ export type { InvitationRecord } from "./tenancy-lookups";
 // The zone helper features need for date-bound writes. Features may import
 // `@/server/viewer` (ARCHITECTURE.md §2); they may not reach `viewer-zone`
 // directly. Re-export keeps one seam and avoids a layer violation.
-export { viewerTimeZone, type ViewerZone } from "./viewer-zone";
+//
+// `ViewerZone` (the return type) is not re-exported: nothing outside
+// viewer-zone.ts names it, every caller lets `await viewerTimeZone(...)`
+// infer it, and knip flags an export nothing imports.
+export { viewerTimeZone } from "./viewer-zone";
 
 /** The stored set: packages/database/src/schema/org.ts:96 and :170 CHECK lower(role) IN (…). */
 export type OrgRole =
