@@ -29,9 +29,9 @@
   font-weight:100 900;font-style:normal;font-display:swap;
 }
 @font-face{
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
-  src:url('/fonts/space-grotesk-latin-600.woff2') format('woff2');
-  font-weight:100 900;font-style:normal;font-display:swap;
+  font-family:'Monaspace Neon';
+  src:url('/fonts/monaspace-neon-latin-wght.woff2') format('woff2');
+  font-weight:200 800;font-style:normal;font-display:swap;
 }
 
 /* ============================ tokens ============================ */
@@ -55,7 +55,7 @@
   --ember-g:#F1CE65;--ember-f:#D4AF37;--ember-c:#977017;--ox-cursor:#FF4B2A;
   --grad:linear-gradient(135deg,#F1CE65 0%,#D4AF37 50%,#977017 100%);
   --sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
-  --mono:ui-monospace, SFMono-Regular, Menlo, monospace,ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  --mono:'Monaspace Neon',ui-monospace,SFMono-Regular,'Cascadia Code',Menlo,Consolas,monospace;
   --serif:'Literata',Charter,'Iowan Old Style',Georgia,serif;
   /* set by JS */
   --pw:480px;--ph:621px;--padx:42px;--padt:44px;--padb:56px;--colw:396px;--gap:96px;--fs:16px;
@@ -471,6 +471,7 @@ body{
   #stage{padding:60px 8px 34px}
 }
 
+.bk .ch-kicker{text-transform:uppercase}
 /* ===== second edition blocks: checklist, metrics, tables, field kit ===== */
 .bk .todo,.bk .measure,.bk .fits{break-inside:avoid;margin:1em 0 1.1em;padding:.75em .95em .65em;border-radius:6px;background:var(--card)}
 .bk .todo{border:1px dashed var(--ink-soft)}

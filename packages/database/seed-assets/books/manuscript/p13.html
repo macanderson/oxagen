@@ -27,7 +27,7 @@
 <h3>The scorecard on one page</h3>
 <p>Copy this into your runbook. Each row is a metric, the computation behind it, and the failure it usually points at.</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Metric</th><th>How to compute it</th><th>What a bad reading usually means</th></tr>
   </thead>
@@ -41,7 +41,7 @@
     <tr><td><code>cost_per_completed_task</code></td><td>Total spend including retries and abandoned runs, divided by tasks merged</td><td>Abandoned runs are uncounted, and the true figure is higher than the one you quote</td></tr>
     <tr><td><code>outcome_variance</code></td><td>Run one task 10 times, take the spread of cost and of pass or fail</td><td>Control flow is decided by inference, so the same input takes different paths</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <p>Cost per task is the number that travels furthest outside engineering, and it raises a question this part does not answer: which agent, which run, and which person does a given dollar belong to. Part 17 takes that up.</p>
 

@@ -25,7 +25,7 @@
   <li><strong>Retrieval precision over recall by default</strong>: start from verified anchors (part 3) and expand along graph edges (part 4) instead of dumping candidates.</li>
   <li><strong>Representation changes</strong>: signatures instead of bodies (a repo map is roughly a 100 to 1 compressor<sup class="cite"><a href="#r12">12</a></sup>), schemas instead of migrations, sliced traces instead of logs.</li>
   <li><strong>Budgets enforced in code</strong>: every context assembler takes a token budget and ranks content to fit it, and going over budget fails the build.</li>
-  <li><strong>Context utilization as a metric</strong>: what fraction of the provided tokens does the final patch depend on? In the traces this book draws on it often sits below 10 percent, and it is the clearest single indicator of wasted spend (part 13, and part 17 for attributing that spend to the team that caused it).</li>
+  <li><strong>Context utilization as a metric</strong>: what fraction of the provided tokens does the final patch depend on? In the traces this book draws on it often sits below 10%, and it is the clearest single indicator of wasted spend (part 13, and part 17 for attributing that spend to the team that caused it).</li>
 </ul>
 
 <h3>A budget the assembler cannot talk its way out of</h3>
@@ -52,14 +52,14 @@
     <li><strong>Replace one file dump with signatures.</strong> Parse with tree-sitter and emit declarations rather than bodies for anything outside the edit site. The artifact is a repo map you can diff against the old prompt, token for token.</li>
     <li><strong>Give the assembler a budget.</strong> Add the cap and the named failure above. Done looks like a test that asks for an over-budget assembly and asserts <code>BudgetError</code>.</li>
     <li><strong>Drop near-duplicates before they ship.</strong> Run minhash or simhash over retrieved chunks and collapse anything above your similarity threshold. Related distractors are the ones the fourth result says cost you most.</li>
-    <li><strong>Re-run last week's failures at the new budget.</strong> If accuracy holds with 40 percent fewer tokens, you have found the model upgrade you were about to buy.</li>
+    <li><strong>Re-run last week's failures at the new budget.</strong> If accuracy holds with 40% fewer tokens, you have found the model upgrade you were about to buy.</li>
   </ol>
 </div>
 
 <div class="measure">
   <span class="tag">Measure it</span>
   <ul>
-    <li><code>context_utilization</code>: tokens of blocks the accepted patch depended on, divided by tokens provided. Higher is better. Below 10 percent means most of your bill is noise.</li>
+    <li><code>context_utilization</code>: tokens of blocks the accepted patch depended on, divided by tokens provided. Higher is better. Below 10% means most of your bill is noise.</li>
     <li><code>tokens_per_accepted_patch</code>: total input tokens across the run, divided by patches a human accepted. Lower is better, and it is the number to quote when somebody proposes a larger window.</li>
     <li><code>distractor_rate</code>: share of retrieved chunks the final patch does not reference. Lower is better, and a rising value usually means recall crept back into your retriever.</li>
     <li><code>budget_overflow_rate</code>: assemblies that raised <code>BudgetError</code>, divided by assemblies. Lower is better, and each one is a retrieval bug with an address.</li>

@@ -424,16 +424,67 @@ export function lintProse(name, html, { words = true } = {}) {
   return problems;
 }
 
+/**
+ * Check the markup rules a fragment has to keep so both editions render it.
+ * Returns one message per violation.
+ *
+ * - A part carries all five fixed blocks: title, thesis, checklist, metrics,
+ *   takeaway. The checklist and the metrics are what the second edition added,
+ *   and a part without them is a part the reader cannot act on.
+ * - A table sits in a .tablewrap, or it overflows a phone-width field manual.
+ * - A citation points at a reference that exists.
+ */
+export function lintStructure(section, html, refsHtml) {
+  const problems = [];
+  if (section.kind === "part") {
+    const required = [
+      ['<h2 class="ch-title">', "a title"],
+      ['<p class="ch-thesis">', "a thesis"],
+      ['<div class="todo">', 'a "Do this week" block'],
+      ['<div class="measure">', 'a "Measure it" block'],
+      ['<div class="takeaway">', "a takeaway"],
+    ];
+    for (const [needle, label] of required) {
+      if (!html.includes(needle)) {
+        problems.push(`${section.file}: missing ${label}`);
+      }
+    }
+  }
+  for (const m of html.matchAll(/<table\b/g)) {
+    const before = html.slice(Math.max(0, m.index - 40), m.index);
+    if (!before.includes('class="tablewrap">')) {
+      problems.push(`${section.file}: a table outside <div class="tablewrap">`);
+    }
+  }
+  for (const m of html.matchAll(/href="#(r\d+)"/g)) {
+    if (!refsHtml.includes(`id="${m[1]}"`)) {
+      problems.push(`${section.file}: cites #${m[1]}, which refs.html lacks`);
+    }
+  }
+  return problems;
+}
+
+/** Every prose and structure problem in a manuscript. An empty list is a pass. */
+export function lintManuscript(manuscript) {
+  const refsHtml = manuscript.inners.refs ?? "";
+  return manuscript.book.sections.flatMap((s) => [
+    ...lintProse(s.file, manuscript.inners[s.id], { words: s.id !== "refs" }),
+    ...lintStructure(s, manuscript.inners[s.id], refsHtml),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Disk
 // ---------------------------------------------------------------------------
 
 export function loadManuscript(dir = MANUSCRIPT_DIR) {
   const book = JSON.parse(readFileSync(join(dir, "book.json"), "utf8"));
+  /** @type {Record<string, string>} */
   const inners = {};
   for (const s of book.sections) {
     inners[s.id] = readFileSync(join(dir, s.file), "utf8");
   }
+  /** @type {Record<string, string>} */
   const shells = {};
   for (const e of EDITIONS) {
     shells[e.shell] = readFileSync(join(dir, "shells", e.shell), "utf8");
@@ -463,10 +514,8 @@ function isDirectRun() {
 if (isDirectRun()) {
   const check = process.argv.includes("--check");
   const manuscript = loadManuscript();
-  const problems = manuscript.book.sections.flatMap((s) =>
-    lintProse(s.file, manuscript.inners[s.id], { words: s.id !== "refs" }),
-  );
-  for (const p of problems) process.stderr.write(`prose: ${p}\n`);
+  const problems = lintManuscript(manuscript);
+  for (const p of problems) process.stderr.write(`manuscript: ${p}\n`);
 
   let stale = 0;
   for (const { path, content } of expectedOutputs(manuscript)) {

@@ -29,9 +29,9 @@
   font-weight:100 900;font-style:normal;font-display:swap;
 }
 @font-face{
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
-  src:url('/fonts/space-grotesk-latin-600.woff2') format('woff2');
-  font-weight:100 900;font-style:normal;font-display:swap;
+  font-family:'Monaspace Neon';
+  src:url('/fonts/monaspace-neon-latin-wght.woff2') format('woff2');
+  font-weight:200 800;font-style:normal;font-display:swap;
 }
 
 /* ============================ tokens ============================ */
@@ -55,7 +55,7 @@
   --ember-g:#F1CE65;--ember-f:#D4AF37;--ember-c:#977017;--ox-cursor:#FF4B2A;
   --grad:linear-gradient(135deg,#F1CE65 0%,#D4AF37 50%,#977017 100%);
   --sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
-  --mono:ui-monospace, SFMono-Regular, Menlo, monospace,ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  --mono:'Monaspace Neon',ui-monospace,SFMono-Regular,'Cascadia Code',Menlo,Consolas,monospace;
   --serif:'Literata',Charter,'Iowan Old Style',Georgia,serif;
   /* set by JS */
   --pw:480px;--ph:621px;--padx:42px;--padt:44px;--padb:56px;--colw:396px;--gap:96px;--fs:16px;
@@ -471,6 +471,7 @@ body{
   #stage{padding:60px 8px 34px}
 }
 
+.bk .ch-kicker{text-transform:uppercase}
 /* ===== second edition blocks: checklist, metrics, tables, field kit ===== */
 .bk .todo,.bk .measure,.bk .fits{break-inside:avoid;margin:1em 0 1.1em;padding:.75em .95em .65em;border-radius:6px;background:var(--card)}
 .bk .todo{border:1px dashed var(--ink-soft)}
@@ -1038,7 +1039,7 @@ g.slice(symbol=<span class="a">"process_refund"</span>, budget=<span class="k">6
 
 <div class="evidence">
   <span class="tag">Evidence · Index once, query cheaply forever</span>
-  <p>Microsoft Research's <strong>GraphRAG</strong> shows the economics of amortized semantic indexing. An LLM pass extracts an entity graph from the corpus once, the Leiden algorithm detects semantic communities, and community summaries are pre-generated at index time. At query time, answering corpus-level questions from those summaries won 70 to 80 percent of head-to-head comparisons against naive RAG on comprehensiveness and diversity, while using roughly <strong>2 to 3 percent of the tokens per query</strong> that hierarchical source-text summarization would require, because the expensive understanding was paid for once, up front.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> The same trade applies to code. Indexing is a fixed cost. Rediscovery inside every run is a tax.</p>
+  <p>Microsoft Research's <strong>GraphRAG</strong> shows the economics of amortized semantic indexing. An LLM pass extracts an entity graph from the corpus once, the Leiden algorithm detects semantic communities, and community summaries are pre-generated at index time. At query time, answering corpus-level questions from those summaries won 70 to 80% of head-to-head comparisons against naive RAG on comprehensiveness and diversity, while using roughly <strong>2 to 3% of the tokens per query</strong> that hierarchical source-text summarization would require, because the expensive understanding was paid for once, up front.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> The same trade applies to code. Indexing is a fixed cost. Rediscovery inside every run is a tax.</p>
   <p class="src">Edge et al., arXiv:2404.16130 · Microsoft Research, 2024</p>
 </div>
 
@@ -1104,7 +1105,7 @@ may_call: [payments, notifications]
 <p>The instinct says instructions are free, and that the worst case is a model skimming the irrelevant ones. The research points the other way. Performance degrades as input grows even when the added material is task-relevant in spirit. Liu et al. showed models lose information positioned in the middle of long contexts,<sup class="cite"><a href="#r6">6</a></sup> and Chroma's 18-model study showed degradation with input length across every frontier model tested, at different rates.<sup class="cite"><a href="#r7">7</a></sup> Anthropic's context-engineering guidance is direct about the mechanism: attention is a finite budget, every token in context draws it down, and the goal is the <em>smallest set of high-signal tokens</em> that achieves the outcome.<sup class="cite"><a href="#r19">19</a></sup> Thirty thousand tokens of standing instructions are not a safety net. They are attention spent before the task begins, and billed per request.</p>
 
 <h3>The caching economics make it worse</h3>
-<p>Prompt caching looks like it rescues the large standing prompt. Cache reads cost about 10 percent of base input price on Anthropic's API, with a 25 percent premium on writes, cutting cost by up to 90 percent and latency by up to 85 percent for long stable prefixes.<sup class="cite"><a href="#r16">16</a></sup> The catch is that caching is prefix-exact. Edit one character of an early block and everything after it recomputes at full price, plus the write premium. A pile of frequently edited prose concatenated into the prompt is the worst shape for this, because each edit invalidates the cache across your whole fleet. Caching rewards small, stable, ordered context. That is an argument for structure, not for volume.</p>
+<p>Prompt caching looks like it rescues the large standing prompt. Cache reads cost about 10% of base input price on Anthropic's API, with a 25% premium on writes, cutting cost by up to 90% and latency by up to 85% for long stable prefixes.<sup class="cite"><a href="#r16">16</a></sup> The catch is that caching is prefix-exact. Edit one character of an early block and everything after it recomputes at full price, plus the write premium. A pile of frequently edited prose concatenated into the prompt is the worst shape for this, because each edit invalidates the cache across your whole fleet. Caching rewards small, stable, ordered context. That is an argument for structure, not for volume.</p>
 
 <div class="vs">
   <div class="a">
@@ -1218,7 +1219,7 @@ may_call: [payments, notifications]
   <li><strong>Retrieval precision over recall by default</strong>: start from verified anchors (part 3) and expand along graph edges (part 4) instead of dumping candidates.</li>
   <li><strong>Representation changes</strong>: signatures instead of bodies (a repo map is roughly a 100 to 1 compressor<sup class="cite"><a href="#r12">12</a></sup>), schemas instead of migrations, sliced traces instead of logs.</li>
   <li><strong>Budgets enforced in code</strong>: every context assembler takes a token budget and ranks content to fit it, and going over budget fails the build.</li>
-  <li><strong>Context utilization as a metric</strong>: what fraction of the provided tokens does the final patch depend on? In the traces this book draws on it often sits below 10 percent, and it is the clearest single indicator of wasted spend (part 13, and part 17 for attributing that spend to the team that caused it).</li>
+  <li><strong>Context utilization as a metric</strong>: what fraction of the provided tokens does the final patch depend on? In the traces this book draws on it often sits below 10%, and it is the clearest single indicator of wasted spend (part 13, and part 17 for attributing that spend to the team that caused it).</li>
 </ul>
 
 <h3>A budget the assembler cannot talk its way out of</h3>
@@ -1245,14 +1246,14 @@ may_call: [payments, notifications]
     <li><strong>Replace one file dump with signatures.</strong> Parse with tree-sitter and emit declarations rather than bodies for anything outside the edit site. The artifact is a repo map you can diff against the old prompt, token for token.</li>
     <li><strong>Give the assembler a budget.</strong> Add the cap and the named failure above. Done looks like a test that asks for an over-budget assembly and asserts <code>BudgetError</code>.</li>
     <li><strong>Drop near-duplicates before they ship.</strong> Run minhash or simhash over retrieved chunks and collapse anything above your similarity threshold. Related distractors are the ones the fourth result says cost you most.</li>
-    <li><strong>Re-run last week's failures at the new budget.</strong> If accuracy holds with 40 percent fewer tokens, you have found the model upgrade you were about to buy.</li>
+    <li><strong>Re-run last week's failures at the new budget.</strong> If accuracy holds with 40% fewer tokens, you have found the model upgrade you were about to buy.</li>
   </ol>
 </div>
 
 <div class="measure">
   <span class="tag">Measure it</span>
   <ul>
-    <li><code>context_utilization</code>: tokens of blocks the accepted patch depended on, divided by tokens provided. Higher is better. Below 10 percent means most of your bill is noise.</li>
+    <li><code>context_utilization</code>: tokens of blocks the accepted patch depended on, divided by tokens provided. Higher is better. Below 10% means most of your bill is noise.</li>
     <li><code>tokens_per_accepted_patch</code>: total input tokens across the run, divided by patches a human accepted. Lower is better, and it is the number to quote when somebody proposes a larger window.</li>
     <li><code>distractor_rate</code>: share of retrieved chunks the final patch does not reference. Lower is better, and a rising value usually means recall crept back into your retriever.</li>
     <li><code>budget_overflow_rate</code>: assemblies that raised <code>BudgetError</code>, divided by assemblies. Lower is better, and each one is a retrieval bug with an address.</li>
@@ -1270,15 +1271,15 @@ may_call: [payments, notifications]
 <h2 class="ch-title">Agents guess at schema they were not shown</h2>
 <p class="ch-thesis">A model adds a duplicate column when the context did not carry the existing one.</p>
 
-<p class="lede">Every team running coding agents against a real product meets the same bug report. The agent added a <code>user_email</code> column to a table that already had <code>email</code>. Or wrote a migration duplicating an index. Or built a query against a column renamed two quarters ago. The postmortem instinct is to call it a hallucination. The mechanism is duller: the model was not shown the schema, so it did what an engineer with no view of the database would do, which is guess.</p>
+<p class="lede">A bug report that teams running coding agents against a real product tend to meet: The agent added a <code>user_email</code> column to a table that already had <code>email</code>. Or wrote a migration duplicating an index. Or built a query against a column renamed two quarters ago. The postmortem instinct is to call it a hallucination. The mechanism is duller: the model was not shown the schema, so it did what an engineer with no view of the database would do, which is guess.</p>
 
 <h3>Why schema is the worst-served context type</h3>
-<p>Schema knowledge resists text retrieval. The live truth is not in any one file. It is the fold of an ordered migration history: 400 migration files where the current shape of <code>orders</code> is the sum of 23 of them, interleaved with everything else. Grep for the table name and you get all 23 plus every query that touches it, which is a pile of maximum-similarity distractors, the exact noise profile part 7 showed is most damaging. Object-relational mapper (ORM) models drift from the database. Column semantics (<code>amount</code> is integer cents, not a float) live in tribal memory. Telling the agent to read the migrations folder does not fix this, because what it needs is a computed state rather than a document.</p>
+<p>Schema knowledge resists text retrieval. The live truth is not in any one file. It is the fold of an ordered migration history: 400 migration files where the current shape of <code>orders</code> is the sum of 23 of them, interleaved with everything else. Grep for the table name and you get all 23 plus every query that touches it, which are closely related distractors, the kind of noise part 7 showed does the most damage. Object-relational mapper (ORM) models drift from the database. Column semantics (<code>amount</code> is integer cents, not a float) live in tribal memory. Telling the agent to read the migrations folder does not fix this, because what it needs is a computed state rather than a document.</p>
 
 <h3>Schema becomes another graph node</h3>
 <p>The deterministic fix treats schema the way part 4 treats code, as structure to be indexed rather than text to be searched.</p>
 <ul class="plain">
-  <li><strong>Schema index</strong>: introspect the live database (or replay migrations) into a canonical, versioned snapshot of tables, columns, types, constraints, indexes, and foreign keys. This is a solved problem, and every ORM ships the machinery.</li>
+  <li><strong>Schema index</strong>: introspect the live database (or replay migrations) into a canonical, versioned snapshot of tables, columns, types, constraints, indexes, and foreign keys. Most ORMs ship the machinery.</li>
   <li><strong>Migration graph</strong>: each column carries its lineage, created in <code>0042</code>, renamed in <code>0187</code>, backfilled in <code>0201</code>. "Why is this nullable?" becomes a graph query with commit-linked answers.</li>
   <li><strong>Code and schema edges</strong>: static analysis of ORM models and query sites links <code>LedgerEntry</code> to <code>ledger_entries</code> to the 14 call sites that write it. "What breaks if I drop this column?" becomes a traversal rather than a guess.</li>
   <li><strong>Domain mapping</strong>: tables attach to the part 5 domains, so a billing task retrieves billing tables and only billing tables.</li>
@@ -1291,7 +1292,7 @@ may_call: [payments, notifications]
 <span class="c"># invariant: money columns are integer cents (lint: no-float-money)</span>
 <span class="c"># ~600 tokens. Verified against production at SHA 9f31c2.</span></code></pre>
 
-<p>Six hundred tokens of verified schema beat sixty thousand tokens of migration files. Because the slice comes from the live database, the duplicate-column failure also gets a second line of defence. The deterministic layer diffs the proposed migration against the index and rejects collisions before a human reviews them. That is the pattern of this series in miniature. Do not ask the model to remember reality. Show it reality, then check its output against reality.</p>
+<p>A slice of a few hundred verified tokens replaces the migration files the agent would otherwise read. Because the slice comes from the live database, the duplicate-column failure also gets a second line of defence. The deterministic layer diffs the proposed migration against the index and rejects collisions before a human reviews them. That is the pattern of this book at small scale. Do not ask the model to remember reality. Show it reality, then check its output against reality.</p>
 
 <h3>The check that catches the duplicate column</h3>
 <pre><code>$ schema-check migrations/0203_add_user_email.py
@@ -1304,14 +1305,14 @@ may_call: [payments, notifications]
 
 <h3>Introspect the database, or replay the migrations</h3>
 <ul class="plain">
-  <li><strong>Introspect a restored copy</strong> when production is the source of truth and hand-run DDL exists. You get the real shape, including the index somebody added at 2am. The cost is a restore in CI.</li>
+  <li><strong>Introspect a restored copy</strong> when production is the source of truth and hand-run DDL exists. You get the real shape, including the index somebody added by hand. The cost is a restore in CI.</li>
   <li><strong>Replay migrations into a scratch database</strong> when the migration history is authoritative and complete. It is cheaper and reproducible from the repository alone, but drift between the files and production stays invisible.</li>
 </ul>
 <p>Pick one and stamp the snapshot with the SHA it came from. An unstamped snapshot becomes the stale wiki of part 5, with worse consequences.</p>
 
 <div class="evidence">
   <span class="tag">Evidence · Grounding beats recall</span>
-  <p>The general principle holds even where the schema-specific study does not exist yet. Retrieval grounding reduces fabrication compared with parametric recall, the precision of what is retrieved dominates its volume (the distractor results in parts 2 and 7<sup class="cite"><a href="#r7">7</a>,<a href="#r9">9</a></sup>), and structured representations of a system outperform prose descriptions of it for machine consumption (parts 4 to 6<sup class="cite"><a href="#r12">12</a>,<a href="#r13">13</a></sup>). Schema is the highest-stakes instance. It is the context type where a fabrication becomes a migration, and a migration becomes an outage.</p>
+  <p>The general principle holds even where the schema-specific study does not exist yet. Retrieval grounding reduces fabrication compared with parametric recall, the precision of what is retrieved dominates its volume (the distractor results in parts 2 and 7<sup class="cite"><a href="#r7">7</a>,<a href="#r9">9</a></sup>), and structured representations of a system outperform prose descriptions of it for machine consumption (parts 4 to 6<sup class="cite"><a href="#r12">12</a>,<a href="#r13">13</a></sup>). Schema is the highest-stakes instance. It is the context type where a fabricated column becomes a migration that someone has to reverse.</p>
   <p class="src">Synthesis. See refs 7, 9, 12, 13</p>
 </div>
 
@@ -1389,7 +1390,7 @@ may_call: [payments, notifications]
   </div>
 </div>
 
-<p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>. A workflow engine owns the graph, localize → retrieve → patch → test → review, and calls the model only inside the nodes where judgment is required. Event-driven orchestration handles fan-out where sub-tasks are independent, the one regime where even Anthropic's data says parallelism pays.<sup class="cite"><a href="#r3">3</a></sup> Where sub-agents do earn their keep, the honest framing is Cognition's: the reliable ones are mostly read-only context gatherers, closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
+<p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>. A workflow engine owns the graph, localize → retrieve → patch → test → review, and calls the model only inside the nodes where judgment is required. Event-driven orchestration handles fan-out where sub-tasks are independent, the one regime where even Anthropic's data says parallelism pays.<sup class="cite"><a href="#r3">3</a></sup> Where sub-agents do earn their keep, the framing to keep is Cognition's: the reliable ones are mostly read-only context gatherers, closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
 
 <p>Written down, the skeleton fits on a page. Every line below is code you can read in a diff, and the budget is a number the engine enforces rather than a sentence the model may ignore.</p>
 
@@ -1408,7 +1409,7 @@ may_call: [payments, notifications]
 
 <p>That leaves one question worth asking per node: does this step need a model at all?</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Use a workflow node when</th><th>Use a sub-agent call when</th></tr>
   </thead>
@@ -1418,7 +1419,7 @@ may_call: [payments, notifications]
     <tr><td>Later steps depend on this one's exact result</td><td>The sub-task is independent and read-only</td></tr>
     <tr><td>You want the same answer twice</td><td>You can afford variance and will verify the result</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <div class="todo">
   <span class="tag">Do this week</span>
@@ -1582,7 +1583,7 @@ on_overflow: drop lowest rank first, then fail the node
 
 <p>Aging needs a policy table rather than a paragraph, because each rule has to hold for a run you did not watch.</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Item in working memory</th><th>Policy</th><th>Where it goes</th></tr>
   </thead>
@@ -1593,7 +1594,7 @@ on_overflow: drop lowest rank first, then fail the node
     <tr><td>Superseded stack trace</td><td>Evict on the next green run</td><td>Run log, outside the window</td></tr>
     <tr><td>Active target symbol</td><td>Pin until the node completes</td><td>Stays resident</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <p>Every one of those policies is deterministic. What pages in, what decays, and what leaves are decidable by code against declared contracts. The window stops being a place things accumulate and becomes the small, hot set of what this step needs. A structured memory of entities, relations, and decisions is also most of the way to a knowledge graph, which is where this series goes next.</p>
 
@@ -1635,7 +1636,7 @@ on_overflow: drop lowest rank first, then fail the node
 <p>The previous eleven parts each built a specialized index. The knowledge graph is where they federate into a single ontology over your engineering reality: <strong>code graphs</strong> (symbols, calls, imports, Part 4), <strong>schema graphs</strong> (tables, lineage, Part 8), <strong>documentation graphs</strong> (architecture decision records, or ADRs, and dossiers linked to the entities they govern, Parts 5 to 6), <strong>test and contract graphs</strong> (behaviors linked to covered symbols, Part 10), and <strong>runtime graphs</strong> (services, traces, and incidents from your tracing and incident systems). Entity relationships cross the boundaries: this function ↔ writes this table ↔ governed by this ADR ↔ covered by these tests ↔ implicated in that incident. No single tool holds those edges today, which is why an incident review opens with an hour of archaeology.</p>
 
 <h3>Why graph retrieval reduces reasoning complexity</h3>
-<p>When an answer requires multi-hop connection, flat retrieval makes the model do the hops. It retrieves chunks, holds them in attention, and infers the links: probabilistic work, paid in tokens, degraded by every distractor (Part 7). Graph retrieval does the hops in the system by deterministic traversal, then hands the model a pre-connected subgraph. You have converted reasoning, which is expensive and variable, into lookup, which is cheap and exact. That is the thesis of this series applied to knowledge itself.</p>
+<p>When an answer requires multi-hop connection, flat retrieval makes the model do the hops. It retrieves chunks, holds them in attention, and infers the links: probabilistic work, paid in tokens, degraded by every distractor (Part 7). Graph retrieval does the hops in the system by deterministic traversal, then hands the model a pre-connected subgraph. You have converted reasoning, which is expensive and variable, into lookup, which is cheap and exact. That is the thesis of this book applied to knowledge.</p>
 
 <div class="evidence">
   <span class="tag">Evidence · Structure wins where connection matters</span>
@@ -1665,7 +1666,7 @@ anchor("process_refund")                  # parsed from the ticket
 
 <p>The difference that buys is worth stating as a comparison, because it is the reason the token bill moves.</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Question: what breaks if I change the refund amount type?</th><th>Flat retrieval</th><th>Graph traversal</th></tr>
   </thead>
@@ -1676,7 +1677,7 @@ anchor("process_refund")                  # parsed from the ticket
     <tr><td>Who does the joining</td><td>The model, in attention, per call</td><td>The index, once, at write time</td></tr>
     <tr><td>Cost of a wrong answer</td><td>A silent miss you find in production</td><td>A missing edge you can go add</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <div class="todo">
   <span class="tag">Do this week</span>
@@ -1736,7 +1737,7 @@ anchor("process_refund")                  # parsed from the ticket
 <h3>The scorecard on one page</h3>
 <p>Copy this into your runbook. Each row is a metric, the computation behind it, and the failure it usually points at.</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Metric</th><th>How to compute it</th><th>What a bad reading usually means</th></tr>
   </thead>
@@ -1750,7 +1751,7 @@ anchor("process_refund")                  # parsed from the ticket
     <tr><td><code>cost_per_completed_task</code></td><td>Total spend including retries and abandoned runs, divided by tasks merged</td><td>Abandoned runs are uncounted, and the true figure is higher than the one you quote</td></tr>
     <tr><td><code>outcome_variance</code></td><td>Run one task 10 times, take the spread of cost and of pass or fail</td><td>Control flow is decided by inference, so the same input takes different paths</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <p>Cost per task is the number that travels furthest outside engineering, and it raises a question this part does not answer: which agent, which run, and which person does a given dollar belong to. Part 17 takes that up.</p>
 

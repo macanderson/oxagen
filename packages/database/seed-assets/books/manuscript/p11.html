@@ -38,7 +38,7 @@ on_overflow: drop lowest rank first, then fail the node
 
 <p>Aging needs a policy table rather than a paragraph, because each rule has to hold for a run you did not watch.</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Item in working memory</th><th>Policy</th><th>Where it goes</th></tr>
   </thead>
@@ -49,7 +49,7 @@ on_overflow: drop lowest rank first, then fail the node
     <tr><td>Superseded stack trace</td><td>Evict on the next green run</td><td>Run log, outside the window</td></tr>
     <tr><td>Active target symbol</td><td>Pin until the node completes</td><td>Stays resident</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <p>Every one of those policies is deterministic. What pages in, what decays, and what leaves are decidable by code against declared contracts. The window stops being a place things accumulate and becomes the small, hot set of what this step needs. A structured memory of entities, relations, and decisions is also most of the way to a knowledge graph, which is where this series goes next.</p>
 

@@ -43,7 +43,7 @@
   </div>
 </div>
 
-<p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>. A workflow engine owns the graph, localize → retrieve → patch → test → review, and calls the model only inside the nodes where judgment is required. Event-driven orchestration handles fan-out where sub-tasks are independent, the one regime where even Anthropic's data says parallelism pays.<sup class="cite"><a href="#r3">3</a></sup> Where sub-agents do earn their keep, the honest framing is Cognition's: the reliable ones are mostly read-only context gatherers, closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
+<p>The pattern that works is <em>deterministic skeleton, probabilistic muscles</em>. A workflow engine owns the graph, localize → retrieve → patch → test → review, and calls the model only inside the nodes where judgment is required. Event-driven orchestration handles fan-out where sub-tasks are independent, the one regime where even Anthropic's data says parallelism pays.<sup class="cite"><a href="#r3">3</a></sup> Where sub-agents do earn their keep, the framing to keep is Cognition's: the reliable ones are mostly read-only context gatherers, closer to expensive tool calls than to collaborating colleagues.<sup class="cite"><a href="#r4">4</a></sup></p>
 
 <p>Written down, the skeleton fits on a page. Every line below is code you can read in a diff, and the budget is a number the engine enforces rather than a sentence the model may ignore.</p>
 
@@ -62,7 +62,7 @@
 
 <p>That leaves one question worth asking per node: does this step need a model at all?</p>
 
-<table class="tbl">
+<div class="tablewrap"><table class="tbl">
   <thead>
     <tr><th>Use a workflow node when</th><th>Use a sub-agent call when</th></tr>
   </thead>
@@ -72,7 +72,7 @@
     <tr><td>Later steps depend on this one's exact result</td><td>The sub-task is independent and read-only</td></tr>
     <tr><td>You want the same answer twice</td><td>You can afford variance and will verify the result</td></tr>
   </tbody>
-</table>
+</table></div>
 
 <div class="todo">
   <span class="tag">Do this week</span>
