@@ -364,7 +364,12 @@
         })
         .then(function (r) {
           var data = r.data || {};
-          if (r.status >= 200 && r.status < 300 && data.ok) {
+          if (
+            r.status >= 200 &&
+            r.status < 300 &&
+            data.ok &&
+            data.delivered !== false
+          ) {
             form.reset();
             setStatus(form, "");
             form.hidden = true;
@@ -382,6 +387,19 @@
                 /* ignore */
               }
             }
+          } else if (r.status >= 200 && r.status < 300 && data.ok) {
+            /* The lead is saved but the email failed to send (data.delivered
+               === false). Keep the form visible and re-enabled so a retry
+               submits again, rather than hiding it behind a success panel
+               over a link that never went out. The homepage has no resend
+               control, so re-submitting the form is the retry path. */
+            btn.disabled = false;
+            setStatus(
+              form,
+              data.message ||
+                "We saved your details, but couldn't send the email. Please try again.",
+              true,
+            );
           } else {
             btn.disabled = false;
             setStatus(form, FAIL, true);

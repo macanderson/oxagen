@@ -72,8 +72,10 @@ const SENT = "The link to the book has been sent to your email.";
 const DEMO_SENT = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND =
   "We couldn't find that email. Please fill out the form to get the book.";
-const DELIVERY_FAILED =
-  "We saved your details, but couldn't email the link just now. Please try the resend option in a moment.";
+const SIGNUP_DELIVERY_FAILED =
+  "We saved your details, but couldn't send the email. Please try again.";
+const RESEND_DELIVERY_FAILED =
+  "We couldn't send the email just now. Please try again in a moment.";
 
 let ipCounter = 0;
 function freshIp(): string {
@@ -173,7 +175,7 @@ describe("POST /v1/cms/leads", () => {
     expect(await res.json()).toEqual({
       ok: true,
       delivered: false,
-      message: DELIVERY_FAILED,
+      message: SIGNUP_DELIVERY_FAILED,
     });
     // The lead and code are already persisted — only the email failed —
     // and finalize revokes the new code rather than the (absent) prior one.
@@ -258,7 +260,6 @@ describe("POST /v1/cms/book/redeem", () => {
       editions: [
         { slug: "page-flip-reader", title: "Reader", format: "page-flip" },
       ],
-      leadEmail: "ada@example.com",
     });
     const res = await post("/book/redeem", {
       edition: "page-flip-reader",
@@ -346,7 +347,7 @@ describe("POST /v1/cms/book/resend", () => {
     expect(await res.json()).toEqual({
       ok: true,
       sent: false,
-      message: DELIVERY_FAILED,
+      message: RESEND_DELIVERY_FAILED,
     });
     // Not delivered: finalize revokes the NEW code, so the prior link (the
     // one the lead already knew worked) is left active, not both dead.

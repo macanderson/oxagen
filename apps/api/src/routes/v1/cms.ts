@@ -63,9 +63,13 @@ const SENT_MESSAGE = "The link to the book has been sent to your email.";
 const DEMO_MESSAGE = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND_MESSAGE =
   "We couldn't find that email. Please fill out the form to get the book.";
-const DELIVERY_FAILED_MESSAGE =
-  "We saved your details, but couldn't email the link just now. " +
-  "Please try the resend option in a moment.";
+// Two wordings: /leads has no resend control in front of it (the homepage
+// forms only ever submit once), while /book/resend IS the resend action, so
+// its own failure message can honestly point back at itself.
+const SIGNUP_DELIVERY_FAILED_MESSAGE =
+  "We saved your details, but couldn't send the email. Please try again.";
+const RESEND_DELIVERY_FAILED_MESSAGE =
+  "We couldn't send the email just now. Please try again in a moment.";
 
 const optionalTrimmed = (max: number) =>
   z
@@ -256,7 +260,7 @@ cmsRoute.post("/leads", async (c) => {
         // first code) their prior link is still live — only the email
         // failed, so this stays 200 with an honest retry message.
         return c.json(
-          { ok: true, delivered: false, message: DELIVERY_FAILED_MESSAGE },
+          { ok: true, delivered: false, message: SIGNUP_DELIVERY_FAILED_MESSAGE },
           200,
         );
       }
@@ -344,7 +348,7 @@ cmsRoute.post("/book/resend", async (c) => {
       {
         ok: true,
         sent: delivered,
-        message: delivered ? SENT_MESSAGE : DELIVERY_FAILED_MESSAGE,
+        message: delivered ? SENT_MESSAGE : RESEND_DELIVERY_FAILED_MESSAGE,
       },
       200,
     );
