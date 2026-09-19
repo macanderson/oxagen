@@ -300,7 +300,6 @@ import { runCostGetRoute } from "./routes/v1/run.cost";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
-import { cmsRoute } from "./routes/v1/cms";
 
 export type AppEnv = {
   Variables: {
