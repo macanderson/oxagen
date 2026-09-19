@@ -60,6 +60,9 @@
       },
       "at": {
         "type": "string"
+      },
+      "confirmUnpriced": {
+        "type": "boolean"
       }
     },
     "required": [

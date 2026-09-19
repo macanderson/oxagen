@@ -190,6 +190,36 @@ describe("price remove", () => {
     expect(c.output()).not.toContain("returns to the list price");
   });
 
+  // The gap the reviewer named: the handler now refuses to close a rate that
+  // would leave the class unpriced unless the caller says to. The CLI must
+  // surface the specific flag that resolves it, not a bare error.
+  it("points at --confirm-unpriced when the close is refused for going unpriced", async () => {
+    apiPostOrThrow.mockRejectedValue(
+      new MockApiError(
+        "Error 409 from cost/price-entries/remove: price_entry_close_would_unprice — " +
+          "ending the negotiated rate for claude-sonnet-5 input_uncached would leave it UNPRICED",
+        409,
+      ),
+    );
+    const c = captureWriter();
+    await priceRemove(good, c.writer);
+    expect(c.output()).toContain("--confirm-unpriced");
+  });
+
+  it("carries --confirm-unpriced through as confirmUnpriced: true", async () => {
+    apiPostOrThrow.mockResolvedValue({
+      at: "2026-11-01T00:00:00.000Z",
+      closed: row({ effectiveTo: "2026-11-01T00:00:00.000Z" }),
+      fallbackPriced: false,
+    });
+    const c = captureWriter();
+    await priceRemove({ ...good, confirmUnpriced: true }, c.writer);
+    expect(apiPostOrThrow).toHaveBeenCalledWith(
+      "cost/price-entries/remove",
+      expect.objectContaining({ confirmUnpriced: true }),
+    );
+  });
+
   it("says when there was nothing open to end", async () => {
     apiPostOrThrow.mockResolvedValue({
       at: "2026-11-01T00:00:00.000Z",

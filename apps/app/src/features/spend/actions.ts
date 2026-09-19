@@ -156,6 +156,13 @@ export async function setPriceEntryAction(
  * must not claim a fallback that is not there. The row is closed and kept,
  * never deleted: a run priced before this instant still names the entry it
  * was priced with.
+ *
+ * The handler checks for that fallback BEFORE it closes anything: without
+ * `confirmUnpriced` it refuses a close that would leave the class unpriced
+ * (`conflict` / `price_entry_close_would_unprice`) rather than close first
+ * and report the gap here afterward. `values.confirmUnpriced` is the
+ * dialog's second submit, once the person has seen that refusal and chosen
+ * to proceed anyway.
  */
 export async function removePriceEntryAction(
   at: SpendAt,

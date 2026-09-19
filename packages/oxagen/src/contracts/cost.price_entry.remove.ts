@@ -31,6 +31,16 @@
  * the org Owner, Admin and Billing roles. The handler asserts the same roles
  * itself — the kernel's IAM check allows every capability for a
  * non-enterprise organization (INV-29).
+ *
+ * `confirmUnpriced` gates the one outcome the contract, the CLI and the
+ * dialog all promise will not happen: a class that "falls back to the list
+ * price" instead going unpriced. The handler checks for an effective
+ * fallback BEFORE it closes anything, and when none exists it refuses with
+ * `price_entry_close_would_unprice` rather than close and hope the caller
+ * reads `fallbackPriced` in the output afterward — closing is a soft delete
+ * (see above), but the window between "closed" and "someone notices and sets
+ * a new rate" still prices every frame in it wrong. `confirmUnpriced: true`
+ * is the caller stating it read that refusal and wants to proceed anyway.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -71,6 +81,13 @@ export const costPriceEntryRemove = registerCapability({
       region: z.string().min(1).max(64).nullable().optional(),
       /** RFC 3339; the write instant when omitted. Must be after the row starts. */
       at: z.string().datetime().optional(),
+      /**
+       * Required (true) when closing this row would leave the class with no
+       * list, override or other negotiated fallback — the handler checks
+       * before closing and refuses with `price_entry_close_would_unprice`
+       * otherwise. Ignored, not required, when a fallback exists.
+       */
+      confirmUnpriced: z.boolean().optional(),
     })
     .strict(),
   output: z

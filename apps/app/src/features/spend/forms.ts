@@ -126,6 +126,13 @@ export type RemovePriceEntryFormValues = {
   model: string;
   region: string;
   tokenClass: string;
+  /**
+   * States the class may go UNPRICED, not list-priced, once this rate ends.
+   * The dialog leaves this unset on the first submit; the handler refuses
+   * with `price_entry_close_would_unprice` if a fallback is missing, and the
+   * dialog resubmits with this set only after the person confirms.
+   */
+  confirmUnpriced?: boolean;
 };
 
 type PriceFormErrorKey =
@@ -267,6 +274,7 @@ export const RemovePriceEntryForm = z
     model: z.string(),
     region: z.string(),
     tokenClass: z.string(),
+    confirmUnpriced: z.boolean().optional(),
   })
   .transform((form, ctx) => {
     const provider = form.provider.trim();
@@ -286,6 +294,7 @@ export const RemovePriceEntryForm = z
       model,
       tokenClass: tokenClass.data,
       region: region.length === 0 ? null : region,
+      ...(form.confirmUnpriced === true ? { confirmUnpriced: true } : {}),
     };
   });
 

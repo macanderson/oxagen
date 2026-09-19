@@ -31,6 +31,16 @@ describe("remove_price_entry contract", () => {
     expect(Object.keys(costPriceEntryRemove.input.shape)).not.toContain("id");
   });
 
+  // Optional, and never required to close a rate that has somewhere to fall
+  // back to — only the handler's pre-close guard reads it, when it must.
+  it("takes an optional confirmUnpriced, not required by default", () => {
+    expect(
+      costPriceEntryRemove.input.safeParse({ ...input, confirmUnpriced: true })
+        .success,
+    ).toBe(true);
+    expect(costPriceEntryRemove.input.safeParse(input).success).toBe(true);
+  });
+
   it("ends a window rather than deleting history", () => {
     expect(Object.keys(costPriceEntryRemove.output.shape).sort()).toEqual([
       "at",

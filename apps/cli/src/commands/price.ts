@@ -86,6 +86,9 @@ interface PriceEntryRemoveResult {
   fallbackPriced: boolean;
 }
 
+/** The handler's refusal when a close has somewhere live to end but nowhere to fall back to. */
+const CLOSE_WOULD_UNPRICE = "price_entry_close_would_unprice";
+
 function isTokenClass(v: string): v is TokenClass {
   return (TOKEN_CLASSES as readonly string[]).includes(v);
 }
@@ -247,6 +250,13 @@ export interface PriceRemoveCliOptions {
   tokenClass?: string;
   region?: string;
   at?: string;
+  /**
+   * States the class may go UNPRICED, not list-priced, once this rate ends.
+   * Only read when it would: `remove_price_entry` refuses without it, naming
+   * `price_entry_close_would_unprice`, rather than close first and report the
+   * gap in the output afterward.
+   */
+  confirmUnpriced?: boolean;
   json?: boolean;
 }
 
@@ -293,10 +303,23 @@ export async function priceRemove(
         tokenClass: opts.tokenClass,
         region: opts.region ?? null,
         at,
+        confirmUnpriced: opts.confirmUnpriced ? true : undefined,
       },
     );
   } catch (err) {
     out.error(err, "api");
+    // The one refusal this command can act on directly: the handler already
+    // named the fix (set a fallback first, or confirm going unpriced), but
+    // named it by the wire field, not the flag a person typing this command
+    // would reach for.
+    if (
+      !out.isJson &&
+      err instanceof Error &&
+      err.message.includes(CLOSE_WOULD_UNPRICE)
+    )
+      writer.write(
+        "  Re-run with --confirm-unpriced to end the rate anyway.",
+      );
     return;
   }
 

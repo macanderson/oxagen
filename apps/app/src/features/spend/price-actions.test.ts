@@ -289,4 +289,34 @@ describe("removePriceEntryAction", () => {
       value: { fallbackPriced: true },
     });
   });
+
+  // The handler refuses a close that would leave the class unpriced unless
+  // the caller states it. The action is a plain relay of that refusal.
+  it("relays the handler's refusal to close an unfallbacked rate as conflict", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "price_entry_close_would_unprice",
+      }),
+    );
+    expect(await removePriceEntryAction(at, key)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "price_entry_close_would_unprice",
+    });
+  });
+
+  it("carries confirmUnpriced through to the handler once the person confirms", async () => {
+    invoke.mockResolvedValue({
+      at: "2026-09-17T12:00:00.000Z",
+      closed: { ...entry, effectiveTo: "2026-09-17T12:00:00.000Z" },
+      fallbackPriced: false,
+    });
+    await removePriceEntryAction(at, { ...key, confirmUnpriced: true });
+    expect(invoke).toHaveBeenCalledWith(
+      costPriceEntryRemove.name,
+      expect.objectContaining({ confirmUnpriced: true }),
+      expect.anything(),
+    );
+  });
 });

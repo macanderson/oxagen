@@ -62,13 +62,26 @@ const closedEntry: PriceEntry = {
   source: "negotiated",
 };
 
+/**
+ * The same row, still open — the shape `loadPriceBook` would actually answer
+ * BEFORE a close that goes on to produce `closedEntry`. The guard reads the
+ * book pre-close, so a harness whose default `result` is `closedEntry` needs
+ * this, not `closedEntry` itself, standing in as "the organization's active
+ * row" or the guard would find nothing live and never engage.
+ */
+const openEntry: PriceEntry = { ...closedEntry, effectiveTo: null };
+
 function harness(
   result: PriceEntry | null = closedEntry,
   cancelled: PriceEntry[] = [],
-  // The book read after the close, for the fallback check. Empty by
-  // default: nothing else in the book means the class has no fallback once
-  // the negotiated row is gone.
-  book: PriceEntry[] = [],
+  // The book the guard reads BEFORE the close. Defaults to naming the
+  // organization's own row open (`openEntry`) whenever `result` says a close
+  // is expected to find and end something — matching what `loadPriceBook`
+  // would actually answer at that point — and to empty when `result` is
+  // null, since a call with nothing to close names no active row either.
+  // Nothing else in the book by default means no fallback once that row is
+  // gone.
+  book: PriceEntry[] = result ? [openEntry] : [],
 ) {
   const closeNegotiatedPriceEntry = vi.fn(async (args: { at?: Date }) => ({
     // The store answers the instant it used: the caller's, or the write
@@ -127,7 +140,11 @@ describe("remove_price_entry", () => {
     ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
 
     gate.keyCreator = "u_key_creator";
-    await h.handler(input(), { ...ctx(), userId: null, apiKeyId: "ak_1" });
+    await h.handler(input({ confirmUnpriced: true }), {
+      ...ctx(),
+      userId: null,
+      apiKeyId: "ak_1",
+    });
     expect(gate.actors).toEqual([null, "u_key_creator"]);
   });
 
@@ -147,8 +164,11 @@ describe("remove_price_entry", () => {
   });
 
   it("leaves an omitted instant to the store, and answers the instant the store used", async () => {
+    // The book this harness reads names only the organization's own open row
+    // and nothing else, so the guard refuses the close unless the caller
+    // confirms it.
     const h = harness();
-    const out = await h.handler(input(), ctx());
+    const out = await h.handler(input({ confirmUnpriced: true }), ctx());
 
     expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledWith({
       orgId: SCOPE.orgId,
@@ -182,9 +202,52 @@ describe("remove_price_entry", () => {
     );
   });
 
+  // The gap the reviewer's fresh evidence named: closing the sole negotiated
+  // price for a custom model or class used to close first and only say
+  // afterward that nothing now prices it. The guard runs before the close,
+  // so the class stays priced (at the rate it already had) until the caller
+  // states it means to go unpriced.
+  it("refuses to close a rate that would leave the class unpriced, without confirmation", async () => {
+    const h = harness();
+    await expect(h.handler(input(), ctx())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_close_would_unprice",
+    });
+    expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+    expect(audit.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it("closes the rate anyway once the caller confirms it may go unpriced", async () => {
+    const h = harness();
+    const out = await h.handler(input({ confirmUnpriced: true }), ctx());
+    expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledTimes(1);
+    expect(out.fallbackPriced).toBe(false);
+  });
+
+  // The guard checks the book as it stands before the close, so the row
+  // about to close must not count as its own fallback: reading the raw book
+  // (own row still open, the harness default) would otherwise resolve to
+  // that very row and never refuse.
+  it("does not let the row about to close stand in as its own fallback", async () => {
+    const h = harness();
+    await expect(h.handler(input(), ctx())).rejects.toMatchObject({
+      reason: "price_entry_close_would_unprice",
+    });
+  });
+
+  // A key never negotiated, or already ended, closes nothing — the safe
+  // no-op a retry relies on — and must stay that way rather than demand
+  // confirmation for a call the guard cannot actually be gating.
+  it("does not gate the no-op close on confirmation, and does not refuse it", async () => {
+    const h = harness(null);
+    const out = await h.handler(input(), ctx());
+    expect(out.closed).toBeNull();
+    expect(out.fallbackPriced).toBe(true);
+  });
+
   // The promise the dialog and the CLI make — "falls back to the list
   // price" — is only true when a list row actually still prices the class.
-  it("reads fallbackPriced true when a list row still prices the class", async () => {
+  it("reads fallbackPriced true when a list row still prices the class, without needing to confirm", async () => {
     const listRow: PriceEntry = {
       ...closedEntry,
       id: "0192d4a8-7c1e-7a00-8000-0000000000e3",
@@ -193,27 +256,31 @@ describe("remove_price_entry", () => {
       effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
       effectiveTo: null,
     };
-    const h = harness(closedEntry, [], [listRow]);
+    const h = harness(closedEntry, [], [openEntry, listRow]);
     const out = await h.handler(input(), ctx());
     expect(h.loadPriceBook).toHaveBeenCalledWith({ orgId: SCOPE.orgId });
     expect(out.fallbackPriced).toBe(true);
     expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
   });
 
-  // No row was closed, so nothing about the class's pricing changed: reading
-  // the book again would only cost a query for an answer that is already
-  // known.
-  it("reads fallbackPriced true without reading the book when nothing was closed", async () => {
+  // No row was closed, so nothing about the class's pricing changed — but
+  // the guard still has to read the book first to learn that, since knowing
+  // whether this call has anything live to end is exactly what the guard
+  // reads the book to find out.
+  it("still reads the book to decide there is nothing to guard, even though nothing closes", async () => {
     const h = harness(null);
-    const out = await h.handler(input(), ctx());
-    expect(out.fallbackPriced).toBe(true);
-    expect(h.loadPriceBook).not.toHaveBeenCalled();
+    await h.handler(input(), ctx());
+    expect(h.loadPriceBook).toHaveBeenCalledTimes(1);
   });
 
   it("ends the row at the instant asked for, in the region asked for", async () => {
     const h = harness();
     await h.handler(
-      input({ region: "eu-west-1", at: "2026-10-01T00:00:00.000Z" }),
+      input({
+        region: "eu-west-1",
+        at: "2026-10-01T00:00:00.000Z",
+        confirmUnpriced: true,
+      }),
       ctx(),
     );
     expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledWith(
@@ -232,7 +299,7 @@ describe("remove_price_entry", () => {
       effectiveTo: null,
     };
     const h = harness(closedEntry, [scheduled]);
-    const out = await h.handler(input(), ctx());
+    const out = await h.handler(input({ confirmUnpriced: true }), ctx());
     // The contract's `closed` is the row that was in effect; the cancelled
     // correction never priced anything and is carried in the log only.
     expect(out.closed?.id).toBe(closedEntry.id);

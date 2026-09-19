@@ -18,6 +18,9 @@ export const schema = {
   at: costPriceEntryRemove.input.shape.at.describe(
     "RFC 3339 instant the negotiated rate stops applying; omit for now",
   ),
+  confirmUnpriced: costPriceEntryRemove.input.shape.confirmUnpriced.describe(
+    "Required (true) if closing would leave the class UNPRICED, not list-priced: the call refuses with price_entry_close_would_unprice otherwise",
+  ),
 };
 
 export const metadata: ToolMetadata = {

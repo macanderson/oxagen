@@ -2309,6 +2309,10 @@ type Messages = {
         unpricedTitle: string;
         unpriced: string;
         unpricedClose: string;
+        confirmUnpricedTitle: string;
+        confirmUnpriced: string;
+        confirmUnpricedSubmit: string;
+        confirmUnpricedCancel: string;
       };
       failure: {
         orgRoleRequired: string;

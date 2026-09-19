@@ -7,11 +7,18 @@
 // What actually changes is forward-looking, and it is not always the same
 // change: usually the model and class fall back to the provider's list price,
 // but a model this organization negotiated alone has no list or override row
-// to fall back to, and the class goes UNPRICED instead. The handler answers
-// `fallbackPriced` and this dialog must show whichever actually happened
-// rather than repeat the "falls back to the list price" line unconditionally
-// — a run that goes unpriced silently is the exact defect the rest of this
-// feature exists to surface.
+// to fall back to, and the class goes UNPRICED instead.
+//
+// The handler checks for that fallback BEFORE it closes anything, and
+// refuses (`conflict` / `price_entry_close_would_unprice`) rather than close
+// first and only say afterward that nothing now prices the class — a run
+// that goes unpriced silently is the exact defect this feature exists to
+// surface. So the first submit carries no confirmation; a refusal on that
+// exact code switches this dialog to a confirm step naming what closing
+// anyway means, and only the second submit — the person having read that —
+// carries `confirmUnpriced: true`. `fallbackPriced` in a successful response
+// still decides which closing screen this dialog shows, for the one case a
+// fallback disappeared between the guard's read and the close itself.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
@@ -45,6 +52,12 @@ export function RemoveRateDialog({
   const [open, setOpen] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Set when the handler refused because this class has no fallback price
+  // and the caller has not yet said to end the rate anyway. The dialog then
+  // shows what closing means instead of a bare error, and the person's next
+  // submit carries `confirmUnpriced: true` — the same key exchange as
+  // `unpriced` below, just before the close rather than after it.
+  const [needsConfirm, setNeedsConfirm] = useState(false);
   // Set only on a successful close whose class has no fallback price. The
   // dialog then stays open with a warning instead of navigating away, so the
   // person sees the class went unpriced rather than discovering it later as
@@ -57,9 +70,7 @@ export function RemoveRateDialog({
     navigate.replace(routes.spend(at.org, at.ws, { tab: "pricing" }));
   }
 
-  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (pending) return;
+  async function submit(confirmUnpriced: boolean) {
     setAlert(null);
     setPending(true);
     try {
@@ -68,13 +79,23 @@ export function RemoveRateDialog({
         model: entry.model,
         tokenClass: entry.tokenClass,
         region: entry.region ?? "",
+        ...(confirmUnpriced ? { confirmUnpriced: true } : {}),
       });
       if (result.ok) {
+        setNeedsConfirm(false);
         if (result.value.fallbackPriced) {
           finish();
           return;
         }
         setUnpriced(true);
+        return;
+      }
+      if (
+        !confirmUnpriced &&
+        result.reason === "conflict" &&
+        result.code === "price_entry_close_would_unprice"
+      ) {
+        setNeedsConfirm(true);
         return;
       }
       setAlert(failureText(result));
@@ -83,6 +104,17 @@ export function RemoveRateDialog({
     } finally {
       setPending(false);
     }
+  }
+
+  async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    await submit(false);
+  }
+
+  async function onConfirmUnpriced() {
+    if (pending) return;
+    await submit(true);
   }
 
   return (
@@ -108,10 +140,17 @@ export function RemoveRateDialog({
           setOpen(next);
           if (!next) {
             setAlert(null);
+            setNeedsConfirm(false);
             setUnpriced(false);
           }
         }}
-        title={unpriced ? t("remove.unpricedTitle") : t("remove.title")}
+        title={
+          unpriced
+            ? t("remove.unpricedTitle")
+            : needsConfirm
+              ? t("remove.confirmUnpricedTitle")
+              : t("remove.title")
+        }
         testId="spend-remove-rate-dialog"
       >
         {unpriced ? (
@@ -128,6 +167,41 @@ export function RemoveRateDialog({
               {t("remove.unpricedClose")}
             </button>
           </div>
+        ) : needsConfirm ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void onConfirmUnpriced();
+            }}
+            className="flex flex-col gap-3"
+          >
+            <FormAlert testId="spend-remove-rate-confirm-unpriced">
+              {t("remove.confirmUnpriced", {
+                model: entry.model,
+                class: tokenClass,
+              })}
+            </FormAlert>
+            {alert === null ? null : (
+              <FormAlert testId="spend-remove-rate-failure">{alert}</FormAlert>
+            )}
+            <div className="flex flex-col gap-2">
+              <SubmitButton
+                pending={pending}
+                label={t("remove.confirmUnpricedSubmit")}
+                pendingLabel={t("remove.pending")}
+              />
+              <button
+                type="button"
+                data-testid="spend-remove-rate-confirm-unpriced-cancel"
+                className={buttonSecondary}
+                onClick={() => {
+                  setNeedsConfirm(false);
+                }}
+              >
+                {t("remove.confirmUnpricedCancel")}
+              </button>
+            </div>
+          </form>
         ) : (
           <form
             onSubmit={(event) => {

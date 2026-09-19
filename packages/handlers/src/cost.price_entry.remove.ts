@@ -14,7 +14,7 @@
 // `defaultRoles`, because the kernel's IAM check allows every capability for a
 // non-enterprise organization (INV-29). An API-key call acts as the key's
 // creator.
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import {
   costPriceEntryRemove,
   type CostPriceEntryRemoveOutput,
@@ -42,9 +42,10 @@ export type PriceEntryRemoveDeps = {
     at?: Date;
   }) => Promise<NegotiatedPriceClose>;
   /**
-   * Reads the book after the close, so the handler can say whether the class
-   * actually falls back to a list or override price or whether it becomes
-   * unpriced — the two outcomes the dialog and the CLI must not conflate.
+   * Read BEFORE the close, so the handler can refuse rather than leave the
+   * class unpriced: the two outcomes the dialog and the CLI must not
+   * conflate, and the second one is no longer something the caller only
+   * learns about after it already happened.
    */
   loadPriceBook: (args: { orgId: string }) => ReturnType<typeof loadPriceBook>;
 };
@@ -83,6 +84,65 @@ export function createPriceEntryRemoveHandler(
     }
     assertDataPlaneUsable(plane);
 
+    // ── Does the class have anywhere to fall back to, BEFORE we close it? ──
+    //
+    // The contract, the CLI and the confirmation dialog all promise closing
+    // "falls back to the list price" — but that is only what happens when a
+    // list or override row still prices this model and class once this
+    // organization's own row is gone. A model this organization negotiated
+    // alone (a custom deployment, or a class no catalog publishes) has no
+    // such row, and closing its only price would leave every frame from `at`
+    // on unpriced rather than list-priced. Checked here, before the close,
+    // not after it: reporting the bad news in the output alongside a
+    // mutation that already happened is not a warning, because the class was
+    // already unpriced by the time anyone read it.
+    //
+    // Gated on whether an active row of this organization's own is even in
+    // the book: a key never negotiated, or already ended, closes nothing
+    // (`closeNegotiatedPriceEntry` answers `closed: null`) and must stay the
+    // safe no-op a retry relies on — demanding confirmation for a call that
+    // changes nothing would turn that idempotent retry into a wall. Only a
+    // call that is actually about to end a live rate is asked to confirm
+    // going unpriced. `input.at` when given, or a best-effort `now`
+    // otherwise: the store computes the real instant under its locks, but
+    // the guard only needs to know the picture at roughly the moment of the
+    // close, and a race between this read and the store's own lock wait is
+    // no worse than the same race the store already runs against a
+    // concurrent write.
+    const preCloseBook = await deps.loadPriceBook({ orgId: ctx.orgId });
+    const guardAt = input.at === undefined ? new Date() : new Date(input.at);
+    const activeOwnRow = resolvePriceEntry(preCloseBook, {
+      orgId: ctx.orgId,
+      modelId: input.model,
+      tokenClass: input.tokenClass,
+      at: guardAt,
+    });
+    const hasActiveOwnRow =
+      activeOwnRow !== null && activeOwnRow.orgId === ctx.orgId;
+    // Excludes every row of this organization's own, not just the one about
+    // to close: the row still open in the raw book would otherwise resolve
+    // to itself and hide the very gap being asked about, and the business
+    // rule of one active row per key means no other own row can be standing
+    // in for it either.
+    const wouldFallback = hasActiveOwnRow
+      ? resolvePriceEntry(
+          preCloseBook.filter((entry) => entry.orgId !== ctx.orgId),
+          {
+            orgId: ctx.orgId,
+            modelId: input.model,
+            tokenClass: input.tokenClass,
+            at: guardAt,
+          },
+        ) !== null
+      : true;
+
+    if (hasActiveOwnRow && !wouldFallback && input.confirmUnpriced !== true)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "price_entry_close_would_unprice",
+        message: `ending the negotiated rate for ${input.model} ${input.tokenClass} would leave it UNPRICED, not list-priced: no list, override, or other negotiated row covers it. Set a fallback price first, or pass confirmUnpriced: true to end the rate anyway.`,
+      });
+
     // The row in effect at `at` is closed there; a correction scheduled to
     // start after `at` is cancelled, because it would re-establish the rate
     // the caller just ended. The write instant decides whether a scheduled
@@ -99,27 +159,14 @@ export function createPriceEntryRemoveHandler(
       at: input.at === undefined ? undefined : new Date(input.at),
     });
 
-    // ── Does the class actually fall back, or does it go unpriced? ────────
-    //
-    // The contract, the CLI and the confirmation dialog all promise "falls
-    // back to the list price" — but that is only what happens when a list
-    // or override row still prices this model and class. A model this
-    // organization negotiated alone (a custom deployment, or a class no
-    // catalog publishes) has no such row, and closing its only price leaves
-    // every frame from `at` on unpriced rather than list-priced, silently,
-    // unless the caller is told. Read after the close, on the same book the
-    // rollup resolves against, so a still-open row this call did not touch
-    // (nothing was closed, or another source already covers the class)
-    // reads as covered without a second guess.
-    const fallbackPriced =
-      closed === null
-        ? true
-        : resolvePriceEntry(await deps.loadPriceBook({ orgId: ctx.orgId }), {
-            orgId: ctx.orgId,
-            modelId: input.model,
-            tokenClass: input.tokenClass,
-            at,
-          }) !== null;
+    // Nothing was actually closed (already ended, or never negotiated): the
+    // guard above ran against a hypothetical close that never happened, so
+    // its answer says nothing about this outcome — the class's pricing did
+    // not change, and it is covered exactly as well as it was before the
+    // call. Otherwise the guard's read stands: list rows do not change out
+    // from under one call, so there is nothing a second query would learn
+    // that the guard did not already establish.
+    const fallbackPriced = closed === null ? true : wouldFallback;
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
     // Emitted whether or not a row was open: the request to return a model to

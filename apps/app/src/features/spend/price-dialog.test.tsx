@@ -356,4 +356,83 @@ describe("Remove a negotiated rate", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  // The handler checks for a fallback BEFORE closing and refuses with this
+  // exact code rather than close first and report the gap afterward — the
+  // dialog must turn that refusal into a confirm step, not a bare error.
+  it("asks for confirmation instead of showing a bare error when closing would unprice the class", async () => {
+    removePriceEntryAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "price_entry_close_would_unprice",
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: "This class would become unpriced",
+    });
+    expect(confirmDialog).toHaveTextContent(
+      "leaves every call from now on UNPRICED, not priced at the list rate",
+    );
+    expect(removePriceEntryAction).toHaveBeenCalledTimes(1);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("closes the rate once the person confirms it may go unpriced", async () => {
+    removePriceEntryAction
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "conflict",
+        code: "price_entry_close_would_unprice",
+      })
+      .mockResolvedValueOnce({ ok: true, value: { fallbackPriced: false } });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    await screen.findByRole("dialog", {
+      name: "This class would become unpriced",
+    });
+    await userEvent.click(
+      screen.getByRole("button", {
+        name: "End the rate anyway, leave it unpriced",
+      }),
+    );
+    expect(
+      await screen.findByTestId("spend-remove-rate-unpriced"),
+    ).toHaveTextContent(
+      "calls from now on are UNPRICED, not priced at the list rate",
+    );
+    expect(removePriceEntryAction).toHaveBeenLastCalledWith(at, {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output",
+      region: "",
+      confirmUnpriced: true,
+    });
+  });
+
+  it("lets the person back out of the confirm step without closing anything", async () => {
+    removePriceEntryAction.mockResolvedValueOnce({
+      ok: false,
+      reason: "conflict",
+      code: "price_entry_close_would_unprice",
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    await screen.findByRole("dialog", {
+      name: "This class would become unpriced",
+    });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Keep the current rate" }),
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "Fall back to the list price" }),
+    ).toBeInTheDocument();
+    expect(removePriceEntryAction).toHaveBeenCalledTimes(1);
+  });
 });

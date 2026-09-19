@@ -291,7 +291,11 @@
         "pending": "Ending the rate",
         "unpricedTitle": "Rate ended — now unpriced",
         "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
-        "unpricedClose": "Close"
+        "unpricedClose": "Close",
+        "confirmUnpricedTitle": "This class would become unpriced",
+        "confirmUnpriced": "No list or override price covers {model}, {class}. Ending your negotiated rate now, rather than setting a new one first, leaves every call from now on UNPRICED, not priced at the list rate, until you set one.",
+        "confirmUnpricedSubmit": "End the rate anyway, leave it unpriced",
+        "confirmUnpricedCancel": "Keep the current rate"
       },
       "failure": {
         "orgRoleRequired": "Your organization role cannot change what this organization is billed at. An organization owner, admin or billing member sets a negotiated rate.",

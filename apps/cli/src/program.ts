@@ -228,6 +228,10 @@ export function buildProgram(): Command {
       "--at <instant>",
       "RFC 3339 instant the rate stops applying; omit for now",
     )
+    .option(
+      "--confirm-unpriced",
+      "Confirm ending this rate even if no list or override price covers the class, which would otherwise refuse and leave it UNPRICED",
+    )
     .option("--json", "Output JSON")
     .action(async (opts: Record<string, unknown>) => {
       const { priceRemove } = await import("./commands/price.js");
