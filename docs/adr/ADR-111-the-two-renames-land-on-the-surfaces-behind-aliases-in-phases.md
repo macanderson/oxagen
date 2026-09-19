@@ -249,17 +249,40 @@ request.**
    enrollment revocation, enrollment tokens, hosts, sessions and incidents. A
    URL compiled into a daemon on a machine we do not control is the most
    customer-facing name in this record, so the routes are mounted under both
-   spellings and the old ones answer until the fleet has re-enrolled. Renaming
-   them without that alias breaks every enrolled host at the moment of deploy,
-   which is the failure this whole record is arranged to avoid. Aliasing them
-   is blocked on nothing, so the server may accept both before any host ships
-   the new binary name; the route filenames stay as they are under decision 1.
+   spellings. Renaming them without that alias breaks every enrolled host at
+   the moment of deploy, which is the failure this whole record is arranged to
+   avoid. Aliasing them is blocked on nothing, so the server may accept both
+   before any host ships the new binary name; the route filenames stay as they
+   are under decision 1.
+
+   **Two retirement clocks, not one.** An earlier draft retired every old path
+   "once the fleet has re-enrolled", which is right for the paths a host calls
+   and wrong for the rest. Re-enrolling a host does nothing for an independent
+   API consumer, and five of these paths are published API surface in their own
+   right: `docs/capabilities/tacho.host.list.md`, `tacho.session.list.md`,
+   `tacho.session.get.md`, `tacho.enrollment.create.md` and
+   `tacho.enrollment.revoke.md` each document the full
+   `POST /v1/:org_slug/:workspace_slug/tacho/...` form, and two of them also
+   publish an MCP tool and a CLI command against it. A script, a dashboard or a
+   customer integration calls those directly and learns nothing from a fleet
+   rollout, so retiring them on the fleet's clock would break a caller that did
+   everything right.
+
+   | Paths | Who calls them | When the old spelling stops answering |
+   | --- | --- | --- |
+   | `/v1/tacho/enroll` and the `/v1/tacho` group | The host daemon only | Once the fleet has re-enrolled, which the host records make observable |
+   | The seven organization-scoped `/tacho/` paths | Operators, scripts and integrations, through the published `/v1/:org_slug/:workspace_slug/` form | Only after an announced API deprecation window closes, independent of the fleet |
 
    **The replacement paths, named.** This rename removes a word rather than
    substituting one, so "both spellings" is not derivable and an implementer
    would have to guess between `/v1/agent`, an unprefixed capability route and
    something else. The target is `agent`, the word phase 1a already shipped on
    the commands, and every one of these nine paths is free today:
+
+   The first two are written as `app.ts` mounts them. The other seven are
+   mount-relative and reach a caller with `/v1/:org_slug/:workspace_slug/` in
+   front, which is the form `docs/capabilities/` publishes and the form an
+   external client holds.
 
    | Today | Phase 4 adds |
    | --- | --- |
@@ -272,6 +295,10 @@ request.**
    | `/tacho/sessions` | `/agent/sessions` |
    | `/tacho/sessions/get` | `/agent/sessions/get` |
    | `/tacho/incidents` | `/agent/incidents` |
+
+   Each of the five with a capability document needs that document's `## Surface`
+   block updated in the same phase, or the published path and the served path
+   disagree.
 
    The organization-scoped group already carries `/agent/tools`,
    `/agent/memory/*`, `/agent/roles/*` and more, so these join a namespace that
