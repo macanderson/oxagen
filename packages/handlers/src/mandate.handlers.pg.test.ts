@@ -814,6 +814,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("org_role_required"));
       expect(doubles.events).toEqual([]);
 
+      // Renaming the window while 150 is reserved would orphan that draw under
+      // the old periodKey and make the new daily balance read as unused.
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limits: {
+                amount: {
+                  perCall: "100000000",
+                  perPeriod: "500000000",
+                  period: "daily",
+                  currencyOrUnit: "USD",
+                },
+              },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("period_drawn"));
+
       // The same monthly period the 150 was drawn in: the new ceiling
       // applies to it, so remaining is 500 − 150.
       const out = await inScope(() =>

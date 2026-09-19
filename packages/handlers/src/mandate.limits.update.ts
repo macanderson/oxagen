@@ -3,7 +3,11 @@
 // The ledger keeps its rows; the next reservation and every read take the
 // new perPeriod as the ceiling over what the period has already drawn. A
 // limit over a measure a matched tool does not declare is refused as
-// grant_mandate refuses it.
+// grant_mandate refuses it. A change that renames the window of a measure
+// that still has reserved or settled authority in the current window is
+// refused too: ledger rows keep the old periodKey, while readAuthority and
+// reserve would query only the new one, so the draw would vanish from the
+// balance and open a second grant of the same ceiling.
 // Roles: the consequence roles of every tag (INV-29).
 //
 // Limits change two ways (ADR-102). `limits` replaces the whole record, which
@@ -22,7 +26,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
-import { lockMandate } from "@oxagen/rules";
+import { lockMandate, hasDrawnInCurrentPeriod } from "@oxagen/rules";
 import {
   mandateLimitsSchema,
   type MandateLimitChanges,
@@ -94,6 +98,37 @@ export function applyLimitChanges(
   return parsed.data;
 }
 
+/**
+ * Refuse renaming a measure's window while that measure still has authority
+ * drawn under the window the ledger already wrote.
+ *
+ * Settlements and open reservations keep the periodKey they were filed under.
+ * `readAuthority` and `reserve` derive the key from the limit's period alone,
+ * so a monthly-to-daily rename would make today's draw invisible and grant the
+ * ceiling again. Leaving the period alone, or changing it when nothing is
+ * reserved or settled in the current window, is fine: a bare figure change
+ * still binds the same key.
+ */
+export async function assertPeriodChangeAllowed(
+  tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
+  mandateId: string,
+  before: MandateLimits,
+  after: MandateLimits,
+  at: Date = new Date(),
+): Promise<void> {
+  for (const [measure, next] of Object.entries(after)) {
+    const prev = before[measure];
+    if (!prev || prev.period === next.period) continue;
+    if (!(await hasDrawnInCurrentPeriod(tx, mandateId, measure, prev.period, at)))
+      continue;
+    throw new HandlerError({
+      code: "conflict",
+      reason: "period_drawn",
+      message: `Measure "${measure}" still has authority drawn under its ${prev.period} window; change the period only when nothing is reserved or settled in the current window`,
+    });
+  }
+}
+
 export const mandateLimitsUpdateHandler: CapabilityHandler<
   typeof mandateLimitsUpdate
 > = async (input, ctx) => {
@@ -136,6 +171,9 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
       limits,
       targets,
     });
+    // Under the same lock as the write, so a concurrent reserve cannot sneak a
+    // draw past the refusal: the row lock serialises both writers.
+    await assertPeriodChangeAllowed(tx, locked.id, locked.limits, limits);
     const [updated] = await tx
       .update(schema.mandates)
       .set({

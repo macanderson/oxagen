@@ -26,6 +26,11 @@ const doubles = vi.hoisted(() => ({
   /** Every `limits` value written, in order. */
   written: [] as MandateLimits[],
   lockCalls: 0,
+  /**
+   * Whether `hasDrawnInCurrentPeriod` answers drawn. False by default so the
+   * merge cases stay about the merge; a period-rename case stubs true here.
+   */
+  drawn: false,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -89,6 +94,9 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
       validTo: new Date("2027-01-01T00:00:00.000Z"),
     };
   },
+  // Undrawn by default so the existing merge cases still write. A case that
+  // renames a drawn window stubs true here.
+  hasDrawnInCurrentPeriod: async () => doubles.drawn,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -109,9 +117,8 @@ vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-const { mandateLimitsUpdateHandler, applyLimitChanges } = await import(
-  "./mandate.limits.update"
-);
+const { mandateLimitsUpdateHandler, applyLimitChanges, assertPeriodChangeAllowed } =
+  await import("./mandate.limits.update");
 const { mandateLimitsUpdate } = await import(
   "@oxagen/oxagen/contracts/mandate.limits.update"
 );
@@ -159,6 +166,7 @@ beforeEach(() => {
   doubles.locked.status = "active";
   doubles.locked.limits = { amount: AMOUNT, calls: CALLS };
   doubles.stale = { amount: AMOUNT, calls: CALLS };
+  doubles.drawn = false;
 });
 
 describe("update_mandate_limits, limitChanges", () => {
@@ -278,6 +286,72 @@ describe("update_mandate_limits, limitChanges", () => {
       (e: unknown) => isHandlerError(e) && e.reason === "mandate_ended",
     );
     expect(doubles.written).toHaveLength(0);
+  });
+
+  // The periodKey the ledger already wrote stays under the old window. Renaming
+  // the window while that draw is open would make readAuthority and reserve see
+  // an empty balance and grant the ceiling again.
+  it("refuses a period rename while the measure is drawn (negative)", async () => {
+    doubles.drawn = true;
+    await expect(
+      change({
+        limitChanges: { amount: { period: "daily" } },
+      }),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+    expect(doubles.written).toHaveLength(0);
+  });
+
+  it("renames the period when the current window holds no draw", async () => {
+    doubles.drawn = false;
+    await change({
+      limitChanges: { amount: { period: "daily" } },
+    });
+    expect(lastWritten().amount).toEqual({
+      ...AMOUNT,
+      period: "daily",
+    });
+  });
+});
+
+describe("assertPeriodChangeAllowed", () => {
+  const tx = {} as Parameters<typeof assertPeriodChangeAllowed>[0];
+  const mandateId = "11111111-1111-4111-8111-111111111111";
+
+  it("refuses when the current window still holds a draw", async () => {
+    doubles.drawn = true;
+    await expect(
+      assertPeriodChangeAllowed(
+        tx,
+        mandateId,
+        { amount: AMOUNT },
+        { amount: { ...AMOUNT, period: "daily" } },
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+  });
+
+  it("allows a figure change that keeps the window, and a rename with nothing drawn", async () => {
+    doubles.drawn = true;
+    await expect(
+      assertPeriodChangeAllowed(
+        tx,
+        mandateId,
+        { amount: AMOUNT },
+        { amount: { ...AMOUNT, perPeriod: "500000000" } },
+      ),
+    ).resolves.toBeUndefined();
+    doubles.drawn = false;
+    await expect(
+      assertPeriodChangeAllowed(
+        tx,
+        mandateId,
+        { amount: AMOUNT },
+        { amount: { ...AMOUNT, period: "daily" } },
+      ),
+    ).resolves.toBeUndefined();
   });
 });
 

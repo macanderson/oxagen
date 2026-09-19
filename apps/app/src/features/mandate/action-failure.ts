@@ -36,6 +36,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureNotDeclared");
           case "measure_unit_mismatch":
             return t("measureUnitMismatch");
+          case "period_drawn":
+            return t("periodDrawn");
           case "no_principal":
             return t("noPrincipal");
           // Not a handler reason: the action itself refuses before it writes,

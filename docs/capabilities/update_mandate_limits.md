@@ -53,6 +53,13 @@ with no figure or no unit is refused (`limit_incomplete`) rather than stored.
 That is reachable only for a measure the record does not hold yet; a bound for a
 new measure takes `daily` as its window when the change names none.
 
+A change that renames a measure's `period` while that measure still has reserved
+or settled authority in the current window is refused (`period_drawn`). Ledger
+rows keep the `periodKey` they were filed under; `readAuthority` and `reserve`
+derive the key from the limit's period alone, so a monthly-to-daily rename would
+hide the draw and grant the ceiling again. Changing the figure inside the same
+window still binds what is already drawn.
+
 `limits` replacement keeps exactly the semantics it always had, for the same
 reason: a caller that holds the whole record is stating the whole record, and
 it is the only way to delete a bound.
@@ -106,6 +113,7 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `conflict` | `validity_inverted` | `validTo` at or before `validFrom`. |
 | `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch` | Denied by construction, the same checks `grant_mandate` runs, against the merged record. |
 | `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
+| `conflict` | `period_drawn` | A measure's period cannot change while that measure still has reserved or settled authority in the current window. Ledger rows keep the old `periodKey`; renaming the window would hide the draw from `readAuthority` and `reserve`. |
 
 ## SPEC references
 

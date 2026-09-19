@@ -1219,6 +1219,7 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        periodDrawn: string;
         noPrincipal: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;
