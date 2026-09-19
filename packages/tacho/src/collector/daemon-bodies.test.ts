@@ -5,7 +5,7 @@
  * the log. Kept apart from daemon.test.ts, whose fake control plane accepts
  * events and never looks at bodies.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -633,6 +633,80 @@ describe("tachod and frame bodies", () => {
     expect(
       batches.flatMap((b) => b.events).some((e) => e.kind === "agent_stop"),
     ).toBe(true);
+  });
+
+  it("does not cache a narrowing it can neither erase nor remember owing", async () => {
+    // The last hole in the debt. One filesystem fault fails the marker write
+    // and the sweep together, and recording the debt used to be best effort —
+    // so the etag was cached with no erase and no debt, every later poll
+    // answered `not_modified`, and the excluded content stayed on disk with
+    // nothing on the host that remembered the clause had narrowed. Permanent
+    // and silent. Refusing the commit costs one poll of shipping under the
+    // withdrawn clause and is self-healing; the alternative is neither.
+    const narrowed: { bundle?: PolicyBundle } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // Both writes fail. The marker path is made a directory, so `writeFileSync`
+    // throws EISDIR — a failure mode that does not depend on permission bits,
+    // which root ignores and CI often runs as. The sweep throws beside it,
+    // which is what one filesystem fault does to both.
+    const owedPath = join(paths.wal, "body-purge-owed");
+    mkdirSync(owedPath);
+    const sweep = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    handle.wal.purgeBodiesOutsideMandate = () => {
+      throw new Error("EROFS: read-only file system");
+    };
+
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+
+    // Neither erased nor remembered, so the narrowing is not cached: the old
+    // etag stands and the next poll fetches the bundle again. Nothing wrote a
+    // debt — the path is still the directory that made the write fail.
+    expect(statSync(owedPath).isDirectory()).toBe(true);
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-3");
+    expect(
+      log.some((line) =>
+        line.startsWith("refusing to cache a narrowed bundle"),
+      ),
+    ).toBe(true);
+
+    // And it does heal: the same poll, once the disk allows both.
+    rmSync(owedPath, { recursive: true });
+    handle.wal.purgeBodiesOutsideMandate = sweep;
+    await handle.refreshBundle();
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
   });
 
   it("records the narrowing before the etag is committed, and settles it after a restart", async () => {

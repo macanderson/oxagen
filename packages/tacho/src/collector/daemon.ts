@@ -588,7 +588,7 @@ export async function startDaemon(
   function markBodyPurgeOwed(
     retention: RetentionMandate,
     dropped: readonly string[],
-  ): void {
+  ): boolean {
     try {
       ensureDir(paths.wal);
       const owed = owedBodyPurge();
@@ -601,9 +601,19 @@ export async function startDaemon(
         JSON.stringify({ retention: clause, classes: dropped }),
         { mode: 0o600 },
       );
-    } catch {
-      // Best effort. Failing to record the debt must not stop the sweep that
-      // is about to run and would usually clear it anyway.
+      return true;
+    } catch (error) {
+      // Answered rather than swallowed. This used to be best effort, on the
+      // reasoning that failing to record the debt must not stop the sweep that
+      // was about to run anyway — true while the sweep ran after the etag was
+      // committed, and false now that it runs before. If this write and the
+      // sweep both fail, which one filesystem fault does, the caller must be
+      // able to refuse the commit; a silent `void` left the narrowing cached
+      // with no debt and no erase, which is the permanent case.
+      log(
+        `failed to record an owed body purge (${dropped.join(", ")}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
     }
   }
 
@@ -693,35 +703,41 @@ export async function startDaemon(
   function purgeBodiesNarrowedOut(
     previous: RetentionMandate,
     next: RetentionMandate,
-  ): void {
+  ): boolean {
     const dropped = HOST_RETENTION_CLASSES.filter(
       (contentClass) =>
         retentionAllows(previous, contentClass) &&
         !retentionAllows(next, contentClass),
     );
-    if (dropped.length === 0) return;
+    if (dropped.length === 0) return true;
     // Owed before attempted, so the debt survives what the attempt might not.
-    // `applyControlFacts` has already written the new etag, so every later
-    // poll answers `not_modified` and never reaches this function again: a
-    // transient filesystem error here, or the process dying mid-sweep, would
-    // otherwise leave content the mandate excludes on disk for ever, with
+    // This runs before `applyControlFacts` writes the new etag, and that order
+    // is the point: once the etag is written every later poll answers
+    // `not_modified` and nothing tells this host the clause narrowed, so a
+    // process that exits in between would leave excluded content on disk with
     // nothing left to notice. The marker is cleared only by a sweep that
     // returned.
-    markBodyPurgeOwed(next, dropped);
+    const recorded = markBodyPurgeOwed(next, dropped);
     try {
       const purged = wal.purgeBodiesOutsideMandate(next);
       clearBodyPurgeOwed();
       log(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
       );
+      return true;
     } catch (error) {
-      // Logged and not rethrown, on purpose. Throwing erases nothing, and it
-      // would abort a refresh that has already cached the narrower mandate,
-      // so the host would go on withholding these bodies and stop reporting
-      // why they are still on disk. The line says what is still there.
       log(
         `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
       );
+      // The erase failed. If the debt was recorded, a later confirmation or
+      // the next start settles it and the caller may cache the narrowing. If
+      // it was not, nothing on this host remembers the clause narrowed, and
+      // caching the etag would make that permanent and silent. Answering false
+      // leaves the old etag in place, so the next poll fetches the bundle
+      // again and arrives back here — one poll of continued shipping under the
+      // clause the workspace withdrew, against content that can never be
+      // erased. Bounded and self-healing beats permanent.
+      return recorded;
     }
   }
 
@@ -768,7 +784,17 @@ export async function startDaemon(
       // with nothing left to notice. Recording the debt and sweeping first
       // closes that window: either the bytes are gone, or the debt is on disk
       // for the next confirming poll and the next start.
-      purgeBodiesNarrowedOut(host.bundle.retention, response.bundle.retention);
+      if (
+        !purgeBodiesNarrowedOut(
+          host.bundle.retention,
+          response.bundle.retention,
+        )
+      ) {
+        log(
+          "refusing to cache a narrowed bundle this host can neither enforce on disk nor remember owing; the old etag stands so the next poll retries",
+        );
+        return false;
+      }
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
         bundle_fetched_at: toProtocolTimestamp(now()),
