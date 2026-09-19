@@ -38,10 +38,6 @@ export const privacySchema = pgSchema("privacy");
 export const schemaRegistrySchema = pgSchema("schema_registry");
 export const environmentsSchema = pgSchema("environments");
 export const aiSchema = pgSchema("ai");
-// cms — public marketing lead capture + gated ebook access for oxagen.sh.
-// Not tenant-scoped: leads are prospects, written through withSystemDb only.
-// Restored after ADR-043 dropped the schema as collateral of the runtime cut.
-export const cmsSchema = pgSchema("cms");
 // ratelimit — cross-cutting abuse-control counters for the distributed API rate
 // limiter. Isolated in its own schema (like `security`) so this hot, ephemeral,
 // high-churn data can be vacuumed/backed-up independently of operational state,
