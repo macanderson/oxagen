@@ -68,7 +68,9 @@ import {
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
+  sessionFileObservedStatusColumnReady,
   sessionGatewayColumnReady,
+  sessionPushesColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
@@ -961,6 +963,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
     const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    // The two columns this branch adds, asked the same way and for the same
+    // window. Probed separately from each other because one migration adds
+    // both and a run that fails between its two statements leaves exactly the
+    // half-applied state an inference would get wrong.
+    const pushesColumn = await sessionPushesColumnReady(tx);
+    const observedStatusColumn = await sessionFileObservedStatusColumnReady(tx);
     // Which of this batch's chains the control plane's own records say it
     // served a gateway call for (#3221). One grouped read for the whole batch,
     // and skipped entirely when no promotion is possible — including while
@@ -1207,7 +1215,15 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         commandsRun: sql`${schema.tachoSessions.commandsRun} + ${delta.commandsRun}`,
         networkCalls: sql`${schema.tachoSessions.networkCalls} + ${delta.networkCalls}`,
         commits: sql`${schema.tachoSessions.commits} + ${delta.commits}`,
-        pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}`,
+        // Skipped while the column is unmigrated. Every other counter here
+        // is on a column that has shipped, so naming this one before its
+        // migration lands would raise 42703 and refuse the whole batch —
+        // ingestion stopped outright, on a host still reporting healthy.
+        ...(pushesColumn
+          ? {
+              pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}`,
+            }
+          : {}),
         pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
       const common = {
@@ -1447,9 +1463,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // them is the same defect as the counters were.
       if (sessionId && accepted) {
         await rollupModels(tx, ctx, sessionId, counted, now);
-        await rollupFiles(tx, ctx, sessionId, fresh, now);
+        await rollupFiles(tx, ctx, sessionId, fresh, now, observedStatusColumn);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
-        await refreshSessionTitle(tx, ctx, sessionId, fresh, now);
+        await refreshSessionTitle(
+          tx,
+          ctx,
+          sessionId,
+          fresh,
+          now,
+          observedStatusColumn,
+        );
       }
       if (accepted) {
         for (const event of fresh) {
@@ -1774,6 +1797,11 @@ async function rollupFiles(
   sessionId: string,
   events: TachoEvent[],
   now: Date,
+  // Whether `tacho.session_files.observed_status` exists yet. Same window as
+  // the gateway columns: the node deploys on merge and the migration is
+  // applied by hand afterwards, so naming the column in between raises 42703
+  // and takes the batch with it.
+  observedStatusColumn: boolean,
 ): Promise<void> {
   // The worktree the batch agrees on, used to turn every absolute path into
   // the repo-relative form that is stable across hosts.
@@ -1942,7 +1970,9 @@ async function rollupFiles(
         // and stays honest: nobody looked.
         linesAdded: entry.observed?.linesAdded ?? 0,
         linesRemoved: entry.observed?.linesRemoved ?? 0,
-        observedStatus: entry.observed?.status,
+        ...(observedStatusColumn
+          ? { observedStatus: entry.observed?.status }
+          : {}),
         firstSeq: entry.first,
         lastSeq: entry.last,
         createdAt: now,
@@ -2000,7 +2030,9 @@ async function rollupFiles(
                 // Assigned, not kept: the latest observation is the current
                 // condition of the path, and a file created and then deleted
                 // is deleted.
-                observedStatus: entry.observed.status,
+                ...(observedStatusColumn
+                  ? { observedStatus: entry.observed.status }
+                  : {}),
               }),
           updatedAt: now,
         },
@@ -2029,6 +2061,10 @@ async function refreshSessionTitle(
   sessionId: string,
   events: TachoEvent[],
   now: Date,
+  // As in `rollupFiles`: the observed half of the file count is only asked
+  // for once the column exists. Before then the title counts the attested
+  // writes alone, which is what it counted before that column was added.
+  observedStatusColumn: boolean,
 ): Promise<void> {
   const place = events.find(
     (event) =>
@@ -2052,8 +2088,10 @@ async function refreshSessionTitle(
           // the reconciliation gave it. Counting the attested columns alone
           // titled a run that plainly changed files as though it had
           // changed none, and fell back to the command count.
-          sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
-              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`,
+          observedStatusColumn
+            ? sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
+              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`
+            : sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
         ),
       ),
     tx

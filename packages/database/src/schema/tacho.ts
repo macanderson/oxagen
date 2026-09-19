@@ -896,6 +896,29 @@ export const SESSION_GATEWAY_COLUMN = {
 } as const;
 
 /**
+ * What the run pushed, counted on the session row.
+ *
+ * Probed for the same reason the gateway columns are: production applies
+ * migrations by hand from the app node while `deploy-node` ships on merge
+ * without waiting, so between the two this code is live and the column is
+ * not. Naming it in an UPDATE raises 42703 and takes the whole batch with
+ * it — and unlike the gateway tier, this one is on the path every batch
+ * walks, so the window would stop ingestion outright rather than degrade it.
+ */
+export const SESSION_PUSHES_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "pushes",
+} as const;
+
+/** What git observed about one path, on the file row. Same window, same rule. */
+export const SESSION_FILE_OBSERVED_STATUS_COLUMN = {
+  schema: "tacho",
+  table: "session_files",
+  column: "observed_status",
+} as const;
+
+/**
  * Which of a host's daemon chains the control plane has served a gateway call
  * for, and when it last did.
  *

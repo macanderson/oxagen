@@ -73,7 +73,14 @@ describe("the daemon's git seam", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(exec: Exec, now: () => number, execAsync?: ExecAsync) {
+  async function boot(
+    exec: Exec,
+    now: () => number,
+    execAsync?: ExecAsync,
+    // Called on every control-plane request, so a test can record where the
+    // poll falls relative to the git spawns.
+    onFetch?: () => void,
+  ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
@@ -100,6 +107,7 @@ describe("the daemon's git seam", () => {
     const handle = await startDaemon({
       paths,
       fetch: async () => {
+        onFetch?.();
         throw new Error("ECONNREFUSED");
       },
       exec,
@@ -217,6 +225,37 @@ describe("the daemon's git seam", () => {
         lines_removed: 0,
       },
     ]);
+  });
+
+  it("polls control state before it spawns any git", async () => {
+    // The git reads are the slow lane: one session can put 64 untracked-file
+    // probes through a four-worker pool at ten seconds each, and the tick
+    // guard drops anything that overlaps. With the reconciliation ahead of
+    // the control poll, an operator's suspend, revoke or cancel waited behind
+    // it while hooks kept answering from the allow state that operator had
+    // just withdrawn.
+    const timeline: string[] = [];
+    const handle = await boot(
+      (command, args) => {
+        if (command === "git") timeline.push("git");
+        for (const [key, value] of Object.entries(REPO_ANSWERS)) {
+          if (args.join(" ").includes(key))
+            return { status: 0, stdout: value, stderr: "" };
+        }
+        return { status: 1, stdout: "", stderr: "no answer" };
+      },
+      () => 1_000,
+      undefined,
+      () => timeline.push("control"),
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    timeline.length = 0;
+    await handle.tick();
+    // Both happened in this tick, and control came first.
+    expect(timeline).toContain("control");
+    expect(timeline).toContain("git");
+    expect(timeline.indexOf("control")).toBeLessThan(timeline.indexOf("git"));
   });
 
   it("does not reconcile on a tool call or a prompt", async () => {

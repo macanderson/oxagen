@@ -1589,12 +1589,25 @@ export async function startDaemon(
       }
       if (stateDirty) persistState();
     });
-    // Outside the serial block above on purpose: this is where the git
-    // process spawns happen, and a hook must never queue behind them.
-    await drainGitReads();
-    // Refresh before draining, so a batch carrying bodies leaves under the
-    // mandate the control plane holds now rather than the one cached before
-    // an outage.
+    // Control state first, and the git reads after it.
+    //
+    // This pair used to run the other way round, and the git reads are the
+    // slow lane: one session can put 64 untracked-file probes through a
+    // four-worker pool at ten seconds each, the drain walks its sessions in
+    // turn, and the `ticking` guard drops any tick that overlaps. So an
+    // operator's suspend, revoke or cancel — which arrives through
+    // `refreshBundle` and `sendAcks`, the control-command poll — could wait
+    // minutes behind a reconciliation, while hooks kept answering from the
+    // allow state the operator had just withdrawn. A mandate that takes
+    // minutes to bite is the one thing this daemon exists to prevent.
+    //
+    // Refresh still precedes `shipper.drain()`, which is what the old
+    // ordering was protecting: a batch carrying bodies leaves under the
+    // mandate the control plane holds now rather than one cached before an
+    // outage. Reconciliation frames sealed by the git reads below now ship on
+    // the following tick, which costs them one interval and nothing else —
+    // they are already asynchronous and already land a batch or more after
+    // the tool frames they belong with.
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();
       await refreshBundle();
@@ -1602,6 +1615,9 @@ export async function startDaemon(
     }
     await shipper.drain();
     await sendAcks();
+    // Outside the serial block above on purpose: this is where the git
+    // process spawns happen, and a hook must never queue behind them.
+    await drainGitReads();
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);

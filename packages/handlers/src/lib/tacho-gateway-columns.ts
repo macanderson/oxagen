@@ -37,7 +37,9 @@ import {
   GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
+  SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
+  SESSION_PUSHES_COLUMN,
   type ProbeTx,
 } from "@oxagen/database";
 
@@ -56,6 +58,38 @@ export async function hostGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
 /** Whether `tacho.sessions.gateway_observed_at` is present. */
 export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
   return hasColumn(tx, SESSION_GATEWAY_COLUMN, await ambientPlaneKey());
+}
+
+/**
+ * Whether `tacho.sessions.pushes` is present.
+ *
+ * The same deploy-before-migrate window this module was written for, on a
+ * column with a wider blast radius. The gateway columns only decide a tier,
+ * so projecting them away degrades one field; `pushes` is written by the
+ * rollup every accepted batch performs, so naming it before the migration
+ * lands raises 42703 and refuses the batch outright. A host would report
+ * healthy and record nothing.
+ */
+export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
+  return hasColumn(tx, SESSION_PUSHES_COLUMN, await ambientPlaneKey());
+}
+
+/**
+ * Whether `tacho.session_files.observed_status` is present.
+ *
+ * Probed separately from `pushes` rather than inferred from it, for the
+ * reason the two gateway columns are probed separately: one migration adds
+ * both, and a migration that fails between two `ADD COLUMN IF NOT EXISTS`
+ * statements leaves exactly the half-applied state an inference gets wrong.
+ */
+export async function sessionFileObservedStatusColumnReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(
+    tx,
+    SESSION_FILE_OBSERVED_STATUS_COLUMN,
+    await ambientPlaneKey(),
+  );
 }
 
 /**
