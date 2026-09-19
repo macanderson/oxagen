@@ -11,8 +11,9 @@
 // recorded is prefilled so the granter reviews the request rather than retyping
 // it. A draft the form cannot hold whole is shown but not granted here
 // (`notCarried`): the handler replaces a draft's body with the granter's, so a
-// money limit, a second limit or rule, or a calls limit the form cannot express
-// would be dropped, and the active mandate would grant more than was asked.
+// money limit, a second limit or rule, a calls limit the form cannot express,
+// or a pattern its comma-separated fields would split would be dropped or
+// widened, and the active mandate would grant more than was asked.
 //
 // The consequences are a set, as on the request: a mandate covers a tool only
 // when it names every tag that tool declares. The counterparty rule and the
@@ -25,6 +26,7 @@ import {
   MEASURE_NAME_MAX,
   PURPOSE_MAX,
   UNIT_MAX,
+  listOf,
   type MandateRow,
   type MeasureValue,
 } from "@/data/contracts/mandates";
@@ -35,7 +37,7 @@ import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { type GrantDraft, grantMandate } from "./grant-actions";
 import { UNANSWERED, useGrantFailure } from "./grant-failure";
-import type { ToolsAt } from "./view";
+import { carriedBy, type ToolsAt } from "./view";
 
 const TESTID = "grant-mandate";
 
@@ -134,17 +136,22 @@ const BLANK: Prefill = {
 };
 
 /**
- * True when submitting this form would drop part of `request`. The form holds
- * one count limit, a calls limit per day with no per-call figure, one
- * counterparty rule and one `humanAbove` threshold. A money figure is micros
- * and this form writes whole units, so it cannot carry one either. Because
+ * True when submitting this form would drop or alter part of `request`. The
+ * form holds one count limit, a calls limit per day with no per-call figure,
+ * one counterparty rule and one `humanAbove` threshold. A money figure is
+ * micros and this form writes whole units, so it cannot carry one either. Its
+ * tool patterns and target globs are comma-separated fields, and each stored
+ * value is free text of up to 256 characters, so one that contains a comma
+ * comes back as two: `vendor:*,prod` becomes `vendor:*` and `prod`, and the
+ * first admits every vendor target the requester never named. Because
  * `grant_mandate` replaces the draft's body with what the form sends, granting
- * such a draft here would activate a weaker mandate than the one requested:
- * a dropped limit or threshold is authority nobody approved.
+ * such a draft here would activate a mandate other than the one requested: a
+ * dropped limit or threshold, or a split pattern, is authority nobody approved.
  */
 function notCarried(request: MandateRow): boolean {
   const limits = request.authority.filter((entry) => entry.measure !== "calls");
   const calls = request.authority.find((entry) => entry.measure === "calls");
+  const whole = (values: readonly string[]) => carriedBy(values, ", ", listOf);
   return (
     limits.length > 1 ||
     limits.some(
@@ -154,7 +161,11 @@ function notCarried(request: MandateRow): boolean {
     (calls !== undefined &&
       (calls.period !== "daily" || calls.perCall !== null)) ||
     request.targets.length > 1 ||
-    request.approval.humanAbove.length > 1
+    request.approval.humanAbove.length > 1 ||
+    !whole(request.tools) ||
+    request.targets.some(
+      (target) => !whole(target.allow) || !whole(target.deny),
+    )
   );
 }
 

@@ -387,6 +387,35 @@ describe("RuleEditor › edit", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
+  // A tool pattern and a glob are each free text of up to 256 characters, so
+  // one may contain the delimiter its field splits on. Saving any field of such
+  // a rule would write the pattern back split, and `vendor:*` admits every
+  // vendor target the author never wrote. The dialog shows the rule and offers
+  // no Save (negative).
+  it.each([
+    [
+      "an allow-list glob that contains a comma",
+      { allowTargets: { counterparty: ["vendor:*,prod"] } },
+    ],
+    [
+      "a tool pattern that contains a line break",
+      { tools: ["stripe__create_refund@*\nstripe__create_payment@*"] },
+    ],
+  ])("shows a rule with %s but does not save it", async (_, change) => {
+    withIntl(
+      <RuleEditor at={at} existing={{ ...rule("small-refunds"), ...change }} />,
+    );
+    const dialog = await openEditor("rule-edit-small-refunds");
+    expect(dialog).toHaveTextContent("cannot be saved here");
+    expect(
+      within(dialog).queryByRole("button", { name: "Save rule" }),
+    ).toBeNull();
+    fireEvent.submit(formOf(screen.getByLabelText("Name")));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(saveApprovalRule).not.toHaveBeenCalled();
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
   it("says the rule is gone when another person deleted it first", async () => {
     saveApprovalRule.mockResolvedValue({
       ok: false,
@@ -575,9 +604,9 @@ describe("useActionFailure › rules", () => {
     const hook = renderHook(() => useActionFailure("rules"), {
       wrapper: intl,
     });
-    expect(hook.result.current({ ok: false, reason: "conflict", code })).toContain(
-      expected,
-    );
+    expect(
+      hook.result.current({ ok: false, reason: "conflict", code }),
+    ).toContain(expected);
     hook.unmount();
   });
 

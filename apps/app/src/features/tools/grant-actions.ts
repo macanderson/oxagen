@@ -31,7 +31,11 @@ import {
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
-import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
+import {
+  endOfZonedDay,
+  isCalendarDay,
+  startOfZonedDay,
+} from "@/shared/calendar-day";
 
 /** The fields the grant dialog collects, as typed. */
 export type GrantDraft = {
@@ -71,9 +75,6 @@ export type GrantDraft = {
   validFrom: string;
   validTo: string;
 };
-
-/** The day a date input gives; the action widens it to the viewer's day. */
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function refuse(field: keyof GrantDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
@@ -150,8 +151,11 @@ export async function grantMandate(
   const purpose = draft.purpose.trim();
   if (purpose === "") return refuse("purpose");
 
-  if (!DATE.test(draft.validFrom)) return refuse("validFrom");
-  if (!DATE.test(draft.validTo)) return refuse("validTo");
+  // Each day has to exist, not only look like one. `2027-02-31` matches the
+  // shape and `startOfZonedDay` rolls it forward to 3 March, which for the end
+  // of a window is three days of authority nobody granted (`isCalendarDay`).
+  if (!isCalendarDay(draft.validFrom)) return refuse("validFrom");
+  if (!isCalendarDay(draft.validTo)) return refuse("validTo");
 
   const ctx = await requireViewer(org, ws);
   // The days a person picks are days on their own clock, placed through their

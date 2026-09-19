@@ -214,6 +214,11 @@ describe("grantMandate", () => {
     ["approvers", { approvers: "priya" }],
     ["purpose", { purpose: "   " }],
     ["validFrom", { validFrom: "09/01/2026" }],
+    // Date-shaped but no such day: `Date.UTC` would roll it into March, and
+    // for the end of a window that is three days of authority nobody granted.
+    ["validFrom", { validFrom: "2026-02-30" }],
+    ["validTo", { validTo: "2027-02-31" }],
+    ["validTo", { validTo: "2026-13-01" }],
     ["validTo", { validTo: "" }],
     ["validTo", { validFrom: "2026-12-31", validTo: "2026-09-01" }],
   ])(

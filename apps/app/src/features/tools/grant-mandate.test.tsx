@@ -396,6 +396,29 @@ describe("GrantMandate on a requested draft", () => {
         ],
       }),
     ],
+    // A glob is free text, so `vendor:*,prod` is one legal glob. The field is
+    // comma-separated, so it would come back as `vendor:*` and `prod`, and the
+    // first admits every vendor target the requester never named.
+    [
+      "an allowed target that contains a comma",
+      mandateRow({
+        ...request,
+        targets: [{ measure: "recipient", allow: ["vendor:*,prod"], deny: [] }],
+      }),
+    ],
+    [
+      "a denied target that contains a comma",
+      mandateRow({
+        ...request,
+        targets: [
+          { measure: "recipient", allow: ["vendor:aws"], deny: ["a,b"] },
+        ],
+      }),
+    ],
+    [
+      "a tool pattern that contains a comma",
+      mandateRow({ ...request, tools: ["stripe__create_payment@1,2"] }),
+    ],
   ])(
     "refuses a draft with %s rather than granting part of it",
     async (_, draft) => {

@@ -5,9 +5,11 @@
 // writes its ceilings and allow lists in.
 import { describe, expect, it } from "vitest";
 import {
+  carriedBy,
   parseMeasureLines,
   parseToolsView,
   splitCommas,
+  splitLines,
   textValue,
   TOOLS_TABS,
   toolsLink,
@@ -170,6 +172,28 @@ describe("splitCommas", () => {
       "vendor:* prod",
       "cus_*",
     ]);
+  });
+});
+
+describe("carriedBy", () => {
+  it("is true when the field would write the stored list back as it is", () => {
+    expect(carriedBy(["cus_*", "vendor:* prod"], ", ", splitCommas)).toBe(true);
+    expect(carriedBy(["a@*", "b c@1"], "\n", splitLines)).toBe(true);
+    expect(carriedBy([], ", ", splitCommas)).toBe(true);
+  });
+
+  // The delimiter inside one legal value is the one thing a delimited field
+  // cannot show: `vendor:*,prod` reads back as `vendor:*` and `prod` (negative).
+  it("is false when a value contains the field's delimiter", () => {
+    expect(carriedBy(["vendor:*,prod"], ", ", splitCommas)).toBe(false);
+    expect(carriedBy(["stripe__a@*\nstripe__b@*"], "\n", splitLines)).toBe(
+      false,
+    );
+  });
+
+  it("is false when the field would drop or reorder a value (negative)", () => {
+    expect(carriedBy([" cus_*"], ", ", splitCommas)).toBe(false);
+    expect(carriedBy(["cus_*", "cus_*"], ", ", splitCommas)).toBe(false);
   });
 });
 

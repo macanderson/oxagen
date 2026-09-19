@@ -192,6 +192,30 @@ export function splitCommas(raw: string): string[] {
 }
 
 /**
+ * True when `split` gives `values` back, one for one and in order, from the
+ * text a field shows them as: `values.join(separator)`.
+ *
+ * A form that shows a stored list as delimited text and reads it back has one
+ * value it cannot carry: one that contains the delimiter. A target glob and a
+ * tool pattern are each `z.string().min(1).max(256)`, so `vendor:*,prod` is one
+ * legal glob, and a comma-separated field shows it as two globs, the first of
+ * which admits every vendor target the author did not write. The only sound
+ * test is the round trip itself, so a stored list is edited in a field only
+ * when this says the field would write it back unchanged.
+ */
+export function carriedBy(
+  values: readonly string[],
+  separator: string,
+  split: (raw: string) => string[],
+): boolean {
+  const back = split(values.join(separator));
+  return (
+    back.length === values.length &&
+    back.every((value, index) => value === values[index])
+  );
+}
+
+/**
  * `measure = value` lines as the pairs they name, in order, or null when a
  * line has no `=`, an empty side, or repeats a measure.
  *

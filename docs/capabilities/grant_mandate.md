@@ -48,10 +48,11 @@ money is a property of the tool version's declaration, which no read the app
 makes returns. Grant a money limit over the API or MCP. The dialog holds one
 counterparty rule and one `humanAbove` threshold. Grant more over the API or
 MCP. A requested draft that holds more than the dialog can carry (a money
-limit, a second limit, target rule or threshold, or a calls limit that is not a
-daily total) opens for review with no **Grant** button: the handler replaces
-the draft's body with the granter's, so granting it from the dialog would drop
-the part it cannot hold.
+limit, a second limit, target rule or threshold, a calls limit that is not a
+daily total, or a tool pattern or target glob with a comma in it, which the
+dialog's comma-separated fields would split in two) opens for review with no
+**Grant** button: the handler replaces the draft's body with the granter's, so
+granting it from the dialog would drop or widen the part it cannot hold.
 
 ## Roles
 

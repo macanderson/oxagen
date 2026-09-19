@@ -4,7 +4,9 @@
 //
 //   - `RuleEditor` creates a rule or edits one. The contract replaces the
 //     whole set, and the server action splices this rule into the set as it
-//     stands at the moment of the write (see `saveApprovalRule`).
+//     stands at the moment of the write (see `saveApprovalRule`). A rule whose
+//     text fields would not write it back as stored is shown but not saved
+//     here (`notCarried`).
 //   - `RuleToggle` switches one rule on or off. Switching on re-runs the
 //     checks the rule was saved under, so it can be refused.
 //   - `RuleDelete` removes one, and offers to switch it off instead: an off
@@ -34,6 +36,7 @@ import {
   setApprovalRuleEnabled,
 } from "./actions";
 import {
+  carriedBy,
   parseMeasureLines,
   splitCommas,
   splitLines,
@@ -64,6 +67,26 @@ function allowLines(rule: ApprovalRule | null): string {
   return Object.entries(rule.allowTargets)
     .map(([measure, globs]) => `${measure} = ${globs.join(", ")}`)
     .join("\n");
+}
+
+/**
+ * True when saving this rule from the editor would write back something other
+ * than what is stored. The tools field is one pattern per line and each allow
+ * list is comma-separated, and both a pattern and a glob are free text of up to
+ * 256 characters, so a stored value that contains its field's delimiter comes
+ * back split: `vendor:*,prod` becomes `vendor:*` and `prod`, and the first
+ * admits every vendor target the author never wrote. Such a rule was written
+ * over the API or MCP; the dialog shows it and offers no Save, so saving any
+ * other field cannot widen it. Measure names and ceilings are bounded to a
+ * pattern that has no delimiter in it, so they always round-trip.
+ */
+function notCarried(rule: ApprovalRule): boolean {
+  return (
+    !carriedBy(rule.tools, "\n", splitLines) ||
+    Object.values(rule.allowTargets).some(
+      (globs) => !carriedBy(globs, ", ", splitCommas),
+    )
+  );
 }
 
 function Field({
@@ -176,11 +199,17 @@ export function RuleEditor({
   );
   const creating = existing === null;
   const hours = existing?.businessHours ?? null;
+  /** A rule the fields cannot write back as stored: shown, never saved here. */
+  const refused = existing !== null && notCarried(existing);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
-    const parsed = draftOf(new FormData(event.currentTarget), existing, hoursOn);
+    if (pending || refused) return;
+    const parsed = draftOf(
+      new FormData(event.currentTarget),
+      existing,
+      hoursOn,
+    );
     if (!parsed.ok) {
       setFailure(t(`unreadable.${parsed.field}`));
       return;
@@ -247,6 +276,11 @@ export function RuleEditor({
               {t("id")} · <span className={mono}>{existing.slug}</span>
             </p>
           )}
+          {refused ? (
+            <p data-state="not-carried" className="text-sm text-foreground">
+              {t("notCarried")}
+            </p>
+          ) : null}
           <Field id="rule-name" label={t("name")}>
             <input
               id="rule-name"
@@ -397,24 +431,20 @@ export function RuleEditor({
           {failure === null ? null : (
             <FormAlert testId="rule-editor-failure">{failure}</FormAlert>
           )}
-          <SubmitButton
-            pending={pending}
-            label={creating ? t("confirmCreate") : t("confirmEdit")}
-            pendingLabel={t("pending")}
-          />
+          {refused ? null : (
+            <SubmitButton
+              pending={pending}
+              label={creating ? t("confirmCreate") : t("confirmEdit")}
+              pendingLabel={t("pending")}
+            />
+          )}
         </form>
       </SheetDialog>
     </>
   );
 }
 
-export function RuleToggle({
-  at,
-  rule,
-}: {
-  at: ToolsAt;
-  rule: ApprovalRule;
-}) {
+export function RuleToggle({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
   const t = useTranslations("tools.autoApprovals.toggle");
   // Switching on re-runs the consequence check; switching off asks only for
   // an org Owner or Admin, so a refusal there names that pair.
@@ -469,13 +499,7 @@ export function RuleToggle({
   );
 }
 
-export function RuleDelete({
-  at,
-  rule,
-}: {
-  at: ToolsAt;
-  rule: ApprovalRule;
-}) {
+export function RuleDelete({ at, rule }: { at: ToolsAt; rule: ApprovalRule }) {
   const t = useTranslations("tools.autoApprovals.delete");
   // Neither deleting nor switching off runs the consequence check (either can
   // only send more calls to a person), so a role refusal is the Owner-or-Admin one.
