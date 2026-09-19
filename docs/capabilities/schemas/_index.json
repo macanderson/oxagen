@@ -1,5 +1,5 @@
 {
-  "generatedCount": 332,
+  "generatedCount": 334,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2616,12 +2616,32 @@
       "consumes": []
     },
     {
+      "name": "propose_agent",
+      "domain": "agent",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "propose_record",
       "domain": "context",
       "surfaces": [
         "api",
         "mcp",
         "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "propose_skill",
+      "domain": "skill",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

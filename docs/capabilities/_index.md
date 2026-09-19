@@ -67,6 +67,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_memory_promotions](agent.memory_promotion.list.md) | [agent.memory_promotion.list.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.list.ts) | api, mcp, agent |
 | [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | api, mcp, agent |
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
+| [propose_agent](agent.propose.md) | [agent.propose.ts](../../packages/oxagen/src/contracts/agent.propose.ts) | api |
 | [publish_agent_def](agent.definition.publish.md) | [agent.definition.publish.ts](../../packages/oxagen/src/contracts/agent.definition.publish.ts) | api, mcp, agent |
 | [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
@@ -510,6 +511,7 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [list_skills](skill.list.md) | [skill.list.ts](../../packages/oxagen/src/contracts/skill.list.ts) | api, mcp |
+| [propose_skill](skill.propose.md) | [skill.propose.ts](../../packages/oxagen/src/contracts/skill.propose.ts) | api |
 
 ## Spend
 

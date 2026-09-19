@@ -36,7 +36,7 @@ function Banner({
   return (
     <section
       data-testid={testId}
-      className={`${panel} flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4`}
+      className={`rounded-xl border border-border bg-banner text-card-foreground shadow-sm flex flex-col gap-2 p-4 sm:flex-row sm:items-start sm:gap-4`}
     >
       <span className="inline-flex flex-none items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
         {badge}

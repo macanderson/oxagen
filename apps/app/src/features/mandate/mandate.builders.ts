@@ -63,7 +63,12 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       contextPr: refuse,
       freshness: refuse,
     },
-    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+    },
     mandates: {
       list: refuse,
       get: (...args: unknown[]) => {

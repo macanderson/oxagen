@@ -40,7 +40,7 @@ export const approvalRuleList = registerCapability({
     "List the workspace's auto-approval rules, with the calls each released and held in the last 30 days",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

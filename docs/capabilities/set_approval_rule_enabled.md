@@ -6,6 +6,7 @@
 **Surfaces:** api, mcp, agent
 **Sensitivity:** high
 **Metering:** none (`noBillingGate`, a settings write)
+**App:** Tools › Auto-approvals › Switch on or Switch off on a row, and Switch off instead in the delete dialog.
 
 ## Intent
 

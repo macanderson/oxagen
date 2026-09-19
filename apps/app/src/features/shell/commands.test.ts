@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 import { pathOf } from "@/shared/safe-path";
 import { buildCommands, filterCommands, moveHighlight } from "./commands";
 
-const labels = { nav: (key: string) => `nav:${key}` };
+const labels = {
+  nav: (key: string) => `nav:${key}`,
+  create: (kind: string | null) => `create:${kind ?? "any"}`,
+};
 
 describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
 
-  it("offers the ten sidebar pages and the organization's other three, and nothing else", () => {
-    expect(commands.map((c) => c.href)).toEqual([
+  it("offers the sidebar pages and the organization's other three, then Create", () => {
+    const go = commands.filter((c) => "href" in c);
+    expect(go.map((c) => c.href)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
-      "/acme/core-platform/skills",
       "/acme/core-platform/steering",
       "/acme/core-platform/repositories",
       "/acme/core-platform/spend",
@@ -23,23 +26,29 @@ describe("buildCommands", () => {
       "/acme/billing",
       "/acme/audit",
     ]);
-    expect(commands.every((c) => c.id.startsWith("go:"))).toBe(true);
+    expect(go.every((c) => c.id.startsWith("go:"))).toBe(true);
     expect(commands.map((c) => c.label)).toContain("nav:apiKeys");
     expect(commands.map((c) => c.label)).toContain("nav:roles");
     expect(commands.map((c) => c.label)).toContain("nav:modelFunding");
   });
 
-  it("offers go:skills to the workspace's Skills page under the Skills label", () => {
-    expect(commands.find((c) => c.id === "go:skills")).toEqual({
-      id: "go:skills",
-      label: "nav:skills",
-      href: "/acme/core-platform/skills",
-    });
+  it("offers no Skills page: Skills is a tab of Steering (negative)", () => {
+    expect(commands.find((c) => c.id === "go:skills")).toBeUndefined();
+  });
+
+  it("ends on Create: the chooser, then one entry per kind the shell hosts", () => {
+    expect(commands.filter((c) => "create" in c)).toEqual([
+      { id: "create", label: "create:any", create: null },
+      { id: "create:agent", label: "create:agent", create: "agent" },
+      { id: "create:skill", label: "create:skill", create: "skill" },
+      { id: "create:record", label: "create:record", create: "record" },
+    ]);
   });
 
   it("offers no workspace routes without a workspace (negative)", () => {
     const orgOnly = buildCommands({ org: "acme", ws: null }, labels);
-    expect(orgOnly.map((c) => c.href)).toEqual([
+    expect(orgOnly.every((c) => "href" in c)).toBe(true);
+    expect(orgOnly.map((c) => ("href" in c ? c.href : null))).toEqual([
       "/acme",
       "/acme/roles",
       "/acme/api-keys",
@@ -49,10 +58,14 @@ describe("buildCommands", () => {
     ]);
   });
 
-  it("offers a page to go to and nothing else: no Ontology graph question, no export (negative)", () => {
+  it("offers a page to go to or a wizard to open and nothing else: no Ontology graph question, no export (negative)", () => {
     for (const c of commands) {
-      expect(c.href).not.toMatch(/\/(ontology|export)(\/|$)/);
-      expect(c.id).toMatch(/^go:/);
+      if ("href" in c) {
+        expect(c.href).not.toMatch(/\/(ontology|export)(\/|$)/);
+        expect(c.id).toMatch(/^go:/);
+      } else {
+        expect(c.id).toMatch(/^create(:|$)/);
+      }
     }
   });
 });

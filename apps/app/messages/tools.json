@@ -20,7 +20,8 @@
       "switches": "Kill switches",
       "mandates": "Mandates",
       "switchesOn": "{count, plural, one {# on} other {# on}}",
-      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}"
+      "switchesOnAtLeast": "{count, plural, one {# or more on} other {# or more on}}",
+      "autoapprovals": "Auto-approvals"
     },
     "gate": {
       "open": "Open",
@@ -282,7 +283,17 @@
         "refused": "Refused: {code}. Nothing was changed.",
         "invalid": "Check the values above and try again.",
         "pendingApproval": "This is waiting for approval. Access request {accessRequestId}.",
-        "unavailable": "Could not be recorded ({code}). Nothing was changed."
+        "unavailable": "Could not be recorded ({code}). Nothing was changed.",
+        "consequenceRoleRequired": "Saving this rule needs an organization Owner or Admin who also holds the role accountable for every consequence its tools carry. Nothing was changed.",
+        "noRoleCoversAllTags": "No single organization role is accountable for every consequence these tools carry together. Split the rule by tool. Nothing was changed.",
+        "ruleIdTaken": "A rule with that id already exists. Pick another id, or edit that rule. Nothing was changed.",
+        "ruleChanged": "Someone else changed this rule set while this dialog was open, so nothing was written. Reload the tab to see the rules as they are now, then make the change again.",
+        "ruleNotFound": "That rule is no longer in this workspace’s rule set. Reload the tab to see the rules as they are now.",
+        "noToolMatches": "A tool pattern matches no declared tool in this workspace. Nothing was changed.",
+        "ruleNotGated": "A tool pattern matches a tool that Oxagen does not route through the decision rules, so a rule over it would never be enforced. Nothing was changed.",
+        "measureNotDeclared": "A condition names a measure that a matched tool does not declare. Nothing was changed.",
+        "measureWrongType": "A condition names a measure of the wrong kind: a ceiling needs an amount or a count, and an allow list needs a text measure. Nothing was changed.",
+        "tooManyConsequences": "The rule’s tools carry more than 64 distinct consequences. Narrow its tool patterns. Nothing was changed."
       }
     },
     "mandates": {
@@ -316,6 +327,190 @@
       "partial": "You see the mandates of the agents you created and any mandate you requested yourself. This ledger is not every mandate this workspace has recorded.",
       "emptyListed": "No mandate is listed here. The ledger above is not complete, so that is not a statement that the workspace has recorded none.",
       "emptyListedDetail": "An org Owner, Admin, Billing or Compliance reader sees every mandate this workspace has recorded. This ledger is written for that office."
+    },
+    "grant": {
+      "open": "Grant a mandate",
+      "title": "Grant a mandate",
+      "body": "The mandate is active from the first day you pick. It lets one agent carry the consequences you name, within the limits below, until the last day. Your role is recorded with the grant.",
+      "grantRequest": "Grant",
+      "grantRequestLabel": "Grant mandate {id}",
+      "titleRequest": "Grant a requested mandate",
+      "bodyRequest": "The request is prefilled. What you submit replaces it and becomes active, and your role is recorded with the grant.",
+      "notCarried": "This request holds more than this form can carry: a money limit, a second limit, target rule or threshold, a calls limit that is not a daily total, or a tool pattern or target pattern with a comma in it. Granting it here would drop or split that part and grant more than was asked, so it cannot be granted here. Grant it over the API or MCP with grant_mandate.",
+      "agentOption": "{name} ({slug})",
+      "agentsPartial": "The first page of this workspace's agents. An agent not listed here can be granted a mandate over the API or MCP.",
+      "agentsUnavailable": "The workspace's agents could not be read, so there is no agent to pick. Reload the page to try again.",
+      "agentsEmpty": "This workspace has no agent that can hold a mandate. A retired agent cannot.",
+      "consequenceOther": "Others the tools declare, separated by commas",
+      "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them. Your org role has to be accountable for every consequence you name.",
+      "toolsHint": "Patterns over slug@version, separated by commas. Each has to match a declared tool. Everything else is denied.",
+      "limits": "Limits",
+      "limitsHint": "Name a measure limit, a calls cap, or both. Every figure is whole units and is recorded exactly as typed.",
+      "measureHint": "The name the tool version declares the figure under. It cannot be “calls”: the calls field sets that limit.",
+      "unitHint": "What the measure counts, in the unit the tool version declares. Not a currency code: a money limit is granted over the API or MCP.",
+      "perPeriodHint": "Name a per-call limit, a per-period limit, or both.",
+      "period": "Period",
+      "periods": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "monthly": "monthly"
+      },
+      "targets": "Counterparties",
+      "targetsHint": "Optional. Which targets one measure may be drawn against, such as a payee or a recipient. Leave these blank for no rule.",
+      "approval": "Approval",
+      "approvalHint": "Optional. When a person answers a call this mandate would otherwise allow. Leave these blank and no call waits for a person.",
+      "alwaysHumanForHint": "Consequences for which a person answers every call, separated by commas.",
+      "humanAboveValueHint": "Whole units of that measure, recorded exactly as typed. A call above it waits for a person.",
+      "approversHint": "role:Owner, role:Admin, role:Billing, role:Compliance, or user:usr_…, separated by commas. Blank leaves the answer to the roles accountable for the consequence.",
+      "purposeHint": "Written for the office that reads the ledger.",
+      "validToHint": "A mandate expires. There is no unbounded option.",
+      "confirm": "Grant the mandate",
+      "confirmRequest": "Grant this request",
+      "pending": "Granting",
+      "fields": {
+        "agentId": "Agent",
+        "consequenceTags": "Consequences",
+        "measure": "Measure",
+        "unit": "Unit",
+        "perCall": "Per call",
+        "perPeriod": "Per period",
+        "callsPerDay": "Calls per day",
+        "tools": "Tools",
+        "targetMeasure": "Measure the target is read from",
+        "targetAllow": "Allowed targets, separated by commas",
+        "targetDeny": "Denied targets, separated by commas",
+        "alwaysHumanFor": "Always ask a person for",
+        "humanAboveMeasure": "Ask a person above, on measure",
+        "humanAboveValue": "Threshold",
+        "approvers": "Who may answer",
+        "purpose": "Purpose",
+        "validFrom": "Valid from",
+        "validTo": "Valid to"
+      },
+      "failure": {
+        "orgRoleRequired": "Your org role is not accountable for every consequence this mandate names. Nothing was granted.",
+        "noRoleCoversAllTags": "No single org role is accountable for every consequence named here, so nobody can grant them together. Grant them as separate mandates. Nothing was granted.",
+        "noPrincipal": "This session carries no person to record the grant against. Nothing was granted.",
+        "agentNotFound": "That agent is not recorded in this workspace. Nothing was granted.",
+        "agentHasNoPrincipal": "That agent has no identity a mandate can bind to. Nothing was granted.",
+        "mandateNotFound": "That request is not recorded in this workspace. Nothing was granted.",
+        "notADraft": "That request was granted or declined by someone else first. Nothing was granted.",
+        "noToolMatches": "A tool pattern matches no declared tool that carries a consequence. Nothing was granted.",
+        "measureNotDeclared": "A tool this mandate covers declares no such measure, so a limit or a target on it could never be read from a call. Nothing was granted.",
+        "measureUnitMismatch": "A tool this mandate covers declares that measure in another unit. Nothing was granted.",
+        "measureKindConflict": "Two tools this mandate covers declare that measure differently, one as an amount and one as a count, so there is no single figure to enforce. Narrow the tool patterns. Nothing was granted.",
+        "agentRetired": "That agent is retired. A retired agent cannot draw on new authority. Nothing was granted.",
+        "timeZoneUnavailable": "Your time zone could not be read, and the days you picked mean a different instant in each zone. Nothing was granted. Try again.",
+        "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the days you picked cannot be placed in it. Pick a time zone again in your account settings. Nothing was granted.",
+        "refused": "The grant was refused: {code}. Nothing was granted.",
+        "invalidField": "Check the field “{field}”. Nothing was granted.",
+        "invalid": "Something in the form is not a value a grant accepts. Nothing was granted.",
+        "pendingApproval": "The grant is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "The grant could not be answered: {code}. Nothing was granted."
+      }
+    },
+    "autoApprovals": {
+      "title": "Auto-approval rules",
+      "lead": "A call the policy sends to a person skips them when a rule here covers it and every condition holds. The receipt names the rule as the approver, so it says plainly that no person looked.",
+      "floors": "No rule releases a call with tainted input, a call to a critical or irreversible tool, or a call to an undeclared tool. Those floors are code, not configuration.",
+      "counted": "Released and held count the approval rows of the last {days} days that name each rule.",
+      "on": "on",
+      "off": "off",
+      "written": "Last written {at} by {by}",
+      "writtenUnattributed": "Last written {at}, by no recorded person",
+      "slug": "policy:{slug}",
+      "unstamped": "Releases nothing until it is saved again: the record does not say which consequences it was checked against.",
+      "checkedAgainst": "Checked against: {tags}",
+      "empty": {
+        "title": "No auto-approval rules yet",
+        "body": "Every call the policy sends to a person waits for one. Create a rule to let a call that meets its conditions skip the queue."
+      },
+      "tiles": {
+        "label": "Auto-approval totals",
+        "on": {
+          "title": "Rules on",
+          "basis": "of {total} in the rule set"
+        },
+        "released": {
+          "title": "Auto-approved, {days} days",
+          "basis": "Calls a rule released with no person"
+        },
+        "held": {
+          "title": "Sent to a person, {days} days",
+          "basis": "Calls that reached a person with a rule read beside them"
+        }
+      },
+      "columns": {
+        "rule": "Rule",
+        "appliesTo": "Applies to",
+        "requires": "Requires",
+        "released": "Approved {days}d",
+        "held": "Held {days}d",
+        "on": "On",
+        "actions": "Actions"
+      },
+      "requires": {
+        "ceiling": "{measure} at most {value}",
+        "allow": "{measure} matches {globs}",
+        "standing": "A person approved the same call in the last {minutes} minutes",
+        "hours": "{days}, {start} to {end} ({timezone})",
+        "floorsOnly": "Nothing beyond the floors"
+      },
+      "days": {
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat",
+        "7": "Sun"
+      },
+      "editor": {
+        "openCreate": "Create rule",
+        "openEdit": "Edit",
+        "titleCreate": "Create an auto-approval rule",
+        "titleEdit": "Edit this rule",
+        "id": "Rule id",
+        "idHint": "Lowercase letters, digits, dots, dashes, and underscores. Receipts cite the rule by this id, so it cannot change later.",
+        "name": "Name",
+        "tools": "Tools",
+        "toolsHint": "One pattern per line, over slug@version or the bare slug, such as stripe__create_payment@*.",
+        "maxMeasures": "Ceilings",
+        "maxMeasuresHint": "One measure per line, as measure = value. Micros for a currency, whole units for a count.",
+        "allowTargets": "Allow lists",
+        "allowTargetsHint": "One measure per line, as measure = pattern, pattern.",
+        "standingMinutes": "Standing approval window, in minutes",
+        "standingMinutesHint": "Leave blank for none. A person’s approval of the same call re-applies inside this window.",
+        "hoursOn": "Only during business hours",
+        "hours": "Business hours",
+        "timezone": "Time zone",
+        "timezoneHint": "An IANA name, such as Europe/London.",
+        "start": "From",
+        "end": "Until",
+        "enabled": "On once saved",
+        "checks": "Saving checks that every pattern matches a declared tool, that each measure is declared by those tools, and that you hold the role accountable for their consequences.",
+        "notCarried": "This rule holds a tool pattern with a line break or an allow-list pattern with a comma, which these fields would split into more than one pattern. Saving it here would widen the rule, so it cannot be saved here. Edit it over the API or MCP with set_approval_rules. It can still be switched off or deleted.",
+        "confirmCreate": "Create rule",
+        "confirmEdit": "Save rule",
+        "pending": "Saving",
+        "unreadable": {
+          "maxMeasures": "Each ceiling line needs a measure, an equals sign, and a value, and names each measure once.",
+          "allowTargets": "Each allow-list line needs a measure, an equals sign, and at least one pattern, and names each measure once."
+        }
+      },
+      "toggle": {
+        "on": "Switch on",
+        "off": "Switch off"
+      },
+      "delete": {
+        "open": "Delete",
+        "title": "Delete this rule",
+        "body": "Deleting removes {name} from the rule set. Calls it would have released go to a person.",
+        "keep": "Switching it off instead keeps its id, so its counters and every receipt that cites {citation} stay readable.",
+        "switchOff": "Switch off instead",
+        "confirm": "Delete rule",
+        "pending": "Deleting"
+      }
     }
   }
 }

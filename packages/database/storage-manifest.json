@@ -2382,6 +2382,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "propose_agent",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "context",
       "name": "propose_record",
       "reads": [],
@@ -2389,6 +2398,15 @@
         "agent",
         "api",
         "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "skill",
+      "name": "propose_skill",
+      "reads": [],
+      "surfaces": [
+        "api"
       ],
       "writes": []
     },
@@ -3531,7 +3549,7 @@
       "writes": []
     }
   ],
-  "contentHash": "eaa5f0ae0eef770c3a3ce084ffd312802ae311e82834fd98a6bd20337170f24c",
+  "contentHash": "82f194cb52b0fa2ecddea65fe179a2b966944edd2ca5e5b9b1ba7525428bdca9",
   "domains": [
     {
       "name": "agent",
@@ -11685,6 +11703,24 @@
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
+        },
+        {
+          "name": "crm_record_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "crm_synced_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "crm_sync_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "cms",

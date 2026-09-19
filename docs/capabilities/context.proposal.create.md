@@ -14,6 +14,8 @@
 
 A proposal on a lineage ([ADR-061](../adr/ADR-061-steering-governance-mode-thresholds-and-the-reflector.md); MC spec §9.2, App. E): the record it should become, why, and the support it cites. A proposal steers nothing; it is published when its Context PR merges (spec §10.3). Proposals appear on the Steering page's Proposals tab.
 
+In the app, the context-record wizard calls it. **Write a context record** on every Steering tab but Skills, or ⌘K **Create › Context record**, opens the wizard. Its last step sends the record the operator chose with the description as the rationale, then calls `open_context_pr` on the new proposal, so the record exists only when that pull request merges (roadmap creation-spec §5). When the open fails, a retry reuses the proposal rather than proposing a second one.
+
 ## Input
 
 | Field | Type | Notes |
