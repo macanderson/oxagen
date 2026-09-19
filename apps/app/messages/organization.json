@@ -71,7 +71,7 @@
       "archiveWorkspace": {
         "open": "Archive",
         "title": "Archive {name}",
-        "body": "The workspace leaves the switcher. Its slug stays taken, and its runs and frames stay readable.",
+        "body": "The workspace leaves the switcher. Its slug stays taken, and its runs and frames stay readable. Its API keys stop working while it is archived. None of them is revoked, so restoring the workspace brings them back.",
         "confirm": "Archive",
         "pending": "Archiving"
       },

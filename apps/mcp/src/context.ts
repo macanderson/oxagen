@@ -68,7 +68,9 @@ type HttpHeaders = Record<string, string | string[] | undefined>;
 export type McpAuthFailure =
   | "unauthenticated"
   | "invalid_token"
-  | "expired_token";
+  | "expired_token"
+  /** The key is valid but its workspace is archived (ADR-105). */
+  | "workspace_archived";
 
 /** Thrown when an MCP request carries no valid principal. Fails closed. */
 export class McpUnauthorizedError extends Error {
@@ -235,11 +237,13 @@ export async function resolveMcpContext(
   if (isApiKey) {
     const resolution = await resolveApiKey(token);
     if (!resolution.ok) {
-      return {
-        ok: false,
-        reason:
-          resolution.kind === "expired" ? "expired_token" : "invalid_token",
-      };
+      const reason: McpAuthFailure =
+        resolution.kind === "expired"
+          ? "expired_token"
+          : resolution.kind === "workspace_archived"
+            ? "workspace_archived"
+            : "invalid_token";
+      return { ok: false, reason };
     }
 
     // An API key must resolve to a non-empty org/workspace scope.
