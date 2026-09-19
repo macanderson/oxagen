@@ -50,10 +50,8 @@ function allowedOrigins(): Set<string> {
   const origins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL];
   // The public marketing website (oxagen.sh / www.oxagen.sh) is a first-party
   // browser origin for this API; in prod it must be explicitly allowed, and
-  // MARKETING_URL carries it. Its one cross-origin caller was the /v1/cms/*
-  // lead + ebook routes, which went with the cms schema in ADR-043 — the
-  // allowance is kept because the origin is first-party, not because a
-  // specific route needs it today.
+  // MARKETING_URL carries it. Its one cross-origin caller is the /v1/cms/*
+  // lead + ebook routes on oxagen.sh (ADR-102).
   const marketing = process.env.MARKETING_URL?.replace(/\/$/, "");
   if (marketing) {
     origins.push(...withWwwTwin(marketing));
