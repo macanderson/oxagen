@@ -129,6 +129,11 @@ async function upsertLeadTx(tx: Tx, input: LeadInput): Promise<LeadRow> {
         source: sql`COALESCE(${input.source ?? null}, ${leads.source})`,
         pagePath: sql`COALESCE(${input.pagePath ?? null}, ${leads.pagePath})`,
         message: sql`COALESCE(${input.message ?? null}, ${leads.message})`,
+        // Only overwrite consent when the caller sent an explicit boolean —
+        // omitting the field must not revive or clear a prior choice.
+        ...(typeof input.marketingConsent === "boolean"
+          ? { marketingConsent: input.marketingConsent }
+          : {}),
         updatedAt: sql`now()`,
       },
     })
@@ -156,6 +161,17 @@ async function mintCodeTx(
   leadId: string,
   opts: MintOpts,
 ): Promise<string> {
+  // Lock the lead so concurrent resends serialize: both must not revoke then
+  // insert and leave two active codes. Redeem already locks the code row; this
+  // is the matching lock on the mint side of the one-active-code invariant.
+  const [lead] = await tx
+    .select({ id: leads.id })
+    .from(leads)
+    .where(eq(leads.id, leadId))
+    .for("update")
+    .limit(1);
+  if (!lead) throw new Error("lead not found for code mint");
+
   await tx
     .update(bookAccessCodes)
     .set({ status: "revoked", updatedAt: sql`now()` })

@@ -427,8 +427,8 @@ main{flex:1;position:relative}
         <fieldset class="edition-pick">
           <legend>Which edition should we send?</legend>
           <div class="edition-opts">
-            <label class="edition-opt is-selected">
-              <input type="radio" name="edition" value="page-flip-reader" checked>
+            <label class="edition-opt">
+              <input type="radio" name="edition" value="page-flip-reader">
               <span class="edition-name">Page-flip reader</span>
               <span class="edition-desc">The premium reading experience</span>
             </label>
@@ -578,6 +578,14 @@ main{flex:1;position:relative}
     return "That link isn’t valid.";
   }
 
+  function redeemFailureMessage(status, reason) {
+    if (status === 429) return "Too many attempts — wait a moment and try again.";
+    if (status >= 500 || !reason) {
+      return "We couldn’t verify that link — check your connection and try again.";
+    }
+    return reasonMessage(reason);
+  }
+
   function replaceDocumentWithBook(edition, newCode, html) {
     try {
       history.replaceState(null, "", "/read?e=" + encodeURIComponent(edition) + "&c=" + encodeURIComponent(newCode));
@@ -587,6 +595,16 @@ main{flex:1;position:relative}
     document.close();
   }
 
+  /* Sync the edition radios to ?e= before the form is shown, so /read?e=field-manual
+     without a code does not silently submit the page-flip default. */
+  var editionInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="edition"]'));
+  editionInputs.forEach(function (input) {
+    var match = input.value === effectiveEdition;
+    input.checked = match;
+    var opt = input.closest(".edition-opt");
+    if (opt) opt.classList.toggle("is-selected", match);
+  });
+
   if (code) {
     showLoading();
     fetch(REDEEM_URL, {
@@ -594,14 +612,16 @@ main{flex:1;position:relative}
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ edition: effectiveEdition, code: code })
     }).then(function (res) {
-      return res.json().then(function (data) { return { status: res.status, data: data }; });
+      return res.json().then(function (data) { return { status: res.status, data: data }; }).catch(function () {
+        return { status: res.status, data: {} };
+      });
     }).then(function (r) {
       var data = r.data || {};
       if (data.ok && data.html) {
         replaceDocumentWithBook(effectiveEdition, data.newCode, data.html);
         return;
       }
-      showGate(reasonMessage(data.reason));
+      showGate(redeemFailureMessage(r.status, data.reason));
     }).catch(function () {
       showGate("We couldn’t verify that link — check your connection and try again.");
     });
@@ -610,7 +630,6 @@ main{flex:1;position:relative}
   }
 
   /* ---------- edition chooser ---------- */
-  var editionInputs = Array.prototype.slice.call(document.querySelectorAll('input[name="edition"]'));
   editionInputs.forEach(function (input) {
     input.addEventListener("change", function () {
       editionInputs.forEach(function (i) {

@@ -27,6 +27,7 @@ import {
   isEditionSlug,
   resolveMarketingUrl,
   readerUrl,
+  captureLead,
   captureLeadAndIssueCode,
   findLeadByEmail,
   issueCodeForLead,
@@ -38,7 +39,11 @@ import {
  * `values`, `set`, `onConflictDoUpdate`, `returning`, …) returns the same
  * awaitable chain, which resolves to the next queued result for that verb.
  */
-function makeFakeTx(opts: { selects?: unknown[][]; inserts?: unknown[][] }) {
+function makeFakeTx(opts: {
+  selects?: unknown[][];
+  inserts?: unknown[][];
+  onConflictSets?: Record<string, unknown>[];
+}) {
   let si = 0;
   let ii = 0;
   const chain = (resolveVal: () => unknown) => {
@@ -47,7 +52,20 @@ function makeFakeTx(opts: { selects?: unknown[][]; inserts?: unknown[][] }) {
         if (prop === "then") {
           return (resolve: (v: unknown) => unknown) => resolve(resolveVal());
         }
-        return () => proxy;
+        return (arg?: unknown) => {
+          if (
+            prop === "onConflictDoUpdate" &&
+            arg &&
+            typeof arg === "object" &&
+            "set" in arg &&
+            opts.onConflictSets
+          ) {
+            opts.onConflictSets.push(
+              (arg as { set: Record<string, unknown> }).set,
+            );
+          }
+          return proxy;
+        };
       },
       apply() {
         return proxy;
@@ -104,6 +122,7 @@ describe("captureLeadAndIssueCode", () => {
   it("upserts the lead, mints a code, returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
     h.tx = makeFakeTx({
+      selects: [[{ id: "lead_1" }]],
       inserts: [[{ id: "lead_1", email: "ada@example.com" }], []],
     });
     const out = await captureLeadAndIssueCode(
@@ -129,6 +148,37 @@ describe("captureLeadAndIssueCode", () => {
   });
 });
 
+describe("captureLead — marketing consent on conflict", () => {
+  it("writes marketingConsent on conflict when the caller sent an explicit boolean", async () => {
+    const onConflictSets: Record<string, unknown>[] = [];
+    h.tx = makeFakeTx({
+      inserts: [[{ id: "lead_1", email: "ada@example.com" }]],
+      onConflictSets,
+    });
+    await captureLead({
+      email: "ada@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      marketingConsent: false,
+    });
+    expect(onConflictSets[0]).toMatchObject({ marketingConsent: false });
+  });
+
+  it("omits marketingConsent from the conflict set when the caller left it unset", async () => {
+    const onConflictSets: Record<string, unknown>[] = [];
+    h.tx = makeFakeTx({
+      inserts: [[{ id: "lead_1", email: "ada@example.com" }]],
+      onConflictSets,
+    });
+    await captureLead({
+      email: "ada@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
+    });
+    expect(onConflictSets[0]).not.toHaveProperty("marketingConsent");
+  });
+});
+
 describe("findLeadByEmail", () => {
   it("returns the lead when present", async () => {
     h.tx = makeFakeTx({
@@ -148,9 +198,19 @@ describe("findLeadByEmail", () => {
 describe("issueCodeForLead", () => {
   it("mints a fresh code and returns the reader url", async () => {
     process.env.MARKETING_URL = "https://oxagen.sh";
-    h.tx = makeFakeTx({ inserts: [[]] });
+    h.tx = makeFakeTx({
+      selects: [[{ id: "lead_1" }]],
+      inserts: [[]],
+    });
     const url = await issueCodeForLead("lead_1", "field-manual");
     expect(url).toMatch(/^https:\/\/oxagen\.sh\/read\?e=field-manual&c=/);
+  });
+
+  it("throws when the lead row is missing", async () => {
+    h.tx = makeFakeTx({ selects: [[]] });
+    await expect(issueCodeForLead("missing", "field-manual")).rejects.toThrow(
+      /lead not found/,
+    );
   });
 });
 
@@ -218,6 +278,7 @@ describe("redeemAndRotate — single-use enforcement", () => {
       selects: [
         editionRow,
         [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
+        [{ id: "l1" }],
         [{ email: "ada@example.com" }],
         [{ slug: "page-flip-reader", title: "Reader", format: "page-flip" }],
       ],
