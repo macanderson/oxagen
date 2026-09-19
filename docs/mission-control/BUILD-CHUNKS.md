@@ -18,7 +18,7 @@ flowchart LR
   S0 --> S3["3 Agents and people<br/>roles, enrollment, schemas, invite"]
   S1 --> S4["4 Run evidence<br/>proof, export download, gateway outcomes"]
   PR3479["PR #3479 merged"] --> S5["5 Steering hub<br/>segments, Memory, Policy, one record"]
-  S0 --> S5
+  S2 --> S5
 ```
 
 Sessions 1, 2, and 3 can run at the same time on separate machines or in separate cloud sessions. They touch different feature lanes and their shared-file hunks (`capability-ui-map.json`, `messages/*.json`, `data/contracts/*`) are kept in per-lane blocks so `git merge` resolves them.
