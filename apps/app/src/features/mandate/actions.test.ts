@@ -139,6 +139,7 @@ const untouched = {
   mandateId: MANDATE_ID,
   ...PREFILLED,
   validTo: "",
+  validToOffsetMinutes: 0,
   baseline: PREFILLED,
 };
 
@@ -156,6 +157,7 @@ describe("changeMandateLimits", () => {
     period: "monthly" as const,
     callsPerDay: "40",
     validTo: "2026-12-31",
+    validToOffsetMinutes: 0,
     baseline: NO_PREFILL,
   };
 
@@ -181,7 +183,7 @@ describe("changeMandateLimits", () => {
       },
       // The last day runs through its end, so a window to 2026-12-31 expires
       // as that day ends rather than as it begins.
-      validTo: "2026-12-31T23:59:59.999Z",
+      validTo: "2027-01-01T00:00:00.000Z",
     });
   });
 
@@ -218,6 +220,7 @@ describe("changeMandateLimits", () => {
       period: "weekly",
       callsPerDay: "",
       validTo: "",
+      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -242,6 +245,7 @@ describe("changeMandateLimits", () => {
       perPeriod: "1000",
       callsPerDay: "",
       validTo: "",
+      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
@@ -267,11 +271,14 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "",
       validTo: "2027-01-31",
+      // An operator on UTC+9, so the boundary is theirs and not UTC's.
+      validToOffsetMinutes: -540,
       baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      validTo: "2027-01-31T23:59:59.999Z",
+      // UTC+9: the end of the operator's 31 January, not of UTC's.
+      validTo: "2027-01-31T15:00:00.000Z",
     });
   });
 
@@ -286,6 +293,7 @@ describe("changeMandateLimits", () => {
       period: "monthly",
       callsPerDay: "500",
       validTo: "",
+      validToOffsetMinutes: 0,
       baseline: NO_PREFILL,
     });
     expect(written()).toEqual({
@@ -308,10 +316,11 @@ describe("changeMandateLimits", () => {
     await changeMandateLimits("a-intel", "core-platform", {
       ...untouched,
       validTo: "2027-03-31",
+      validToOffsetMinutes: 0,
     });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      validTo: "2027-03-31T23:59:59.999Z",
+      validTo: "2027-04-01T00:00:00.000Z",
     });
     expect(invoke).toHaveBeenCalledTimes(1);
   });
@@ -478,6 +487,7 @@ describe("changeMandateLimits", () => {
         period: "monthly",
         callsPerDay: "",
         validTo: "",
+        validToOffsetMinutes: 0,
         baseline: NO_PREFILL,
       }),
     ).toEqual({
@@ -516,6 +526,7 @@ describe("changeMandateLimits", () => {
       await changeMandateLimits("a-intel", "core-platform", {
         ...draft,
         validTo: "next year",
+        validToOffsetMinutes: 0,
       }),
     ).toEqual({
       ok: false,
@@ -524,6 +535,45 @@ describe("changeMandateLimits", () => {
       field: "validTo",
     });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // The offset moves an authority boundary by up to a day, so it is checked
+  // like any other submitted value. A server action is reachable by anyone
+  // holding a session, and this one is not sent by the dialog alone.
+  it.each([
+    ["past the widest real offset", 900],
+    ["not a whole minute", 90.5],
+    ["not a number at all", Number.NaN],
+  ])("refuses an offset that is %s (negative)", async (_why, offset) => {
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...draft,
+        validTo: "2027-06-30",
+        validToOffsetMinutes: offset,
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "validTo",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("ignores the offset when no date was submitted", async () => {
+    kernelAnswers({});
+    // Nothing to place in a zone, so a junk offset is not a reason to refuse a
+    // submission that only changes a limit.
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...untouched,
+      callsPerDay: "90",
+      validTo: "",
+      validToOffsetMinutes: Number.NaN,
+    });
+    expect(written()).toEqual({
+      mandateId: MANDATE_ID,
+      limitChanges: { calls: { perPeriod: "90", currencyOrUnit: "calls" } },
+    });
   });
 
   // The handler's own gate: a caller whose roles are not accountable for the

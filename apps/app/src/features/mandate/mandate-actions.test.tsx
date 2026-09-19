@@ -16,6 +16,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
+import { offsetAfter } from "./validity";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -128,6 +129,8 @@ describe("ChangeLimits", () => {
       mandateId: bounded.id,
       ...PREFILLED,
       validTo: "",
+      // No day picked, so there is no day to place in a zone.
+      validToOffsetMinutes: 0,
       baseline: PREFILLED,
     });
   });
@@ -145,6 +148,11 @@ describe("ChangeLimits", () => {
       ...PREFILLED,
       perPeriod: "800",
       validTo: "2027-03-31",
+      // The operator's offset on the day AFTER the one they picked, which is the
+      // instant the window ends. Asserted as the relation rather than a number so
+      // this holds under any TZ the runner has, and so a dialog that started
+      // sending today's offset instead would fail here.
+      validToOffsetMinutes: offsetAfter("2027-03-31"),
       // Unmoved: the action reads this and leaves the other bounds, the unit and
       // the window out of the change.
       baseline: PREFILLED,
@@ -171,6 +179,7 @@ describe("ChangeLimits", () => {
       perCall: "",
       perPeriod: "800",
       validTo: "",
+      validToOffsetMinutes: 0,
       baseline: PREFILLED,
     });
   });

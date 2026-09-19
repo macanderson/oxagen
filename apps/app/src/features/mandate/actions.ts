@@ -39,6 +39,7 @@ import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
+import { endOfLocalDay, isUsableOffset } from "./validity";
 
 /**
  * What the dialog had in the editable fields when it opened, as it rendered
@@ -77,6 +78,15 @@ export type LimitsDraft = {
   callsPerDay: string;
   /** The last day the mandate may be drawn on (`YYYY-MM-DD`); blank keeps the window. */
   validTo: string;
+  /**
+   * `getTimezoneOffset()` for the *start of the day after* `validTo`, taken in
+   * the operator's browser. It arrives as its own field rather than being
+   * inferred here because a server action has no access to the caller's zone,
+   * and because the offset that matters is the one in force on that date, not
+   * today's: a window ending after a DST change is an hour out otherwise.
+   * Ignored when `validTo` is blank.
+   */
+  validToOffsetMinutes: number;
   /** What the dialog prefilled into the fields above, so an untouched one can be told from an edit. */
   baseline: LimitsBaseline;
 };
@@ -91,7 +101,7 @@ type MandateLimitChanges = NonNullable<
   z.input<typeof mandateLimitsUpdate.input>["limitChanges"]
 >;
 
-/** The day a date input gives; the action widens it to the end of that day. */
+/** The day a date input gives; `endOfLocalDay` turns it into an instant. */
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
@@ -206,6 +216,12 @@ export async function changeMandateLimits(
   }
 
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
+  // The offset decides an authority boundary, so it is validated like one
+  // rather than trusted because it came from our own form: a server action is
+  // reachable by anyone holding a session.
+  const offsetMinutes = draft.validToOffsetMinutes;
+  if (validTo !== "" && !isUsableOffset(offsetMinutes))
+    return refuse("validTo");
 
   /**
    * Whether this submission is editing the bound the dialog prefilled or has
@@ -288,8 +304,11 @@ export async function changeMandateLimits(
     // no measure, and a change to the window alone is a legal change.
     ...(Object.keys(limitChanges).length === 0 ? {} : { limitChanges }),
     // The last day a mandate may be drawn on runs through the end of that day,
-    // so a window ending 2026-12-31 expires as that day ends, not as it begins.
-    ...(validTo === "" ? {} : { validTo: `${validTo}T23:59:59.999Z` }),
+    // in the operator's own calendar, which is the instant the day after it
+    // begins for them. See `endOfLocalDay`.
+    ...(validTo === ""
+      ? {}
+      : { validTo: endOfLocalDay(validTo, offsetMinutes) }),
   });
   return result.ok
     ? {

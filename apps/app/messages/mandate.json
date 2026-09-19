@@ -117,7 +117,7 @@
           "monthly": "monthly"
         },
         "validTo": "Valid to",
-        "validToHint": "The last day the mandate may be drawn on. Leave it as it is to keep the window.",
+        "validToHint": "The last day the mandate may be drawn on, in your timezone. Leave it as it is to keep the window.",
         "confirm": "Change the limits",
         "pending": "Changing the limits",
         "callsPer": "Calls per {period}",
