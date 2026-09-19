@@ -279,8 +279,8 @@ describe("the context-record wizard: statement", () => {
     await toStatement("constraint");
     const effect = screen.getByTestId<HTMLSelectElement>("record-effect");
     expect([...effect.options].map((o) => o.value)).toEqual([
-      "forbid",
       "require",
+      "forbid",
     ]);
   });
 

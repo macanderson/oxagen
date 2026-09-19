@@ -321,7 +321,7 @@ describe("the other dialogs on a phone", () => {
     expect(style(within(menu).getByRole("combobox")).fontSize).toBe("16px");
   });
 
-  it("the drawer opens over a scrim with the sidebar's nine links", async () => {
+  it("the drawer opens over a scrim with the sidebar's eight links", async () => {
     const user = userEvent.setup();
     renderPhone(shellData());
     expect(document.querySelector("[data-scrim]")).toBeNull();
@@ -332,7 +332,7 @@ describe("the other dialogs on a phone", () => {
       within(drawer)
         .getByRole("navigation", { name: "Main" })
         .querySelectorAll("a"),
-    ).toHaveLength(9);
+    ).toHaveLength(8);
   });
 
   // The rail that carries the launcher is `hidden md:flex`, so without this a

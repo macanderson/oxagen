@@ -66,7 +66,6 @@
       "denied": "Reading the tool registry needs a workspace role. You can still continue: the definition asks for the fallback belt.",
       "unavailable": "The tool registry could not be read ({code}). You can still continue: the definition asks for the fallback belt.",
       "more": "This is the first 100 tool versions. Add any other by name in the definition.",
-      "version": "v{version}",
       "risk": "{grade} risk",
       "unclassified": "unclassified",
       "effects": {
