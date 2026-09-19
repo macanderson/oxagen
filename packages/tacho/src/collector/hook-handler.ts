@@ -24,6 +24,7 @@ import {
 } from "../wire";
 import {
   type Evaluation,
+  type EvaluationInput,
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
@@ -308,6 +309,47 @@ export async function handleHookEvent(
   return { ...outcome, bodies: outcome.record?.recorder.takeBodies() ?? [] };
 }
 
+/**
+ * The `evaluatePreToolUse` request for one view of the policy.
+ *
+ * Both paths that evaluate a tool go through here, and so does each path's
+ * second attempt after a refresh: `PreToolUse` for the agent's own call, and
+ * `SubagentStart` for the subagent Cursor is about to launch. Building the
+ * request by hand at each of the four sites is what let `mandateConfirmedAt`
+ * reach the parent's evaluation and not the subagent's — past the bundle's
+ * signed lifetime the subagent then measured freshness from `issued_at`, and
+ * in enforce mode that denied every subagent launch on a host whose mandate
+ * the daemon had been confirming by `not_modified` the whole time. One
+ * builder, reading the view it is handed, is what stops the parent and the
+ * subagent drifting apart again.
+ */
+function evaluationRequestFor(
+  view: PolicyView,
+  toolName: string,
+  toolInput: Record<string, unknown> | undefined,
+  record: SessionRecord,
+  deps: HookHandlerDeps,
+): EvaluationInput {
+  return {
+    bundle: view.bundle,
+    bundleVerified: view.verified,
+    toolName,
+    ...(toolInput !== undefined ? { toolInput } : {}),
+    hostStatus: view.hostStatus,
+    session: record.control,
+    latestDenyGeneration: view.denyGeneration,
+    controlReachable: view.controlReachable,
+    ...(view.mandateConfirmedAt !== undefined
+      ? { mandateConfirmedAt: view.mandateConfirmedAt }
+      : {}),
+    now: deps.now(),
+    context: {
+      ...deps.match,
+      ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
+    },
+  };
+}
+
 async function routeHook(
   raw: unknown,
   env: Record<string, string | undefined>,
@@ -466,45 +508,15 @@ async function routeHook(
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
-        evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName,
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          ...(currentView.mandateConfirmedAt !== undefined
-            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
-            : {}),
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluatePreToolUse(
+          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+        );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
-        evaluation = evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName,
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          ...(currentView.mandateConfirmedAt !== undefined
-            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
-            : {}),
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluation = evaluatePreToolUse(
+          evaluationRequestFor(currentView, toolName, toolInput, record, deps),
+        );
       }
       if (evaluation.decision === "defer") {
         // No way to refresh: the stale bundle fails closed on non-read-only tools.
@@ -590,45 +602,15 @@ async function routeHook(
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
-        evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName: "Task",
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          ...(currentView.mandateConfirmedAt !== undefined
-            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
-            : {}),
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluatePreToolUse(
+          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+        );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
         await deps.refreshBundle();
         currentView = deps.policy();
-        evaluation = evaluatePreToolUse({
-          bundle: currentView.bundle,
-          bundleVerified: currentView.verified,
-          toolName: "Task",
-          ...(toolInput !== undefined ? { toolInput } : {}),
-          hostStatus: currentView.hostStatus,
-          session: record.control,
-          latestDenyGeneration: currentView.denyGeneration,
-          controlReachable: currentView.controlReachable,
-          ...(currentView.mandateConfirmedAt !== undefined
-            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
-            : {}),
-          now: deps.now(),
-          context: {
-            ...deps.match,
-            ...(record.cwd !== undefined ? { cwd: record.cwd } : {}),
-          },
-        });
+        evaluation = evaluatePreToolUse(
+          evaluationRequestFor(currentView, "Task", toolInput, record, deps),
+        );
       }
       if (evaluation.decision === "defer") {
         evaluation = {

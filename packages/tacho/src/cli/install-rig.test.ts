@@ -224,6 +224,36 @@ describe("install rig: macOS, every harness", () => {
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
 
+  it("keeps a hook the user added to the Cursor file enrollment created", async () => {
+    // The other half of the receipt that lets a purge take back a file Tacho
+    // made. The teardown writes the stripped document through
+    // `HarnessFiles.write`, so those bytes are by definition the bytes Tacho
+    // wrote last — and a hook the user added while enrolled is inside them.
+    // Deleting on that digest alone would take their hook with the file, out
+    // of their home directory. Only `cursorDocumentIsVestigial` saying the
+    // strip left nothing but our own `version` may delete it, and here it
+    // cannot say that.
+    const seed = seedHome();
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ["cursor"] }, rig.deps)).ok).toBe(true);
+    const path = rig.deps.paths.cursorHooks[0] as string;
+    expect(existsSync(path)).toBe(true);
+    // They add one of their own to the file enrollment created for them.
+    const live = JSON.parse(readFileSync(path, "utf8")) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    live.hooks["afterFileEdit"] = [{ command: "~/bin/my-own-hook.sh" }];
+    writeFileSync(path, `${JSON.stringify(live, null, 2)}\n`);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    // Their hook and their file are still there; every Tacho entry is gone.
+    expect(existsSync(path)).toBe(true);
+    const after = readFileSync(path, "utf8");
+    expect(after).toContain("~/bin/my-own-hook.sh");
+    expect(after).not.toContain(TEST_ENROLLMENT);
+    expect(after).not.toContain("tacho");
+  });
+
   it("writes through a symlinked settings file and leaves the link a link", async () => {
     const seed = seedHome({ symlinkedClaudeSettings: true });
     const before = snapshotTree(seed.home);
