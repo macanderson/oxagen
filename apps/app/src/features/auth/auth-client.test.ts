@@ -101,7 +101,7 @@ describe("liveVerifyTwoFactor", () => {
 });
 
 describe("liveSignInSocial", () => {
-  it("starts social sign-in with the SafePath callback and login error URL", async () => {
+  it("starts social sign-in with the SafePath callback and a login error URL carrying next", async () => {
     client.signIn.social.mockResolvedValue({});
     await expect(
       auth.liveSignInSocial({
@@ -112,6 +112,23 @@ describe("liveSignInSocial", () => {
     expect(client.signIn.social).toHaveBeenCalledWith({
       provider: "github",
       callbackURL: "/acme/core",
+      // A retry from /login after a failed round-trip still lands on the
+      // destination the visitor originally asked for.
+      errorCallbackURL: "/login?next=%2Facme%2Fcore",
+    });
+  });
+
+  it("drops next from the login error URL when the destination is the root", async () => {
+    client.signIn.social.mockResolvedValue({});
+    await expect(
+      auth.liveSignInSocial({
+        provider: "github",
+        callbackURL: routes.root(),
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(client.signIn.social).toHaveBeenCalledWith({
+      provider: "github",
+      callbackURL: "/",
       errorCallbackURL: "/login",
     });
   });

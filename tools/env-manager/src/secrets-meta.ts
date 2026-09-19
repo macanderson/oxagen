@@ -61,7 +61,7 @@ export const ALIAS: Record<string, string> = {
   "oxagen-google-client-secret": "GOOGLE_LOGIN_CLIENT_SECRET",
   "oxagen-google-connections-client-id": "GOOGLE_DATA_CLIENT_ID",
   "oxagen-google-connections-client-secret": "GOOGLE_DATA_CLIENT_SECRET",
-  // GitHub LOGIN (social sign-in) — distinct from the GitHub App connector below
+  // GitHub LOGIN (social sign-in), distinct from the GitHub App connector below
   "oxagen-github-login-client-id": "GITHUB_LOGIN_CLIENT_ID",
   "oxagen-github-login-client-secret": "GITHUB_LOGIN_CLIENT_SECRET",
   "oxagen-github-client-id": "GITHUB_LOGIN_CLIENT_ID",

@@ -3,7 +3,7 @@
 // only when a live call runs. It is the one browser module that imports
 // @oxagen/auth/client; the server half is src/server/session.ts. A destination
 // Better Auth navigates to (the social sign-in `callbackURL`) is a SafePath.
-import type { SafePath } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { type AuthOutcomeKey, authOutcomeKey } from "./auth-errors";
 
 export type ClientAuthResult =
@@ -85,10 +85,12 @@ export async function liveSignInSocial(input: {
   const reply: BetterAuthReply = await (await client()).signIn.social({
     provider: input.provider,
     callbackURL: input.callbackURL,
-    // Failed provider round-trips land on /login?error=<code> so the form can
-    // show them. Better Auth's default (`/?error=`) is gated and used to bury
-    // the code inside `next` until the proxy lift landed.
-    errorCallbackURL: "/login",
+    // Failed provider round-trips land on /login?next=<callbackURL>&error=<code>
+    // so the form can show the outcome and a retry still lands on the
+    // destination the visitor asked for, rather than defaulting to "/".
+    // Better Auth's default (`/?error=`) is gated and used to bury the code
+    // inside `next` until the proxy lift landed.
+    errorCallbackURL: routes.login(input.callbackURL),
   });
   return fail(reply) ?? { ok: true };
 }
