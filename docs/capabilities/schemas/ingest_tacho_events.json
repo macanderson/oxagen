@@ -21931,7 +21931,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
