@@ -302,7 +302,7 @@
           },
           "checks": {
             "title": "2 · Checks",
-            "body": "Schema, tools that exist in the registry, no irreversible side effect without a mandate, and a secret and PII scan on the instructions."
+            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every tool it names is one you hold yourself. Your repository's own checks run on the pull request."
           },
           "review": {
             "title": "3 · Review",
@@ -310,7 +310,7 @@
           },
           "merge": {
             "title": "4 · Merge is the change",
-            "body": "The principal, roles and toolbelt update. Open your coding agent in the repository and it is there."
+            "body": "The merged file is the definition of record. The next run on this repository reads it from the default branch."
           },
           "note": "Deleting an agent is a pull request that removes the file. The principal is retired, never deleted, so its runs keep their identity."
         }
