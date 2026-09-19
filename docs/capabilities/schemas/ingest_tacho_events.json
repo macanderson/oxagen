@@ -16905,6 +16905,14 @@
                     "mcp_tool_name": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "plugin_name": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    "plugin_id_hash": {
+                      "type": "string",
+                      "maxLength": 512
                     }
                   },
                   "additionalProperties": false
