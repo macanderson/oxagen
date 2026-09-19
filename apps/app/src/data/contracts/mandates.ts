@@ -463,6 +463,13 @@ export const MEASURE_VALUE = /^(0|[1-9][0-9]{0,29})$/;
 /** `measureNameSchema`: snake_case, up to 64 characters. */
 export const MEASURE_NAME_MAX = 64;
 
+/**
+ * `measureNameSchema`: `/^[a-z][a-z0-9_]{0,63}$/`. Every measure a form names
+ * (a limit, a counterparty rule, an approval threshold) is a record key the
+ * contract checks against this, so a form checks it first and names the field.
+ */
+export const MEASURE_NAME = /^[a-z][a-z0-9_]{0,63}$/;
+
 /** `mandateLimitSchema.currencyOrUnit`: `.min(1).max(32)`. */
 export const UNIT_MAX = 32;
 
@@ -530,6 +537,8 @@ export type MandateLimitFields = {
  *   the grant handler exempts it from the declared-measure check, so a limit
  *   filed under that name stops measuring what it names. The calls-per-day
  *   field is the only writer of that limit.
+ * - **Snake_case, as `measureNameSchema` has it.** A name the contract refuses
+ *   is named on its field here rather than as a schema failure naming none.
  * - **The measure is optional.** A cap on calls alone is a legal mandate and the
  *   only one a tool that declares no numeric measure can carry. The four
  *   measure fields stand or fall together.
@@ -557,9 +566,13 @@ export function mandateLimitsOf(
 
   const limits: Record<string, MandateLimit> = {};
   if (wantsMeasure) {
-    if (measure === "" || measure === RESERVED_MEASURE)
+    if (measure === RESERVED_MEASURE || !MEASURE_NAME.test(measure))
       return { ok: false, field: "measure" };
-    if (unit === "" || isCurrencyCode(unit.toUpperCase()))
+    if (
+      unit === "" ||
+      unit.length > UNIT_MAX ||
+      isCurrencyCode(unit.toUpperCase())
+    )
       return { ok: false, field: "unit" };
     if (perCall === "" && perPeriod === "")
       return { ok: false, field: "perPeriod" };

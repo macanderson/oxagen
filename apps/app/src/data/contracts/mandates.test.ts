@@ -13,7 +13,9 @@ import {
   isChangeable,
   isEffective,
   isUpcoming,
+  MANDATE_APPROVER,
   MAX_CONSEQUENCE_TAGS,
+  MEASURE_NAME,
   MEASURE_NAME_MAX,
   MEASURE_VALUE,
   PURPOSE_MAX,
@@ -280,6 +282,47 @@ describe("the contract bounds this app mirrors", () => {
       expect(MEASURE_VALUE.test("1000000000")).toBe(true);
       expect(/^\d{1,9}$/.test("1000000000")).toBe(false);
     });
+  });
+
+  describe("MEASURE_NAME mirrors measureNameSchema", () => {
+    // /^[a-z][a-z0-9_]{0,63}$/ — snake_case, 1 to 64 characters.
+    it.each([["r"], ["rows"], ["rows_read_2"], [`a${"b".repeat(63)}`]])(
+      "admits %s",
+      (name) => {
+        expect(MEASURE_NAME.test(name)).toBe(true);
+      },
+    );
+
+    it.each([
+      [""],
+      ["Rows"],
+      ["rows-read"],
+      ["rows read"],
+      ["2rows"],
+      [`a${"b".repeat(64)}`],
+    ])("refuses %s (negative)", (name) => {
+      expect(MEASURE_NAME.test(name)).toBe(false);
+    });
+  });
+
+  describe("MANDATE_APPROVER mirrors mandateApproverSchema", () => {
+    // role:<Owner|Admin|Compliance|Billing> or user:<usr_…>, either casing.
+    it.each([
+      ["role:Owner"],
+      ["role:admin"],
+      ["role:Compliance"],
+      ["ROLE:BILLING"],
+      ["user:usr_priyanatarajan"],
+    ])("admits %s", (entry) => {
+      expect(MANDATE_APPROVER.test(entry)).toBe(true);
+    });
+
+    it.each([["role:Member"], ["role:Viewer"], ["priya"], ["user:priya"], [""]])(
+      "refuses %s (negative)",
+      (entry) => {
+        expect(MANDATE_APPROVER.test(entry)).toBe(false);
+      },
+    );
   });
 
   it("carries the array and length ceilings the mandate shape states", () => {

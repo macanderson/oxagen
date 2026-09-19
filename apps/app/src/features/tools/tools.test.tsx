@@ -14,6 +14,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentPage } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import type { MandateList } from "@/data/contracts/mandates";
 import { type Read, readError, readOk } from "@/data/read";
@@ -42,8 +43,14 @@ vi.mock("next/navigation", () => ({
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Tools, ToolsLoading } = await import("./tools");
-const { credentialGrantPage, killSwitchBoard, toolsSource, toolVersionPage } =
-  await import("./tools.builders");
+const {
+  agentPage,
+  agentPageRow,
+  credentialGrantPage,
+  killSwitchBoard,
+  toolsSource,
+  toolVersionPage,
+} = await import("./tools.builders");
 const { TOOLS_TABS } = await import("./view");
 
 /**
@@ -1081,5 +1088,132 @@ describe("Tools › mandates ledger", () => {
     // A mandate may cap calls daily and money monthly; each window sits with
     // the limit it belongs to.
     expect(row.textContent).toContain("per day");
+  });
+});
+
+// Grant a mandate (#2957). `grant_mandate` asserts an org role the workspace
+// names for every tag, and every such role is Owner, Admin, Billing or
+// Compliance, so the control is drawn for those four and for nobody else. The
+// agents read the picker needs is made only for them.
+describe("Tools › mandates ledger › grant", () => {
+  const draft = (over: Parameters<typeof mandateRow>[0] = {}) =>
+    mandateRow({
+      id: "mnd_7c1d2e",
+      status: "draft",
+      grantedBy: null,
+      roleAtGrant: null,
+      ...over,
+    });
+
+  async function renderGrant(
+    as: OrgRole,
+    mandates: Read<MandateList> = mandateList([mandateRow()]),
+    agents: Read<AgentPage> = readOk(
+      agentPage([agentPageRow("invoice-bot"), agentPageRow("release-bot")]),
+    ),
+  ) {
+    return renderTools(
+      { mandates, agents, killSwitches: board() },
+      { tab: "mandates" },
+      viewer(as),
+    );
+  }
+
+  it.each([
+    ["owner" as const],
+    ["admin" as const],
+    ["billing" as const],
+    ["compliance" as const],
+  ])("offers a %s the grant, reading the agents it picks from", async (as) => {
+    const { calls } = await renderGrant(as);
+    expect(
+      within(ledger()).getByRole("button", { name: "Grant a mandate" }),
+    ).toBeInTheDocument();
+    expect(calls.agents).toEqual([[viewer(as), { cursor: null }]]);
+  });
+
+  it.each([["member" as const], ["viewer" as const]])(
+    "offers a %s no grant and makes no agents read (negative)",
+    async (as) => {
+      const { calls } = await renderGrant(
+        as,
+        mandateList([mandateRow(), draft()]),
+      );
+      expect(
+        within(ledger()).queryByRole("button", { name: /^Grant/ }),
+      ).toBeNull();
+      expect(calls.agents).toEqual([]);
+    },
+  );
+
+  it("puts a Grant on a requested row, and on no other", async () => {
+    await renderGrant(
+      "billing",
+      mandateList([mandateRow({ status: "active" }), draft()]),
+    );
+    expect(
+      within(ledger()).getByRole("button", { name: "Grant mandate mnd_7c1d2e" }),
+    ).toBeInTheDocument();
+    expect(
+      within(ledger()).queryByRole("button", {
+        name: "Grant mandate mnd_4f2a9c",
+      }),
+    ).toBeNull();
+  });
+
+  // Retirement suspends the principal, so authority granted to it could never
+  // be drawn; the handler would still record it.
+  it("offers a retired agent neither the picker nor its requests (negative)", async () => {
+    const retired = agentPageRow("old-bot", "retired");
+    await renderGrant(
+      "owner",
+      mandateList([draft({ agentId: retired.id, agentSlug: "old-bot" })]),
+      readOk(agentPage([agentPageRow("invoice-bot"), retired])),
+    );
+    expect(
+      within(ledger()).queryByRole("button", {
+        name: "Grant mandate mnd_7c1d2e",
+      }),
+    ).toBeNull();
+    fireEvent.click(
+      within(ledger()).getByRole("button", { name: "Grant a mandate" }),
+    );
+    const picker = within(screen.getByTestId("grant-mandate")).getByLabelText(
+      "Agent",
+    );
+    expect(
+      within(picker)
+        .getAllByRole("option")
+        .map((option) => option.getAttribute("value")),
+    ).toEqual(["agt_invoicebot"]);
+  });
+
+  it("says the picker holds one page when the agents read has more", async () => {
+    await renderGrant(
+      "owner",
+      mandateList([mandateRow()]),
+      readOk(agentPage([agentPageRow("invoice-bot")], "cursor_2")),
+    );
+    fireEvent.click(
+      within(ledger()).getByRole("button", { name: "Grant a mandate" }),
+    );
+    expect(screen.getByTestId("grant-mandate")).toHaveTextContent(
+      "The first page of this workspace's agents.",
+    );
+  });
+
+  it("keeps the ledger when the agents read fails, and says why no agent is offered (negative)", async () => {
+    await renderGrant(
+      "owner",
+      mandateList([mandateRow()]),
+      readError("agents_unavailable", 503),
+    );
+    expect(within(ledger()).getByTestId("mandate")).toBeInTheDocument();
+    fireEvent.click(
+      within(ledger()).getByRole("button", { name: "Grant a mandate" }),
+    );
+    expect(screen.getByTestId("grant-mandate")).toHaveTextContent(
+      "could not be read",
+    );
   });
 });

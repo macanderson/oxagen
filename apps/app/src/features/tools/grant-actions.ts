@@ -21,6 +21,7 @@ import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
 import {
   CONSEQUENCE_TAG,
   MANDATE_APPROVER,
+  MEASURE_NAME,
   MEASURE_VALUE,
   TARGET_MAX,
   consequenceTagsOf,
@@ -113,7 +114,10 @@ export async function grantMandate(
   const allow = [...new Set(listOf(draft.targetAllow))];
   const deny = [...new Set(listOf(draft.targetDeny))];
   const wantsTargets = allow.length > 0 || deny.length > 0;
-  if (wantsTargets && (targetMeasure === "" || targetMeasure === "calls"))
+  if (
+    wantsTargets &&
+    (targetMeasure === "calls" || !MEASURE_NAME.test(targetMeasure))
+  )
     return refuse("targetMeasure");
   if (!wantsTargets && targetMeasure !== "") return refuse("targetAllow");
   if (allow.some((target) => target.length > TARGET_MAX))
@@ -131,7 +135,10 @@ export async function grantMandate(
   const humanAboveValue = draft.humanAboveValue.trim();
   if (humanAboveMeasure !== "" && humanAboveValue === "")
     return refuse("humanAboveValue");
-  if (humanAboveValue !== "" && humanAboveMeasure === "")
+  if (
+    humanAboveValue !== "" &&
+    (humanAboveMeasure === "" || !MEASURE_NAME.test(humanAboveMeasure))
+  )
     return refuse("humanAboveMeasure");
   if (humanAboveValue !== "" && !MEASURE_VALUE.test(humanAboveValue))
     return refuse("humanAboveValue");
