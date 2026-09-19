@@ -100,6 +100,27 @@ describe("repoRelativePathOf", () => {
     );
   });
 
+  it("matches a Windows root whose case differs past the drive letter", () => {
+    // NTFS compares filenames without case and records them with it, so one
+    // tool's `c:\\Repo` and a git read's `C:\\repo` are the same directory.
+    // Folding only the drive letter left everything below it unmatched, and
+    // the file landed in a second row under its absolute path.
+    expect(repoRelativePathOf("c:\\Repo\\src\\a.ts", "C:\\repo")).toBe(
+      "src/a.ts",
+    );
+    // The spelling that comes back is the one that arrived, not the folded
+    // form: the comparison is case-insensitive, the record is not.
+    expect(repoRelativePathOf("C:\\repo\\SRC\\A.ts", "c:\\REPO")).toBe(
+      "SRC/A.ts",
+    );
+  });
+
+  it("keeps case significant on a POSIX root, where it names the file", () => {
+    // The mirror of the case above: on ext4 `/repo/SRC` and `/repo/src` are
+    // two directories, so a path under one is not under the other.
+    expect(repoRelativePathOf("/REPO/src/a.ts", "/repo")).toBeUndefined();
+  });
+
   it("strips a UNC share root", () => {
     expect(
       repoRelativePathOf("\\\\server\\share\\src\\a.ts", "\\\\server\\share"),
