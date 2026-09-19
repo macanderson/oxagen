@@ -9,10 +9,12 @@ type ActionFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 export function useActionFailure(
   /**
-   * `rules` for the auto-approval writes. Saving a rule also asks for the org
-   * role accountable for every consequence its tools carry, so an Admin can
-   * be refused a rule over a tool that moves money. There the Owner-or-Admin
-   * sentence would name a role the person already holds.
+   * `rules` for the auto-approval writes that run the consequence check:
+   * saving a rule and switching one on. Those also ask for the org role
+   * accountable for every consequence the rule's tools carry, so an Admin can
+   * be refused a rule over a tool that moves money, and the Owner-or-Admin
+   * sentence would name a role the person already holds. Deleting a rule and
+   * switching one off ask only for that pair, so they take the default.
    */
   on: "tools" | "rules" = "tools",
 ): (failure: ActionFailure) => string {

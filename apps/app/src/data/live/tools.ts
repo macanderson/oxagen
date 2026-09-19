@@ -3,7 +3,8 @@
 // reaching this workspace, and the workspace's auto-approval rules. All four
 // are `noBillingGate` reads whose role gate lives in the handler (INV-29), so
 // a member without it comes back as `denied` and the tab shows the
-// access-denied state rather than an empty table. An answer a view model refuses is reported once as record_unmappable.
+// access-denied state rather than an empty table. An answer a view model
+// refuses is reported once as record_unmappable.
 import "server-only";
 import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";

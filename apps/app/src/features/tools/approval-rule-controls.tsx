@@ -394,7 +394,11 @@ export function RuleToggle({
   rule: ApprovalRule;
 }) {
   const t = useTranslations("tools.autoApprovals.toggle");
-  const failureText = useActionFailure("rules");
+  // Switching on re-runs the consequence check; switching off asks only for
+  // an org Owner or Admin, so a refusal there names that pair.
+  const failureOn = useActionFailure("rules");
+  const failureOff = useActionFailure();
+  const failureText = rule.enabled ? failureOff : failureOn;
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -451,7 +455,9 @@ export function RuleDelete({
   rule: ApprovalRule;
 }) {
   const t = useTranslations("tools.autoApprovals.delete");
-  const failureText = useActionFailure("rules");
+  // Neither deleting nor switching off runs the consequence check (either can
+  // only send more calls to a person), so a role refusal is the Owner-or-Admin one.
+  const failureText = useActionFailure();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);

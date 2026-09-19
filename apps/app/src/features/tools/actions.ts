@@ -26,9 +26,12 @@ import type {
   ToolRiskGrade,
   ToolSideEffect,
 } from "@/data/contracts/tools";
-import type { Read } from "@/data/read";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import {
+  kernelRead,
+  kernelWrite,
+  readToActionResult,
+} from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /**
@@ -269,20 +272,6 @@ function bodyOf(rule: StoredRule | ApprovalRuleDraft) {
   };
 }
 
-/** A read this action could not make, as the write result the dialog names. */
-function readFailed(
-  read: Exclude<Read<unknown>, { ok: true }>,
-): Exclude<ActionResult<never>, { ok: true }> {
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
-    case "pending_approval":
-      return read;
-    case "error":
-      return { ok: false, reason: "unavailable", code: read.code };
-  }
-}
-
 /**
  * Creates or edits one auto-approval rule.
  *
@@ -307,7 +296,7 @@ export async function saveApprovalRule(
     input: {},
     page: "tools",
   });
-  if (!current.ok) return readFailed(current);
+  if (!current.ok) return readToActionResult<never>(current);
   const stored = current.value.items;
   const body = bodyOf({
     ...draft,

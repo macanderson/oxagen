@@ -238,7 +238,8 @@ export const ApprovalRule = z.object({
   businessHours: ApprovalRuleHours.nullable(),
   /** The `usr_…` of whoever last wrote the rule; null when no person did. */
   lastWrittenBy: PublicId.nullable(),
-  lastWrittenAt: Instant,
+  /** The contract admits an offset here, so the view does too. */
+  lastWrittenAt: z.iso.datetime({ offset: true }),
   /**
    * The consequence tags the rule's tools carried when it was last written.
    * Null when the record carries no stamp, which the evaluator reads as "does
