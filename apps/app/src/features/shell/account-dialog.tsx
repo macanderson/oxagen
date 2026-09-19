@@ -28,6 +28,7 @@ import {
   useState,
 } from "react";
 import { routes } from "@/shared/safe-path";
+import { useFormatter } from "@/ui/formatter";
 import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
@@ -77,8 +78,13 @@ const tabClass =
 
 export function AccountDialog({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account");
-  const { accountOpen, setAccountOpen, accountTab, setAccountTab, openAccount } =
-    useShellState();
+  const {
+    accountOpen,
+    setAccountOpen,
+    accountTab,
+    setAccountTab,
+    openAccount,
+  } = useShellState();
 
   // Recovery codes are shown exactly once, and from the moment a rotation
   // lands on the server this page holds the only copy that will ever exist.
@@ -138,11 +144,11 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // organization they rotated in, by Back or by a link, before saving them.
   // The set is still in the vault, so it is put back in front of them rather
   // than left for them to go looking for.
-  const arrivedWithCodes = useRef(
+  const arrivedWithCodesRef = useRef(
     vault.rotating || vault.codes !== null || vault.uncertain,
   );
   useEffect(() => {
-    if (arrivedWithCodes.current) openAccount("security");
+    if (arrivedWithCodesRef.current) openAccount("security");
   }, [openAccount]);
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
@@ -828,6 +834,11 @@ function SecurityTab({
   rotation,
 }: { data: ShellData } & CodeVault) {
   const t = useTranslations("shell.account.security");
+  // The viewer's zone, not UTC. Preferences promises every date and time
+  // follows the zone chosen there, and a device list that answers in UTC
+  // breaks that promise where it matters most: "was that me?" is a question
+  // about the clock the person was actually looking at.
+  const format = useFormatter();
   const passwordId = useId();
   const [sessions, setSessions] = useState<SessionsState>({ kind: "loading" });
   // Seeded from the vault, so a return to this tab shows codes issued while
@@ -1131,8 +1142,10 @@ function SecurityTab({
                 <time className={listTime} dateTime={s.updatedAt.toISOString()}>
                   {s.current
                     ? t("now")
-                    : s.updatedAt.toISOString().slice(0, 16).replace("T", " ") +
-                      "Z"}
+                    : format.dateTime(s.updatedAt, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                 </time>
                 {s.current ? null : (
                   <button
