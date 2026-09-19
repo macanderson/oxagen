@@ -218,13 +218,36 @@ describe("Mandate › loaded", () => {
     expect(grant.textContent).toContain("always answers for moves_money");
   });
 
-  // An empty approvers list is a rule, not an absence: the consequence roles
-  // decide. Printing it as empty would say the opposite.
-  it("reads an empty approver list as the consequence roles", async () => {
+  // Approvers only mean something once something can park a call. The gate
+  // fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
+  // `humanAbove` threshold and proceeds when it is empty
+  // (`packages/rules/src/mandates.ts`). A mandate with neither parks nothing,
+  // so naming approvers on it would describe a review path that does not run.
+  it("says no call waits for a person when the rule can park none", async () => {
     await renderMandate(
       mandateDetailRead({
         mandate: mandateRow({
           approval: { humanAbove: [], alwaysHumanFor: [], approvers: [] },
+        }),
+      }),
+    );
+    expect(screen.getByTestId("mandate-grant").textContent).toContain(
+      "no call on this mandate waits for a person",
+    );
+  });
+
+  // Once a tag can park a call, an empty approvers list is a rule and not an
+  // absence: the consequence roles decide. Printing it as empty would say the
+  // opposite of what it means.
+  it("reads an empty approver list as the consequence roles", async () => {
+    await renderMandate(
+      mandateDetailRead({
+        mandate: mandateRow({
+          approval: {
+            humanAbove: [],
+            alwaysHumanFor: ["moves_money"],
+            approvers: [],
+          },
         }),
       }),
     );
@@ -437,7 +460,7 @@ describe("Mandate › access denied", () => {
     expect(panel.textContent).toContain("Signed in as: Member");
     expect(panel.textContent).toContain("Needed:");
     expect(panel.textContent).toContain("Decided by:");
-    expect(panel.textContent).toContain("An owner can grant it");
+    expect(panel.textContent).toContain("An owner can grant an accountable role");
     expect(
       within(panel).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/a-intel/core-platform");

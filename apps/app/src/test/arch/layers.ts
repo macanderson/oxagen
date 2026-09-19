@@ -92,6 +92,15 @@ const ALLOWED: Record<
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "server/viewer" || target === "server/session") return true;
+    // `viewerTimeZone` resolves the viewer's zone through `kernelRead`, so it
+    // carries the restriction of the read it wraps: a `"use server"` module
+    // only, or a type. A write that places a calendar day a person picked
+    // cannot do it without the zone that day was picked in
+    // (`server/viewer-zone.ts`), and the mandate and agent actions both ask
+    // there rather than each running its own read and its own fallback.
+    if (target === "server/viewer-zone") {
+      return edge.typeOnly || from.directive === "use server";
+    }
     // `kernelWrite` and `kernelRead`, only from a "use server" module; their
     // types from anywhere. The read half is ADR-089.
     //

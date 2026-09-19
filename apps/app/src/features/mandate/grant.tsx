@@ -45,10 +45,20 @@ function Row({
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
       <dt className={term}>{label}</dt>
-      <dd className={value}>{children}</dd>
-      {basis === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{basis}</p>
-      )}
+      {/*
+        The basis sits inside the `<dd>`, not beside it. Axe's `definition-list`
+        rule lets a `<dl>` group its `<dt>`/`<dd>` pair in a wrapping `<div>`,
+        but that wrapper may hold nothing else: a `<p>` beside the pair made
+        every render of this panel fail the rule, and the panel is on every
+        mandate page. It reads the same either way, because the basis explains
+        the value it now lives in.
+      */}
+      <dd className={value}>
+        {children}
+        {basis === undefined ? null : (
+          <p className="pt-0.5 text-xs text-muted-foreground">{basis}</p>
+        )}
+      </dd>
     </div>
   );
 }
