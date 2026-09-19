@@ -173,6 +173,7 @@
         "headMoved": "The pull request changed after the checks ran. Run the checks again.",
         "baseMoved": "The pull request no longer targets the production branch. Nothing was merged.",
         "githubRefused": "GitHub refused the change. Nothing was published.",
+        "mergeTimeUnknown": "The pull request merged and GitHub has not said when, so nothing was published. Merge again to publish it.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "Write a reason before you dismiss the proposal.",
         "pendingApproval": "The change is waiting for approval: {accessRequestId}.",

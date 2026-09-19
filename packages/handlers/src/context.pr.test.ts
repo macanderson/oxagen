@@ -937,32 +937,88 @@ describe("merge_context_pr", () => {
     expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime());
   });
 
-  // The merge has already landed by the time the re-read runs, so a failure
-  // there must not lose the publication. The handler falls back to its own
-  // clock, which is where it started.
-  it("publishes on its own clock when the merged pull request cannot be re-read", async () => {
+  // The re-read that reports GitHub's merge instant can time out while two
+  // Context PRs are merging at once. Stamping the earlier commit with this
+  // call's later clock made `latestPublication` name an ancestor as the tip a
+  // checkout must reach, so a checkout stopped there read as current while it
+  // lacked the later record. The publication is refused instead, and the
+  // merge GitHub already holds is resumed on the retry.
+  it("refuses merge_time_unknown when the merged pull request cannot be re-read, and the retry publishes GitHub's instant", async () => {
     const h = harness();
     const id = await opened(h);
     const github = h.github;
     const read = github.getPullRequest.bind(github);
     // The first read is the head check before the merge; the second is the
-    // re-read this fix added.
+    // re-read for the merge instant.
     let calls = 0;
     github.getPullRequest = async (repo, number) => {
       calls += 1;
       if (calls > 1) throw new Error("GitHub API error 502");
       return read(repo, number);
     };
-    const out = await createMergeContextPrHandler(h)(
-      { proposalId: id },
-      ctx({ userId: REVIEWER }),
-    );
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merge_time_unknown",
+    });
+    // The merge landed on GitHub; only the publication was refused.
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.events).toHaveLength(0);
+    // The proposal is still mergeable, which is what makes the refusal safe
+    // to retry.
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+
+    github.getPullRequest = read;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
-    expect(h.store.records).toHaveLength(1);
+    expect(out.mergedCommit).toBe("merge519");
+    expect(h.github.merges).toHaveLength(1);
     const mergedAt = h.github.pulls[0]!.mergedAt!;
-    expect(h.store.records[0]!.publishedAt!.getTime()).toBeGreaterThan(
-      mergedAt.getTime(),
-    );
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    // The retry's clock is later, so the stamp can only be GitHub's.
+    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime());
+  });
+
+  // The resume path reads the instant off the pull request, so it has the
+  // same guess to refuse when GitHub answers without one.
+  it("refuses merge_time_unknown when GitHub reports the merge with no instant", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let fail = true;
+    store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const pr = h.github.pulls[0]!;
+    const mergedAt = pr.mergedAt;
+    pr.mergedAt = null;
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merge_time_unknown",
+    });
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+
+    // Once GitHub answers with the instant, the same retry publishes.
+    pr.mergedAt = mergedAt;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
   });
 
   // `latestPublication` orders by `publishedAt` to name the commit a checkout

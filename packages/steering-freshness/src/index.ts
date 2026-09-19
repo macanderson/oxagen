@@ -19,6 +19,7 @@ export {
   isSyncSafe,
   publishedCommits,
   steeringPathspec,
+  DEFAULT_NETWORK_BUDGET_MS,
   type CheckOptions,
   type FreshnessStatus,
   type FreshnessVerdict,

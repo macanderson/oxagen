@@ -76,6 +76,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { captureWriter, type CommandWriter } from "../lib/capture-writer";
 import {
+  budgetFrom,
   findProjectRoot,
   toSignal,
   parseRemoteUrl,
@@ -84,8 +85,13 @@ import {
   steeringHooks,
   steeringStatus,
   steeringSync,
+  HOOK_PATH_BUDGET_MS,
 } from "./steering";
-import { resolveSteeringPolicy } from "@oxagen/steering-freshness";
+import {
+  resolveSteeringPolicy,
+  DEFAULT_NETWORK_BUDGET_MS,
+  HOOK_TIMEOUT_SECONDS,
+} from "@oxagen/steering-freshness";
 import {
   mkdtemp,
   realpath,
@@ -303,6 +309,116 @@ describe("toSignal ancestry budget", () => {
       () => 0,
     );
     expect(signal?.aheadOfCheckout).toBe(false);
+  });
+});
+
+// Every stage of the gate carried its own constant and the hook paid the
+// sum: three seconds reading the platform, five reading the committed gates,
+// five in `toSignal`, eight in the freshness check and five more reloading
+// the policy after the fetch. Twenty-six seconds, past the twenty the hook
+// allows, so the harness killed the gate and the prompt ran unenforced.
+describe("the gate's shared budget", () => {
+  it("leaves the installed hook room to finish", () => {
+    expect(HOOK_PATH_BUDGET_MS).toBeLessThan(HOOK_TIMEOUT_SECONDS * 1_000);
+    expect(HOOK_PATH_BUDGET_MS).toBeGreaterThan(0);
+  });
+
+  it("caps a stage at what is left, and floors a late one so it still runs", () => {
+    let clock = 0;
+    const budget = budgetFrom(10_000, () => clock);
+    // Early: the stage's own cap is the smaller of the two.
+    expect(budget.stage(3_000).remaining()).toBe(3_000);
+    // Late: what is left is.
+    clock = 8_000;
+    expect(budget.stage(5_000).remaining()).toBe(2_000);
+    // Spent: a slice small enough to fail fast, large enough for a local git
+    // call that is about to answer.
+    clock = 12_000;
+    expect(budget.expired()).toBe(true);
+    expect(budget.stage(5_000).remaining()).toBe(250);
+  });
+
+  it("spends one budget across the platform read, the remote lookup and the committed gates", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    let clock = 0;
+    const asked: number[] = [];
+    apiPostOrThrow.mockImplementation(async (_path, _body, _scope, options) => {
+      asked.push(options?.timeoutMs ?? 0);
+      clock += 3_000;
+      return {
+        steeringVersion: 1,
+        headCommit: null,
+        repository: "acme/app",
+        defaultBranch: "main",
+        policy: null,
+      };
+    });
+    const gitTimeouts: number[] = [];
+    execGit.mockImplementation((async (
+      args: readonly string[],
+      opts: { timeoutMs: number },
+    ) => {
+      gitTimeouts.push(opts.timeoutMs);
+      clock += 2_000;
+      if (args.length === 1 && args[0] === "remote") return "origin";
+      if (args[0] === "remote" && args[1] === "get-url")
+        return "git@github.com:acme/app.git";
+      return "";
+    }) as never);
+
+    const ctx = await resolveContext(tmp, {
+      budget: budgetFrom(10_000, () => clock),
+    });
+
+    // The platform read gets its own three-second cap, because the budget is
+    // untouched at that point.
+    expect(asked).toEqual([3_000]);
+    // `git remote` at 3s has seven of the ten left, so its five-second cap
+    // binds; `git remote get-url` at 5s gets the three the lookup stage has
+    // left; the committed-gates read starts at 7s and gets three rather than
+    // another five.
+    expect(gitTimeouts).toEqual([5_000, 3_000, 3_000]);
+    // The lookup matched inside its slice, so nothing is reported as
+    // belonging elsewhere and the budget is not reported as spent.
+    expect(ctx.warnings.join("\n")).not.toContain("no remote of this checkout");
+    expect(ctx.warnings.join("\n")).not.toContain("ran out of");
+  });
+
+  it("says so when the budget runs out, and does not blame the checkout's remotes", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "oxagen-cli-"));
+    await mkdir(join(tmp, ".oxagen"), { recursive: true });
+    let clock = 0;
+    apiPostOrThrow.mockImplementation(async () => {
+      clock += 3_000;
+      return {
+        steeringVersion: 1,
+        headCommit: null,
+        repository: "acme/app",
+        defaultBranch: "main",
+        policy: null,
+      };
+    });
+    execGit.mockImplementation((async (args: readonly string[]) => {
+      clock += 2_000;
+      if (args.length === 1 && args[0] === "remote") return "origin";
+      return "";
+    }) as never);
+
+    const ctx = await resolveContext(tmp, {
+      budget: budgetFrom(4_000, () => clock),
+    });
+
+    // The remote that matches may well be there; the search ran out before it
+    // could say. Telling the developer to relink would send them to fix the
+    // wrong thing.
+    expect(ctx.warnings.join("\n")).toContain(
+      "ran out of time before it could tell whether a remote",
+    );
+    expect(ctx.warnings.join("\n")).not.toContain("oxagen init");
+    expect(ctx.warnings.join("\n")).toContain("ran out of its");
+    // The platform answer goes with it, so git stays the only signal.
+    expect(ctx.platform).toBeNull();
   });
 });
 
@@ -980,6 +1096,23 @@ describe("steering gate", () => {
     await steeringGate({}, splitWriter().writer, process.cwd());
     expect(evaluateGate).toHaveBeenCalledWith(
       expect.objectContaining({ reloadPolicy: expect.any(Function) }),
+    );
+  });
+
+  // The check's eight seconds used to start fresh after the reads had already
+  // spent theirs, which is how the path added up past the hook's twenty.
+  it("gives the freshness check what the reads left, not a fresh eight seconds", async () => {
+    evaluateGate.mockResolvedValue(decision("allow"));
+    await steeringGate({}, splitWriter().writer, process.cwd());
+    expect(evaluateGate).toHaveBeenCalledWith(
+      expect.objectContaining({ networkBudgetMs: expect.any(Number) }),
+    );
+    const [[options]] = evaluateGate.mock.calls as [
+      [{ networkBudgetMs: number }],
+    ];
+    expect(options.networkBudgetMs).toBeGreaterThan(0);
+    expect(options.networkBudgetMs).toBeLessThanOrEqual(
+      DEFAULT_NETWORK_BUDGET_MS,
     );
   });
 

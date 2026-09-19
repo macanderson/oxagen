@@ -51,7 +51,9 @@ import {
   renderGate,
   resolveSteeringPolicy,
   syncSteering,
+  DEFAULT_NETWORK_BUDGET_MS,
   HARNESSES,
+  HOOK_TIMEOUT_SECONDS,
   INSTALLABLE,
   PROJECT_DIR_NAME,
   type FreshnessVerdict,
@@ -148,6 +150,92 @@ function gitRootOr(start: string): string | null {
   }
 }
 
+// ── One budget for the whole gate path ───────────────────────────────────────
+
+/**
+ * What is held back from the hook's timeout for everything this budget does
+ * not cover.
+ *
+ * Node's startup, loading this command's modules, the local git comparison
+ * inside `checkSteeringFreshness`, rendering the decision, and writing it out.
+ * Those keep their own per-call timeouts; four seconds is what is left for
+ * them after the budget below is spent.
+ */
+const HOOK_PATH_RESERVE_MS = 4_000;
+
+/**
+ * How long everything on the gate's path may take, counted from the moment
+ * the command starts.
+ *
+ * Every stage used to carry its own constant, and the hook paid the sum. A
+ * slow but individually legal run spent three seconds reading the platform,
+ * five reading the committed gates, five in `toSignal`, eight in the
+ * freshness check's network budget and five more reloading the policy after
+ * the fetch: twenty-six seconds, past the twenty the installed hook allows
+ * (`HOOK_TIMEOUT_SECONDS` in `@oxagen/steering-freshness`). Both harnesses
+ * read that timeout as a hook failure and allow the prompt, so the whole gate
+ * was skipped on exactly the machines slow enough to need it.
+ *
+ * So the stages share one deadline instead of adding up. Each takes the
+ * smaller of its own cap and what is left, which is the shape the platform
+ * read already had for its own calls. A stage that starts past the deadline
+ * still gets `MIN_SLICE_MS`, so a late local git call completes rather than
+ * failing on a zero timeout; that floor is the only way the total exceeds the
+ * budget, and it can do so by at most one slice per remaining stage.
+ */
+export const HOOK_PATH_BUDGET_MS =
+  HOOK_TIMEOUT_SECONDS * 1_000 - HOOK_PATH_RESERVE_MS;
+
+/**
+ * The smallest slice a stage may be given.
+ *
+ * Long enough for a local git call that is about to answer, short enough that
+ * a network call past the deadline fails rather than hangs.
+ */
+const MIN_SLICE_MS = 250;
+
+/** What is left of the gate's budget, and how a stage takes its share. */
+export interface Budget {
+  /** Milliseconds a call starting now may take, floored at `MIN_SLICE_MS`. */
+  remaining: () => number;
+  /** True once the deadline has passed. */
+  expired: () => boolean;
+  /** A child budget capped at `capMs`, or at what is left, whichever is less. */
+  stage: (capMs: number) => Budget;
+}
+
+function budgetUntil(deadline: number, now: () => number): Budget {
+  return {
+    remaining: () => Math.max(MIN_SLICE_MS, deadline - now()),
+    expired: () => now() >= deadline,
+    stage: (capMs) => budgetUntil(Math.min(now() + capMs, deadline), now),
+  };
+}
+
+/** A budget of `ms` starting now. */
+export function budgetFrom(ms: number, now: () => number = Date.now): Budget {
+  return budgetUntil(now() + ms, now);
+}
+
+/**
+ * What a spent budget is reported as.
+ *
+ * Every stage that can answer at all answers in the direction that does not
+ * report a checkout current on a commit nobody verified, so running out is
+ * safe. It is still said out loud: a check cut short is a check the developer
+ * should know did not fully run, the way a dropped settings layer is.
+ */
+const BUDGET_SPENT_NOTE = `the steering check ran out of its ${
+  HOOK_PATH_BUDGET_MS / 1_000
+}-second budget, so part of it did not run`;
+
+/** Add the note once, whichever stage was the one that ran out. */
+function noteSpentBudget(budget: Budget, messages: string[]): void {
+  if (budget.expired() && !messages.includes(BUDGET_SPENT_NOTE)) {
+    messages.push(BUDGET_SPENT_NOTE);
+  }
+}
+
 // ── The platform half of "both, git first" ───────────────────────────────────
 
 /** What `get_steering_freshness` answers. */
@@ -181,7 +269,7 @@ interface PlatformFreshness {
  * it is optional.
  */
 /**
- * How long the optional platform read may take on the path of a prompt.
+ * The most of the shared budget the optional platform read may take.
  *
  * The hook has 20 seconds. A connection that hangs rather than failing (a
  * blackholed API, a half-up VPN) spent all of it here, before the git check
@@ -194,8 +282,8 @@ interface PlatformFreshness {
 const PLATFORM_READ_TIMEOUT_MS = 3_000;
 
 /**
- * One budget for every ancestry call `toSignal` makes, however many commits
- * the platform names.
+ * The most of the shared budget every ancestry call `toSignal` makes may
+ * take, however many commits the platform names.
  *
  * Each call had its own five seconds. Two merges in one second meant two
  * commits and ten seconds, on top of the platform read's three, before the
@@ -206,17 +294,38 @@ const PLATFORM_READ_TIMEOUT_MS = 3_000;
  */
 const ANCESTRY_TIMEOUT_MS = 5_000;
 
+/**
+ * The most of the shared budget one read of the production branch's
+ * committed gates may take.
+ *
+ * It is `git show` against a remote-tracking ref, so it reads from disk and
+ * normally answers at once. The cap is for the case where it does not: a
+ * locked index, a network filesystem, a repository being repacked.
+ */
+const COMMITTED_GATES_TIMEOUT_MS = 5_000;
+
+/**
+ * The most of the shared budget the search for the bound repository's remote
+ * may take, across every remote this checkout has.
+ *
+ * One `git remote` and one `git remote get-url` per name. Each had its own
+ * five seconds and the loop had no bound at all, so a checkout with several
+ * remotes could spend the whole hook here before the freshness check began.
+ */
+const REMOTE_LOOKUP_TIMEOUT_MS = 5_000;
+
 async function readPlatform(
   projectRoot: string,
   link: CheckoutLink | undefined,
-  now: () => number = Date.now,
+  budget: Budget,
 ): Promise<PlatformFreshness | null> {
   // One deadline for everything this function does on the network: the
   // read, and on a 404 the two list calls that recover renamed slugs and the
   // retried read. Each call gets what is left, so a hung API costs the hook
-  // at most PLATFORM_READ_TIMEOUT_MS however many calls it takes.
-  const deadline = now() + PLATFORM_READ_TIMEOUT_MS;
-  const remaining = () => Math.max(250, deadline - now());
+  // at most PLATFORM_READ_TIMEOUT_MS however many calls it takes, and less
+  // than that when the gate's shared budget is already part spent.
+  const stage = budget.stage(PLATFORM_READ_TIMEOUT_MS);
+  const remaining = () => stage.remaining();
   const ask = (scope: { org: string; ws: string } | undefined) =>
     apiPostOrThrow<PlatformFreshness>("context/steering/freshness", {}, scope, {
       timeoutMs: remaining(),
@@ -322,11 +431,18 @@ function checkoutLink(projectRoot: string): CheckoutLink | undefined {
 async function remoteFor(
   projectRoot: string,
   repository: string,
+  budget: Budget,
 ): Promise<string | null> {
+  const stage = budget.stage(REMOTE_LOOKUP_TIMEOUT_MS);
   const { execGit } = await import("@oxagen/steering-freshness");
   let names: string[];
   try {
-    names = (await execGit(["remote"], { cwd: projectRoot, timeoutMs: 5_000 }))
+    names = (
+      await execGit(["remote"], {
+        cwd: projectRoot,
+        timeoutMs: stage.remaining(),
+      })
+    )
       .split("\n")
       .map((n) => n.trim())
       .filter((n) => n.length > 0);
@@ -337,7 +453,12 @@ async function remoteFor(
   for (const name of names) {
     // A remote name git could read as an option is never passed to it.
     if (name.startsWith("-")) continue;
-    if ((await checkoutRepository(projectRoot, name)) === wanted) return name;
+    // Out of budget. The remotes still unread are not remotes this checkout
+    // was shown to lack, so the caller says that rather than reporting the
+    // repository as unreachable from here.
+    if (stage.expired()) return null;
+    if ((await checkoutRepository(projectRoot, name, stage)) === wanted)
+      return name;
   }
   return null;
 }
@@ -404,13 +525,14 @@ const BOUND_REPOSITORY_HOST = "github.com";
 async function checkoutRepository(
   projectRoot: string,
   remote: string,
+  budget: Budget,
 ): Promise<string | null> {
   const { execGit } = await import("@oxagen/steering-freshness");
   try {
     return parseRemoteUrl(
       await execGit(["remote", "get-url", "--", remote], {
         cwd: projectRoot,
-        timeoutMs: 5_000,
+        timeoutMs: budget.remaining(),
       }),
     );
   } catch {
@@ -429,6 +551,7 @@ export async function toSignal(
   platform: PlatformFreshness | null,
   projectRoot: string,
   now: () => number = Date.now,
+  budget: Budget = budgetFrom(ANCESTRY_TIMEOUT_MS, now),
 ): Promise<PlatformSignal | null> {
   if (!platform) return null;
   let aheadOfCheckout = false;
@@ -437,20 +560,18 @@ export async function toSignal(
   const commits = publishedCommits(platform);
   if (commits.length > 0) {
     const { execGit } = await import("@oxagen/steering-freshness");
-    const deadline = now() + ANCESTRY_TIMEOUT_MS;
     for (const commit of commits) {
-      const remaining = deadline - now();
       // Out of budget. The checkout has not been shown to reach this commit,
       // and saying it has would let the prompt run past the gate; the check
       // that follows still has its own budget and reports the staleness.
-      if (remaining <= 0) {
+      if (budget.expired()) {
         aheadOfCheckout = true;
         break;
       }
       try {
         await execGit(["merge-base", "--is-ancestor", commit, "HEAD"], {
           cwd: projectRoot,
-          timeoutMs: remaining,
+          timeoutMs: budget.remaining(),
         });
       } catch {
         // A non-zero exit means "not an ancestor", which is the answer we
@@ -484,6 +605,12 @@ export interface ResolvedContext {
    * `evaluateGate` calls this after its fetch; see its `reloadPolicy`.
    */
   reloadPolicy: () => Promise<SteeringPolicy>;
+  /**
+   * What is left of the one budget this context's reads were taken from, so
+   * the caller's own stages come out of the same total rather than starting
+   * a fresh one. `steeringGate` passes it to the freshness check.
+   */
+  budget: Budget;
 }
 
 /**
@@ -491,15 +618,24 @@ export interface ResolvedContext {
  *
  * `offline` skips the platform entirely, which `gate --no-network` uses to
  * guarantee no HTTP call sits in front of a prompt.
+ *
+ * `budget` is the one deadline every read here shares. The gate starts it
+ * when the command begins and goes on spending it afterwards; a caller that
+ * does not pass one gets a fresh budget of the same size.
  */
 export async function resolveContext(
   cwd: string,
-  { offline = false }: { offline?: boolean } = {},
+  {
+    offline = false,
+    budget = budgetFrom(HOOK_PATH_BUDGET_MS),
+  }: { offline?: boolean; budget?: Budget } = {},
 ): Promise<ResolvedContext> {
   const projectRoot = findProjectRoot(cwd);
   const link = checkoutLink(projectRoot);
   const scope = link?.scope;
-  const fromPlatform = offline ? null : await readPlatform(projectRoot, link);
+  const fromPlatform = offline
+    ? null
+    : await readPlatform(projectRoot, link, budget);
   const mismatch: string[] = [];
 
   // ── Is the platform answering about THIS checkout? ──────────────────────
@@ -546,15 +682,21 @@ export async function resolveContext(
     );
   }
   if (fromPlatform?.repository) {
-    boundRemote = await remoteFor(projectRoot, fromPlatform.repository);
+    boundRemote = await remoteFor(projectRoot, fromPlatform.repository, budget);
     if (boundRemote === null) {
       belongsHere = false;
+      // A search that ran out of budget found nothing, which is not the same
+      // as a checkout that points nowhere near the bound repository. Telling
+      // a developer to relink over a slow git would send them to fix the
+      // wrong thing.
       mismatch.push(
-        `Oxagen's answer is about ${fromPlatform.repository}, which no remote of this checkout points at, so it was ignored — ${
-          scope
-            ? `check the workspace named in .oxagen/workspace.json`
-            : `run \`oxagen init\` in this repository to link it to its workspace`
-        }`,
+        budget.expired()
+          ? `the check ran out of time before it could tell whether a remote of this checkout points at ${fromPlatform.repository}, so Oxagen's answer was ignored`
+          : `Oxagen's answer is about ${fromPlatform.repository}, which no remote of this checkout points at, so it was ignored — ${
+              scope
+                ? `check the workspace named in .oxagen/workspace.json`
+                : `run \`oxagen init\` in this repository to link it to its workspace`
+            }`,
       );
     }
   }
@@ -617,12 +759,15 @@ export async function resolveContext(
     layers.filter((layer) => layer.scope === "workspace"),
     emergency,
   );
+  // Each read takes its own slice of the shared budget, so the one after the
+  // gate's fetch costs whatever is left rather than another five seconds.
   const readCommitted = () =>
     loadCommittedProjectGates({
       cwd: projectRoot,
       remote: authority.remote,
       branch: authority.branch,
       run: execGit,
+      timeoutMs: budget.stage(COMMITTED_GATES_TIMEOUT_MS).remaining(),
     });
   // And WHERE the gates are then enforced is not the working copy's to say
   // either.
@@ -661,11 +806,19 @@ export async function resolveContext(
         `\`${path}\` is excluded in a settings file and was ignored: only the workspace can remove records from the freshness check`,
     ),
   ];
+  const platform = await toSignal(
+    platformFreshness,
+    projectRoot,
+    Date.now,
+    budget.stage(ANCESTRY_TIMEOUT_MS),
+  );
+  noteSpentBudget(budget, messages);
   return {
     projectRoot,
     policy,
-    platform: await toSignal(platformFreshness, projectRoot),
+    platform,
     warnings: messages,
+    budget,
     reloadPolicy: async () => {
       const again = await readCommitted();
       const note =
@@ -842,17 +995,28 @@ export async function steeringGate(
   // `--no-network` is Commander's negation of `--network`, so an absent
   // value means the network is allowed.
   const allowNetwork = opts.network !== false;
+  // The deadline every stage below shares, started here rather than inside
+  // each of them. See HOOK_PATH_BUDGET_MS for what the total is and how it
+  // relates to the installed hook's own timeout.
+  const budget = budgetFrom(HOOK_PATH_BUDGET_MS);
   try {
-    const ctx = await resolveContext(cwd, { offline: !allowNetwork });
+    const ctx = await resolveContext(cwd, { offline: !allowNetwork, budget });
     const decision = await evaluateGate({
       cwd: ctx.projectRoot,
       policy: ctx.policy,
       platform: ctx.platform,
       allowNetwork,
+      // The check's own network budget comes out of what the reads above
+      // left, so a slow platform read shortens the fetch rather than adding
+      // eight seconds to it.
+      networkBudgetMs: ctx.budget.stage(DEFAULT_NETWORK_BUDGET_MS).remaining(),
       // The gate's own fetch is what moves the ref the production branch's
       // gates are read from, so it asks for them again once it has fetched.
       reloadPolicy: ctx.reloadPolicy,
     });
+    // The check itself can be what spends the last of the budget, and
+    // `ctx.warnings` is written up to the moment it is read below.
+    noteSpentBudget(budget, ctx.warnings);
     const rendered = renderGate(decision, opts.harness ?? "text");
     if (rendered.stdout) writer.write(rendered.stdout.trimEnd());
     if (rendered.stderr) writer.writeErr(rendered.stderr.trimEnd());
