@@ -519,6 +519,42 @@ describe("sealing an OTLP export", () => {
     };
   }
 
+  /** One OTLP metrics export carrying a single data point. */
+  function metricExportOf(name: string, attrs: Record<string, unknown>) {
+    return {
+      resourceMetrics: [
+        {
+          resource: {
+            attributes: [
+              kv("os.type", "linux"),
+              kv("service.version", "2.1.263"),
+            ],
+          },
+          scopeMetrics: [
+            {
+              metrics: [
+                {
+                  name: `claude_code.${name}`,
+                  sum: {
+                    dataPoints: [
+                      {
+                        timeUnixNano: TS,
+                        asInt: "1",
+                        attributes: Object.entries(attrs).map(([k, v]) =>
+                          kv(k, v),
+                        ),
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   it("seals a plugin MCP connection and keeps the model call exported with it", () => {
     // Claude Code 2.1.277 sends plugin attribution on its MCP connection
     // records. The strict body refused them, and the throw took the whole
@@ -585,6 +621,39 @@ describe("sealing an OTLP export", () => {
     expect(events[0]?.body).toMatchObject({ input_tokens: 100 });
   });
 
+  it("rolls back a sticky standard field when the record that carried it is refused", () => {
+    const r = recorder();
+    // Past the envelope's 512-character limit, so the row is refused.
+    const refused = exportOf([
+      "api_request",
+      {
+        model: "claude-opus-5",
+        input_tokens: 1,
+        output_tokens: 1,
+        request_id: "req_long_account",
+        "user.account_uuid": "a".repeat(600),
+      },
+    ]) as never;
+    expect(r.ingestOtlp(refused)).toEqual([]);
+    expect(r.takeOtelRefusals()).toHaveLength(1);
+    // A later record that omits the attribute must not inherit the refused
+    // value, or it would be refused too.
+    const events = r.ingestOtlp(
+      exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_after",
+        },
+      ]) as never,
+    );
+    expect(r.takeOtelRefusals()).toEqual([]);
+    expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+    expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+  });
+
   it("keeps a body member its kind does not declare as an attribute instead of refusing the event", () => {
     const r = recorder();
     const event = r.sealCollectorEvent("oxagen:mcp_connection", {
@@ -596,5 +665,264 @@ describe("sealing an OTLP export", () => {
     // The chain stays dense: the next seal follows directly.
     const next = r.sealCollectorEvent("oxagen:hook_health", {});
     expect(next.seq).toBe(event.seq + 1);
+  });
+
+  describe("a refused record does not poison the recorder's sticky fields", () => {
+    // Regression coverage for #3438: `sealOtelDraft` used to merge a record's
+    // standard fields onto the recorder BEFORE `seal()` validated them, so a
+    // refused `user.account_uuid` (over the envelope's 512-char limit) stuck
+    // around and refused every later record that omitted it too.
+    const overLongAccountUuid = "a".repeat(513);
+
+    it("refuses only the one record in the same export, and seals the one after it", () => {
+      const r = recorder();
+      const events = r.ingestOtlp(
+        exportOf(
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 100,
+              output_tokens: 50,
+              request_id: "req_bad",
+              "user.account_uuid": overLongAccountUuid,
+            },
+          ],
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 200,
+              output_tokens: 75,
+              request_id: "req_good",
+            },
+          ],
+        ) as never,
+      );
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.body).toMatchObject({ input_tokens: 200 });
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
+
+    it("seals cleanly in a later, separate export after a refusal", () => {
+      const r = recorder();
+      const refusedExport = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_bad",
+          "user.account_uuid": overLongAccountUuid,
+        },
+      ]) as never;
+      expect(r.ingestOtlp(refusedExport)).toEqual([]);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+
+      const laterExport = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 300,
+          output_tokens: 90,
+          request_id: "req_good",
+        },
+      ]) as never;
+      const events = r.ingestOtlp(laterExport);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.body).toMatchObject({ input_tokens: 300 });
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+      expect(r.takeOtelRefusals()).toEqual([]);
+    });
+
+    it("does not poison sticky state on a subagent child recorder either", () => {
+      const r = recorder();
+      const events = r.ingestOtlp(
+        exportOf(
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 10,
+              output_tokens: 5,
+              request_id: "req_child_bad",
+              agent_id: "sub-1",
+              "user.account_uuid": overLongAccountUuid,
+            },
+          ],
+          [
+            "api_request",
+            {
+              model: "claude-opus-5",
+              input_tokens: 20,
+              output_tokens: 8,
+              request_id: "req_child_good",
+              agent_id: "sub-1",
+            },
+          ],
+        ) as never,
+      );
+      const child = r.openChildren.get("sub-1");
+      expect(child).toBeDefined();
+      // `ingestOtlp`'s catch records the refusal on the recorder the export
+      // was fed to, not the child chain the draft routed to.
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+      const llmEvent = events.find((e) => e.kind === "llm_call");
+      expect(llmEvent?.body).toMatchObject({ input_tokens: 20 });
+      expect(llmEvent?.anthropic?.account_uuid).toBeUndefined();
+    });
+
+    it("refuses, and does not push, a metric whose standard fields the envelope would refuse", () => {
+      const r = recorder();
+      r.ingestOtlp(
+        metricExportOf("token.usage", {
+          "user.account_uuid": overLongAccountUuid,
+        }) as never,
+      );
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("metric:"),
+      ]);
+      expect(r.metrics).toEqual([]);
+
+      // The next log record must seal cleanly, unpoisoned by the metric's
+      // refused standard fields.
+      const events = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 42,
+            output_tokens: 7,
+            request_id: "req_after_metric",
+          },
+        ]) as never,
+      );
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
+
+    it("refuses, and does not commit, a metric whose harness_version the envelope would refuse", () => {
+      // A metric's `service.version` becomes the sticky `harnessVersion`.
+      // `refusedStandardReason` originally checked only anthropic/context/
+      // host, so an over-long version committed here and refused every
+      // later log record that omitted its own `service.version`.
+      const overLongVersion = "v".repeat(513);
+      const r = recorder();
+      r.ingestOtlp({
+        resourceMetrics: [
+          {
+            resource: {
+              attributes: [
+                kv("os.type", "linux"),
+                kv("service.version", overLongVersion),
+              ],
+            },
+            scopeMetrics: [
+              {
+                metrics: [
+                  {
+                    name: "claude_code.token.usage",
+                    sum: {
+                      dataPoints: [
+                        { timeUnixNano: TS, asInt: "1", attributes: [] },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("metric:"),
+      ]);
+      expect(r.metrics).toEqual([]);
+
+      // A later log record whose resource carries no `service.version` at
+      // all must not inherit the refused harness version.
+      const events = r.ingestOtlp({
+        resourceLogs: [
+          {
+            resource: { attributes: [kv("os.type", "linux")] },
+            scopeLogs: [
+              {
+                logRecords: [
+                  {
+                    timeUnixNano: TS,
+                    body: { stringValue: "claude_code.api_request" },
+                    attributes: [
+                      kv("model", "claude-opus-5"),
+                      kv("input_tokens", 42),
+                      kv("output_tokens", 7),
+                      kv("request_id", "req_after_bad_harness_version"),
+                    ],
+                    traceId: "t1",
+                    spanId: "s1",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      } as never);
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.agent.harness_version).not.toBe(overLongVersion);
+    });
+
+    it("does not poison sticky state when a same-source repeat carries an invalid standard field", () => {
+      // The dedupe-drop branch (a repeat of an already-sealed call, same
+      // source) has no `seal()` call guarding it either, so it must run its
+      // computed standard update through the same validation before commit.
+      const r = recorder();
+      const first = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 100,
+            output_tokens: 50,
+            request_id: "req_repeat",
+          },
+        ]) as never,
+      );
+      expect(first.map((e) => e.kind)).toEqual(["llm_call"]);
+
+      const repeatWithBadField = exportOf([
+        "api_request",
+        {
+          model: "claude-opus-5",
+          input_tokens: 100,
+          output_tokens: 50,
+          request_id: "req_repeat",
+          "user.account_uuid": overLongAccountUuid,
+        },
+      ]) as never;
+      expect(r.ingestOtlp(repeatWithBadField)).toEqual([]);
+      expect(r.takeOtelRefusals()).toEqual([
+        expect.stringContaining("llm_call:"),
+      ]);
+
+      const events = r.ingestOtlp(
+        exportOf([
+          "api_request",
+          {
+            model: "claude-opus-5",
+            input_tokens: 300,
+            output_tokens: 90,
+            request_id: "req_after_bad_repeat",
+          },
+        ]) as never,
+      );
+      expect(events.map((e) => e.kind)).toEqual(["llm_call"]);
+      expect(events[0]?.anthropic?.account_uuid).toBeUndefined();
+    });
   });
 });

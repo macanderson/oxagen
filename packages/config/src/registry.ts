@@ -1881,13 +1881,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "Container image the packaged node bundle's run manifest names. " +
-      "Defaults to node:22-alpine.",
+      "Defaults to node:24.21.0-alpine.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "node:22-alpine",
+    placeholder: "node:24.21.0-alpine",
   },
   NPM_TOKEN: {
     group: "Operator scripts",
@@ -1960,6 +1960,35 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "clickhouse,neo4j",
+  },
+  DB_LINT_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "The ref `pnpm db:lint-migrations` compares new Atlas migrations against for its " +
+      "git-aware ordering check (#3387): a migration added since the merge base with this " +
+      "ref must sort after every migration already there. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  DB_LINT_HEAD_REF: {
+    group: "Operator scripts",
+    description:
+      "The ref `pnpm db:lint-migrations` treats as the branch's own tip for its git-aware " +
+      "ordering check (#3387). CI's pull_request checkout puts HEAD on GitHub's synthetic " +
+      "merge commit, not the PR branch itself, which collapses the merge-base fail/warn " +
+      "distinction into one tier; the pipeline sets this to " +
+      "github.event.pull_request.head.sha to compare against the real PR head. Defaults to " +
+      "HEAD, which is correct everywhere else (a push checkout, a local branch).",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "HEAD",
   },
   PGSUPERUSER: {
     group: "Operator scripts",
@@ -2140,6 +2169,28 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     requiredIn: [],
     valueOrigin: "manual",
     placeholder: "1",
+  },
+  STALE_MERGE_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as main's current tip. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  STALE_MERGE_BRANCH_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as the branch under review. Defaults to HEAD.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "HEAD",
   },
 
   // ── Infrastructure (read by infra/ scripts and provisioned Lambdas) ────────

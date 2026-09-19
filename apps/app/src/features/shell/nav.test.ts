@@ -83,6 +83,9 @@ describe("isNavItemCurrent", () => {
     ["/acme/core-platform/skills", "skills"],
     ["/acme/core-platform/steering", "steering"],
     ["/acme/core-platform/spend/budgets", "spend"],
+    // Flat route, no sidebar item of its own: lights Agents, the same way
+    // `runs/{run}` with no Runs item lights Fleet.
+    ["/acme/core-platform/mandates/mnd_1", "agents"],
   ] as const)("%s → %s", (path, key) => {
     expect(
       ALL_KEYS.filter((k) => k !== "organization" && isNavItemCurrent(k, path)),
@@ -254,7 +257,7 @@ describe("breadcrumbs", () => {
     });
   });
 
-  it("agent detail, source and mandate", () => {
+  it("agent detail and source", () => {
     const agent = breadcrumbs(
       "/acme/core-platform/agents/acme.core.triage",
       names,
@@ -269,9 +272,15 @@ describe("breadcrumbs", () => {
       { kind: "id", text: "a", href: "/acme/core-platform/agents/a" },
       { kind: "id", text: "source", href: null },
     ]);
+  });
+
+  it("mandate, on its flat route (not nested under the agent)", () => {
     expect(
-      breadcrumbs("/acme/core-platform/agents/a/mandates/mnd_1", names).at(-1),
-    ).toEqual({ kind: "id", text: "mnd_1", href: null });
+      breadcrumbs("/acme/core-platform/mandates/mnd_1", names).slice(2),
+    ).toEqual([
+      { kind: "nav", key: "agents", href: "/acme/core-platform/agents" },
+      { kind: "id", text: "mnd_1", href: null },
+    ]);
   });
 
   it("falls back to the slug for an unknown workspace name, and is empty outside an organization", () => {

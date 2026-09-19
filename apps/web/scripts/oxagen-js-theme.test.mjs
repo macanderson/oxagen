@@ -60,7 +60,13 @@ function loadPage({ osLight = false, storage = "ok", stored = null } = {}) {
     querySelectorAll: () => buttons,
   };
   const scheme = { content: "light dark" };
-  const themeColors = [{ content: "#FFFFFF" }, { content: "#09090B" }];
+  // The head carries one theme-color tag per OS preference, and oxagen.js reads
+  // `media` to know which is which: a pinned theme sets both to its own colour,
+  // System puts each back to the one it answers for.
+  const themeColors = [
+    { media: "(prefers-color-scheme: light)", content: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", content: "#09090B" },
+  ];
   const root = {
     attrs: {},
     offsetWidth: 0,
@@ -137,10 +143,12 @@ describe("oxagen.js theme control", () => {
       "#09090B",
       "#09090B",
     ]);
+    // System hands each tag back to the preference it answers for, so the OS
+    // drives the chrome again rather than both tags being stuck on one colour.
     page.buttons[0].click();
     expect(page.themeColors.map((m) => m.content)).toEqual([
       "#FFFFFF",
-      "#FFFFFF",
+      "#09090B",
     ]);
   });
 

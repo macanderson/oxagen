@@ -247,11 +247,14 @@
 :root[data-theme="light"] .hero-art img {
   filter: invert(1) hue-rotate(180deg);
 }
-/* Without script no data-theme is stamped, and the page follows the OS
-   through color-scheme alone, so the art follows the OS the same way. */
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme]) .hero-art img {
-    filter: invert(1) hue-rotate(180deg);
+/* Without script there is no data-theme, and the page follows the OS. A
+   browser without light-dark() keeps the dark tokens, so the art stays as
+   drawn there. */
+@supports (color: light-dark(white, black)) {
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) .hero-art img {
+      filter: invert(1) hue-rotate(180deg);
+    }
   }
 }
 @media (max-width: 720px) {

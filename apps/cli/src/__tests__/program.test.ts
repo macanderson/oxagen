@@ -10,6 +10,40 @@ describe("buildProgram", () => {
   });
 });
 
+// ADR-103 phase 1, MC spec §2.1: the old word does not appear in the product,
+// and `--help` is the product. The commands themselves stay, because every
+// machine enrolled so far was enrolled with `oxagen tacho enroll` and that
+// string is in scripts, runbooks, and the managed settings documents MDM has
+// already pushed. Hiding is the whole change; removing would be an outage.
+describe("the deprecated tacho group", () => {
+  const program = buildProgram();
+
+  it("is absent from the top-level help", () => {
+    expect(program.helpInformation()).not.toMatch(/tacho/i);
+  });
+
+  it("still carries every subcommand, so nothing enrolled breaks", () => {
+    const tacho = program.commands.find((c) => c.name() === "tacho");
+    expect(tacho, "the group itself must still be registered").toBeDefined();
+    expect(tacho?.commands.map((c) => c.name()).sort()).toEqual([
+      "enroll",
+      "export",
+      "hosts",
+      "reassign",
+      "status",
+      "unenroll",
+      "verify",
+    ]);
+  });
+
+  // Telemetry classifies an invocation against `program.commands`, which keeps
+  // hidden entries, so a deprecated call is still attributed rather than
+  // recorded as unknown.
+  it("stays visible to command classification", () => {
+    expect(program.commands.map((c) => c.name())).toContain("tacho");
+  });
+});
+
 describe("describeCliCommands", () => {
   const meta = describeCliCommands(buildProgram());
   const byName = new Map(meta.map((m) => [m.name, m]));

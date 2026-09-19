@@ -178,7 +178,12 @@ describe("chrome", () => {
       },
     };
     const scheme = { content: "light dark" };
-    const colors = [{ content: "#FFFFFF" }, { content: "#09090B" }];
+    // One theme-color tag per OS preference, as the head declares them. Their
+    // starting values are what an untouched pair looks like.
+    const colors = [
+      { media: "(prefers-color-scheme: light)", content: "#FFFFFF" },
+      { media: "(prefers-color-scheme: dark)", content: "#09090B" },
+    ];
     const document = {
       documentElement: root,
       querySelector: () => scheme,
@@ -205,9 +210,12 @@ describe("chrome", () => {
     expect(pinned.theme).toBe("dark");
     expect(pinned.scheme.content).toBe("dark");
     expect(pinned.colors.map((m) => m.content)).toEqual(["#09090B", "#09090B"]);
+    // Nothing pinned: the pair is left exactly as declared, so the browser keeps
+    // choosing between them and a later OS change still moves the chrome. Writing
+    // the resolved colour into both would read the same at load and then stick.
     const system = runHead({ stored: null, osLight: true });
     expect(system.theme).toBe("light");
-    expect(system.colors.map((m) => m.content)).toEqual(["#FFFFFF", "#FFFFFF"]);
+    expect(system.colors.map((m) => m.content)).toEqual(["#FFFFFF", "#09090B"]);
     const blocked = runHead({ stored: new Error("blocked"), osLight: false });
     expect(blocked.theme).toBe("dark");
   });
