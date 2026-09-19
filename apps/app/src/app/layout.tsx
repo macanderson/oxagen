@@ -70,7 +70,7 @@ export default async function RootLayout({
 }) {
   return (
     <html lang={await getLocale()} dir="ltr" suppressHydrationWarning>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">
+      <body className="min-h-dvh bg-app-canvas font-sans text-foreground antialiased">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>
     </html>

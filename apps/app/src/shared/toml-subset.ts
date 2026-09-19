@@ -85,6 +85,34 @@ function setPath(table: TomlTable, path: string, value: TomlValue): void {
 
 const unquote = (key: string): string => key.replace(/^"|"$/g, "");
 
+/** The index of the first `"""` at or after `from` that is not escaped, or -1. */
+function closingFence(s: string, from: number): number {
+  let at = s.indexOf('"""', from);
+  while (at > 0 && s.charAt(at - 1) === "\\") at = s.indexOf('"""', at + 1);
+  return at;
+}
+
+/** The escapes of a basic string, plus the line-ending backslash, applied to a multi-line body. */
+function unescapeMultiline(raw: string): string {
+  let out = "";
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw.charAt(i);
+    if (c !== "\\") {
+      out += c;
+      continue;
+    }
+    const next = raw.charAt(i + 1);
+    if (next === "\n" || next === "\r") {
+      i++;
+      while (i + 1 < raw.length && /[ \t\r\n]/.test(raw.charAt(i + 1))) i++;
+      continue;
+    }
+    out += ESCAPES.get(next) ?? next;
+    i++;
+  }
+  return out;
+}
+
 function skipBlanks(s: string, p: number): number {
   let q = p;
   while (s.charAt(q) === " " || s.charAt(q) === "\t") q++;
@@ -97,19 +125,28 @@ export function parseTomlSubset(text: string): TomlParse {
   let current = doc;
   let index = 0;
 
-  /** A `"""` string: closed on its own line, or read on until the line that closes it (end -1). */
+  /**
+   * A `"""` string: closed on its own line, or read on until the line that
+   * closes it (end -1). Escapes are processed as in a basic string, and a
+   * backslash before a line end swallows the newline and the whitespace
+   * after it (TOML's line-ending backslash), so a writer can close the fence
+   * without adding a newline to the value.
+   */
   function multiline(s: string, p: number, line: number): [string, number] {
     const rest = s.slice(p + 3);
-    const close = rest.indexOf('"""');
+    const close = closingFence(rest, 0);
     if (close >= 0)
-      return [rest.slice(0, close).replace(/^\n/, ""), p + 3 + close + 3];
+      return [
+        unescapeMultiline(rest.slice(0, close).replace(/^\n/, "")),
+        p + 3 + close + 3,
+      ];
     const parts = rest.length > 0 ? [rest] : [];
     for (index++; index < lines.length; index++) {
       const next = lines[index] ?? "";
-      const end = next.indexOf('"""');
+      const end = closingFence(next, 0);
       if (end >= 0) {
         parts.push(next.slice(0, end));
-        return [parts.join("\n"), -1];
+        return [unescapeMultiline(parts.join("\n")), -1];
       }
       parts.push(next);
     }

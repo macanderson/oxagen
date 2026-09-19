@@ -50,6 +50,24 @@ describe("parseTomlSubset", () => {
     });
   });
 
+  it("applies escapes and the line-ending backslash inside a multi-line string, as TOML does", () => {
+    expect(
+      parseTomlSubset(
+        'body = """\nPath:\\\\deploy says \\"go\\".\nA fence \\""" inside.\\\n"""\nnext = 1\n',
+      ),
+    ).toEqual({
+      ok: true,
+      doc: {
+        body: 'Path:\\deploy says "go".\nA fence """ inside.',
+        next: 1,
+      },
+    });
+    expect(parseTomlSubset('one = """a\\"""b"""')).toEqual({
+      ok: true,
+      doc: { one: 'a"""b' },
+    });
+  });
+
   it("reads a one-line multi-line string, dotted keys, nested arrays and CRLF line ends", () => {
     expect(
       parseTomlSubset(

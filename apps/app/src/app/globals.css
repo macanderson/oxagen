@@ -18,7 +18,15 @@
 @theme inline {
   --color-muted: var(--muted-surface);
   --color-banner: var(--banner-bg);
-  --color-app-canvas: var(--background);
+  --color-app-canvas: var(--ink);
+  /* Code surfaces (ui/code-editor.tsx): the ground and the syntax colours. */
+  --color-code-bg: var(--code-bg);
+  --color-code-comment: var(--code-comment);
+  --color-code-table: var(--code-table);
+  --color-code-key: var(--code-key);
+  --color-code-string: var(--code-string);
+  --color-code-number: var(--code-number);
+  --color-code-punct: var(--code-punct);
 }
 
 @layer base {
@@ -27,9 +35,10 @@
     --void: var(--ox-paper-void);
     --panel: var(--card);
     --hl: var(--accent);
-    --rule: var(--input);
+    --rule: var(--ox-paper-rule);
     --fg: var(--foreground);
     --body: var(--ox-text-ink-body);
+    --muted: var(--ox-muted-ink);
     --dim: var(--ox-dim-ink);
     --gold: var(--ox-gold);
     --gold-bright: var(--ox-gold-bright);
@@ -47,24 +56,39 @@
     --sk-off: var(--dim);
     --sk-held: var(--st-denied);
     --sk-res: var(--fk-ctx);
-    --k-rule: #9d8be3;
-    --fk-model: #3987e5;
-    --fk-tool: #d95926;
-    --fk-gov: #199e70;
-    --fk-ctx: #9085e9;
-    --fk-op: #d55181;
-    --k-constraint: #d677b5;
-    --k-procedure: #a6b95e;
-    --k-fact: #5cb5d6;
-    --k-memory: #94a3c2;
-    --k-preference: #d08fa0;
-    --tx-surface: var(--void);
+    --k-rule: #5d4ab5;
+    --fk-model: #2a78d6;
+    --fk-tool: #eb6834;
+    --fk-gov: #1baf7a;
+    --fk-ctx: #4a3aa7;
+    --fk-op: #e87ba4;
+    --k-constraint: #a0397f;
+    --k-procedure: #5f7a1f;
+    --k-fact: #1e7392;
+    --k-memory: #4e6280;
+    --k-preference: #98485e;
+    --tx-surface: var(--ox-paper);
     --side-w: 236px;
     --sidebar-width: var(--side-w);
+    --sidebar-bg: var(--void);
     --mono: var(--ox-font-mono);
     --font: var(--ox-font);
     --muted-surface: var(--_stone-100);
-    --banner-bg: var(--card);
+    --banner-bg: var(--hl);
+    --button-disabled-bg: var(--muted-surface);
+    --input-disabled-bg: var(--muted-surface);
+    --shadow:
+      0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 44px rgba(9, 9, 11, 0.08);
+    --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
+    /* Code sits a shade below the panel: grey on paper, and on ink a grey
+       between the panel and the canvas, never the canvas itself. */
+    --code-bg: var(--ox-paper-hl);
+    --code-comment: var(--muted-foreground);
+    --code-table: var(--ember-ink);
+    --code-key: var(--foreground);
+    --code-string: var(--proven);
+    --code-number: var(--info);
+    --code-punct: var(--muted-foreground);
   }
 
   body {
@@ -80,11 +104,27 @@
 
   .dark {
     --void: var(--ox-void);
+    --rule: var(--ox-rule);
+    --tx-surface: var(--void);
+    --k-rule: #9d8be3;
+    --fk-model: #3987e5;
+    --fk-tool: #d95926;
+    --fk-gov: #199e70;
+    --fk-ctx: #9085e9;
+    --fk-op: #d55181;
+    --k-constraint: #d677b5;
+    --k-procedure: #a6b95e;
+    --k-fact: #5cb5d6;
+    --k-memory: #94a3c2;
+    --k-preference: #d08fa0;
     --body: var(--ox-text-body);
+    --proven: var(--ox-st-proven);
+    --critical: var(--ox-st-critical);
     --muted: var(--ox-muted);
     --dim: var(--ox-dim);
     --muted-surface: var(--ox-hl);
     --banner-bg: var(--ox-hl);
+    --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
     --button-primary-bg: var(--gold);
     --button-primary-fg: var(--on-gold);
     --button-primary-hover-bg: var(--gold-bright);
@@ -100,11 +140,40 @@
   @media (prefers-color-scheme: dark) {
     :root:not(.light):not(.dark) {
       --void: var(--ox-void);
+      --rule: var(--ox-rule);
+      --tx-surface: var(--void);
+      --k-rule: #9d8be3;
+      --fk-model: #3987e5;
+      --fk-tool: #d95926;
+      --fk-gov: #199e70;
+      --fk-ctx: #9085e9;
+      --fk-op: #d55181;
+      --k-constraint: #d677b5;
+      --k-procedure: #a6b95e;
+      --k-fact: #5cb5d6;
+      --k-memory: #94a3c2;
+      --k-preference: #d08fa0;
+      --rule: var(--ox-rule);
+      --tx-surface: var(--void);
+      --k-rule: #9d8be3;
+      --fk-model: #3987e5;
+      --fk-tool: #d95926;
+      --fk-gov: #199e70;
+      --fk-ctx: #9085e9;
+      --fk-op: #d55181;
+      --k-constraint: #d677b5;
+      --k-procedure: #a6b95e;
+      --k-fact: #5cb5d6;
+      --k-memory: #94a3c2;
+      --k-preference: #d08fa0;
       --body: var(--ox-text-body);
+      --proven: var(--ox-st-proven);
+      --critical: var(--ox-st-critical);
       --muted: var(--ox-muted);
       --dim: var(--ox-dim);
       --muted-surface: var(--ox-hl);
       --banner-bg: var(--ox-hl);
+      --code-bg: color-mix(in oklab, var(--ox-panel) 55%, var(--ox-ink));
       --button-primary-bg: var(--gold);
       --button-primary-fg: var(--on-gold);
       --button-primary-hover-bg: var(--gold-bright);
