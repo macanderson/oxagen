@@ -14,6 +14,39 @@ const mocks = vi.hoisted(() => ({
   emitSecurityEvent: vi.fn<(arg: unknown) => void>(),
 }));
 
+// ── @oxagen/tenancy mock ─────────────────────────────────────────────────────
+// The policy re-check enters a tenant scope before reading IAM, because
+// `fetchAuthz` reads org-wide and `runInTenantScope` validates both ids as
+// UUIDs. This file's fixtures use opaque ids, so the scope entry is a
+// passthrough here; `privacy.data.export.status.test.ts` runs the real one
+// against UUID fixtures.
+vi.mock("@oxagen/tenancy", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/tenancy")>();
+  return {
+    ...real,
+    runInTenantScope: (_scope: unknown, fn: () => unknown) => fn(),
+  };
+});
+
+// ── @oxagen/iam mock ─────────────────────────────────────────────────────────
+// The org branch now asks the IAM resolver whether an explicit rule has
+// revoked the capability: the revocation path a membership read cannot see.
+// The resolver itself runs for real; only its Postgres read is replaced. The
+// default is an organisation with nothing configured, so nothing is revoked
+// and these tests exercise the role rules as before.
+const authz = vi.hoisted(() => ({
+  value: {
+    principal: null as unknown,
+    grants: [] as unknown[],
+    roles: [] as unknown[],
+    roleGrants: [] as unknown[],
+    policies: [] as unknown[],
+  },
+}));
+vi.mock("@oxagen/iam", () => ({
+  fetchAuthz: () => Promise.resolve(authz.value),
+}));
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const makeTx = () => ({
@@ -69,6 +102,13 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     vi.clearAllMocks();
     mocks.selectResults.length = 0;
     mocks.insertReturning.mockResolvedValue([{ id: "exp_1" }]);
+    authz.value = {
+      principal: null,
+      grants: [],
+      roles: [],
+      roleGrants: [],
+      policies: [],
+    };
     mocks.eventSend.mockResolvedValue(undefined);
   });
 
@@ -175,5 +215,49 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     await expect(
       privacyDataExportHandler({ scope: "org" } as never, CTX),
     ).rejects.toThrow("orgId is required for org-scope export");
+  });
+
+  // An administrator can revoke the mandate without touching a single role, by
+  // writing an explicit `deny` against `export_data`. `org_users.role` cannot
+  // see that row, and below the enterprise tier neither can the kernel: its
+  // gate answers `tier_gate → allow` before any policy is read. So the queue
+  // asks the resolver directly.
+  it("refuses an Owner while an explicit export_data deny stands", async () => {
+    queueSelects([{ role: "owner" }]);
+    authz.value = {
+      principal: {
+        id: "p_1",
+        kind: "human",
+        orgId: "org_A",
+        workspaceId: null,
+      },
+      grants: [],
+      roles: [
+        {
+          id: "r_1",
+          name: "Owner",
+          scopeKind: "org",
+          orgId: "org_A",
+          principalIds: ["p_1"],
+          isSystemDefault: true,
+        },
+      ],
+      roleGrants: [
+        { roleId: "r_1", capabilityId: "export_data", effect: "deny" },
+      ],
+      policies: [],
+    };
+    const err = await privacyDataExportHandler(
+      { scope: "org", orgId: "org_A" },
+      CTX,
+    ).catch((e: unknown) => e);
+    expect(isHandlerError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: "forbidden",
+      reason: "org_export_not_permitted",
+    });
+    // Nothing queued, so no archive is ever assembled to be downloaded.
+    expect(mocks.insertReturning).not.toHaveBeenCalled();
+    expect(mocks.eventSend).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { withSystemDb, schema } from "@oxagen/database";
 import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
+import { assertCapabilityNotRevoked } from "./lib/capability-policy-recheck";
 import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
@@ -81,6 +82,20 @@ export const privacyDataExportHandler: CapabilityHandler<
         message: "An organization export requires the Owner or Admin role",
       });
     }
+    // And the other revocation path, which the role read above cannot see: an
+    // explicit `deny` written against `export_data` itself. The note above says
+    // a membership read is no substitute for the kernel's decision, and on
+    // every tier but enterprise the kernel makes no decision, because its gate
+    // answers `tier_gate → allow` before any policy is read. So the question is
+    // asked here too, and the answer holds on the tiers most organisations are
+    // on. `get_export_status` asks the same thing before it releases the
+    // archive: the queue and the download are two places the mandate has to
+    // still hold.
+    await assertCapabilityNotRevoked(privacyDataExport, ctx, {
+      reason: "org_export_not_permitted",
+      message:
+        "An organization export is not permitted: the export_data policy for this organization denies it",
+    });
   }
 
   const orgId = input.scope === "org" ? (input.orgId ?? ctx.orgId) : ctx.orgId;

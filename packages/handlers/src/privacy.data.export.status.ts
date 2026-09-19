@@ -1,12 +1,12 @@
 // audit-exempt: read-only. It selects one export row and returns its storage
 // key, and mutates nothing; the kernel's capability.invoke_* row records the
-// access, as it does for audit.events.export beside it. The organization-role
-// recheck below is an authorization guard on a read, not a privileged state
-// change. A refused read of an organization archive would be worth its own
+// access, as it does for audit.events.export beside it. The two rechecks below,
+// the organization role and whether an explicit rule has revoked `export_data`,
+// are authorization guards on a read, not privileged state changes. A refused read of an organization archive would be worth its own
 // row by the bar the secret lifecycle sets in security-event-types.ts, and no
 // type in that taxonomy fits one: adding it needs a taxonomy entry and a
 // migration widening the event_type constraint, so it is tracked in #3391
-// rather than invented here.
+// rather than invented here. That residual now covers both refusals.
 //
 // get_export_status: where one of the calling person's own exports has got to.
 //
@@ -21,9 +21,11 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
+import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
+import { assertCapabilityNotRevoked } from "./lib/capability-policy-recheck";
 
 /**
  * The canonical object key from whatever `export_url` holds.
@@ -115,6 +117,25 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
           "An organization export can only be read by an Owner or Admin of that organization",
       });
     }
+    // The role is one of two ways the mandate can be taken back, and the
+    // narrower one. An administrator can leave every role alone and write an
+    // explicit `deny` against `export_data` itself; `org_users.role` cannot
+    // see that row, so the check above reports a revoked mandate as intact.
+    // The kernel does not catch it either: this capability's `defaultEffect`
+    // is "allow", and the download routes spend `export_data`'s authority while
+    // invoking `get_export_status`, a different name no `export_data` rule is
+    // keyed to. An explicit deny that does not deny is
+    // worse than a missing control, because the administrator who wrote it
+    // believes access is gone. So `export_data`'s own policy is asked one
+    // question here, at every plan tier and against the organization that
+    // governed the export: has an explicit rule revoked it? The role check
+    // above remains the authorization; this observes the revocation it cannot
+    // see.
+    await assertCapabilityNotRevoked(privacyDataExport, ctx, {
+      reason: "org_export_not_permitted",
+      message:
+        "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
+    });
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a

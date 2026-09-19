@@ -37,6 +37,40 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   };
 });
 
+// The second revocation path the handler observes: an explicit `deny` written
+// against `export_data` itself. The handler asks the IAM resolver about it
+// through `fetchAuthz`, and the resolver runs here for real. Only the Postgres
+// read is replaced, so these tests pin the decision rather than a stub of it.
+//
+// The default is an organisation with nothing configured (no principal, no
+// roles, no grants), which is what every test but the revocation ones wants:
+// the resolver finds nothing explicit and the role check stays the only gate.
+const authz = vi.hoisted(() => ({
+  value: {
+    principal: null as unknown,
+    grants: [] as unknown[],
+    roles: [] as unknown[],
+    roleGrants: [] as unknown[],
+    policies: [] as unknown[],
+  },
+  calls: [] as { capability: string; orgId: string; userId: string | null }[],
+}));
+
+vi.mock("@oxagen/iam", () => ({
+  fetchAuthz: (args: {
+    capability: string;
+    orgId: string;
+    userId: string | null;
+  }) => {
+    authz.calls.push({
+      capability: args.capability,
+      orgId: args.orgId,
+      userId: args.userId,
+    });
+    return Promise.resolve(authz.value);
+  },
+}));
+
 import {
   exportObjectKey,
   privacyDataExportStatusHandler,
@@ -97,9 +131,50 @@ function personalRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const PRINCIPAL_ID = "44444444-4444-4444-8444-444444444444";
+const ROLE_ID = "55555555-5555-4555-8555-555555555555";
+
+/**
+ * The organisation as it looks after an administrator writes an explicit deny
+ * against `export_data` for a role the caller holds: every role intact, one
+ * `iam.role_grants` row with `effect: "deny"`. This is the state
+ * `orgMembershipRole` cannot observe: `org_users.role` still says owner.
+ */
+function denyExportData(effect: "deny" | "require_approval" = "deny"): void {
+  authz.value = {
+    principal: {
+      id: PRINCIPAL_ID,
+      kind: "human",
+      orgId: ORG_ID,
+      workspaceId: null,
+    },
+    grants: [],
+    roles: [
+      {
+        id: ROLE_ID,
+        name: "Owner",
+        scopeKind: "org",
+        orgId: ORG_ID,
+        principalIds: [PRINCIPAL_ID],
+        isSystemDefault: true,
+      },
+    ],
+    roleGrants: [{ roleId: ROLE_ID, capabilityId: "export_data", effect }],
+    policies: [],
+  };
+}
+
 beforeEach(() => {
   mocks.selects.length = 0;
   mocks.wheres.length = 0;
+  authz.calls.length = 0;
+  authz.value = {
+    principal: null,
+    grants: [],
+    roles: [],
+    roleGrants: [],
+    policies: [],
+  };
 });
 
 describe("get_export_status", () => {
@@ -313,5 +388,151 @@ describe("reading a key out of what the row holds", () => {
       ctx(),
     );
     expect(out.storageKey).toBe("privacy-exports/org-1/old.zip");
+  });
+});
+
+// The role is not the only way the mandate goes away. An administrator can
+// leave every role alone and write an explicit `deny` against `export_data`,
+// and `org_users.role` cannot see that row, so without the policy re-check
+// the completed organization archive stays downloadable after access was
+// revoked. `get_export_status` is `defaultEffect: "allow"` and the download
+// routes invoke it rather than `export_data`, so nothing else catches it.
+describe("an export_data deny written after the archive was queued", () => {
+  /** A ready org export whose caller is still, on paper, the owner. */
+  function readyOrgExportForAnOwner(): void {
+    queueSelects([personalRow({ scope: "org" })], [{ role: "owner" }]);
+  }
+
+  it("refuses the read rather than returning the storage key", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_not_permitted",
+    );
+  });
+
+  // The question asked is `export_data`'s, in the organisation that governed
+  // the export, for the person reading it. Asking about `get_export_status`
+  // instead would miss the deny entirely: no rule is keyed to that name.
+  it("asks about export_data in the governed organisation", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
+      () => undefined,
+    );
+    expect(authz.calls).toEqual([
+      { capability: "export_data", orgId: ORG_ID, userId: USER_ID },
+    ]);
+  });
+
+  // No plan tier is read on this path, by construction: the kernel's own gate
+  // answers `tier_gate → allow` before any policy is read on every tier but
+  // enterprise, so a check that consulted the tier would pass its test and
+  // change nothing for the organisations most customers are on.
+  it("refuses without consulting the plan tier", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    await expect(
+      privacyDataExportStatusHandler(
+        { exportId: EXPORT_ID },
+        ctx({ planTier: "free" } as Partial<CapabilityContext>),
+      ),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+  });
+
+  // `require_approval` has nothing to satisfy on the API and app surfaces,
+  // because the approval step is read only by the agent tool wrapper, so it is
+  // refused rather than treated as a grant.
+  it("refuses an explicit require_approval as well", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData("require_approval");
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+  });
+
+  // A deny on another capability is not this one. Keyed matching, not a
+  // substring or a prefix.
+  it("is unmoved by a deny on a different capability", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    authz.value = {
+      ...authz.value,
+      roleGrants: [
+        { roleId: ROLE_ID, capabilityId: "erase_data", effect: "deny" },
+      ],
+    };
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+  });
+
+  // A personal export is the caller's own data. No role gated it and no
+  // organization policy governs it, so the deny must not reach it and the
+  // resolver must not even be asked.
+  it("still hands a person their own export while the org deny stands", async () => {
+    queueSelects([personalRow()]);
+    denyExportData();
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+    expect(authz.calls).toEqual([]);
+  });
+
+  // The role check runs first and is unchanged: a demoted owner is refused on
+  // the role, whatever the policy says.
+  it("still refuses a demoted owner when nothing is denied", async () => {
+    queueSelects([personalRow({ scope: "org" })], [{ role: "member" }]);
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_requires_admin",
+    );
+    expect(authz.calls).toEqual([]);
+  });
+
+  // A caller in no workspace still gets an answer: the scope the IAM read needs
+  // is entered with the org-only sentinel (ADR-068), and an org rule binds a
+  // call that names no workspace.
+  it("observes the deny for a caller who names no workspace", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    await expect(
+      privacyDataExportStatusHandler(
+        { exportId: EXPORT_ID },
+        ctx({ workspaceId: undefined }),
+      ),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+  });
+
+  // An organisation that has configured nothing is not an organisation that
+  // denied something. The resolver's "nothing matched" fallback must read as
+  // "nothing revoked it", or every unprovisioned org loses its archive.
+  it("hands the key over when no rule names export_data", async () => {
+    readyOrgExportForAnOwner();
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+    expect(authz.calls).toHaveLength(1);
   });
 });

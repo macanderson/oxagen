@@ -3,6 +3,7 @@ import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { withSystemDb, schema } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { orgMembershipRole } from "./_org_membership";
+import { assertCapabilityNotRevoked } from "./lib/capability-policy-recheck";
 import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
@@ -56,6 +57,19 @@ export const privacyDataEraseHandler: CapabilityHandler<
     if (role !== "owner") {
       throw new Error("Forbidden: org erasure requires owner role");
     }
+    // The role is one revocation path; an explicit `deny` written against
+    // `erase_data` itself is the other, and `org_users.role` cannot see it. The
+    // kernel does not see it either below the enterprise tier, where its gate
+    // answers `tier_gate → allow` before any policy is read. So an owner of an
+    // organisation that had explicitly denied erasure could still schedule the
+    // hard-delete of every record in it. Same guard as the export paths, same
+    // reason: an explicit deny that does not deny is worse than no control at
+    // all, because whoever wrote it believes the action is impossible.
+    await assertCapabilityNotRevoked(privacyDataErase, ctx, {
+      reason: "org_erasure_not_permitted",
+      message:
+        "An organization erasure is not permitted: the erase_data policy for this organization denies it",
+    });
   }
 
   const orgId = input.scope === "org" ? (input.orgId ?? ctx.orgId) : ctx.orgId;
