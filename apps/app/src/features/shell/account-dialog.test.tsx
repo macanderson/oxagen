@@ -879,6 +879,55 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
+  // The window opens when the request is sent, not when it answers. Better
+  // Auth voids the old set the moment the call lands, so during the in-flight
+  // span the old codes are already dead and the new ones do not exist on this
+  // page yet: a reload there loses them with nothing held anywhere to recover.
+  // Guarding only the arrived set left exactly that span unguarded.
+  it("asks before unloading while a rotation is still in flight", async () => {
+    let issue: ((result: unknown) => void) | undefined;
+    liveRegenerateBackupCodes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          issue = resolve;
+        }),
+    );
+    const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    expect(asked()).toBe(false);
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+
+    // Nothing on screen yet, and nothing in the vault, and it still asks.
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+    expect(asked()).toBe(true);
+
+    issue?.({ ok: true, codes: ["flight-1111", "flight-2222"] });
+    await screen.findByTestId("account-codes");
+    expect(asked()).toBe(true);
+
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(asked()).toBe(false);
+  });
+
+  // A refused rotation leaves nothing at stake, so the guard must release: the
+  // old codes still work and there is no new set to lose.
+  it("stops asking when a rotation is refused (negative)", async () => {
+    liveRegenerateBackupCodes.mockResolvedValue({ ok: false });
+    const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "wrong");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes-refused");
+    expect(asked()).toBe(false);
+  });
+
   // The second rotation is never started, so no late first response can exist
   // to be sorted out: "runs one rotation at a time" above is what closes this,
   // and it also closes the tab-switch bypass, which a ticket held inside the

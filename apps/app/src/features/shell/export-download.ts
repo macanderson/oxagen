@@ -19,6 +19,8 @@
 // business, not the gate's.
 import "server-only";
 import type { ActionResult } from "@/server/kernel";
+import { responseRedirect } from "@/shared/navigation";
+import { routes } from "@/shared/safe-path";
 import type { RouteViewer } from "@/server/viewer";
 import type { ExportObject } from "./export-storage";
 
@@ -36,7 +38,7 @@ function refusal(status: number, code: string): Response {
 }
 
 export async function handleExportDownload(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ org: string; exportId: string }> },
   deps: ExportDownloadDeps,
 ): Promise<Response> {
@@ -49,7 +51,19 @@ export async function handleExportDownload(
       return refusal(404, "not_found");
     case "mfa_enroll":
       return refusal(403, "mfa_required");
+    // The organization was reached by a slug it used to have. Falling through
+    // to the read would spend the stale slug: `readStatus` resolves the viewer
+    // a second time, and that resolution can only redirect through the
+    // optional `x-url` / `next-url` headers. Without one it lands on the
+    // canonical organization root, so the export id is dropped and the person
+    // is handed a dashboard instead of their archive. Answer with the move
+    // instead, the way the audit export route does.
     case "redirect":
+      return responseRedirect(
+        request,
+        routes.accountExport(viewer.org, exportId),
+        308,
+      );
     case "ok":
       break;
   }

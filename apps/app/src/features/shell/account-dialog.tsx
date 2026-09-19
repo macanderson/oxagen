@@ -95,36 +95,6 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // actually been received.
   const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
 
-  // A reload is the one way out of this dialog the vault above cannot survive,
-  // and the set is already the only one that works: Better Auth voided the old
-  // codes the moment it issued these, and it keeps only hashes of the new ones,
-  // so nothing anywhere can show them a second time.
-  //
-  // The review that found this asked for the pending set to be held in
-  // server-backed state until it is acknowledged. That is the wrong trade, and
-  // deliberately not what this does. It would put a full second factor bypass
-  // in Oxagen's own database in recoverable form, for as long as nobody presses
-  // a button, replicated to whichever data plane the organisation is on
-  // (ADR-042), in its backups, and inside the very export bundle this dialog
-  // queues. Losing an unsaved set costs one more rotation, with the password,
-  // by someone who is signed in and still holds the authenticator that got them
-  // here. Storing the codes costs the factor itself, to anyone who reaches the
-  // row. The cheaper failure is the one to keep.
-  //
-  // So the loss is made deliberate instead of silent: while a set is unsaved,
-  // the browser asks before it unloads the page. `preventDefault` is the
-  // specified opt-in; the wording is the browser's and cannot be set.
-  useEffect(() => {
-    if (!heldCodes) return;
-    const ask = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", ask);
-    return () => {
-      window.removeEventListener("beforeunload", ask);
-    };
-  }, [heldCodes]);
-
   // The rotation itself is held here too, and for the same reason the codes
   // are: every state the Security tab owns is destroyed by Cancel, by a tab
   // switch and by a close, and a rotation that is in flight must survive all
@@ -156,6 +126,45 @@ export function AccountDialog({ data }: { data: ShellData }) {
       setRotating(false);
     },
   };
+
+  // A reload is the one way out of this dialog neither the vault nor the
+  // rotation ticket above can survive, and by then the set on the server is
+  // already the only one that works: Better Auth voids the old codes the moment
+  // the call lands, and it keeps only hashes of the new ones, so nothing
+  // anywhere can show them a second time.
+  //
+  // The window opens when the request is sent, not when it answers. Guarding
+  // only `heldCodes` left the whole in-flight span unguarded, which is the
+  // worst part of it: the old set is already void and the new one does not
+  // exist on this page yet, so a reload there loses the codes with nothing
+  // held anywhere to recover. So the guard covers a rotation in flight as well
+  // as a set that has arrived and not been acknowledged.
+  //
+  // The review that found the original gap asked for the pending set to be
+  // held in server-backed state until it is acknowledged. That is the wrong
+  // trade, and deliberately not what this does. It would put a full second
+  // factor bypass in Oxagen's own database in recoverable form, for as long as
+  // nobody presses a button, replicated to whichever data plane the
+  // organisation is on (ADR-042), in its backups, and inside the very export
+  // bundle this dialog queues. Losing an unsaved set costs one more rotation,
+  // with the password, by someone who is signed in and still holds the
+  // authenticator that got them here. Storing the codes costs the factor
+  // itself, to anyone who reaches the row. The cheaper failure is the one to
+  // keep.
+  //
+  // So the loss is made deliberate instead of silent: while anything is at
+  // stake, the browser asks before it unloads the page. `preventDefault` is
+  // the specified opt-in; the wording is the browser's and cannot be set.
+  useEffect(() => {
+    if (!heldCodes && !rotating) return;
+    const ask = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => {
+      window.removeEventListener("beforeunload", ask);
+    };
+  }, [heldCodes, rotating]);
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and

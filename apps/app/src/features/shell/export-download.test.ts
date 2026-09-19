@@ -89,6 +89,27 @@ describe("the gates", () => {
     expect(get).not.toHaveBeenCalled();
   });
 
+  // A historical slug must be answered with the move, not spent. Reading on
+  // with the stale slug resolves the viewer a second time, and that resolution
+  // can only redirect through the optional `x-url` / `next-url` headers;
+  // without one it lands on the organization root and the export id is gone,
+  // so the person is handed a dashboard instead of their archive.
+  it("redirects a renamed organization to the canonical download", async () => {
+    resolveViewer.mockResolvedValue({
+      kind: "redirect",
+      org: "acme",
+      ws: null,
+    });
+    const res = await call();
+    expect(res.status).toBe(308);
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe(
+      `/acme/account/export/${EXPORT_ID}`,
+    );
+    // And nothing was read on the stale slug on the way past.
+    expect(readStatus).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
   // The capability matches the row on the principal, so someone else's id
   // refuses there. The route answers not_found either way, so a refusal never
   // says whether a stranger's export id is real.
