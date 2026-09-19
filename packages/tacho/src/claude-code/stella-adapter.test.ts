@@ -8,6 +8,7 @@ import { digestText } from "./context";
 import { hookInputSchema, normalizeHook } from "./hooks";
 import {
   parseAnswerBody,
+  tryParseAnswerBody,
   parsePsLine,
   psLookup,
   psStartInstance,
@@ -372,6 +373,15 @@ describe("stella answer", () => {
     expect(parseAnswerBody("")).toEqual({});
     expect(parseAnswerBody("not json")).toEqual({});
     expect(parseAnswerBody("[1,2]")).toEqual({});
+    // A caller that must not read an allow out of a fault gets the cases
+    // apart: an empty object parses, a blank or truncated or non-object
+    // body does not.
+    expect(tryParseAnswerBody("{}")).toEqual({});
+    expect(tryParseAnswerBody("")).toBeUndefined();
+    expect(tryParseAnswerBody("   \n\t")).toBeUndefined();
+    expect(tryParseAnswerBody('{"decision":"bl')).toBeUndefined();
+    expect(tryParseAnswerBody("not json")).toBeUndefined();
+    expect(tryParseAnswerBody("[1,2]")).toBeUndefined();
   });
 });
 

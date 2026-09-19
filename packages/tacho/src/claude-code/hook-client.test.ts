@@ -482,14 +482,31 @@ describe("runTachoHook for Stella and custom agents", () => {
     // HOME is not a harness variable; the Stella pid is added for the sweep.
     expect(body.env).toEqual({ TACHO_HARNESS_PID: "4242" });
     expect(seen[0]?.responseTimeoutMs).toBe(10_000);
-    // A body that is not JSON is no decision, never a malformed one (which
-    // Stella treats as a deny).
+    // A body that is not a JSON object is a fault, not a decision, so the
+    // local evaluator answers instead of the daemon.
     const junk = await runTachoHook({
       ...base,
       stdin: STELLA_PRE,
       post: async () => ({ status: 200, body: "oops" }),
     });
-    expect(junk.stdout).toBe("{}\n");
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
+    // A blank 200 is the same fault: whitespace is not an intentional "{}".
+    const blank = await runTachoHook({
+      ...base,
+      stdin: STELLA_PRE,
+      post: async () => ({ status: 200, body: "   \n\t" }),
+    });
+    expect(blank).toMatchObject({ path: "local", exitCode: 0 });
+    expect(blank.stderr).toContain("not a JSON object");
+    // An intentional empty object still reaches Stella as no opinion.
+    const emptyObject = await runTachoHook({
+      ...base,
+      stdin: STELLA_PRE,
+      post: async () => ({ status: 200, body: "{}" }),
+    });
+    expect(emptyObject).toMatchObject({ path: "daemon", exitCode: 0 });
+    expect(emptyObject.stdout).toBe("{}\n");
     // SessionStart context reaches Stella as prompt text.
     const started = await runTachoHook({
       ...base,
@@ -765,6 +782,36 @@ describe("runTachoHook for Cursor", () => {
     // The address Cursor sends on every hook never reaches the daemon.
     expect(seen[0]?.body).not.toContain("someone@example.com");
     expect(seen[0]?.responseTimeoutMs).toBe(10_000);
+    // A body that is not a JSON object is a fault, not an empty decision: it
+    // takes the local evaluator rather than becoming the explicit allow that
+    // an empty answer translates to. Cursor still reads a conforming answer.
+    const junk = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({ status: 200, body: "oops" }),
+    });
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
+    expect(
+      (JSON.parse(junk.stdout) as { permission?: string }).permission,
+    ).toMatch(/^(allow|deny)$/);
+    // Blank or whitespace-only is the same fault as truncated JSON.
+    const blank = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({ status: 200, body: "" }),
+    });
+    expect(blank).toMatchObject({ path: "local", exitCode: 0 });
+    expect(blank.stderr).toContain("not a JSON object");
+    expect(
+      (JSON.parse(blank.stdout) as { permission?: string }).permission,
+    ).toMatch(/^(allow|deny)$/);
   });
 
   it("denies from the cached bundle when the daemon is down", async () => {
