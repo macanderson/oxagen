@@ -268,8 +268,11 @@ describe("Mandate › loaded", () => {
     expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
   });
 
-  // Both handlers refuse a status other than active, so offering the controls
-  // would be offering a write the kernel is certain to refuse.
+  // A revoked mandate is refused by both handlers, so offering either control
+  // would be offering a write the kernel is certain to refuse. A draft is not
+  // this case: `revoke_mandate` accepts one, because declining a request is the
+  // revocation of a mandate that never took effect, and `mandate-actions.test.tsx`
+  // covers it.
   it("offers neither write on a revoked mandate (negative)", async () => {
     await renderMandate(
       mandateDetailRead({ mandate: mandateRow({ status: "revoked" }) }),

@@ -1195,6 +1195,13 @@ type Messages = {
         reasonHint: string;
         confirm: string;
         pending: string;
+        draft: {
+          open: string;
+          title: string;
+          body: string;
+          confirm: string;
+          pending: string;
+        };
       };
       failure: {
         orgRoleRequired: string;

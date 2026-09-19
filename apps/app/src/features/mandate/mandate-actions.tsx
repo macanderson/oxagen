@@ -322,6 +322,13 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
 
 function Revoke({ org, ws, mandate, here }: Place) {
   const t = useTranslations("mandate.actions.revoke");
+  const d = useTranslations("mandate.actions.revoke.draft");
+  // A draft was never in effect, so nothing in the revoke copy is true of it: no
+  // reservation was ever held against it and the ledger has no movement to keep.
+  // Declining a request is its own act and the dialog says so. The two
+  // namespaces are read separately rather than through one chosen translator,
+  // because each `t` is typed to the keys of its own namespace.
+  const isDraft = mandate.status === "draft";
   const failureText = useActionFailure();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -361,7 +368,7 @@ function Revoke({ org, ws, mandate, here }: Place) {
           setOpen(true);
         }}
       >
-        {t("open")}
+        {isDraft ? d("open") : t("open")}
       </button>
       <SheetDialog
         open={open}
@@ -369,11 +376,17 @@ function Revoke({ org, ws, mandate, here }: Place) {
           setOpen(next);
           if (!next) setFailure(null);
         }}
-        title={t("title", { mandate: mandate.id })}
+        title={
+          isDraft
+            ? d("title", { mandate: mandate.id })
+            : t("title", { mandate: mandate.id })
+        }
         testId="revoke-mandate"
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">{t("body")}</p>
+          <p className="text-sm text-muted-foreground">
+            {isDraft ? d("body") : t("body")}
+          </p>
           <Field
             id="revoke-mandate-reason"
             label={t("reason")}
@@ -393,8 +406,8 @@ function Revoke({ org, ws, mandate, here }: Place) {
           )}
           <SubmitButton
             pending={pending}
-            label={t("confirm")}
-            pendingLabel={t("pending")}
+            label={isDraft ? d("confirm") : t("confirm")}
+            pendingLabel={isDraft ? d("pending") : t("pending")}
           />
         </form>
       </SheetDialog>
@@ -403,17 +416,25 @@ function Revoke({ org, ws, mandate, here }: Place) {
 }
 
 /**
- * The header's actions. A mandate that has already ended offers neither: both
- * handlers refuse a status other than `active` (revoke also takes a `draft`,
- * which is how a request is declined, and the request is declined from the
- * agent's own page), so offering them here would be offering a control the
- * kernel is certain to refuse.
+ * The header's actions, each offered only where its handler will accept it.
+ *
+ * `update_mandate_limits` takes an `active` mandate alone. `revoke_mandate`
+ * takes `active` or `draft`, because declining a request is a revocation of a
+ * mandate that never took effect, and this page is the only place in the app
+ * that calls it: an earlier comment here said a request was declined from the
+ * agent's own page, and no such control exists there. A draft with no decline
+ * control is a capability the API has and the app does not, which is the one
+ * gap this repo treats as seriously as a missing route.
+ *
+ * A mandate that has already ended offers neither, since both handlers are
+ * certain to refuse it.
  */
 export function MandateActions(place: Place) {
-  if (place.mandate.status !== "active") return null;
+  const { status } = place.mandate;
+  if (status !== "active" && status !== "draft") return null;
   return (
     <>
-      <ChangeLimits {...place} />
+      {status === "active" ? <ChangeLimits {...place} /> : null}
       <Revoke {...place} />
     </>
   );

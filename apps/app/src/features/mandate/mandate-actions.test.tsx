@@ -15,6 +15,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MandateRow } from "@/data/contracts/mandates";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -47,14 +48,14 @@ const bounded = mandateRow({
   ],
 });
 
-function draw() {
+function draw(mandate: MandateRow = bounded) {
   render(
     <IntlProvider>
       <MandateActions
         org="acme"
         ws="core-platform"
-        mandate={bounded}
-        here={routes.mandate("acme", "core-platform", bounded.id)}
+        mandate={mandate}
+        here={routes.mandate("acme", "core-platform", mandate.id)}
       />
     </IntlProvider>,
   );
@@ -188,5 +189,49 @@ describe("ChangeLimits", () => {
       within(dialog()).getByTestId("change-limits-failure"),
     ).toHaveTextContent("not accountable for this mandate's consequences");
     expect(router.replace).not.toHaveBeenCalled();
+  });
+});
+
+
+// `revoke_mandate` takes a draft as well as an active mandate, because declining
+// a request is the revocation of a mandate that never took effect. This component
+// is the app's only caller of it, so a draft the header refuses to act on is a
+// request nobody can decline anywhere in the app.
+describe("MandateActions on a draft", () => {
+  const requested = mandateRow({ status: "draft" });
+
+  it("offers a decline and no limit change", () => {
+    draw(requested);
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+    // Change limits refuses anything but an active mandate, so offering it here
+    // would be offering a control the kernel is certain to refuse.
+    expect(
+      screen.queryByRole("button", { name: "Change limits" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says it is declining a request, not ending a mandate", async () => {
+    draw(requested);
+    const user = userEvent.setup({ delay: null });
+    await user.click(screen.getByRole("button", { name: "Decline" }));
+    const panel = screen.getByTestId("revoke-mandate");
+    // Nothing was ever reserved against a draft and the ledger holds no movement
+    // for it, so the revoke copy is false of it in every sentence.
+    expect(within(panel).getByText(/never takes effect/)).toBeInTheDocument();
+    expect(
+      within(panel).queryByText(/Every reservation held by a call/),
+    ).not.toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Decline this request" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers nothing once the mandate has ended", () => {
+    // Both handlers refuse a revoked or expired mandate.
+    for (const status of ["revoked", "expired"] as const) {
+      cleanup();
+      draw(mandateRow({ status }));
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    }
   });
 });

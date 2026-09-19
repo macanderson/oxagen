@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Oxagen: agent control plane and agent fleet management</title>
-<meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices every model call and attributes it to the operator, answers every agent request with a rule you wrote, routes consequential requests to a person, and records every run frame by frame. The agent never sees the key.">
+<meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices the model calls routed through it and attributes each one to the operator, answers an agent's request for a system or an action with the decision rules you wrote, routes anything consequential to a person, and records every run frame by frame. The agent never sees the key.">
 <link rel="canonical" href="https://oxagen.sh/products/oxagen">
 <meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark">
@@ -221,10 +221,10 @@
         <p class="eyebrow">Product · Oxagen</p>
         <h1>See which agent spent what,<br><span class="gold">and on whose behalf.</span></h1>
         <p class="hero-sub">
-          Oxagen prices every model call by token class and <strong>attributes it to the person,
-          the agent, the run, the turn, and the step</strong>. Findings name the waste and who can
-          fix it. A rule you wrote routes anything consequential to a person, and the record
-          keeps every run frame by frame. <strong>Fewer tokens, same answers.</strong>
+          Oxagen prices every model call routed through it by token class and <strong>attributes
+          it to the person, the agent, the run, the turn, and the step</strong>. Findings name the
+          waste and who can fix it. A rule you wrote routes anything consequential to a person, and
+          the record keeps every run frame by frame. <strong>Fewer tokens, same answers.</strong>
         </p>
         <div class="hero-ctas">
           <a class="btn btn-primary" href="#demo">Get a demo <span class="arr">→</span></a>
@@ -291,7 +291,7 @@
         </div>
         <div>
           <h3>Equipment</h3>
-          <p>Never re-explain yourself to AI ever again.</p>
+          <p>Give agents the business context their work requires.</p>
           <ol>
             <li><a href="#proven">A witness the agent never sees</a></li>
             <li><a href="#graph">A map of your business</a></li>
@@ -479,7 +479,7 @@
         <p class="lede">Your provider bill says how much. It does not say who, for what, or
         whether it was worth it.</p>
         <ul>
-          <li>The proxy prices every model call by token class, including cache reads, cache writes, and reasoning tokens, in micro-dollars, with the price entry it used.</li>
+          <li>The proxy prices every model call routed through it by token class, including cache reads, cache writes, and reasoning tokens, in micro-dollars, with the price entry it used.</li>
           <li>Every cost record hangs on a frame, and every frame knows its step, turn, run, agent, operator, and workspace, so attribution is arithmetic.</li>
           <li>The reconciler matches your ledger to provider usage exports by request id, then by key and day, then by invoice line. Budgets are enforced at the proxy before the call, not reported after.</li>
         </ul>
@@ -546,7 +546,7 @@
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Equipment</p>
-        <h2>Never re-explain yourself to AI ever again</h2>
+        <h2>Give agents the business context their work requires</h2>
         <p class="lede">Your agents do not know your business because nothing gave them a map.
         Oxagen builds one knowledge graph per organization, isolated in its own database, from
         GitHub, Linear, and Postgres.</p>
