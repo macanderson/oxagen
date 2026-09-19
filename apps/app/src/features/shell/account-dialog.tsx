@@ -780,9 +780,19 @@ function SecurityTab({
   // vault filling is the only thing that can tell this mount the set arrived.
   // Without this the codes would sit in the vault behind a form still saying it
   // is issuing them.
-  useEffect(() => {
+  //
+  // Adjusted during render rather than in an effect, which is React's own
+  // answer for state that has to follow a value from above
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // An effect would render the stale form first and correct it on a second
+  // pass, and `react-hooks/set-state-in-effect` refuses it for that reason.
+  // React re-runs this component immediately, before anything is committed, so
+  // the form never shows the wrong thing.
+  const [vaulted, setVaulted] = useState(heldCodes);
+  if (heldCodes !== vaulted) {
+    setVaulted(heldCodes);
     if (heldCodes) setCodes({ kind: "issued", codes: heldCodes });
-  }, [heldCodes]);
+  }
 
   useEffect(() => {
     let live = true;
