@@ -21,7 +21,7 @@
 // Every state it can be in is drawn, and none is faked: reading, no
 // installation, an unconfigured deployment, a picker over a live GitHub list,
 // a bound repository, and each refusal the three capabilities can give.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   type SyntheticEvent,
@@ -64,6 +64,7 @@ import {
   useWorkspaceSettingsFailure,
   type WorkspaceSettingsFailure,
 } from "./workspace-settings-failure";
+import { useFormatter } from "@/ui/formatter";
 
 /** A record being read, refused, or in hand. The refusal is kept as a value so its sentence is formatted at render. */
 type Load<T> =

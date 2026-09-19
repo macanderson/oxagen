@@ -1,5 +1,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
+import {
+  DEFAULT_TIME_ZONE,
+  userPreferencesRead,
+} from "@oxagen/oxagen/contracts/user.preferences.read";
 // user_preferences is user-global (no org_id, no RLS policy) — withSystemDb is correct.
 import { schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
@@ -13,7 +16,7 @@ const PREF_DEFAULTS = {
   pendingPromptBehavior: "queue" as const,
   defaultTextTier: null,
   defaultTextModel: null,
-  timezone: "UTC",
+  timezone: DEFAULT_TIME_ZONE,
   language: "en",
   theme: "system" as const,
 };

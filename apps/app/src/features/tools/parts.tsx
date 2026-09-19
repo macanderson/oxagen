@@ -2,11 +2,12 @@
 // list, the one date style, the cursor pager, and the badges that carry state
 // as a dot and a word so they survive greyscale (the mockup's rule: gold is
 // identity, never state).
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { useFormatter } from "@/ui/formatter";
 
 export function Section({
   id,

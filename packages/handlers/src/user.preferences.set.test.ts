@@ -128,7 +128,7 @@ describe("set_preferences", () => {
       updatedById: "u_1",
       language: "en",
       theme: "system",
-      timezone: "UTC",
+      timezone: "America/Los_Angeles",
       fontSize: "medium",
       density: "comfortable",
       enterToSubmit: false,

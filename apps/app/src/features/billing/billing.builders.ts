@@ -199,7 +199,7 @@ export function billingSource(
   const refuse = () => Promise.reject(new Error("not a Billing read"));
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
       get: refuse,

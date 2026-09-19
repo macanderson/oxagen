@@ -28,6 +28,7 @@ import {
 import { FixDialog } from "./fix-dialog";
 import { Empty, HeaderCell, Panel } from "./tables";
 import type { SpendAt } from "./view";
+import { useFormatter } from "@/ui/formatter";
 
 /** Findings named in the legend; the rest roll into one entry, since at forty a name per slice is unreadable. */
 const LEGEND_MAX = 8;

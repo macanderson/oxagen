@@ -1,9 +1,9 @@
 // The frame every Billing section shares: a region named by its heading, the
 // term-and-value list its facts print in, and the one date style the page
 // uses.
-import { useFormatter } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
 import { panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 
 export function Section({
   id,
