@@ -4,7 +4,7 @@
 // covers and what each side cost. Every figure is the findings job's. The one
 // thing computed here is a finding's share of the listed total, divided
 // through the micros seam and printed as a ratio (INV-09, INV-10).
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {
   SpendFinding,
@@ -27,6 +27,7 @@ import {
 import { FixDialog } from "./fix-dialog";
 import { Empty, HeaderCell, Panel } from "./tables";
 import type { SpendAt } from "./view";
+import { useFormatter } from "@/ui/formatter";
 
 /** Findings named in the legend; the rest roll into one entry, since at forty a name per slice is unreadable. */
 const LEGEND_MAX = 8;
