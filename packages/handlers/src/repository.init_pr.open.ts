@@ -6,7 +6,11 @@
 //   2. The two files the person reviewed are checked before anything reaches
 //      GitHub: governance.toml must parse and declare exactly the mode they
 //      chose (the Context PR gate reads it on every open and merge, and a file
-//      it cannot read refuses both), and workspace.toml must parse.
+//      it cannot read refuses both), workspace.toml must parse, neither file
+//      may carry a credential or personal data (`secret_pii_scan`), and
+//      neither may declare a grant of authority (`no_authority`): a tool, a
+//      tier, a budget, a permission. The repository-binding spec §2.3 names
+//      the five checks; these are the two that read the files alone.
 //   3. The bound repository by its binding id, a client for the workspace's
 //      installation, and the check that GitHub's repository at those
 //      coordinates is still the one the binding carries the id of.
@@ -28,6 +32,7 @@ import {
 } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { parse } from "smol-toml";
+import { findSecretsAndPii } from "./context.steering.checks";
 import {
   GOVERNANCE_PATH,
   parseGovernanceMode,
@@ -73,6 +78,86 @@ function tomlRefused(reason: string, message: string): HandlerError {
   return new HandlerError({ code: "conflict", reason, message });
 }
 
+/**
+ * A key that, wherever it sits in the tree, reads as a grant: a tool an
+ * agent may call, a tier or budget it runs under, a permission it holds.
+ * `.oxagen/workspace.toml` v0.1 says which workspace a repository belongs
+ * to and nothing more, so no such key has a place in it; one that appears
+ * is refused rather than merged and then argued about. `role` is not in the
+ * list: `[repository] role` is the repository's role, main or linked.
+ */
+const GRANT_KEYS = new Set([
+  "tool",
+  "tools",
+  "grant",
+  "grants",
+  "allow",
+  "allowed",
+  "permission",
+  "permissions",
+  "mandate",
+  "mandates",
+  "authority",
+  "budget",
+  "budgets",
+  "tier",
+  "tiers",
+  "capability",
+  "capabilities",
+  "spend",
+  "limit",
+  "limits",
+]);
+
+/** Every key path in a parsed TOML tree that names a grant, dotted. */
+export function findAuthorityGrants(
+  tree: unknown,
+  at: string[] = [],
+): string[] {
+  if (typeof tree !== "object" || tree === null || Array.isArray(tree))
+    return [];
+  const found: string[] = [];
+  for (const [key, value] of Object.entries(tree)) {
+    const path = [...at, key];
+    if (GRANT_KEYS.has(key.toLowerCase())) found.push(path.join("."));
+    else found.push(...findAuthorityGrants(value, path));
+  }
+  return found;
+}
+
+/**
+ * Checks 4 and 5 of the init lane, over the two reviewed files. Run before
+ * the first GitHub call: a file pushed to a branch is already in the
+ * repository's history, and a pull request is not where a secret is caught.
+ */
+function refuseSecretsAndGrants(files: {
+  workspace: { text: string; tree: unknown };
+  governance: { text: string; tree: unknown };
+}): void {
+  const named = (path: string, findings: string[]) =>
+    findings.map((finding) => `${path}: ${finding}`);
+  const secrets = [
+    ...named(WORKSPACE_TOML_PATH, findSecretsAndPii(files.workspace.text)),
+    ...named(GOVERNANCE_PATH, findSecretsAndPii(files.governance.text)),
+  ];
+  if (secrets.length > 0) {
+    throw tomlRefused(
+      "secret_found",
+      `the files carry what must not be committed: ${secrets.join("; ")}`,
+    );
+  }
+  const grants = [
+    ...named(WORKSPACE_TOML_PATH, findAuthorityGrants(files.workspace.tree)),
+    ...named(GOVERNANCE_PATH, findAuthorityGrants(files.governance.tree)),
+  ];
+  if (grants.length > 0) {
+    throw tomlRefused(
+      "authority_declared",
+      `the files declare a grant of authority, which the init tree never carries: ${grants.join("; ")}`,
+    );
+  }
+}
+
 export interface InitPrDeps {
   github: WorkspaceGithub;
   readBound: typeof readBoundRepository;
@@ -99,14 +184,23 @@ export function createInitPrOpenHandler(
         `governance.toml declares mode ${declared}; the chosen mode is ${input.governanceMode}`,
       );
     }
+    let workspaceTree: unknown;
     try {
-      parse(input.workspaceToml);
+      workspaceTree = parse(input.workspaceToml);
     } catch (err) {
       throw tomlRefused(
         "workspace_toml_invalid",
         `workspace.toml is not TOML: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+    refuseSecretsAndGrants({
+      workspace: { text: input.workspaceToml, tree: workspaceTree },
+      // governance.toml parsed above, through parseGovernanceMode.
+      governance: {
+        text: input.governanceToml,
+        tree: parse(input.governanceToml),
+      },
+    });
 
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const bound = await deps.readBound(scope, input.bindingId);

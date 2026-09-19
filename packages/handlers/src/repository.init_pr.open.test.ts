@@ -24,6 +24,7 @@ import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_p
 import type { BoundRepository } from "./repository.bound";
 import {
   createInitPrOpenHandler,
+  findAuthorityGrants,
   gitignoreWithOxagen,
 } from "./repository.init_pr.open";
 
@@ -217,6 +218,91 @@ describe("open_init_pr", () => {
     ).rejects.toMatchObject({ reason: "workspace_toml_invalid" });
   });
 
+  // Checks 4 and 5 of the init lane (repository-binding spec §2.3): a file
+  // pushed to a branch is in the repository's history, so both refuse before
+  // the first GitHub call.
+  it("refuses a workspace.toml carrying a credential, naming the file, before GitHub is reached", async () => {
+    const client = fakeGithub();
+    await expect(
+      handler(client)(
+        {
+          ...INPUT,
+          workspaceToml: `${INPUT.workspaceToml}[github]\ntoken = "ghp_0123456789abcdefghijklmnopqrstuvwxyz"\n`,
+        },
+        makeCTX(),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "secret_found",
+      message: expect.stringContaining(".oxagen/workspace.toml"),
+    });
+    expect(client.getRepoInfo).not.toHaveBeenCalled();
+    expect(client.putFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a governance.toml carrying an email address (negative)", async () => {
+    const client = fakeGithub();
+    await expect(
+      handler(client)(
+        {
+          ...INPUT,
+          governanceToml: `${INPUT.governanceToml}owner = "marcus@example.com"\n`,
+        },
+        makeCTX(),
+      ),
+    ).rejects.toMatchObject({
+      reason: "secret_found",
+      message: expect.stringContaining(".oxagen/rules/governance.toml"),
+    });
+    expect(client.getRepoInfo).not.toHaveBeenCalled();
+  });
+
+  it("refuses a workspace.toml that grants authority, naming the key, before GitHub is reached", async () => {
+    const client = fakeGithub();
+    await expect(
+      handler(client)(
+        {
+          ...INPUT,
+          workspaceToml: `${INPUT.workspaceToml}[agent.tools]\nshell = "allow"\n`,
+        },
+        makeCTX(),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "authority_declared",
+      message: expect.stringContaining("agent.tools"),
+    });
+    expect(client.getRepoInfo).not.toHaveBeenCalled();
+    expect(client.putFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a governance.toml that lifts a budget (negative)", async () => {
+    await expect(
+      handler(fakeGithub())(
+        {
+          ...INPUT,
+          governanceToml: `${INPUT.governanceToml}budget = 1000\n`,
+        },
+        makeCTX(),
+      ),
+    ).rejects.toMatchObject({
+      reason: "authority_declared",
+      message: expect.stringContaining("governance.toml: budget"),
+    });
+  });
+
+  it("keeps [repository] role, which is the repository's role and not a grant", async () => {
+    const client = fakeGithub();
+    const out = await handler(client)(
+      {
+        ...INPUT,
+        workspaceToml: `${INPUT.workspaceToml}[repository]\nrole = "linked"\nproduction_branch = "main"\n`,
+      },
+      makeCTX(),
+    );
+    expect(out.pullRequest.number).toBe(7);
+  });
+
   it("refuses a repository that already has .oxagen/ on its production branch", async () => {
     const client = fakeGithub({
       getTree: vi.fn(async () => [".oxagen/workspace.toml"]),
@@ -309,5 +395,38 @@ describe("open_init_pr", () => {
       code: "forbidden",
     });
     expect(client.findOpenPullRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("findAuthorityGrants", () => {
+  it("names every grant-shaped key by its dotted path, at any depth", () => {
+    expect(
+      findAuthorityGrants({
+        workspace: { slug: "core" },
+        agent: { tools: ["shell"], limits: { spend: 5 } },
+        Budget: 10,
+      }),
+    ).toEqual(["agent.tools", "agent.limits", "Budget"]);
+  });
+
+  it("finds nothing in the two files the wizard drafts (negative)", () => {
+    expect(
+      findAuthorityGrants({
+        workspace: { organization: "acme", slug: "core", name: "Core" },
+        repository: {
+          name: "acme/widgets",
+          role: "main",
+          production_branch: "main",
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      findAuthorityGrants({ mode: "team", separation_of_duties: false }),
+    ).toEqual([]);
+  });
+
+  it("does not descend into arrays or scalars (negative)", () => {
+    expect(findAuthorityGrants([{ tools: [] }])).toEqual([]);
+    expect(findAuthorityGrants("tools")).toEqual([]);
   });
 });

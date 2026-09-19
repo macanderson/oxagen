@@ -1918,6 +1918,8 @@ type Messages = {
       oxagenTreeExists: string;
       governanceTomlInvalid: string;
       workspaceTomlInvalid: string;
+      secretFound: string;
+      authorityDeclared: string;
       githubRefused: string;
     };
     page: {

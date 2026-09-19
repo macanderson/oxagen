@@ -82,6 +82,8 @@
       "oxagenTreeExists": "This repository already has .oxagen/ on its production branch. Change it with an ordinary pull request.",
       "governanceTomlInvalid": "governance.toml does not declare the mode you chose. Fix the file or pick the mode it names.",
       "workspaceTomlInvalid": "workspace.toml is not valid TOML. Fix the file and open the pull request again.",
+      "secretFound": "A file carries a credential or personal data. Nothing was pushed. Take it out and open the pull request again.",
+      "authorityDeclared": "A file declares a grant of authority, which the init tree never carries. Nothing was pushed. Take it out and open the pull request again.",
       "githubRefused": "GitHub refused the write. Nothing reached the production branch. Check that the App can write to this repository, then try again."
     },
     "page": {

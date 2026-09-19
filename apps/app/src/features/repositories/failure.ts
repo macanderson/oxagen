@@ -60,6 +60,10 @@ export function useRepositoriesFailure(): (
             return t("governanceTomlInvalid");
           case "workspace_toml_invalid":
             return t("workspaceTomlInvalid");
+          case "secret_found":
+            return t("secretFound");
+          case "authority_declared":
+            return t("authorityDeclared");
           case "github_refused":
             return t("githubRefused");
           default:

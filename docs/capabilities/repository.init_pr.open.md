@@ -53,6 +53,8 @@ Idempotent: an init pull request already open for the repository is answered as 
 | `forbidden` | `no_principal`, `org_role_required` | no acting user, or not an org Owner or Admin or the workspace's Owner |
 | `conflict` | `governance_toml_invalid` | the file does not parse, or declares a different mode |
 | `conflict` | `workspace_toml_invalid` | the file does not parse |
+| `conflict` | `secret_found` | a file carries a credential token, a private key block, a value after a sensitive key, an email address, a social security number or a card number; the message names the file and the finding (`secret_pii_scan`) |
+| `conflict` | `authority_declared` | a file carries a grant-shaped key (`tools`, `budget`, `tier`, `permissions`, `mandate`, and the like) at any depth; the message names the file and the dotted key (`no_authority`) |
 | `not_found` | `repository_not_linked` | no head in this workspace carries the binding |
 | `conflict` | `github_not_connected` | the workspace has no installation to write through |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
