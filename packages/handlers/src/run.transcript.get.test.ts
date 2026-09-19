@@ -203,6 +203,7 @@ describe("get_run_transcript", () => {
     const entry = out.entries[0];
     expect(entry?.kind).toBe("tool_call");
     expect(entry?.frames).toBe(2);
+    expect(entry?.callId).toBe("tu_shared");
     expect(entry?.request).toMatchObject({
       seq: "0",
       type: "tool_requested",

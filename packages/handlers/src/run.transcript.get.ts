@@ -300,6 +300,7 @@ export function createRunTranscriptGetHandler(
         kind: fold.kind,
         type: opening.type,
         label: opening.summary,
+        callId: opening.identity.callId,
         kinds: entryKinds(fold),
         request: pair.request,
         response: pair.response,

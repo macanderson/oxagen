@@ -404,6 +404,7 @@ describe("runs.transcript", () => {
             kind: "turn",
             type: "llm_call",
             label: "claude-opus-5",
+            callId: null,
             kinds: ["responses"],
             request: null,
             response: {

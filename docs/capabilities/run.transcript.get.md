@@ -62,6 +62,7 @@ The Mission Control mockup also draws a `thinking` chip. Neither the ledger's ev
 | `entries[].elapsedMs` | integer | milliseconds from the run's recorded start; clamped at zero |
 | `entries[].kind` | `turn` \| `model_call` \| `tool_call` \| `policy` \| `frame` | |
 | `entries[].type`, `label` | string | the opening frame's recorded type and its machine-derived label |
+| `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. Clients that rebuild steps at `everything` pair halves on this value rather than on adjacency |
 | `entries[].kinds` | string[] | the chips this entry answers to |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |

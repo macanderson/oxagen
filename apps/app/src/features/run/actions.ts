@@ -155,6 +155,7 @@ function toTranscriptPage(
       kind: entry.kind,
       type: entry.type,
       label: entry.label,
+      callKey: entry.callId,
       kinds: entry.kinds,
       turn: entry.turn,
       request: entry.request,
