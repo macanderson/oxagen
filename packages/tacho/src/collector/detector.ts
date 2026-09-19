@@ -34,21 +34,47 @@ export interface DetectorDeps {
   /** Directories holding `<project>/<session uuid>.jsonl` transcripts. */
   transcriptRoots: string[];
   readSettings: () => unknown;
-  enrollmentId: string;
   /**
-   * Whether this host hooks Claude Code at all, read each tick. Absent means
-   * yes. A Codex-only, Stella-only or Claude Desktop-only host has no Claude
-   * Code hooks to lose, and without this the detector chained a severity-3
-   * `oxagen:hooks_removed` incident fifteen seconds after every start. It is
-   * a function so a `reassign` that drops the harness is seen without a
-   * restart.
+   * The enrollment id hooks are checked against, and whether this host
+   * hooks Claude Code at all, read together on every tick from the same
+   * host.json snapshot. A Codex-only, Stella-only or Claude Desktop-only
+   * host names no `"claude-code"` harness, so hook absence is not an
+   * incident there; without that check the detector chained a severity-3
+   * `oxagen:hooks_removed` incident fifteen seconds after every start
+   * (#3320). Reading the harness list and the enrollment id as one pair,
+   * rather than the id as a value fixed at construction, is what keeps a
+   * live `reassign` from pairing a fresh harness list with a stale
+   * enrollment id and reintroducing that same false incident (#3398).
+   *
+   * `verified` is false when host.json could not be read or did not
+   * validate, so the pair is a remembered value, not a confirmed on-disk
+   * identity. The hook-removal check does NOT stop running when
+   * unverified: this is a tamper-evidence control, and an attacker who
+   * makes host.json unreadable and then strips the hooks must still trip
+   * `hooks_removed`, not find the one path that goes quiet. The check
+   * keeps evaluating against the last enrollment it did confirm on disk
+   * (docs/specs/tacho/spec.md §11, §14 item 8), and stamps `verified` onto
+   * the evidence of anything it seals so a reader can tell "checked
+   * against a last-verified pair" from "checked against a live-confirmed
+   * one" (#3398).
    */
-  claudeCodeEnrolled?: () => boolean;
+  enrollment: () => {
+    enrollmentId: string;
+    harnesses: string[];
+    verified: boolean;
+  };
   now: () => number;
   /** How long a transcript may advance unhooked before it is an incident. */
   graceMs?: number;
   /** Project directories whose files one tick may scan; see `MAX_DIRS_PER_TICK`. */
   maxDirsPerTick?: number;
+  /**
+   * Where the hook-removal check reports the on-disk enrollment becoming
+   * unverified, and reports when it can be verified again. Absent means the
+   * reason goes unlogged; the check still keeps running against the last
+   * verified pair either way.
+   */
+  log?: (line: string) => void;
 }
 
 /** Writes sealed frames to the WAL; see `Detector.tick`. */
@@ -263,6 +289,19 @@ export class Detector {
   private readonly scanner: TranscriptScanner;
   private lastPresence: HookPresence | undefined;
   private hooksOk: boolean | undefined;
+  /** Tracks the transition into and out of "enrollment unverified", so the
+   * reason logs once per transition rather than once per tick. */
+  private enrollmentVerified: boolean | undefined;
+  /**
+   * The last enrollment pair this daemon actually confirmed on disk. The
+   * hook-removal check keeps evaluating against this when the live read is
+   * unverified, rather than going quiet: an attacker who makes host.json
+   * unreadable and then strips the hooks must still trip `hooks_removed`,
+   * because the check never stops running (#3398).
+   */
+  private lastVerifiedEnrollment:
+    | { enrollmentId: string; harnesses: string[] }
+    | undefined;
 
   constructor(deps: DetectorDeps) {
     this.deps = deps;
@@ -288,17 +327,55 @@ export class Detector {
   }
 
   private checkHooks(): TachoEvent[] {
-    if (this.deps.claudeCodeEnrolled?.() === false) {
+    const read = this.deps.enrollment();
+    let enrollmentId: string;
+    let harnesses: string[];
+    if (read.verified) {
+      this.lastVerifiedEnrollment = {
+        enrollmentId: read.enrollmentId,
+        harnesses: read.harnesses,
+      };
+      if (this.enrollmentVerified === false) {
+        this.deps.log?.(
+          "the on-disk enrollment can be read again; the Claude Code hook-removal check resumes against the confirmed identity",
+        );
+      }
+      this.enrollmentVerified = true;
+      enrollmentId = read.enrollmentId;
+      harnesses = read.harnesses;
+    } else {
+      // host.json could not be read or did not validate on this tick. Going
+      // quiet here would hand an attacker the exact evasion path this check
+      // exists to close: make the enrollment file unreadable, then strip
+      // the hooks, and nothing chains (docs/specs/tacho/spec.md §11, §14
+      // item 8). The last pair this daemon actually confirmed on disk is
+      // still the best evidence available, and it stays true unless
+      // someone changed it, which is the thing being watched for -- so keep
+      // checking against it instead of disabling. A host with no
+      // last-verified pair yet (host.json was already broken at startup)
+      // has nothing better than the caller's best-effort read; check that
+      // rather than stay silent from boot.
+      if (this.enrollmentVerified !== false) {
+        this.deps.log?.(
+          "the on-disk enrollment could not be read or does not validate; continuing the Claude Code hook-removal check against the last verified enrollment",
+        );
+      }
+      this.enrollmentVerified = false;
+      const fallback = this.lastVerifiedEnrollment ?? {
+        enrollmentId: read.enrollmentId,
+        harnesses: read.harnesses,
+      };
+      enrollmentId = fallback.enrollmentId;
+      harnesses = fallback.harnesses;
+    }
+    if (!harnesses.includes("claude-code")) {
       this.hooksOk = undefined;
       this.lastPresence = undefined;
       return [];
     }
     let presence: HookPresence;
     try {
-      presence = tachoHookPresence(
-        this.deps.readSettings(),
-        this.deps.enrollmentId,
-      );
+      presence = tachoHookPresence(this.deps.readSettings(), enrollmentId);
     } catch (error) {
       presence = {
         complete: false,
@@ -316,6 +393,7 @@ export class Detector {
             incident_severity: 3,
             incident_evidence: {
               error: error instanceof Error ? error.message : String(error),
+              enrollment_verified: read.verified,
             },
           }),
         ];
@@ -334,6 +412,7 @@ export class Detector {
             missing: presence.missing,
             env_ok: presence.envOk,
             disabled_by_flag: presence.disabledByFlag,
+            enrollment_verified: read.verified,
           },
           hook_count: presence.present.length,
         }),
