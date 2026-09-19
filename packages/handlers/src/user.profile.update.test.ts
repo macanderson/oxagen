@@ -56,6 +56,33 @@ describe("update_profile", () => {
     expect(out).toEqual({ displayName: "Ada Lovelace", avatarUrl: null });
   });
 
+  // A partial write: auth.users.display_name is nullable and the avatar editor
+  // has no name field, so a save that always carried a name could never come
+  // from a person who has not set one.
+  it("leaves the display name alone when the caller sends only an avatar", async () => {
+    mocks.returning.mockResolvedValueOnce([
+      { displayName: null, avatarUrl: "avatar:v1:{}" },
+    ]);
+    const out = await userProfileUpdateHandler(
+      { avatarUrl: "avatar:v1:{}" },
+      CTX,
+    );
+    const values = mocks.set.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(values).not.toHaveProperty("displayName");
+    expect(values.avatarUrl).toBe("avatar:v1:{}");
+    expect(out).toEqual({ displayName: null, avatarUrl: "avatar:v1:{}" });
+  });
+
+  it("leaves the avatar alone when the caller sends only a name", async () => {
+    mocks.returning.mockResolvedValueOnce([
+      { displayName: "Ada", avatarUrl: "https://example.com/a.png" },
+    ]);
+    await userProfileUpdateHandler({ displayName: "Ada" }, CTX);
+    const values = mocks.set.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(values).not.toHaveProperty("avatarUrl");
+    expect(values.displayName).toBe("Ada");
+  });
+
   it("writes a provided avatar URL through unchanged", async () => {
     mocks.returning.mockResolvedValueOnce([
       { displayName: "Ada", avatarUrl: "https://example.com/a.png" },

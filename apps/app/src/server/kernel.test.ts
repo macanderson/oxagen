@@ -600,3 +600,70 @@ describe("handler registries (INV-23)", () => {
     expect(registered).toEqual([true, true]);
   }, 60_000);
 });
+
+// The other end of `toRead`'s encoding. `Read` has no not_found, conflict or
+// invalid variant, so those three kinds arrive as a `ReadError` whose `code`
+// is the kind's own name. A converter reading `reason` alone calls a missing
+// row unavailable, which tells a person to come back for something that was
+// never there and hides a 404 behind a 503.
+describe("readToActionResult", () => {
+  it("keeps not_found, conflict and invalid apart from a real outage", async () => {
+    const { readToActionResult } = await import("./kernel");
+    expect(readToActionResult(readError("not_found", 404))).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "not_found",
+    });
+    expect(readToActionResult(readError("conflict", 409))).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "conflict",
+    });
+    expect(readToActionResult(readError("invalid_input", 400))).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+    });
+  });
+
+  it("calls a store that is down unavailable, keeping its code (negative)", async () => {
+    const { readToActionResult } = await import("./kernel");
+    expect(
+      readToActionResult(readError("control_plane_unavailable", 503)),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "control_plane_unavailable",
+    });
+  });
+
+  it("carries a denial's permission and a pending approval's id", async () => {
+    const { readToActionResult } = await import("./kernel");
+    expect(
+      readToActionResult({
+        ok: false,
+        reason: "denied",
+        permission: "workspace.read",
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "workspace.read" });
+    expect(
+      readToActionResult({
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: "req_1",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "pending_approval",
+      accessRequestId: "req_1",
+    });
+  });
+
+  it("passes a value through", async () => {
+    const { readToActionResult } = await import("./kernel");
+    expect(readToActionResult(readOk({ a: 1 }))).toEqual({
+      ok: true,
+      value: { a: 1 },
+    });
+  });
+});

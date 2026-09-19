@@ -45,13 +45,20 @@ import { logger } from "./logger";
  * Escalates to ClickHouse `error_events` + optional alert webhook via
  * `captureError`, which is itself fire-and-forget and never throws.
  */
-function reportAuditEmissionFailure(
+export function reportAuditEmissionFailure(
   capability: string,
   ctx: CapabilityContext,
   err: unknown,
+  /**
+   * Which decision path lost the row. Exported for the out-of-kernel guards in
+   * `@oxagen/handlers`, which decide `export_data` and `erase_data` outside
+   * `checkIAM` and whose rows would otherwise leave the governance record
+   * silently: the same failure, and no reason for it to be reported less.
+   */
+  where = "iam:checkIAM",
 ): void {
   logger.error(
-    { err, capability },
+    { err, capability, where },
     "[iam:audit] CRITICAL — audit event emission failed",
   );
   captureError({
@@ -62,7 +69,7 @@ function reportAuditEmissionFailure(
     workspaceId: ctx.workspaceId,
     capability,
     requestId: ctx.requestId,
-    context: "iam:checkIAM — audit event emission failed after retries",
+    context: `${where} — audit event emission failed after retries`,
   });
 }
 

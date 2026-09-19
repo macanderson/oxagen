@@ -17,7 +17,7 @@ export const userPreferencesRead = registerCapability({
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   // `app`: the organization layout reads it for every page, so each date the
-  // app renders is in the person's own zone (apps/app/src/data/live/shell.ts).
+  // app renders is in the person's own zone (apps/app/src/features/shell/source.ts).
   layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },

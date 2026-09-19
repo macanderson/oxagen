@@ -28,7 +28,14 @@ const ws: WorkspaceRecord = {
   name: "Core platform",
 };
 const session: AppSession = {
-  user: { id: "u1", email: "m@acme.example", name: "Marcus", image: null },
+  user: {
+    id: "u1",
+    email: "m@acme.example",
+    name: "Marcus",
+    image: null,
+    emailVerified: true,
+    twoFactorEnabled: false,
+  },
 };
 const now = new Date("2026-09-12T12:00:00Z");
 

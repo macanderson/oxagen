@@ -86,13 +86,23 @@ export const userProfileUpdate = registerCapability({
   },
   input: z
     .object({
-      displayName: displayNameSchema,
-      avatarUrl: avatarUrlSchema.nullable(),
+      // Optional, so a caller may change the avatar alone. The avatar editor
+      // has no name field, and `auth.users.display_name` is nullable: sending
+      // the viewer's name back meant sending "" for a person who has never
+      // set one, which this schema refuses, so their avatar could never be
+      // saved. A key left out is left alone; a key present is validated.
+      displayName: displayNameSchema.optional(),
+      avatarUrl: avatarUrlSchema.nullable().optional(),
     })
-    .strict(),
+    .strict()
+    .refine(
+      (value) =>
+        value.displayName !== undefined || value.avatarUrl !== undefined,
+      { message: "displayName or avatarUrl is required" },
+    ),
   output: z
     .object({
-      displayName: z.string(),
+      displayName: z.string().nullable(),
       avatarUrl: z.string().nullable(),
     })
     .strict(),

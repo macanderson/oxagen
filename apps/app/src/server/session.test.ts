@@ -34,11 +34,25 @@ beforeEach(() => {
 describe("getSession", () => {
   it("returns the Better Auth user, normalised", async () => {
     api.getSession.mockResolvedValue({
-      user: { id: "u1", email: "a@b.c", name: "", image: undefined },
+      user: {
+        id: "u1",
+        email: "a@b.c",
+        name: "",
+        image: undefined,
+        emailVerified: true,
+        twoFactorEnabled: true,
+      },
       session: { id: "s1" },
     });
     await expect(getSession()).resolves.toEqual({
-      user: { id: "u1", email: "a@b.c", name: null, image: null },
+      user: {
+        id: "u1",
+        email: "a@b.c",
+        name: null,
+        image: null,
+        emailVerified: true,
+        twoFactorEnabled: true,
+      },
     });
     expect(api.getSession).toHaveBeenCalledWith({ headers: requestHeaders });
   });
@@ -52,7 +66,13 @@ describe("getSession", () => {
 describe("getAuthUser", () => {
   it("narrows the session to the person the flows show, a nameless account as an empty name", async () => {
     api.getSession.mockResolvedValue({
-      user: { id: "u2", email: "m@acme.example", name: null, image: "x" },
+      user: {
+        id: "u2",
+        email: "m@acme.example",
+        name: null,
+        image: "x",
+        emailVerified: false,
+      },
     });
     await expect(getAuthUser()).resolves.toEqual({
       id: "u2",
@@ -61,18 +81,30 @@ describe("getAuthUser", () => {
       // Better Auth maps `image` to auth.users.avatar_url; the Account dialog
       // draws it, so the shell's viewer carries it.
       avatarUrl: "x",
+      emailVerified: false,
+      // The twoFactor plugin's column, absent until the person enrols.
+      twoFactorEnabled: false,
     });
   });
 
   it("carries a null avatar rather than an empty one, so the dialog draws initials (negative)", async () => {
     api.getSession.mockResolvedValue({
-      user: { id: "u3", email: "d@acme.example", name: "Dana", image: null },
+      user: {
+        id: "u3",
+        email: "d@acme.example",
+        name: "Dana",
+        image: null,
+        emailVerified: true,
+        twoFactorEnabled: null,
+      },
     });
     await expect(getAuthUser()).resolves.toEqual({
       id: "u3",
       email: "d@acme.example",
       name: "Dana",
       avatarUrl: null,
+      emailVerified: true,
+      twoFactorEnabled: false,
     });
   });
 
