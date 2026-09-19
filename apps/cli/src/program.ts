@@ -20,7 +20,10 @@
  */
 import { Command } from "commander";
 import pkg from "../package.json" with { type: "json" };
-import { printRetiredNotice } from "./commands/retired.js";
+import {
+  printDeprecatedNotice,
+  printRetiredNotice,
+} from "./commands/retired.js";
 
 const { version } = pkg;
 
@@ -803,9 +806,7 @@ export function buildProgram(): Command {
   // One line on the way past, naming the replacement. On stderr so it never
   // lands in the output of `--json` subcommands that a script is parsing.
   tacho.hook("preSubcommand", () => {
-    process.stderr.write(
-      "`oxagen tacho` is deprecated and will be removed in a later release. It still works today.\n",
-    );
+    printDeprecatedNotice("`oxagen tacho`", "`oxagen agent`");
   });
 
   tacho

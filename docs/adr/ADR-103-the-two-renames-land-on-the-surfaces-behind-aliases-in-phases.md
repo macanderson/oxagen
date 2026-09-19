@@ -93,6 +93,15 @@ documents. The old name keeps working, stays out of `--help`, and prints one
 line on use naming its replacement. It is removed in a later release, once the
 fleet has rolled.
 
+The notice says "moving to" rather than "moved to" while a phase is outstanding.
+A line that names a command the reader cannot yet run the same way is worse than
+no line, and naming the replacement is not decoration: hiding the old spelling
+from `--help` removes the operator's other way of finding the new one, so the
+notice is the migration guidance. `printDeprecatedNotice` in
+`apps/cli/src/commands/retired.js` is the one place that sentence lives, and it
+leaves the exit code alone, unlike the ADR-043 retirement notice beside it,
+because a deprecated command still does its work.
+
 **3. The three colliding CLI names resolve by argument, not by renaming either
 side.** `oxagen agent status` with no argument reports this machine.
 `oxagen agent status <agent>` reports that agent. The same split applies to
