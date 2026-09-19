@@ -29,6 +29,7 @@ import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
 import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 
+import { resetRecoveryCodeVaultForTests } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
@@ -121,6 +122,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  resetRecoveryCodeVaultForTests();
   nav.pathname = "/acme/core-platform";
   nav.query = "";
   nav.push.mockReset();

@@ -47,15 +47,6 @@ type ShellState = {
   setAssistantOpen: (open: boolean) => void;
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  /**
-   * True while leaving the shell would lose recovery codes: a rotation is in
-   * flight, or its set is on screen and not yet saved. The Account dialog
-   * owns the codes and sets this; the shell's own exits (sign out, a link out
-   * of the organization) read it, because none of them unloads the page, so
-   * the browser's `beforeunload` prompt never runs for them.
-   */
-  exitHeld: boolean;
-  setExitHeld: (held: boolean) => void;
 };
 
 const ShellStateContext = createContext<ShellState | null>(null);
@@ -99,7 +90,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     if (!open) setAccountTab("profile");
   }, []);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [exitHeld, setExitHeld] = useState(false);
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -134,8 +124,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setAssistantOpen,
       theme,
       setTheme,
-      exitHeld,
-      setExitHeld,
     }),
     [
       commandOpen,
@@ -149,7 +137,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       assistantOpen,
       theme,
       setTheme,
-      exitHeld,
     ],
   );
   return <ShellStateContext value={value}>{children}</ShellStateContext>;
