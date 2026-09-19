@@ -177,7 +177,7 @@ export async function changeMandateLimits(
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
 
   /** The measures this submission edits, and only those. */
-  const edited = {
+  const edited: StoredLimits = {
     ...(wantsMeasure
       ? {
           [measure]: {
