@@ -306,7 +306,7 @@ describe.skipIf(!enabled)(
         tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
       );
       expect(row?.costBasis).toBe("gateway_observed");
-      expect(row?.costMicros).toBe("4500");
+      expect(row?.costMicros).toBe(4500n);
     });
 
     it("still applies a write that makes an incomplete run MORE complete", async () => {
@@ -347,7 +347,7 @@ describe.skipIf(!enabled)(
         tx.select().from(totals).where(eq(totals.runId, id)).limit(1),
       );
       expect(row?.costBasis).toBe("gateway_observed");
-      expect(row?.costMicros).toBe("4500");
+      expect(row?.costMicros).toBe(4500n);
     });
 
     it("still applies a write with a different frame count, even if it looks like a regression", async () => {
