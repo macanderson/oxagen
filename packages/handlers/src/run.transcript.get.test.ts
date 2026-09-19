@@ -189,9 +189,14 @@ describe("get_run_transcript", () => {
       tachoRow(0, {
         kind: "tool_requested",
         toolStatus: "",
+        toolUseId: "tu_shared",
         ...stored('{"path":"README.md"}', "application/json"),
       }),
-      tachoRow(1, { kind: "tool_call", ...stored("# Oxagen") }),
+      tachoRow(1, {
+        kind: "tool_call",
+        toolUseId: "tu_shared",
+        ...stored("# Oxagen"),
+      }),
     ]);
     const out = await transcript(input({ zoom: "steps" }), ctx());
     expect(out.entries).toHaveLength(1);
@@ -214,8 +219,12 @@ describe("get_run_transcript", () => {
 
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
-      tachoRow(0, { kind: "tool_requested", toolStatus: "" }),
-      tachoRow(1, { kind: "tool_call" }),
+      tachoRow(0, {
+        kind: "tool_requested",
+        toolStatus: "",
+        toolUseId: "tu_shared",
+      }),
+      tachoRow(1, { kind: "tool_call", toolUseId: "tu_shared" }),
       tachoRow(2, { kind: "tool_call" }),
     ]);
     const out = await transcript(input({ zoom: "steps" }), ctx());
@@ -258,14 +267,18 @@ describe("get_run_transcript", () => {
 
   it("folds a policy decision into the step it was made about, and names it", async () => {
     const { transcript } = harness([
-      tachoRow(0, { kind: "tool_requested", toolStatus: "" }),
+      tachoRow(0, {
+        kind: "tool_requested",
+        toolStatus: "",
+        toolUseId: "tu_shared",
+      }),
       tachoRow(1, {
         kind: "policy_decision",
         toolName: "",
         toolStatus: "",
         policyDecision: "route",
       }),
-      tachoRow(2, { kind: "tool_call" }),
+      tachoRow(2, { kind: "tool_call", toolUseId: "tu_shared" }),
     ]);
     const out = await transcript(input({ zoom: "steps" }), ctx());
     expect(out.entries).toHaveLength(1);

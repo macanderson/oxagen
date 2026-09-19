@@ -275,6 +275,8 @@ export interface TachoFrameRowLike {
   redactions: string;
   toolName: string;
   toolStatus: string;
+  /** The tool_use_id the producer recorded; empty when the kind carries none. */
+  toolUseId: string;
   model: string;
   provider: string;
   policyDecision: string;
@@ -413,9 +415,11 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
       policy: blank(row.policyDecision),
       verdict: null,
       contextRows: null,
-      // `tacho_events` records no call id, so a wrapped session's two halves
-      // pair on adjacency within their step kind (`foldTranscript`).
-      callId: null,
+      // The producer's tool_use_id: foldSteps keys pending requests on it so
+      // parallel wrapped calls (start A, start B, complete A, complete B) pair
+      // correctly. Empty for kinds that carry no call id; those still fall
+      // back to adjacency within their step kind.
+      callId: blank(row.toolUseId),
     },
   };
 }
