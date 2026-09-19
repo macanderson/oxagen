@@ -9,6 +9,7 @@ const SHELL_VIEWER = {
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
   avatarUrl: null,
+  timeZone: "America/Los_Angeles",
 } as const;
 
 const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;
