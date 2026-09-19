@@ -2141,6 +2141,28 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "1",
   },
+  STALE_MERGE_BASE_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as main's current tip. Defaults to origin/main.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "origin/main",
+  },
+  STALE_MERGE_BRANCH_REF: {
+    group: "Operator scripts",
+    description:
+      "Ref the stale-merge-base check (#3237) treats as the branch under review. Defaults to HEAD.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "HEAD",
+  },
 
   // ── Infrastructure (read by infra/ scripts and provisioned Lambdas) ────────
   NODE_NAME: {

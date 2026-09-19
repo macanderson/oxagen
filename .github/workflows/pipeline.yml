@@ -217,6 +217,18 @@ jobs:
       - name: Prose gate (oxagen.sh and docs.oxagen.sh)
         run: pnpm check:prose
 
+      # Advisory (#3237): a squash merge applies a branch's diff against its
+      # merge base, not against main's current tip, so a branch cut before a
+      # later fix can carry the old copy of any file that fix touched, and a
+      # clean, conflict-free squash merge can silently take that old copy over
+      # the newer one. See ADR-109 for the incident and why this stays
+      # advisory rather than blocking: never fails the build, only reports.
+      # `fetch-depth: 0` above gives it the full history the merge-base
+      # computation needs; the pull-request branch above already fetched
+      # origin/main.
+      - name: Stale merge base (advisory)
+        run: node tools/scripts/check-stale-merge-base.mjs
+
       # `Org-only sentinel reads` (check-org-sentinel-reads.mjs) stood here and
       # is gone. It read the source to prove no org-level read was narrowed by
       # RLS, and it could not converge: eight blind spots in eight review
