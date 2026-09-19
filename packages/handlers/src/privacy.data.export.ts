@@ -1,7 +1,7 @@
 import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { withSystemDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
 import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
@@ -63,26 +63,10 @@ export const privacyDataExportHandler: CapabilityHandler<
     // Belt and braces on the rule the contract cannot express: `defaultRoles`
     // cannot read an input field, so Owner/Admin for org scope is enforced
     // here. Kept as a read against the target org, mirroring
-    // privacy.data.erase.
-    const membership = await withSystemDb((tx) =>
-      tx
-        .select({ role: schema.orgUsers.role })
-        .from(schema.orgUsers)
-        .where(
-          and(
-            eq(schema.orgUsers.orgId, input.orgId!),
-            eq(schema.orgUsers.userId, ctx.userId!),
-          ),
-        )
-        .limit(1),
-    );
-    // org_users.role holds the membership role, NOT the capitalized
-    // SystemOrgRole ("Owner") the IAM defaultRoles layer uses. It is written in
-    // both casings — see privacy.data.erase, which normalises the same way —
-    // and the column's CHECK is `lower(role) IN (...)`, so a case-sensitive
-    // compare would deny a legitimately promoted admin.
-    const role = membership[0]?.role?.toLowerCase();
-    if (role !== "owner" && role !== "admin") {
+    // privacy.data.erase, and re-applied by get_export_status when the archive
+    // is actually read: this check authorizes a queue, not a download.
+    const role = await orgMembershipRole(input.orgId, ctx.userId);
+    if (!isOrgAdministrator(role)) {
       // A typed refusal, not a bare Error. Since the contract admits every org
       // role (it must, or a member could not export their own data), so this
       // branch is now the ONLY thing that refuses a member's org export, and a

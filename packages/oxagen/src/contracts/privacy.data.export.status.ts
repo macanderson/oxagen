@@ -24,6 +24,14 @@
  * for the same reason `update_profile` carries none: a read that took a
  * target id would be a way to enumerate other people's bundles.
  *
+ * An **organization** export is the exception, and the handler carries it.
+ * `export_data` gates queueing one on Owner or Admin, a rule `defaultRoles`
+ * cannot express because it turns on an input field. A queue is not a
+ * download: the archive is assembled minutes later, and an Owner can be
+ * demoted or removed in between. So the handler re-reads that authority at
+ * read time for a row whose scope is "org", and refuses `forbidden` when it
+ * is gone. A personal export is untouched.
+ *
  * A read of one's own request is never a governed action (ADR-052 exclusion
  * 2): `noBillingGate: true`. `defaultEffect: "allow"`, because a person is
  * never the wrong person to ask after their own export; rule 7 still lets an

@@ -44,6 +44,28 @@ bundle. A field here would be a way to enumerate other people's exports.
 |---|---|
 | `forbidden` / `no_principal` | A machine credential: MCP builds every context with `userId: null`, so this can only refuse there. That is why the capability has no MCP surface. |
 | `not_found` / `export_not_found` | No such id, **or** an id belonging to someone else. The two are deliberately the same answer: distinguishing them would tell a caller whether a stranger's export id is real. |
+| `forbidden` / `org_export_requires_admin` | The export's scope is `org` and the caller is no longer an Owner or Admin of the organization that governed it. See below. |
+
+## Organization exports are re-authorized at read time
+
+`export_data` takes a `scope` of `user` or `org`, and refuses an `org` request
+from anyone below Owner or Admin. That check is in its handler rather than in
+`defaultRoles`, because the rule turns on an input field and a role map cannot
+read one.
+
+A queue is not a download. The archive is assembled by an Inngest job minutes
+later, and in that window an Owner can be demoted or removed from the
+organization. Matching the row on the id, the person and the organization alone
+would then still answer: an ordinary member would hold the key to the full
+organization archive, everyone's data, on authority they no longer have. With
+`defaultEffect: "allow"` the kernel does not catch it either, and both download
+routes trust this answer.
+
+So the handler re-reads the membership role for a row whose scope is `org`, and
+refuses when it is no longer Owner or Admin. The role is read through
+`packages/handlers/src/_org_membership.ts`, the one place that knows
+`org_users.role` is written in both casings. A personal export takes no second
+read: it is the caller's own data and no role ever gated it.
 
 ## Surfaces
 
@@ -85,13 +107,12 @@ Both dispatch this capability first and stream `storage().get(storageKey)`
 only on a `ready` answer, so authorization is the capability's rather than each
 route's, and an export that is not the caller's never reaches storage. Both
 answer 409 while the bundle is still being written or after it failed, and both
-send `cache-control: private, no-store`.
+send `cache-control: private, no-store`. The app route
+(`apps/app/src/features/shell/export-download.ts`) resolves the viewer first,
+so a signed-out visitor is refused before the capability is dispatched.
 
-The app route is described below.
-
-The bytes are served by `GET /{org}/account/export/{exportId}`
-(`apps/app/src/features/shell/export-download.ts`), which resolves the viewer,
-invokes this capability to confirm the export is theirs and ready, and streams
-`storage().get(storageKey)` with `cache-control: private, no-store`. A refusal
-from either gate answers before storage is touched, and an export that is not
-the caller's answers `not_found` like one that does not exist.
+A refusal answers before storage is touched. An export that is not the
+caller's answers 404, like one that does not exist; an organization export the
+caller may no longer read answers 403; a read that failed because Postgres or
+the kernel is down answers 503, never 404, because the archive is still there
+and the caller should come back.

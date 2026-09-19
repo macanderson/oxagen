@@ -1,7 +1,8 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { privacyDataErase } from "@oxagen/oxagen/contracts/privacy.data.erase";
 import { withSystemDb, schema } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { orgMembershipRole } from "./_org_membership";
 import { eventClient } from "./event-client";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { logger } from "./logger";
@@ -48,27 +49,10 @@ export const privacyDataEraseHandler: CapabilityHandler<
   if (input.scope === "org") {
     if (!input.orgId)
       throw new Error("orgId is required for org-scope erasure");
-    // Org-scope erasure: Owner only (enforced by IAM + explicit check here for defense-in-depth)
-    const membership = await withSystemDb((tx) =>
-      tx
-        .select({ role: schema.orgUsers.role })
-        .from(schema.orgUsers)
-        .where(
-          and(
-            eq(schema.orgUsers.orgId, input.orgId!),
-            eq(schema.orgUsers.userId, ctx.userId!),
-          ),
-        )
-        .limit(1),
-    );
-    // org_users.role holds the membership role, NOT the capitalized
-    // SystemOrgRole ("Owner") the IAM defaultRoles layer uses — those are
-    // different concepts. It is written in both casings, though: lowercase by
-    // organization.create and the invite-accept path, TitleCase by
-    // workspace.invite.send's mapRole() and org.member.role.change. The column's
-    // CHECK is `lower(role) IN (...)`, so both are valid rows and a
-    // case-sensitive compare would deny a legitimately promoted owner.
-    const role = membership[0]?.role?.toLowerCase();
+    // Org-scope erasure: Owner only (enforced by IAM + explicit check here for
+    // defense-in-depth). Owner alone, not Owner or Admin: erasing an
+    // organization's data is not the same authority as exporting it.
+    const role = await orgMembershipRole(input.orgId, ctx.userId);
     if (role !== "owner") {
       throw new Error("Forbidden: org erasure requires owner role");
     }
