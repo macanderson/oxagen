@@ -613,6 +613,8 @@ export function TranscriptView({
    * replaced, so the scroll position and the playhead survive the read.
    */
   const loadMore = useCallback(async (): Promise<void> => {
+    // A sealed run stops when the page answers no cursor. A live run must
+    // keep a resume cursor from the handler so SSE can ask for the next page.
     if (readingRef.current || cursorRef.current === null) return;
     readingRef.current = true;
     setReading(true);

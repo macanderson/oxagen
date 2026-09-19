@@ -49,6 +49,7 @@ import {
   defaultRunReadDeps,
   readAllFrames,
   resolveRun,
+  startCursorSeq,
   type RunReadDeps,
 } from "./lib/run-read";
 
@@ -58,6 +59,8 @@ const TRANSCRIPT_FRAME_CAP = 10_000;
 const BODY_CONCURRENCY = 8;
 
 const DECIMAL = /^\d+$/;
+/** The tacho start cursor: frames are numbered from 0, so a read from the start sits at -1. */
+const TACHO_START = "-1";
 
 export type RunTranscriptGetDeps = RunReadDeps & {
   bodies: Pick<EvidenceStore, "getBody">;
@@ -77,6 +80,7 @@ export function decodeTranscriptCursor(raw: string): string | null {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   if (!text.startsWith("t:")) return null;
   const seq = text.slice(2);
+  if (seq === TACHO_START) return seq;
   return DECIMAL.test(seq) && seq.length <= 19 ? seq : null;
 }
 
@@ -201,6 +205,13 @@ export function createRunTranscriptGetHandler(
       cumulative.push(running);
     }
 
+    // A sealed run answers no cursor once the page holds every fold left. A
+    // live run keeps a resume point even when caught up, so the next read can
+    // pick up frames that have not landed yet.
+    const live = run.item.status === "live";
+    const resumeCursor = (): string =>
+      encodeTranscriptCursor(after ?? startCursorSeq(run));
+
     const start =
       after === null
         ? 0
@@ -210,7 +221,7 @@ export function createRunTranscriptGetHandler(
         zoom: input.zoom,
         kinds: input.kinds,
         entries: [],
-        cursor: null,
+        cursor: live ? resumeCursor() : null,
         complete: read.complete,
       };
     }
@@ -263,11 +274,18 @@ export function createRunTranscriptGetHandler(
 
     const last = page.at(-1);
     const more = start + page.length < folds.length;
+    const cursor = live
+      ? last
+        ? encodeTranscriptCursor(last.endSeq)
+        : resumeCursor()
+      : more && last
+        ? encodeTranscriptCursor(last.endSeq)
+        : null;
     return {
       zoom: input.zoom,
       kinds: input.kinds,
       entries,
-      cursor: more && last ? encodeTranscriptCursor(last.endSeq) : null,
+      cursor,
       complete: read.complete,
     };
   };

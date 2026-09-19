@@ -40,8 +40,19 @@ function stored(text: string | Uint8Array, contentType = "text/plain") {
 const input = (over: Record<string, unknown>) =>
   runTranscriptGet.input.parse({ runId: TACHO_ID, ...over });
 
-function harness(rows: TachoFrameRow[]) {
-  const stores = memoryStores([], [tachoSession({ publicId: TACHO_ID })]);
+function harness(
+  rows: TachoFrameRow[],
+  session?: Partial<{ outcome: string; sealedAt: Date | null }>,
+) {
+  const stores = memoryStores(
+    [],
+    [
+      tachoSession({
+        publicId: TACHO_ID,
+        ...(session ? { session } : {}),
+      }),
+    ],
+  );
   const getBody = vi.fn((_scope: unknown, ref: string) => {
     const object = objects.get(ref);
     if (!object) return Promise.reject(new Error(`no object for ${ref}`));
@@ -112,13 +123,14 @@ describe("get_run_transcript", () => {
         e.response?.fidelity ?? null,
       ]),
     ).toEqual([
-      ["0", "frame", null, "digest_only"],
-      ["1", "frame", null, "digest_only"],
+      // Non-step openings leave both halves empty (see foldTranscript open()).
+      ["0", "frame", null, null],
+      ["1", "frame", null, null],
       ["2", "model_call", "What is in README?", "full"],
       ["3", "tool_call", '{"path":"README.md"}', "full"],
-      ["4", "frame", null, "digest_only"],
+      ["4", "frame", null, null],
       ["5", "model_call", null, "digest_only"],
-      ["6", "frame", null, "digest_only"],
+      ["6", "frame", null, null],
     ]);
     // A single terminal receipt has no request half to show.
     expect(out.entries.every((e) => e.request === null)).toBe(true);
@@ -309,10 +321,13 @@ describe("get_run_transcript", () => {
       rows.map((r) => ({ ...r, bytesRef: "" })),
     );
     const out = await transcript(input({ zoom: "everything" }), ctx());
-    expect(out.entries.every((e) => e.response?.text === null)).toBe(true);
-    expect(
-      out.entries.every((e) => e.response?.fidelity === "digest_only"),
-    ).toBe(true);
+    // Only step halves carry a response; non-step openings leave it null.
+    const halves = out.entries
+      .map((e) => e.response)
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    expect(halves.length).toBeGreaterThan(0);
+    expect(halves.every((r) => r.text === null)).toBe(true);
+    expect(halves.every((r) => r.fidelity === "digest_only")).toBe(true);
     expect(getBody).not.toHaveBeenCalled();
   });
 
@@ -376,5 +391,55 @@ describe("get_run_transcript", () => {
       cursor: null,
       complete: true,
     });
+  });
+
+  it("keeps a resume cursor on a live run whose transcript fits in one page", async () => {
+    const { transcript } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries).toHaveLength(rows.length);
+    expect(out.cursor).not.toBeNull();
+    expect(decodeTranscriptCursor(out.cursor as string)).toBe(
+      out.entries.at(-1)?.endSeq,
+    );
+  });
+
+  it("keeps a resume cursor on a live run with zero entries", async () => {
+    const { transcript } = harness([], {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const out = await transcript(input({ zoom: "turns" }), ctx());
+    expect(out.entries).toEqual([]);
+    expect(out.cursor).not.toBeNull();
+    // A wrapped session numbers frames from 0, so the start cursor is -1.
+    expect(decodeTranscriptCursor(out.cursor as string)).toBe("-1");
+  });
+
+  it("keeps a resume cursor on a live run caught up past every fold", async () => {
+    const { transcript } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const after = first.cursor as string;
+    const caughtUp = await transcript(
+      input({ zoom: "everything", after }),
+      ctx(),
+    );
+    expect(caughtUp.entries).toEqual([]);
+    expect(caughtUp.cursor).not.toBeNull();
+    expect(decodeTranscriptCursor(caughtUp.cursor as string)).toBe(
+      decodeTranscriptCursor(after),
+    );
+  });
+
+  it("answers no cursor for a sealed run whose page held every fold (negative)", async () => {
+    const { transcript } = harness(rows);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries).toHaveLength(rows.length);
+    expect(out.cursor).toBeNull();
   });
 });

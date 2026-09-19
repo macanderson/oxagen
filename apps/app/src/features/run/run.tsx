@@ -98,22 +98,24 @@ function Tabs({
 }
 
 /**
- * The approvals recorded on this run, and the instant the strip counts down
- * from. The clock is read here rather than in the component, because a render
- * is pure and `Date.now()` is not (react-hooks/purity); the Fleet page reads
- * its own the same way. A caller may fix it, which is how a test renders the
- * countdown at a known instant.
+ * The run's pending approvals and the instant their clocks start from.
+ *
+ * `Date.now()` lives here rather than in the page or the component body: a
+ * component's render must be pure, and the route's render is a render too, so
+ * the React compiler's rule refuses the call in either place. An async read
+ * function is neither, and the clock belongs beside the read anyway. This is
+ * the same shape `readFleet` uses in features/fleet.
+ *
+ * `fixed` is how a test pins the countdown.
  */
 async function readApprovals(
-  ctx: WsCtx,
   source: DataSource,
+  ctx: WsCtx,
   runId: string,
   fixed: number | undefined,
 ) {
-  return {
-    approvals: await source.approvals.pending(ctx, { runId }),
-    now: fixed ?? Date.now(),
-  };
+  const approvals = await source.approvals.pending(ctx, { runId });
+  return { approvals, at: fixed ?? Date.now() };
 }
 
 export async function Run({
@@ -142,8 +144,9 @@ export async function Run({
   /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
   body: string | null;
   /**
-   * The instant the approvals strip counts down from. Left off, the page reads
-   * the clock outside the render; a test fixes it so the countdown is stable.
+   * Pins the instant the approvals strip counts down from. Only a test passes
+   * it; the page leaves it out and `readApprovals` reads the clock beside the
+   * read it belongs to.
    */
   now?: number;
 }) {
@@ -217,15 +220,20 @@ export async function Run({
       );
       break;
     case "approvals": {
-      const parked = await readApprovals(ctx, source, detail.run.id, now);
+      const { approvals, at } = await readApprovals(
+        source,
+        ctx,
+        detail.run.id,
+        now,
+      );
       section = (
         <ApprovalsPanel
-          approvals={parked.approvals}
+          approvals={approvals}
           // A mandate bar needs `list_mandates`, which the Fleet page reads for
           // its own cards. The Run page does not read it, so a card names the
           // mandate it drew on rather than drawing a bar from nothing.
           mandates={new Map()}
-          now={parked.now}
+          now={at}
           on="run"
           org={place.org}
           ws={place.ws}

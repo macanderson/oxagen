@@ -259,6 +259,36 @@ describe("transcript fold", () => {
     ]);
   });
 
+  it("leaves non-step openings out of request and response slots", () => {
+    // turn_start, policy_decision and agent_start open an entry but are not
+    // halves of a call. Putting them in response by default labelled a turn
+    // prompt as something that came back, and at turns zoom blocked the
+    // real model response from absorbing into the same entry.
+    const folded = foldTranscript(frames, "everything");
+    const agentStart = folded[0]!;
+    const turnStart = folded[1]!;
+    const policy = folded[4]!;
+    const llm = folded[2]!;
+    expect(stepKind(agentStart.opening)).toBeNull();
+    expect(stepKind(turnStart.opening)).toBeNull();
+    expect(stepKind(policy.opening)).toBeNull();
+    expect([agentStart.request, agentStart.response]).toEqual([null, null]);
+    expect([turnStart.request, turnStart.response]).toEqual([null, null]);
+    expect([policy.request, policy.response]).toEqual([null, null]);
+    // A step half still fills its own slot when it opens the entry.
+    expect(llm.response?.seq).toBe("2");
+    expect(llm.request).toBeNull();
+  });
+
+  it("at turns zoom, absorbs the model response after an opening turn_start", () => {
+    const folded = foldTranscript(frames, "turns");
+    const turn = folded[1]!;
+    expect(turn.opening.type).toBe("turn_start");
+    expect(turn.request).toBeNull();
+    expect(turn.response?.type).toBe("llm_call");
+    expect(turn.response?.seq).toBe("2");
+  });
+
   it("steps opens at model and tool calls and folds the rest into the step before", () => {
     const folded = foldTranscript(frames, "steps");
     expect(

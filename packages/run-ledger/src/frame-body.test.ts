@@ -113,6 +113,33 @@ describe("deriveCompletenessGaps", () => {
     ).toContain("body_missing");
   });
 
+  it("names no body_missing when every engine-call half retained its body", () => {
+    // The four engine_call types are content-bearing so a view reader can
+    // open both halves of each exchange. Recording bodies on them (subject
+    // to retention) is what unlocks view and fork; without bodies, the same
+    // set caps every in-app assistant run at inspect.
+    const rows = [
+      kept("model.engine_call_started"),
+      kept("model.engine_call_completed"),
+      kept("tool.engine_call_started"),
+      kept("tool.engine_call_completed"),
+    ];
+    const gaps = deriveCompletenessGaps({
+      rows,
+      policy: FULL,
+      terminalStatus: "completed",
+    });
+    expect(gaps).not.toContain("body_missing");
+    expect(gaps).not.toContain("tool_bodies");
+    expect(
+      gradeSealedAttempt(
+        gaps,
+        rows.length,
+        ledgerEnforcementTier(rows),
+      ),
+    ).toBe("fork");
+  });
+
   it("names tool_bodies when engine tool calls happened and none kept a result", () => {
     // Before the engine vocabulary reached this derivation, a run whose only
     // tool calls were the engine's sealed with no tool_bodies gap at all.
