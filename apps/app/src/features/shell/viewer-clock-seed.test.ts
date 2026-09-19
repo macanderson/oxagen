@@ -6,8 +6,11 @@ import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Classic JSX transform looks up `React` as a free variable. Bind it for this
-// file so the assertion can run without the Vite React plugin.
-Object.assign(globalThis, { React });
+// file so the assertion can run without the Vite React plugin. `Reflect.set`
+// rather than a cast or `Object.assign`: this app forbids type assertions
+// outright, and forbids `Object.assign` as a way to copy a value into any
+// shape (INV-02).
+Reflect.set(globalThis, "React", React);
 
 const setViewerTimeZone = vi.fn();
 vi.mock("@/ui/formatter", () => ({ setViewerTimeZone }));
