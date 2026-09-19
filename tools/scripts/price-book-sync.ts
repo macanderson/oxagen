@@ -27,6 +27,14 @@
  * for the same reason: a correction is always a later row. Negotiated and
  * override rows are never touched.
  *
+ * An `--apply` that backdated rows also requests the repricing, the same way
+ * the hourly job does: the cold-start path writes a newly discovered key from
+ * a floor instant before any frame, which prices runs that have already
+ * sealed, and `cost.price-book-reprice` is what re-rolls them. Without that
+ * request a manual apply left those totals blank for ever — the next hourly
+ * sync found the book already correct and wrote nothing, so it asked for
+ * nothing either.
+ *
  * Runs against whatever DATABASE_URL is in scope and prints the host so the
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
  */
@@ -35,8 +43,15 @@ import {
   nextPriceBookBoundary,
   syncPriceBookFromSources,
   type PriceEntrySeed,
+  type SyncPriceBookFromSourcesArgs,
 } from "@oxagen/billing";
 import { closeDatabase } from "@oxagen/database";
+// The event name only, by relative path, as `inngest-verify.ts` reaches the
+// same package: `@oxagen/inngest-functions` is not a dependency of the scripts
+// workspace, and `src/events.ts` carries no dependencies of its own. The
+// client that ships the event is loaded on demand in `sendBackdatedEvent`, so
+// a dry run never constructs it.
+import { PRICE_BOOK_BACKDATED_EVENT } from "../../packages/inngest-functions/src/events";
 
 export interface Flags {
   apply: boolean;
@@ -95,15 +110,90 @@ export function describeTarget(databaseUrl: string | undefined): string {
   }
 }
 
-async function main(): Promise<void> {
-  const flags = parseFlags(process.argv.slice(2), new Date());
+/** The shape `sendBackdatedEvent` and the injected test double both take. */
+export type EventSender = (event: {
+  name: string;
+  data: Record<string, never>;
+}) => Promise<void>;
 
-  console.log(kleur.bold().cyan("\n══ Price book ══\n"));
-  console.log(
-    `  Target database: ${describeTarget(process.env["DATABASE_URL"])}`,
+/**
+ * A manual apply wrote the book but the repricing it made possible could not
+ * be requested. Typed with a stable `code` so the exit path can say which of
+ * the two halves failed: the prices are in force, the runs they can now price
+ * are still blank.
+ */
+export class RepriceRequestError extends Error {
+  readonly code = "price_book_reprice_request_failed" as const;
+  constructor(cause: unknown) {
+    super(
+      `the price book was written but the repricing request could not be dispatched: ${cause instanceof Error ? cause.message : String(cause)}. The backdated prices are in force; runs sealed before them keep a blank or estimated cost until ${PRICE_BOOK_BACKDATED_EVENT} is delivered — check the event key and the Inngest endpoint, then re-run with --apply (an unchanged book writes nothing and requests nothing, so send the event directly instead).`,
+      { cause },
+    );
+    this.name = "RepriceRequestError";
+  }
+}
+
+/**
+ * Whether this run has to ask for the runs it can now price to be re-rolled.
+ *
+ * The same test the hourly job makes, for the same reason: only a backdated
+ * write prices something that has already run. A row effective from a future
+ * instant prices nothing settled, an unchanged book writes nothing at all,
+ * and a dry run wrote nothing to reprice against.
+ */
+export function needsReprice(args: {
+  apply: boolean;
+  coldStart: boolean;
+  written: number;
+}): boolean {
+  return args.apply && args.coldStart && args.written > 0;
+}
+
+/**
+ * Ship the event through the same seam every other sender uses. Imported here
+ * rather than at module scope so the report and the dry run never construct an
+ * Inngest client, and so a test can pass its own sender.
+ */
+export const sendBackdatedEvent: EventSender = async (event) => {
+  const { createEventClient } = await import(
+    "../../packages/inngest-functions/src/adapter"
   );
-  console.log(`  Effective from:  ${flags.effectiveFrom.toISOString()}`);
-  console.log(
+  await createEventClient().send(event);
+};
+
+export interface RunDeps {
+  /** Ships the repricing request. */
+  send: EventSender;
+  /** Where the report goes. */
+  log: (line: string) => void;
+  /** The price-book writer; the real transaction unless a test injects one. */
+  write?: SyncPriceBookFromSourcesArgs["write"];
+}
+
+/**
+ * Merge the sources, report, and on `--apply` write the book — then, if the
+ * write backdated rows, request the repricing.
+ *
+ * The request is the whole reason this is not just a print. Before it existed
+ * a manual apply against a cold or partly-filled book backdated rows and
+ * stopped there: `cost.run-rollup` had already written `run_totals` rows with
+ * a blank or `estimated` cost, the nightly sweep skips them because their
+ * `rolled_up_at` is after their seal, and the next hourly sync found the book
+ * already correct, wrote nothing, and so requested nothing either. Those runs
+ * read "not recorded" for ever, and the operator who ran the sync to fix the
+ * prices had no way to know. The event is the hourly job's own chain —
+ * `cost.price-book-reprice` pages through every incomplete run behind a
+ * keyset cursor — so this dispatches it rather than walking runs itself.
+ */
+export async function runPriceBookSync(
+  flags: Flags,
+  deps: RunDeps,
+): Promise<void> {
+  const { log } = deps;
+  log(kleur.bold().cyan("\n══ Price book ══\n"));
+  log(`  Target database: ${describeTarget(process.env["DATABASE_URL"])}`);
+  log(`  Effective from:  ${flags.effectiveFrom.toISOString()}`);
+  log(
     `  Catalogs:        ${flags.offline ? "skipped (--offline)" : "OpenRouter, models.dev"}\n`,
   );
 
@@ -111,29 +201,30 @@ async function main(): Promise<void> {
     effectiveFrom: flags.effectiveFrom,
     offline: flags.offline,
     dryRun: !flags.apply,
+    ...(deps.write ? { write: deps.write } : {}),
   });
 
   for (const [source, count] of Object.entries(report.counts))
-    if (count > 0) console.log(`  ${source.padEnd(18)} ${count} models`);
-  console.log(`\n  ${report.models} models priced in total.`);
+    if (count > 0) log(`  ${source.padEnd(18)} ${count} models`);
+  log(`\n  ${report.models} models priced in total.`);
 
   for (const failure of report.failures)
-    console.log(
+    log(
       kleur.yellow(
         `  ! ${failure.source} contributed nothing: ${failure.error}`,
       ),
     );
   for (const source of report.held)
-    console.log(
+    log(
       kleur.yellow(
         `  ! ${source} answered but was held: a catalog above it failed, and its prices must not supersede rows that catalog still has in force`,
       ),
     );
 
   if (!flags.apply) {
-    console.log(kleur.dim("\n  Rows this would write:\n"));
-    for (const line of reportLines(report.seeds)) console.log(`  ${line}`);
-    console.log(
+    log(kleur.dim("\n  Rows this would write:\n"));
+    for (const line of reportLines(report.seeds)) log(`  ${line}`);
+    log(
       kleur.dim(
         `\n  ${report.seeds.length} rows (dry-run — pass --apply to write.)\n`,
       ),
@@ -141,10 +232,45 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(
+  log(
     kleur.bold().cyan("\n══ Done ══\n") +
       `  ${report.written} rows written, ${report.renamed} renamed, ${report.superseded} superseded, ${report.retired} retired, ${report.unchanged} unchanged, ${report.deferred} deferred to a scheduled correction.\n`,
   );
+
+  if (
+    !needsReprice({
+      apply: flags.apply,
+      coldStart: report.coldStart,
+      written: report.written,
+    })
+  )
+    return;
+
+  try {
+    await deps.send({ name: PRICE_BOOK_BACKDATED_EVENT, data: {} });
+  } catch (err) {
+    // Log the cause with its context, then rethrow it typed: the exit path
+    // must fail, because a run that backdated prices and did not ask for the
+    // repricing looks exactly like a success and leaves the costs blank.
+    console.error(
+      kleur.red("  ! requesting the repricing failed:"),
+      err,
+      `\n    event: ${PRICE_BOOK_BACKDATED_EVENT}`,
+    );
+    throw new RepriceRequestError(err);
+  }
+  log(
+    kleur.bold().cyan("  Backdated rows written. ") +
+      `Requested ${PRICE_BOOK_BACKDATED_EVENT}: every run whose cost is blank or estimated and which these prices can now price will be re-rolled.\n`,
+  );
+}
+
+async function main(): Promise<void> {
+  const flags = parseFlags(process.argv.slice(2), new Date());
+  await runPriceBookSync(flags, {
+    send: sendBackdatedEvent,
+    log: (line) => console.log(line),
+  });
 }
 
 // Run only when invoked directly, so a test can import the pure helpers

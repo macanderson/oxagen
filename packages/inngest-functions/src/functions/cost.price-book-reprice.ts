@@ -7,10 +7,17 @@ import {
 } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
+import { PRICE_BOOK_BACKDATED_EVENT } from "../events";
 import { logger } from "../logger";
 
-/** The event `cost.price-book-sync` sends after a backdated write, and this function sends itself per page. */
-export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated";
+/**
+ * The event every backdated write sends — the hourly `cost.price-book-sync`
+ * job, a manual `pnpm billing:price-book-sync --apply`, and this function to
+ * itself once per page. It lives in `../events` so a caller outside this
+ * package can name it without importing this module's dependencies, and is
+ * re-exported here because this is the function that consumes it.
+ */
+export { PRICE_BOOK_BACKDATED_EVENT };
 
 /**
  * Runs re-rolled per invocation, carried-forward retries included. Each run

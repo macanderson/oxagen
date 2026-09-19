@@ -1,9 +1,18 @@
 /**
  * price-book-sync's pure edges: the flag parser, the effective instant a run
- * defaults to, the report, and the target line that never prints a credential.
+ * defaults to, the report, and the target line that never prints a credential
+ * — plus the repricing request a manual `--apply` owes whenever it backdated
+ * rows.
  */
-import { describe, expect, it } from "vitest";
-import { describeTarget, parseFlags, reportLines } from "./price-book-sync";
+import { describe, expect, it, vi } from "vitest";
+import {
+  describeTarget,
+  type Flags,
+  needsReprice,
+  parseFlags,
+  reportLines,
+  runPriceBookSync,
+} from "./price-book-sync";
 
 const NOW = new Date("2026-09-14T17:42:31.123Z");
 
@@ -88,5 +97,113 @@ describe("describeTarget", () => {
   it("says so when the url is unset or unparseable", () => {
     expect(describeTarget(undefined)).toBe("(DATABASE_URL unset)");
     expect(describeTarget("not a url")).toBe("(DATABASE_URL unparseable)");
+  });
+});
+
+// The half of a manual apply that used to be missing. A cold or partly-filled
+// book backdates a newly discovered key to an instant before every frame, so
+// the write prices runs that have already sealed with a blank or `estimated`
+// cost — and the nightly sweep will not revisit them, because their
+// `rolled_up_at` is already after their seal. The hourly job asks for those
+// runs to be re-rolled; this script wrote the same rows and only printed a
+// report, and the next hourly sync then found the book correct, wrote nothing
+// and asked for nothing, so the costs stayed blank permanently.
+describe("runPriceBookSync", () => {
+  const FROM = new Date("2026-09-14T18:00:00.000Z");
+  const flags = (over: Partial<Flags> = {}): Flags => ({
+    apply: true,
+    offline: true,
+    effectiveFrom: FROM,
+    ...over,
+  });
+  const writing = (
+    result: Partial<{ written: number; unchanged: number; coldStart: boolean }>,
+  ) =>
+    vi.fn().mockResolvedValue({
+      written: 0,
+      unchanged: 0,
+      coldStart: false,
+      ...result,
+    });
+
+  it("requests the repricing exactly once after a backdated apply", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runPriceBookSync(flags(), {
+      send,
+      log: () => {},
+      write: writing({ written: 12, coldStart: true }),
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      name: "cost/price-book.backdated",
+      data: {},
+    });
+  });
+
+  // A dry run wrote nothing, so there is nothing to reprice against — and it
+  // must never dispatch work an operator only asked to preview.
+  it("dispatches nothing on a dry run", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runPriceBookSync(flags({ apply: false }), { send, log: () => {} });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  // An apply against a book that is already correct writes nothing, and a
+  // forward-dated write prices nothing that has already run.
+  it("dispatches nothing when the apply wrote nothing", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runPriceBookSync(flags(), {
+      send,
+      log: () => {},
+      write: writing({ written: 0, unchanged: 340, coldStart: true }),
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("dispatches nothing when the write was not backdated", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    await runPriceBookSync(flags(), {
+      send,
+      log: () => {},
+      write: writing({ written: 7, coldStart: false }),
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  // Nowhere to send it is a failed run, not a quiet one: the prices are in
+  // force and the runs they price are still blank, which reads as a success
+  // to anyone watching the report alone.
+  it("fails loudly when the event cannot be dispatched", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("ECONNREFUSED :8288"));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      runPriceBookSync(flags(), {
+        send,
+        log: () => {},
+        write: writing({ written: 12, coldStart: true }),
+      }),
+    ).rejects.toMatchObject({
+      code: "price_book_reprice_request_failed",
+      name: "RepriceRequestError",
+    });
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+});
+
+describe("needsReprice", () => {
+  it("is the same test the hourly job makes", () => {
+    expect(needsReprice({ apply: true, coldStart: true, written: 1 })).toBe(
+      true,
+    );
+    expect(needsReprice({ apply: false, coldStart: true, written: 1 })).toBe(
+      false,
+    );
+    expect(needsReprice({ apply: true, coldStart: false, written: 1 })).toBe(
+      false,
+    );
+    expect(needsReprice({ apply: true, coldStart: true, written: 0 })).toBe(
+      false,
+    );
   });
 });
