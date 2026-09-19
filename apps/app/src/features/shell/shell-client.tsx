@@ -5,6 +5,7 @@
 // labels the page's list tables for the phone's card layout.
 import { AccountDialog } from "./account-dialog";
 import { AssistantFlyout } from "./assistant-flyout";
+import { AvatarDialog } from "./avatar-dialog";
 import { useCardTables } from "./card-tables";
 import { CommandMenu } from "./command-menu";
 import { NavDrawer, ShellMobileNav } from "./mobile-nav";
@@ -24,6 +25,7 @@ export function ShellClient({ data }: { data: ShellData }) {
       <NavDrawer data={data} />
       <CommandMenu data={data} />
       <AccountDialog data={data} />
+      <AvatarDialog data={data} />
       <WorkspaceSettingsDialog data={data} />
       <AssistantFlyout />
     </ShellStateProvider>

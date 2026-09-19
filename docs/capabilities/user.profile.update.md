@@ -1,6 +1,6 @@
 # user.profile.update
 
-The Account dialog's identity fields: display name and avatar. The rebuilt app has no write seam onto `auth.users` — its one `withSystemDb` read (`apps/app/src/server/tenancy-lookups.ts`) is column-gated to `id`/`twoFactorEnabled` — where the retired app wrote the row directly from a server action. Every write in the rebuilt app goes through `kernelWrite(contract)`, so the profile write became a real capability.
+The Account dialog's identity fields: display name and avatar. The rebuilt app has no write seam onto `auth.users` (its one `withSystemDb` read, `apps/app/src/server/tenancy-lookups.ts`, is column-gated to `id`/`twoFactorEnabled`), where the retired app wrote the row directly from a server action. Every write in the rebuilt app goes through `kernelWrite(contract)`, so the profile write became a real capability.
 
 The input carries no user id: the handler acts on the authenticated principal only. A capability that took a target user id would be a privilege-escalation surface.
 
@@ -25,9 +25,9 @@ explicitly: org `Owner`, `Admin`, `Compliance`, `Billing`; workspace `Owner`,
 `Member`, `Viewer`. A person is never the wrong person to be, so the only gate
 is the handler's: no authenticated principal, no write.
 
-The role map alone would not be enough. On an enterprise org — the only tier
+The role map alone would not be enough. On an enterprise org (the only tier
 that runs the IAM resolver, since `checkIAM` fast-paths every other tier to an
-unconditional allow for a non-agent principal — a role the map omits gets no
+unconditional allow for a non-agent principal) a role the map omits gets no
 seeded grant, and the four system org roles are Owner, Admin, **Compliance**
 and **Billing** (there is no org-level `Member` or `Viewer`; those are
 workspace roles). `defaultEffect: "allow"` is rule 8 of the resolver and is
@@ -37,12 +37,20 @@ is reached.
 
 ## Input
 
-Both fields are required — this is a full replace of the identity fields, not a partial update.
+A partial update: a field left out is left alone, and at least one must be
+present. `auth.users.display_name` is nullable and the avatar editor has no
+name field, so a save that always carried both could never come from a person
+who has not set a name. Every such avatar save was refused before the avatar
+was written.
+
+Each surface sends only what it changes. The Account dialog's Profile tab sends
+`displayName` alone: sending back the avatar it rendered with would revert a
+newer one saved since, because the handler writes every field it is given.
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `displayName` | string | yes | trimmed, 1-120 characters |
-| `avatarUrl` | string \| null | yes | an `https://` URL or a designed-avatar spec string (`avatar:v1:<json>`); `null` clears it |
+| `displayName` | string | no | trimmed, 1-120 characters |
+| `avatarUrl` | string \| null | no | an `https://` URL or a designed-avatar spec string (`avatar:v1:<json>`) up to 512 characters; `null` clears it |
 
 ## Output
 
@@ -50,5 +58,5 @@ The persisted values, read back from the row after the write.
 
 | Field | Type | Description |
 |---|---|---|
-| `displayName` | string | the stored display name |
+| `displayName` | string \| null | the stored display name, `null` for a person who has not set one |
 | `avatarUrl` | string \| null | the stored avatar value, or `null` when unset |

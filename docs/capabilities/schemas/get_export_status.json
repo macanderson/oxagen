@@ -1,0 +1,80 @@
+{
+  "name": "get_export_status",
+  "domain": "privacy",
+  "description": "Read the status of one of the calling user's own data exports. Answers a storage key rather than a URL: once ready, fetch the archive from GET /v1/{org}/{workspace}/privacy/export/{exportId}/download.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "exportId": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "required": [
+      "exportId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "exportId": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "processing",
+          "ready",
+          "failed"
+        ]
+      },
+      "ready": {
+        "type": "boolean"
+      },
+      "storageKey": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "completedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "exportId",
+      "status",
+      "ready",
+      "storageKey",
+      "completedAt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -86,7 +86,31 @@ function convert(schema: ZodLike): { schema: JsonSchema; optional: boolean } {
       };
     }
     case "ZodEffects": {
-      return convert(d.schema as ZodLike);
+      // A `.refine()` / `.superRefine()` predicate is arbitrary TypeScript, so
+      // there is no JSON Schema for it and none can be generated. What matters
+      // is that the published artifact does not pretend otherwise: unwrapping
+      // silently emitted a schema strictly more permissive than the kernel, so
+      // an external client could validate `{ "scope": "org" }` against the
+      // published `export_data` schema and still be refused at `invoke()`, with
+      // the machine-readable contract saying the payload was fine.
+      //
+      // So the constraint is not expressed, and the omission is declared. A
+      // consumer reading `x-server-validated` knows this schema is necessary
+      // but not sufficient, and that a local pass does not predict the answer.
+      // The alternative, refusing to generate for the 37 contracts that use a
+      // refinement until each is rewritten into a discriminated union the
+      // generator can express, is the durable end state and a change to those
+      // contracts rather than to this script.
+      const inner = convert(d.schema as ZodLike);
+      return {
+        schema: {
+          ...inner.schema,
+          "x-server-validated": true,
+          "x-server-validated-note":
+            "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload.",
+        },
+        optional: inner.optional,
+      };
     }
     case "ZodObject": {
       const shape = d.shape?.() ?? {};

@@ -416,6 +416,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .privacyDataExportHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_export_status",
+    async () =>
+      (await import("./privacy.data.export.status"))
+        .privacyDataExportStatusHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "erase_data",
     async () =>
       (await import("./privacy.data.erase"))

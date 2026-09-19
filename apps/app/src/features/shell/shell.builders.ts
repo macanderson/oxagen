@@ -9,6 +9,10 @@ const SHELL_VIEWER = {
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
   avatarUrl: null,
+  id: "usr_01K3F8QB7R",
+  orgRole: "member",
+  emailVerified: true,
+  twoFactorEnabled: true,
   timeZone: "America/Los_Angeles",
 } as const;
 

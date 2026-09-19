@@ -15,25 +15,34 @@
 // The contract carries no user id and neither does this action: the handler
 // acts on the authenticated principal. A profile write that took a target id
 // would be a privilege-escalation surface reachable from a form field.
+import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
+import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
+import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
 import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type ProfileDraft = {
-  displayName: string;
+  /** Left out to change the avatar alone. */
+  displayName?: string;
   /**
-   * An https URL or a designed-avatar spec string, per the canonical
-   * `avatarUrlSchema`; empty clears the avatar. Not validated here —
+   * Left out to change the name alone, which is what the Profile form does:
+   * sending the avatar it rendered with would revert a newer one saved since
+   * (in the editor, or in another tab), because the handler writes every
+   * is given.
+   *
+   * When present: an https URL or a designed-avatar spec string, per the
+   * canonical `avatarUrlSchema`; empty clears the avatar. Not validated here
    * `kernelWrite` pre-parses with the contract's own schema and answers
    * `invalid` with the offending field before the kernel runs (§3.2 step 5).
    */
-  avatarUrl: string;
+  avatarUrl?: string;
 };
 
 export type ProfileWritten = {
-  displayName: string;
+  displayName: string | null;
   avatarUrl: string | null;
 };
 
@@ -51,29 +60,112 @@ export async function updateProfile(
 ): Promise<ActionResult<ProfileWritten>> {
   const ctx = await requireViewer(org);
   return kernelWrite(ctx, userProfileUpdate, {
-    displayName: draft.displayName,
-    avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl,
+    ...(draft.displayName === undefined
+      ? {}
+      : { displayName: draft.displayName }),
+    ...(draft.avatarUrl === undefined
+      ? {}
+      : { avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl }),
   });
 }
 
 /**
- * Change the zone every date in the app renders in for the signed-in person.
- *
- * `set_preferences` is the one writer of `auth.user_preferences` (ADR-075) and
- * a partial write: only `timezone` is sent, so theme, locale and the model
- * defaults keep their stored values. The contract admits an IANA name; a value
- * outside that shape is answered `invalid` before the kernel runs. Like the
- * profile write it carries no user id: the handler acts on the principal.
+ * The Preferences tab's three fields. `get_user_preferences` answers with the
+ * whole set; the tab shows the ones it can set, and a partial `set_preferences`
+ * leaves the rest as they are.
  */
-export async function updateTimeZone(
+export type PreferencesDraft = {
+  /** A BCP 47 tag from the app's own catalog (`language` on the read). */
+  locale: string;
+  /** An IANA zone name. */
+  timezone: string;
+  theme: "system" | "light" | "dark";
+};
+
+/** INV-19: a `"use server"` module answers with an ActionResult, so a read's refusal takes a write's shape. */
+export async function readPreferences(
   org: string,
-  timeZone: string,
-): Promise<ActionResult<{ timeZone: string }>> {
+): Promise<ActionResult<PreferencesDraft>> {
+  const ctx = await requireViewer(org);
+  const read = await kernelRead(ctx, {
+    contract: userPreferencesRead,
+    input: {},
+    page: "shell",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const { language, timezone, theme } = read.value;
+  return { ok: true, value: { locale: language, timezone, theme } };
+}
+
+export async function savePreferences(
+  org: string,
+  draft: PreferencesDraft,
+): Promise<ActionResult<PreferencesDraft>> {
   const ctx = await requireViewer(org);
   const result = await kernelWrite(ctx, userPreferencesSet, {
-    timezone: timeZone,
+    locale: draft.locale,
+    timezone: draft.timezone,
+    theme: draft.theme,
+  });
+  if (!result.ok) return result;
+  const { locale, timezone, theme } = result.value;
+  return { ok: true, value: { locale, timezone, theme } };
+}
+
+export type ExportQueued = { exportId: string; status: string };
+
+/**
+ * `export_data`: a bundle of the person's own activity, or of the whole
+ * organization for an Owner or Admin. It queues and answers at once with the
+ * export id; the bundle is fetched from the API by that id once it is ready
+ * (packages/inngest-functions/src/functions/privacy.export.process.ts).
+ */
+export async function requestExport(
+  org: string,
+  scope: "user" | "org",
+): Promise<ActionResult<ExportQueued>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, privacyDataExport, {
+    scope,
+    ...(scope === "org" ? { orgId: ctx.orgId } : {}),
   });
   return result.ok
-    ? { ok: true, value: { timeZone: result.value.timezone } }
+    ? {
+        ok: true,
+        value: { exportId: result.value.exportId, status: result.value.status },
+      }
     : result;
+}
+
+export type ExportProgress = {
+  exportId: string;
+  status: "queued" | "processing" | "ready" | "failed";
+  /** Whether the bundle exists and can be fetched. */
+  ready: boolean;
+  /**
+   * The canonical storage key, for the download route to stream back. The
+   * archive is a private object, so there is no URL a browser could fetch.
+   */
+  storageKey: string | null;
+};
+
+/**
+ * `get_export_status`: where a queued bundle has got to, and the link once it
+ * is ready. `export_data` answers the instant it queues, so without this read
+ * the Privacy tab could start a bundle it could never hand over, and the
+ * right the export exists to serve is receiving the data, not starting a job.
+ */
+export async function readExportStatus(
+  org: string,
+  exportId: string,
+): Promise<ActionResult<ExportProgress>> {
+  const ctx = await requireViewer(org);
+  const read = await kernelRead(ctx, {
+    contract: privacyDataExportStatus,
+    input: { exportId },
+    page: "shell",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const { status, ready, storageKey } = read.value;
+  return { ok: true, value: { exportId, status, ready, storageKey } };
 }

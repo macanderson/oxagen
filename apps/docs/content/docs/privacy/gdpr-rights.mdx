@@ -30,7 +30,9 @@ An export produces a ZIP archive with:
 
 Oxagen reads every file except `user-profile.json` on its own. If one of those reads fails, Oxagen logs it and skips it, and a partial export still ships.
 
-Oxagen assembles exports in the background. The request returns at once with `status: "queued"`. Poll `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId` as the job moves through `processing` to `ready` (or `failed`). When the export is `ready`, the response includes a `downloadUrl`. Oxagen stores the archive as a private object and serves it only through an authenticated path, never a public URL. You can poll only your own exports.
+Oxagen assembles exports in the background. The request returns at once with `status: "queued"`. Poll `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId` as the job moves through `processing` to `ready` (or `failed`). You can poll only your own exports, and only in the organization that governed them.
+
+The status read returns no URL. Oxagen stores the archive as a private object, so there is no address a browser or a client could fetch on its own. When the status says `ready`, fetch the archive from `GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId/download`, which checks who you are and streams the bytes. It answers 409 while the archive is still being written or after the job failed.
 
 ### API
 
@@ -45,7 +47,23 @@ Content-Type: application/json
 { "exportId": "…", "status": "queued" }
 ```
 
-An org-scope export sends `{ "scope": "org", "orgId": "<uuid>" }` and requires the Owner or Admin role on that org.
+An org-scope export sends `{ "scope": "org", "orgId": "<uuid>" }` and requires the Owner or Admin role on that org. The `orgId` must be the organization the request is made in.
+
+Poll, then fetch:
+
+```http
+GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId
+```
+
+```json
+{ "exportId": "…", "status": "ready", "ready": true, "storageKey": "…", "completedAt": "…" }
+```
+
+```http
+GET /v1/:org_slug/:workspace_slug/privacy/export/:exportId/download
+```
+
+The download responds with the ZIP, `Content-Disposition: attachment`, and `Cache-Control: private, no-store`.
 
 ### Capability
 

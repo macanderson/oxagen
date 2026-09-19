@@ -1,4 +1,4 @@
-h1:/M3AEjU1uw9mDgmPczJAKihp2912Ya58W6EGjKRWxPY=
+h1:lfK06UR8+lJEkmylD9QJvgewYS9/LWSAJaTW4WXt4a4=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -163,3 +163,4 @@ h1:/M3AEjU1uw9mDgmPczJAKihp2912Ya58W6EGjKRWxPY=
 20260919130000_restore_cms_ebook_lead_gate.sql h1:6DO3SAJk0JUlpjl7s6ttST5nEbXJqxkL+reigKbCR5I=
 20260919131000_seed_cms_book_editions.sql h1:6AJWnXsCMDFsG9Cq0efP8bBgzdz/jyRgzQtTmxqHug8=
 20260919150000_update_page_flip_reader_edition.sql h1:uTP8FadKXz3PWvI31fkWGAOHFwFU2yrLLANTWepNlLs=
+20260919160000_privacy_export_requests_workspace.sql h1:7UG30UGaDSkQl02vwIeVxhC5LNKP6ADvQvaNJuGDD/Q=

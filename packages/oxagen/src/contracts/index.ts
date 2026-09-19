@@ -245,6 +245,7 @@ import { connectionMappingsSuggest } from "./connection.mappings.suggest";
 import { connectionMappingsGet } from "./connection.mappings.get";
 import { connectionMappingsSet } from "./connection.mappings.set";
 import { privacyDataExport } from "./privacy.data.export";
+import { privacyDataExportStatus } from "./privacy.data.export.status";
 import { privacyDataErase } from "./privacy.data.erase";
 import { graphNodeLabelsGet } from "./graph.node_label.get";
 import { knowledgeNodeRefSchema } from "./knowledge.node-ref";
@@ -757,6 +758,7 @@ export {
   connectionMappingsGet,
   connectionMappingsSet,
   privacyDataExport,
+  privacyDataExportStatus,
   privacyDataErase,
   graphNodeLabelsGet,
   knowledgeNodeRefSchema,
@@ -1095,6 +1097,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   connectionMappingsGet,
   connectionMappingsSet,
   privacyDataExport,
+  privacyDataExportStatus,
   privacyDataErase,
   graphNodeLabelsGet,
   graphNodeGet,
