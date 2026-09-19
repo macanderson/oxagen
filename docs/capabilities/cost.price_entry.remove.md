@@ -8,6 +8,8 @@ The rate is the whole effective-dated chain for the key, so a correction **sched
 
 Nothing here touches a list row either: the platform's published price is not an organization's to change. A key this organization never negotiated answers `closed: null`, which claims nothing was removed.
 
+"Priced at the provider list price again" holds only where a list price exists. For a custom model, or a token class no catalog publishes, nothing underneath the negotiated row prices the frame, so closing it makes the model unpriced rather than cheaper — and an unpriced frame records no cost at all, so its runs read "not recorded" instead of a lower figure. The handler resolves the fallback before it closes anything, using the list and override rows alone, and refuses the removal with `conflict` / `price_entry_no_fallback` when there is none. Pass `acknowledgeUnpriced: true` to end the rate anyway. The answer names the row the model now resolves to in `fallback`, which is null in exactly that acknowledged case.
+
 ## Mode
 
 **sync**
@@ -32,6 +34,7 @@ Nothing here touches a list row either: the platform's published price is not an
 | `tokenClass` | enum | yes | the same eleven classes `set_price_entry` takes |
 | `region` | string or null | no | null (default) is the region-agnostic row |
 | `at` | string | no | RFC 3339; the write instant when omitted. Must be after the row in effect at that instant starts |
+| `acknowledgeUnpriced` | boolean | no | false (default) refuses a removal that would leave the model and class unpriced; true ends the rate and accepts that its runs record no cost |
 
 One token class per call, for the same reason `set_price_entry` takes one: a token class is a row, each effective-dated on its own, and closing them one at a time is the only way each close is atomic. Ending a whole card is a loop with one `at`.
 
@@ -41,6 +44,7 @@ One token class per call, for the same reason `set_price_entry` takes one: a tok
 |---|---|---|
 | `at` | string | the instant the negotiated rate stopped applying |
 | `closed` | object or null | the row that was in effect at `at`, as closed, in the `cost.price_entry.list` entry shape, or null when nothing was in effect at that instant |
+| `fallback` | object or null | the list row or override the model and class now resolve to, in the same entry shape, or null when nothing underneath prices them |
 
 Re-ending a class this organization has already ended answers `closed: null` and changes nothing, so a retry is safe. So is a retry after a cancellation: a scheduled row that never began is deleted when it is cancelled, and the retry finds nothing and answers the same null close. A key this organization never negotiated gets that answer too.
 
@@ -55,11 +59,14 @@ The call takes the same per-key transaction lock `set_price_entry` takes, so a r
 | The organization is on a dedicated Postgres plane | refused before the store is called — the price book is read from the shared plane only, so a close on a dedicated plane would report an end the rollup never sees; the same refusal `set_price_entry` makes |
 | `at` is at or before the start of the row in effect at `at` | `conflict` / `price_entry_ends_before_it_starts` — a price cannot end at or before it starts (`price_entries_effective_range_check`) |
 | A correction scheduled after `at` has already begun by the write instant | `conflict` / `price_entry_ends_before_it_starts` — ending the rate before a window that has shipped would reprice settled runs; end it at or after that window starts |
+| No list row or override prices the model and class at `at`, and `acknowledgeUnpriced` is not set | `conflict` / `price_entry_no_fallback` — closing the row would leave the model unpriced, so its runs would record no cost at all; set a list price for it, or pass `acknowledgeUnpriced: true` |
 
 ## Audit
 
 Emits `billing.plan_changed` (SOC 2 CC6.3), whether or not a row was open: the request to return a model to list pricing is the event.
 
 ## Tenancy
+
+The fallback is read with `loadPriceBook` on the shared plane, the same book the rollup resolves against, before anything is closed. It is read outside the store's per-key lock, so another call can close the list row in between; that race only widens the refusal, never narrows it.
 
 The write runs through `withTenantDb` in the caller's scope and reads only the caller's rows; a list row (`org_id` null) is never read or updated. The handler refuses an organization on a dedicated Postgres plane before the store is called, because `loadPriceBook` and the rollup read the price book from the shared plane (ADR-042).

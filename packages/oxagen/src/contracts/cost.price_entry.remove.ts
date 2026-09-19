@@ -16,6 +16,16 @@
  * one at a time is the only way each close is atomic. Ending a whole card is
  * a loop with one `at`.
  *
+ * The fallback is checked before the row is closed. "Falls back to the list
+ * price" is only true when a list price exists: for a custom model, or a
+ * class no catalog publishes, nothing underneath the negotiated row prices
+ * the frame, and closing it makes the model unpriced — an unpriced frame
+ * yields a null cost, so runs stop carrying a cost at all rather than
+ * carrying a cheaper one. A removal with no fallback underneath is therefore
+ * refused (`conflict` / `price_entry_no_fallback`) unless the caller sets
+ * `acknowledgeUnpriced`, which says the model going unpriced is the intent.
+ * Nothing about it is silent either way.
+ *
  * Re-ending a class this organization has already ended is a no-op that
  * answers `closed: null`, so a retry is safe. So is a retry after a
  * cancellation: a scheduled row that never began is deleted, and the retry
@@ -38,7 +48,7 @@ export const costPriceEntryRemove = registerCapability({
   name: "remove_price_entry",
   domain: "cost",
   description:
-    "End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again. The row is closed, not deleted: a run priced before the instant still names the entry it was priced with. Owner / Admin / Billing only.",
+    "End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again. The row is closed, not deleted: a run priced before the instant still names the entry it was priced with. Refused when no list price or override can price that model and class, because the frame would become unpriced rather than cheaper; pass acknowledgeUnpriced to end it anyway. Owner / Admin / Billing only.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
   // No "cli" layer: CapabilityLayer has no such member, and check_manifest
@@ -66,6 +76,13 @@ export const costPriceEntryRemove = registerCapability({
       region: z.string().min(1).max(64).nullable().optional(),
       /** RFC 3339; the write instant when omitted. Must be after the row starts. */
       at: z.string().datetime().optional(),
+      /**
+       * End the rate even though nothing underneath prices this model and
+       * class, so every frame from `at` on is unpriced and its runs record no
+       * cost. False (the default) refuses that removal rather than performing
+       * it quietly.
+       */
+      acknowledgeUnpriced: z.boolean().optional(),
     })
     .strict(),
   output: z
@@ -74,6 +91,13 @@ export const costPriceEntryRemove = registerCapability({
       at: z.string().datetime(),
       /** The row as closed, or null when the organization had already ended it. */
       closed: priceEntrySchema.nullable(),
+      /**
+       * The list row or override the model and class now resolve to, or null
+       * when nothing underneath prices them and the caller acknowledged that
+       * the frames become unpriced. Null with a null `closed` claims nothing:
+       * there was no negotiated rate to end.
+       */
+      fallback: priceEntrySchema.nullable(),
     })
     .strict(),
 });

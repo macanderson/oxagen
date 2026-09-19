@@ -62,9 +62,32 @@ const closedEntry: PriceEntry = {
   source: "negotiated",
 };
 
+/** The organization's open negotiated row, the one a removal closes. */
+const negotiatedRow: PriceEntry = { ...closedEntry, effectiveTo: null };
+
+/** The list row underneath it: what the frame falls back to. */
+const listRow: PriceEntry = {
+  id: "0192d4a8-7c1e-7a00-8000-0000000000f1",
+  orgId: null,
+  provider: "anthropic",
+  model: "claude-sonnet-5",
+  modelAliases: [],
+  region: null,
+  tokenClass: "output",
+  unit: "token",
+  currency: "USD",
+  microsPerMillion: 15_000_000n,
+  effectiveFrom: new Date("2026-08-01T00:00:00.000Z"),
+  effectiveTo: null,
+  source: "list",
+};
+
 function harness(
   result: PriceEntry | null = closedEntry,
   cancelled: PriceEntry[] = [],
+  // The book the check reads. By default the organization's open rate with a
+  // list row underneath it, so a removal falls back to something.
+  book: PriceEntry[] = [negotiatedRow, listRow],
 ) {
   const closeNegotiatedPriceEntry = vi.fn(async (args: { at?: Date }) => ({
     // The store answers the instant it used: the caller's, or the write
@@ -73,11 +96,14 @@ function harness(
     closed: result,
     cancelled,
   }));
+  const loadPriceBook = vi.fn(async () => book);
   return {
     handler: createPriceEntryRemoveHandler({
       closeNegotiatedPriceEntry,
+      loadPriceBook,
     }),
     closeNegotiatedPriceEntry,
+    loadPriceBook,
   };
 }
 
@@ -208,5 +234,78 @@ describe("remove_price_entry", () => {
     expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
     // The request is still the event, whether or not a row was open.
     expect(audit.emitSecurityEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the row the model falls back to", async () => {
+    const h = harness();
+    const out = await h.handler(input(), ctx());
+    expect(out.fallback).toMatchObject({
+      id: listRow.id,
+      orgId: null,
+      microsPerMillion: "15000000",
+      source: "list",
+    });
+    expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
+  });
+
+  // "Falls back to the list price" is only true when a list price exists. For
+  // a custom model, or a class no catalog publishes, closing the negotiated
+  // row leaves the model unpriced, and an unpriced frame records no cost at
+  // all rather than a lower one — so runs silently stop carrying a cost while
+  // the contract, the CLI and the dialog all promise a fallback.
+  it("refuses to close the last rate that can price a model, and closes nothing", async () => {
+    const h = harness(closedEntry, [], [negotiatedRow]);
+    await expect(h.handler(input(), ctx())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_no_fallback",
+    });
+    expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+    expect(audit.emitSecurityEvent).not.toHaveBeenCalled();
+  });
+
+  // A list row for another class prices nothing this removal touches: the
+  // fallback is resolved per token class, as the book is keyed.
+  it("refuses when the only list row underneath prices a different token class", async () => {
+    const h = harness(
+      closedEntry,
+      [],
+      [negotiatedRow, { ...listRow, tokenClass: "input_uncached" }],
+    );
+    await expect(h.handler(input(), ctx())).rejects.toMatchObject({
+      reason: "price_entry_no_fallback",
+    });
+    expect(h.closeNegotiatedPriceEntry).not.toHaveBeenCalled();
+  });
+
+  // The operator who means it says so. The close then runs, and the answer
+  // carries a null fallback: from here on the model records no cost.
+  it("closes the last rate when the caller acknowledges the model becomes unpriced", async () => {
+    const h = harness(closedEntry, [], [negotiatedRow]);
+    const out = await h.handler(input({ acknowledgeUnpriced: true }), ctx());
+    expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledTimes(1);
+    expect(out.closed?.id).toBe(closedEntry.id);
+    expect(out.fallback).toBeNull();
+    expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
+  });
+
+  // Nothing open to close cannot unprice anything, so the no-op retry the
+  // contract promises must not turn into a refusal.
+  it("does not refuse a removal that closes nothing, whatever lies underneath", async () => {
+    const h = harness(null, [], []);
+    const out = await h.handler(input(), ctx());
+    expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledTimes(1);
+    expect(out.closed).toBeNull();
+    expect(out.fallback).toBeNull();
+  });
+
+  // The fallback is read from the same shared plane the rollup reads, and it
+  // is read before anything is closed.
+  it("reads the book for the calling organization before it closes the row", async () => {
+    const h = harness();
+    await h.handler(input(), ctx());
+    expect(h.loadPriceBook).toHaveBeenCalledWith({ orgId: SCOPE.orgId });
+    expect(h.loadPriceBook.mock.invocationCallOrder[0]).toBeLessThan(
+      h.closeNegotiatedPriceEntry.mock.invocationCallOrder[0]!,
+    );
   });
 });

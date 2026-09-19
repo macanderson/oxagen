@@ -303,6 +303,60 @@ export function resolvePriceEntry(
 }
 
 /**
+ * The list row that prices `modelId`'s `tokenClass` at `at` — what a frame
+ * falls back to when an organization's negotiated rate is closed. Every
+ * organization's own rows are excluded, so this answers only what lies
+ * underneath: a `list` row, or an operator override, resolved by the same
+ * name and family rules {@link resolvePriceEntry} uses.
+ *
+ * Null means nothing underneath prices that model and class, so closing the
+ * negotiated row does not return the frame to a list price — it makes the
+ * frame unpriced, and an unpriced frame yields a null cost rather than a
+ * zero. `remove_price_entry` checks this before it closes a row, because
+ * "falls back to the list price" is only true when a list price exists.
+ */
+export function resolveListPriceEntry(
+  book: PriceBook,
+  args: { modelId: string; tokenClass: PriceTokenClass; at: Date },
+): PriceEntry | null {
+  const list = book.filter((e) => e.orgId === null);
+  // The NIL UUID is reserved and `cost.price_entries.org_id` is a foreign
+  // key, so it matches no row: the negotiated pass finds nothing and only the
+  // list rows are considered.
+  return resolvePriceEntry(list, { ...args, orgId: NIL_UUID });
+}
+
+/**
+ * The organization's own row in force at `at` for exactly this key, or null.
+ * The key is the tuple `cost.price_entries` arbitrates on, matched exactly
+ * rather than by the resolver's name rules: this answers "is there a row here
+ * to close", which is a row identity question, not a pricing one.
+ */
+export function findNegotiatedPriceEntry(
+  book: PriceBook,
+  args: {
+    orgId: string;
+    provider: string;
+    model: string;
+    tokenClass: PriceTokenClass;
+    region: string | null;
+    at: Date;
+  },
+): PriceEntry | null {
+  return (
+    book.find(
+      (e) =>
+        e.orgId === args.orgId &&
+        e.provider === args.provider &&
+        e.model === args.model &&
+        e.tokenClass === args.tokenClass &&
+        (e.region ?? null) === args.region &&
+        effectiveAt(e, args.at),
+    ) ?? null
+  );
+}
+
+/**
  * The name a price row is compared under when two rows are asked whether they
  * price the same model: the bare family behind a `creator/` prefix, or the
  * name itself when it carries none.
@@ -607,8 +661,7 @@ export async function syncPriceBook(args: {
     // rows still reports the obligation, which is how a caller whose dispatch
     // failed recovers on its next attempt.
     const flooredBefore = existing.some(
-      (r) =>
-        r.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
+      (r) => r.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
     );
     let flooredHere = false;
     // Which sources wrote at initialization, read off the book itself. Every
@@ -971,11 +1024,8 @@ export async function syncPriceBook(args: {
     // seed still answers ids the seed cannot match, so it stays open.
     const sourceRank = (source: string | undefined): number =>
       source === "override" ? 1 : 0;
-    const nameKey = (
-      tokenClass: string,
-      region: string | null,
-      name: string,
-    ) => `${tokenClass}|${region ?? ""}|${name}`;
+    const nameKey = (tokenClass: string, region: string | null, name: string) =>
+      `${tokenClass}|${region ?? ""}|${name}`;
     const seedByName = new Map<string, PriceEntrySeed>();
     for (const seed of seeds)
       for (const name of [seed.model, ...seed.modelAliases]) {

@@ -287,6 +287,10 @@
         "title": "Fall back to the list price",
         "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
         "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
+        "unpricedTitle": "This model has no list price",
+        "unpricedBody": "No list price or override prices {model}, {class}, so ending your negotiated rate does not fall back to anything. From now on this model and class are unpriced.",
+        "unpricedCost": "An unpriced call records no cost, so runs that use it read \u201cnot recorded\u201d rather than a lower figure, and they stay out of the totals until a price covers them again. Set a list price for this model first if you want the cost to keep landing.",
+        "unpricedSubmit": "End this rate, leave the model unpriced",
         "submit": "End this rate, use the list price",
         "pending": "Ending the rate"
       },

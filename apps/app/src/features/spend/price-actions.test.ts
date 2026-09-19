@@ -246,6 +246,9 @@ describe("removePriceEntryAction", () => {
     invoke.mockResolvedValue({
       at: "2026-09-17T12:00:00.000Z",
       closed: { ...entry, effectiveTo: "2026-09-17T12:00:00.000Z" },
+      // The list row the model now resolves to. The contract requires it, so a
+      // removal that answered without one would fail output validation here.
+      fallback: entry,
     });
     expect(await removePriceEntryAction(at, key)).toEqual({
       ok: true,
@@ -264,10 +267,33 @@ describe("removePriceEntryAction", () => {
   });
 
   it("answers a class this organization had already ended without failing, since the retry is a no-op", async () => {
-    invoke.mockResolvedValue({ at: "2026-09-17T12:00:00.000Z", closed: null });
+    invoke.mockResolvedValue({
+      at: "2026-09-17T12:00:00.000Z",
+      closed: null,
+      fallback: entry,
+    });
     expect(await removePriceEntryAction(at, key)).toEqual({
       ok: true,
       value: null,
     });
+  });
+
+  // The acknowledgement travels only when the person gave it, after the
+  // capability refused the removal that would leave the model unpriced. An
+  // explicit `false` would read as a decision nobody made.
+  it("forwards the acknowledgement that the model becomes unpriced, and only when it was given", async () => {
+    invoke.mockResolvedValue({
+      at: "2026-09-17T12:00:00.000Z",
+      closed: { ...entry, effectiveTo: "2026-09-17T12:00:00.000Z" },
+      fallback: null,
+    });
+    await removePriceEntryAction(at, { ...key, acknowledgeUnpriced: true });
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      acknowledgeUnpriced: true,
+    });
+
+    invoke.mockClear();
+    await removePriceEntryAction(at, { ...key, acknowledgeUnpriced: false });
+    expect(invoke.mock.calls[0]?.[1]).not.toHaveProperty("acknowledgeUnpriced");
   });
 });

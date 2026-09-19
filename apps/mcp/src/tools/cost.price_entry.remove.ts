@@ -18,6 +18,10 @@ export const schema = {
   at: costPriceEntryRemove.input.shape.at.describe(
     "RFC 3339 instant the negotiated rate stops applying; omit for now",
   ),
+  acknowledgeUnpriced:
+    costPriceEntryRemove.input.shape.acknowledgeUnpriced.describe(
+      "End the rate even though no list price or override can price this model and class, leaving it unpriced so its runs record no cost. Omit to have that removal refused instead",
+    ),
 };
 
 export const metadata: ToolMetadata = {

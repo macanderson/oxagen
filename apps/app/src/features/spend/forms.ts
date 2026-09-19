@@ -126,6 +126,12 @@ export type RemovePriceEntryFormValues = {
   model: string;
   region: string;
   tokenClass: string;
+  /**
+   * The person has been told the model becomes unpriced and asked for it
+   * anyway. Absent on the first submit, so the capability refuses a removal
+   * with nothing underneath it and the dialog can say so before it happens.
+   */
+  acknowledgeUnpriced?: boolean;
 };
 
 type PriceFormErrorKey =
@@ -267,6 +273,7 @@ export const RemovePriceEntryForm = z
     model: z.string(),
     region: z.string(),
     tokenClass: z.string(),
+    acknowledgeUnpriced: z.boolean().optional(),
   })
   .transform((form, ctx) => {
     const provider = form.provider.trim();
@@ -286,6 +293,12 @@ export const RemovePriceEntryForm = z
       model,
       tokenClass: tokenClass.data,
       region: region.length === 0 ? null : region,
+      // Sent only when it is true: the contract's default refuses the removal
+      // that would unprice the model, and an explicit `false` would read as a
+      // decision the person never made.
+      ...(form.acknowledgeUnpriced === true
+        ? { acknowledgeUnpriced: true }
+        : {}),
     };
   });
 

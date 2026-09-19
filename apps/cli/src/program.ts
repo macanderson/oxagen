@@ -228,6 +228,13 @@ export function buildProgram(): Command {
       "--at <instant>",
       "RFC 3339 instant the rate stops applying; omit for now",
     )
+    // Refused by default when nothing underneath prices the model and class:
+    // the frame would be unpriced, not cheaper, and its runs would record no
+    // cost. This flag says that is the intent.
+    .option(
+      "--acknowledge-unpriced",
+      "End the rate even when no list price or override can price the model, leaving it unpriced",
+    )
     .option("--json", "Output JSON")
     .action(async (opts: Record<string, unknown>) => {
       const { priceRemove } = await import("./commands/price.js");

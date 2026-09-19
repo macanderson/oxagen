@@ -78,6 +78,12 @@ interface PriceEntrySetResult {
 interface PriceEntryRemoveResult {
   at: string;
   closed: PriceEntryRow | null;
+  /**
+   * The list row or override the model now resolves to, or null when nothing
+   * underneath prices it — the acknowledged case, where the model becomes
+   * unpriced and its runs record no cost.
+   */
+  fallback: PriceEntryRow | null;
 }
 
 function isTokenClass(v: string): v is TokenClass {
@@ -241,6 +247,8 @@ export interface PriceRemoveCliOptions {
   tokenClass?: string;
   region?: string;
   at?: string;
+  /** End the rate although nothing underneath prices the model and class. */
+  acknowledgeUnpriced?: boolean;
   json?: boolean;
 }
 
@@ -287,6 +295,7 @@ export async function priceRemove(
         tokenClass: opts.tokenClass,
         region: opts.region ?? null,
         at,
+        acknowledgeUnpriced: opts.acknowledgeUnpriced === true,
       },
     );
   } catch (err) {
@@ -302,6 +311,17 @@ export async function priceRemove(
     writer.write(
       `No open negotiated rate for ${opts.model} ${opts.tokenClass}; nothing to end. It was already priced at the list rate.`,
     );
+    return;
+  }
+  // The removal that was acknowledged rather than refused. Say what it did:
+  // nothing underneath prices this model and class, so its runs from here on
+  // record no cost at all.
+  if (result.fallback === null) {
+    writer.write(
+      `✓ ${result.closed.model} ${result.closed.tokenClass} is no longer priced, from ${result.at}. No list price or override prices it, so runs using it record no cost until one does.`,
+    );
+    writer.write("");
+    renderEntries([result.closed], writer);
     return;
   }
   writer.write(

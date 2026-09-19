@@ -8,6 +8,15 @@
 // consequence — from now on this model and class are priced at the provider's
 // list price again — so that is what the copy says, and the button says it
 // too.
+//
+// Except when there is no list price underneath. For a custom model, or a
+// class no catalog publishes, closing the negotiated row leaves the model
+// unpriced, and an unpriced frame records no cost at all rather than a lower
+// one. The capability refuses that removal rather than performing it while
+// this dialog promises a fallback; the refusal comes back as
+// `price_entry_no_fallback`, and the dialog then states what actually happens
+// and asks again. The second submit carries the acknowledgement, so the
+// person ends the rate knowing the model stops carrying a cost.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { PriceTokenClass } from "@/data/contracts/spend";
@@ -41,6 +50,10 @@ export function RemoveRateDialog({
   const [open, setOpen] = useState(false);
   const [alert, setAlert] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Set by the capability's refusal, never guessed here: the app does not hold
+  // the list book, so whether anything prices this model is the price book's
+  // answer and not a client-side test.
+  const [unpriced, setUnpriced] = useState(false);
   const tokenClass = t(`class.${entry.tokenClass}`);
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
@@ -54,10 +67,21 @@ export function RemoveRateDialog({
         model: entry.model,
         tokenClass: entry.tokenClass,
         region: entry.region ?? "",
+        // Carried only on the second submit, after the refusal has said what
+        // ending this rate really does.
+        ...(unpriced ? { acknowledgeUnpriced: true } : {}),
       });
       if (result.ok) {
         setOpen(false);
         navigate.replace(routes.spend(at.org, at.ws, { tab: "pricing" }));
+        return;
+      }
+      if (
+        result.reason === "conflict" &&
+        result.code === "price_entry_no_fallback"
+      ) {
+        setUnpriced(true);
+        setAlert(null);
         return;
       }
       setAlert(failureText(result));
@@ -89,9 +113,12 @@ export function RemoveRateDialog({
         open={open}
         onOpenChange={(next) => {
           setOpen(next);
-          if (!next) setAlert(null);
+          if (!next) {
+            setAlert(null);
+            setUnpriced(false);
+          }
         }}
-        title={t("remove.title")}
+        title={unpriced ? t("remove.unpricedTitle") : t("remove.title")}
         testId="spend-remove-rate-dialog"
       >
         <form
@@ -101,15 +128,27 @@ export function RemoveRateDialog({
           className="flex flex-col gap-3"
         >
           <p className="text-sm text-foreground">
-            {t("remove.body", { model: entry.model, class: tokenClass })}
+            {unpriced
+              ? t("remove.unpricedBody", {
+                  model: entry.model,
+                  class: tokenClass,
+                })
+              : t("remove.body", { model: entry.model, class: tokenClass })}
           </p>
-          <p className="text-sm text-muted-foreground">{t("remove.kept")}</p>
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid={
+              unpriced ? "spend-remove-rate-unpriced" : "spend-remove-rate-kept"
+            }
+          >
+            {unpriced ? t("remove.unpricedCost") : t("remove.kept")}
+          </p>
           {alert === null ? null : (
             <FormAlert testId="spend-remove-rate-failure">{alert}</FormAlert>
           )}
           <SubmitButton
             pending={pending}
-            label={t("remove.submit")}
+            label={unpriced ? t("remove.unpricedSubmit") : t("remove.submit")}
             pendingLabel={t("remove.pending")}
           />
         </form>

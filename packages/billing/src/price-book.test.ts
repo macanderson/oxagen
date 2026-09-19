@@ -29,8 +29,10 @@ import {
   closeNegotiatedPriceEntry,
   BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
+  findNegotiatedPriceEntry,
   nextPriceBookBoundary,
   priceEntriesFromRateCards,
+  resolveListPriceEntry,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
   syncPriceBook as syncPriceBookLive,
@@ -257,6 +259,116 @@ const syncPriceBook: typeof syncPriceBookLive = (args) => {
   fakeClock.now = now;
   return syncPriceBookLive({ now, ...args });
 };
+
+// What a frame falls back to when a negotiated rate is closed, and whether
+// there is a rate to close at all. `remove_price_entry` reads both before it
+// closes anything: "falls back to the list price" is only true when a list
+// price exists, and for a custom model none does.
+describe("resolveListPriceEntry", () => {
+  const AT = new Date("2026-09-17T12:00:00.000Z");
+  const row = (over: Partial<PriceEntry>): PriceEntry => ({
+    id: crypto.randomUUID(),
+    orgId: null,
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    modelAliases: [],
+    region: null,
+    tokenClass: "output",
+    unit: "token",
+    currency: "USD",
+    microsPerMillion: 15_000_000n,
+    effectiveFrom: new Date("2026-08-01T00:00:00.000Z"),
+    effectiveTo: null,
+    source: "list",
+    ...over,
+  });
+  const ORG_ID = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
+
+  it("ignores every negotiated row, so it answers only what lies underneath", () => {
+    const negotiated = row({
+      orgId: ORG_ID,
+      microsPerMillion: 12_000_000n,
+      source: "negotiated",
+    });
+    const list = row({ microsPerMillion: 15_000_000n });
+    expect(
+      resolveListPriceEntry([negotiated, list], {
+        modelId: "claude-sonnet-5",
+        tokenClass: "output",
+        at: AT,
+      })?.microsPerMillion,
+    ).toBe(15_000_000n);
+  });
+
+  it("answers null when the negotiated row is the only thing that prices the model", () => {
+    const negotiated = row({ orgId: ORG_ID, source: "negotiated" });
+    expect(
+      resolveListPriceEntry([negotiated], {
+        modelId: "claude-sonnet-5",
+        tokenClass: "output",
+        at: AT,
+      }),
+    ).toBeNull();
+  });
+
+  it("answers null when the only list row prices another class, or has already closed", () => {
+    const otherClass = row({ tokenClass: "input_uncached" });
+    const closed = row({ effectiveTo: new Date("2026-09-01T00:00:00.000Z") });
+    expect(
+      resolveListPriceEntry([otherClass, closed], {
+        modelId: "claude-sonnet-5",
+        tokenClass: "output",
+        at: AT,
+      }),
+    ).toBeNull();
+  });
+
+  it("takes an operator override as a fallback, since it prices the frame too", () => {
+    const override = row({ source: "override", microsPerMillion: 9_000_000n });
+    expect(
+      resolveListPriceEntry([override], {
+        modelId: "claude-sonnet-5",
+        tokenClass: "output",
+        at: AT,
+      })?.source,
+    ).toBe("override");
+  });
+
+  it("finds the organization's own row by its exact key, region included", () => {
+    const eu = row({
+      orgId: ORG_ID,
+      region: "eu-west-1",
+      source: "negotiated",
+    });
+    const key = {
+      orgId: ORG_ID,
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output" as const,
+      at: AT,
+    };
+    expect(findNegotiatedPriceEntry([eu], { ...key, region: null })).toBeNull();
+    expect(
+      findNegotiatedPriceEntry([eu], { ...key, region: "eu-west-1" })?.id,
+    ).toBe(eu.id);
+    // A list row is nobody's to close, and a row already closed is nothing to
+    // close either: both answer null, so the removal stays the promised no-op.
+    expect(
+      findNegotiatedPriceEntry([row({})], { ...key, region: null }),
+    ).toBeNull();
+    expect(
+      findNegotiatedPriceEntry(
+        [
+          row({
+            orgId: ORG_ID,
+            effectiveTo: new Date("2026-09-01T00:00:00.000Z"),
+          }),
+        ],
+        { ...key, region: null },
+      ),
+    ).toBeNull();
+  });
+});
 
 describe("the negotiated write path", () => {
   let fake: FakePriceStore;

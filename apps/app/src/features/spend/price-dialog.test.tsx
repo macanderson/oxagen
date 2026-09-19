@@ -323,4 +323,66 @@ describe("Remove a negotiated rate", () => {
     );
     expect(router.replace).not.toHaveBeenCalled();
   });
+
+  // The dialog states the fallback as a fact, and for a custom model there is
+  // no fallback: closing the rate leaves the model unpriced, so its runs
+  // record no cost at all. The capability refuses that removal, and the dialog
+  // then says what ending the rate really does before asking again.
+  it("says the model becomes unpriced when nothing underneath prices it, and ends nothing yet", async () => {
+    removePriceEntryAction.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "price_entry_no_fallback",
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    expect(
+      await screen.findByRole("dialog", {
+        name: "This model has no list price",
+      }),
+    ).toHaveTextContent(
+      "ending your negotiated rate does not fall back to anything",
+    );
+    expect(screen.getByTestId("spend-remove-rate-unpriced")).toHaveTextContent(
+      "An unpriced call records no cost",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+    expect(removePriceEntryAction).toHaveBeenCalledTimes(1);
+    expect(removePriceEntryAction.mock.calls[0]?.[1]).not.toHaveProperty(
+      "acknowledgeUnpriced",
+    );
+  });
+
+  it("carries the acknowledgement on the second submit, so the rate ends knowingly", async () => {
+    removePriceEntryAction
+      .mockResolvedValueOnce({
+        ok: false,
+        reason: "conflict",
+        code: "price_entry_no_fallback",
+      })
+      .mockResolvedValue({ ok: true, value: null });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", {
+        name: "End this rate, leave the model unpriced",
+      }),
+    );
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=pricing",
+      );
+    });
+    expect(removePriceEntryAction).toHaveBeenLastCalledWith(at, {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "output",
+      region: "",
+      acknowledgeUnpriced: true,
+    });
+  });
 });
