@@ -7,9 +7,9 @@
  *
  * Frame bodies ship in the same batch as their events, never a later one:
  * the control plane refuses a body whose event it did not receive in the
- * same request. A batch is therefore cut at the event whose body would take
- * it past `TACHO_MAX_BATCH_BODY_BYTES`, and a bisected half carries exactly
- * the bodies of the events in it.
+ * same request. A batch is therefore cut at the event that would take the
+ * encoded request past `TACHO_MAX_REQUEST_BYTES`, and a bisected half carries
+ * exactly the bodies of the events in it.
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -26,8 +26,8 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   TACHO_MAX_BATCH,
-  TACHO_MAX_BATCH_BODY_BYTES,
   TACHO_MAX_REQUEST_BYTES,
+  TACHO_REQUEST_ENVELOPE_BYTES,
   type TachoBody,
 } from "../wire";
 
@@ -84,13 +84,12 @@ function serverRequestedWaitMs(error: ControlError): number | undefined {
 }
 
 /**
- * The decoded size of a base64 string, without decoding it: four characters
- * per three bytes, less the padding. The budget names raw bytes because that
- * is what the control plane stores.
+ * The bytes a value adds to the request as JSON. The route's limit counts
+ * the encoded request, so a body is measured as its base64 text, not as the
+ * raw bytes it decodes to.
  */
-function base64ByteLength(encoded: string): number {
-  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
-  return (encoded.length / 4) * 3 - padding;
+function wireByteLength(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 
 export class Shipper {
@@ -234,36 +233,24 @@ export class Shipper {
   }
 
   /**
-   * Cut the batch where it would cross either budget: the body bytes
-   * (`TACHO_MAX_BATCH_BODY_BYTES`, before base64) or the request itself on the
-   * wire (`TACHO_MAX_REQUEST_BYTES`, the route's ceiling, counting each
-   * event's JSON and each body's base64). The first event always ships,
-   * whatever it weighs: a single body is already capped at
-   * `TACHO_MAX_BODY_BYTES` by the recorder, and a batch that could never
-   * contain its head would wedge the queue.
+   * Cut the batch where the encoded request would cross the route's limit.
+   * Events count as well as bodies, since 200 events carry their own weight.
+   * The first event always ships, whatever it weighs: a single body is
+   * already capped at `TACHO_MAX_BODY_BYTES` by the recorder, and an event
+   * the route still refuses comes back as a 413, which `shipBatch` handles.
    */
-  private fitBodyBudget(
+  private fitRequestBudget(
     batch: TachoEvent[],
     bodies: Map<string, TachoBody>,
   ): TachoEvent[] {
-    // The request's own envelope (schema, host id, daemon health) is small;
-    // this leaves room for it.
-    const wireCeiling = TACHO_MAX_REQUEST_BYTES - 64 * 1024;
-    let bodyBytes = 0;
-    let wireBytes = 0;
+    const budget = TACHO_MAX_REQUEST_BYTES - TACHO_REQUEST_ENVELOPE_BYTES;
+    let total = 0;
     for (let index = 0; index < batch.length; index += 1) {
       const event = batch[index] as TachoEvent;
-      wireBytes += Buffer.byteLength(JSON.stringify(event));
       const body = bodies.get(event.event_id_idem);
-      if (body !== undefined) {
-        bodyBytes += base64ByteLength(body.bytes_base64);
-        wireBytes += body.bytes_base64.length + body.content_type.length + 96;
-      }
-      if (
-        index > 0 &&
-        (bodyBytes > TACHO_MAX_BATCH_BODY_BYTES || wireBytes > wireCeiling)
-      )
-        return batch.slice(0, index);
+      total += wireByteLength(event) + 1;
+      if (body !== undefined) total += wireByteLength(body) + 1;
+      if (total > budget && index > 0) return batch.slice(0, index);
     }
     return batch;
   }
@@ -284,7 +271,7 @@ export class Shipper {
         .map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
-      this.fitBodyBudget(own, bodies),
+      this.fitRequestBudget(own, bodies),
       bodies,
     );
     return { ...result, quarantined: result.quarantined + quarantined };
@@ -322,57 +309,36 @@ export class Shipper {
         return { shipped: 0, quarantined: 0, reachable: false };
       }
       if (error instanceof ControlError && error.status === 413) {
-        // Too large for the route. Retrying the same bytes would be refused
-        // for ever and hold every later event behind it, so split the batch;
-        // one event still too large ships without its body, which the
-        // control plane records as a `body_missing` gap.
-        if (batch.length === 1) {
-          const only = batch[0] as TachoEvent;
-          if (!bodies.has(only.event_id_idem)) {
-            this.quarantine(only, error.body.slice(0, 512));
-            this.succeed();
-            return { shipped: 0, quarantined: 1, reachable: true };
-          }
+        // The request was too large, which retrying cannot change. Bisect
+        // until it fits. A lone event that is still too large ships without
+        // its body, so the event and its chain survive, and is quarantined
+        // only if the event alone is refused.
+        const head = batch[0] as TachoEvent;
+        if (batch.length === 1 && bodies.has(head.event_id_idem)) {
           this.options.log(
-            `ingest refused ${only.event_id_idem} as too large (413); shipping it without its body`,
+            `shipping ${head.session_uuid}#${head.seq} without its body: request too large`,
           );
-          const withoutBody = new Map(bodies);
-          withoutBody.delete(only.event_id_idem);
-          return this.shipBatch(batch, withoutBody);
+          return this.shipBatch(batch, new Map());
         }
-        const middle = Math.ceil(batch.length / 2);
-        const leftHalf = batch.slice(0, middle);
-        const left = await this.shipBatch(leftHalf, bodies);
-        // A later half that ships would markShipped past the earlier seqs,
-        // so those events vanish from the WAL without reaching the plane.
-        // Do not send higher sequences until every left event has shipped
-        // or been quarantined.
-        if (left.shipped + left.quarantined < leftHalf.length) return left;
-        const right = await this.shipBatch(batch.slice(middle), bodies);
-        return {
-          shipped: left.shipped + right.shipped,
-          quarantined: left.quarantined + right.quarantined,
-          reachable: left.reachable && right.reachable,
-        };
       }
       if (
         error instanceof ControlError &&
-        (error.status === 400 || error.status === 422 || error.status === 413)
+        (error.status === 400 || error.status === 413 || error.status === 422)
       ) {
         // The control plane refused the batch: malformed (400, 422), or too
         // large for one request (413). Bisect to the event it objects to; a
         // single refused event is quarantined.
         //
         // 413 belongs here and not with the retryable refusals below. The
-        // ingest route caps a request at 1 MiB, and a retry can never make a
-        // batch smaller, so keeping it means offering the same oversized
-        // request on every drain for ever. Because the WAL head never
-        // advances past it, every later event on that host queues behind it
-        // and the evidence pipeline stops permanently, while the host still
-        // reports itself healthy. Bisection halves the batch until the
-        // request fits, and an event that exceeds the limit on its own is
-        // quarantined rather than retried, which is the same answer this
-        // path already gives a malformed event.
+        // ingest route caps a request at TACHO_MAX_REQUEST_BYTES, and a
+        // retry can never make a batch smaller, so keeping it means offering
+        // the same oversized request on every drain for ever. Because the
+        // WAL head never advances past it, every later event on that host
+        // queues behind it and the evidence pipeline stops permanently,
+        // while the host still reports itself healthy. Bisection halves the
+        // batch until the request fits, and an event that exceeds the limit
+        // on its own is quarantined rather than retried, which is the same
+        // answer this path already gives a malformed event.
         if (batch.length === 1) {
           this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
           this.succeed();

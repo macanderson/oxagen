@@ -30,6 +30,7 @@ import {
 } from "../host/fs";
 import {
   applyControlFacts,
+  enrolledHarnesses,
   type HostFile,
   readHostFile,
   mcpEndpointFor,
@@ -629,6 +630,11 @@ export async function startDaemon(
     listProcesses: () => listClaudeProcesses(exec),
     transcriptRoots: options.transcriptRoots ?? [paths.claudeProjects],
     readSettings: () => readJsonFileIfExists(paths.claudeSettings) ?? {},
+    // A Codex-, Stella- or Claude Desktop-only host has no Claude Code hooks
+    // to lose; without this every such start chained a severity-3
+    // `oxagen:hooks_removed` incident fifteen seconds in (#3320).
+    claudeCodeEnrolled: () =>
+      enrolledHarnesses(paths.hostFile, host).includes("claude-code"),
     enrollmentId: host.host_enrollment_id,
     now,
   });
