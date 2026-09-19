@@ -1166,5 +1166,69 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
     });
+
+    it("list: an enterprise org's custom role reaches the handler without a workspace Owner/Member fallback", async () => {
+      // A separate org, so resolveOrgTierDetailed reads its own row rather
+      // than the shared fixture's (which has none, and so resolves
+      // `established: false` and always takes the workspace-role branch).
+      // This stands in for a custom `role_grants` entry that admitted the
+      // caller through checkIAM's real resolver without either an
+      // accountable org role or a built-in workspace Owner/Member role: the
+      // mocked `assertOrgRole` refuses both legs for this user exactly as a
+      // custom-role-only grant would refuse them under the real resolver,
+      // and readerFilter must still let the call through rather than
+      // refusing a caller the kernel already admitted (#3440 follow-on).
+      const enterpriseOrgId = randomUUID();
+      const enterpriseWorkspaceId = randomUUID();
+      const customRoleUserId = randomUUID();
+      doubles.roles.set(customRoleUserId, {
+        org: "CustomAuditor",
+        workspace: null,
+      });
+      await withSystemDb((tx) =>
+        tx.insert(schema.organizations).values({
+          id: enterpriseOrgId,
+          name: "Enterprise Co",
+          slug: `enterprise-${tag}`,
+          namespace: `ent${tag}`.slice(0, 6),
+          planType: "enterprise",
+          status: "active",
+        }),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.workspaces).values({
+          id: enterpriseWorkspaceId,
+          orgId: enterpriseOrgId,
+          name: "Enterprise Workspace",
+          slug: `entws-${tag}`,
+          namespace: `entw${tag}`.slice(0, 6),
+        }),
+      );
+      const enterpriseCtx: CapabilityContext = {
+        orgId: enterpriseOrgId,
+        workspaceId: enterpriseWorkspaceId,
+        userId: customRoleUserId,
+        apiKeyId: null,
+        requestId: `req_${tag}_ent`,
+        surface: "api",
+        messageId: null,
+      };
+      await expect(
+        runInTenantScope(
+          { orgId: enterpriseOrgId, workspaceId: enterpriseWorkspaceId },
+          () => mandateListHandler({ limit: 50 }, enterpriseCtx),
+        ),
+      ).resolves.toMatchObject({ items: [] });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.workspaces)
+          .where(eq(schema.workspaces.id, enterpriseWorkspaceId)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.organizations)
+          .where(eq(schema.organizations.id, enterpriseOrgId)),
+      );
+    });
   },
 );

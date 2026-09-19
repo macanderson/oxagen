@@ -6,6 +6,7 @@
 // Every lookup is workspace-scoped and runs in the caller's tenant
 // transaction; only public ids leave through the mapping.
 
+import { canAccessACL, resolveOrgTierDetailed } from "@oxagen/billing";
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
@@ -233,6 +234,18 @@ export async function assertToolsDeclareMeasures(
  * signed-in user `assertOrgRole`'s org leg refused as a narrowed reader,
  * without also checking the workspace leg, would admit a workspace Viewer,
  * or an Owner/Member demoted after creating an agent, on those tiers.
+ *
+ * The workspace-role check runs only when the org's tier is the reason the
+ * call reached here at all (`tier_gate` bypassed IAM's resolver). On an
+ * enterprise org, `checkIAM` runs the full resolver, so a caller who is
+ * neither an accountable office role nor a built-in workspace Owner/Member
+ * can still legitimately reach the handler through an explicit custom
+ * `role_grants` entry naming this capability. Enforcing the built-in
+ * workspace roles unconditionally would refuse that configured grant and
+ * silently revoke access the enterprise org's own IAM setup deliberately
+ * gave (#3440 follow-on finding). Every caller who reaches this point has
+ * already cleared the kernel's real check on that tier, so they take the
+ * narrowed-reader scope without a second role assertion.
  */
 export async function readerFilter(
   ctx: CheckedContext,
@@ -247,9 +260,21 @@ export async function readerFilter(
       throw err;
     }
   }
-  await assertOrgRole(actingCtx, { org: [], workspace: ["Owner", "Member"] });
-  // assertOrgRole refused a call with no acting user or no qualifying role.
-  return actingUserId as string;
+  const tierResolution = await resolveOrgTierDetailed(ctx.orgId);
+  if (!tierResolution.established || !canAccessACL(tierResolution.tier)) {
+    // Non-enterprise (or an org tier nothing established, which fails
+    // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
+    // admitted every signed-in user regardless of role, so this is the
+    // only place a Viewer is actually refused.
+    await assertOrgRole(actingCtx, { org: [], workspace: ["Owner", "Member"] });
+  }
+  // assertOrgRole refused a call with no acting user; on an enterprise org
+  // that ran the full resolver, reaching this line already means the
+  // kernel granted it, built-in role or custom role_grant alike.
+  if (actingUserId === null) {
+    throw new HandlerError({ code: "forbidden", reason: "no_principal" });
+  }
+  return actingUserId;
 }
 
 /** Public ids of the users a set of mandate rows name. */
