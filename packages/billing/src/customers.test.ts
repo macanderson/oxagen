@@ -149,7 +149,7 @@ const tx = {
             world.settings.stripeCustomerId = v.stripeCustomerId;
           }
           // else: a concurrent write already moved the row past
-          // previousValue — the CAS is a no-op and that winner stands.
+          // previousValue, so the CAS is a no-op and that winner stands.
           return [{ stripeCustomerId: world.settings.stripeCustomerId }];
         },
       }),
