@@ -1,13 +1,12 @@
 // Every date under the organization layout renders in the person's own zone.
 //
-// Client components take the zone from <TimeZoneProvider> below. Server
-// Components (`useFormatter` / `getFormatter`) take it from the request config
-// in `i18n/request.ts`, which reads the `tz` cookie rather than this preference
-// load: Cache Components prerenders the static shell without person-specific
-// DB data, so the zone cannot live in that config as a store read. The
-// provider writes the cookie when the preference lands, and the Account dialog
-// writes it on save, so the next request formats on the server in the same
-// zone the client already shows.
+// The app formats dates in one way, next-intl's `useFormatter().dateTime`, and
+// next-intl takes its zone from the nearest provider. The root layout's
+// provider inherits the request config, which names no zone because the config
+// is read while the static shell prerenders (Cache Components) and a person's
+// preference is request data. So the zone is read here, inside the <Suspense>
+// the organization layout gives its pages, and <TimeZoneProvider> hands it
+// down; locale and messages are inherited from the root provider.
 //
 // A person's zone is a preference, not a session claim: `get_user_preferences`
 // through the shell port, the same read the chrome makes (deduplicated per
