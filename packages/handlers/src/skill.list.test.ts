@@ -5,6 +5,7 @@
  * rows, tenant isolation and the SQL semantics (a null inventory versus an
  * empty one, the window's bounds) run against Postgres in skill.list.pg.test.ts.
  */
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { skillList } from "@oxagen/oxagen/contracts/skill.list";
@@ -20,6 +21,7 @@ import {
   createSkillListHandler,
   decodeSkillCursor,
   encodeSkillCursor,
+  namesQuery,
   type SkillQueries,
   toInventoryRow,
   windowEndingAt,
@@ -261,5 +263,28 @@ describe("toInventoryRow", () => {
     expect(() => toInventoryRow({ ...base, sessions: 0 })).toThrow();
     expect(() => toInventoryRow({ ...base, harnesses: [] })).toThrow();
     expect(() => toInventoryRow({ ...base, harness_count: 0 })).toThrow();
+  });
+});
+
+describe("namesQuery", () => {
+  const dialect = new PgDialect();
+  const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+  const window = windowEndingAt(NOW, 30);
+
+  it("filters by the page cursor in the first scan, before harnesses are ranked or aggregated", () => {
+    const { sql: text, params } = dialect.sqlToQuery(
+      namesQuery(scope, window, { after: "release-notes", limit: 100 }),
+    );
+    const cursorAt = text.indexOf("skill.name > $");
+    expect(cursorAt).toBeGreaterThan(-1);
+    expect(cursorAt).toBeLessThan(text.indexOf("ranked_harness as ("));
+    expect(params).toContain("release-notes");
+  });
+
+  it("adds no cursor predicate on the first page", () => {
+    const { sql: text } = dialect.sqlToQuery(
+      namesQuery(scope, window, { after: null, limit: 100 }),
+    );
+    expect(text).not.toContain("skill.name > $");
   });
 });

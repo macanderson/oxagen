@@ -173,6 +173,10 @@ const iso = (column: SQL) =>
  * the returned array, alongside `harness_count`, the true distinct count. A
  * workspace whose wrapper stamps a unique label per session (a host name, a
  * run id) can no longer make one row's harness list grow without bound.
+ *
+ * The page cursor filters `expanded`, the first scan, so the ranking and the
+ * aggregates cover only names after it. Filtering the outer select instead
+ * would rank and aggregate every name in the window on every page.
  */
 export function namesQuery(
   scope: SkillScope,
@@ -194,6 +198,7 @@ export function namesQuery(
         and s.started_at < ${window.to.toISOString()}::timestamptz
         and jsonb_typeof(s.skills_available) = 'array'
         and skill.name <> ''
+        ${q.after === null ? sql`` : sql`and skill.name > ${q.after}`}
     ),
     ranked_harness as (
       select name, harness,
@@ -218,8 +223,6 @@ export function namesQuery(
       ${iso(sql`max(e.started_at)`)} as last_seen_at
     from expanded e
     join harness_summary hs on hs.name = e.name
-    where true
-      ${q.after === null ? sql`` : sql`and e.name > ${q.after}`}
     group by e.name, hs.harnesses, hs.harness_count
     order by e.name
     limit ${q.limit + 1}
