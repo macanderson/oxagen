@@ -57,7 +57,6 @@ export function killSwitchBoard(
   );
 }
 
-<<<<<<< HEAD
 /** One agent as `list_agents` pages it, for the grant dialog's picker. */
 export function agentPageRow(
   slug: string,
@@ -91,14 +90,14 @@ export function agentPage(
       tamperIncidents: 0,
     },
   };
-=======
+}
+
 export function approvalRuleSet(
   over: Parameters<typeof approvalRuleListOutput>[0] = {},
 ): ApprovalRuleSet {
   return ApprovalRuleSetShape.parse(
     toApprovalRuleSet(approvalRuleListOutput(over)),
   );
->>>>>>> fix/tools-gaps-autoapprovals
 }
 
 type ToolsReads = {
@@ -108,16 +107,13 @@ type ToolsReads = {
   /** The Mandates tab's read (#2957); built by `@/test/mandate-views`, which
    * three features share because no feature may reach into another's folder. */
   mandates?: Read<MandateList>;
-<<<<<<< HEAD
   /**
    * The agents the Mandates tab reads for a reader who may grant. Defaults to
    * one enrolled agent, since every such reader makes this read; a test that
    * cares what the picker offers hands its own.
    */
   agents?: Read<AgentPage>;
-=======
   approvalRules?: Read<ApprovalRuleSet>;
->>>>>>> fix/tools-gaps-autoapprovals
 };
 
 /** A DataSource answering the Tools reads it was handed; `calls` records each read's arguments. */
@@ -127,11 +123,8 @@ export function toolsSource(reads: ToolsReads) {
     grants: [],
     killSwitches: [],
     mandates: [],
-<<<<<<< HEAD
     agents: [],
-=======
     approvalRules: [],
->>>>>>> fix/tools-gaps-autoapprovals
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
