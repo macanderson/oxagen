@@ -395,6 +395,8 @@
         "noToolMatches": "A tool pattern matches no declared tool that carries a consequence. Nothing was granted.",
         "measureNotDeclared": "A tool this mandate covers declares no such measure, so a limit or a target on it could never be read from a call. Nothing was granted.",
         "measureUnitMismatch": "A tool this mandate covers declares that measure in another unit. Nothing was granted.",
+        "measureKindConflict": "Two tools this mandate covers declare that measure differently, one as an amount and one as a count, so there is no single figure to enforce. Narrow the tool patterns. Nothing was granted.",
+        "agentRetired": "That agent is retired. A retired agent cannot draw on new authority. Nothing was granted.",
         "timeZoneUnavailable": "Your time zone could not be read, and the days you picked mean a different instant in each zone. Nothing was granted. Try again.",
         "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the days you picked cannot be placed in it. Pick a time zone again in your account settings. Nothing was granted.",
         "refused": "The grant was refused: {code}. Nothing was granted.",

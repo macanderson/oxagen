@@ -348,6 +348,8 @@ describe("useGrantFailure", () => {
     ["conflict", "no_tool_matches", "matches no declared tool"],
     ["conflict", "measure_not_declared", "declares no such measure"],
     ["conflict", "measure_unit_mismatch", "in another unit"],
+    ["conflict", "measure_kind_conflict", "no single figure to enforce"],
+    ["conflict", "agent_retired", "agent is retired"],
     ["conflict", "time_zone_unsupported", "not one this server can read"],
     ["denied", "something_new", "The grant was refused: something_new."],
   ] as const)("names %s %s", (reason, code, expected) => {

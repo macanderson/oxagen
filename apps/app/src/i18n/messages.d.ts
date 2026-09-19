@@ -3474,6 +3474,8 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        measureKindConflict: string;
+        agentRetired: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;
         refused: string;
