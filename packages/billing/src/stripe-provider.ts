@@ -869,6 +869,16 @@ export class StripeProvider implements BillingProvider {
     return found.data[0] ? { id: found.data[0].id } : null;
   }
 
+  async customerExists(customerId: string): Promise<boolean> {
+    try {
+      const cust = await this.client().customers.retrieve(customerId);
+      return !cust.deleted;
+    } catch (err) {
+      if (isResourceMissing(err)) return false;
+      throw err;
+    }
+  }
+
   async createCustomer(input: BillingCustomerCreateInput): Promise<string> {
     const stripe = this.client();
     const customer = await stripe.customers.create({
