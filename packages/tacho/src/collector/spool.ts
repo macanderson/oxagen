@@ -33,6 +33,33 @@ import {
   type TachoBody,
 } from "../wire";
 
+/**
+ * The retention clause in force, and whether it is the workspace's own answer.
+ *
+ * The two halves are one value because they are one decision and a caller
+ * that could answer them separately could answer them inconsistently. That is
+ * the shape of an earlier defect on this path, where four sites built the same
+ * request by hand and one field reached three of them.
+ */
+export interface RetentionDecision {
+  /** The classes whose content may leave this host right now. */
+  mandate: RetentionMandate;
+  /**
+   * Whether `mandate` is what the workspace decided, rather than the absence
+   * of an answer. False when the cached bundle does not verify or has outlived
+   * its signed window: `mandate` is then `NO_RETENTION` because nothing can be
+   * shown to be covered, which is not the same as the workspace having
+   * narrowed it.
+   *
+   * Both withhold. Only a proven narrowing also purges, because a purge is
+   * irreversible and an unprovable mandate is usually transient — a control
+   * plane outage lapses every cached bundle at once, and destroying the queued
+   * evidence of every session on that signal would make an outage into
+   * permanent data loss committed by the component whose job is the record.
+   */
+  proven: boolean;
+}
+
 export interface ShipperOptions {
   wal: Wal;
   client: ControlClient;
@@ -56,13 +83,18 @@ export interface ShipperOptions {
    * clause is asked again here, against the mandate the last refresh
    * established, and a body it no longer covers is never transmitted.
    *
+   * A body the clause no longer covers is also purged from the WAL when the
+   * clause is `proven`, because withholding alone leaves the bytes on disk
+   * until the session seals and ages out.
+   *
    * Required, and deliberately. An optional clause that a caller may omit is
    * the same bypass in a new shape: the filter would read `undefined` and
    * transmit every queued body, and a shipper built without it would look
    * correct at the call site. A caller with no trustworthy mandate to offer
-   * passes `NO_RETENTION`, which keeps nothing, rather than passing nothing.
+   * passes `NO_RETENTION` with `proven: false`, which keeps nothing and
+   * destroys nothing, rather than passing nothing.
    */
-  retentionInForce: () => RetentionMandate;
+  retentionInForce: () => RetentionDecision;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -289,38 +321,57 @@ export class Shipper {
     // case this guards: the body is dropped here rather than sent and refused
     // after it has already left the machine.
     //
-    // This filter answers for the wire only, and it withholds on any doubt,
-    // including the doubt of an unverifiable cached bundle. The bytes on disk
-    // are erased by `Wal.purgeBodiesOutsideMandate`, which the daemon calls
-    // when a verified replacement bundle narrows the mandate. The two
-    // conditions are deliberately different: withholding is right whenever
-    // the mandate cannot be read, and erasing is right only when the control
-    // plane has said the mandate is narrower.
+    // This filter answers for the wire. The bytes on disk go below, and only
+    // under a proven mandate. Bodies outside a drain's reach, whose events
+    // already shipped, are swept by `Wal.purgeBodiesOutsideMandate`, which the
+    // daemon calls when a replacement bundle verifies and narrows the clause.
     //
     // The class comes from the body's own event rather than from the body,
     // because the WAL stores bodies as bytes and does not persist a class.
     // `contentClassOf` is the one table that maps a frame kind to a class, so
     // asking it here cannot disagree with what the append path asked.
     const retention = this.options.retentionInForce();
-    const kindOf = new Map(
-      own.map((event) => [event.event_id_idem, event.kind] as const),
+    const eventOf = new Map(
+      own.map((event) => [event.event_id_idem, event] as const),
     );
+    const allowed: TachoBody[] = [];
+    const withdrawn: TachoEvent[] = [];
+    for (const body of this.options.wal.bodiesFor(own)) {
+      const event = eventOf.get(body.event_id_idem);
+      const contentClass =
+        event === undefined ? undefined : contentClassOf(event.kind);
+      // A body whose event is not in this batch, or whose kind names no
+      // class, is not shipped: an unclassifiable body cannot be shown to
+      // be covered, and the boundary fails closed.
+      if (
+        contentClass !== undefined &&
+        retentionAllows(retention.mandate, contentClass)
+      ) {
+        allowed.push(body);
+        continue;
+      }
+      if (event !== undefined) withdrawn.push(event);
+    }
+    // Leaving the body out of the request protects the network boundary and
+    // nothing else: `markShipped` advances a cursor, and `Wal.compact` frees
+    // body bytes only once a sealed session has aged out, so an unsealed
+    // session would keep the withdrawn content on disk indefinitely. The
+    // narrowed mandate reaches the disk here, as the spec requires.
+    //
+    // Only a proven mandate purges. An unverifiable or lapsed bundle also
+    // withholds, but keeps: that condition is usually transient and a purge
+    // is not. A control plane outage lapses every cached bundle at once, so
+    // purging on it would destroy the queued evidence of every session on
+    // this host.
+    if (retention.proven && withdrawn.length > 0) {
+      const dropped = this.options.wal.dropBodies(withdrawn);
+      if (dropped > 0)
+        this.options.log(
+          `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,
+        );
+    }
     const bodies = new Map(
-      this.options.wal
-        .bodiesFor(own)
-        .filter((body) => {
-          const kind = kindOf.get(body.event_id_idem);
-          const contentClass =
-            kind === undefined ? undefined : contentClassOf(kind);
-          // A body whose event is not in this batch, or whose kind names no
-          // class, is not shipped: an unclassifiable body cannot be shown to
-          // be covered, and the boundary fails closed.
-          return (
-            contentClass !== undefined &&
-            retentionAllows(retention, contentClass)
-          );
-        })
-        .map((body) => [body.event_id_idem, body] as const),
+      allowed.map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
       this.fitRequestBudget(own, bodies),

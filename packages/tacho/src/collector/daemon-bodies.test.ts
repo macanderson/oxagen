@@ -469,11 +469,13 @@ describe("tachod and frame bodies", () => {
     "base64",
   );
 
-  it("erases queued bodies from the WAL when the mandate narrows, on a session that never seals", async () => {
-    // The finding: the shipper stopped transmitting these bytes, and the bytes
-    // stayed on disk. `Wal.compact` removes a body file only once its session
-    // is sealed, fully shipped, and past the retention window, so a live or
-    // abandoned session kept the raw prompt with no bound at all.
+  it("sweeps bodies the drain can no longer reach when the mandate narrows, on a session that never seals", async () => {
+    // The finding, in the case the drain cannot answer. Dropping a body as it
+    // is withheld from a batch reaches only a body whose event is still
+    // unshipped. Once the event has shipped the cursor is past it, so nothing
+    // looks at that body again, and `Wal.compact` frees the file only when its
+    // session is sealed, fully shipped, and past the retention window. A live
+    // or abandoned session therefore kept the raw prompt with no bound at all.
     const narrowed: { bundle?: PolicyBundle } = {};
     const { fetch, batches } = plane(
       () => undefined,
@@ -496,6 +498,11 @@ describe("tachod and frame bodies", () => {
     });
     await runLiveSession(handle.port as number, host.local_token);
     const bodyPath = bodyFileOf(paths.wal, handle);
+    // Ship everything under the mandate that authorised it. The bodies stay on
+    // disk afterwards, and no later batch names their events.
+    await handle.tick();
+    expect(handle.wal.stats().unshipped).toBe(0);
+    expect(batches.flatMap((b) => b.bodies ?? []).length).toBeGreaterThan(0);
     expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
     // Nothing sealed this session, so compaction would never remove the bytes.
     expect(handle.wal.compact(Date.now() + 365 * 24 * 60 * 60_000, 0)).toEqual(
@@ -509,14 +516,19 @@ describe("tachod and frame bodies", () => {
         retention: { mode: "digest_only", classes: [] },
       }),
     );
+    // The poll is what carries a narrowing to this host.
+    await handle.refreshBundle();
     await handle.tick();
 
-    expect(readFileSync(bodyPath, "utf8")).not.toContain(PROMPT_BASE64);
+    // Gone from disk: either the line went, or the file went with it.
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
     expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
       true,
     );
-    // The events still seal and ship, digests and all: only the bytes went.
-    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    // The chain is untouched: the events shipped with their digests, and the
+    // session still reads and still seals.
     expect(
       batches
         .flatMap((b) => b.events)
@@ -525,6 +537,17 @@ describe("tachod and frame bodies", () => {
         ),
     ).toBe(true);
     expect(handle.wal.stats().unshipped).toBe(0);
+    expect(
+      await post(handle.port as number, host.local_token, {
+        session_id: session,
+        hook_event_name: "SessionEnd",
+        reason: "other",
+      }),
+    ).toBe(200);
+    await handle.tick();
+    expect(
+      batches.flatMap((b) => b.events).some((e) => e.kind === "agent_stop"),
+    ).toBe(true);
   });
 
   it("keeps queued bodies through a mandate it cannot establish, and ships them once it can", async () => {

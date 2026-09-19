@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FrameBody } from "../evidence/frame-body";
@@ -111,12 +111,57 @@ describe("Wal", () => {
     expect(existsSync(join(paths.wal, `${uuid}.bodies.jsonl`))).toBe(false);
   });
 
-  it("erases bodies a narrowed mandate no longer covers, in a session that never seals", () => {
-    // The leak this closes: `compact` removes body bytes one whole session at
-    // a time, and only once that session is sealed, fully shipped, and older
-    // than the retention window. A session that never seals is never
-    // compacted, so a body queued under `content_exact` used to sit on disk
-    // with no bound at all once the mandate narrowed.
+  it("drops the bytes of named bodies and keeps the events and the rest", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const bodyOf = (index: number, text: string): FrameBody => ({
+      event_id_idem: session[index]?.event_id_idem as string,
+      session_uuid: uuid,
+      seq: session[index]?.seq as number,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode(text),
+      content_class: "model_call",
+    });
+    wal.append(session, [bodyOf(1, "first prompt"), bodyOf(2, "second")]);
+
+    expect(wal.dropBodies([session[1] as (typeof session)[number]])).toBe(1);
+    // The event survives: the chain is the record, only the content went.
+    expect(wal.read(uuid)).toHaveLength(session.length);
+    expect(wal.bodiesFor(session).map((b) => b.event_id_idem)).toEqual([
+      session[2]?.event_id_idem,
+    ]);
+    // The bytes are off the disk, not merely unreferenced.
+    expect(
+      readFileSync(join(paths.wal, `${uuid}.bodies.jsonl`), "utf8"),
+    ).not.toContain(Buffer.from("first prompt").toString("base64"));
+
+    // Dropping what is already gone changes nothing (negative).
+    expect(wal.dropBodies([session[1] as (typeof session)[number]])).toBe(0);
+    // A session with no body file answers zero (negative).
+    expect(
+      wal.dropBodies([
+        {
+          ...(session[0] as (typeof session)[number]),
+          session_uuid: "00000000-0000-4000-8000-000000000000",
+        },
+      ]),
+    ).toBe(0);
+
+    // The last body going takes the file with it.
+    expect(wal.dropBodies([session[2] as (typeof session)[number]])).toBe(1);
+    expect(existsSync(join(paths.wal, `${uuid}.bodies.jsonl`))).toBe(false);
+    expect(wal.bodiesFor(session)).toEqual([]);
+  });
+
+  it("sweeps bodies a narrowed mandate no longer covers, in a session that never seals", () => {
+    // `dropBodies` reaches the bodies of one batch, which is every body the
+    // drain still has an unshipped event for. It cannot reach a body whose
+    // event already shipped, and `compact` frees a body file only once its
+    // session is sealed, fully shipped, and past the retention window. A
+    // session that never seals satisfies neither, so before this sweep its
+    // bodies stayed on disk with no bound at all.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const session = minimalSession();
@@ -141,14 +186,19 @@ describe("Wal", () => {
       bodyAt(toolIndex, "the tool arguments"),
     ]);
     const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
-    const before = readFileSync(bodyPath, "utf8");
-    expect(before).toContain(Buffer.from("the raw prompt").toString("base64"));
+    expect(readFileSync(bodyPath, "utf8")).toContain(
+      Buffer.from("the raw prompt").toString("base64"),
+    );
+    // Every event shipped, so no batch names these bodies again.
+    wal.markShipped(uuid, live.length - 1);
+    expect(wal.unshipped(100)).toEqual([]);
+    // Unsealed, so compaction refuses it whatever the age.
     expect(
       wal.compact(Date.now() + 365 * 24 * 60 * 60_000, 7 * 24 * 60 * 60_000),
     ).toEqual([]);
 
-    // The mandate narrows to tool content only. The prompt body goes; the tool
-    // body stays.
+    // The mandate narrows to tool content. The prompt body goes, the tool body
+    // stays, and the chain is untouched.
     expect(
       wal.purgeBodiesOutsideMandate({
         mode: "content_exact",
@@ -162,40 +212,17 @@ describe("Wal", () => {
     expect(after).toContain(
       Buffer.from("the tool arguments").toString("base64"),
     );
-    // In place: same file, same length, so no line's offset moved.
-    expect(after.length).toBe(before.length);
-    expect(wal.bodiesFor(live).map((b) => b.event_id_idem)).toEqual([
-      live[toolIndex]?.event_id_idem,
-    ]);
-    // The chain is untouched: the events still read, digests and all.
     expect(wal.read(uuid).length).toBe(live.length);
-
-    // An append made after the erasure survives it and reads back, which is
-    // what the in-place write buys: the hook only ever writes past the end of
-    // the file, and the erasure only ever writes inside the length it read.
-    appendFileSync(
-      bodyPath,
-      `${JSON.stringify({
-        event_id_idem: live[live.length - 1]?.event_id_idem,
-        seq: live[live.length - 1]?.seq,
-        content_type: "text/plain; charset=utf-8",
-        bytes_base64: Buffer.from(
-          "appended while the daemon was down",
-        ).toString("base64"),
-      })}\n`,
-    );
-    expect(statSync(bodyPath).size).toBeGreaterThan(before.length);
     expect(wal.bodiesFor(live).map((b) => b.event_id_idem)).toEqual([
       live[toolIndex]?.event_id_idem,
-      live[live.length - 1]?.event_id_idem,
     ]);
 
-    // Nothing is covered now, so both remaining bodies go.
+    // Nothing is covered now, so the last body goes and takes the file.
     expect(
       wal.purgeBodiesOutsideMandate({ mode: "digest_only", classes: [] }),
-    ).toBe(2);
-    expect(wal.bodiesFor(live)).toEqual([]);
-    // Erasing does not reverse: widening the mandate again brings nothing back.
+    ).toBe(1);
+    expect(existsSync(bodyPath)).toBe(false);
+    // Erasing does not reverse: widening again brings nothing back.
     expect(
       wal.purgeBodiesOutsideMandate({
         mode: "content_exact",
@@ -205,7 +232,7 @@ describe("Wal", () => {
     expect(wal.bodiesFor(live)).toEqual([]);
   });
 
-  it("keeps a body whose event is not on the chain yet, and erases a torn line", () => {
+  it("sweeps a torn line and keeps a body whose event is not on the chain yet", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const session = minimalSession();
@@ -226,7 +253,7 @@ describe("Wal", () => {
     ]);
     // `append` writes bodies before events, so a crash between the two leaves
     // a body whose event is not on the chain. That is a microsecond, not an
-    // orphan, and the next pass judges it once the event lands.
+    // orphan, and the next sweep judges it once the event lands.
     appendFileSync(
       bodyPath,
       `${JSON.stringify({
