@@ -59,10 +59,10 @@ import { OrganizationTabs } from "./tabs";
  * a member of, and `requireViewer(org, slug)` answers `not_found` for exactly
  * those — so a picker offering one would offer a page that cannot open.
  *
- * Archived workspaces stay: `archive_workspace` records `archived_at` and
- * nothing else, `resolveApiKey` never consults it, so a key in an archived
- * workspace keeps authenticating. A key nobody can reach is a key nobody can
- * revoke.
+ * Archived workspaces stay. Their keys no longer authenticate — `resolveApiKey`
+ * refuses a key whose workspace is archived (ADR-104) — but they are not
+ * revoked, and restoring the workspace restores them. An operator who wants one
+ * gone for good still has to reach it, and this picker is how.
  */
 function enterable(workspaces: WorkspaceList): readonly Workspace[] {
   return workspaces.workspaces.filter((ws) => ws.role !== null);

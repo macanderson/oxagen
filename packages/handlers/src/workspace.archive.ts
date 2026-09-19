@@ -15,6 +15,12 @@
 //      the `workspace.archived` security event. The write matches only a row
 //      still unarchived; when a concurrent archive got there first it changes
 //      nothing and the call is refused with `already_archived`.
+//   5. Live API keys bound to the workspace are counted in the same
+//      transaction and returned as `suspendedApiKeys`. Archival does not touch
+//      the key rows: under ADR-105 `resolveApiKey` refuses a key whose
+//      workspace is archived, so those keys stop authenticating the moment the
+//      row is written and start working again if the workspace is restored.
+//      The count is what the operator is told, and what the audit trail keeps.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -22,7 +28,7 @@ import { emitSecurityEventAsync } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { INTERACTIVE_AGENT_SLUG } from "@oxagen/oxagen/interactive-agent";
 import { getPrincipalAttribution, runInTenantScope } from "@oxagen/tenancy";
-import { and, count, eq, isNull, ne } from "drizzle-orm";
+import { and, count, eq, gt, isNull, ne, or } from "drizzle-orm";
 import { logger } from "./logger";
 
 export const workspaceArchiveHandler: CapabilityHandler<
@@ -77,6 +83,20 @@ export const workspaceArchiveHandler: CapabilityHandler<
     },
     () =>
       withTenantDb(async (tx) => {
+        // Locks the workspace row for the rest of this transaction, the same
+        // way `create_api_key` locks it before checking `archivedAt`
+        // (`api.key.create.ts`). Without this, a `create_api_key` that starts
+        // after the count below but before the write commits could acquire
+        // its own lock, insert a key, and commit while this transaction still
+        // waits — a key `suspendedApiKeys` and the audit log would then omit,
+        // even though ADR-105 still stops it from authenticating once this
+        // commits. The two `FOR UPDATE`s make the two capabilities queue for
+        // the same row: whichever commits first is the order the other sees.
+        await tx
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces)
+          .where(eq(schema.workspaces.id, workspace.id))
+          .for("update");
         const [agents] = await tx
           .select({ n: count() })
           .from(schema.agents)
@@ -98,6 +118,25 @@ export const workspaceArchiveHandler: CapabilityHandler<
           });
         }
         const archivedAt = new Date();
+        // Keys that would still authenticate today. ADR-105 stops them at
+        // `resolveApiKey` once the row below is written; nothing here revokes
+        // them, so the number is a report, not a destruction. An expired or
+        // revoked key is already dead and is not counted.
+        const [liveKeys] = await tx
+          .select({ n: count() })
+          .from(schema.apiKeys)
+          .where(
+            and(
+              eq(schema.apiKeys.orgId, ctx.orgId),
+              eq(schema.apiKeys.workspaceId, workspace.id),
+              isNull(schema.apiKeys.deletedAt),
+              or(
+                isNull(schema.apiKeys.expiresAt),
+                gt(schema.apiKeys.expiresAt, archivedAt),
+              ),
+            ),
+          );
+        const suspendedApiKeys = liveKeys?.n ?? 0;
         // The write repeats the `archived_at is null` check, so of two
         // concurrent archives of one workspace only one changes the row.
         const [written] = await tx
@@ -122,7 +161,7 @@ export const workspaceArchiveHandler: CapabilityHandler<
             message: `${workspace.name} is already archived`,
           });
         }
-        return { ...workspace, archivedAt };
+        return { ...workspace, archivedAt, suspendedApiKeys };
       }),
   );
 
@@ -143,7 +182,12 @@ export const workspaceArchiveHandler: CapabilityHandler<
     );
   });
   logger.info(
-    { orgId: ctx.orgId, workspaceId: archived.id, surface: ctx.surface },
+    {
+      orgId: ctx.orgId,
+      workspaceId: archived.id,
+      surface: ctx.surface,
+      suspendedApiKeys: archived.suspendedApiKeys,
+    },
     "archive_workspace: workspace archived",
   );
 
@@ -152,5 +196,6 @@ export const workspaceArchiveHandler: CapabilityHandler<
     slug: archived.slug,
     name: archived.name,
     archivedAt: archived.archivedAt.toISOString(),
+    suspendedApiKeys: archived.suspendedApiKeys,
   };
 };
