@@ -41,11 +41,11 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 
 ## Roles
 
-- `scope: "user"` — any authenticated user (their own data only). The contract
+- `scope: "user"`: any authenticated user (their own data only). The contract
   defaults to `allow` rather than listing roles: an invited member holds no org
   role, and portability is a right the person holds, not a privilege an
   administrator grants. An explicit deny grant still refuses.
-- `scope: "org"` — Owner or Admin role on the org, and `orgId` must be the org
+- `scope: "org"`: Owner or Admin role on the org, and `orgId` must be the org
   the request was made in. `invoke()` resolves IAM against the request's org, so
   an export naming a different one would be decided in one tenant and read from
   another, with the target's own grants never consulted. To export another

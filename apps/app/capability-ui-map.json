@@ -762,7 +762,7 @@
     "update_profile": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account in the user menu on every organization page — the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account in the user menu on every organization page: the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "open-account",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
       "verifiedAt": "2026-09-18",
