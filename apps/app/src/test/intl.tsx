@@ -39,9 +39,16 @@ export const messages = {
   ...workspaceSettings,
 };
 
-export function IntlProvider({ children }: { children: ReactNode }) {
+export function IntlProvider({
+  children,
+  timeZone = "UTC",
+}: {
+  children: ReactNode;
+  /** Override to prove a surface formats in the viewer's zone, not UTC. */
+  timeZone?: string;
+}) {
   return (
-    <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+    <NextIntlClientProvider locale="en" messages={messages} timeZone={timeZone}>
       {children}
     </NextIntlClientProvider>
   );

@@ -1,57 +1,85 @@
 // @vitest-environment jsdom
-// The avatar renderer over the three shapes a stored value can take. The test
+// The avatar renderer over the shapes a stored value can take: an https image,
+// a designed icon, a designed monogram, and the initials fallback. The test
 // that matters is the designed one: `avatarUrlSchema` accepts an
 // `avatar:v1:{...}` string everywhere an avatar is written, and a renderer that
 // tests for `https://` alone shows initials to a person whose avatar is
-// perfectly valid — silently, with nothing to tell them why.
+// perfectly valid, silently, with nothing to tell them why.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AVATAR_MAX_LEN, AVATAR_SPEC_PREFIX } from "@oxagen/oxagen/avatar";
 import { afterEach, describe, expect, it } from "vitest";
 import { Avatar } from "./avatar";
+import {
+  AVATAR_ICONS,
+  INITIALS_MAX,
+  monogram,
+  parseAvatarValue,
+  serializeAvatar,
+} from "./avatar-spec";
 
-const DESIGNED = 'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"full"}';
+const ICON = 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"solid"}';
+const MONOGRAM =
+  'avatar:v1:{"kind":"initials","text":"MB","font":"serif","tone":"line"}';
 
 afterEach(cleanup);
 
-/**
- * The parser is not exported — it is an implementation detail of the one
- * renderer that uses it — so every reading of a stored value is asserted
- * through what the renderer draws: `image`, `designed` or the `initials`
- * fallback. That is also the only thing a person ever sees.
- */
 function drawn(value: string | null | undefined): HTMLElement {
   cleanup();
   render(<Avatar value={value} initials="MB" testId="k" />);
   return screen.getByTestId("k");
 }
 
-describe("reading a stored avatar value", () => {
-  // The prefix and the cap are the contract's, re-declared in avatar.tsx so a
-  // client bundle does not pull zod in. This is what stops the two drifting.
+describe("the spec", () => {
+  // The prefix and the cap are the contract's, re-declared in avatar-spec.ts so
+  // a client bundle does not pull zod in. This is what stops the two drifting,
+  // and it asserts the behaviour rather than the copy: a value written at the
+  // contract's prefix parses, and the contract's cap is exactly where the
+  // parser stops reading one.
   it("mirrors the contract's canonical prefix and length cap", () => {
+    const spec = `${AVATAR_SPEC_PREFIX}{"kind":"icon","icon":"rocket","tone":"solid"}`;
+    expect(parseAvatarValue(spec).kind).toBe("icon");
+
+    const url = (length: number) =>
+      `https://a.example/${"b".repeat(length - "https://a.example/".length)}`;
+    expect(parseAvatarValue(url(AVATAR_MAX_LEN)).kind).toBe("image");
+    expect(parseAvatarValue(url(AVATAR_MAX_LEN + 1)).kind).toBe("none");
+  });
+
+  it("round-trips an icon and a monogram through the stored string", () => {
+    for (const value of [ICON, MONOGRAM]) {
+      const parsed = parseAvatarValue(value);
+      expect(parsed.kind === "icon" || parsed.kind === "initials").toBe(true);
+      if (parsed.kind === "icon" || parsed.kind === "initials")
+        expect(serializeAvatar(parsed)).toBe(value);
+    }
+  });
+
+  it("keeps a monogram to six upper-case letters", () => {
+    expect(INITIALS_MAX).toBe(6);
+    expect(monogram("  marcus bell ")).toBe("MARCUS");
     expect(
-      drawn(`${AVATAR_SPEC_PREFIX}{"emoji":"x","bg":"#000000","mode":"full"}`)
-        .dataset.avatar,
-    ).toBe("designed");
-    expect(
-      drawn(`https://e.example/${"a".repeat(AVATAR_MAX_LEN)}`).dataset.avatar,
-    ).toBe("initials");
+      serializeAvatar({
+        kind: "initials",
+        text: "abcdefgh",
+        font: "mono",
+        tone: "soft",
+      }),
+    ).toBe(
+      'avatar:v1:{"kind":"initials","text":"ABCDEF","font":"mono","tone":"soft"}',
+    );
   });
 
-  it("reads a designed avatar into its emoji, background and mode", () => {
-    const tile = drawn(DESIGNED);
-    expect(tile.dataset.avatar).toBe("designed");
-    expect(tile.textContent).toBe("🦊");
-    expect(tile.style.backgroundColor).toBe("rgb(245, 158, 11)");
+  it("ships the mockup's twenty-four Lucide glyphs", () => {
+    expect(AVATAR_ICONS).toHaveLength(24);
+    expect(AVATAR_ICONS).toContain("rocket");
+    expect(AVATAR_ICONS).toContain("shield-check");
   });
 
-  it("reads an https URL as an image", () => {
-    const tile = drawn("https://cdn.example/a.png");
-    expect(tile.dataset.avatar).toBe("image");
-    expect(tile).toHaveAttribute("src", "https://cdn.example/a.png");
-  });
-
-  it("degrades every malformed value to the initials tile, never throwing (negative)", () => {
+  it("reads every well-formed value, and nothing else (negative)", () => {
+    expect(parseAvatarValue("https://cdn.example/a.png")).toEqual({
+      kind: "image",
+      url: "https://cdn.example/a.png",
+    });
     for (const value of [
       null,
       undefined,
@@ -59,40 +87,99 @@ describe("reading a stored avatar value", () => {
       "http://cdn.example/a.png",
       "not-a-url",
       "avatar:v1:{not json",
-      'avatar:v1:{"emoji":"","bg":"#f59e0b","mode":"full"}',
-      'avatar:v1:{"emoji":"🦊","bg":"#F59E0B","mode":"full"}',
-      'avatar:v1:{"emoji":"🦊","bg":"orange","mode":"full"}',
-      'avatar:v1:{"emoji":"🦊","bg":"#f59e0b","mode":"neon"}',
-      'avatar:v1:["🦊"]',
+      'avatar:v1:{"kind":"icon","icon":"dragon","tone":"solid"}',
+      'avatar:v1:{"kind":"icon","icon":"rocket","tone":"neon"}',
+      'avatar:v1:{"kind":"initials","text":"  ","font":"sans","tone":"soft"}',
+      'avatar:v1:{"kind":"initials","text":"MB","font":"comic","tone":"soft"}',
+      'avatar:v1:{"kind":"photo","src":"data:image/png;base64,AAAA"}',
+      'avatar:v1:["rocket"]',
       "avatar:v1:null",
+      `https://e.example/${"a".repeat(AVATAR_MAX_LEN)}`,
     ]) {
+      expect(parseAvatarValue(value)).toEqual({ kind: "none" });
       expect(() => drawn(value)).not.toThrow();
       expect(screen.getByTestId("k").dataset.avatar).toBe("initials");
     }
   });
 });
 
+describe("the emoji body stored before the W11 editor", () => {
+  const LEGACY = 'avatar:v1:{"emoji":"\u{1F98A}","bg":"#f59e0b","mode":"full"}';
+
+  // `avatarUrlSchema` accepted this body and still does, so profiles,
+  // workspaces and agents hold it. A parser that reads only the new shapes
+  // turns every one of them into the initials fallback, silently, without
+  // anyone editing anything.
+  it("still reads, so an avatar set years ago is still the avatar", () => {
+    expect(parseAvatarValue(LEGACY)).toEqual({ kind: "emoji", emoji: "\u{1F98A}" });
+  });
+
+  it("draws the emoji on a house tone, not the free colour it stored", () => {
+    const tile = drawn(LEGACY);
+    expect(tile.dataset.avatar).toBe("emoji");
+    expect(tile.dataset.tone).toBe("soft");
+    expect(tile.textContent).toBe("\u{1F98A}");
+    // The body's own `bg` was a free hex colour, which the house scale replaced.
+    expect(tile.getAttribute("style") ?? "").not.toContain("#f59e0b");
+  });
+
+  it("is never written back: an empty emoji is not an avatar", () => {
+    expect(
+      parseAvatarValue('avatar:v1:{"emoji":"","bg":"#000","mode":"full"}'),
+    ).toEqual({ kind: "none" });
+  });
+});
+
 describe("Avatar", () => {
-  it("renders the designed avatar's emoji on its background, not the initials", () => {
-    render(<Avatar value={DESIGNED} initials="MB" testId="a" />);
-    const tile = screen.getByTestId("a");
-    expect(tile.dataset.avatar).toBe("designed");
-    expect(tile.textContent).toBe("🦊");
-    expect(tile.style.backgroundColor).toBe("rgb(245, 158, 11)");
+  it("draws a designed icon in its tone, not the initials", () => {
+    const tile = drawn(ICON);
+    expect(tile.dataset.avatar).toBe("icon");
+    expect(tile.dataset.icon).toBe("rocket");
+    expect(tile.dataset.tone).toBe("solid");
+    expect(tile.querySelector("svg")).not.toBeNull();
     expect(screen.queryByText("MB")).toBeNull();
   });
 
-  it("renders a mono mode as a silhouette", () => {
-    render(
-      <Avatar
-        value={'avatar:v1:{"emoji":"🦊","bg":"#101010","mode":"mono-light"}'}
-        initials="MB"
-        testId="a"
-      />,
+  it("draws a monogram in its typeface and tone, scaled to its length", () => {
+    const tile = drawn(MONOGRAM);
+    expect(tile.dataset.avatar).toBe("initials");
+    expect(tile.dataset.font).toBe("serif");
+    expect(tile.dataset.tone).toBe("line");
+    expect(tile.textContent).toBe("MB");
+    expect(tile.className).toContain("font-serif");
+
+    const six = drawn(
+      'avatar:v1:{"kind":"initials","text":"MARCUS","font":"mono","tone":"soft"}',
     );
-    expect(screen.getByTestId("a").firstElementChild).toHaveStyle({
-      filter: "brightness(0) invert(1)",
-    });
+    expect(six.textContent).toBe("MARCUS");
+    expect(parseFloat(six.style.fontSize)).toBeLessThan(
+      parseFloat(tile.style.fontSize),
+    );
+  });
+
+  it("sizes the tile in pixels and scales the type with it", () => {
+    render(
+      <>
+        <Avatar value={null} initials="MB" size={30} testId="t" />
+        <Avatar value={null} initials="MB" size={72} testId="p" />
+      </>,
+    );
+    expect(screen.getByTestId("t").style.width).toBe("30px");
+    expect(screen.getByTestId("p").style.width).toBe("72px");
+    expect(parseFloat(screen.getByTestId("p").style.fontSize)).toBeGreaterThan(
+      parseFloat(screen.getByTestId("t").style.fontSize),
+    );
+  });
+
+  it("is round for a person and a squircle for an agent", () => {
+    render(
+      <>
+        <Avatar value={ICON} initials="MB" testId="p" />
+        <Avatar value={ICON} initials="MB" shape="agent" testId="a" />
+      </>,
+    );
+    expect(screen.getByTestId("p").className).toContain("rounded-full");
+    expect(screen.getByTestId("a").className).toContain("rounded-[27%]");
   });
 
   it("renders an https value as a decorative image", () => {
@@ -103,33 +190,6 @@ describe("Avatar", () => {
     expect(img.tagName).toBe("IMG");
     expect(img).toHaveAttribute("src", "https://cdn.example/a.png");
     expect(img).toHaveAttribute("alt", "");
-  });
-
-  // An emoji does not scale with its tile, so the two call sites -- a 32px
-  // trigger and a 52px editor preview -- need their own glyph steps or the
-  // emoji is lost in the circle at one of them.
-  it("draws each size with its own tile and glyph steps, in lockstep", () => {
-    render(
-      <>
-        <Avatar value={DESIGNED} initials="MB" size="trigger" testId="t" />
-        <Avatar value={DESIGNED} initials="MB" size="preview" testId="p" />
-        <Avatar value={null} initials="MB" size="trigger" testId="ti" />
-        <Avatar value={null} initials="MB" size="preview" testId="pi" />
-      </>,
-    );
-    expect(screen.getByTestId("t").className).toContain("size-8");
-    expect(screen.getByTestId("t").className).toContain("text-base");
-    expect(screen.getByTestId("p").className).toContain("size-13");
-    expect(screen.getByTestId("p").className).toContain("text-2xl");
-    expect(screen.getByTestId("ti").className).toContain("size-8");
-    expect(screen.getByTestId("ti").className).toContain("text-xs");
-    expect(screen.getByTestId("pi").className).toContain("size-13");
-    expect(screen.getByTestId("pi").className).toContain("text-base");
-  });
-
-  it("defaults to the preview size", () => {
-    render(<Avatar value={null} initials="MB" testId="a" />);
-    expect(screen.getByTestId("a").className).toContain("size-13");
   });
 
   // A well-formed URL is not a loadable image: the contract checks the
@@ -169,10 +229,11 @@ describe("Avatar", () => {
     );
   });
 
-  it("falls back to initials when the value names no avatar (negative)", () => {
+  it("falls back to soft initials when the value names no avatar (negative)", () => {
     render(<Avatar value="not-an-avatar" initials="MB" testId="a" />);
     const tile = screen.getByTestId("a");
     expect(tile.dataset.avatar).toBe("initials");
+    expect(tile.dataset.tone).toBe("soft");
     expect(tile.textContent).toBe("MB");
   });
 });

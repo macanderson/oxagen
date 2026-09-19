@@ -102,7 +102,11 @@ describe("update_profile contract", () => {
   // only. A user-id field here would let one caller rewrite another's
   // identity, so the input schema must never grow one.
   it("has no user-id field in its input schema (privilege-escalation guard)", () => {
-    const keys = Object.keys(userProfileUpdate.input.shape);
+    // `.refine()` wraps the object in a ZodEffects, so the shape is one level
+    // in. Reaching through it rather than dropping the assertion: this guard
+    // is the reason the contract has no user-id field, and a test that cannot
+    // see the keys cannot hold that line.
+    const keys = Object.keys(userProfileUpdate.input.innerType().shape);
     expect(keys).toEqual(["displayName", "avatarUrl"]);
     for (const key of keys) {
       expect(key.toLowerCase()).not.toContain("userid");

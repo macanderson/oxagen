@@ -27,7 +27,9 @@
         "anyOf": [
           {
             "type": "string",
-            "maxLength": 512
+            "maxLength": 512,
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
           },
           {
             "type": "null"
@@ -35,18 +37,23 @@
         ]
       }
     },
-    "required": [
-      "displayName",
-      "avatarUrl"
-    ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
       "displayName": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "avatarUrl": {
         "anyOf": [

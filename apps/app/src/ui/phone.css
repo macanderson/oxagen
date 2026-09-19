@@ -44,7 +44,8 @@
     flex-wrap: wrap;
   }
 
-  [data-sheet-footer] > * {
+  [data-sheet-footer] > *,
+  [data-footer-slot] > * {
     flex: 1 1 45%;
   }
 

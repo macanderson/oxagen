@@ -20,12 +20,19 @@ export const userProfileUpdateHandler: CapabilityHandler<
   }
   const userId = ctx.userId;
 
+  // A partial write: only the fields the caller sent are touched. The avatar
+  // editor sends an avatar and no name, and a person whose display_name is
+  // null has no name to send back.
   const row = await withSystemDb(async (tx) => {
     const [after] = await tx
       .update(schema.users)
       .set({
-        displayName: input.displayName,
-        avatarUrl: input.avatarUrl,
+        ...(input.displayName === undefined
+          ? {}
+          : { displayName: input.displayName }),
+        ...(input.avatarUrl === undefined
+          ? {}
+          : { avatarUrl: input.avatarUrl }),
         updatedAt: new Date(),
         updatedById: userId,
       })
@@ -41,7 +48,7 @@ export const userProfileUpdateHandler: CapabilityHandler<
   }
 
   return {
-    displayName: row.displayName ?? input.displayName,
+    displayName: row.displayName ?? null,
     avatarUrl: row.avatarUrl ?? null,
   };
 };

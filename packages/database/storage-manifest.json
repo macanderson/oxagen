@@ -961,6 +961,15 @@
       "writes": []
     },
     {
+      "domain": "privacy",
+      "name": "get_export_status",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "get_finding_evidence",
       "reads": [],
@@ -3436,7 +3445,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ba4760fea4c1855bf88d39b92236818bd738a86d2f387a6ffda9f1c93fa432cb",
+  "contentHash": "ef812ba6fa02dbc368a49cb52e828aadb56ff33ce09a7d1b55610045c5b5776c",
   "domains": [
     {
       "name": "agent",
@@ -17045,6 +17054,12 @@
         {
           "name": "org_id",
           "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },

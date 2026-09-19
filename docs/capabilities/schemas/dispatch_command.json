@@ -127,7 +127,9 @@
       "target",
       "command"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   },
   "output": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
