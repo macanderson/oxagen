@@ -118,6 +118,10 @@ export const AVOID = [
   // (.claude/skills/oxagen-branding/references/positioning.md, "Retired").
   // Each one came back once after it was retired, so the scanner holds it.
   "never re-explain",
+  "fewer tokens, same answers",
+  "stop wasting money",
+  "explain your ai bill",
+  "mission control for your autonomous agents",
 ];
 
 const AVOID_RE = new RegExp(

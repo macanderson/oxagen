@@ -30,6 +30,34 @@ describe("check-prose", () => {
     ]);
   });
 
+  // Every one of these came back on a customer page after the registry retired
+  // it, three of them inside one pull request, which is why the scanner holds
+  // them rather than a reviewer.
+  it("flags each retired line the registry names, phrase and all", () => {
+    for (const [text, kind] of [
+      ["Fewer tokens, same answers.", "avoid: Fewer tokens, same answers"],
+      ["Stop wasting money on AI.", "avoid: Stop wasting money"],
+      [
+        "Can you explain your AI bill?",
+        "avoid: explain your AI bill",
+      ],
+      [
+        "Mission Control for your autonomous agents.",
+        "avoid: Mission Control for your autonomous agents",
+      ],
+    ] as const) {
+      expect(findHits(text, ".mdx").map((h) => h.kind)).toContain(kind);
+    }
+  });
+
+  // The approved replacement must not trip the scanner, or the fix for one of
+  // these findings would fail the gate that exists to enforce it.
+  it("leaves the approved headline alone", () => {
+    expect(findHits("Mission Control for agent operators.", ".mdx")).toEqual(
+      [],
+    );
+  });
+
   it("flags an exclamation point but not a shell negation", () => {
     expect(findHits("Done!", ".mdx")[0].kind).toBe("exclamation");
     expect(findHits("if [ ! -f x ]", ".mdx")).toEqual([]);
