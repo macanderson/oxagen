@@ -42,10 +42,14 @@ afterEach(() => {
 
 describe("apiPostOrThrow with an explicit scope", () => {
   it("needs only the token when the caller names the org and workspace", async () => {
-    await apiPostOrThrow("context/steering/freshness", {}, {
-      org: "acme",
-      ws: "payments",
-    });
+    await apiPostOrThrow(
+      "context/steering/freshness",
+      {},
+      {
+        org: "acme",
+        ws: "payments",
+      },
+    );
     const [url] = fetchMock.mock.calls[0] ?? [];
     expect(String(url)).toBe(
       "https://api.example.invalid/v1/acme/payments/context/steering/freshness",

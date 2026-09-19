@@ -22,6 +22,8 @@ export type ApprovalListRow = {
   expiresAt: Date;
   requesterPublicId: string | null;
   mandatePublicId: string | null;
+  /** The run the call was parked in; null when no run was in scope (#3286). */
+  runPublicId: string | null;
   ruleIds: string[];
   autoRuleId: string | null;
   resolvedReasons: string[];
@@ -60,7 +62,7 @@ export function decodeCursor(
 export function toApprovalListItem(row: ApprovalListRow): ApprovalListItem {
   return {
     id: row.publicId,
-    runId: null,
+    runId: row.runPublicId,
     tool: row.capabilityName,
     requester: row.requesterPublicId,
     createdAt: row.createdAt.toISOString(),
@@ -100,11 +102,6 @@ export async function agentApprovalListHandler(
   input: AgentApprovalListInput,
   ctx: CapabilityContext,
 ): Promise<AgentApprovalListOutput> {
-  // No approval row names a run (contract header), so no approval is on the
-  // run the caller asks about: the page is empty because the record holds no
-  // such row.
-  if (input.runId !== undefined) return { items: [], nextCursor: null };
-
   const after = decodeCursor(input.cursor);
   const rows = await withTenantDb((tx) =>
     tx
@@ -115,6 +112,7 @@ export async function agentApprovalListHandler(
         expiresAt: ar.expiresAt,
         requesterPublicId: schema.users.publicId,
         mandatePublicId: schema.mandates.publicId,
+        runPublicId: ar.runPublicId,
         ruleIds: ar.ruleIds,
         autoRuleId: ar.autoRuleId,
         resolvedReasons: ar.resolvedReasons,
@@ -144,6 +142,10 @@ export async function agentApprovalListHandler(
           eq(ar.workspaceId, ctx.workspaceId),
           isNull(ar.resolution),
           sql`${ar.expiresAt} > now()`,
+          // One run's parked calls, when the caller names one. A run whose
+          // writers recorded no reference answers an empty page, which is the
+          // truth about the record and not a filter that was ignored.
+          input.runId === undefined ? undefined : eq(ar.runPublicId, input.runId),
           after ? afterCursor(after) : undefined,
         ),
       )

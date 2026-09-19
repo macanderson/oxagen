@@ -133,6 +133,7 @@ export function RecordActions({
   runId,
   sealed,
   hasSummary,
+  summarizable,
   orgRole,
 }: {
   org: string;
@@ -141,6 +142,12 @@ export function RecordActions({
   /** Both writes need a sealed record: a live run is refused by both handlers. */
   sealed: boolean;
   hasSummary: boolean;
+  /**
+   * `canSummarize` from the row: `summarize_run` refuses a `digest_only`
+   * recording, because there are no bodies for a model to read. The contract
+   * answers it, so the button and the handler read one rule (#3285).
+   */
+  summarizable: boolean;
   /**
    * The viewer's organization role, which both handlers assert on:
    * `summarize_run` admits an Owner, Admin or Member and `export_run` an Owner
@@ -152,7 +159,8 @@ export function RecordActions({
   const t = useTranslations("run.record");
   if (!sealed) return null;
   const canExport = orgRole === "owner" || orgRole === "admin";
-  const canSummarize = canExport || orgRole === "member";
+  const hasRole = canExport || orgRole === "member";
+  const canSummarize = hasRole && summarizable;
   const summarizeAction = hasSummary ? "resummarize" : "summarize";
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
@@ -196,10 +204,10 @@ export function RecordActions({
       </div>
       {canSummarize ? null : (
         <p
-          data-testid="summarize-no-role"
+          data-testid={hasRole ? "summarize-no-bodies" : "summarize-no-role"}
           className="max-w-prose text-xs text-muted-foreground lg:text-right"
         >
-          {t("summarize.needsRole")}
+          {hasRole ? t("summarize.needsBodies") : t("summarize.needsRole")}
         </p>
       )}
       {canExport ? null : (

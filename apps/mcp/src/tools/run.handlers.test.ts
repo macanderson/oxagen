@@ -1,5 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
-// (#2952, ADR-058): get_run_frame_body, get_run_transcript, bisect_runs.
+// (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_chain,
+// bisect_runs.
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool.
 //
@@ -35,6 +36,10 @@ import runBisectTool, {
   schema as bisectSchema,
   metadata as bisectMetadata,
 } from "./run.bisect";
+import runChainGetTool, {
+  schema as chainSchema,
+  metadata as chainMetadata,
+} from "./run.chain.get";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -98,11 +103,73 @@ const CASES: ToolCase[] = [
     handler: runTranscriptGetTool,
     schema: transcriptSchema,
     metadata: transcriptMetadata,
-    fields: ["runId", "zoom"],
+    fields: ["runId", "zoom", "kinds", "after", "limit"],
     readOnly: true,
-    args: { runId: TACHO_ID, zoom: "turns" },
-    validOutput: { zoom: "turns", entries: [], complete: true },
-    invalidOutput: { zoom: "frames", entries: [], complete: true },
+    args: { runId: TACHO_ID, zoom: "turns", kinds: [], limit: 200 },
+    validOutput: {
+      zoom: "turns",
+      kinds: [],
+      entries: [],
+      cursor: null,
+      complete: true,
+    },
+    invalidOutput: {
+      zoom: "frames",
+      kinds: [],
+      entries: [],
+      cursor: null,
+      complete: true,
+    },
+  },
+  {
+    name: "get_run_chain",
+    handler: runChainGetTool,
+    schema: chainSchema,
+    metadata: chainMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      hashRule: "tacho.sha256_prev_hash_v1",
+      frameCount: 0,
+      firstSeq: null,
+      lastSeq: null,
+      merkleRoot: null,
+      checkpoints: [],
+      gaps: {
+        missingSequences: [],
+        missingFrameCount: 0,
+        missingBodies: 0,
+        recorded: [],
+      },
+      seals: [],
+      enforcementTier: "observe",
+      recordedGrade: null,
+      ladder: [{ grade: "inspect", met: true, reason: "frames_recorded" }],
+      complete: true,
+    },
+    // A hash rule outside the closed set: a verifier cannot recompute with it.
+    invalidOutput: {
+      runId: TACHO_ID,
+      hashRule: "sha1",
+      frameCount: 0,
+      firstSeq: null,
+      lastSeq: null,
+      merkleRoot: null,
+      checkpoints: [],
+      gaps: {
+        missingSequences: [],
+        missingFrameCount: 0,
+        missingBodies: 0,
+        recorded: [],
+      },
+      seals: [],
+      enforcementTier: "observe",
+      recordedGrade: null,
+      ladder: [],
+      complete: true,
+    },
   },
   {
     name: "bisect_runs",

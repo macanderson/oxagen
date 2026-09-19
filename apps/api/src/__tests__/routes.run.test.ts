@@ -112,6 +112,11 @@ interface RouteCase {
   contract: string;
   /** An input the contract accepts, as the wire carries it. */
   input: Record<string, unknown>;
+  /**
+   * What the handler is called with, where the contract fills a default the
+   * wire body left out. Omitted when the parsed body is the body as sent.
+   */
+  parsed?: Record<string, unknown>;
   /** What a handler answers; the route forwards it verbatim. */
   output: Record<string, unknown>;
   /** Inputs the contract refuses, each named by what is wrong with it. */
@@ -155,6 +160,10 @@ const CASES: RouteCase[] = [
     path: "/runs/transcript",
     contract: "get_run_transcript",
     input: { runId: TACHO_ID, zoom: "steps" },
+    // `kinds` and `limit` carry contract defaults, so the handler is called
+    // with more than the wire sent. Asserting the sent body here would have
+    // the route look like it forwards the body unparsed.
+    parsed: { runId: TACHO_ID, zoom: "steps", kinds: [], limit: 200 },
     output: { entries: [], complete: true },
     refused: {
       "zoom outside the three levels": { runId: TACHO_ID, zoom: "frames" },
@@ -221,7 +230,7 @@ for (const routeCase of CASES) {
       expect(mocks.invoke).toHaveBeenCalledOnce();
       const call = mocks.invoke.mock.calls[0];
       expect(call?.[0]).toBe(routeCase.contract);
-      expect(call?.[1]).toEqual(routeCase.input);
+      expect(call?.[1]).toEqual(routeCase.parsed ?? routeCase.input);
       expect(call?.[3]).toEqual({ surface: "api" });
     });
 

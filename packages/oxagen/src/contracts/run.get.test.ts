@@ -70,6 +70,9 @@ describe("get_run contract", () => {
       sealedAt: null,
       replayGrade: null,
       verdict: null,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      canSummarize: false,
       name: null,
       summary: null,
     };

@@ -297,8 +297,14 @@ describe("the Tacho host key", () => {
     // `fetch_tacho_commands` after the contract became `fetch_commands`, and
     // every host's command poll was refused in production. The list is held
     // to the contracts' own names so the next rename fails here instead.
-    expect([...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? [])].sort()).toEqual(
-      [tachoBundleGet.name, tachoCommandFetch.name, tachoEventsIngest.name].sort(),
+    expect(
+      [...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? [])].sort(),
+    ).toEqual(
+      [
+        tachoBundleGet.name,
+        tachoCommandFetch.name,
+        tachoEventsIngest.name,
+      ].sort(),
     );
   });
 

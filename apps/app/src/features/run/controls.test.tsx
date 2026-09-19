@@ -41,6 +41,7 @@ function renderControls() {
         runId={RUN}
         status="live"
         source="tacho"
+        enforcementTier="harness"
         orgRole="member"
         wsRole="member"
       />
@@ -179,6 +180,7 @@ describe("run controls", () => {
           runId={RUN}
           status="live"
           source="tacho"
+          enforcementTier="harness"
           orgRole="viewer"
           wsRole="viewer"
         />
@@ -204,6 +206,7 @@ describe("run controls", () => {
           runId={RUN}
           status="live"
           source="tacho"
+          enforcementTier="harness"
           orgRole="viewer"
           wsRole="member"
         />
@@ -218,6 +221,7 @@ describe("record writes", () => {
   function renderRecord(
     hasSummary: boolean,
     orgRole: "owner" | "member" | "viewer" = "owner",
+    summarizable = true,
   ) {
     return render(
       <IntlProvider>
@@ -227,6 +231,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed
           hasSummary={hasSummary}
+          summarizable={summarizable}
           orgRole={orgRole}
         />
       </IntlProvider>,
@@ -316,6 +321,7 @@ describe("record writes", () => {
           runId={RUN}
           sealed={false}
           hasSummary={false}
+          summarizable={false}
           orgRole="owner"
         />
       </IntlProvider>,

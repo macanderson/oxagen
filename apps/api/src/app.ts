@@ -274,6 +274,8 @@ import { runListRoute } from "./routes/v1/run.list";
 import { runGetRoute } from "./routes/v1/run.get";
 import { runFrameBodyGetRoute } from "./routes/v1/run.frame_body.get";
 import { runTranscriptGetRoute } from "./routes/v1/run.transcript.get";
+import { runChainGetRoute } from "./routes/v1/run.chain.get";
+import { runStreamRoute } from "./routes/v1/run.stream";
 import { runBisectRoute } from "./routes/v1/run.bisect";
 import { runForkRoute } from "./routes/v1/run.fork";
 import { runExportRoute } from "./routes/v1/run.export";
@@ -599,6 +601,10 @@ orgScoped.route("/runs", runListRoute);
 orgScoped.route("/runs/get", runGetRoute);
 orgScoped.route("/runs/frame-body", runFrameBodyGetRoute);
 orgScoped.route("/runs/transcript", runTranscriptGetRoute);
+orgScoped.route("/runs/chain", runChainGetRoute);
+// One run's frames, live. GET, so EventSource can open it and resume from
+// Last-Event-ID; the read underneath is get_run, gates and all.
+orgScoped.route("/runs/:run_id/stream", runStreamRoute);
 orgScoped.route("/runs/bisect", runBisectRoute);
 orgScoped.route("/runs/fork", runForkRoute);
 orgScoped.route("/runs/export", runExportRoute);

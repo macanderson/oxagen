@@ -7,7 +7,28 @@
 // recorded types, labels, instants and costs, and a figure the frames did not
 // carry is left out rather than drawn as a zero.
 import { type Money, sumMoney } from "@/data/contracts/money";
-import type { TranscriptEntry } from "@/data/contracts/run";
+import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
+
+/**
+ * The one half of the exchange an entry carries, or null.
+ *
+ * At `everything` an entry is a single frame, so exactly one half is recorded:
+ * what went out, or what came back. This answers that half.
+ *
+ * An entry carrying BOTH halves answers null rather than picking one. That is
+ * the whole point of the function. The contract folds a step at the `steps`
+ * and `turns` zooms, and a folded tool step carries its input in `request` and
+ * its result in `response`; a positional `response ?? request` would silently
+ * render a tool's input where its result belongs, and nothing about the page
+ * would look wrong. A caller that needs both halves reads them by name, which
+ * is what the frame renderer does. Module-private: its one caller is
+ * `textOf` below, in this file; a turn's prompt and reply are the only
+ * place the app still reads a body positionally instead of by name.
+ */
+function soleBody(entry: TranscriptEntry): TranscriptBody | null {
+  if (entry.request !== null && entry.response !== null) return null;
+  return entry.response ?? entry.request;
+}
 
 /** A transcript with at least one frame: the only kind the view draws. */
 export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
@@ -55,8 +76,19 @@ export type TranscriptTurn = {
 
 const MODEL_REQUEST = "model.request";
 const MODEL_RESPONSE = "model.response";
+/** The in-app assistant's write-ahead and receipt for a model call. */
+const MODEL_ENGINE_STARTED = "model.engine_call_started";
+const MODEL_ENGINE_COMPLETED = "model.engine_call_completed";
 const TOOL_REQUESTED = "tool_requested";
 const TOOL_CALL = "tool_call";
+/** The in-app assistant's write-ahead and receipt for a tool call. */
+const TOOL_ENGINE_STARTED = "tool.engine_call_started";
+const TOOL_ENGINE_COMPLETED = "tool.engine_call_completed";
+/** The frame that closes a tool step: wrapped `tool_call` or engine receipt. */
+const TOOL_CLOSE: ReadonlySet<string> = new Set([
+  TOOL_CALL,
+  TOOL_ENGINE_COMPLETED,
+]);
 /** Policy frames: the decision about a tool call, which sits between its request and the call. */
 const TOOL_GATE: ReadonlySet<string> = new Set([
   "policy_decision",
@@ -76,28 +108,79 @@ const CONTROL: ReadonlySet<string> = new Set([
   "turn_end",
 ]);
 
-/** Where the step opening at `i` ends (exclusive), and what kind it is. */
-function stepEnd(
+/**
+ * Which indices the step opening at `i` owns, and what kind it is.
+ *
+ * A model or tool exchange is two frames wherever the producer wrote two: the
+ * request and the response. The wrapped session spells those
+ * `model.request`/`model.response` and `tool_requested`/`tool_call`; the
+ * in-app assistant spells them `*.engine_call_started`/`*.engine_call_completed`.
+ * Both halves carry the same step kind at `everything`, so without this pair
+ * each half would draw as its own step.
+ *
+ * When the opening frame carries a `callKey`, the close is the later frame of
+ * the matching close type with the same key, even when another call's start or
+ * close sits between them (TOOL_GATE frames are allowed through the same way).
+ * Frames claimed by an earlier pair are skipped by `stepsOf`, so overlapping
+ * `start A, start B, complete A, complete B` yields two steps that each own
+ * their own halves. When `callKey` is null, pairing stays adjacency: the next
+ * close of the right type, with only TOOL_GATE frames allowed between a tool's
+ * request and its call.
+ */
+function stepPair(
   frames: readonly TranscriptEntry[],
   i: number,
   frame: TranscriptEntry,
-): { end: number; kind: TranscriptStep["kind"] } {
-  if (frame.type === MODEL_REQUEST) {
-    const paired = frames[i + 1]?.type === MODEL_RESPONSE;
-    return { end: paired ? i + 2 : i + 1, kind: "model" };
-  }
-  if (frame.type === TOOL_REQUESTED) {
-    let end = i + 1;
-    for (let next = frames[end]; next !== undefined; next = frames[end]) {
-      if (next.type === TOOL_CALL) return { end: end + 1, kind: "tool" };
-      if (!TOOL_GATE.has(next.type)) break;
-      end += 1;
+): { indices: number[]; kind: TranscriptStep["kind"] } {
+  if (frame.type === MODEL_REQUEST || frame.type === MODEL_ENGINE_STARTED) {
+    const close =
+      frame.type === MODEL_ENGINE_STARTED
+        ? MODEL_ENGINE_COMPLETED
+        : MODEL_RESPONSE;
+    const callKey = frame.callKey;
+    if (callKey !== null) {
+      for (let j = i + 1; j < frames.length; j += 1) {
+        const next = frames[j];
+        if (next === undefined) break;
+        if (next.type === close && next.callKey === callKey) {
+          return { indices: [i, j], kind: "model" };
+        }
+      }
+      return { indices: [i], kind: "model" };
     }
-    return { end, kind: "tool" };
+    const paired = frames[i + 1]?.type === close;
+    return { indices: paired ? [i, i + 1] : [i], kind: "model" };
   }
-  if (frame.kind === "model_call") return { end: i + 1, kind: "model" };
-  if (frame.kind === "tool_call") return { end: i + 1, kind: "tool" };
-  return { end: i + 1, kind: "event" };
+  if (frame.type === TOOL_REQUESTED || frame.type === TOOL_ENGINE_STARTED) {
+    const close =
+      frame.type === TOOL_ENGINE_STARTED ? TOOL_ENGINE_COMPLETED : TOOL_CALL;
+    const callKey = frame.callKey;
+    if (callKey !== null) {
+      for (let j = i + 1; j < frames.length; j += 1) {
+        const next = frames[j];
+        if (next === undefined) break;
+        if (next.type === close && next.callKey === callKey) {
+          return { indices: [i, j], kind: "tool" };
+        }
+      }
+      return { indices: [i], kind: "tool" };
+    }
+    const indices = [i];
+    for (let j = i + 1; j < frames.length; j += 1) {
+      const next = frames[j];
+      if (next === undefined) break;
+      if (next.type === close) {
+        indices.push(j);
+        return { indices, kind: "tool" };
+      }
+      if (!TOOL_GATE.has(next.type)) break;
+      indices.push(j);
+    }
+    return { indices, kind: "tool" };
+  }
+  if (frame.kind === "model_call") return { indices: [i], kind: "model" };
+  if (frame.kind === "tool_call") return { indices: [i], kind: "tool" };
+  return { indices: [i], kind: "event" };
 }
 
 function stepsOf(
@@ -105,20 +188,31 @@ function stepsOf(
   offset: number,
 ): TranscriptStep[] {
   const steps: TranscriptStep[] = [];
-  let i = 0;
-  for (let first = frames[i]; first !== undefined; first = frames[i]) {
-    const { end, kind } = stepEnd(frames, i, first);
-    const slice = frames.slice(i, end);
+  const claimed = new Set<number>();
+  for (let i = 0; i < frames.length; i += 1) {
+    if (claimed.has(i)) continue;
+    const first = frames[i];
+    if (first === undefined) continue;
+    const { indices, kind } = stepPair(frames, i, first);
+    for (const index of indices) {
+      if (index !== i) claimed.add(index);
+    }
+    const slice = indices.flatMap((index) => {
+      const entry = frames[index];
+      return entry === undefined ? [] : [entry];
+    });
+    const last = slice[slice.length - 1] ?? first;
+    const from = indices[0] ?? i;
+    const to = indices[indices.length - 1] ?? i;
     steps.push({
       id: `s${first.seq}`,
       kind,
-      from: offset + i,
-      to: offset + end - 1,
+      from: offset + from,
+      to: offset + to,
       first,
-      last: slice[slice.length - 1] ?? first,
+      last,
       frames: slice,
     });
-    i = end;
   }
   return steps;
 }
@@ -131,9 +225,9 @@ function textOf(
 ): string | null {
   const ordered = last ? [...frames].reverse() : frames;
   const found = ordered.find(
-    (frame) => frame.type === type && frame.text !== null,
+    (frame) => frame.type === type && (soleBody(frame)?.text ?? null) !== null,
   );
-  return found?.text ?? null;
+  return found === undefined ? null : (soleBody(found)?.text ?? null);
 }
 
 /**
@@ -220,7 +314,7 @@ export function stepDigest(step: TranscriptStep): StepDigest {
   if (step.kind === "tool") {
     // The call's own frame carries the outcome; the request only names the tool.
     const named =
-      step.frames.find((frame) => frame.type === TOOL_CALL) ?? first;
+      step.frames.find((frame) => TOOL_CLOSE.has(frame.type)) ?? first;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
     const status = toolStatus(named.label);
     const denied =
@@ -262,25 +356,6 @@ export function frameCost(frames: readonly TranscriptEntry[]): Money | null {
   return sumMoney(
     frames.flatMap((frame) => (frame.cost === null ? [] : [frame.cost])),
   );
-}
-
-/** Cumulative cost up to and including position `pos` (§8.4: a prefix sum, computed on read). */
-export function costAt(
-  entries: readonly TranscriptEntry[],
-  pos: number,
-): Money | null {
-  return frameCost(entries.slice(0, pos + 1));
-}
-
-/** Milliseconds from the first frame to the frame at `pos`. */
-export function elapsedAt(
-  entries: readonly TranscriptEntry[],
-  pos: number,
-): number {
-  const first = entries[0];
-  const here = entries[Math.min(pos, entries.length - 1)];
-  if (first === undefined || here === undefined) return 0;
-  return Math.max(0, Date.parse(here.at) - Date.parse(first.at));
 }
 
 /**

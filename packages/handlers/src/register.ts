@@ -1107,6 +1107,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runTranscriptGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_chain",
+    async () =>
+      (await import("./run.chain.get"))
+        .runChainGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "bisect_runs",
     async () =>
       (await import("./run.bisect")).runBisectHandler as CapabilityHandlerFn,

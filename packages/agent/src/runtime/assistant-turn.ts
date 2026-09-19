@@ -336,9 +336,16 @@ async function runPreparedTurn(
     hooks.onApprovalRequired?.(event);
   };
 
+  // Filled in once `openAssistantRun` opens the run below; every materialized
+  // tool's `execute` closure reads it at call time so a parked approval
+  // attaches to this turn's run rather than to whatever `capCtx.agentRun`
+  // held before the run existed (finding 9, macanderson/oxagen#3370).
+  const runIdRef: { current: string | null } = { current: null };
+
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>
     Promise.all([
       materializeTools(capCtx, {
+        runIdRef,
         serverAllowlist:
           request.activeServerIds && request.activeServerIds.length > 0
             ? new Set(request.activeServerIds)
@@ -441,6 +448,13 @@ async function runPreparedTurn(
     ],
   });
   hooks.onRun?.({ runId: run.runPublicId });
+  // Every materialized tool's `execute` closure reads this at call time
+  // (finding 9, macanderson/oxagen#3370): a call parked from here on attaches
+  // to the run whose Policy tab a person can actually see. The value is the
+  // internal UUID — `createApprovalRequest` → `resolveRunPublicId` only
+  // accepts a uuid and looks up `agent_runs.id`; a public `arun_…` id would
+  // write `run_public_id = null` and disappear from `list_approvals({ runId })`.
+  runIdRef.current = run.runId;
 
   // `openAssistantRun` has admitted the run and opened its attempt, but
   // `runGovernedTurn` does not install its sealing path until after its

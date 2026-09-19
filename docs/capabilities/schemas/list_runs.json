@@ -214,6 +214,33 @@
                 }
               ]
             },
+            "enforcementTier": {
+              "type": "string",
+              "enum": [
+                "gateway",
+                "harness",
+                "observe"
+              ]
+            },
+            "completenessGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "digest_only",
+                  "body_missing",
+                  "tool_bodies",
+                  "model_calls",
+                  "hooks_partial",
+                  "unobserved_tail",
+                  "chain_break",
+                  "telemetry_gap"
+                ]
+              }
+            },
+            "canSummarize": {
+              "type": "boolean"
+            },
             "model": {
               "anyOf": [
                 {
@@ -366,6 +393,9 @@
             "sealedAt",
             "replayGrade",
             "verdict",
+            "enforcementTier",
+            "completenessGaps",
+            "canSummarize",
             "model",
             "machine",
             "name",

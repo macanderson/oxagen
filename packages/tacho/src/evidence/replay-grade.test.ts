@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPLETENESS_GAP_KINDS,
   computeReplayGrade,
+  explainReplayGrade,
   gradeAllows,
   isCompletenessGapKind,
   isContentBearingFrame,
@@ -135,5 +136,88 @@ describe("the ladder", () => {
     expect(isContentBearingFrame("tool_requested")).toBe(false);
     expect(isContentBearingFrame("agent_start")).toBe(false);
     expect(isContentBearingFrame("context.frames_selected")).toBe(false);
+  });
+});
+
+describe("explainReplayGrade", () => {
+  const base = {
+    gaps: [] as string[],
+    enforcementTier: "gateway" as const,
+    retainedBodies: 4,
+    harnessReproducible: false,
+  };
+
+  it("agrees with computeReplayGrade on every input it is asked", () => {
+    for (const tier of ["gateway", "harness", "observe"] as const) {
+      for (const gaps of [[], ["tool_bodies"], ["chain_break"]]) {
+        for (const bodies of [0, 3]) {
+          const input = { ...base, enforcementTier: tier, gaps, retainedBodies: bodies };
+          expect(explainReplayGrade(input).grade).toBe(
+            computeReplayGrade(input),
+          );
+        }
+      }
+    }
+  });
+
+  it("names what carries each rung it reaches", () => {
+    const { grade, ladder } = explainReplayGrade(base);
+    expect(grade).toBe("fork");
+    expect(ladder.map((r) => [r.grade, r.met, r.reason])).toEqual([
+      ["inspect", true, "frames_recorded"],
+      ["view", true, "bodies_retained"],
+      ["fork", true, "tool_cassette_complete"],
+      ["retry", false, "harness_not_reproducible"],
+    ]);
+  });
+
+  it("names the single thing that stops each rung it does not reach", () => {
+    expect(
+      explainReplayGrade({ ...base, enforcementTier: "harness" }).ladder[2],
+    ).toEqual({
+      grade: "fork",
+      met: false,
+      reason: "enforcement_tier:harness",
+    });
+    expect(
+      explainReplayGrade({ ...base, gaps: ["tool_bodies"] }).ladder[2]?.reason,
+    ).toBe("tool_bodies");
+    expect(
+      explainReplayGrade({ ...base, retainedBodies: 0 }).ladder[1]?.reason,
+    ).toBe("no_retained_bodies");
+    expect(
+      explainReplayGrade({ ...base, enforcementTier: "observe" }).ladder[1]
+        ?.reason,
+    ).toBe("observe_tier");
+  });
+
+  it("carries a blocking gap down the rungs above it, sorted so the reason is stable", () => {
+    const ladder = explainReplayGrade({
+      ...base,
+      gaps: ["chain_break", "body_missing"],
+    }).ladder;
+    expect(ladder.map((r) => r.met)).toEqual([true, false, false, false]);
+    expect(ladder[1]?.reason).toBe("body_missing,chain_break");
+    expect(ladder[3]?.reason).toBe("body_missing,chain_break");
+  });
+
+  it("refuses a gap kind the vocabulary does not name (negative)", () => {
+    expect(() =>
+      explainReplayGrade({ ...base, gaps: ["something_new"] }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe("isContentBearingFrame", () => {
+  it("counts the engine's own call halves, which a body-less in-app run graded `view` without", () => {
+    for (const type of [
+      "model.engine_call_started",
+      "model.engine_call_completed",
+      "tool.engine_call_started",
+      "tool.engine_call_completed",
+    ]) {
+      expect(isContentBearingFrame(type)).toBe(true);
+    }
+    expect(isContentBearingFrame("turn_start")).toBe(false);
   });
 });

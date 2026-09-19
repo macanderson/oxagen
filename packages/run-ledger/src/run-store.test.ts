@@ -549,6 +549,7 @@ describe("mapAttemptRow", () => {
     model_calls: null,
     tool_calls: null,
     turns: null,
+    enforcement_tier: null,
   };
 
   it("projects an open attempt with no seal and no provenance", () => {
@@ -1218,6 +1219,7 @@ describe("SQL builders", () => {
         modelCalls: 0,
         toolCalls: 1,
         turns: 0,
+        enforcementTier: "harness",
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
@@ -2620,9 +2622,12 @@ describe("the seal's rollup", () => {
       sealerId: "drain-1",
     });
     const seal = executed.find((e) => INSERT_SEAL.test(e.sql));
-    expect(seal?.sql).toContain("model_calls, tool_calls, turns");
-    // One tool call, no model call, zero turns.
-    expect(seal?.params.slice(-3)).toEqual([0, 1, 0]);
+    expect(seal?.sql).toContain(
+      "model_calls, tool_calls, turns, enforcement_tier",
+    );
+    // One tool call, no model call, zero turns, and no model call observed at
+    // the gateway — so the attempt is graded at the `harness` tier.
+    expect(seal?.params.slice(-4)).toEqual([0, 1, 0, "harness"]);
   });
 });
 
