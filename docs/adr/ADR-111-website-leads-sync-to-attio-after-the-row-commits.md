@@ -29,9 +29,13 @@ Three ways to get the lead into Attio were on the table:
 Option 3. Postgres stays the record and the form's answer never depends on a
 third party. After `cms.leads` commits, the route hands the lead id to
 `queueCrmSync`, which asserts a company (by email domain, skipped for
-consumer mailboxes), asserts a person (by email) linked to it, and writes a
-note on the person carrying the fields Attio has no attribute for. The
-result is written back to the row: `crm_record_id` and `crm_synced_at` on
+consumer mailboxes), asserts a person (by email) linked to it, writes a
+note on the person carrying the fields Attio has no attribute for, and, for
+a lead who asked for the book, adds the person to the "Inbound lead
+nurture" list with Asset set to each edition their access codes name and
+Branch left blank for the nurture sequence's day-3 job. A demo request is
+a conversation, not a nurture, so it stays off the list. The result is
+written back to the row: `crm_record_id` and `crm_synced_at` on
 success, `crm_sync_error` on failure. The client retries 429 and 5xx with
 backoff and honours `Retry-After`. `pnpm --filter @oxagen/api
 cms:crm-backfill` re-runs the same sync for every row with `crm_synced_at`
@@ -41,7 +45,11 @@ command instead of a database export.
 Person and company asserts are idempotent (Attio matches on the one unique
 attribute of each object), so a retry or a backfill cannot create a second
 record. A note is a new object each time, which is intended: a visitor who
-submits twice shows two notes, and the second one is the signal.
+submits twice shows two notes, and the second one is the signal. The list
+entry is asserted with no values and the asset is then appended with the
+PATCH form, because a PUT with values overwrites a multi-select (verified
+against the workspace on 2026-09-19): a second form must add its asset to
+the entry, never reset it, or the good leads restart the sequence.
 
 ## Consequences
 

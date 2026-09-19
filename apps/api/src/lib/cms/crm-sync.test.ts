@@ -2,7 +2,8 @@
  * Unit tests for the lead → Attio sync (crm-sync.ts).
  *
  * withSystemDb is mocked with a scripted fake transaction (selects resolve to
- * queued rows; update().set() payloads are recorded), and the Attio client is
+ * queued rows in order: the lead row, then its access codes' editions;
+ * update().set() payloads are recorded), and the Attio client is
  * an in-memory fake, so the tests cover the mapping, the write-back and the
  * failure paths without a database or the network.
  */
@@ -31,13 +32,14 @@ vi.mock("@oxagen/database", async (importOriginal) => {
     });
     return proxy;
   };
+  const nextSelect = () => {
+    const next = h.selects.shift();
+    if (next instanceof Error) throw next;
+    return next ?? [];
+  };
   const tx = {
-    select: () =>
-      chain(() => {
-        const next = h.selects.shift();
-        if (next instanceof Error) throw next;
-        return next ?? [];
-      }),
+    select: () => chain(nextSelect),
+    selectDistinct: () => chain(nextSelect),
     update: () =>
       chain(
         () => undefined,
@@ -55,7 +57,9 @@ vi.mock("../../middleware/logger", () => ({ logger: h.logger }));
 
 import type { AttioClient } from "./attio";
 import {
+  ASSET_TITLES,
   CONSUMER_EMAIL_DOMAINS,
+  NURTURE_LIST_SLUG,
   __resetCrmClientForTests,
   buildLeadNote,
   companyNameFor,
@@ -106,6 +110,8 @@ function fakeClient(overrides: Partial<AttioClient> = {}) {
     assertCompany: vi.fn().mockResolvedValue({ recordId: "company-1" }),
     assertPerson: vi.fn().mockResolvedValue({ recordId: "person-1" }),
     createNote: vi.fn().mockResolvedValue({ noteId: "note-1" }),
+    assertListEntry: vi.fn().mockResolvedValue({ entryId: "entry-1" }),
+    appendListEntryValues: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
   return client;
@@ -199,6 +205,10 @@ describe("helpers", () => {
 describe("syncLeadToCrm", () => {
   it("asserts company then person, writes a note, records the record id", async () => {
     h.selects.push([lead()]);
+    h.selects.push([
+      { edition: "field-manual" },
+      { edition: "page-flip-reader" },
+    ]);
     const client = fakeClient();
 
     const out = await syncLeadToCrm("lead-1", client);
@@ -227,6 +237,16 @@ describe("syncLeadToCrm", () => {
         title: "Website lead: demo",
       }),
     );
+    expect(client.assertListEntry).toHaveBeenCalledWith({
+      list: NURTURE_LIST_SLUG,
+      parentObject: "people",
+      parentRecordId: "person-1",
+    });
+    expect(client.appendListEntryValues).toHaveBeenCalledWith({
+      list: NURTURE_LIST_SLUG,
+      entryId: "entry-1",
+      values: { asset: ["Field manual", "Page-flip reader"] },
+    });
     expect(h.sets).toHaveLength(1);
     expect(h.sets[0]).toMatchObject({
       crmRecordId: "person-1",
@@ -235,8 +255,34 @@ describe("syncLeadToCrm", () => {
     expect(h.sets[0]!.crmSyncedAt).toBeInstanceOf(Date);
   });
 
+  it("keeps a demo-only lead (no access codes) off the nurture list", async () => {
+    h.selects.push([lead()]);
+    h.selects.push([]);
+    const client = fakeClient();
+    const out = await syncLeadToCrm("lead-1", client);
+    expect(out.status).toBe("synced");
+    expect(client.assertListEntry).not.toHaveBeenCalled();
+    expect(client.appendListEntryValues).not.toHaveBeenCalled();
+  });
+
+  it("ignores a code whose edition is unknown or null", async () => {
+    h.selects.push([lead()]);
+    h.selects.push([{ edition: null }, { edition: "mystery" }]);
+    const client = fakeClient();
+    await syncLeadToCrm("lead-1", client);
+    expect(client.assertListEntry).not.toHaveBeenCalled();
+  });
+
+  it("ASSET_TITLES names every edition", () => {
+    expect(ASSET_TITLES).toEqual({
+      "field-manual": "Field manual",
+      "page-flip-reader": "Page-flip reader",
+    });
+  });
+
   it("skips the company for a consumer mailbox", async () => {
     h.selects.push([lead({ email: "ada@gmail.com", company: null })]);
+    h.selects.push([]);
     const client = fakeClient();
     await syncLeadToCrm("lead-1", client);
     expect(client.assertCompany).not.toHaveBeenCalled();
@@ -263,6 +309,7 @@ describe("syncLeadToCrm", () => {
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(new Error("offline"));
     h.selects.push([lead({ email: "ada@gmail.com" })]);
+    h.selects.push([]);
     const out = await syncLeadToCrm("lead-1");
     expect(out.status).toBe("failed");
     expect(fetchSpy).toHaveBeenCalled();
@@ -284,6 +331,7 @@ describe("syncLeadToCrm", () => {
 
   it("records the failure on the row and never throws", async () => {
     h.selects.push([lead()]);
+    h.selects.push([]);
     const client = fakeClient({
       assertPerson: vi.fn().mockRejectedValue(new Error("Attio said 400")),
     });
@@ -300,6 +348,7 @@ describe("syncLeadToCrm", () => {
 
   it("truncates a long failure message to 500 chars", async () => {
     h.selects.push([lead()]);
+    h.selects.push([]);
     const client = fakeClient({
       assertCompany: vi.fn().mockRejectedValue(new Error("x".repeat(900))),
     });
@@ -332,6 +381,7 @@ describe("queueCrmSync", () => {
       .spyOn(globalThis, "fetch")
       .mockRejectedValue(new Error("offline"));
     h.selects.push([lead({ email: "ada@gmail.com" })]);
+    h.selects.push([]);
     queueCrmSync("lead-1");
     await vi.waitFor(() => expect(h.sets).toHaveLength(1));
     expect(h.sets[0]).toMatchObject({ crmSyncError: "offline" });
@@ -343,7 +393,9 @@ describe("syncPendingLeads", () => {
   it("syncs each pending lead oldest first and returns the outcomes", async () => {
     h.selects.push([{ id: "lead-1" }, { id: "lead-2" }]);
     h.selects.push([lead({ id: "lead-1" })]);
+    h.selects.push([{ edition: "field-manual" }]);
     h.selects.push([lead({ id: "lead-2", email: "b@gmail.com" })]);
+    h.selects.push([]);
     const client = fakeClient();
     const out = await syncPendingLeads({ client, limit: 10 });
     expect(out.map((r) => r.status)).toEqual(["synced", "synced"]);

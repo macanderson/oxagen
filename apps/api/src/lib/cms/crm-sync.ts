@@ -15,14 +15,19 @@
  *   - a person, asserted by email, linked to that company;
  *   - a note on the person carrying everything the form said that Attio has
  *     no attribute for: source, page, message, tracking code, company size,
- *     referral source, location, consent.
+ *     referral source, location, consent;
+ *   - for a lead who asked for the book, an entry on the "Inbound lead
+ *     nurture" list with Asset set to each edition they requested (read from
+ *     their access codes) and Branch left blank, which is what the nurture
+ *     sequence's day-3 job fills in. A second form appends its asset; it
+ *     never resets the entry.
  *
  * Person and company asserts are idempotent, so a retry cannot duplicate
  * them. A note is a new object each time, so a resubmitted form adds a new
  * note, which is what a sales rep wants to see ("they came back").
  */
 
-import { schema, withSystemDb } from "@oxagen/database";
+import { schema, withSystemDb, type EditionSlug } from "@oxagen/database";
 import { eq, isNull, asc } from "drizzle-orm";
 import { logger } from "../../middleware/logger";
 import {
@@ -31,7 +36,20 @@ import {
   type AttioPersonInput,
 } from "./attio";
 
-const { leads } = schema;
+const { leads, bookAccessCodes } = schema;
+
+/** The Attio list the nurture sequence reads (People object). */
+export const NURTURE_LIST_SLUG = "inbound_lead_nurture";
+
+/**
+ * The list's `asset` options, by edition. These are the option titles as
+ * created in Attio; a new gated asset is a new option there and a new row
+ * here.
+ */
+export const ASSET_TITLES: Record<EditionSlug, string> = {
+  "field-manual": "Field manual",
+  "page-flip-reader": "Page-flip reader",
+};
 
 /** Mailbox providers whose domain names a mailbox, not an employer. */
 export const CONSUMER_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
@@ -153,6 +171,23 @@ export function buildLeadNote(lead: LeadRecord): {
   };
 }
 
+/** Every edition this lead has been issued a code for, in Attio's titles. */
+async function loadRequestedAssets(leadId: string): Promise<string[]> {
+  const rows = await withSystemDb(async (tx) =>
+    tx
+      .selectDistinct({ edition: bookAccessCodes.lastEditionSlug })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.leadId, leadId)),
+  );
+  const titles = new Set<string>();
+  for (const { edition } of rows) {
+    if (edition && edition in ASSET_TITLES) {
+      titles.add(ASSET_TITLES[edition as EditionSlug]);
+    }
+  }
+  return [...titles].sort();
+}
+
 async function loadLead(leadId: string): Promise<LeadRecord | null> {
   return withSystemDb(async (tx) => {
     const [row] = await tx
@@ -195,8 +230,10 @@ export async function syncLeadToCrm(
   if (!client) return { status: "skipped", leadId, reason: "not_configured" };
 
   let lead: LeadRecord | null;
+  let assets: string[];
   try {
     lead = await loadLead(leadId);
+    assets = lead ? await loadRequestedAssets(leadId) : [];
   } catch (err) {
     logger.error({ err, leadId }, "[cms] crm sync could not load the lead");
     return { status: "failed", leadId, error: errorText(err) };
@@ -230,6 +267,21 @@ export async function syncLeadToCrm(
       parentRecordId: recordId,
       ...note,
     });
+
+    // A demo request is a conversation, not a nurture; only book leads join
+    // the list. Assert first (keeps an existing entry intact), then append.
+    if (assets.length > 0) {
+      const { entryId } = await client.assertListEntry({
+        list: NURTURE_LIST_SLUG,
+        parentObject: "people",
+        parentRecordId: recordId,
+      });
+      await client.appendListEntryValues({
+        list: NURTURE_LIST_SLUG,
+        entryId,
+        values: { asset: assets },
+      });
+    }
 
     await recordOutcome(leadId, { recordId });
     logger.info({ leadId, recordId }, "[cms] lead synced to crm");

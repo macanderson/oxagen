@@ -21,6 +21,7 @@ function jsonResponse(status: number, body: unknown, headers?: HeadersInit) {
 const PERSON_OK = { data: { id: { record_id: "person-1" } } };
 const COMPANY_OK = { data: { id: { record_id: "company-1" } } };
 const NOTE_OK = { data: { id: { note_id: "note-1" } } };
+const ENTRY_OK = { data: { id: { entry_id: "entry-1" } } };
 
 function makeClient(fetchImpl: typeof fetch, extra = {}) {
   return createAttioClient({
@@ -132,6 +133,57 @@ describe("createAttioClient", () => {
         content: "Source: demo",
       },
     });
+  });
+
+  it("asserts a list entry by parent with no values", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, ENTRY_OK));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    const out = await client.assertListEntry({
+      list: "inbound_lead_nurture",
+      parentObject: "people",
+      parentRecordId: "person-1",
+    });
+    expect(out).toEqual({ entryId: "entry-1" });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${ATTIO_BASE_URL}/lists/inbound_lead_nurture/entries`);
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body)).toEqual({
+      data: {
+        parent_record_id: "person-1",
+        parent_object: "people",
+        entry_values: {},
+      },
+    });
+  });
+
+  it("appends list entry values with PATCH", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, ENTRY_OK));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    await client.appendListEntryValues({
+      list: "inbound_lead_nurture",
+      entryId: "entry-1",
+      values: { asset: ["Field manual"] },
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(
+      `${ATTIO_BASE_URL}/lists/inbound_lead_nurture/entries/entry-1`,
+    );
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body)).toEqual({
+      data: { entry_values: { asset: ["Field manual"] } },
+    });
+  });
+
+  it("rejects a list entry assert that carries no entry id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { data: {} }));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    await expect(
+      client.assertListEntry({
+        list: "l",
+        parentObject: "people",
+        parentRecordId: "p",
+      }),
+    ).rejects.toThrow("no entry_id");
   });
 
   it("retries 429 and 5xx, honouring Retry-After, then succeeds", async () => {

@@ -1,12 +1,13 @@
 /**
  * Minimal Attio REST client for the website lead sync.
  *
- * Three calls, all idempotent from the caller's point of view: people and
+ * Five calls, idempotent from the caller's point of view: people and
  * companies are asserted by their one unique attribute (`email_addresses`
- * and `domains`), so a retry after a lost response updates the same record
- * instead of creating a second one. Notes are the exception (a note is a
- * new object every time), so the sync writes one only after the record
- * asserts succeed.
+ * and `domains`), a list entry is asserted by its parent record, and a
+ * multi-select append ignores a repeat, so a retry after a lost response
+ * updates the same objects instead of creating more. Notes are the
+ * exception (a note is a new object every time), so the sync writes one
+ * only after the record asserts succeed.
  *
  * Transient failures (429 and 5xx) are retried with backoff, honouring
  * `Retry-After`. Anything else is an `AttioRequestError` carrying the status
@@ -52,10 +53,35 @@ export interface AttioNoteInput {
   content: string;
 }
 
+export interface AttioListEntryInput {
+  /** List slug or id. */
+  list: string;
+  parentObject: "people" | "companies";
+  parentRecordId: string;
+}
+
+export interface AttioListEntryValuesInput {
+  list: string;
+  entryId: string;
+  /**
+   * Attribute slug → values. A multi-select value is appended to what the
+   * entry already holds (PATCH semantics); Attio ignores a repeat.
+   */
+  values: Record<string, unknown>;
+}
+
 export interface AttioClient {
   assertPerson(input: AttioPersonInput): Promise<{ recordId: string }>;
   assertCompany(input: AttioCompanyInput): Promise<{ recordId: string }>;
   createNote(input: AttioNoteInput): Promise<{ noteId: string }>;
+  /**
+   * Find or create the list entry for a record. Sends no values, so an
+   * existing entry keeps everything it holds; `appendListEntryValues` adds
+   * to it. (A PUT with values would overwrite a multi-select, which is how
+   * a second form would erase the first asset.)
+   */
+  assertListEntry(input: AttioListEntryInput): Promise<{ entryId: string }>;
+  appendListEntryValues(input: AttioListEntryValuesInput): Promise<void>;
 }
 
 export interface AttioClientOptions {
@@ -78,6 +104,10 @@ interface NoteResponse {
   data?: { id?: { note_id?: string } };
 }
 
+interface EntryResponse {
+  data?: { id?: { entry_id?: string } };
+}
+
 const RETRYABLE = (status: number) => status === 429 || status >= 500;
 
 function retryAfterMs(res: Response): number | null {
@@ -96,7 +126,7 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
     opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
 
   async function request<T>(
-    method: "PUT" | "POST",
+    method: "PUT" | "POST" | "PATCH",
     path: string,
     body: unknown,
   ): Promise<T> {
@@ -205,6 +235,29 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
         throw new AttioRequestError(200, path, "response carried no note_id");
       }
       return { noteId };
+    },
+
+    async assertListEntry(input) {
+      const path = `/lists/${encodeURIComponent(input.list)}/entries`;
+      const res = await request<EntryResponse>("PUT", path, {
+        data: {
+          parent_record_id: input.parentRecordId,
+          parent_object: input.parentObject,
+          entry_values: {},
+        },
+      });
+      const entryId = res.data?.id?.entry_id;
+      if (!entryId) {
+        throw new AttioRequestError(200, path, "response carried no entry_id");
+      }
+      return { entryId };
+    },
+
+    async appendListEntryValues(input) {
+      const path = `/lists/${encodeURIComponent(input.list)}/entries/${encodeURIComponent(input.entryId)}`;
+      await request<EntryResponse>("PATCH", path, {
+        data: { entry_values: input.values },
+      });
     },
   };
 }
