@@ -2,18 +2,19 @@
 # CI toolchain image for the Oxagen monorepo.
 #
 # Two published targets (see .github/workflows/ci-image.yml):
-#   ghcr.io/macanderson/oxagen-ci-base — Node 24 + pnpm (corepack) + Atlas +
-#     postgresql-client. Used by every non-e2e CI job.
+#   ghcr.io/macanderson/oxagen-ci-base — Node (pinned in .node-version) + pnpm
+#     (corepack) + Atlas + postgresql-client. Used by every non-e2e CI job.
 #   ghcr.io/macanderson/oxagen-ci-e2e  — base + Playwright Chromium and its OS
 #     deps, pinned to apps/app's @playwright/test version. Used by e2e jobs.
 #
 # Version pins arrive as build args from ci-image.yml, which reads them from
-# the repo (packageManager in package.json, @playwright/test in
+# the repo (.node-version, packageManager in package.json, @playwright/test in
 # apps/app/package.json) so the image cannot drift from the toolchain that
 # produced the lockfile. ATLAS_VERSION must match the env pin in
 # .github/workflows/pipeline.yml and nightly.yml.
 
-FROM node:24-bookworm AS base
+ARG NODE_VERSION=24.21.0
+FROM node:${NODE_VERSION}-bookworm AS base
 
 ARG PNPM_VERSION=11.7.0
 ARG ATLAS_VERSION=v0.38.0

@@ -13,3 +13,22 @@ export function printRetiredNotice(what: string): void {
   );
   process.exitCode = 1;
 }
+
+/**
+ * The notice for a command that has been renamed and still works (ADR-103
+ * phase 1). It differs from `printRetiredNotice` in both halves: it leaves the
+ * exit code alone, because the command runs and a script that depends on it
+ * keeps passing, and it names the replacement.
+ *
+ * Naming the replacement is the point. Hiding the old spelling from `--help`
+ * takes away the operator's other way of finding the new one, so this line is
+ * the migration guidance rather than a courtesy. "Moving to" rather than "moved
+ * to" on purpose: the commands land on the new group in a later phase, and
+ * promising a command that does not accept the same invocation yet would send
+ * the reader somewhere that fails.
+ */
+export function printDeprecatedNotice(what: string, replacement: string): void {
+  process.stderr.write(
+    `${what} is deprecated and will be removed in a later release. Its commands are moving to ${replacement}; this one still works today.\n`,
+  );
+}

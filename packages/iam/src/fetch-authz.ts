@@ -18,6 +18,30 @@
 // an unnoticed IAM bypass in prod. Every caller, human session or API key,
 // must fail closed the same way. Run `pnpm db:migrate` to apply the IAM
 // foundation migration and clear the alert.
+//
+// A PURPOSE-SCOPED KEY AND resolveOperatorUserId
+// (`packages/handlers/src/lib/api-key-authz.ts`): the two answer DIFFERENT
+// questions and, read past each other, used to sound like they disagreed
+// (#3151). This module's `_fetchAuthz` still resolves a purpose-scoped key
+// (a Tacho host, its gateway, a Stella telemetry install) to its CREATOR's
+// role grants. That is deliberate and unchanged, and it is what lets a
+// machine key pass the full resolver on an enterprise org at all (rule 7).
+// `resolveOperatorUserId` answers a narrower question, "did a PERSON
+// request this operator action (mint, revoke, rotate a key or enrollment)?",
+// and a purpose-scoped key never does, because inheriting a role grant is
+// not the same act as a person presenting a request. Neither function is
+// the security boundary for what a machine key may invoke at all: that is
+// `machineKeyDenial` (`packages/iam/src/machine-key-scope.ts`), which runs
+// UNCONDITIONALLY before this module is ever reached and decides the
+// question by the key's purpose, never by whose role grants it would
+// inherit. What THIS module changed to close the gap: `apiKeyPurpose` on
+// `AuthzData` lets `checkIAM` tell a machine-bound key's calls apart from a
+// person's for EVIDENCE. The audit row for a call a purpose-scoped key made
+// records the credential, never the creator it borrowed role grants from.
+// A purpose-scoped key still never "acts for a person" in
+// `resolveOperatorUserId`'s sense; this module's return value now says so
+// too, on every path that matters, rather than only in the handlers that
+// call `resolveOperatorUserId` directly.
 
 import { withOrgDb } from "@oxagen/database";
 import { eq, and, inArray, isNull, or, gt, sql } from "drizzle-orm";
@@ -32,6 +56,20 @@ export interface AuthzData {
   roles: readonly Role[];
   roleGrants: readonly RoleGrant[];
   policies: readonly Policy[];
+  /**
+   * The `scope.purpose` string on the API key this request authenticated
+   * with, or null when the request carried no API key, the key names no
+   * purpose (a plain org key), or the key could not be read (deny/empty
+   * paths, where `principal` already carries a synthetic, non-human id and
+   * this field is not consulted).
+   *
+   * This is what lets `checkIAM` answer a question `principal` alone cannot:
+   * "was the human identity above INHERITED from a purpose-scoped key's
+   * creator, or did a person actually present this request?" See the
+   * `resolveOperatorUserId` / `fetchAuthz` reconciliation note above for why
+   * that distinction exists and where each caller draws the line.
+   */
+  apiKeyPurpose: string | null;
 }
 
 const EMPTY_AUTHZ: AuthzData = {
@@ -40,6 +78,7 @@ const EMPTY_AUTHZ: AuthzData = {
   roles: [],
   roleGrants: [],
   policies: [],
+  apiKeyPurpose: null,
 };
 
 /**
@@ -104,6 +143,9 @@ function denyAuthz(
         enforced: true,
       },
     ],
+    // The synthetic principal above is already a non-human service id, so no
+    // caller needs the key's purpose to tell it apart from a person.
+    apiKeyPurpose: null,
   };
 }
 
@@ -119,6 +161,19 @@ function isUndefinedTable(err: unknown): boolean {
     err !== null &&
     (err as Record<string, unknown>)["code"] === PG_UNDEFINED_TABLE
   );
+}
+
+/**
+ * The `purpose` string on an API key's `scope` column, or null for a plain
+ * org key (no scope, or a scope naming no purpose). Mirrors the same read
+ * `readKeyScope` (`packages/iam/src/machine-key-scope.ts`) does against a
+ * fresh query; this one reuses the row `_fetchAuthz` already has, rather than
+ * adding a second round trip for the same answer.
+ */
+function purposeOf(scope: unknown): string | null {
+  if (typeof scope !== "object" || scope === null) return null;
+  const purpose = (scope as { purpose?: unknown }).purpose;
+  return typeof purpose === "string" ? purpose : null;
 }
 
 export interface FetchAuthzArgs {
@@ -190,7 +245,10 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
   // An API-key request authenticates with no session user (userId null,
-  // apiKeyId set). It authorizes AS THE KEY'S CREATOR (see below).
+  // apiKeyId set). It authorizes AS THE KEY'S CREATOR (see below): that is
+  // the role-grant question. It is never ATTRIBUTED to the creator for
+  // evidence when the key is purpose-scoped; see the module note above and
+  // `apiKeyPurpose` on AuthzData.
   const isApiKey = !userId && !!apiKeyId;
 
   // Neither a human session nor an API key — nothing to resolve.
@@ -207,9 +265,22 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     // key or a key with no recorded creator yields no effective user → fail
     // closed below (never fall through to defaultEffect on the m2m surface).
     let effectiveUserId: string | null = userId;
+    // The key's own scope, read in the same query as its creator so a
+    // purpose-scoped key is identifiable without a second round trip. It
+    // plays no part in resolving effectiveUserId or in the role-grant match
+    // below (those are unchanged, and a machine-bound key still inherits its
+    // creator's grants, which is what lets it work on enterprise orgs at all,
+    // see the module note above). It answers a narrower question this
+    // function did not used to: whether the identity checkIAM is about to
+    // attribute a call to is a person, or a credential wearing that person's
+    // role grants. See the apiKeyPurpose doc on AuthzData.
+    let apiKeyPurpose: string | null = null;
     if (isApiKey) {
       const keyRows = await tx
-        .select({ createdById: schema.apiKeys.createdById })
+        .select({
+          createdById: schema.apiKeys.createdById,
+          scope: schema.apiKeys.scope,
+        })
         .from(schema.apiKeys)
         .where(
           and(
@@ -219,7 +290,9 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
           ),
         )
         .limit(1);
-      effectiveUserId = keyRows[0]?.createdById ?? null;
+      const keyRow = keyRows[0];
+      effectiveUserId = keyRow?.createdById ?? null;
+      apiKeyPurpose = purposeOf(keyRow?.scope);
       if (!effectiveUserId) return denyAuthz(orgId, workspaceId, capability);
     }
 
@@ -354,6 +427,6 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
       effect: rg.effect as "allow" | "deny" | "require_approval",
     }));
 
-    return { principal, grants, roles, roleGrants, policies };
+    return { principal, grants, roles, roleGrants, policies, apiKeyPurpose };
   });
 }
