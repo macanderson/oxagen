@@ -6,14 +6,18 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mocks = vi.hoisted(() => ({ select: vi.fn() }));
+const mocks = vi.hoisted(() => ({ select: vi.fn(), transactions: [] as 1[] }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   const dbMock = {
     ...real,
-    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) =>
-      fn({ select: mocks.select }),
+    withTenantDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      // Counted, so a test can pin that a pair of reads that must agree runs
+      // in one transaction rather than two.
+      mocks.transactions.push(1);
+      return fn({ select: mocks.select });
+    },
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
@@ -22,6 +26,7 @@ import {
   createGetSteeringFreshnessHandler,
   readGatePolicy,
 } from "./context.steering.freshness";
+import { postgresSteeringStore } from "./context.steering.store";
 import { TEST_CTX as CTX } from "./test-utils/fixtures";
 
 describe("readGatePolicy", () => {
@@ -97,6 +102,7 @@ function stubReads(settings: unknown): void {
 describe("get_steering_freshness handler", () => {
   beforeEach(() => {
     mocks.select.mockReset();
+    mocks.transactions.length = 0;
     wheres.length = 0;
   });
 
@@ -178,5 +184,77 @@ describe("get_steering_freshness handler", () => {
     expect(out.headCommits).toEqual([]);
     expect(out.publishedAt).toBeNull();
     expect(out.steeringVersion).toBe(0);
+  });
+
+  // A Context PR publication commits while this read is in flight. Read
+  // independently, the count could observe the new promotion while the
+  // publication still observed the commit before it, and the response paired
+  // the new steering version with the old `headCommit`. A checkout sitting at
+  // that old commit — with its cached remote there too, and a failed fetch —
+  // then read as current under the new version on both signals at once, and
+  // `blockStaleRuns` allowed the first prompt after the new record entered
+  // force. The pair comes from one snapshot or it does not come at all.
+  it("pairs the version with the publication from one snapshot", async () => {
+    stubReads({ steering: { blockStaleRuns: true } });
+    const racy = {
+      // What two independent reads would have answered across that commit:
+      // the count from after it, the publication from before it.
+      ledgerLength: vi.fn(async () => 13),
+      latestPublication: vi.fn(async () => ({
+        commitSha: "old1234",
+        commitShas: ["old1234"],
+        publishedAt: new Date("2026-09-01T10:00:00.000Z"),
+      })),
+      versionAndPublication: vi.fn(async () => ({
+        version: 12,
+        publication: {
+          commitSha: "old1234",
+          commitShas: ["old1234"],
+          publishedAt: new Date("2026-09-01T10:00:00.000Z"),
+        },
+      })),
+    };
+    const handler = createGetSteeringFreshnessHandler({
+      store: racy as never,
+      readConnection: bound as never,
+    });
+    const out = await handler({}, CTX);
+    expect(out.steeringVersion).toBe(12);
+    expect(out.headCommit).toBe("old1234");
+    expect(racy.ledgerLength).not.toHaveBeenCalled();
+    expect(racy.latestPublication).not.toHaveBeenCalled();
+  });
+
+  // And the store keeps that promise: both queries inside one transaction.
+  it("reads the version and the publication in one transaction", async () => {
+    const thenable = (rows: unknown[]) => {
+      const self: Record<string, unknown> = {};
+      for (const key of ["from", "where", "orderBy", "limit"]) {
+        self[key] = () => self;
+      }
+      self.then = (resolve: (v: unknown) => unknown) =>
+        Promise.resolve(rows).then(resolve);
+      return self;
+    };
+    // In call order: the newest-instant subquery, the promotions count, then
+    // the publications tied at that instant.
+    mocks.select
+      .mockReturnValueOnce(thenable([]))
+      .mockReturnValueOnce(thenable([{ total: 12 }]))
+      .mockReturnValueOnce(
+        thenable([
+          {
+            commitSha: "old1234",
+            publishedAt: new Date("2026-09-01T10:00:00.000Z"),
+          },
+        ]),
+      );
+    const out = await postgresSteeringStore.versionAndPublication({
+      orgId: CTX.orgId,
+      workspaceId: CTX.workspaceId,
+    });
+    expect(out.version).toBe(12);
+    expect(out.publication?.commitSha).toBe("old1234");
+    expect(mocks.transactions).toHaveLength(1);
   });
 });
