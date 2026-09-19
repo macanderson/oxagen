@@ -10,10 +10,11 @@
 // A gap is a fact about the record, not a fault to soften. A run that dropped
 // nine frames says so with the sequences it dropped, and a walk that stopped
 // short says its gaps are a prefix's.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ChainCheckpoint, RunChain } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
