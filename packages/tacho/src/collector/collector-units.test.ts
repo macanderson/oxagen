@@ -371,6 +371,7 @@ describe("detector", () => {
       enrollment: () => ({
         enrollmentId: TEST_ENROLLMENT,
         harnesses: ["claude-code"],
+        verified: true,
       }),
       now,
       graceMs: 10_000,
@@ -408,6 +409,7 @@ describe("detector", () => {
       enrollment: () => ({
         enrollmentId: TEST_ENROLLMENT,
         harnesses: ["claude-code"],
+        verified: true,
       }),
       now,
     });
@@ -485,6 +487,7 @@ describe("detector", () => {
       enrollment: () => ({
         enrollmentId: TEST_ENROLLMENT,
         harnesses: ["claude-code"],
+        verified: true,
       }),
       now,
     });

@@ -67,10 +67,11 @@ describe("currentEnrollment", () => {
     expect(currentEnrollment(path, started)).toEqual({
       harnesses: ["claude-code", "codex"],
       enrollmentId: "tch_reassigned000000000",
+      verified: true,
     });
   });
 
-  it("falls back to the daemon's copy, harnesses and enrollment id together, when host.json is gone", () => {
+  it("falls back to the daemon's copy, harnesses and enrollment id together, when host.json is gone, and reports it unverified", () => {
     const started = testHostFile(signer, bundle, {
       harnesses: ["stella"],
       host_enrollment_id: "tch_started0000000000000",
@@ -78,10 +79,11 @@ describe("currentEnrollment", () => {
     expect(currentEnrollment(scratchPath(), started)).toEqual({
       harnesses: ["stella"],
       enrollmentId: "tch_started0000000000000",
+      verified: false,
     });
   });
 
-  it("falls back to the daemon's copy, harnesses and enrollment id together, when host.json does not validate", () => {
+  it("falls back to the daemon's copy, harnesses and enrollment id together, when host.json does not validate, and reports it unverified", () => {
     const path = scratchPath();
     writeFileSync(path, "{ not json");
     const started = testHostFile(signer, bundle, {
@@ -91,6 +93,7 @@ describe("currentEnrollment", () => {
     expect(currentEnrollment(path, started)).toEqual({
       harnesses: ["claude-code", "codex"],
       enrollmentId: "tch_started0000000000000",
+      verified: false,
     });
   });
 

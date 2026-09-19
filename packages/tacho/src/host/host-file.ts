@@ -308,6 +308,16 @@ export function readHostFileLenient(path: string): LenientHostRead {
 export interface CurrentEnrollment {
   harnesses: string[];
   enrollmentId: string;
+  /**
+   * False when host.json could not be read or did not validate, so
+   * `harnesses` and `enrollmentId` are the daemon's startup copy rather than
+   * a pair confirmed on disk just now. A caller that gates a
+   * security-relevant check on the enrollment identity (the hook-removal
+   * detector) must treat an unverified pair as "cannot tell", not as "same
+   * as before": disable the check rather than evaluate it against an
+   * identity nothing on disk currently backs.
+   */
+  verified: boolean;
 }
 
 /**
@@ -322,15 +332,22 @@ export interface CurrentEnrollment {
  * call, rather than two separate reads at two separate moments, is what
  * keeps a live `reassign` from ever pairing the new harness list with the
  * old enrollment id (#3398). A missing or invalid file falls back to the
- * daemon's copy, in full: a hand-edited host.json must not make the daemon
- * forget which agents it wraps, or which enrollment it wraps them under.
+ * daemon's copy, in full, marked `verified: false`: a hand-edited host.json
+ * must not make the daemon forget which agents it wraps or which enrollment
+ * it wraps them under, but a caller that needs a *confirmed* identity, not
+ * merely a remembered one, must see that the file could not back it.
  */
 export function currentEnrollment(
   path: string,
   fallback: HostFile,
 ): CurrentEnrollment {
-  const host = readHostFileLenient(path).host ?? fallback;
-  return { harnesses: host.harnesses, enrollmentId: host.host_enrollment_id };
+  const read = readHostFileLenient(path).host;
+  const host = read ?? fallback;
+  return {
+    harnesses: host.harnesses,
+    enrollmentId: host.host_enrollment_id,
+    verified: read !== undefined,
+  };
 }
 
 /**

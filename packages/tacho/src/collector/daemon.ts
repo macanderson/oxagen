@@ -477,6 +477,7 @@ export async function startDaemon(
     // chained a severity-3 `oxagen:hooks_removed` incident fifteen seconds
     // in (#3320).
     enrollment: () => currentEnrollment(paths.hostFile, host),
+    log,
     now,
   });
 

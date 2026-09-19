@@ -23,7 +23,9 @@ const CONTEXT: ClaudeCodeContext = {
 function detector(opts?: {
   harnesses?: () => string[];
   enrollmentId?: () => string;
+  verified?: () => boolean;
   readSettings?: () => unknown;
+  log?: (line: string) => void;
 }): Detector {
   const now = () => 1_790_000_000_000;
   const registry = new SessionRegistry({
@@ -41,7 +43,9 @@ function detector(opts?: {
     enrollment: () => ({
       enrollmentId: opts?.enrollmentId?.() ?? TEST_ENROLLMENT,
       harnesses: opts?.harnesses?.() ?? ["claude-code"],
+      verified: opts?.verified?.() ?? true,
     }),
+    ...(opts?.log !== undefined ? { log: opts.log } : {}),
     now,
   });
 }
@@ -138,5 +142,35 @@ describe("the hook-removal detector", () => {
     settings = newSettings;
     expect(await d.tick()).toEqual([]);
     expect(d.hooksHealthy).toBe(true);
+  });
+
+  it("disables the hook-removal check, without an incident, when the on-disk enrollment cannot be verified (#3398)", async () => {
+    // The regression this guards: falling back to the daemon's startup
+    // enrollment when host.json is missing or invalid still evaluated hooks
+    // against that startup identity, so an unreadable host.json reintroduced
+    // the same false hooks_removed incident #3398 exists to prevent, just
+    // by a different path (an unverified identity instead of a stale one).
+    let verified = false;
+    const logged: string[] = [];
+    const d = detector({
+      harnesses: () => ["claude-code"],
+      verified: () => verified,
+      readSettings: () => ({ hooks: {} }), // would be "removed" if checked
+      log: (line) => logged.push(line),
+    });
+    expect(await d.tick()).toEqual([]);
+    expect(d.hooksHealthy).toBeUndefined();
+    expect(d.presence).toBeUndefined();
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatch(/enrollment/i);
+    // Ticking again while still unverified logs nothing further: the
+    // reason is reported once per transition, not once per tick.
+    expect(await d.tick()).toEqual([]);
+    expect(logged).toHaveLength(1);
+    // Once the enrollment can be verified again, the check resumes.
+    verified = true;
+    expect((await d.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+    ]);
   });
 });

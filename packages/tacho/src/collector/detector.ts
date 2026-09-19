@@ -45,13 +45,30 @@ export interface DetectorDeps {
    * rather than the id as a value fixed at construction, is what keeps a
    * live `reassign` from pairing a fresh harness list with a stale
    * enrollment id and reintroducing that same false incident (#3398).
+   *
+   * `verified` is false when host.json could not be read or did not
+   * validate, so the pair is a remembered startup copy, not a confirmed
+   * on-disk identity. The hook-removal check must not run against an
+   * unverified pair: a host it cannot currently confirm the enrollment of
+   * is exactly the host it must stay quiet about, or it reintroduces the
+   * same false incident by another path (#3398).
    */
-  enrollment: () => { enrollmentId: string; harnesses: string[] };
+  enrollment: () => {
+    enrollmentId: string;
+    harnesses: string[];
+    verified: boolean;
+  };
   now: () => number;
   /** How long a transcript may advance unhooked before it is an incident. */
   graceMs?: number;
   /** Project directories whose files one tick may scan; see `MAX_DIRS_PER_TICK`. */
   maxDirsPerTick?: number;
+  /**
+   * Where the hook-removal check reports it is disabling itself because the
+   * on-disk enrollment could not be verified. Absent means the reason goes
+   * unlogged; the check still disables.
+   */
+  log?: (line: string) => void;
 }
 
 /** Writes sealed frames to the WAL; see `Detector.tick`. */
@@ -266,6 +283,9 @@ export class Detector {
   private readonly scanner: TranscriptScanner;
   private lastPresence: HookPresence | undefined;
   private hooksOk: boolean | undefined;
+  /** Tracks the transition into "enrollment unverified", so the disabled
+   * reason logs once per transition rather than once per tick. */
+  private enrollmentVerified: boolean | undefined;
 
   constructor(deps: DetectorDeps) {
     this.deps = deps;
@@ -291,7 +311,26 @@ export class Detector {
   }
 
   private checkHooks(): TachoEvent[] {
-    const { enrollmentId, harnesses } = this.deps.enrollment();
+    const { enrollmentId, harnesses, verified } = this.deps.enrollment();
+    if (!verified) {
+      // host.json could not be read or did not validate on this tick, so
+      // there is no on-disk identity to check hooks against. Evaluating
+      // hooks against the daemon's startup copy anyway would reintroduce
+      // the false hooks_removed incident this dependency exists to prevent,
+      // just against a stale identity instead of a stale harness list; a
+      // host whose enrollment cannot currently be confirmed is exactly the
+      // host that must stay quiet, not the host that gets flagged.
+      if (this.enrollmentVerified !== false) {
+        this.deps.log?.(
+          "the on-disk enrollment could not be read or does not validate; disabling the Claude Code hook-removal check until it can be verified again",
+        );
+      }
+      this.enrollmentVerified = false;
+      this.hooksOk = undefined;
+      this.lastPresence = undefined;
+      return [];
+    }
+    this.enrollmentVerified = true;
     if (!harnesses.includes("claude-code")) {
       this.hooksOk = undefined;
       this.lastPresence = undefined;
