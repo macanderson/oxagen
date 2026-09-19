@@ -9,10 +9,58 @@ import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.rea
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+const DAY_MS = 86_400_000;
+
 /**
- * The UTC instant for `year-month-day hour:minute:second.ms` in `timeZone`.
- * Walks once from a UTC guess: format the guess in the zone, subtract the
- * local-vs-intended delta, then correct once more when DST moved the offset.
+ * The parts of `instant` as `timeZone` reads them, as a comparable UTC number,
+ * plus the zone's offset from UTC at that instant in milliseconds.
+ */
+function zonedPartsOf(
+  instant: number,
+  timeZone: string,
+): { asLocal: number; offset: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(instant));
+  const num = (type: Intl.DateTimeFormatPartTypes): number => {
+    const value = parts.find((part) => part.type === type)?.value;
+    return value === undefined ? Number.NaN : Number(value);
+  };
+  const asLocal = Date.UTC(
+    num("year"),
+    num("month") - 1,
+    num("day"),
+    num("hour"),
+    num("minute"),
+    num("second"),
+  );
+  return { asLocal, offset: asLocal - instant };
+}
+
+/**
+ * The UTC instant for `year-month-day hour:minute:second` in `timeZone`.
+ *
+ * A civil time is not always one instant. A DST transition can skip it — the
+ * clock jumps forward over it, so it never happens — or repeat it, when the
+ * clock falls back over it. Sample the zone's offset a day either side of the
+ * naive guess, which brackets any transition within the day, and try both
+ * offsets; a candidate counts only when formatting it back in the zone yields
+ * the civil time we asked for.
+ *
+ * Skipped times therefore resolve forward by the length of the gap, and
+ * repeated times resolve to the first of the two instants — both of which come
+ * from the pre-transition offset, so that candidate is the one to prefer.
+ * Asking for a skipped local midnight (America/Santiago on 2026-09-06, where
+ * the clock goes 00:00 -> 01:00) gives 01:00 that same day, the first instant
+ * the civil day has. Taking the other offset would land at 23:00 the day
+ * before, putting an audit bound or a mandate window on the wrong date.
  */
 function zonedPartsToUtc(
   year: number,
@@ -24,34 +72,20 @@ function zonedPartsToUtc(
   timeZone: string,
 ): Date {
   const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
-  const shift = (instant: number): number => {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hourCycle: "h23",
-    }).formatToParts(new Date(instant));
-    const num = (type: Intl.DateTimeFormatPartTypes): number => {
-      const value = parts.find((part) => part.type === type)?.value;
-      return value === undefined ? Number.NaN : Number(value);
-    };
-    const asLocal = Date.UTC(
-      num("year"),
-      num("month") - 1,
-      num("day"),
-      num("hour"),
-      num("minute"),
-      num("second"),
-    );
-    return asLocal - instant;
-  };
-  let utc = asUtc - shift(asUtc);
-  utc = asUtc - shift(utc);
-  return new Date(utc);
+  if (Number.isNaN(zonedPartsOf(asUtc, timeZone).offset)) {
+    return new Date(Number.NaN);
+  }
+  const before = asUtc - zonedPartsOf(asUtc - DAY_MS, timeZone).offset;
+  const after = asUtc - zonedPartsOf(asUtc + DAY_MS, timeZone).offset;
+  for (const candidate of [before, after]) {
+    if (zonedPartsOf(candidate, timeZone).asLocal === asUtc) {
+      return new Date(candidate);
+    }
+  }
+  // Neither round-trips: the civil time falls in a gap. `before` uses the
+  // offset in force ahead of the jump, which lands just after it — the first
+  // instant this civil time's day actually reaches.
+  return new Date(before);
 }
 
 function parseDay(day: string): { year: number; month: number; day: number } | null {
@@ -63,7 +97,11 @@ function parseDay(day: string): { year: number; month: number; day: number } | n
   return { year, month, day: dayNum };
 }
 
-/** Midnight at the start of `day` in `timeZone`, as an ISO instant. */
+/**
+ * The first instant of `day` in `timeZone`, as an ISO instant. Normally that is
+ * local midnight; where a DST jump skips midnight there is no such instant, so
+ * this is the first one the civil day does reach.
+ */
 export function startOfZonedDay(
   day: string,
   timeZone: string = DEFAULT_TIME_ZONE,
@@ -98,8 +136,8 @@ export function endOfZonedDay(
 }
 
 /**
- * Midnight at the start of the calendar day after `day` in `timeZone`. Audit
- * `to` filters are exclusive at this instant so the named day stays inclusive.
+ * The first instant of the calendar day after `day` in `timeZone`. Audit `to`
+ * filters are exclusive at this instant so the named day stays inclusive.
  */
 export function startOfNextZonedDay(
   day: string,

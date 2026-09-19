@@ -53,3 +53,64 @@ describe("startOfNextZonedDay", () => {
     );
   });
 });
+
+describe("civil days whose midnight a DST jump skips", () => {
+  // Santiago starts DST on 2026-09-06 by going 00:00 -> 01:00, so that day has
+  // no local midnight at all. Its first instant is 01:00 local, 04:00 UTC. The
+  // wrong answer is 03:00 UTC, which reads as 23:00 on 2026-09-05 there.
+  it("starts a Santiago day at the first instant the day reaches", () => {
+    expect(startOfZonedDay("2026-09-06", "America/Santiago")).toBe(
+      "2026-09-06T04:00:00.000Z",
+    );
+  });
+
+  it("closes the Santiago day before at that same instant", () => {
+    expect(startOfNextZonedDay("2026-09-05", "America/Santiago")).toBe(
+      "2026-09-06T04:00:00.000Z",
+    );
+    expect(endOfZonedDay("2026-09-05", "America/Santiago")).toBe(
+      "2026-09-06T03:59:59.999Z",
+    );
+  });
+
+  it("ends the skipped-midnight day at the next day's real midnight", () => {
+    // 2026-09-07 00:00 in Santiago exists and is 03:00Z at the new UTC-3
+    // offset, so the short day runs 04:00Z to 02:59:59.999Z the next day.
+    expect(endOfZonedDay("2026-09-06", "America/Santiago")).toBe(
+      "2026-09-07T02:59:59.999Z",
+    );
+  });
+
+  // The Azores do the same on 2026-03-29, going 00:00 -> 01:00 from UTC-1 to
+  // UTC+0, so the day's first instant is 01:00 local and 01:00 UTC.
+  it("starts an Azores day at the first instant the day reaches", () => {
+    expect(startOfZonedDay("2026-03-29", "Atlantic/Azores")).toBe(
+      "2026-03-29T01:00:00.000Z",
+    );
+    expect(endOfZonedDay("2026-03-28", "Atlantic/Azores")).toBe(
+      "2026-03-29T00:59:59.999Z",
+    );
+  });
+
+  it("resolves an ordinary spring-forward day to its real midnight", () => {
+    // Los Angeles jumps at 02:00 on 2026-03-08, well clear of midnight, so
+    // that day still starts at 00:00 local — 08:00 UTC at PST.
+    expect(startOfZonedDay("2026-03-08", "America/Los_Angeles")).toBe(
+      "2026-03-08T08:00:00.000Z",
+    );
+    expect(endOfZonedDay("2026-03-08", "America/Los_Angeles")).toBe(
+      "2026-03-09T06:59:59.999Z",
+    );
+  });
+
+  it("resolves a fall-back day to the first of its two midnights", () => {
+    // Havana rewinds 01:00 -> 00:00 on 2026-11-01, so that midnight happens
+    // twice, at 04:00Z and again at 05:00Z. The day starts at the first.
+    expect(startOfZonedDay("2026-11-01", "America/Havana")).toBe(
+      "2026-11-01T04:00:00.000Z",
+    );
+    expect(endOfZonedDay("2026-10-31", "America/Havana")).toBe(
+      "2026-11-01T03:59:59.999Z",
+    );
+  });
+});
