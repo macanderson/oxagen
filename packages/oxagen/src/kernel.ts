@@ -319,6 +319,8 @@ export type DecisionRulesKernelGateFn = (args: {
     userId: string | null;
     surface?: string;
     requestId?: string;
+    /** The run an auto-approval receipt attaches to (#3153), or null. */
+    runId?: string | null;
   };
   /** The IAM-resolved acting principal, or null (the non-enterprise fast-path). */
   principal: ResolvedPrincipal | null;
