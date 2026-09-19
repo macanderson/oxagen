@@ -224,7 +224,12 @@ export type ApprovalRuleHours = z.infer<typeof ApprovalRuleHours>;
  * shows the rule as it is written, not a summary of it.
  */
 export const ApprovalRule = z.object({
-  id: ApprovalRuleId,
+  /**
+   * The rule's slug, not a database id: the author picks it, and a receipt
+   * cites it as `policy:<slug>`. It is named `slug` so INV-11 (every `id`
+   * field is a PublicId) holds without an exemption.
+   */
+  slug: ApprovalRuleId,
   name: z.string().min(1),
   /** Globs over a declared tool's `slug@version` or its bare slug. */
   tools: z.array(z.string().min(1)).min(1),

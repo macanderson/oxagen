@@ -194,3 +194,21 @@ export function parseMeasureLines(
   }
   return pairs;
 }
+
+/** ISO weekdays as `tools.autoApprovals.days` keys them, Monday first. */
+const WEEKDAY_KEYS = ["1", "2", "3", "4", "5", "6", "7"] as const;
+export type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
+
+/**
+ * The catalogue key for an ISO weekday (1 is Monday, 7 is Sunday). The return
+ * is a literal union rather than `String(day)`, so the translator's key type
+ * and the catalog-used arch test can both see which keys are read. The
+ * contract bounds a rule's days to 1–7, so any other value is a bug upstream.
+ */
+export function weekdayKey(day: number): WeekdayKey {
+  const key = WEEKDAY_KEYS[day - 1];
+  if (key === undefined) {
+    throw new RangeError(`not an ISO weekday: ${String(day)}`);
+  }
+  return key;
+}

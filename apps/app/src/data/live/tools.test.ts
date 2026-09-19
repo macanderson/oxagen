@@ -249,7 +249,7 @@ describe("tools.approvalRules", () => {
     expect(read.value.windowDays).toBe(30);
     const [refunds, deploys] = read.value.rules;
     expect(refunds).toEqual({
-      id: "small-refunds",
+      slug: "small-refunds",
       name: "Small refunds to known customers",
       tools: ["stripe__create_refund@*"],
       enabled: true,
