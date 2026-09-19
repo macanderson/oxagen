@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  classifyProbeFailure,
+  commitPresent,
   defaultBranch,
   fetchBranch,
   GitCommandError,
@@ -343,12 +345,60 @@ describe("isAncestor", () => {
     expect(await isAncestor(ctx(run), C, D)).toBe(false);
   });
 
-  // A ref cannot contain a commit the clone does not have.
+  // A ref cannot contain a commit the clone does not have. The error is the
+  // shape real git produces: `cat-file -e <sha>^{commit}` on an object this
+  // clone lacks exits 128 and says the name is not valid, because git resolves
+  // the peel before it looks.
   it("is false when the commit is not in this clone", async () => {
     const run = runner({
-      [`cat-file -e ${C}^{commit}`]: new Error("no such object"),
+      [`cat-file -e ${C}^{commit}`]: new GitCommandError(
+        ["cat-file", "-e", `${C}^{commit}`],
+        128,
+        `fatal: Not a valid object name ${C}^{commit}`,
+      ),
     });
     expect(await isAncestor(ctx(run), C, D)).toBe(false);
+  });
+
+  // The regression the 250 ms floor introduced. The presence probe runs on a
+  // slice of the shared hook deadline, and a slice can run out: `gitOrNull`
+  // collapsed that timeout to null, this function reported the publication
+  // commit absent, the platform fallback read that as `behind`, and
+  // `blockStaleRuns` refused the prompt over a local git timeout. A killed
+  // probe has to stay unknown.
+  it("is null when the presence probe is killed by its timeout", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new GitCommandError(
+        ["cat-file", "-e", `${C}^{commit}`],
+        null,
+        "",
+        "SIGTERM",
+      ),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBeNull();
+  });
+
+  // An injected runner (a host with its own git abstraction) that throws
+  // something this package cannot read established no fact either.
+  it("is null when the presence probe fails in a way it cannot read", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new Error("runner exploded"),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBeNull();
+  });
+
+  // A corrupt object database is not a missing object. Git exits 128 for
+  // both, so the message is what separates them, and only the "this name
+  // resolves to nothing" messages are read as absent.
+  it("is null when the object database is corrupt", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new GitCommandError(
+        ["cat-file", "-e", `${C}^{commit}`],
+        128,
+        "error: object file .git/objects/ab/cd is empty",
+      ),
+    });
+    expect(await isAncestor(ctx(run), C, D)).toBeNull();
   });
 
   // Only exit 1 means "not an ancestor". A timeout or a corrupt object
@@ -364,6 +414,69 @@ describe("isAncestor", () => {
       ),
     });
     expect(await isAncestor(ctx(run), C, D)).toBeNull();
+  });
+});
+
+describe("commitPresent", () => {
+  const C = "cccccccccccccccccccccccccccccccccccccccc";
+
+  it("is true when cat-file succeeds", async () => {
+    const run = runner({ [`cat-file -e ${C}^{commit}`]: "" });
+    expect(await commitPresent(ctx(run), C)).toBe(true);
+  });
+
+  it("is false on exit 1, git's plain no", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new GitCommandError(
+        ["cat-file", "-e", `${C}^{commit}`],
+        1,
+        "",
+      ),
+    });
+    expect(await commitPresent(ctx(run), C)).toBe(false);
+  });
+
+  it("is null when the command was killed", async () => {
+    const run = runner({
+      [`cat-file -e ${C}^{commit}`]: new GitCommandError(
+        ["cat-file", "-e", `${C}^{commit}`],
+        null,
+        "",
+        "SIGTERM",
+      ),
+    });
+    expect(await commitPresent(ctx(run), C)).toBeNull();
+  });
+});
+
+describe("classifyProbeFailure", () => {
+  it("reads a killed command as unanswered, whatever its exit code", () => {
+    expect(
+      classifyProbeFailure(new GitCommandError([], 1, "", "SIGKILL")),
+    ).toBe("unanswered");
+  });
+
+  it("reads exit 1 as absent", () => {
+    expect(classifyProbeFailure(new GitCommandError([], 1, ""))).toBe("absent");
+  });
+
+  it("reads git's not-a-valid-name messages as absent", () => {
+    for (const stderr of [
+      "fatal: Not a valid object name abc^{commit}",
+      "fatal: bad object abc",
+      "fatal: ambiguous argument: unknown revision or path not in the working tree",
+    ]) {
+      expect(classifyProbeFailure(new GitCommandError([], 128, stderr))).toBe(
+        "absent",
+      );
+    }
+  });
+
+  it("reads anything else as unanswered", () => {
+    expect(classifyProbeFailure(new GitCommandError([], 128, "fatal: oops"))).toBe(
+      "unanswered",
+    );
+    expect(classifyProbeFailure(new Error("no idea"))).toBe("unanswered");
   });
 });
 

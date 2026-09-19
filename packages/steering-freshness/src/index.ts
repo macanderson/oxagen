@@ -20,6 +20,7 @@ export {
   publishedCommits,
   steeringPathspec,
   DEFAULT_HOOK_BUDGET_MS,
+  MIN_LOCAL_SLICE_MS,
   DEFAULT_NETWORK_BUDGET_MS,
   type CheckOptions,
   type FreshnessStatus,
@@ -59,6 +60,7 @@ export {
 } from "./settings";
 export {
   syncSteering,
+  MIN_SYNC_BUDGET_MS,
   type SyncOptions,
   type SyncResult,
   type SyncRefusal,
@@ -84,12 +86,18 @@ export {
   HOOK_MARKER,
   HOOK_TIMEOUT_SECONDS,
   INSTALLABLE,
+  UNINSTALLABLE,
+  ungatedHarnessNotice,
   type InstallableHarness,
+  type UninstallableHarness,
   type InstallResult,
 } from "./hooks";
 export {
+  classifyProbeFailure,
+  commitPresent,
   execGit,
   GitCommandError,
+  type ProbeFailure,
   type GitContext,
   type GitRunner,
   type PathChange,

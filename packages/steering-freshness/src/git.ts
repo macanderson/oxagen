@@ -28,11 +28,79 @@ export class GitCommandError extends Error {
     readonly args: readonly string[],
     readonly exitCode: number | null,
     readonly stderr: string,
+    /**
+     * The signal that killed the command, when one did. A timeout is a
+     * SIGTERM from `execFile`, and it is the difference between "git
+     * answered no" and "git never answered": a probe whose command was
+     * killed has to stay unknown, or a slow disk reads as a missing object.
+     */
+    readonly signal: string | null = null,
   ) {
     super(
-      `git ${args.join(" ")} failed (exit ${exitCode ?? "signal"}): ${stderr.trim()}`,
+      `git ${args.join(" ")} failed (exit ${exitCode ?? signal ?? "signal"}): ${stderr.trim()}`,
     );
     this.name = "GitCommandError";
+  }
+}
+
+/**
+ * What a failed probe means: git said no, or git said nothing.
+ *
+ * `cat-file -e` and its kin answer a yes/no question by exit status, so a
+ * caller that reads every failure as "no" turns a timeout into a fact. The
+ * three cases have to stay apart, because the verdict they feed is the one
+ * that refuses a prompt.
+ *
+ *   - `"absent"`: git ran, and the object is not there. Exit 1 is the
+ *     documented answer for a plain object id; exit 128 with a
+ *     "not a valid object name" is the answer for `<sha>^{commit}`, which is
+ *     how every probe here asks (git resolves the peel before it looks).
+ *   - `"unanswered"`: the command was killed by the hook deadline or a
+ *     signal, it exited on something else (a corrupt object database prints
+ *     its own fatal), or the injected runner failed in a way this package
+ *     cannot read. No fact was established.
+ */
+export type ProbeFailure = "absent" | "unanswered";
+
+/** Ordinary git ways of saying "that name resolves to nothing here". */
+const ABSENT_STDERR =
+  /not a valid object name|bad object|unknown revision|no such (?:object|ref)|could not get object info/i;
+
+/**
+ * Read a failed probe as "absent" or "unanswered", erring towards
+ * unanswered: an unknown verdict warns and lets the prompt run, while a
+ * wrong "absent" refuses one.
+ */
+export function classifyProbeFailure(err: unknown): ProbeFailure {
+  if (!(err instanceof GitCommandError)) return "unanswered";
+  // Killed, so it never got to answer. The hook deadline lands here.
+  if (err.signal !== null || err.exitCode === null) return "unanswered";
+  if (err.exitCode === 1) return "absent";
+  return ABSENT_STDERR.test(err.stderr) ? "absent" : "unanswered";
+}
+
+/**
+ * Does this clone hold `rev` as a commit?
+ *
+ * Three answers, and the third is the point: `true` present, `false` git
+ * looked and it is not here, `null` git could not say. A `gitOrNull` probe
+ * collapsed the last two, so a `cat-file` that timed out on its slice of the
+ * hook budget reported the publication commit absent, the platform fallback
+ * read that as `behind`, and an enabled blocking policy refused the prompt
+ * over a local git timeout.
+ */
+export async function commitPresent(
+  ctx: GitContext,
+  rev: string,
+): Promise<boolean | null> {
+  try {
+    await ctx.run(["cat-file", "-e", `${rev}^{commit}`], {
+      cwd: ctx.cwd,
+      timeoutMs: ctx.timeoutMs,
+    });
+    return true;
+  } catch (err) {
+    return classifyProbeFailure(err) === "absent" ? false : null;
   }
 }
 
@@ -69,7 +137,14 @@ export const execGit: GitRunner = (args, { cwd, timeoutMs }) =>
             "number"
               ? ((err as unknown as { code: number }).code satisfies number)
               : null;
-          reject(new GitCommandError(args, code, stderr || err.message));
+          const signal =
+            typeof (err as NodeJS.ErrnoException & { signal?: unknown })
+              .signal === "string"
+              ? ((err as unknown as { signal: string }).signal satisfies string)
+              : null;
+          reject(
+            new GitCommandError(args, code, stderr || err.message, signal),
+          );
           return;
         }
         resolve(stdout);
@@ -442,23 +517,24 @@ export async function treeOid(
  * Three answers, because the caller acts on each differently:
  *
  *   - `true`: reachable.
- *   - `false`: not reachable. That includes `ancestor` missing from this
- *     clone entirely, since a ref cannot contain a commit the clone lacks.
+ *   - `false`: not reachable. That includes git looking for `ancestor` and
+ *     finding it absent from this clone, since a ref cannot contain a commit
+ *     the clone lacks.
  *   - `null`: git failed to answer (a timeout, a signal, a corrupt object
- *     database). A caller must not read that as "no".
+ *     database), on either the presence probe or the reachability call. A
+ *     caller must not read that as "no".
  */
 export async function isAncestor(
   ctx: GitContext,
   ancestor: string,
   descendant: string,
 ): Promise<boolean | null> {
-  const present = await gitOrNull(
-    ctx,
-    "cat-file",
-    "-e",
-    `${ancestor}^{commit}`,
-  );
-  if (present === null) return false;
+  // Three answers, not two. `commitPresent` tells "git looked and it is not
+  // here" apart from "git never answered", because this probe runs on a slice
+  // of the hook deadline and a slice can run out.
+  const present = await commitPresent(ctx, ancestor);
+  if (present === null) return null;
+  if (!present) return false;
   try {
     await ctx.run(["merge-base", "--is-ancestor", ancestor, descendant], {
       cwd: ctx.cwd,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { evaluateGate } from "./gate";
 import { resolveSteeringPolicy } from "./policy";
 import type { CacheIo } from "./cache";
-import type { GitRunner } from "./git";
+import { GitCommandError, type GitRunner } from "./git";
 
 const HEAD = "1111111111111111111111111111111111111111";
 const REMOTE = "2222222222222222222222222222222222222222";
@@ -129,6 +129,36 @@ describe("evaluateGate", () => {
     const d = await gate(true, { blockStaleRuns: true }, { run });
     expect(d.verdict.status).toBe("unknown");
     expect(d.action).toBe("allow");
+    expect(d.exitCode).toBe(0);
+  });
+
+  // Finding 3, at the level that matters: a local git command running out of
+  // its 250 ms slice must never become a refusal. The presence probe in the
+  // platform fallback was the one place a killed command still produced a
+  // definite answer, and `behind` plus `blockStaleRuns` is exit 2.
+  it("never blocks when the presence probe is killed by its timeout", async () => {
+    const PROMOTION = "4444444444444444444444444444444444444444";
+    const { run: base } = stubRepo({ behind: false });
+    const run: GitRunner = async (args, opts) => {
+      if (args[0] === "cat-file") {
+        throw new GitCommandError([...args], null, "", "SIGTERM");
+      }
+      return base(args, opts);
+    };
+    const d = await gate(
+      false,
+      { blockStaleRuns: true },
+      {
+        run,
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(d.verdict.status).toBe("unknown");
+    expect(d.action).not.toBe("block");
     expect(d.exitCode).toBe(0);
   });
 
@@ -298,6 +328,62 @@ describe("evaluateGate with auto-sync", () => {
     });
     expect(d.sync?.applied).toBe(false);
     expect(d.sync?.message).toContain("index.lock");
+    expect(d.action).toBe("block");
+    expect(d.exitCode).toBe(2);
+  });
+
+  // Finding 1. The sync's own default is 30 seconds per git call, one and a
+  // half times the hook's whole timeout, and the gate used to pass it no
+  // deadline at all: a slow `restore`, `rm` or `clean` let the harness kill
+  // the process before the decision was rendered, and the prompt ran with
+  // `blockStaleRuns` on. Every call the sync makes is now clamped to what is
+  // left of the gate's own budget.
+  it("hands the sync what is left of the hook's budget", async () => {
+    const { run: base } = stubRepo({ behind: true });
+    const seen: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      if (args[0] === "restore") seen.push(opts.timeoutMs);
+      return base(args, opts);
+    };
+    const d = await evaluateGate({
+      cwd: "/repo",
+      policy: resolveSteeringPolicy([
+        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
+      ]),
+      run,
+      cacheIo: noCache,
+      now: () => 1,
+      timeoutMs: 30_000,
+      hookBudgetMs: 6_000,
+    });
+    expect(d.sync?.applied).toBe(true);
+    expect(seen).toEqual([6_000]);
+  });
+
+  // And when the check has already spent the hook's time, the sync does not
+  // start. Nothing is written, `applied` is false, and the blocking policy
+  // still refuses the prompt: the one outcome that must not happen is a
+  // half-written `.oxagen/` plus a prompt that ran anyway.
+  it("refuses the sync, and still blocks, when the budget is gone", async () => {
+    let clock = 1_000_000;
+    const { run: base } = stubRepo({ behind: true });
+    const run: GitRunner = async (args, opts) => {
+      // The check itself spends the whole budget.
+      if (args[0] === "status") clock += 7_000;
+      return base(args, opts);
+    };
+    const d = await evaluateGate({
+      cwd: "/repo",
+      policy: resolveSteeringPolicy([
+        { scope: "project", policy: { autoSync: true, blockStaleRuns: true } },
+      ]),
+      run,
+      cacheIo: noCache,
+      now: () => clock,
+      hookBudgetMs: 6_000,
+    });
+    expect(d.sync?.applied).toBe(false);
+    expect(d.sync?.refusal).toBe("out_of_time");
     expect(d.action).toBe("block");
     expect(d.exitCode).toBe(2);
   });

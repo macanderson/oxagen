@@ -73,6 +73,19 @@ function runner(t: Record<string, string | Error>): GitRunner {
     if (key.startsWith("ls-files --others -z --")) return "";
     // Index entries excluded from the working tree. None, unless a test says so.
     if (key.startsWith("ls-files -t -z --")) return "";
+    // A commit no test put in the table is one this clone does not hold, and
+    // real git says so the way it says so: `cat-file -e <sha>^{commit}` exits
+    // 128 with "Not a valid object name", because it resolves the peel before
+    // it looks. The stub used to fall through to the generic throw, which
+    // reads as git failing rather than as git answering, and the presence
+    // probe now tells those two apart.
+    if (args[0] === "cat-file") {
+      throw new GitCommandError(
+        [...args],
+        128,
+        `fatal: Not a valid object name ${args[2]}`,
+      );
+    }
     // Production's blob for each path. Every path, unless a test says so.
     if (key.startsWith(`ls-tree -r -z ${REMOTE} --`)) {
       return args
@@ -672,6 +685,61 @@ describe("checkSteeringFreshness, when the ancestry question fails", () => {
     );
     expect(v.status).toBe("unknown");
     expect(v.notes.join(" ")).toContain("steering version 42");
+  });
+
+  // The regression the shared hook budget introduced. The presence probe in
+  // front of the reachability call runs on a slice of that budget, and the
+  // slice has a 250 ms floor: a `cat-file` killed by it collapsed to null,
+  // the probe reported the publication commit absent, and this fallback read
+  // "absent" as "the ref is too old" and returned `behind`. An enabled
+  // blocking policy then refused the prompt over a local git timeout, which
+  // is the one thing this design promises never to do.
+  it("is unknown when the presence probe is killed by its slice of the budget", async () => {
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: new GitCommandError(
+          ["cat-file", "-e", `${PROMOTION}^{commit}`],
+          null,
+          "",
+          "SIGTERM",
+        ),
+      },
+      {
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("unknown");
+    expect(v.status).not.toBe("behind");
+    expect(v.notes.at(-1)).toContain("could not tell whether");
+  });
+
+  // The other half of the same distinction: git looking and finding nothing
+  // still has to mean `behind`, or the fallback stops doing its job.
+  it("is still behind when git looks and the commit is genuinely absent", async () => {
+    const v = await check(
+      {
+        ...table(),
+        [`cat-file -e ${PROMOTION}^{commit}`]: new GitCommandError(
+          ["cat-file", "-e", `${PROMOTION}^{commit}`],
+          128,
+          `fatal: Not a valid object name ${PROMOTION}^{commit}`,
+        ),
+      },
+      {
+        platform: {
+          steeringVersion: 42,
+          headCommit: PROMOTION,
+          aheadOfCheckout: true,
+        },
+      },
+    );
+    expect(v.status).toBe("behind");
+    expect(v.notes[0]).toContain("steering version 42");
   });
 });
 
