@@ -272,131 +272,52 @@ detail from the tree and treats a disagreement with this record as this record
 being stale, not as a reason to make the code match it. A decision ages well; an
 inventory does not.
 
-4. The names an enrolled host carries, each shipping alongside the old one and
-   migrating on the next enroll: the runtime names `tachod` to `oxagend` and
-   `tacho-hook` to `oxagen-hook`, and the deployed API paths the host calls.
-   `apps/api/src/app.ts` mounts `/v1/tacho/enroll` and the credentialed
-   `/v1/tacho` group that carries event ingest, bundle fetch and command fetch,
-   plus seven organization-scoped paths under `/tacho/` for enrollments,
-   enrollment revocation, enrollment tokens, hosts, sessions and incidents. A
-   URL compiled into a daemon on a machine we do not control is the most
-   customer-facing name in this record, so the routes are mounted under both
-   spellings. Renaming them without that alias breaks every enrolled host at
-   the moment of deploy, which is the failure this whole record is arranged to
-   avoid. No other phase blocks the aliasing, so the server may accept both
-   before any host ships the new binary name; the route filenames stay as they
-   are under decision 1.
+4. The names an enrolled host carries: the runtime names `tachod` to `oxagend`
+   and `tacho-hook` to `oxagen-hook`, and the deployed API paths. What this
+   record fixes is the shape, not the steps.
 
-   **Two retirement clocks, not one.** An earlier draft retired every old path
-   "once the fleet has re-enrolled", which is right for the paths a host calls
-   and wrong for the rest. Re-enrolling a host does nothing for an independent
-   API consumer, and five of these paths are published API surface in their own
-   right: `docs/capabilities/tacho.host.list.md`, `tacho.session.list.md`,
-   `tacho.session.get.md`, `tacho.enrollment.create.md` and
-   `tacho.enrollment.revoke.md` each document the full
-   `POST /v1/:org_slug/:workspace_slug/tacho/...` form, and two of them also
-   publish an MCP tool and a CLI command against it. A script, a dashboard or a
-   customer integration calls those directly and learns nothing from a fleet
-   rollout, so retiring them on the fleet's clock would break a caller that did
-   everything right.
+   **The shape.** Every old name keeps answering behind an alias. No old name is
+   retired on a release count. Each one is retired only when there is evidence
+   that nobody still holds it, and the evidence has to be about the holder: a
+   host, a script, a configured deployment. Where two things hold the same name
+   on different update cycles, they get separate clocks.
 
-   | Paths | Who calls them | When the old spelling stops answering |
-   | --- | --- | --- |
-   | `/v1/tacho/enroll` and the `/v1/tacho` group | The host daemon only | Once the fleet has re-enrolled, which the host records make observable |
-   | The seven organization-scoped `/tacho/` paths | Operators, scripts and integrations, through the published `/v1/:org_slug/:workspace_slug/` form | Only after an announced API deprecation window closes, independent of the fleet |
+   **Why the steps are not here.** Eleven rounds of review on the pull request
+   that wrote this phase found eight distinct couplings a rename would have
+   severed, and four of them were found in the round after I claimed to have
+   enumerated the mechanism. The couplings were not obscure. They were a
+   compile-time schema constant, two rate-limit matchers, an envelope literal
+   frozen into sealed WAL entries, five hard-coded client paths, an endpoint the
+   server issues rather than the host choosing, an environment variable that
+   overrides that endpoint, a reapply branch that skips the endpoint write
+   entirely, and a per-host route signal that does not exist. Each one was found
+   by someone reading a file this record was not changing. A ninth is the
+   expected case, not the surprising one, so a step list here would be a list of
+   things I happened to look at, presented as the things that matter.
 
-   **The replacement paths, named.** This rename removes a word rather than
-   substituting one, so "both spellings" is not derivable and an implementer
-   would have to guess between `/v1/agent`, an unprefixed capability route and
-   something else. The target is `agent`, the word phase 1a already shipped on
-   the commands, and every one of these nine paths is free today:
+   **What phase 4 must establish, in its own pull request, against the code.**
+   These are the questions the eight findings earned. Each is open, and each
+   needs an answer from the tree rather than from this record:
 
-   The first two are written as `app.ts` mounts them. The other seven are
-   mount-relative and reach a caller with `/v1/:org_slug/:workspace_slug/` in
-   front, which is the form `docs/capabilities/` publishes and the form an
-   external client holds.
+   | Question | Why it is not rhetorical |
+   |---|---|
+   | Which code paths construct one of these URLs or names? | `packages/tacho/src/cli/enroll.ts`, `cli/unenroll.ts`, `apps/cli/src/commands/agent.ts` and `tacho.ts` each hard-code one. That list is what one search found, not what exists. |
+   | What decides the endpoint a host actually uses? | Not the host. `tacho-host-enroll.ts` reads `TACHO_INGEST_ENDPOINTS` and falls back to a `DEFAULT_ENDPOINT` constant, so a configured deployment ignores the constant, and `.env.example` still names the old path. Changing the constant alone moves nobody. |
+   | Does re-enrolling actually rewrite a host's endpoints? | Not on the normal path. `enrollLocked`'s reapply branch keeps `existing.endpoints` and tells the operator to pass `--force` to enroll again; the triple is written only from a fresh enrollment response. So "the fleet re-enrolled" and "the fleet moved" are different facts. |
+   | How would anyone observe which path a host is calling? | Today, they could not. `packages/database/src/schema/tacho.ts` stores no endpoint or route on a host, and the request logger records a path without the authenticated host. The retirement condition needs a signal that has to be built, or a different condition. |
+   | What else answers on the old path, unmetered, if only the route moves? | `apps/api/src/app.ts` registers `tacho-preauth-ip` and `tacho-preauth-credential` against the literal `/v1/tacho/*`, above the mount so they stay pre-auth. An alias without them is an unmetered door to the same authentication path, and an alias that answers but does not count is worse than no alias. |
+   | Which callers update on a cycle we do not control? | An operator's runbook holding `oxagen tacho ...`, a script calling a published organization-scoped route, an MDM-distributed settings document. None of them learns anything from a host re-enrolling, so each needs its own announced window rather than the fleet's clock. |
+   | Which names look like paths but are not? | `tacho-host-enroll.ts` also sets `AUDIENCE = "tacho-collector"` on the token a host presents, verified on both sides, so changing it invalidates every live host token at once. It is in no phase. If it ever moves it needs the envelope's two-sided alias: the verifier accepts both before any issuer emits the new one. |
 
-   | Today | Phase 4 adds |
-   | --- | --- |
-   | `/v1/tacho/enroll` | `/v1/agent/enroll` |
-   | `/v1/tacho` (events, bundle, commands) | `/v1/agent` |
-   | `/tacho/enrollments` | `/agent/enrollments` |
-   | `/tacho/enrollments/revoke` | `/agent/enrollments/revoke` |
-   | `/tacho/enrollment-tokens` | `/agent/enrollment-tokens` |
-   | `/tacho/hosts` | `/agent/hosts` |
-   | `/tacho/sessions` | `/agent/sessions` |
-   | `/tacho/sessions/get` | `/agent/sessions/get` |
-   | `/tacho/incidents` | `/agent/incidents` |
-
-   All seven have a capability document, and each one's `## Surface` block moves
-   in the same phase or the published path and the served path disagree. An
-   earlier draft of this paragraph said five, missing
-   `tacho.enrollment_token.create.md`, which publishes
-   `/tacho/enrollment-tokens`, and `tacho.incident.list.md`, which publishes
-   `/tacho/incidents` in a third spelling again,
-   `POST /api/v1/{org}/{ws}/tacho/incidents`. Two documents left behind would
-   keep directing clients at a path the phase is retiring.
-
-   **Mounting the aliases migrates nobody. The callers move in the same phase.**
-   Our own code holds the old paths in three different ways, and only one of them
-   is a string in a request:
-
-   - **Request paths compiled into clients.** `packages/tacho/src/cli/enroll.ts`
-     posts to `/v1/:org/:ws/tacho/enrollments` and `/v1/tacho/enroll`,
-     `cli/unenroll.ts` to `/v1/:org/:ws/tacho/enrollments/revoke`, and
-     `apps/cli/src/commands/agent.ts` and `tacho.ts` to `tacho/enrollments/revoke`
-     and `tacho/hosts`.
-   - **The endpoint the server hands the host.**
-     `packages/handlers/src/lib/tacho-host-enroll.ts` sets
-     `DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho"`, and the bundle written
-     at enrollment carries `ingest_endpoint`, `bundle_endpoint` and
-     `commands_endpoint` built from it.
-   - **Endpoint triples already written into host config**, which only change when
-     a host takes a new bundle.
-
-   The second one breaks the clock this phase retires on. A host does not choose
-   its endpoint; the server issues it at enrollment. So if `DEFAULT_ENDPOINT` still
-   names the old path when a host re-enrolls, that host re-enrolls straight back
-   onto the old path, and "the fleet has re-enrolled" stops being evidence that
-   anyone left it. The condition is therefore two-part and in this order: the
-   bundle issues the new endpoints, **and then** hosts have re-enrolled since,
-   observable from what each host reports it is calling. Re-enrollment before the
-   bundle moves proves nothing.
-
-   So phase 4 ships the alias mounts, the client rewrites, the `DEFAULT_ENDPOINT`
-   change, and route tests that assert a client reaches the new path, as one
-   change. Aliases plus updated capability documents, with the callers left alone,
-   is the version that passes review and breaks the fleet on the day the alias
-   closes.
-
-   **One name in that file is not a path and needs its own decision.**
-   `tacho-host-enroll.ts` also sets `AUDIENCE = "tacho-collector"`, the audience
-   claim on the token the host presents. It is the only occurrence in the tree, and
-   it is validated on both sides, so changing it invalidates every live host token
-   at once. It is not in any phase and this record does not move it: if it ever
-   moves, it needs the same two-sided alias as the envelope, with the verifier
-   accepting both audiences before any issuer emits the new one. Treat it as an
-   identifier under decision 1 until someone writes that down.
-
-   **The aliases carry the pre-auth ceilings or they are a hole.** This is the
-   part of phase 4 that is not a rename. `apps/api/src/app.ts` registers two
-   credential-stuffing ceilings, `tacho-preauth-ip` and
-   `tacho-preauth-credential`, whose matchers are the literal `/v1/tacho/*`, and
-   the comment above them says why they sit where they sit: registered below the
-   mount they run after authentication, so every bad credential is rejected by
-   auth first and counted against nothing. Mounting `/v1/agent/*` without
-   equivalent matchers, in the same position relative to the mount, gives an
-   attacker an unmetered door to the same authentication path. The unauthenticated
-   `/v1/tacho/enroll` route depends on its own registration order for the same
-   reason. So phase 4 ships the matchers and the ordering with the aliases, and a
-   route test that asserts an invalid credential on a new path counts against both
-   buckets. An alias that answers but does not count is worse than no alias.
-
-   The organization-scoped group already carries `/agent/tools`,
-   `/agent/memory/*`, `/agent/roles/*` and more, so these join a namespace that
-   exists rather than opening one. Check each target for a collision before
-   mounting it anyway: the `status` and `unenroll` collision that phase 1b hit
-   was the same mistake one layer up.
+   **What is already known to be true**, and is worth carrying because it was
+   verified rather than predicted: `apps/api/src/app.ts` mounts
+   `/v1/tacho/enroll`, the credentialed `/v1/tacho` group, and seven
+   organization-scoped `/tacho/` paths. The target word is `agent`, which phase
+   1a already shipped on the commands, and all nine target paths were free on
+   2026-09-19. All seven organization-scoped paths have a capability document
+   whose `## Surface` line publishes the old path, one of them in a third
+   spelling, and those move with the routes or the documentation contradicts the
+   server. Re-check each of these before relying on it.
 5. The envelope: `oxagen.frame/1.0` accepted alongside `tacho/1.0`. **The old
    literal is not retired on a release count, and may never be retired.** An
    earlier draft said "for one release", which this codebase has already learned
@@ -468,11 +389,12 @@ retires an old name on a release count.** Every retirement here waits on evidenc
 about who still holds the old name, because that is the only thing that makes the
 retirement safe:
 
-| The old name | Stops answering when |
-| --- | --- |
-| `tachod`, `tacho-hook`, `/v1/tacho/enroll` and the `/v1/tacho` group | The bundle issues the new endpoints, and the host records then show the fleet re-enrolled since. Re-enrolling before `DEFAULT_ENDPOINT` moves puts a host back on the old path, so that order is the condition. |
-| The seven organization-scoped `/tacho/` paths | An announced API deprecation window closes, independent of the fleet, because a host re-enrolling does not update a caller's script |
-| `tacho/1.0` | Host telemetry shows no enrolled host still sends it, which a sealed WAL entry may make never |
+| The old name | Who holds it | Stops answering when |
+| --- | --- | --- |
+| `tachod`, `tacho-hook`, `/v1/tacho/enroll`, the `/v1/tacho` group | An enrolled machine, through a config file the server wrote | A signal that does not exist yet says no host is on the old path. Phase 4 either builds that signal or picks a condition it can actually check. "The fleet re-enrolled" is not it: a normal re-enroll keeps the existing endpoints. |
+| The seven organization-scoped `/tacho/` paths | Operators, scripts, integrations | An announced API deprecation window closes. Independent of the fleet, because none of these callers learns anything from a host re-enrolling. |
+| `oxagen tacho ...` | An operator's runbook or script | An announced CLI window closes, or usage telemetry shows none. Also independent of the fleet, for the same reason. Decision 2 promises this spelling keeps working, and retiring it on the host clock would break that promise. |
+| `tacho/1.0` | Every producer, including sealed WAL entries that cannot be rewritten | Telemetry shows no enrolled host still sends it, which a sealed entry may make never. |
 
 So no phase leaves a host, a producer or a caller that the next phase cannot
 read. An earlier draft of this paragraph said phases 4 and 5 retire the old name
