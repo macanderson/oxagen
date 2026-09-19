@@ -48,7 +48,7 @@ export function UserMenu({ data }: { data: ShellData }) {
     // copy of a set Better Auth has already swapped in for the old one. So the
     // menu takes the person back to the codes instead; sign out works again
     // once they are saved.
-    if (vault.rotating || vault.codes !== null) {
+    if (vault.rotating || vault.codes !== null || vault.uncertain) {
       openAccount("security");
       return;
     }

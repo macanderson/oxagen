@@ -36,25 +36,26 @@ type VaultState = {
   /** The set Better Auth returned, not yet acknowledged as saved. */
   codes: string[] | null;
   /**
-   * A rotation went out and no answer came back, so nobody knows what the
-   * server holds. The old set may be void and the new set may exist where no
-   * one can read it. Only a rotation that answers with a set settles this.
+   * A rotation left and its answer never came back. The server may have
+   * committed it, in which case the old set is void and the new one is gone,
+   * or it may not. Nothing on this page can tell which, so only a rotation
+   * that does answer with a set ends this.
    */
-  atRisk: boolean;
+  uncertain: boolean;
 };
 
 const EMPTY: VaultState = {
   userId: null,
   rotating: false,
   codes: null,
-  atRisk: false,
+  uncertain: false,
 };
 
 let state: VaultState = EMPTY;
 const listeners = new Set<() => void>();
 
 function atStake(s: VaultState): boolean {
-  return s.rotating || s.codes !== null || s.atRisk;
+  return s.rotating || s.codes !== null || s.uncertain;
 }
 
 // The browser's own "leave site?" prompt, armed while anything is at stake.
@@ -86,10 +87,10 @@ function subscribe(listener: () => void): () => void {
 export type HeldCodes = {
   rotating: boolean;
   codes: string[] | null;
-  atRisk: boolean;
+  uncertain: boolean;
 };
 
-const NOTHING: HeldCodes = { rotating: false, codes: null, atRisk: false };
+const NOTHING: HeldCodes = { rotating: false, codes: null, uncertain: false };
 
 function view(s: VaultState, userId: string): HeldCodes {
   if (s.userId !== userId) return NOTHING;
@@ -117,9 +118,7 @@ export const recoveryCodeVault = {
       userId,
       rotating: true,
       codes: mine ? state.codes : null,
-      // Starting a replacement rotation does not settle an earlier one that
-      // never answered. Only its own answer does.
-      atRisk: mine && state.atRisk,
+      uncertain: mine && state.uncertain,
     });
     return true;
   },
@@ -127,32 +126,27 @@ export const recoveryCodeVault = {
   end(): void {
     if (state.rotating) set({ ...state, rotating: false });
   },
-  /**
-   * The rotation answered with a set: hold it until it is saved. This is the
-   * one thing that settles an earlier rotation nobody heard back from, because
-   * the set in hand is now the set the server holds.
-   */
+  /** The rotation answered with a set: hold it until it is saved. */
   hold(userId: string, codes: string[]): void {
-    set({ userId, rotating: false, codes, atRisk: false });
+    set({ userId, rotating: false, codes, uncertain: false });
   },
   /**
-   * The rotation went out and nothing came back that says what the server did.
-   * Any set held here may already be void, so it is dropped, and the at-risk
-   * mark stays up until a rotation answers. A tab switch, a closed dialog, a
-   * client-side transition and a second failure all leave it standing, and the
-   * unload prompt stays armed, because the account really is one lost
-   * authenticator from locked out.
+   * The server answered and refused, a wrong password for one. It answered,
+   * so this rotation changed nothing. Any doubt left by an earlier lost answer
+   * still stands: a refusal now says nothing about that one.
    */
-  uncertain(userId: string): void {
-    set({ userId, rotating: false, codes: null, atRisk: true });
+  refuse(): void {
+    set(state.uncertain ? { ...state, rotating: false, codes: null } : EMPTY);
   },
   /**
-   * The person saved the set. Nothing is held and nothing is at risk.
-   *
-   * A failed rotation does not come through here. A server that refused before
-   * it wrote leaves the vault as it was, and a rotation that never answered
-   * goes to `uncertain`, which keeps the mark and the unload prompt up.
+   * The call threw: the request may or may not have reached the server, and
+   * the answer is lost either way. The old set may already be void, so the
+   * page stays guarded until a rotation answers with a set.
    */
+  lose(userId: string): void {
+    set({ userId, rotating: false, codes: null, uncertain: true });
+  },
+  /** The person saved the set: the single showing was received. */
   clear(): void {
     set(EMPTY);
   },
