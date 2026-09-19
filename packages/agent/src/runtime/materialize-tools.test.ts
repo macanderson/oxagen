@@ -558,15 +558,16 @@ describe("materializeTools", () => {
     const runIdRef: { current: string | null } = { current: null };
     const { tools } = await mt({ ...CTX, messageId: "msg_42" }, { runIdRef });
     // The run opens only after materializeTools has already returned —
-    // exactly the order `runPreparedTurn` follows.
-    runIdRef.current = "arun_after_materialize";
+    // exactly the order `runPreparedTurn` follows. The value is the internal
+    // UUID `createApprovalRequest` → `resolveRunPublicId` accepts.
+    runIdRef.current = "0192d4a8-7c1e-7a00-8000-0000000000a1";
     await (
       tools.capB as unknown as { execute: (i: unknown) => Promise<unknown> }
     ).execute({ y: 1 });
     const call = mocks.createApprovalRequest.mock.calls.at(0)?.at(0) as
       | { runId: string | null }
       | undefined;
-    expect(call?.runId).toBe("arun_after_materialize");
+    expect(call?.runId).toBe("0192d4a8-7c1e-7a00-8000-0000000000a1");
   });
 
   it("falls back to ctx.agentRun.runId when the caller passes no runIdRef (negative)", async () => {

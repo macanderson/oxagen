@@ -465,7 +465,7 @@ describe("the prepared turn", () => {
     // unset at materialize time. By now the turn has finished, so the ref
     // already carries the run openAssistantRun opened.
     expect(materializeOpts.runIdRef).toEqual({
-      current: "arun_0123456789abcdef012345",
+      current: "run-uuid",
     });
     // The belt owns `search_tools` and `load_tools` inside a turn. Their
     // capability contracts declare the same names, and `modelToolsFor` layers

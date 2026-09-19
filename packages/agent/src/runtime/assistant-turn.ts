@@ -450,8 +450,11 @@ async function runPreparedTurn(
   hooks.onRun?.({ runId: run.runPublicId });
   // Every materialized tool's `execute` closure reads this at call time
   // (finding 9, macanderson/oxagen#3370): a call parked from here on attaches
-  // to the run whose Policy tab a person can actually see.
-  runIdRef.current = run.runPublicId;
+  // to the run whose Policy tab a person can actually see. The value is the
+  // internal UUID — `createApprovalRequest` → `resolveRunPublicId` only
+  // accepts a uuid and looks up `agent_runs.id`; a public `arun_…` id would
+  // write `run_public_id = null` and disappear from `list_approvals({ runId })`.
+  runIdRef.current = run.runId;
 
   // `openAssistantRun` has admitted the run and opened its attempt, but
   // `runGovernedTurn` does not install its sealing path until after its

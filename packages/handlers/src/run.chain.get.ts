@@ -320,10 +320,16 @@ export function createRunChainGetHandler(
       harnessReproducible: false,
     });
 
-    const recordedGrade =
+    const recordedGradeRaw =
       run.source === "ledger"
         ? run.record.seal?.replayGrade
         : run.row.session.replayGrade;
+    // A live run (including a retry after a sealed attempt) has no recorded
+    // grade yet — `toLedgerRunItem` already nulls it on the row. Returning the
+    // previous attempt's seal grade here would present a historical trust
+    // grade as the current run's before the active attempt has sealed.
+    const recordedGrade =
+      run.item.status === "live" ? null : recordedGradeRaw;
     const first = read.frames.at(0);
     const last = read.frames.at(-1);
 

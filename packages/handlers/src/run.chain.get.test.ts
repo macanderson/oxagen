@@ -88,6 +88,7 @@ function tachoHarness(
 function ledgerHarness(
   sealOver: Record<string, unknown> = {},
   attemptSeals = [seal(RUN_UUID, sealOver)],
+  runOver: { status?: string } = {},
 ) {
   const stores = memoryStores(
     [
@@ -95,6 +96,17 @@ function ledgerHarness(
         publicId: LEDGER_ID,
         runId: RUN_UUID,
         seal: attemptSeals.at(-1) ?? seal(RUN_UUID, sealOver),
+        run: {
+          runId: RUN_UUID,
+          publicId: LEDGER_ID,
+          status: runOver.status ?? "completed",
+          createdAt: new Date("2026-09-11T10:00:00.000Z"),
+          startedAt: new Date("2026-09-11T10:00:01.000Z"),
+          name: null,
+          summary: null,
+          summaryGeneratedAt: null,
+          summaryModel: null,
+        },
       }),
     ],
     [],
@@ -290,6 +302,19 @@ describe("get_run_chain", () => {
     });
     expect(out.merkleRoot).toBe(`sha256:${"f".repeat(64)}`);
     expect(out.recordedGrade).toBe("view");
+  });
+
+  it("clears recordedGrade while a retry is still live (negative)", async () => {
+    // A sealed first attempt leaves its grade on `run.record.seal`; a live
+    // retry must not present that historical grade as the current run's.
+    const chain = ledgerHarness(
+      { replayGrade: "view", enforcementTier: "gateway" },
+      undefined,
+      { status: "running" },
+    );
+    const out = await chain({ runId: LEDGER_ID }, ctx());
+    expect(out.recordedGrade).toBeNull();
+    expect(out.seals).toHaveLength(1);
   });
 
   it("a retried run answers one seal per attempt, not only the latest (finding 8, negative)", async () => {
