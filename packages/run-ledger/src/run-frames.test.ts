@@ -6,9 +6,11 @@ import {
   foldTranscript,
   ledgerFrame,
   type RunFrame,
+  stepKind,
   tachoFrame,
   tachoStage,
   tachoTimestamp,
+  turnOrdinals,
 } from "./run-frames";
 import type { AttemptEventReadRecord } from "./run-store";
 
@@ -304,5 +306,116 @@ describe("transcript fold", () => {
     const oneTurn = ledger.map((f) => ({ ...f, turnIndex: null }));
     expect(foldTranscript(oneTurn, "turns")).toHaveLength(1);
     expect(foldTranscript([], "turns")).toEqual([]);
+  });
+
+  it("turnOrdinals counts turn_start frames and leaves the frames before the first in no turn", () => {
+    expect(turnOrdinals(frames)).toEqual([null, 1, 1, 1, 1, 2, 2, 2]);
+  });
+
+  it("turnOrdinals follows the turn index without boundaries, and puts every frame in one turn when it has neither", () => {
+    const ledger = [
+      ledgerFrame(event(1, "admission.run_admitted", null)),
+      ledgerFrame(event(2, "model.call_completed", { turn_index: 0 })),
+      ledgerFrame(event(3, "tool.call_completed", null)),
+      ledgerFrame(event(4, "model.call_completed", { turn_index: 1 })),
+    ];
+    expect(turnOrdinals(ledger)).toEqual([1, 1, 1, 2]);
+    expect(
+      turnOrdinals(ledger.map((f) => ({ ...f, turnIndex: null }))),
+    ).toEqual([1, 1, 1, 1]);
+    expect(turnOrdinals([])).toEqual([]);
+  });
+});
+
+describe("the steps zoom on a run the in-app assistant recorded", () => {
+  // The assistant writes `model.engine_call_completed` and
+  // `tool.engine_call_completed`, and it is the only ledger producer in the
+  // tree. This list named neither, so every one of its runs folded into a
+  // single `frame` entry however many calls it made.
+  const assistant = [
+    ledgerFrame(
+      event(1, "admission.run_admitted", {
+        engine_name: "stella",
+        engine_version: "1",
+      }),
+    ),
+    ledgerFrame(
+      event(2, "model.engine_call_started", { model_call_id: "prov-1-0" }),
+    ),
+    ledgerFrame(
+      event(3, "model.engine_call_completed", {
+        model_call_id: "prov-1-0",
+        turn_index: 0,
+      }),
+    ),
+    ledgerFrame(
+      event(4, "tool.engine_call_started", { tool_call_id: "tool-1-0" }),
+    ),
+    ledgerFrame(
+      event(5, "tool.engine_call_completed", {
+        tool_call_id: "tool-1-0",
+        outcome: "completed",
+      }),
+    ),
+  ];
+
+  it("opens a step at each completed call and folds its intention into it", () => {
+    expect(
+      foldTranscript(assistant, "steps").map((f) => [
+        f.opening.seq,
+        f.endSeq,
+        f.kind,
+        f.frames,
+      ]),
+    ).toEqual([
+      // The admission receipt and the write-ahead intention lead the first
+      // step; the intention is not a step of its own, which is the same
+      // reason the recorder keeps intentions off its receipts.
+      ["1", "2", "frame", 2],
+      ["3", "4", "model_call", 2],
+      ["5", "5", "tool_call", 1],
+    ]);
+  });
+
+  it("names the step kind of each completed call", () => {
+    expect(assistant.map((f) => stepKind(f))).toEqual([
+      null,
+      null,
+      "model_call",
+      null,
+      "tool_call",
+    ]);
+  });
+});
+
+describe("a frame's summary and identity on a run the assistant recorded", () => {
+  const modelFrame = ledgerFrame(
+    event(1, "model.engine_call_completed", {
+      model_call_id: "prov-1-0",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      outcome: "completed",
+    }),
+  );
+  const toolFrame = ledgerFrame(
+    event(2, "tool.engine_call_completed", {
+      tool_call_id: "tool-1-0",
+      tool_name: "search_tools",
+      outcome: "completed",
+    }),
+  );
+
+  it("names the model and the tool instead of falling through to the event type", () => {
+    expect(modelFrame.summary).toBe("oxagen/anthropic/claude-sonnet-4");
+    expect(modelFrame.identity.model).toBe("oxagen/anthropic/claude-sonnet-4");
+    // The engine event calls it `tool_name` where the ledger's own event
+    // calls it `capability_name`; both read.
+    expect(toolFrame.summary).toBe("search_tools completed");
+    expect(toolFrame.identity.tool).toBe("search_tools");
+    expect(toolFrame.identity.toolStatus).toBe("completed");
+  });
+
+  it("reads no turn index, because the engine event carries none", () => {
+    expect(modelFrame.turnIndex).toBeNull();
   });
 });

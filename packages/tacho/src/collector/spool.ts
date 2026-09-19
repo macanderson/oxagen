@@ -334,7 +334,9 @@ export class Shipper {
           return { shipped: 0, quarantined: 1, reachable: true };
         }
         const middle = Math.ceil(batch.length / 2);
-        const left = await this.shipBatch(batch.slice(0, middle), bodies);
+        const leftHalf = batch.slice(0, middle);
+        const left = await this.shipBatch(leftHalf, bodies);
+        if (left.shipped + left.quarantined < leftHalf.length) return left;
         const right = await this.shipBatch(batch.slice(middle), bodies);
         return {
           shipped: left.shipped + right.shipped,

@@ -276,3 +276,17 @@ export const deferredEvidenceArchive: RunArchiveStore = {
   getSegment: (ref) => evidenceStore().getSegment(ref),
   putSegment: (input) => evidenceStore().putSegment(input),
 };
+
+/**
+ * The frame-body seam over the same store, resolved at each call for the same
+ * reason.
+ *
+ * A run store that has none refuses any append whose frame carries a body its
+ * pinned policy retains (`resolveBodyColumns`), and the default assistant
+ * policy retains every content class. So a producer that starts passing
+ * bodies must be constructed with this, or every turn it records fails at the
+ * first frame.
+ */
+export const deferredEvidenceBodies: RunBodyStore = {
+  put: (input) => evidenceStore().put(input),
+};

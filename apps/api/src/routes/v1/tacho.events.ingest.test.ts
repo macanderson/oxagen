@@ -216,6 +216,13 @@ describe("POST /v1/tacho/events", () => {
     };
     expect((await post(huge)).status).toBe(413);
     expect(mocks.invoke).not.toHaveBeenCalled();
+    // A single body at the recorder's 1 MiB cap is about 1.4 MiB as base64:
+    // the route must let it through to validation rather than refuse its size.
+    const oneBody = {
+      ...VALID_BATCH,
+      padding: "x".repeat(Math.ceil((TACHO_MAX_BODY_BYTES * 4) / 3)),
+    };
+    expect((await post(oneBody)).status).not.toBe(413);
   });
 
   it("admits a batch carrying a body at the 1 MiB cap", async () => {

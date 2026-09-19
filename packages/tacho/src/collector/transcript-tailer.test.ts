@@ -34,9 +34,7 @@ function fakeSession(id: string, transcriptPath?: string) {
     lines,
     recorder: {
       ingestTranscriptLine(line: string, subagentId?: string): TachoEvent[] {
-        lines.push(
-          subagentId !== undefined ? { line, subagentId } : { line },
-        );
+        lines.push(subagentId !== undefined ? { line, subagentId } : { line });
         return [{ kind: "line" } as unknown as TachoEvent];
       },
       takeBodies(): FrameBody[] {
@@ -187,13 +185,17 @@ describe("TranscriptTailer", () => {
     const session = fakeSession("s1", path);
     writeFileSync(agentPath, "sub-1\nsub-2\n");
     const { instance } = tailer([session]);
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(2);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      2,
+    );
     expect(session.lines).toEqual([
       { line: "sub-1", subagentId: "a1" },
       { line: "sub-2", subagentId: "a1" },
     ]);
     // A replayed SubagentStop for the same agent feeds nothing.
-    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(0);
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
     expect(session.lines).toHaveLength(2);
     // A path that is not there is reported, not thrown.
     expect(
@@ -205,7 +207,7 @@ describe("TranscriptTailer", () => {
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then drops its cursor", async () => {
+  it("drains a sealed session once more, then never reads it again", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
@@ -222,8 +224,15 @@ describe("TranscriptTailer", () => {
     await instance.tick();
     expect(session.lines).toHaveLength(3);
     expect(instance.state().cursors["s1"]?.drained).toBe(true);
+    // The sealed session stays in the registry for days: its drained cursor
+    // stays too, and no later tick reads the transcript again.
+    appendFileSync(path, "late\n");
     await instance.tick();
-    expect(instance.state().cursors["s1"]).toBeUndefined();
+    await instance.tick();
+    await instance.tick();
+    expect(session.lines).toHaveLength(3);
+    expect(instance.state().cursors["s1"]?.drained).toBe(true);
+    expect(instance.state().cursors["s1"]?.offset).toBeGreaterThan(0);
     // A session that left the registry loses its cursor too.
     const other = fakeSession("s2", path);
     const second = tailer([other]);

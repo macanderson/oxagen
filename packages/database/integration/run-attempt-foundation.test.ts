@@ -8,7 +8,8 @@
  *
  *   T1  tenant isolation on every new foundation table
  *   T2  scope agreement — an attempt cannot be written into another tenant
- *   T3  ACTUAL database privileges: append-only tables have no UPDATE/DELETE
+ *   T3  ACTUAL database privileges: append-only tables have no UPDATE/DELETE,
+ *       and the one mutable pointer table has DELETE (unlink_repository)
  *   T4  attempt identity — one attempt number per run
  *   T5  the V1/V2 partial constraints, including the dropped full unique
  *   T6  same-transaction seal → grant → obligation, and its atomic rollback
@@ -70,8 +71,13 @@ const APPEND_ONLY_TABLES: ReadonlyArray<[string, string]> = [
   ["evidence", "retention_policy_versions"],
 ];
 
-// Mutable operational state: UPDATE allowed, DELETE still denied.
-const UPDATE_BUT_NEVER_DELETE_TABLES: ReadonlyArray<[string, string]> = [
+// Mutable POINTERS: SELECT, INSERT, UPDATE and DELETE all granted. A head is
+// the pointer "this workspace sees this repository" and deleting it is how a
+// repository is unlinked (ADR-099 §5; `unlink_repository`). The binding
+// versions it points at are evidence and stay append-only above.
+// 20260813100000 revoked DELETE here alongside the evidence tables, and
+// 20260918200000 grants it back for the heads alone.
+const MUTABLE_POINTER_TABLES: ReadonlyArray<[string, string]> = [
   ["ingestion", "repository_binding_heads"],
 ];
 
@@ -99,9 +105,9 @@ beforeAll(async () => {
       `GRANT SELECT, INSERT ON ${schema}.${table} TO "${APP_ROLE}"`,
     );
   }
-  for (const [schema, table] of UPDATE_BUT_NEVER_DELETE_TABLES) {
+  for (const [schema, table] of MUTABLE_POINTER_TABLES) {
     await sql.unsafe(
-      `GRANT SELECT, INSERT, UPDATE ON ${schema}.${table} TO "${APP_ROLE}"`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON ${schema}.${table} TO "${APP_ROLE}"`,
     );
   }
   await sql.unsafe(
@@ -223,7 +229,7 @@ afterAll(async () => {
 
   for (const [schema, table] of [
     ...APPEND_ONLY_TABLES,
-    ...UPDATE_BUT_NEVER_DELETE_TABLES,
+    ...MUTABLE_POINTER_TABLES,
     ["agent", "agent_runs"] as [string, string],
   ]) {
     await sql
@@ -392,18 +398,23 @@ describe("T3: append-only privileges, read back from the catalog", () => {
     }
   });
 
-  it("operational state may be UPDATEd but never DELETEd", async () => {
+  it("a mutable pointer may be SELECTed, INSERTed, UPDATEd and DELETEd: unlinking a repository deletes its head", async () => {
     const role = await privilegeRole();
-    for (const [schema, table] of UPDATE_BUT_NEVER_DELETE_TABLES) {
-      const rows = await sql<{ upd: boolean; del: boolean }[]>`
+    for (const [schema, table] of MUTABLE_POINTER_TABLES) {
+      const rows = await sql<
+        { sel: boolean; ins: boolean; upd: boolean; del: boolean }[]
+      >`
         SELECT
+          has_table_privilege(${role}, ${`${schema}.${table}`}, 'SELECT') AS sel,
+          has_table_privilege(${role}, ${`${schema}.${table}`}, 'INSERT') AS ins,
           has_table_privilege(${role}, ${`${schema}.${table}`}, 'UPDATE') AS upd,
           has_table_privilege(${role}, ${`${schema}.${table}`}, 'DELETE') AS del
       `;
-      expect(rows[0]?.upd, `${schema}.${table} UPDATE`).toBe(true);
-      expect(rows[0]?.del, `${schema}.${table} must NOT be deletable`).toBe(
-        false,
-      );
+      const p = rows[0]!;
+      expect(p.sel, `${schema}.${table} SELECT`).toBe(true);
+      expect(p.ins, `${schema}.${table} INSERT`).toBe(true);
+      expect(p.upd, `${schema}.${table} UPDATE`).toBe(true);
+      expect(p.del, `${schema}.${table} DELETE (unlink_repository)`).toBe(true);
     }
   });
 
@@ -421,7 +432,7 @@ describe("T3: append-only privileges, read back from the catalog", () => {
   });
 
   it("every foundation table has FORCE ROW LEVEL SECURITY and a tenant_isolation policy", async () => {
-    const tables = [...APPEND_ONLY_TABLES, ...UPDATE_BUT_NEVER_DELETE_TABLES];
+    const tables = [...APPEND_ONLY_TABLES, ...MUTABLE_POINTER_TABLES];
     for (const [schema, table] of tables) {
       const rows = await sql<{ relrowsecurity: boolean; relforce: boolean }[]>`
         SELECT c.relrowsecurity, c.relforcerowsecurity AS relforce

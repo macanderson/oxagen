@@ -162,7 +162,10 @@ export class TranscriptTailer {
       const persisted = readJsonFileIfExists(options.statePath);
       if (isPersistedTailState(persisted)) {
         for (const [id, cursor] of Object.entries(persisted.cursors))
-          this.cursors.set(id, { ...cursor, subagents: cursor.subagents ?? [] });
+          this.cursors.set(id, {
+            ...cursor,
+            subagents: cursor.subagents ?? [],
+          });
       }
     }
   }
@@ -177,7 +180,10 @@ export class TranscriptTailer {
 
   private persist(): void {
     if (!this.dirty || this.options.statePath === undefined) return;
-    writeSensitiveFileAtomic(this.options.statePath, JSON.stringify(this.state()));
+    writeSensitiveFileAtomic(
+      this.options.statePath,
+      JSON.stringify(this.state()),
+    );
     this.dirty = false;
   }
 
@@ -197,8 +203,9 @@ export class TranscriptTailer {
   }
 
   /**
-   * Advance every live cursor by at most the budget, and drop the cursors of
-   * sessions that sealed and drained or left the registry.
+   * Advance every live cursor by at most the budget, give a sealed session
+   * one final unbounded pass, and drop the cursors of sessions that left the
+   * registry.
    */
   async tick(): Promise<void> {
     const live = new Set<string>();
@@ -206,13 +213,14 @@ export class TranscriptTailer {
       live.add(session.harnessSessionId);
       if (session.transcriptPath === undefined) continue;
       const cursor = this.cursorFor(session, session.transcriptPath);
-      if (cursor.drained) {
-        this.cursors.delete(session.harnessSessionId);
-        this.dirty = true;
-        continue;
-      }
+      // A drained cursor stays as a tombstone for as long as the registry
+      // keeps the sealed session (days, not ticks). Deleting it here let the
+      // next tick recreate the cursor at offset 0 and append the whole
+      // transcript again after `agent_stop`, every other tick. It goes with
+      // the session, in the sweep below.
+      if (cursor.drained) continue;
       if (session.sealed) {
-        // One unbounded pass after the chain closed, then the cursor goes.
+        // One unbounded pass after the chain closed; nothing reads it after.
         await this.advance(session, cursor, Number.POSITIVE_INFINITY);
         cursor.drained = true;
         this.dirty = true;
@@ -290,7 +298,11 @@ export class TranscriptTailer {
    * One line to the recorder, and its events and bodies to the WAL in one
    * call, so a body is never written for an event that is still in memory.
    */
-  private feed(session: TailedSession, line: string, subagentId?: string): void {
+  private feed(
+    session: TailedSession,
+    line: string,
+    subagentId?: string,
+  ): void {
     const events = session.recorder.ingestTranscriptLine(line, subagentId);
     this.options.record(events, session.recorder.takeBodies());
   }
@@ -378,9 +390,7 @@ export class TranscriptTailer {
     // tick can tell a replaced file from the one this cursor read.
     const headLength = Math.min(HEAD_BYTES, cursor.offset);
     const known =
-      cursor.head === undefined
-        ? 0
-        : Buffer.from(cursor.head, "base64").length;
+      cursor.head === undefined ? 0 : Buffer.from(cursor.head, "base64").length;
     if (headLength > known) {
       try {
         const head = await readAt(cursor.path, 0, headLength);
