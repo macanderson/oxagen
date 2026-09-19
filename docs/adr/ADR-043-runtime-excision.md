@@ -141,11 +141,17 @@ cloud runners and managed devices first, and never mandatory on a developer's
 own laptop. ADR-094's loopback proxy is also not a runtime: it forwards a
 request a harness made and assembles nothing.
 
-## Amendment 2026-09-19: cms marketing lead gate is not runtime
+## Amendment 2026-09-19: marketing `cms.*` is restored
 
-Maintainer decision of 2026-09-19, recorded in ADR-102. The `cms` schema
-(leads, book editions, access codes) and the public `/v1/cms/*` routes were
-dropped in this ADR as collateral of the runtime excision. They are marketing
-infrastructure for the oxagen.sh ebook gate, not agent runtime, and are
-restored. The ban on sandboxes, coding engines, workers, skill systems, eval
-harnesses, playbooks, browser tools, and content generators is unchanged.
+Maintainer decision of 2026-09-19, recorded in ADR-102. The website lead
+forms (demo / contact and the field-manual ebook gate) still POST to
+`/v1/cms/leads`. Dropping `cms.*` with the runtime cut left those forms
+posting into auth middleware (401) and the CORS allowlist without a
+fallback for `oxagen.sh`. That was collateral damage, not a product
+decision to retire lead capture.
+
+The `cms` schema, `/v1/cms/*` routes, and `apps/web/read/` reader are
+restored as marketing infrastructure: no tenant scope, bypass-only RLS, no
+capability contract, no MCP/CLI parity. The ban on sandboxes, coding
+engines, workers, skill systems, eval harnesses, playbooks, browser tools,
+and content generators is unchanged.

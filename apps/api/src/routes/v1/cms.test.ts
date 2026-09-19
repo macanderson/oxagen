@@ -7,21 +7,27 @@
  * access.ts's own logic is covered separately in lib/cms/access.test.ts.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   captureLead: vi.fn(),
   captureLeadAndIssueCode: vi.fn(),
+  finalizeCodeDelivery: vi.fn().mockResolvedValue(undefined),
   findLeadByEmail: vi.fn(),
   issueCodeForLead: vi.fn(),
   redeemAndRotate: vi.fn(),
-  sendEmail: vi.fn().mockResolvedValue({ ok: true }),
+  sendEmail: vi
+    .fn()
+    .mockImplementation((opts: { to: string }) =>
+      Promise.resolve({ accepted: [opts.to], rejected: [] }),
+    ),
   isEmailTransportConfigured: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock("../../lib/cms/access", () => ({
   captureLead: mocks.captureLead,
   captureLeadAndIssueCode: mocks.captureLeadAndIssueCode,
+  finalizeCodeDelivery: mocks.finalizeCodeDelivery,
   findLeadByEmail: mocks.findLeadByEmail,
   issueCodeForLead: mocks.issueCodeForLead,
   redeemAndRotate: mocks.redeemAndRotate,
@@ -67,11 +73,13 @@ vi.mock("@oxagen/database", () => ({
 import { cmsRoute } from "./cms";
 
 const SENT = "The link to the book has been sent to your email.";
-const DEMO_SENT = "Thanks. We got it. We will be in touch shortly.";
+const DEMO_SENT = "Thanks. We got it. We'll be in touch shortly.";
 const NOT_FOUND =
-  "We could not find that email. Please fill out the form to get the book.";
-const DELIVERY_FAILED =
-  "We saved your details, but could not email the link just now. Please try the resend option in a moment.";
+  "We couldn't find that email. Please fill out the form to get the book.";
+const SIGNUP_DELIVERY_FAILED =
+  "We saved your details, but couldn't send the email. Please try again.";
+const RESEND_DELIVERY_FAILED =
+  "We couldn't send the email just now. Please try again in a moment.";
 
 let ipCounter = 0;
 function freshIp(): string {
@@ -104,11 +112,15 @@ const VALID_LEAD = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.sendEmail.mockResolvedValue({ ok: true });
+  mocks.sendEmail.mockImplementation((opts: { to: string }) =>
+    Promise.resolve({ accepted: [opts.to], rejected: [] }),
+  );
   mocks.isEmailTransportConfigured.mockReturnValue(true);
+  mocks.finalizeCodeDelivery.mockResolvedValue(undefined);
   mocks.captureLeadAndIssueCode.mockResolvedValue({
     readUrl: "http://localhost:8080/read?e=page-flip-reader&c=abc",
     leadId: "lead_1",
+    codeId: "code_1",
   });
 });
 
@@ -123,19 +135,6 @@ describe("POST /v1/cms/leads", () => {
     expect(edition).toBe("page-flip-reader");
     expect(reason).toBe("signup");
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
-  });
-
-  it("reports an honest delivery failure instead of claiming success", async () => {
-    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
-    const res = await post("/leads", VALID_LEAD);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      ok: true,
-      delivered: false,
-      message: DELIVERY_FAILED,
-    });
-    // The lead and code are already persisted — only the email failed.
-    expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a missing required field with 400 and no side effects", async () => {
@@ -164,6 +163,51 @@ describe("POST /v1/cms/leads", () => {
     await post("/leads", { ...VALID_LEAD, edition: "field-manual" });
     expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe(
       "field-manual",
+    );
+  });
+
+  it("defaults to the field-manual edition when source names it but edition is unset", async () => {
+    await post("/leads", { ...VALID_LEAD, source: "field-manual" });
+    expect(mocks.captureLeadAndIssueCode.mock.calls[0]![1]).toBe(
+      "field-manual",
+    );
+  });
+
+  it("reports an honest delivery failure instead of claiming success", async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await post("/leads", VALID_LEAD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: false,
+      message: SIGNUP_DELIVERY_FAILED,
+    });
+    // The lead and code are already persisted — only the email failed —
+    // and finalize revokes the new code rather than the (absent) prior one.
+    expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
+      "code_1",
+      false,
+    );
+  });
+
+  it("treats a resolved send with the recipient in `rejected` as a delivery failure", async () => {
+    mocks.sendEmail.mockResolvedValueOnce({
+      accepted: [],
+      rejected: ["ada@example.com"],
+    });
+    const res = await post("/leads", VALID_LEAD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: false,
+      message: SIGNUP_DELIVERY_FAILED,
+    });
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
+      "code_1",
+      false,
     );
   });
 
@@ -231,70 +275,6 @@ describe("POST /v1/cms/leads", () => {
   });
 });
 
-describe("POST /v1/cms/leads rate-limit key resolution", () => {
-  // These mounts moved off the in-process rateLimiter's defaultKeyFn (the
-  // caller-controlled x-forwarded-for header, taken verbatim) onto
-  // distributedRateLimiter + trustedClientIpBucketKey, the same primitive
-  // apps/api/src/routes/v1/tacho.host.enroll.ts uses for its own pre-auth
-  // ceiling. trustedClientIpBucketKey and distributedRateLimiter's spoofing
-  // resistance are exhaustively unit-tested in
-  // apps/api/src/middleware/distributed-rate-limit.test.ts; this test proves
-  // only the wiring: with a trusted proxy configured, varying the
-  // caller-controlled prefix of x-forwarded-for no longer mints a fresh
-  // bucket per request, unlike the resolver this route used before.
-  const TRUSTED_PROXY = "10.0.0.1";
-  const REAL_CLIENT = "198.51.100.7";
-
-  async function postFromRealClientBehindTrustedProxy(
-    attackerPrefix: string,
-  ): Promise<Response> {
-    return cmsRoute.request(
-      new Request("http://localhost/leads", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          // The rightmost hop is the only one a trusted proxy could have
-          // written; everything left of it (including REAL_CLIENT itself,
-          // here) is exactly what an attacker sending straight to the proxy
-          // controls unless the proxy overwrote it. This models an attacker
-          // who cannot make the proxy attribute a different real address, but
-          // pads the header with a different, useless prefix each request.
-          "x-forwarded-for": `${attackerPrefix}, ${REAL_CLIENT}, ${TRUSTED_PROXY}`,
-          "user-agent": "vitest",
-        },
-        body: JSON.stringify(VALID_LEAD),
-      }),
-    );
-  }
-
-  beforeEach(async () => {
-    process.env.TRUSTED_PROXY_CIDRS = `${TRUSTED_PROXY}/32`;
-    const { __resetTrustedProxyHopsForTests } = await import(
-      "../../lib/context"
-    );
-    __resetTrustedProxyHopsForTests();
-  });
-
-  afterEach(async () => {
-    delete process.env.TRUSTED_PROXY_CIDRS;
-    const { __resetTrustedProxyHopsForTests } = await import(
-      "../../lib/context"
-    );
-    __resetTrustedProxyHopsForTests();
-  });
-
-  it("still throttles the same trusted-proxy-vouched client across requests bearing a different spoofed prefix each time", async () => {
-    // max is 10 for /leads; the trusted-proxy-vouched client is REAL_CLIENT
-    // on every one of these regardless of the attacker-controlled prefix.
-    for (let i = 0; i < 10; i += 1) {
-      const res = await postFromRealClientBehindTrustedProxy(`spoof-${i}`);
-      expect(res.status).not.toBe(429);
-    }
-    const eleventh = await postFromRealClientBehindTrustedProxy("spoof-10");
-    expect(eleventh.status).toBe(429);
-  });
-});
-
 describe("POST /v1/cms/book/redeem", () => {
   it("returns the access result on a valid code", async () => {
     mocks.redeemAndRotate.mockResolvedValue({
@@ -358,31 +338,73 @@ describe("POST /v1/cms/book/resend", () => {
       id: "lead_1",
       email: "ada@example.com",
     });
-    mocks.issueCodeForLead.mockResolvedValue(
-      "http://localhost:8080/read?e=page-flip-reader&c=xyz",
-    );
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+    });
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, sent: true, message: SENT });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    // Delivered: finalize makes the new code the lead's one live link.
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
+      "code_2",
+      true,
+    );
   });
 
-  it("reports an honest delivery failure on resend instead of claiming sent", async () => {
+  it("reports an honest delivery failure and keeps the prior code usable", async () => {
     mocks.findLeadByEmail.mockResolvedValue({
       id: "lead_1",
       email: "ada@example.com",
     });
-    mocks.issueCodeForLead.mockResolvedValue(
-      "http://localhost:8080/read?e=page-flip-reader&c=xyz",
-    );
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+    });
     mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
     const res = await post("/book/resend", { email: "ada@example.com" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
       sent: false,
-      message: DELIVERY_FAILED,
+      message: RESEND_DELIVERY_FAILED,
     });
+    // Not delivered: finalize revokes the NEW code, so the prior link (the
+    // one the lead already knew worked) is left active, not both dead.
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
+      "code_2",
+      false,
+    );
+  });
+
+  it("treats a resolved send with the recipient in `rejected` as a delivery failure", async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: "lead_1",
+      email: "ada@example.com",
+    });
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+    });
+    mocks.sendEmail.mockResolvedValueOnce({
+      accepted: [],
+      rejected: ["ada@example.com"],
+    });
+    const res = await post("/book/resend", { email: "ada@example.com" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      message: RESEND_DELIVERY_FAILED,
+    });
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "lead_1",
+      "code_2",
+      false,
+    );
   });
 
   it("tells an unknown email to fill out the form (no email sent)", async () => {

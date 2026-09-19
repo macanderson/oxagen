@@ -49,13 +49,15 @@ function withWwwTwin(origin: string): string[] {
 function allowedOrigins(): Set<string> {
   const origins = [process.env.APP_URL, process.env.NEXT_PUBLIC_APP_URL];
   // The public marketing website (oxagen.sh / www.oxagen.sh) is a first-party
-  // browser origin for this API; in prod it must be explicitly allowed, and
-  // MARKETING_URL carries it. Its one cross-origin caller is the /v1/cms/*
-  // lead + ebook routes on oxagen.sh (ADR-102).
-  const marketing = process.env.MARKETING_URL?.replace(/\/$/, "");
-  if (marketing) {
-    origins.push(...withWwwTwin(marketing));
-  }
+  // browser origin for this API; the /v1/cms/* lead + ebook routes call from
+  // it. MARKETING_URL carries the configured origin; when unset, fall back the
+  // same way resolveMarketingUrl() does so a missing env var does not leave
+  // the live site unable to POST a lead.
+  const marketing = (
+    process.env.MARKETING_URL?.replace(/\/$/, "") ||
+    (isProductionRuntime() ? "https://oxagen.sh" : "http://localhost:8080")
+  ).replace(/\/$/, "");
+  origins.push(...withWwwTwin(marketing));
   if (!isProductionRuntime()) {
     origins.push("http://localhost:3000");
   }
