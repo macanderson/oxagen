@@ -168,15 +168,31 @@ export function absoluteHookCommandProblem(
   return undefined;
 }
 
+/**
+ * How long Cursor waits for one hook, in seconds.
+ *
+ * An event Claude Code also runs as a command hook takes that budget. An
+ * event Oxagen enforces takes `PreToolUse`'s, whether or not Claude Code has
+ * a counterpart for it: `subagentStart` is Cursor's own, it carries
+ * `failClosed: true`, and the daemon can spend up to fifteen seconds
+ * refreshing a stale bundle through `ControlClient`. On the five-second
+ * telemetry budget Cursor killed the hook first and `failClosed` turned that
+ * into a deny, so a launch the mandate permits was refused because the
+ * answer did not arrive in time. Enforcement is named here rather than
+ * listed, so a future veto point cannot inherit the telemetry budget by
+ * being left out of a condition.
+ *
+ * Everything else is telemetry: after the fact, nothing left to permit, and
+ * a long wait there would only slow the agent down.
+ */
 function timeoutFor(event: CursorHookEventName): number {
   const claude = CURSOR_TO_CLAUDE_EVENT[event];
-  if (
-    claude === "SessionStart" ||
-    claude === "UserPromptSubmit" ||
-    claude === "PreToolUse" ||
-    claude === "Stop"
-  )
-    return COMMAND_HOOK_TIMEOUTS_S[claude];
+  if (Object.hasOwn(COMMAND_HOOK_TIMEOUTS_S, claude))
+    return COMMAND_HOOK_TIMEOUTS_S[
+      claude as keyof typeof COMMAND_HOOK_TIMEOUTS_S
+    ];
+  if (CURSOR_ENFORCEMENT_EVENTS.includes(event))
+    return COMMAND_HOOK_TIMEOUTS_S.PreToolUse;
   return TELEMETRY_TIMEOUT_S;
 }
 
@@ -349,7 +365,13 @@ export function cursorHookPresence(
   const missing: CursorHookEventName[] = [];
   const failOpenEnforcement: CursorHookEventName[] = [];
   for (const event of CURSOR_HOOK_EVENTS) {
-    const entries = document.hooks?.[event] ?? [];
+    // A value that is not a list is read as no entries rather than trusted.
+    // A hand-edited `{"hooks":{"preToolUse":null}}` reaches here through
+    // `tacho status`, which is the command someone runs to find out what is
+    // wrong with their file, and it threw on the `.filter` instead of
+    // reporting the event missing.
+    const raw = document.hooks?.[event];
+    const entries = Array.isArray(raw) ? raw : [];
     const ours = entries.filter((entry) => isOurs(entry, enrollmentId));
     if (ours.length === 0) {
       missing.push(event);

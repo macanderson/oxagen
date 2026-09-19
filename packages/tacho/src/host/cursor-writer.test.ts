@@ -232,6 +232,24 @@ describe("an invalid schema version", () => {
   });
 });
 
+describe("a hooks value that is not a list", () => {
+  it("reads as no entries so `status` reports rather than crashes", () => {
+    // `tacho status` is the command someone runs to find out what is wrong
+    // with a file they hand-edited, so it is the one that must not throw on
+    // one.
+    //
+    // `null` is not the case: `?? []` already catches it. What threw is a
+    // value that is present and not a list — a number, a string, an object
+    // — which is what a hand-edit or a schema change actually produces.
+    for (const value of [5, "preToolUse", { hooks: [] }] as unknown[]) {
+      const presence = () =>
+        cursorHookPresence({ hooks: { preToolUse: value } }, ENROLLMENT);
+      expect(presence, JSON.stringify(value)).not.toThrow();
+      expect(presence().missing).toContain("preToolUse");
+    }
+  });
+});
+
 describe("what an unenroll leaves behind", () => {
   it("leaves the `version` it wrote, for `settle` to take back with the file", () => {
     // `mergeCursorHooks` wrote that `version` on a machine with no
@@ -262,6 +280,28 @@ describe("what an unenroll leaves behind", () => {
     expect(
       stripCursorHooks(mergeCursorHooks(mine, CONFIG).document).document,
     ).toEqual(mine);
+  });
+});
+
+describe("hook timeouts", () => {
+  it("gives every veto point the command budget, not the telemetry one", () => {
+    // `subagentStart` carries `failClosed: true` and is Cursor's own event,
+    // so it has no Claude Code counterpart in the command-hook table. On the
+    // five-second telemetry budget Cursor killed the hook before the daemon
+    // could finish refreshing a stale bundle, and `failClosed` turned that
+    // into a deny of a launch the mandate permits.
+    const entries = cursorHookEntries(CONFIG);
+    const budgetOf = (event: keyof typeof entries) =>
+      entries[event]?.[0]?.timeout;
+    expect(budgetOf("subagentStart")).toBe(budgetOf("preToolUse"));
+    // The property that matters is that no veto point runs on the telemetry
+    // budget. An event Claude Code also runs as a command hook keeps its own
+    // budget — `beforeSubmitPrompt` is `UserPromptSubmit`, at ten seconds —
+    // which is a command budget and not this one.
+    const telemetry = budgetOf("postToolUse") as number;
+    for (const event of CURSOR_ENFORCEMENT_EVENTS) {
+      expect(budgetOf(event), event).toBeGreaterThan(telemetry);
+    }
   });
 });
 
