@@ -133,6 +133,29 @@ export const routes = {
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
   /**
+   * One mandate, under the agent that holds it (#2957; the design's route is
+   * `…/agents/invoice-bot/mandates/<mandate id>`). A mandate is authority
+   * granted to one identity, so it hangs off that identity rather than sitting
+   * in a flat list: the breadcrumb that reaches it names the agent, and the
+   * page the reader came from is the agent's Mandates section.
+   *
+   * `q` searches the ledger, `state` narrows it to one movement kind and
+   * `offset` opens a later page of it. All three are query values, not routes,
+   * for the reason every other filter and page here is (ARCHITECTURE.md §1.2).
+   */
+  mandate: (
+    org: string,
+    ws: string,
+    agent: string,
+    mandate: string,
+    q?: { search?: string; state?: string; offset?: string },
+  ): SafePath =>
+    withQuery(pathOf(org, ws, "agents", agent, "mandates", mandate), {
+      q: q?.search,
+      state: q?.state,
+      offset: q?.offset,
+    }),
+  /**
    * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
    * the identity `register_agent` minted from the name step to the wrap and
    * run steps, so a reload lands back on the same registration.

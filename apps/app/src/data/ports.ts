@@ -27,7 +27,7 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { MandateList } from "./contracts/mandates";
+import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
   ApiKey,
@@ -179,6 +179,13 @@ export interface DataSource {
    */
   mandates: {
     list(ctx: WsCtx, q: { agentId: string | null }): Promise<Read<MandateList>>;
+    /**
+     * One mandate with its ledger (`get_mandate`): the mandate page. Caller:
+     * features/mandate/mandate.tsx. `mandateId` is the public id the URL names,
+     * and the read answers `not_found` for a mandate this workspace has not
+     * recorded, which the page turns into a 404 rather than a page error.
+     */
+    get(ctx: WsCtx, mandateId: string): Promise<Read<MandateDetail>>;
   };
   /**
    * The cost rollup (#2962), every read noBillingGate; callers:

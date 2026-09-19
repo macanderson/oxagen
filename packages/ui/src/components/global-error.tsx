@@ -36,7 +36,7 @@ export function GlobalErrorPage({
           background: "#FFFFFF",
           color: "#09090B",
           fontFamily:
-            "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+            '"Geist", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
         }}
       >
         <section
@@ -44,7 +44,7 @@ export function GlobalErrorPage({
             width: "100%",
             maxWidth: "28rem",
             borderRadius: "0",
-            border: "1px solid #E6E6E6",
+            border: "1px solid #E4E4E7",
             background: "#FFFFFF",
             padding: "2.5rem",
             textAlign: "center",
@@ -57,7 +57,7 @@ export function GlobalErrorPage({
             style={{
               marginTop: "0.5rem",
               fontSize: "0.875rem",
-              color: "#3E3A34",
+              color: "#27272A",
             }}
           >
             An unexpected error occurred. You can try again, and if it keeps
@@ -68,8 +68,9 @@ export function GlobalErrorPage({
               style={{
                 marginTop: "0.75rem",
                 fontSize: "0.75rem",
-                color: "#5F5A52",
-                fontFamily: "ui-monospace, SFMono-Regular, monospace",
+                color: "#71717A",
+                fontFamily:
+                  '"Monaspace Neon", ui-monospace, SFMono-Regular, monospace',
               }}
             >
               {error.digest}

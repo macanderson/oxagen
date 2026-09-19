@@ -148,7 +148,7 @@ export function orgSource(reads: OrgReads): {
       apiKeys: answer(reads.apiKeys, "apiKeys"),
       modelCredential: answer(reads.modelCredential, "modelCredential"),
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: { records: refuse, proposals: refuse, contextPr: refuse },

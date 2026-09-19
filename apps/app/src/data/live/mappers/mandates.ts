@@ -26,9 +26,14 @@
 // The answer is stamped `asOf` with the instant it was mapped, because whether
 // a mandate is in effect is a question about an instant and a component may
 // not ask a clock during render.
+import type { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import type { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import type { z } from "zod";
-import type { MandateList, MeasureValue } from "@/data/contracts/mandates";
+import type {
+  MandateDetail,
+  MandateList,
+  MeasureValue,
+} from "@/data/contracts/mandates";
 import {
   isCurrencyCode,
   moneyFromMicros,
@@ -40,6 +45,7 @@ import type { ContractOutput } from "@/server/kernel";
 type Out = ContractOutput<typeof mandateList>;
 type MandateOut = Out["items"][number];
 type AuthorityOut = MandateOut["authority"][number];
+type DetailOut = ContractOutput<typeof mandateGet>;
 
 function measureValue(
   value: string,
@@ -79,6 +85,27 @@ function toAuthority(
   };
 }
 
+/** One mandate row, shared by `list_mandates` and `get_mandate`: the same view model. */
+function toMandateRow(
+  item: MandateOut,
+): z.input<typeof MandateList>["mandates"][number] {
+  return {
+    id: item.id,
+    agentId: item.agentId,
+    agentSlug: item.agentSlug,
+    requestedBy: item.requestedBy,
+    grantedBy: item.grantedBy,
+    roleAtGrant: item.roleAtGrant,
+    consequenceTags: item.consequenceTags,
+    tools: item.tools,
+    purpose: item.purpose,
+    validFrom: item.validFrom,
+    validTo: item.validTo,
+    status: item.status,
+    authority: item.authority.map(toAuthority),
+  };
+}
+
 export function toMandateList(
   out: Out,
   limit: number,
@@ -87,20 +114,38 @@ export function toMandateList(
   return {
     asOf: asOf.toISOString(),
     truncatedAt: out.items.length >= limit ? limit : null,
-    mandates: out.items.map((item) => ({
-      id: item.id,
-      agentId: item.agentId,
-      agentSlug: item.agentSlug,
-      requestedBy: item.requestedBy,
-      grantedBy: item.grantedBy,
-      roleAtGrant: item.roleAtGrant,
-      consequenceTags: item.consequenceTags,
-      tools: item.tools,
-      purpose: item.purpose,
-      validFrom: item.validFrom,
-      validTo: item.validTo,
-      status: item.status,
-      authority: item.authority.map(toAuthority),
+    mandates: out.items.map(toMandateRow),
+  };
+}
+
+/**
+ * `get_mandate` to the mandate page's record. The limits and the authority go
+ * through the same row mapper the ledger tables read, so the figures on the
+ * detail page and the figures in the two tables are one mapping.
+ *
+ * The ledger rows keep the measure's own form — micros under a currency, whole
+ * units under a unit name — through the same `measureValue` the limits use, so
+ * a movement and the limit it drew against are printed by the same rule. The
+ * row's `id` and `toolCallId` are dropped rather than carried: both are raw
+ * database uuids and INV-11 admits none into a view model (`MandateLedgerRow`
+ * carries the reasoning).
+ */
+export function toMandateDetail(
+  out: DetailOut,
+  ledgerLimit: number,
+  asOf: Date = new Date(),
+): z.input<typeof MandateDetail> {
+  return {
+    asOf: asOf.toISOString(),
+    truncatedAt: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
+    mandate: toMandateRow(out.mandate),
+    ledger: out.ledger.map((row) => ({
+      kind: row.kind,
+      measure: row.measure,
+      value: measureValue(row.value, row.unitOrCurrency),
+      externalEffectId: row.externalEffectId,
+      periodKey: row.periodKey,
+      at: row.at,
     })),
   };
 }

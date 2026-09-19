@@ -311,6 +311,11 @@ function staticSurface(root, brand) {
     `spinners/${brand}-spinner.svg`,
     `${root}/assets/brand/${brand}-spinner.svg`,
   );
+  // The palette itself, so the static site references the kit's tokens rather
+  // than a hand-transcribed copy of them. Its own stylesheet imports this file
+  // and aliases onto it, which is what makes "byte-for-byte off the kit" true
+  // by construction instead of true until someone edits a hex.
+  copy("tokens/house-tokens.css", `${root}/assets/house-tokens.css`);
   // The static site serves its faces from /fonts/: the kit's three, beside
   // whatever else the site ships there.
   for (const f of readdirSync(join(BRAND, "fonts"))) {

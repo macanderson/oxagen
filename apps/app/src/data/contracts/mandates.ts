@@ -110,6 +110,65 @@ export const MandateList = z.object({
 export type MandateList = z.infer<typeof MandateList>;
 
 /**
+ * What one movement in the ledger did: authority was held at decision time,
+ * then either spent on a recorded effect or handed back. The three read as a
+ * dot and a word on the page, never as a colour alone.
+ */
+export const MandateMovement = z.enum(["reserve", "settle", "release"]);
+export type MandateMovement = z.infer<typeof MandateMovement>;
+
+/**
+ * One row of `tools.mandate_ledger` as the mandate page shows it.
+ *
+ * **It carries no identifier, and that is the constraint rather than an
+ * omission.** The ledger row's `id` and `tool_call_id` are raw uuids
+ * (`packages/database/src/schema/tools.ts`), `get_mandate` passes them through
+ * as recorded, and INV-11 keeps a raw database id out of every view model —
+ * which is the same rule as CLAUDE.md's: a uuid is not a name a person can
+ * read. So the view model drops both, the table keys its rows by position, and
+ * the *Call* column names the measure the movement drew. The tool version the
+ * call named is not recoverable from any read the app may make: the schema's
+ * own comment says `control.tool_calls` is not in the tree, so nothing resolves
+ * `tool_call_id` to a tool. The page says so under the table rather than
+ * printing a uuid or leaving the column blank.
+ */
+export const MandateLedgerRow = z.object({
+  kind: MandateMovement,
+  /** The measure the movement drew, as the mandate's limits name it. */
+  measure: z.string().min(1),
+  value: MeasureValue,
+  /**
+   * The transaction, migration, message or deployment the settlement recorded.
+   * Null on a reservation, which has not caused an effect yet, and on a release,
+   * which never will.
+   */
+  externalEffectId: z.string().min(1).nullable(),
+  /** The accounting window the movement was counted in, as the ledger keys it. */
+  periodKey: z.string().min(1),
+  at: Instant,
+});
+export type MandateLedgerRow = z.infer<typeof MandateLedgerRow>;
+
+/**
+ * One mandate and its ledger: the page's whole record (`get_mandate`).
+ *
+ * `truncatedAt` is `MandateList`'s field for the same reason. `get_mandate`
+ * takes a `ledgerLimit` and no cursor, so a mandate drawn on more times than
+ * the read asked for is missing its older movements — and every figure in the
+ * tiles would then be a rollup of rows the reader cannot see. The tiles are the
+ * ledger's own totals rather than sums of these rows (INV-10), so they stay
+ * right; the table says what it is not showing.
+ */
+export const MandateDetail = z.object({
+  mandate: MandateRow,
+  /** Newest movement first, as `get_mandate` orders them. */
+  ledger: z.array(MandateLedgerRow),
+  asOf: Instant,
+  truncatedAt: z.number().int().positive().nullable(),
+});
+export type MandateDetail = z.infer<typeof MandateDetail>;
+
+/**
  * The org roles `list_mandates` answers in full. A reader outside this set is
  * narrowed by the handler (`readerFilter`, packages/handlers/src/_mandate.ts)
  * to the agents they created, and the narrowing is silent: the answer is a
