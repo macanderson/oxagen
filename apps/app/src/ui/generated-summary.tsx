@@ -4,8 +4,9 @@
 // model's sentence from the recording at a glance. The model that wrote it and
 // the instant it was written are on the same element, so the label can never
 // travel without its provenance.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { RunSummary } from "@/data/contracts/runs";
+import { useFormatter } from "@/ui/formatter";
 
 function GeneratedLabel() {
   const t = useTranslations("ui.generated");
