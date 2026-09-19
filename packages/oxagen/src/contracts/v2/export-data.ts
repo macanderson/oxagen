@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { privacyDataExport } from "../privacy.data.export";
+import { exportDataFields, privacyDataExport } from "../privacy.data.export";
 
 /**
  * Appendix E: `export_data` — "organization export". Absorbs `export_data`.
@@ -30,7 +30,7 @@ export const exportData = defineTool({
   name: "export_data",
   domain: "audit",
   description:
-    "Request a machine-readable export of the organization's data as a verifiable bundle — archive segments, attestations, key ids, and a verifier script (§13.4). Returns immediately with status 'queued'; poll for the signed download URL.",
+    "Request a machine-readable export of the organization's data as a verifiable bundle — archive segments, attestations, key ids, and a verifier script (§13.4). Returns immediately with status 'queued'; poll get_export_status until it reports ready, then fetch the bundle from the authenticated download route. No response carries a download URL.",
   // Carried: building an org-wide bundle is not a request-path operation, and
   // the caller is handed a request id to poll rather than a held connection.
   mode: "async",
@@ -68,20 +68,28 @@ export const exportData = defineTool({
      * removed so the request stays self-describing in the audit record: an
      * export event that does not say what was exported ages badly.
      */
-    scope: privacyDataExport.input.shape.scope.extract(["org"]),
+    scope: exportDataFields.shape.scope.extract(["org"]),
     /**
      * Carried, now required. v1 made it optional with "required when scope =
      * 'org'" in a comment; with `user` gone the condition always holds, so the
      * schema enforces what the comment asked for.
      */
-    orgId: privacyDataExport.input.shape.orgId.unwrap(),
+    orgId: exportDataFields.shape.orgId.unwrap(),
   }),
 
   output: z.object({
     // Carried: the request handle and its lifecycle, unchanged.
     exportId: privacyDataExport.output.shape.exportId,
     status: privacyDataExport.output.shape.status,
-    /** Carried: signed download URL — present only when status is "ready". */
+    /**
+     * Carried, and carried as what it now is: never set. The v1 field's
+     * description says so, but a v2 client reads this shape, so repeating it
+     * here is the difference between a field it knows to ignore and one it
+     * waits for. The bundle is a private object, so there is no URL to sign:
+     * `get_export_status` answers a storage key and the bytes come from the
+     * authenticated download route. Kept only so an older client parsing this
+     * shape does not break on its absence.
+     */
     downloadUrl: privacyDataExport.output.shape.downloadUrl,
 
     /**

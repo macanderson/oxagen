@@ -30,7 +30,7 @@ import { z } from "zod";
 /**
  * Org-level route segments a workspace slug may not take: a workspace at
  * `/{org}/{slug}` would shadow `/{org}/<segment>`. The set is the union of the
- * rev1 org pages (`api-keys`, `billing`, `audit`, `roles`) and the org sections
+ * rev1 org pages (`account`, `api-keys`, `billing`, `audit`, `roles`) and the org sections
  * of `apps/app_deprecated`.
  *
  * This set is enforced on the way IN. It does not repair rows already stored:
@@ -46,6 +46,7 @@ import { z } from "zod";
  */
 export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "access",
+  "account",
   "api-keys",
   "audit",
   "billing",

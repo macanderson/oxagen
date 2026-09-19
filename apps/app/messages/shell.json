@@ -40,9 +40,15 @@
       "userMenu": "User menu for {name}"
     },
     "userMenu": {
+      "profile": "Account",
+      "preferences": "Preferences",
+      "security": "Security and devices",
+      "privacy": "Privacy and data",
       "switchTheme": "Switch theme",
       "themeNow": "now {theme, select, light {Paper} dark {Ink} other {system}}",
-      "account": "Account"
+      "signOut": "Sign out",
+      "signingOut": "Signing out…",
+      "signOutFailed": "Sign-out did not go through, so this session is still open. Try again."
     },
     "commands": {
       "title": "Command menu",
@@ -72,21 +78,104 @@
     },
     "account": {
       "title": "Account",
+      "tabs": {
+        "profile": "Profile",
+        "preferences": "Preferences",
+        "security": "Security",
+        "privacy": "Privacy"
+      },
       "save": "Save",
       "saving": "Saving",
       "saved": "Saved.",
       "displayName": "Display name",
-      "avatar": "Avatar",
-      "avatarHint": "An https image URL or a designed avatar (avatar:v1:…), or leave blank to show your initials.",
       "email": "Email",
       "emailHint": "Your email is how you sign in and cannot be changed here.",
-      "timeZone": "Time zone",
-      "timeZoneHint": "Every date and time in Oxagen is shown in this zone. New accounts start on Pacific time.",
-      "timeZoneInvalid": "That time zone was refused. Pick one from the list.",
-      "invalid": "That display name or avatar was refused. A name is 1 to 120 characters; an avatar is an https URL or a designed-avatar value.",
+      "verified": "verified",
+      "unverified": "not verified",
+      "editAvatar": "Edit avatar",
+      "roles": "Roles",
+      "principal": "user ID",
+      "rolesHint": "A role is changed on the Organization page by someone who holds <code>set_member_role</code>, never here. This is where you see what you hold.",
+      "invalid": "That display name was refused. A name is 1 to 120 characters.",
       "denied": "You do not have permission to change this profile.",
       "failed": "That could not be saved. Try again.",
-      "avatarPlaceholder": "https://"
+      "preferences": {
+        "loading": "Reading your preferences.",
+        "denied": "You do not have permission to read or change these preferences.",
+        "failed": "That could not be done. Try again.",
+        "locale": "Locale",
+        "localeName": "{code, select, en {English} other {{code}}}",
+        "localeHint": "Dates, numbers, and currencies format to this. Machine-readable fields in records, receipts, and exports are never translated.",
+        "timezone": "Time zone",
+        "timezoneHint": "Every date and time in Oxagen is shown in this zone. New accounts start on Pacific time.",
+        "theme": "Theme",
+        "themes": {
+          "system": "Match the system",
+          "dark": "Ink",
+          "light": "Paper"
+        },
+        "preview": "Preview",
+        "previewDate": "date",
+        "previewNumber": "number",
+        "previewMoney": "money",
+        "save": "Save",
+        "saving": "Saving",
+        "saved": "Saved.",
+        "invalid": "One of those values was refused. A locale is a BCP 47 tag and a time zone is an IANA name."
+      },
+      "security": {
+        "signIn": "Sign-in",
+        "email": "email",
+        "verified": "verified",
+        "unverified": "not verified",
+        "twoFactor": "Two-factor",
+        "twoFactorOn": "on, authenticator app",
+        "twoFactorOff": "not set up",
+        "authenticator": "Authenticator app",
+        "authenticatorOn": "TOTP. Recovery codes let you in when the app is not to hand.",
+        "authenticatorOff": "Not set up. A code from an authenticator app is asked for at every sign-in once it is.",
+        "setUp": "Set up",
+        "regenerate": "Regenerate codes",
+        "password": "Password",
+        "issue": "Issue new codes",
+        "issuing": "Issuing",
+        "cancel": "Cancel",
+        "codesRefused": "That password was not accepted. Try again.",
+        "codesUncertain": "The last request did not come back, so your recovery codes may already have changed. Issue a new set before you leave this page.",
+        "codesIssued": "New recovery codes. The old set is void. Keep these somewhere only you can reach; they are not shown again.",
+        "codesSaved": "I have saved these",
+        "codesHeld": "Your new codes are still here. The Account dialog held them because they are shown only once.",
+        "sessions": "Signed-in devices",
+        "sessionsLoading": "Reading your signed-in devices.",
+        "sessionsFailed": "Your signed-in devices could not be read. Try again.",
+        "thisDevice": "this device",
+        "unknownDevice": "Unknown device",
+        "unknownAddress": "address not recorded",
+        "now": "now",
+        "revoke": "Revoke",
+        "revoking": "Revoking",
+        "revoked": "Sign-in ended. The device stops at its next request.",
+        "sessionsHint": "Ending a sign-in stops that device at its next request. It does not touch an agent credential or a run token. Those are revoked on the Agents page, and that is what makes a halt stick.",
+        "codesBlockedByOther": "New codes cannot be issued yet. An earlier sign-in on this page left recovery codes that were never saved, and issuing now would destroy them. Reload the page to continue.",
+        "codesBlockedElsewhere": "Another tab is issuing recovery codes, or holds a set not yet saved. Finish there first. Issuing here would make that set stop working."
+      },
+      "privacy": {
+        "export": "Export",
+        "exportHint": "A machine-readable bundle of your data, or of the whole organization for an owner or admin. Runs as <code>export_data</code>, a governed action. It queues at once and the download appears here when it is ready.",
+        "exportMine": "Export my activity",
+        "exportOrg": "Export the organization",
+        "exporting": "Queuing",
+        "queued": "Export queued as <code>{id}</code>. This page updates when it is ready.",
+        "ready": "Your export is ready.",
+        "download": "Download the bundle",
+        "expired": "That export could not be prepared. Ask for it again.",
+        "denied": "You do not have permission to export this data.",
+        "deniedOrg": "An organization export needs an owner or admin.",
+        "failed": "That export could not be queued. Try again.",
+        "erasure": "Erasure",
+        "erasureHint": "Erasure of your data runs as <code>erase_data</code> on the API, with explicit confirmation. It ends every sign-in at once and schedules the hard delete. It is not a button here."
+      },
+      "orgRole": "org.{role}"
     },
     "assistant": {
       "label": "Assistant",
@@ -113,6 +202,48 @@
         "parked": "That turn is waiting on an approval before it can answer.",
         "unavailable": "The assistant could not be reached. Try again."
       }
+    },
+    "avatar": {
+      "title": "Your avatar",
+      "cancel": "Cancel",
+      "save": "Save avatar",
+      "saving": "Saving",
+      "kind": "Kind",
+      "kinds": {
+        "icon": "Icon",
+        "initials": "Initials",
+        "photo": "Photo"
+      },
+      "icon": "Icon",
+      "iconHint": "Lucide glyphs, the set the product ships. One line weight, drawn in the tone's ink.",
+      "letters": "Letters",
+      "lettersHint": "Up to {max}.",
+      "typeface": "Typeface",
+      "fonts": {
+        "sans": "Sans",
+        "serif": "Serif",
+        "mono": "Mono"
+      },
+      "photo": "Photo",
+      "photoHint": "An https link to a hosted image: PNG, JPEG, WebP, or SVG.",
+      "tone": "Tone",
+      "tones": {
+        "solid": "Solid",
+        "soft": "Soft",
+        "line": "Line"
+      },
+      "toneHint": "Solid, soft, or line. Three tones from the house scale, each fixing its own glyph colour, so there is no combination that fails.",
+      "describeIcon": "icon · {icon} · {tone} tone",
+      "describeInitials": "initials · {font} · {tone} tone",
+      "describePhoto": "photo · by link",
+      "describePhotoNone": "photo · none chosen yet",
+      "note": "Saved with <code>update_profile</code>, like any change to your account.",
+      "noPhoto": "Paste an https link to a photo first, or switch to an icon or initials.",
+      "noLetters": "Type at least one letter.",
+      "invalid": "That avatar was refused. A photo link must be an https address under 512 characters.",
+      "denied": "You do not have permission to change this profile.",
+      "failed": "That could not be saved. Try again.",
+      "photoPlaceholder": "https://"
     }
   }
 }

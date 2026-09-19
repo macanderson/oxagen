@@ -181,6 +181,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "export_data": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Privacy and data in the user menu opens the Account dialog's Privacy tab; “Export my activity” and “Export the organization” queue export_data (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "account-export-user",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
+    },
     "export_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -228,6 +237,15 @@
       "proof": "apps/app/src/features/billing/contract-rate.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
+    },
+    "get_export_status": {
+      "route": "/[org]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "Account dialog › Privacy: a queued export is polled with get_export_status until it is ready, then the bundle is fetched from /[org]/account/export/[exportId], which streams the private object after checking the viewer (features/shell/account-dialog.tsx, features/shell/export-download.ts)",
+      "testid": "account-export-download",
+      "proof": "apps/app/src/features/shell/export-download.test.ts",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-01GYhmZx-account-dialog-w11"
     },
     "get_finding_evidence": {
       "route": "/[org]/[ws]/spend",
@@ -353,10 +371,11 @@
     "get_user_preferences": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Every organization and workspace page — the organization layout reads the viewer's time zone through the shell port (data/live/shell.ts) and <ViewerClock> and the chrome hand it to next-intl, so each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx); the Account dialog shows the stored zone",
-      "proof": "apps/app/src/features/shell/viewer-clock.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-17f8865f-user-timezone"
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Preferences in the user menu on every organization page opens the Account dialog's Preferences tab, which reads get_user_preferences on open (features/shell/account-dialog.tsx, features/shell/account-actions.ts); every organization and workspace page also reads it through the shell port so <ViewerClock> and the chrome hand the stored zone to next-intl, and each date on the page renders in it (features/shell/viewer-clock.tsx, features/shell/shell-chrome.tsx)",
+      "testid": "open-preferences",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "import_tools": {
       "route": "/[org]/[ws]/tools",
@@ -693,11 +712,11 @@
     "set_preferences": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account in the user menu on every organization page — the Account dialog's Time zone select, saved with the profile, invokes set_preferences with {timezone} (features/shell/account-dialog.tsx, features/shell/account-actions.ts updateTimeZone)",
-      "testid": "account-time-zone",
-      "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-17f8865f-user-timezone"
+      "verifiedBy": "session-514c860f-account-dialog-w11",
+      "entry": "Account dialog › Preferences › Save writes locale, time zone and theme through set_preferences (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "testid": "account-preferences-save",
+      "proof": "apps/app/src/features/shell/account-dialog.test.tsx"
     },
     "set_role_grants": {
       "route": "/[org]/roles",
@@ -767,11 +786,11 @@
     "update_profile": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "Account in the user menu on every organization page — the shell's Account dialog, which invokes update_profile (features/shell/account-dialog.tsx, features/shell/account-actions.ts)",
+      "entry": "Account in the user menu on every organization page: the shell's Account dialog's Profile tab and its Avatar editor both invoke update_profile (features/shell/account-dialog.tsx, features/shell/avatar-dialog.tsx, features/shell/account-actions.ts)",
       "testid": "open-account",
       "proof": "apps/app/src/features/shell/account-dialog.test.tsx",
-      "verifiedAt": "2026-09-17",
-      "verifiedBy": "session-7172f7a7-account-dialog"
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-514c860f-account-dialog-w11"
     },
     "update_workspace_settings": {
       "route": "/[org]",
