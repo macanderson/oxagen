@@ -1578,7 +1578,11 @@ export async function startDaemon(
    *
    * `drainGitReads` used to be awaited in the middle of `tick`, ahead of
    * `refreshBundle` (the allow-state fetch) and `sendAcks` (which is also how a
-   * queued control command reaches this host). Its bounds are generous by
+   * queued control command reaches this host). Moving it after them is half the
+   * answer and not this one: the drain would still be inside the tick, so the
+   * interval driver's `ticking` guard would still drop every tick that
+   * overlapped it and the NEXT poll would be as late as the old one. Its bounds
+   * are generous by
    * design, because a git read that is slow is a read worth abandoning rather
    * than waiting on — but the ceilings multiply. One reconciliation is
    * `readGitFacts` (`rev-parse HEAD`, then three reads at once: 2 x 10 s) plus
@@ -1662,10 +1666,6 @@ export async function startDaemon(
       }
       if (stateDirty) persistState();
     });
-    // Started, not awaited. The spawns are outside the serial block above so a
-    // hook never queues behind them, and outside this function's own await
-    // chain so an operator's command never does either.
-    void startGitReads();
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
@@ -1676,6 +1676,20 @@ export async function startDaemon(
     }
     await shipper.drain();
     await sendAcks();
+    // Started after the poll and awaited by nothing — both halves matter, and
+    // they answer different halves of the same defect.
+    //
+    // AFTER, so the poll in this tick never sits behind a git spawn. NOT
+    // AWAITED, because ordering alone only narrows the window: the drain would
+    // still run inside the tick, the `ticking` guard would still drop every
+    // tick that overlaps it, and the NEXT poll would still be up to fourteen
+    // minutes late. In a lane of its own nothing waits on it in this tick or
+    // any later one. `startGitReads` has the arithmetic.
+    //
+    // Reconciliation frames the lane seals ship on a following tick, which
+    // costs them one interval and nothing else — they are already asynchronous
+    // and already land a batch or more after the tool frames they belong with.
+    void startGitReads();
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);

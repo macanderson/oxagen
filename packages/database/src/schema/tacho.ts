@@ -896,15 +896,14 @@ export const SESSION_GATEWAY_COLUMN = {
 } as const;
 
 /**
- * `tacho.sessions.pushes`, added by migration `20260918223000`.
+ * What the run pushed, counted on the session row.
  *
- * Named here for the same probe the gateway columns use, and for the same
- * reason: `deploy-node` ships on merge while production migrations are applied
- * by hand (#1275), so between the two this schema declares a column the
- * database does not have. A counter increment naming it raises 42703 and
- * aborts the transaction, which on this table means every accepted Tacho batch
- * is rejected — the evidence pipeline drops the window's runs outright instead
- * of recording what it can (discussion_r4051911079).
+ * Probed for the same reason the gateway columns are: production applies
+ * migrations by hand from the app node while `deploy-node` ships on merge
+ * without waiting, so between the two this code is live and the column is
+ * not. Naming it in an UPDATE raises 42703 and takes the whole batch with
+ * it — and unlike the gateway tier, this one is on the path every batch
+ * walks, so the window would stop ingestion outright rather than degrade it.
  */
 export const SESSION_PUSHES_COLUMN = {
   schema: "tacho",
@@ -912,16 +911,7 @@ export const SESSION_PUSHES_COLUMN = {
   column: "pushes",
 } as const;
 
-/**
- * `tacho.session_files.observed_status`, added by migration `20260918230000`.
- *
- * Reached from three directions, which is why one ref serves all of them: the
- * file rollup writes it, the rollup's conflict branch assigns it, and the
- * title derivation reads it inside a WHERE. The WHERE is the one worth naming
- * — a predicate over a missing column fails the enclosing statement just as an
- * INSERT of it does, so a run's title cannot be derived from a column the
- * database has not got yet.
- */
+/** What git observed about one path, on the file row. Same window, same rule. */
 export const SESSION_FILE_OBSERVED_STATUS_COLUMN = {
   schema: "tacho",
   table: "session_files",

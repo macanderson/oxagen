@@ -57,29 +57,27 @@ const identityColumns = {
 } as const;
 
 function identitySelect(tx: Tx) {
-  return tx
-    .select(identityColumns)
-    .from(schema.agents)
-    .leftJoin(
-      schema.principals,
-      and(
-        eq(schema.principals.id, schema.agents.principalId),
-        eq(schema.principals.orgId, schema.agents.orgId),
-      ),
-    )
-    // The relations seam, not an inline condition (AGENTS.md: cross-domain
-    // joins live in `src/relations.ts`) — and the CREATOR seam, not the
-    // operator one.
-    //
-    // The principal joined above is the agent's own delegated row, which
-    // `create_agent_definition` writes with `kind = 'agent'` and
-    // `parent_user_id` = the creating user. `operatorUserJoin` additionally
-    // requires `kind = 'human'`, which that row never is, so pointing this
-    // join at it reported no operator for every agent in the workspace. The
-    // two joins read the same column and answer different questions; which
-    // one is right depends on the principal the join arrives at, and here it
-    // is the agent's own (discussion_r4051925928).
-    .leftJoin(schema.users, agentCreatorUserJoin);
+  return (
+    tx
+      .select(identityColumns)
+      .from(schema.agents)
+      .leftJoin(
+        schema.principals,
+        and(
+          eq(schema.principals.id, schema.agents.principalId),
+          eq(schema.principals.orgId, schema.agents.orgId),
+        ),
+      )
+      // The relations seam, not an inline condition (AGENTS.md: cross-domain
+      // joins live in `src/relations.ts`).
+      //
+      // `agentCreatorUserJoin`, not `operatorUserJoin`. This row's principal is
+      // the agent's own, which is `kind = 'agent'`, and its `parent_user_id` is
+      // the user who created it — the person `operatorId` names here. The run
+      // join carries `kind = 'human'` for a different question, so pointing it
+      // at this one matched nothing and every agent reported no operator.
+      .leftJoin(schema.users, agentCreatorUserJoin)
+  );
 }
 
 /** One live agent by public id (`agt_…`), uuid or slug, in the scope's workspace. */

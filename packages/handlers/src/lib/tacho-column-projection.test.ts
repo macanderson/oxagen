@@ -33,12 +33,12 @@ const SRC = join(HERE, "..");
  * has added a column to after the table itself shipped.
  *
  * `tachoSessionFiles` joined the list the way `tachoSessions` did — by being
- * missed. `observed_status` (`20260918230000`) landed in the schema while
- * `tacho.session.get` still read the table unprojected, so reading any run
- * would have raised 42703 for the whole rollout window, over a column that
- * handler does not return (discussion_r4051911079). The pattern is now twice
- * confirmed: guarding the table the migration is about is not the same as
- * guarding every table the new declaration reaches.
+ * missed. `observed_status` landed in the schema while `tacho.session.get`
+ * still read the table unprojected, so reading any run would have raised 42703
+ * for the whole rollout window, over a column that handler does not return
+ * (discussion_r4051911079). The pattern is now twice confirmed: guarding the
+ * table the migration is about is not the same as guarding every table the new
+ * declaration reaches.
  */
 const GUARDED = [
   "tachoHosts",

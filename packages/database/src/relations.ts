@@ -419,33 +419,30 @@ export const operatorUserJoin = and(
 );
 
 /**
- * The person an AGENT's own delegated principal acts for — the user who
- * registered it, and the ceiling its permissions are capped at.
+ * The person an AGENT acts for: the user who created it.
  *
- * The same column as {@link operatorUserJoin} and deliberately not the same
- * join, because the two arrive at different principal rows and ask different
- * questions of them.
+ * The same two columns as `operatorUserJoin` above and the opposite `kind`,
+ * because the two answer different questions and only look alike.
  *
- * `operatorUserJoin` starts from a run's INITIATING principal, which may be
- * either kind, and wants the person who ran the thing. There `kind = 'human'`
- * is the whole point: an agent principal's `parent_user_id` names its creator,
- * and putting that person on every run the agent started is a claim the record
- * does not make.
+ * `operatorUserJoin` asks who started a run. A run started by an agent has an
+ * agent principal whose `parent_user_id` is whoever built that agent, and that
+ * person did not start the run, so the human filter is what keeps their name
+ * off it.
  *
- * This one starts from `agents.principal_id`, which `create_agent_definition`
- * provisions with `kind = 'agent'` and `parent_user_id` = the creating user.
- * For that row the parent user is not a bystander: it IS the answer, both as
- * the registrar and as the human half of the delegation ceiling (agent
- * effective permissions = agent ∩ human, `docs/specs/agent-rbac/spec.md` §2.1).
- * Requiring `kind = 'human'` there matches nothing at all, so every agent
- * reports no operator.
+ * This asks who an agent belongs to. An agent's own principal is `kind =
+ * 'agent'` by construction (`agent.definition.create` provisions it that way
+ * and its test says so), and its `parent_user_id` is the creating user — which
+ * is exactly the person the contract's `operatorId` names. Reusing the run
+ * join here matched nothing at all, so every agent reported no operator.
  *
- * No `kind` filter and no flag on the other join. A single seam switched by an
- * argument would be one condition with two meanings, and the next reader would
- * have to know which to pass — which is the drift the seam exists to prevent
- * (discussion_r4051925928).
+ * Kept as two named joins rather than one parameterised by `kind`. The
+ * parameter would be the whole distinction, passed at each call site, and a
+ * call site is where this went wrong once already.
  */
-export const agentCreatorUserJoin = eq(users.id, principals.parentUserId);
+export const agentCreatorUserJoin = and(
+  eq(users.id, principals.parentUserId),
+  eq(principals.kind, "agent"),
+);
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, {

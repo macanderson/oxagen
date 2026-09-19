@@ -51,7 +51,7 @@ export const tachoSessionGetHandler: CapabilityHandler<
           orderBy: [asc(schema.tachoSessionFiles.firstSeq)],
           limit: 1000,
           // A relational read selects every column the schema declares, so this
-          // one names `observed_status` from the moment the declaration lands —
+          // one names `observed_status` from the moment the declaration landed —
           // and raises 42703 until the migration does. Nothing below reads it;
           // it is projected away only so that reading a run does not go dark
           // for the deploy-before-migrate window

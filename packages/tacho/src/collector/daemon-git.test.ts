@@ -77,10 +77,12 @@ describe("the daemon's git seam", () => {
     exec: Exec,
     now: () => number,
     execAsync?: ExecAsync,
-    fetchImpl?: (
-      url: string,
-      init?: unknown,
-    ) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>,
+    // Called on every control-plane request, so a test can record where the
+    // poll falls relative to the git spawns.
+    onFetch?: () => void,
+    // Run the real interval driver, for the one case that is about the driver's
+    // `ticking` guard rather than about the order inside a single tick.
+    driver?: { shipMs: number },
   ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
@@ -107,17 +109,25 @@ describe("the daemon's git seam", () => {
     );
     const handle = await startDaemon({
       paths,
-      fetch: (fetchImpl ??
-        (async () => {
-          throw new Error("ECONNREFUSED");
-        })) as Parameters<typeof startDaemon>[0]["fetch"],
+      fetch: async () => {
+        onFetch?.();
+        throw new Error("ECONNREFUSED");
+      },
       exec,
       ...(execAsync !== undefined ? { execAsync } : {}),
       now,
       log: () => undefined,
-      listen: false,
+      listen: driver !== undefined,
+      ...(driver !== undefined ? { port: 0 } : {}),
       transcriptRoots: [`${paths.root}/no-transcripts`],
-      timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+      timers: {
+        detectorMs: 0,
+        sweepMs: 0,
+        checkpointMs: 0,
+        commandsPollMs: 0,
+        ...(driver ?? {}),
+        ...(driver !== undefined ? { bundleRefreshMs: 0 } : {}),
+      },
     });
     handles.push(handle);
     return handle;
@@ -193,74 +203,6 @@ describe("the daemon's git seam", () => {
     await ticking;
   });
 
-  it("polls the control path without waiting on a slow worktree read", async () => {
-    // The governance half of the git seam, and the reason the reconciliation is
-    // a lane of its own.
-    //
-    // A reconciliation is bounded, but generously: `readGitFacts` is
-    // `rev-parse HEAD` then three reads at once (2 x 10 s), and
-    // `readWorkingTreeChanges` is `status`, then numstat-and-root at once with
-    // a no-HEAD fallback, then 64 untracked probes through a pool of 4, which
-    // is 16 waves (10 + 20 + 160 s). That is 210 s for one session, and four
-    // are drained one after another: 840 s, fourteen minutes, while the
-    // interval driver's `ticking` guard drops every tick in between.
-    //
-    // The bundle this loop fetches is what the hooks read to decide allow or
-    // deny, and the ingest response is how a queued suspend, revoke or cancel
-    // reaches this host. Behind the drain, an operator's withdrawal of a
-    // mandate took up to fourteen minutes to be enforced, and the record named
-    // the withdrawn state as the live one for that whole window. Now the poll
-    // runs on its own cadence whatever git is doing.
-    let release = (): void => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let probeStarted = false;
-    // Never answers until released: the worst case, not merely a slow one.
-    const stuck: ExecAsync = async () => {
-      probeStarted = true;
-      await held;
-      return { status: 1, stdout: "", stderr: "released" };
-    };
-    const reached: string[] = [];
-    const handle = await boot(
-      fakeGit(() => REPO_ANSWERS, []),
-      () => 1_000,
-      stuck,
-      async (url: string) => {
-        reached.push(url);
-        throw new Error("ECONNREFUSED");
-      },
-    );
-    await handle.api.handleHook(hook("SessionStart"));
-    await handle.api.handleHook(hook("Stop"));
-
-    const ticking = handle.tick();
-    const deadline = Date.now() + 2_000;
-    while (!probeStarted && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 1));
-    expect(probeStarted).toBe(true);
-
-    // The discriminating assertion. The git read is in flight and will not
-    // answer, and the control path has already run inside the SAME tick: the
-    // shipper reached the control plane, which is where acks go out and where
-    // control commands come back. Awaited on the same tick as the drain, none
-    // of this happens until the read is released.
-    const controlDeadline = Date.now() + 2_000;
-    while (reached.length === 0 && Date.now() < controlDeadline)
-      await new Promise((resolve) => setTimeout(resolve, 1));
-    expect(reached.length).toBeGreaterThan(0);
-
-    // And a second poll gets through while the first read is still stuck, which
-    // is the half the `ticking` guard used to eat.
-    reached.length = 0;
-    await handle.refreshBundle();
-    expect(reached.length).toBeGreaterThan(0);
-
-    release();
-    await ticking;
-  });
-
   it("reconciles the worktree at the end of a turn", async () => {
     const calls: string[][] = [];
     const handle = await boot(
@@ -294,6 +236,93 @@ describe("the daemon's git seam", () => {
         lines_removed: 0,
       },
     ]);
+  });
+
+  it("polls control state before it spawns any git", async () => {
+    // The git reads are the slow lane: one session can put 64 untracked-file
+    // probes through a four-worker pool at ten seconds each, and the tick
+    // guard drops anything that overlaps. With the reconciliation ahead of
+    // the control poll, an operator's suspend, revoke or cancel waited behind
+    // it while hooks kept answering from the allow state that operator had
+    // just withdrawn.
+    const timeline: string[] = [];
+    const handle = await boot(
+      (command, args) => {
+        if (command === "git") timeline.push("git");
+        for (const [key, value] of Object.entries(REPO_ANSWERS)) {
+          if (args.join(" ").includes(key))
+            return { status: 0, stdout: value, stderr: "" };
+        }
+        return { status: 1, stdout: "", stderr: "no answer" };
+      },
+      () => 1_000,
+      undefined,
+      () => timeline.push("control"),
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    timeline.length = 0;
+    await handle.tick();
+    // Both happened in this tick, and control came first.
+    expect(timeline).toContain("control");
+    expect(timeline).toContain("git");
+    expect(timeline.indexOf("control")).toBeLessThan(timeline.indexOf("git"));
+  });
+
+  it("keeps polling control state while a worktree read is stuck", async () => {
+    // Ordering inside one tick is the other test above. This is the half
+    // ordering cannot fix.
+    //
+    // A reconciliation's ceilings multiply: `readGitFacts` is `rev-parse HEAD`
+    // then three reads at once (2 x 10 s), and `readWorkingTreeChanges` is
+    // `status`, then numstat-and-root at once with a no-HEAD fallback, then 64
+    // untracked probes through a pool of 4, which is 16 waves — 10 + 20 + 160 s,
+    // so 210 s for one session and 840 s for the four a tick drains. Awaited
+    // anywhere inside the tick, that holds the interval driver's `ticking`
+    // guard for the whole fourteen minutes and every poll in between is
+    // dropped, whichever end of the tick the drain sits at. The allow state the
+    // hooks read would stay fourteen minutes behind the operator's withdrawal
+    // of it, and the record would name the withdrawn state as the live one.
+    //
+    // So the drain runs in a lane of its own, and this asserts the consequence:
+    // the driver keeps polling while a git read is in flight and will not
+    // answer.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let probeStarted = false;
+    const stuck: ExecAsync = async () => {
+      probeStarted = true;
+      await held;
+      return { status: 1, stdout: "", stderr: "released" };
+    };
+    let polls = 0;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      stuck,
+      () => {
+        polls += 1;
+      },
+      { shipMs: 10 },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    const started = Date.now() + 2_000;
+    while (!probeStarted && Date.now() < started)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(probeStarted).toBe(true);
+
+    // Several polls, not one. Awaited in the tick, the guard is held by the
+    // stuck read and the count stops at the poll that preceded it.
+    polls = 0;
+    const deadline = Date.now() + 1_500;
+    while (polls < 3 && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(polls).toBeGreaterThanOrEqual(3);
+
+    release();
   });
 
   it("does not reconcile on a tool call or a prompt", async () => {

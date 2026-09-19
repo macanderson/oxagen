@@ -1,17 +1,6 @@
 /**
- * tacho-gateway-columns.ts — reading and writing the Tacho columns a pending
- * migration may not have added yet.
- *
- * It began as the two columns of migration `20260917140000`, which is where the
- * filename comes from; `20260918223000` (`tacho.sessions.pushes`) and
- * `20260918230000` (`tacho.session_files.observed_status`) need the same
- * treatment and are bound here too rather than in a module of their own. The
- * probe itself is shared (`@oxagen/database`); what differs per migration is
- * only which column is asked about and what the caller does while the answer
- * is no, so a second module would be a second copy of that decision. The name
- * is left alone deliberately: eight files import this path and the branch is
- * worked by several sessions at once, so renaming it buys tidiness and pays in
- * merge conflicts.
+ * tacho-gateway-columns.ts — reading and writing the two columns migration
+ * `20260917140000` adds, on a database that may not have them yet.
  *
  * `tacho.hosts.gateway_last_seen_at` and `tacho.sessions.gateway_observed_at`
  * are what the server-observed enforcement tier stands on. Production applies
@@ -47,7 +36,6 @@ import {
   ambientPlaneKey,
   GATEWAY_CHAIN_COLUMN,
   hasColumn,
-  hasColumnFresh,
   HOST_GATEWAY_COLUMN,
   SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
@@ -73,6 +61,38 @@ export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
 }
 
 /**
+ * Whether `tacho.sessions.pushes` is present.
+ *
+ * The same deploy-before-migrate window this module was written for, on a
+ * column with a wider blast radius. The gateway columns only decide a tier,
+ * so projecting them away degrades one field; `pushes` is written by the
+ * rollup every accepted batch performs, so naming it before the migration
+ * lands raises 42703 and refuses the batch outright. A host would report
+ * healthy and record nothing.
+ */
+export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
+  return hasColumn(tx, SESSION_PUSHES_COLUMN, await ambientPlaneKey());
+}
+
+/**
+ * Whether `tacho.session_files.observed_status` is present.
+ *
+ * Probed separately from `pushes` rather than inferred from it, for the
+ * reason the two gateway columns are probed separately: one migration adds
+ * both, and a migration that fails between two `ADD COLUMN IF NOT EXISTS`
+ * statements leaves exactly the half-applied state an inference gets wrong.
+ */
+export async function sessionFileObservedStatusColumnReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(
+    tx,
+    SESSION_FILE_OBSERVED_STATUS_COLUMN,
+    await ambientPlaneKey(),
+  );
+}
+
+/**
  * The `columns` fragment for a `tacho.hosts` read: everything, minus the
  * gateway column while the database lacks it.
  *
@@ -88,17 +108,7 @@ export async function hostReadColumns(
     : { gatewayLastSeenAt: false };
 }
 
-/**
- * The same for a `tacho.sessions` read, over both of that table's pending
- * columns.
- *
- * One projection rather than one per migration, because Drizzle takes a single
- * `columns` object and a caller holding two would have to merge them — and the
- * merge is the part that gets forgotten when a third column arrives. Nothing
- * reads either column off a session row today, so dropping them costs the
- * callers nothing; they are projected away only to stop the SELECT naming
- * them.
- */
+/** The same for a `tacho.sessions` read. */
 export async function sessionReadColumns(
   tx: ProbeTx,
 ): Promise<
@@ -107,9 +117,18 @@ export async function sessionReadColumns(
   | { pushes: false }
   | undefined
 > {
-  // Sequential, not `Promise.all`: both answers come from one per-process cache
-  // and the second is free once the first has warmed the plane key, so
-  // concurrency here buys nothing and costs two round trips on a cold miss.
+  // Both of this table's pending columns, in one projection.
+  //
+  // `pushes` is here because a relational read selects every column the schema
+  // DECLARES, so `tacho.session.list` and `tacho.session.get` named it from the
+  // moment the declaration landed — for a column neither of them returns. The
+  // write gate on the ingest path is not enough on its own: guarding the
+  // statement the migration is about is not the same as guarding every
+  // statement the new declaration reaches (discussion_r4051911079).
+  //
+  // One projection rather than one per column, because Drizzle takes a single
+  // `columns` object and a caller holding two would have to merge them — and
+  // the merge is the part that gets forgotten when a third column arrives.
   const gateway = await sessionGatewayColumnReady(tx);
   const pushes = await sessionPushesColumnReady(tx);
   if (gateway && pushes) return undefined;
@@ -118,40 +137,8 @@ export async function sessionReadColumns(
 }
 
 /**
- * Whether `tacho.sessions.pushes` is present, asked afresh every time.
- *
- * {@link hasColumnFresh} rather than {@link hasColumn}: the caller is a counter
- * increment, and a write that skips a counter for a batch never gets another
- * chance at it. The events are acknowledged, the daemon will not re-send them,
- * and no backfill knows what the omitted delta was. A read may spend the
- * negative-probe TTL being conservative because the next call is right again; a
- * lost push count is lost for good.
- */
-export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
-  return hasColumnFresh(tx, SESSION_PUSHES_COLUMN, await ambientPlaneKey());
-}
-
-/**
- * Whether `tacho.session_files.observed_status` is present, asked afresh.
- *
- * Fresh for the same reason as {@link sessionPushesColumnReady}: the rollup
- * writes the observed verdict for a path once, on the batch whose
- * reconciliation carried it, and a row written without it stays null. The title
- * derivation reads the same answer, and paying one extra round trip on the read
- * is worth the two paths never disagreeing inside one transaction.
- */
-export async function sessionFileObservedStatusColumnReady(
-  tx: ProbeTx,
-): Promise<boolean> {
-  return hasColumnFresh(
-    tx,
-    SESSION_FILE_OBSERVED_STATUS_COLUMN,
-    await ambientPlaneKey(),
-  );
-}
-
-/**
- * The `columns` fragment for a `tacho.session_files` read.
+ * The `columns` fragment for a `tacho.session_files` read: everything, minus
+ * the observed verdict while the database lacks it.
  *
  * `undefined` on the ready path, for the reason {@link hostReadColumns} gives:
  * Drizzle reads `{}` as "select nothing".

@@ -71,7 +71,10 @@ describe("an agent identity's operator", () => {
     // so a `'human'` bound anywhere in this statement makes the user join match
     // nothing and every agent report no operator.
     expect(params).not.toContain("human");
-    expect(sql).not.toMatch(/"kind"/);
+    // And the creator seam's own filter IS bound, which is the positive half:
+    // the join is the one that matches an agent principal, not merely one
+    // without the wrong filter.
+    expect(params).toContain("agent");
   });
 
   it("has two seams over one column, told apart by the kind filter", () => {
@@ -80,10 +83,9 @@ describe("an agent identity's operator", () => {
     // filter back to the creator join — fails here rather than silently
     // blanking a field.
     const dialect = new PgDialect();
-    expect(dialect.sqlToQuery(operatorUserJoin!).sql).toContain("$1");
     expect(dialect.sqlToQuery(operatorUserJoin!).params).toEqual(["human"]);
-    const creator = dialect.sqlToQuery(agentCreatorUserJoin);
-    expect(creator.params).toEqual([]);
+    const creator = dialect.sqlToQuery(agentCreatorUserJoin!);
+    expect(creator.params).toEqual(["agent"]);
     expect(creator.sql).toContain("parent_user_id");
   });
 });
