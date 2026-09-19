@@ -6,10 +6,11 @@
 //
 // Every control here saves or acts, and none is a stub: Profile writes
 // `update_profile`; Preferences reads `get_user_preferences` and writes
-// `set_preferences`; Security lists and revokes Better Auth sessions and
-// reissues recovery codes; Privacy queues `export_data`. What the product
-// cannot do yet is absent, not drawn: a control that cannot act is the thing
-// this file exists to stop shipping.
+// `set_preferences`, including the time zone every date in the app renders in
+// (features/shell/viewer-clock.tsx); Security lists and revokes Better Auth
+// sessions and reissues recovery codes; Privacy queues `export_data`. What the
+// product cannot do yet is absent, not drawn: a control that cannot act is the
+// thing this file exists to stop shipping.
 //
 // It is a `SheetDialog` like every other dialog in the app, so on a phone it
 // rises from the bottom edge with a drag handle, a scrim, safe-area padding
@@ -66,7 +67,12 @@ import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";
 import type { Theme } from "./theme";
 
-type Outcome = "saved" | "invalid" | "denied" | "failed";
+type Outcome =
+  | "saved"
+  | "invalid"
+  | "timeZoneInvalid"
+  | "denied"
+  | "failed";
 
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";

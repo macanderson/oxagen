@@ -5,12 +5,13 @@
 // what the record carries — the name, the sessions that reported it, their
 // harnesses and when it was last seen — and nothing the record does not.
 import { GraduationCap } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { SkillInventory } from "@/data/contracts/skills";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { linkText, mono, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { useFormatter } from "@/ui/formatter";
 
 /** Where the section renders: the workspace and the page of the inventory it read. */
 type SkillsAt = { org: string; ws: string; cursor: string | null };

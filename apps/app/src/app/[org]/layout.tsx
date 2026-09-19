@@ -1,6 +1,6 @@
-import { Suspense } from "react";
+import { type ReactNode, Suspense } from "react";
 import { dataSource } from "@/data/source";
-import { ShellChrome, ShellFrame } from "@/features/shell";
+import { ShellChrome, ShellFrame, ViewerClock } from "@/features/shell";
 import { requireViewer } from "@/server/viewer";
 
 // The organization shell: sidebar, top bar, command menu and <MobileNav>
@@ -9,14 +9,34 @@ import { requireViewer } from "@/server/viewer";
 // <Suspense>, so the static shell still prerenders and a stranger is a 404
 // before the chrome renders. Each page resolves its own viewer, inside the
 // <Suspense> around the page (params of an unlisted slug are request data).
+// Inside that same <Suspense>, <OrganizationClock> resolves the viewer's time
+// zone and every date on the page renders in it.
 export default function OrganizationLayout({
   children,
   params,
 }: LayoutProps<"/[org]">) {
   return (
     <ShellFrame chrome={<OrganizationChrome params={params} />}>
-      <Suspense fallback={null}>{children}</Suspense>
+      <Suspense fallback={null}>
+        <OrganizationClock params={params}>{children}</OrganizationClock>
+      </Suspense>
     </ShellFrame>
+  );
+}
+
+async function OrganizationClock({
+  children,
+  params,
+}: {
+  children: ReactNode;
+  params: LayoutProps<"/[org]">["params"];
+}) {
+  const { org } = await params;
+  const ctx = await requireViewer(org);
+  return (
+    <ViewerClock ctx={ctx} source={dataSource()}>
+      {children}
+    </ViewerClock>
   );
 }
 

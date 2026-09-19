@@ -1,13 +1,14 @@
 // The frame every Steering section shares: a region named by its heading with
 // an optional lead, the term-and-value list its facts print in, the pager for
 // a page of records or proposals, and the one date style the page uses.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ComponentProps, ReactNode } from "react";
 import { STEERING_PAGE } from "@/data/contracts/steering";
 import type { SafePath } from "@/shared/safe-path";
 import { linkText, panel } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
+import { useFormatter } from "@/ui/formatter";
 
 export function Section({
   id,

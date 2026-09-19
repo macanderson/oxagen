@@ -32,7 +32,7 @@ const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
   pretenant: { orgs, workspaces },
-  shell: { context: vi.fn() },
+  shell: { context: vi.fn(), preferences: vi.fn() },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),

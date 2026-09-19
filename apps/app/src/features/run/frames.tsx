@@ -14,7 +14,7 @@
 // a later page is a link and the run keeps one route. It is a resume point,
 // not a promise of more: the pager links onward only when the page came back
 // full (`more`), and a page that came back empty keeps its way back.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type {
   RunFrame,
   RunFrameBody,
@@ -29,6 +29,7 @@ import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, NoValue, Panel } from "./parts";
+import { useFormatter } from "@/ui/formatter";
 
 type Place = { org: string; ws: string; runId: string };
 

@@ -7,7 +7,7 @@
 // placeholder headline would read as a title the record does not have. The
 // generated summary sits under the identity, labelled, so the model's sentence
 // is never mistaken for the recording.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
@@ -20,6 +20,7 @@ import { StatusBadge } from "@/ui/status-badge";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
 import { RunControls } from "./run-controls";
+import { useFormatter } from "@/ui/formatter";
 
 function Figure({
   label,

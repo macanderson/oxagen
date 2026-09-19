@@ -229,7 +229,7 @@ export function agentsSource(reads: AgentReads) {
     };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,

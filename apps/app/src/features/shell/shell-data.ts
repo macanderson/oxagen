@@ -17,6 +17,8 @@ export type ShellData = {
     orgRole: string;
     emailVerified: boolean;
     twoFactorEnabled: boolean;
+    /** The IANA zone the chrome's dates render in, and the Account dialog's current choice. */
+    timeZone: string;
   };
   context: Read<ShellContext>;
   /**
