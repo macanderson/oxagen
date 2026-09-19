@@ -48,13 +48,20 @@ const bounded = mandateRow({
   ],
 });
 
-function draw(mandate: MandateRow = bounded) {
+// The page resolves this server-side and hands it down as a prop (`mandate.tsx`'s
+// `readAt`), so the test does the same rather than let the component read a
+// clock: a fixed instant inside the fixture's own default window
+// (validFrom 2026-09-01, validTo 2026-12-31).
+const NOW = new Date("2026-10-01T00:00:00.000Z");
+
+function draw(mandate: MandateRow = bounded, now: Date = NOW) {
   render(
     <IntlProvider>
       <MandateActions
         org="acme"
         ws="core-platform"
         mandate={mandate}
+        now={now}
         here={routes.mandate("acme", "core-platform", mandate.id)}
       />
     </IntlProvider>,
@@ -191,7 +198,6 @@ describe("ChangeLimits", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 });
-
 
 // `mandateLimitSchema` requires only that a limit names `perCall`, `perPeriod` or
 // both, so a bound that caps a single call and leaves the period open is valid.

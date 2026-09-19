@@ -451,14 +451,21 @@ function Revoke({ org, ws, mandate, here }: Place) {
  * a control that could push validTo forward and reopen ended authority. Revoke
  * stays available so an operator can end a draft request or mark a lapsed row
  * revoked before the cron does. A revoked or expired status offers neither.
+ *
+ * **`now` is a prop, not a local clock read.** This component is `"use
+ * client"`, and a client component still server-renders once in the App
+ * Router; a `new Date()` in its own body (or in a `useState` initializer,
+ * which only fixes re-renders, not the server/client split) runs once on the
+ * server and again on the client during hydration, and those two instants can
+ * disagree across `mandate`'s validity boundary — one render shows
+ * `ChangeLimits`, the other does not, a hydration mismatch on the control
+ * that grants or withholds a limit-changing affordance. `readAt` is resolved
+ * once, server-side, in `Mandate` (`mandate.tsx`, the same pattern
+ * `readFleet` in `features/fleet/fleet.tsx` uses), and travels down as a prop
+ * so both renders agree by construction.
  */
-export function MandateActions(place: Place) {
-  const { mandate } = place;
-  // A lazy state initializer, not a bare `new Date()` in the render body: the
-  // latter is impure (React may re-render without re-running it, and it can
-  // mismatch between server and client render), where a state initializer is
-  // the one place the purity rule accepts a clock read.
-  const [now] = useState(() => new Date());
+export function MandateActions(place: Place & { now: Date }) {
+  const { mandate, now } = place;
   if (mandate.status !== "active" && mandate.status !== "draft") return null;
   return (
     <>

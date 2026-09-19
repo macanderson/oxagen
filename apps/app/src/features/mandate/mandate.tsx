@@ -134,7 +134,15 @@ function Tiles({ mandate }: { mandate: MandateRow }) {
   );
 }
 
-function Header({ mandate, at }: { mandate: MandateRow; at: MandateAt }) {
+function Header({
+  mandate,
+  at,
+  readAt,
+}: {
+  mandate: MandateRow;
+  at: MandateAt;
+  readAt: Date;
+}) {
   const t = useTranslations("mandate");
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -175,6 +183,7 @@ function Header({ mandate, at }: { mandate: MandateRow; at: MandateAt }) {
           ws={at.ws}
           mandate={mandate}
           here={mandateLink(at)}
+          now={readAt}
         />
       </div>
     </header>
@@ -263,14 +272,16 @@ function Loaded({
   detail,
   at,
   view,
+  readAt,
 }: {
   detail: MandateDetail;
   at: MandateAt;
   view: MandateView;
+  readAt: Date;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <Header mandate={detail.mandate} at={at} />
+      <Header mandate={detail.mandate} at={at} readAt={readAt} />
       <Tiles mandate={detail.mandate} />
       <MandateLedger detail={detail} at={at} view={view} />
       <div className="grid gap-4 lg:grid-cols-2">
@@ -284,7 +295,10 @@ function Loaded({
 /**
  * When the read came back, which the page prints as the "as of" instant beside
  * the tiles so a figure is never presented as newer than the answer it came
- * from.
+ * from — and which `Header` also hands to `MandateActions` as `now`, so the
+ * validity-window check that decides whether `ChangeLimits` renders reads the
+ * same server-resolved instant rather than a client clock hydration could
+ * disagree with (`MandateActions`' own doc comment has the failure mode).
  *
  * It sits outside the component on purpose. `Mandate` is an async server
  * component, so reading the clock in its body runs once per request and is not
@@ -330,7 +344,7 @@ export async function Mandate({
       />
     );
   }
-  return <Loaded detail={read.value} at={at} view={view} />;
+  return <Loaded detail={read.value} at={at} view={view} readAt={readAt} />;
 }
 
 /**
