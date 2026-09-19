@@ -1,0 +1,89 @@
+<h2 class="ch-title">Tests should be first-class retrieval objects</h2>
+<p class="ch-thesis">Tests describe behavior in executable form, and a test runner's verdict is computed rather than inferred.</p>
+
+<p class="lede">Your agent writes a patch, then runs the suite to find out whether it broke something. The tests that would have told it what the function was supposed to do were sitting in the repository the whole time, and it read none of them before it started. Most stacks treat tests as a thing you run after generating a patch, not a thing you retrieve before. That is backwards. The test suite is the best-maintained behavioral specification your repository has.</p>
+
+<h3>Behavioral indexing</h3>
+<p>Make tests queryable along the axes that matter:</p>
+<ul class="plain">
+  <li><strong>Coverage mapping.</strong> Run the suite under coverage once per merge and invert the result: for every function, the exact tests that execute it. <code>tests_covering("process_refund")</code> becomes a deterministic lookup.</li>
+  <li><strong>Contract extraction.</strong> Parse assertions into behavior statements. "A refund of a settled order returns <code>RefundResult(status=PENDING)</code>. A refund exceeding the order total raises <code>InvalidRefund</code>." Signatures told the model the shape (Part 4). Assertions tell it the meaning.</li>
+  <li><strong>Fixture graph.</strong> Fixtures encode how valid domain objects are constructed. Link them into the code graph and the model gets canonical object construction for free.</li>
+</ul>
+<p>Now the retrieval plan from Part 3 gains a behavioral layer. Touching <code>process_refund</code> pulls its three covering tests, a precise executable account of current behavior, usually far smaller than the docs that would attempt to describe it.</p>
+
+<p>The inversion is a few lines in CI, and the artifact it produces is a map from symbol to tests.</p>
+
+<pre><code># once per merge, in CI
+pytest --cov=app --cov-context=test --cov-report=json
+
+# invert contexts: {symbol: [tests that executed it]}
+index = defaultdict(list)
+for fn, arcs in coverage["files"].items():
+    for line, contexts in arcs["contexts"].items():
+        for test in contexts:
+            index[symbol_at(fn, line)].append(test)
+
+tests_covering("process_refund")
+→ ["test_refund_settled_order",
+   "test_refund_exceeds_total",
+   "test_refund_is_idempotent"]
+</code></pre>
+
+<div class="evidence">
+  <span class="tag">Evidence · Tests as selection machinery</span>
+  <p>Agentless does more than run tests at the end. Tests are load-bearing in its pipeline. It generates <em>reproduction tests</em> from the issue, uses existing <em>regression tests</em> to filter candidate patches, and re-ranks the survivors, a deterministic selection stage that the paper's ablations credit for a substantial share of final accuracy.<sup class="cite"><a href="#r1">1</a></sup> SWE-bench makes the broader point: the industry's shared yardstick for agent capability defines "solved" as nothing more or less than "the fail-to-pass tests now pass."<sup class="cite"><a href="#r15">15</a></sup> If tests are how you judge agents, they should be how agents see.</p>
+  <p class="src">Xia et al., FSE 2025 · Jimenez et al., ICLR 2024</p>
+</div>
+
+<h3>What an assertion says that a docstring does not</h3>
+<p>Contract extraction is worth a worked example, because the output is smaller than the input and carries more.</p>
+<div class="vs">
+  <div class="a">
+    <h4>◌ The docstring</h4>
+    <ul>
+      <li>"Processes a refund for an order."</li>
+      <li>Written once, at creation</li>
+      <li>Silent about the settled case, the over-total case, and idempotency</li>
+      <li>No signal when it drifts from the code</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● The extracted contract</h4>
+    <ul>
+      <li>settled order → <code>RefundResult(status=PENDING)</code></li>
+      <li>amount &gt; order.total → raises <code>InvalidRefund</code></li>
+      <li>same idempotency key twice → one ledger entry</li>
+      <li>CI reruns it, so a drift turns the build red</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Execution-driven, contract-first loops</h3>
+<p>Tests also give the workflow skeleton (Part 9) its cheapest validators. A contract-first loop runs like this: retrieve the covering tests, have the model write or extend the failing test first so the intent becomes executable, have it patch, run the deterministic runner, then feed the structured failure (sliced per Part 2) into the next attempt. A compiler and a test runner grade each iteration. Their verdicts are computed from the code that ran, not inferred from a diff by another model emitting an opinion. The loop converges on green, and green is a fact about a process exit code.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Turn on per-test coverage contexts.</strong> Run the suite once with coverage.py recording a context per test (or your language's equivalent) and write the JSON to a build artifact. Done looks like one file that records which test touched which line.</li>
+    <li><strong>Invert it into a symbol index.</strong> Map each covered line to its enclosing symbol with tree-sitter and store <code>{symbol: [tests]}</code> next to your code graph. Done looks like <code>tests_covering("process_refund")</code> answering in milliseconds.</li>
+    <li><strong>Put covering tests in the retrieval bundle.</strong> When a node targets a symbol, attach its covering tests ahead of any prose documentation, under the same token budget. Done looks like a bundle you can diff against the old one and see docs give way to tests.</li>
+    <li><strong>Extract assertion contracts for your ten hottest symbols.</strong> Parse the assert statements into one-line behavior statements and store them as graph properties. Done looks like ten symbols whose contracts a reviewer agrees with.</li>
+    <li><strong>Make the loop write the test first.</strong> Change the patch node to emit a failing test before it emits a patch, and reject attempts that skip it. Done looks like every merged agent patch carrying a test that failed before it.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>symbol_test_coverage_index_freshness</code>: hours since the coverage inversion last ran, compared against commits merged since. Down is good. A stale index points an agent at tests that no longer exist.</li>
+    <li><code>covering_tests_in_bundle</code>: share of retrieval bundles for an edit task that include at least one covering test for the target symbol. Compute it from the bundle logs. Up is good.</li>
+    <li><code>first_attempt_green_rate</code>: patches that pass the suite on attempt 1, divided by all patches. Up is good, and it moves when retrieval improves rather than when the model changes.</li>
+    <li><code>test_first_compliance</code>: agent patches that shipped with a test that failed before the patch, divided by all agent patches. Up is good.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Index your tests the way you index your code. They are the documentation in your repository that executes, and the ones running in CI are current as of the last green run. That makes them the highest-signal retrieval objects you own.</p>
+</div>

@@ -1,4 +1,4 @@
-# conversation.list
+# list_conversations
 
 **Domain:** conversation
 **Mode:** sync
@@ -31,8 +31,8 @@ listing hundreds of conversations is a single indexed scan.
 ## Surfaces
 
 - **API:** `GET /v1/:org/:workspace/conversations?filter=&limit=&cursor=`
-- **MCP:** `conversation.list` tool (read-only, idempotent)
-- **Agent:** invoked directly via `invoke("conversation.list", ...)` — no approval required
+- **MCP:** `list_conversations` tool (read-only, idempotent)
+- **Agent:** invoked directly via `invoke("list_conversations", ...)` — no approval required
 
 ## Side effects
 

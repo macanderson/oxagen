@@ -1,4 +1,4 @@
-# graph.node.list
+# list_nodes
 
 Paginated browse of all nodes in the workspace graph. Enables the graph explorer UI.
 

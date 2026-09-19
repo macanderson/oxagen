@@ -1,0 +1,235 @@
+{
+  "slug": "deterministic-ai-coding-agents",
+  "title": "Engineering Deterministic AI Coding Agents",
+  "edition": "Second edition",
+  "author": "Mac Anderson",
+  "authorRole": "Founder and CEO, Oxagen Inc. · Los Angeles, California",
+  "publisher": "Oxagen · 2026",
+  "headTitle": {
+    "field-manual": "Engineering Deterministic AI Coding Agents: a field manual, second edition",
+    "page-flip-reader": "Engineering Deterministic AI Coding Agents: the reader, second edition"
+  },
+  "ogTitle": "Engineering Deterministic AI Coding Agents, by Mac Anderson",
+  "description": "A field manual in 21 parts, by Mac Anderson of Oxagen. Parts 1 to 13 show how to build the deterministic system around a coding agent, with published evidence in each part. Parts 14 to 20 show how to operate the agents you now run: identity, authority, budget, equipment, and a record another person can read. Every part ends with steps for this week and metrics to track.",
+  "printSubtitle": "Build the deterministic system around the model. Then operate the agents you run: identity, authority, budget, equipment, and a record another person can read.",
+  "tocBrand": "Oxagen Press · Field manual · 21 parts",
+  "sections": [
+    {
+      "id": "cover",
+      "file": "cover.html",
+      "kind": "cover",
+      "mark": "§",
+      "toc": "Cover and thesis",
+      "title": "Cover"
+    },
+    {
+      "id": "start",
+      "file": "start.html",
+      "kind": "matter",
+      "mark": "→",
+      "kicker": "Start here",
+      "toc": "How to use this book",
+      "title": "How to use this book"
+    },
+
+    {
+      "id": "p1",
+      "file": "p01.html",
+      "kind": "part",
+      "group": "The economics",
+      "toc": "Agents are not expensive. Bad architecture is"
+    },
+
+    {
+      "id": "p2",
+      "file": "p02.html",
+      "kind": "part",
+      "group": "Deterministic retrieval",
+      "toc": "Stop making agents read your logs"
+    },
+    {
+      "id": "p3",
+      "file": "p03.html",
+      "kind": "part",
+      "group": "Deterministic retrieval",
+      "toc": "Parse the prompt before the model sees it"
+    },
+    {
+      "id": "p4",
+      "file": "p04.html",
+      "kind": "part",
+      "group": "Deterministic retrieval",
+      "toc": "Why grep is the wrong retrieval engine"
+    },
+    {
+      "id": "p5",
+      "file": "p05.html",
+      "kind": "part",
+      "group": "Deterministic retrieval",
+      "toc": "Build semantic memory once"
+    },
+
+    {
+      "id": "p6",
+      "file": "p06.html",
+      "kind": "part",
+      "group": "Context engineering",
+      "toc": "Rules belong in data, not in prose"
+    },
+    {
+      "id": "p7",
+      "file": "p07.html",
+      "kind": "part",
+      "group": "Context engineering",
+      "toc": "Compression beats a bigger model"
+    },
+    {
+      "id": "p8",
+      "file": "p08.html",
+      "kind": "part",
+      "group": "Context engineering",
+      "toc": "Show the agent the schema"
+    },
+
+    {
+      "id": "p9",
+      "file": "p09.html",
+      "kind": "part",
+      "group": "Orchestration and memory",
+      "toc": "Why coordinator agents do not scale"
+    },
+    {
+      "id": "p10",
+      "file": "p10.html",
+      "kind": "part",
+      "group": "Orchestration and memory",
+      "toc": "Tests as retrieval objects"
+    },
+    {
+      "id": "p11",
+      "file": "p11.html",
+      "kind": "part",
+      "group": "Orchestration and memory",
+      "toc": "Working memory, not bigger windows"
+    },
+    {
+      "id": "p12",
+      "file": "p12.html",
+      "kind": "part",
+      "group": "Orchestration and memory",
+      "toc": "Knowledge graphs over concatenation"
+    },
+
+    {
+      "id": "p13",
+      "file": "p13.html",
+      "kind": "part",
+      "group": "Measurement",
+      "toc": "Measuring an agent in production"
+    },
+
+    {
+      "id": "p14",
+      "file": "p14.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Give every agent its own identity"
+    },
+    {
+      "id": "p15",
+      "file": "p15.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Write the mandate"
+    },
+    {
+      "id": "p16",
+      "file": "p16.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "The agent asks, a rule decides"
+    },
+    {
+      "id": "p17",
+      "file": "p17.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Spend you can attribute"
+    },
+    {
+      "id": "p18",
+      "file": "p18.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Equip agents on purpose"
+    },
+    {
+      "id": "p19",
+      "file": "p19.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Keep a record another person can read"
+    },
+    {
+      "id": "p20",
+      "file": "p20.html",
+      "kind": "part",
+      "group": "Operating the workforce",
+      "toc": "Bounded tasks and ongoing work"
+    },
+
+    {
+      "id": "p21",
+      "file": "p21.html",
+      "kind": "part",
+      "group": "The endgame",
+      "toc": "Better systems, not better models"
+    },
+
+    {
+      "id": "closing",
+      "file": "closing.html",
+      "kind": "matter",
+      "mark": "∎",
+      "kicker": "Closing thought",
+      "toc": "Closing thought",
+      "title": "Closing thought"
+    },
+    {
+      "id": "kit",
+      "file": "kit.html",
+      "kind": "matter",
+      "mark": "▤",
+      "kicker": "Field kit",
+      "toc": "Field kit: templates and worksheets",
+      "title": "Field kit"
+    },
+    {
+      "id": "glossary",
+      "file": "glossary.html",
+      "kind": "matter",
+      "mark": "≡",
+      "kicker": "Glossary",
+      "toc": "Glossary",
+      "title": "Glossary"
+    },
+    {
+      "id": "author",
+      "file": "author.html",
+      "kind": "matter",
+      "mark": "☉",
+      "kicker": "About the author",
+      "toc": "About the author",
+      "title": "About the author"
+    },
+    {
+      "id": "refs",
+      "file": "refs.html",
+      "kind": "matter",
+      "mark": "※",
+      "kicker": "References and further reading",
+      "toc": "References",
+      "title": "Sources"
+    }
+  ]
+}

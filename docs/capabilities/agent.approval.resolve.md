@@ -1,4 +1,4 @@
-# agent.approval.resolve
+# resolve_approval
 
 **Domain:** agent
 **Mode:** sync

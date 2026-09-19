@@ -151,6 +151,42 @@ describe("agent.approval.list route", () => {
   });
 });
 
+// ── agent.approval.list_resolved (#3153) ────────────────────────────────────
+
+describe("agent.approval.list_resolved route", () => {
+  const PATH = "/agent/approvals/resolved";
+
+  it("happy path POST: returns 200 with the page invoke returned", async () => {
+    const invokeResult = { items: [], nextCursor: null };
+    mocks.invoke.mockResolvedValue(invokeResult);
+    const res = await app.fetch(post(PATH, {}));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(invokeResult);
+  });
+
+  it("calls invoke once with contract name 'list_resolved_approvals', the parsed input and surface 'api'", async () => {
+    mocks.invoke.mockResolvedValue({ items: [], nextCursor: null });
+    await app.fetch(
+      post(PATH, { runId: "arun_0123456789abcdefghjkmn", limit: 5 }),
+    );
+    expect(mocks.invoke).toHaveBeenCalledOnce();
+    expect(mocks.invoke.mock.calls[0]?.[0]).toBe("list_resolved_approvals");
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual({
+      runId: "arun_0123456789abcdefghjkmn",
+      limit: 5,
+    });
+    expect(mocks.invoke.mock.calls[0]?.[3]).toEqual({ surface: "api" });
+  });
+
+  it("refuses a page size outside 1..100 and an unknown field before invoke", async () => {
+    const tooBig = await app.fetch(post(PATH, { limit: 101 }));
+    expect(tooBig.status).toBe(400);
+    const unknown = await app.fetch(post(PATH, { status: "approved" }));
+    expect(unknown.status).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+});
+
 // ── agent.approval.resolve ──────────────────────────────────────────────────
 
 describe("agent.approval.resolve route", () => {

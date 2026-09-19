@@ -1,4 +1,4 @@
-# integration.delete
+# delete_integration
 
 Remove a plugin instance and optionally purge its graph data from Neo4j.
 

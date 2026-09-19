@@ -1,4 +1,4 @@
-# integration.metrics
+# get_integration_metrics
 
 Get sync statistics and metrics for a plugin instance.
 

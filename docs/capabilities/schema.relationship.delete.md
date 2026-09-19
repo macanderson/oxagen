@@ -1,4 +1,4 @@
-# schema.relationship.delete
+# delete_schema_relationship
 
 Remove a relationship type from the current draft version. Does not affect published versions — publish a new version to make the deletion permanent.
 

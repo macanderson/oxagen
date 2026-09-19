@@ -1,4 +1,4 @@
-# graph.node.get
+# get_node
 
 Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`.
 

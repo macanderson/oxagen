@@ -1,503 +1,597 @@
 # Capabilities
 
-Reference for all declared capabilities across the Oxagen platform.
-Each capability is implemented across API, MCP, and agent surfaces with
-contract-first design, IAM enforcement, and instrumentation. Following
-[ADR-043](../adr/ADR-043-runtime-excision.md), Oxagen is a governance plane —
-it does not run agents. Deleted runtime families (sandboxes, code execution,
-subagent fan-out, background tasks, file locks, plans, skills, evals,
-automations/workflows, browser tools, content generation, research swarm,
-web fetch/search, and repo mutations) no longer have capability pages.
-
-**307 capabilities across 47 domains.**
-
-Capabilities granted to an agent as a set have a page of their own:
-[the ontology read set](_ontology-read-set.md) covers the graph reads and the
-`toolPolicy.ontology` opt-in.
-
-## Agent (57)
-
-- [agent.approval.list](agent.approval.list.md) — List the workspace's pending tool-call approvals, soonest expiry first, cursor-paged, optionally narrowed to one run
-- [agent.approval.resolve](agent.approval.resolve.md) — Approve or deny a pending tool-call approval request; resolution ends the tool-call wait and streams the next step
-- [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
-- [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
-- [agent.definition.commit](agent.definition.commit.md) — Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written
-- [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
-- [agent.definition.delete](agent.definition.delete.md) — Soft-delete an agent definition and its delegated IAM principal together, in one lifecycle
-- [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
-- [agent.definition.list](agent.definition.list.md) — List the agent definitions in the current workspace with identity, lifecycle status, deployment posture, and latest version number
-- [agent.definition.publish](agent.definition.publish.md) — Publish an agent version — marks it published, checksums its canonical config, and sets it as the active version (immutable thereafter)
-- [agent.definition.suggest](agent.definition.suggest.md) — AI-assisted agent setup — turns a plain-language description into a complete draft agent configuration (identity, instructions, graph access, tools, triggers), grounded in the workspace's real skills, ontologies, MCP servers, and capabilities
-- [agent.definition.summarize](agent.definition.summarize.md) — Generate or refresh a short, LLM-inferred plain-text summary of what an agent does, cached against a checksum of its config so it only regenerates when the config changed (or force is set)
-- [agent.definition.update](agent.definition.update.md) — Update an agent definition by snapshotting a new unpublished version with the updated config; the version number is bumped
-- [agent.deploy](agent.deploy.md) — Set an agent's deployment posture; activating requires a published active version, deactivating makes its triggers dormant
-- [agent.environment.bind](agent.environment.bind.md) — Bind an agent to an environment (and optionally a specific sandbox template within it); promoting one to primary atomically demotes the agent's previous primary
-- [agent.environment.list](agent.environment.list.md) — List an agent's environment bindings, with each binding's resolved sandbox template name
-- [agent.environment.unbind](agent.environment.unbind.md) — Remove an agent's binding to an environment; falls back to the workspace default environment and template when the removed binding was primary
-- [agent.execution.list](agent.execution.list.md) — List recent top-level agent runs for the workspace, newest first, with keyset pagination — each row's status, origin, duration, and token/cost figures
-- [agent.execution.record](agent.execution.record.md) — Persist a complete agent execution record including steps, tool calls, and result summary for observability and audit
-- [agent.get](agent.get.md) — Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached
-- [agent.list](agent.list.md) — List the agent identities registered in this workspace with their principal, harness, operator, status, enrollment and credential counts, and the 30-day run, spend and incident figures the stores record
-- [agent.mcp.delete](agent.mcp.delete.md) — Soft-delete a registered external MCP server; its tools stop registering immediately while tool-descriptor snapshots are retained for replay
-- [agent.mcp.list](agent.mcp.list.md) — List registered external MCP servers in the active workspace with status, transport, auth kind, and tool inventory
-- [agent.mcp.register](agent.mcp.register.md) — Register an external MCP server with the workspace; the runner runs a separate process and injects its tools into the agent
-- [agent.mcp.set_enabled](agent.mcp.set_enabled.md) — Enable or disable a registered external MCP server; disabling stops its tools from registering but keeps tool-descriptor snapshots for replay
-- [agent.mcp_consent.list](agent.mcp_consent.list.md) — List external MCP tool consent grants in the active workspace; scope to the caller with `mineOnly`
-- [agent.mcp_consent.resolve](agent.mcp_consent.resolve.md) — Grant or deny first-use consent for an external MCP tool, resuming the paused agent stream
-- [agent.memory.cite](agent.memory.cite.md) — Record memory citations within an execution (influence + rule compliance); maintains citation/influence/violation counters
-- [agent.memory.delete](agent.memory.delete.md) — Permanently delete an AgentMemory node and its edges by id (destructive; prefer update to lower salience)
-- [agent.memory.demote](agent.memory.demote.md) — Demote a memory down the confidence ladder (FACT→RULE→OBSERVATION) with an auditable demotion event; clears enforcement on OBSERVATION and human confirmation when leaving FACT
-- [agent.memory.list](agent.memory.list.md) — List a workspace's ACTIVE AgentMemory nodes (newest first) with optional class/kind/enforcement/node filters; non-semantic browse counterpart to agent.memory.recall
-- [agent.memory.promote](agent.memory.promote.md) — Promote a memory up the confidence ladder (OBSERVATION→RULE→FACT) with an auditable promotion event; FACT requires human confirmation
-- [agent.memory.recall](agent.memory.recall.md) — Query ACTIVE AgentMemory nodes by semantic similarity with optional class/enforcement filters; recovers confidence on recall
-- [agent.memory.remember](agent.memory.remember.md) — Capture a free-text memory, inferring its kind and class unless pinned, then embed and write it to the workspace AgentMemory graph
-- [agent.memory.update](agent.memory.update.md) — Edit an AgentMemory in place (lesson, kind, source, confidence/enforcement, status), re-embedding when the lesson changes
-- [agent.memory.write](agent.memory.write.md) — Persist a two-axis memory (class + kind, confidence + enforcement) tied to a graph node
-- [agent.memory_citation.list](agent.memory_citation.list.md) — List the memory citations recorded for an execution, filterable by compliance or influence
-- [agent.memory_citation.stats](agent.memory_citation.stats.md) — Workspace-wide citation analytics across executions: totals, influence/compliance breakdowns, a daily series, and top / least-useful / most-violated memories plus most-cited graph nodes
-- [agent.memory_evidence.attach](agent.memory_evidence.attach.md) — Attach corroborating or refuting evidence to a memory and adjust its confidence score
-- [agent.memory_import.commit](agent.memory_import.commit.md) — Write confirmed (optionally edited) draft memories into the workspace AgentMemory graph
-- [agent.memory_import.parse](agent.memory_import.parse.md) — Extract atomic memories from uploaded documents via the AI gateway, returning editable drafts
-- [agent.memory_policy.read](agent.memory_policy.read.md) — Read the workspace memory decay policy: confidence half-lives and recall threshold
-- [agent.memory_policy.write](agent.memory_policy.write.md) — Update the workspace memory decay policy (partial update)
-- [agent.memory_promotion.dismiss](agent.memory_promotion.dismiss.md) — Dismiss a memory from the promotion-candidate queue (or restore it) so the next candidate fills the slot, without archiving the memory
-- [agent.memory_promotion.list](agent.memory_promotion.list.md) — Return the top OBSERVATION memories ripe for promotion to RULE/FACT, ranked by citation pressure
-- [agent.memory_promotion.rationales](agent.memory_promotion.rationales.md) — Draft short, context-grounded rationales for a promotion/demotion via a low-cost model, with a deterministic fallback built from citation signals
-- [agent.register](agent.register.md) — Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once; the definition is committed to the repository separately
-- [agent.retire](agent.retire.md) — Retire an agent identity: archive the agent, suspend its principal, revoke every credential and host enrollment; runs keep their identity, nothing is deleted
-- [agent.role.assign](agent.role.assign.md) — Assign an IAM role to an agent's delegated principal; system agent roles at every tier, custom roles enterprise-only, rejected when the role's grants exceed the assigner's own effective grants (delegation ceiling)
-- [agent.role.get](agent.role.get.md) — Get one IAM role's status relative to an agent: held or not, assignment provenance, and the role's capability grant list
-- [agent.role.list](agent.role.list.md) — List the IAM roles attached to an agent's delegated principal with assignment provenance
-- [agent.role.revoke](agent.role.revoke.md) — Revoke an IAM role from an agent's delegated principal — soft-deletes the assignment (audit trail preserved); idempotent
-- [agent.suspend](agent.suspend.md) — Suspend or resume an agent identity: a suspended principal anchors no governed run and its belt is empty; resuming restores it without re-issuing anything
-- [agent.toolbelt.get](agent.toolbelt.get.md) — Compute the toolbelt an agent would be shown without executing anything: the decision and rule per tool, how the belt was computed, what the model receives, and what the agent cannot see
-- [agent.tool.list](agent.tool.list.md) — List the capabilities surfaced as agent tools for the active workspace, filtered by role, entitlements, and denylist
-- [agent.trace.get](agent.trace.get.md) — Fetch one agent execution as a collapsible span tree: the run, its ordered steps, each step's tool calls with durations/tokens/cost/status, and child executions (subagent/A2A lineage)
-- [revise_agent_def](revise_agent_def.md) — AI-driven edit of an existing agent definition from a plain-language prompt; the model designs the revised config grounded in the workspace and a new unpublished version is bumped (slug immutable, publish stays separate)
-
-## Api (4)
-
-- [api.key.create](api.key.create.md) — Create a new API key scoped to the requesting org; the raw key is shown once and never retrievable
-- [api.key.list](api.key.list.md) — List the API keys in scope with their metadata; never returns a key's secret or its hash
-- [api.key.revoke](api.key.revoke.md) — Revoke an API key by its public ID; the key is soft-deleted and immediately invalid for all subsequent requests
-- [api.key.rotate](api.key.rotate.md) — Atomically issue a replacement API key and revoke the old one; the new raw key is shown once
-
-## Approval_rule (5)
-
-- [delete_approval_rule](delete_approval_rule.md) — Remove one auto-approval rule from the workspace's rule set
-- [get_auto_eligibility](get_auto_eligibility.md) — The auto-approval evaluation recorded for one approval request, and who resolved it
-- [list_approval_rules](list_approval_rules.md) — List the workspace's auto-approval rules, with the calls each released and held in the last 30 days
-- [set_approval_rule_enabled](set_approval_rule_enabled.md) — Switch one auto-approval rule on or off
-- [set_approval_rules](set_approval_rules.md) — Replace the workspace's auto-approval rules — the conditions under which a call a policy sent to a person may skip them
-
-## Assistant (2)
-
-- [assistant.ask](assistant.ask.md) — Take one turn with the in-app agent on stella-serve: the message appended to a conversation, the turn recorded and sealed as a run of its own, the reply returned with its run id and any governed write parked for a person
-- [assistant.engine.get](assistant.engine.get.md) — Probe the in-app agent's engine: the readiness state it reported, or unreachable after three attempts, with the host the probe was aimed at
-
-## Asset (1)
-
-- [asset.upload](asset.upload.md) — Ingest a binary asset from a publicly reachable source URL into object storage
-
-## Auth (1)
-
-- [auth.cli.authorize](auth.cli.authorize.md) — Mint the single-use PKCE authorization code that lets the Oxagen CLI obtain an API key for one org and workspace after the signed-in person consents
-
-## Audit (2)
-
-- [audit.events.export](audit.events.export.md) — Export the org's security audit events as CSV or NDJSON over the query_audit_log filters, signed with HMAC-SHA256; up to 50,000 events
-- [audit.log.query](audit.log.query.md) — Query the org's security audit events with structured filters, newest first
-
-## Billing (15)
-
-- [billing.action_estimate](billing.action_estimate.md) — Convert a projected number of agent runs into governed actions and a price, using the published run-class conversion and volume bands; shows its assumptions
-- [billing.action_rate_card](billing.action_rate_card.md) — The published rate card for governed actions: volume bands, per-tier included allowances, evidence-retention price, and confirmation that model tokens are reported at zero
-- [billing.auto_topup.set](billing.auto_topup.set.md) — Turn automatic top-up on or off for the organization and set how many governed-action-unit blocks each top-up buys. Owner/Admin only
-- [billing.budget.get](billing.budget.get.md) — Read the hard period-to-date spend ceilings (org + workspace) governing the active scope, each with live burn: period-to-date spend, projection, percent-of-ceiling, and whether the gate is denying
-- [billing.budget.set](billing.budget.set.md) — Create or replace one scope's hard period-to-date spend ceiling (org or workspace; monthly or rolling window; USD limit). Raising a ceiling is the audited org-admin override that clears a budget_exceeded denial. Owner/Admin/Billing only
-- [billing.contract_rate.get](billing.contract_rate.get.md) — The organisation's contracted governed-action terms: per-GAU rate in micro-dollars, block size, currency, included GAUs per month, effective dates, and whether they are the published tier's figures or a negotiated agreement's
-- [billing.credits.purchase](billing.credits.purchase.md) — Initiate a dynamic usage-credit purchase via Stripe Checkout with automatic volume discount
-- [billing.evidence_retention](billing.evidence_retention.md) — Evidence-retention posture and its price: included window, effective retention window, whether extended retention is opted in, rate, and credits charged this period
-- [billing.gau_bucket.get](billing.gau_bucket.get.md) — The organization's governed action unit bucket for the current month: billing mode, period, units included, purchased, carried forward, used and remaining, plus invoice thresholds or auto top-up state
-- [billing.gau_bucket.purchase](billing.gau_bucket.purchase.md) — Buy governed action units in block quantities at the organisation's contracted rate through Stripe Checkout; returns the Checkout URL, the quantity, the block size and the number of blocks
-- [billing.invoice.list](billing.invoice.list.md) — List the organization's invoices newest first, cursor-paged, each with the kind of charge it settled (subscription, block purchase, auto top-up, interim, period close), amounts, period and the Stripe-hosted page
-- [billing.org_terms.set](billing.org_terms.set.md) — Platform-operator only: approve an organization for invoice billing or return it to prepaid, and set the uninvoiced-overage ceiling at which an interim invoice is cut. On no surface; run through `pnpm billing:terms`
-- [billing.subscription.read](billing.subscription.read.md) — Return the active subscription, plan slug, current period bounds, and available credits
-- [billing.subscription_upgrade.start](billing.subscription_upgrade.start.md) — Begin a plan change; returns a Stripe Checkout URL, completed via webhook
-- [billing.usage.breakdown](billing.usage.breakdown.md) — Aggregated usage (tokens, cost, calls) for a window, broken down by model, surface, and workspace, plus a daily time series
-
-## Budget (2)
-
-- [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
-- [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
-
-## Cost (4)
-
-- [cost.price_entry.list](cost.price_entry.list.md) — List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over
-- [cost.price_entry.remove](cost.price_entry.remove.md) — End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again; the row is closed, not deleted
-- [cost.price_entry.set](cost.price_entry.set.md) — Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant; the row it supersedes is closed, never overwritten
-- [cost.unpriced_model.list](cost.unpriced_model.list.md) — List the models this organization has run that the price book cannot price: the model, its vendor, how many calls and tokens it has run in the window, and which token classes are missing a price — the reason a run's cost comes back blank
-
-## Capability (2)
-
-- [capability.registry.get](capability.registry.get.md) — Read one typed contract as the full enforced object: identity grants, tenancy scope, input/output field specs, commercial terms, and chaining metadata
-- [capability.registry.list](capability.registry.list.md) — List the platform's typed capability contracts from the live in-process registry (name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, audit binding); the governance catalog's data source
-
-## Chat (2)
-
-- [chat.message.execution](chat.message.execution.md) — Record an agent execution that originated from a chat message; atomically links execution to message for observability
-- [chat.message.send](chat.message.send.md) — Append a user message to a conversation and stream the assistant's response
-
-## Command (2)
-
-- [command.menu.search](command.menu.search.md) — Full-text entity search for the Command Menu, returning up to 8 typed, ready-to-navigate rows filtered to the caller's grants
-- [command.menu.suggest](command.menu.suggest.md) — Generate 3–5 context-aware "Suggested for this page" prompts via a fast LLM tier, sending only the page entity summary
-
-## Connection (10)
-
-- [connection.create](connection.create.md) — Create a new data source connection for a workspace; credentials are encrypted before storage
-- [connection.delete](connection.delete.md) — Delete a data source connection with three modes: connection_only, data_only, or full deletion
-- [connection.get](connection.get.md) — Get details of a single data source connection
-- [connection.list](connection.list.md) — List all data source connections for a workspace
-- [connection.mappings.get](connection.mappings.get.md) — Get the current entity type mappings for a data source connection
-- [connection.mappings.set](connection.mappings.set.md) — Save entity type mappings for a data source connection; activates connection and starts ingestion
-- [connection.mappings.suggest](connection.mappings.suggest.md) — Use an LLM to suggest entity type mappings based on previewed record types
-- [connection.pause](connection.pause.md) — Pause or resume syncing for a connection without tearing down the connection or its data
-- [connection.preview](connection.preview.md) — Preview sample records from a data source connection for the setup wizard
-- [connection.update](connection.update.md) — Rename a connection and/or adjust its delivery configuration (sync schedule/scope)
-
-## Context (12)
-
-- [context.record.list](context.record.list.md) — List the steering context records registered in the active workspace with lifecycle status
-- [context.record.promote](context.record.promote.md) — Append a lifecycle action to a context record's hash-chained promotions ledger
-- [context.record.publish](context.record.publish.md) — Publish a steering context record into the workspace agent-asset registry
-- [context.records.list](context.records.list.md) — List the workspace's published steering records with kind, force, constraint effect, scope, lineage, commit and path
-- [context.records.get](context.records.get.md) — Get one published record (with versions and its publishing PR) or one appended record
-- [context.records.append](context.records.append.md) — Append one context record, the protocol's context/append; a directive is refused
-- [context.proposal.create](context.proposal.create.md) — Open a record proposal: the record it should become, the rationale and its support
-- [context.proposal.list](context.proposal.list.md) — List the workspace's record proposals with their Context PR state
-- [context.proposal.dismiss](context.proposal.dismiss.md) — Reject a record proposal with a reason
-- [context.pr.open](context.pr.open.md) — Open a proposal's Context PR: branch, record file, pull request and the six checks as GitHub check runs
-- [context.pr.get](context.pr.get.md) — Get a proposal's Context PR: state, checks, what merge will do, the promotion event once merged
-- [context.pr.merge](context.pr.merge.md) — Merge a proposal's Context PR and publish its record: promotion event, steering version, steering.published
-
-## Conversation (9)
-
-- [conversation.archive](conversation.archive.md) — Archive or restore one or more conversations in a single set-based update
-- [conversation.attachment.add](conversation.attachment.add.md) — Link an already-uploaded asset to a conversation as a chat attachment and return its conversation-file record
-- [conversation.chat](conversation.chat.md) — Post a message to an existing conversation; appends to the conversation thread
-- [conversation.delete](conversation.delete.md) — Permanently delete one or more conversations from the user's view via soft-delete
-- [conversation.export](conversation.export.md) — Export an entire conversation (active branch) as a Markdown document or a formatted PDF
-- [conversation.files.list](conversation.files.list.md) — List the ready generated assets attached to a conversation, access-policy filtered, newest-first, keyset-paginated
-- [conversation.list](conversation.list.md) — List a user's conversations in a workspace, filtered by active or archived status
-- [conversation.purge](conversation.purge.md) — Bulk soft-delete every archived conversation the caller owns in the active workspace
-- [conversation.rename](conversation.rename.md) — Set a conversation's title; low-risk metadata edit exposed via long-press or double-click
-
-## Environment (6)
-
-- [environment.create](environment.create.md) — Create a workspace environment (e.g. production, development, preview) for scoping secrets and sandbox config
-- [environment.delete](environment.delete.md) — Soft-delete a workspace environment; the default cannot be deleted until another is promoted
-- [environment.get](environment.get.md) — Fetch a single workspace environment by its public id
-- [environment.list](environment.list.md) — List the environments configured in the active workspace
-- [environment.set_default](environment.set_default.md) — Promote an environment to the workspace default via an atomic swap
-- [environment.update](environment.update.md) — Update a workspace environment's name, slug, description, or active state; the default cannot be deactivated
-
-## Evidence (1)
-
-- [evidence.disclosure_grain.set](evidence.disclosure_grain.set.md) — Set the workspace's witness disclosure grain, from L0 (the worker hears only pass or fail) to L3, recorded as a security event
-
-## Finding (4)
-
-- [finding.dismiss](finding.dismiss.md) — Dismiss an open finding without applying its fix (org Owner or Admin); later passes cite only runs that start after the dismissal
-- [finding.evidence.get](finding.evidence.get.md) — Get the evidence behind one finding: the calls it cites and how many the counterfactual covers, the tokens and money they cost against the counterfactual, and the cited runs with the largest saving
-- [finding.fix.record](finding.fix.record.md) — Record that the fix an open finding names was applied (org Owner or Admin): the finding becomes applied with the request id of this call, and later passes cite only runs that start after it
-- [finding.list](finding.list.md) — List this workspace's costed findings ranked by the money at stake, each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend and that saving annualised
-
-## Graph (6)
-
-- [graph.node.get](graph.node.get.md) — Retrieve a single `KnowledgeNode` from the workspace graph by its `publicId`
-- [graph.node.list](graph.node.list.md) — Paginated browse of all nodes in the workspace graph; backs the graph explorer UI
-- [graph.node.search](graph.node.search.md) — Text search over the workspace graph, matching `displayName`/`description` with optional label filter
-- [graph.node_label.get](graph.node_label.get.md) — Read a node's full label set; read-only companion to label add/remove
-- [graph.search](graph.search.md) — Natural-language semantic search across eligible shared workspace knowledge, ranked by vector similarity
-- [graph.stats](graph.stats.md) — Workspace graph statistics: node count, edge count, inferred edge count, breakdown by type
-
-## Iam (4)
-
-- [iam.role.create](iam.role.create.md) — `create_role`: a custom role from the permission catalogue; one allow grant per capability, within the granter's ceiling (ADR-063)
-- [iam.role.delete](iam.role.delete.md) — `delete_role`: remove a custom role nobody holds
-- [iam.role.grants.set](iam.role.grants.set.md) — `set_role_grants`: replace a custom role's grants with a permission set
-- [iam.role.list](iam.role.list.md) — List the org's IAM roles with grants, catalogue permissions, origin and holder counts, the catalogue and whether roles are enforced for the org
-
-## Integration (7)
-
-- [integration.configure](integration.configure.md) — Update plugin instance configuration, filters, and sync cadence
-- [integration.delete](integration.delete.md) — Remove a plugin instance and optionally purge graph data (async)
-- [integration.get](integration.get.md) — Get full details of a single plugin instance including schema
-- [integration.install](integration.install.md) — Install a plugin instance from catalog or custom URL (async)
-- [integration.list](integration.list.md) — Browse installed plugin instances with status and sync metrics
-- [integration.metrics](integration.metrics.md) — Get sync statistics and metrics for a plugin instance
-- [integration.sync](integration.sync.md) — Trigger synchronization of a plugin instance (async)
-
-## Mandate (6)
-
-- [get_mandate](get_mandate.md) — Read one mandate: the grant, remaining authority by measure from the ledger, and the ledger rows newest first
-- [grant_mandate](grant_mandate.md) — Grant an agent bounded, expiring authority for a consequence within limits over the tool's declared measures
-- [list_mandates](list_mandates.md) — List the workspace's mandates with remaining authority by measure, optionally narrowed to one agent or one status
-- [request_mandate](request_mandate.md) — Ask for a mandate on behalf of an agent, recorded as a draft for the accountable role to grant or decline
-- [revoke_mandate](revoke_mandate.md) — Revoke a mandate with a reason; releases every reservation held by a call that has not dispatched
-- [update_mandate_limits](update_mandate_limits.md) — Change an active mandate's limits, targets, approval rule or validity end
-
-## Model (1)
-
-- [model.capability.list](model.capability.list.md) — List the provider capability posture matrix — per vendor, how its prompt cache is engaged (explicit opt-in vs implicit), how its reasoning budget is controlled, how structured output is obtained, and which attachment kinds it accepts
-
-## Notification (2)
-
-- [notification.list](notification.list.md) — List in-app notifications for the calling user, with unread filtering and pagination
-- [notification.mark](notification.mark.md) — Mark a notification as read and/or archived for the calling user
-
-## Onboarding (3)
-
-- [onboarding.advance](onboarding.advance.md) — Move the onboarding gate between the wrap and run steps; the run step completes only on the first frame, so unlocked is never a target
-- [onboarding.first_frame.get](onboarding.first_frame.get.md) — For one registered agent: the host enrolled for it, what that host last reported, and the first frame ingested from it, long-polled for up to waitMs
-- [onboarding.state.get](onboarding.state.get.md) — Where the signed-in person is in the onboarding gate: the current step, the gate's workspace, the first frame once one arrived, and the provisional window until a main repository is bound
-
-## Ontology (2)
-
-- [ontology.neighbors](ontology.neighbors.md) — The one-hop neighborhood of a node — a focused traversal primitive pairing with `ontology.query`
-- [ontology.query](ontology.query.md) — Typed multi-hop traversal over the knowledge graph via a governed, non-Cypher shape
-
-## Org (11)
-
-- [org.create](org.create.md) — Create a new organization with a globally-unique slug and attach the caller as first member
-- [get_data_plane](get_data_plane.md) — Read the organisation's data-plane binding for one store (postgres/neo4j/clickhouse): shared or dedicated, health status, endpoint host and database name — never a credential
-- [set_data_plane](set_data_plane.md) — Bind one of the organisation's stores to a dedicated customer-controlled endpoint, or return it to the shared platform plane; the config is envelope-encrypted and never readable back
-- [org.list](org.list.md) — List the organizations the authenticated user belongs to, with the caller's role in each; backs the CLI tenant picker
-- [org.member.add](org.member.add.md) — Invite a user to join the org by email; enforces seat limits
-- [org.member.remove](org.member.remove.md) — Permanently remove a member from the org; irreversible action with last-owner block
-- [org.member_invite.accept](org.member_invite.accept.md) — Accept a pending org invitation and provision least-privilege IAM for the user
-- [org.member_invite.decline](org.member_invite.decline.md) — Decline a pending org invitation and free the reserved license seat
-- [org.member_role.change](org.member_role.change.md) — Change a member's org role; blocks demoting the last org owner
-- [org.settings.read](org.settings.read.md) — Read the org's profile settings: name, slug, avatar, website, industry, employee size, type
-- [org.settings.write](org.settings.write.md) — Update the org's profile settings (partial) through the kernel with IAM, metering, and audit
-
-## Plugin (19)
-
-- [plugin.catalog.browse](plugin.catalog.browse.md) — Search and filter the MCP server catalog by text, category, transport, and auth kind
-- [plugin.catalog.get](plugin.catalog.get.md) — Get full detail for one catalog server entry including README, packages, and transport types
-- [plugin.catalog.sync](plugin.catalog.sync.md) — Trigger an immediate sync of the MCP registry catalog for the workspace, refreshing cached server listings from the upstream registry
-- [plugin.credential.reauth](plugin.credential.reauth.md) — Initiate or complete an OAuth re-authentication flow for an expired plugin token
-- [plugin.credential.revoke](plugin.credential.revoke.md) — Revoke and delete the stored credential for an installed plugin so the workspace must re-authenticate
-- [plugin.credential.set_secret](plugin.credential.set_secret.md) — Store or update an encrypted credential (API key or bearer token) for a plugin server
-- [plugin.org.install](plugin.org.install.md) — Install a catalog or custom server to the org allow-list; disabled by default
-- [plugin.org.install_bulk](plugin.org.install_bulk.md) — Install multiple catalog or custom plugin servers to the org allow-list in one request
-- [plugin.org.list](plugin.org.list.md) — List installed plugins and denylisted server names for the org with enabled/disabled status
-- [plugin.org.uninstall](plugin.org.uninstall.md) — Soft-delete a plugin listing from the org allow-list and remove dependent workspace installs
-- [plugin.registry.add](plugin.registry.add.md) — Add a custom MCP registry source for the org; triggers automatic catalog sync
-- [plugin.registry.list](plugin.registry.list.md) — List MCP registries available to the org including the default seed registry
-- [plugin.registry.remove](plugin.registry.remove.md) — Remove an org-added MCP registry source; the default registry cannot be removed
-- [plugin.schema.get](plugin.schema.get.md) — Fetch typed config schema for a connector plugin
-- [plugin.schema.validate](plugin.schema.validate.md) — Validate a config object against a plugin schema
-- [plugin.set_enabled](plugin.set_enabled.md) — Enable/disable a plugin listing; scope='org' toggles the org listing flag, scope='workspace' upserts/disables the workspace mcp_servers row
-- [plugin.settings.get_auth_alerts](plugin.settings.get_auth_alerts.md) — Read the org's MCP auth-alert notification setting (roles + email toggle), with the documented default when unset
-- [plugin.settings.set_auth_alerts](plugin.settings.set_auth_alerts.md) — Configure re-authentication alert preferences for the org
-- [plugin.version.list](plugin.version.list.md) — List version history with changelog and breaking-change flags
-
-## Privacy (2)
-
-- [privacy.data.erase](privacy.data.erase.md) — Request erasure of personal or organizational data under GDPR Article 17
-- [privacy.data.export](privacy.data.export.md) — Request a machine-readable ZIP archive of data under GDPR Article 20
-- [privacy.data.export.status](privacy.data.export.status.md): read a queued export's status and, once ready, fetch the archive
-
-## Prompt (2)
-
-- [prompt.settings.read](prompt.settings.read.md) — Read the workspace prompt configuration including appended instructions and auto-improve toggle
-- [prompt.settings.write](prompt.settings.write.md) — Update the workspace prompt configuration (partial update)
-
-## Reference (2)
-
-- [reference.cite](reference.cite.md) — Record @-mention citations of knowledge-graph nodes within a chat execution, creating :Citation lineage and incrementing citation counters
-- [reference.search](reference.search.md) — Tenant-scoped autocomplete search across every referenceable platform object (repositories, branches, files, directories, agents, skills, tools, MCP servers, capabilities, nodes, edges) for the chat @-mention picker
-
-## Repo (8)
-
-- [repo.ci.status](repo.ci.status.md) — Read CI check-run and commit-status results for a ref in a GitHub repository
-- [repo.configure](repo.configure.md) — Set repo-specific config: filters, inference, cadence, field mappings
-- [repo.metrics](repo.metrics.md) — Get sync statistics and metrics for a repository connection
-- [repo.pause](repo.pause.md) — Pause automatic syncing for a repository connection
-- [repo.pr.diff](repo.pr.diff.md) — Read the per-file unified-diff patches for a GitHub pull request
-- [repo.pr.get](repo.pr.get.md) — Read a GitHub pull request's summary, diff stats, comments, and CI status
-- [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
-- [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
-
-## Repository (8)
-
-- [repository.installation.attach](repository.installation.attach.md) — Make one of the workspace's reachable GitHub App installations the installation it acts through
-- [repository.installation.candidates](repository.installation.candidates.md) — The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept
-- [repository.installation.list](repository.installation.list.md) — The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept
-- [repository.link](repository.link.md) — Link a GitHub repository the workspace's GitHub App installation reaches as a linked (not main) repository; another workspace's main repository is refused
-- [repository.list](repository.list.md) — The workspace's repositories, its one main repository and every linked one, with each one's role, approved default ref and whether its connection is live
-- [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
-- [repository.main.get](repository.main.get.md) — The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches
-- [repository.unlink](repository.unlink.md) — Unlink a linked repository from the workspace by its binding id; the main repository is refused and binding history is kept
-
-## Router (4)
-
-- [router.decision.preview](router.decision.preview.md) — Dry-run the market router for a prompt: task class, observed outcomes, and the full decision (chosen model + candidate audit trail); changes nothing
-- [router.policy.get](router.policy.get.md) — Read the effective market-router policy for the current scope (mode, threshold, samples, window, escalation) plus its provenance (workspace / org / default)
-- [router.policy.set](router.policy.set.md) — Set the market-router policy for this org or workspace (partial update) — mode, thresholds, and tier-escalation; changes model spend behavior, Owner/Admin only
-- [router.stats.list](router.stats.list.md) — List observed outcomes per (task class, model) — samples, verified rate, cost, latency — plus the cheapest model currently clearing the bar per class
-
-## Run (12)
-
-- [run.bisect](run.bisect.md) — Align two runs frame by frame on each frame's kind and call identity and answer the first sequence at which they diverge, with both keys there; null when they agree throughout
-- [run.chain.get](run.chain.get.md) — Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached
-- [run.cost](run.cost.md) — Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model and per-tool breakdown; null until the rollup has rebuilt the run from its frames
-- [run.export](run.export.md) — Queue a signed, offline-verifiable evidence bundle for one sealed run: frame envelopes as NDJSON, the Merkle root, an attestation, the verifying key id and a verifier script
-- [run.fork](run.fork.md) — Mint a new attempt of an evidence-ledger run that replays the recording up to a frame and runs live from there; refused unless the seal recorded grade fork and every frame before the branch point kept its body
-- [run.frame_body.get](run.frame_body.get.md) — Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only
-- [run.get](run.get.md) — Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame
-- [run.list](run.list.md) — List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded
-- [run.proof.get](run.proof.get.md) — Read one run's proof record: every witness that reported on it with each attempt's target and head results, fingerprints and attestation, the run's verdict, the cost of each witness run, and the workspace's disclosure grain
-- [run.recent.list](run.recent.list.md) — The newest runs of this workspace for the command menu: id, agent key, status and start time, the in-app agent's own turns excluded
-- [run.summarize](run.summarize.md) — Queue a fast-tier model to read a sealed run's transcript and write its generated name and summary; refused on a live run and on a digest_only recording
-- [run.transcript.get](run.transcript.get.md) — Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost
-
-## Schema (23)
-
-- [schema.chat](schema.chat.md) — AI iterative builder turn: takes conversation and draft, returns assistant message and proposed mutations
-- [schema.delete](schema.delete.md) — Drop an entire named schema from the draft, removing its labels, relationship types, and properties
-- [schema.export](schema.export.md) — Export a schema version as a downloadable ZIP grouped by schema
-- [schema.label.delete](schema.label.delete.md) — Remove a node label and all its properties from the current draft
-- [schema.label.upsert](schema.label.upsert.md) — Create or update a node label on a schema within the current draft version
-- [schema.list](schema.list.md) — List workspace schemas with per-schema enabled state (lightweight listing without full tree)
-- [schema.property.delete](schema.property.delete.md) — Remove a property from the current draft
-- [schema.property.upsert](schema.property.upsert.md) — Create or update a property on a node label or relationship type in the current draft
-- [schema.recommend](schema.recommend.md) — AI-generated schema recommendation based on existing graph structure and observed labels
-- [schema.reconcile.dispatch](schema.reconcile.dispatch.md) — Dispatch an async job to re-label existing graph nodes and relationships against the pinned schema version
-- [schema.reconcile.status](schema.reconcile.status.md) — Poll the progress and outcome of a schema reconciliation job
-- [schema.registry.config](schema.registry.config.md) — Set enforcement mode and conformance floor for the workspace schema registry
-- [schema.registry.get](schema.registry.get.md) — Resolve the workspace registry: pinned version, enforcement mode, and the full label/relationship/property tree
-- [schema.relationship.delete](schema.relationship.delete.md) — Remove a relationship type from the current draft
-- [schema.relationship.upsert](schema.relationship.upsert.md) — Create or update a relationship type on a schema within the current draft version
-- [schema.setup](schema.setup.md) — Interactive LLM-assisted schema setup wizard: recommend → Q&A → apply → activate
-- [schema.toggle](schema.toggle.md) — Enable/disable a schema; activation auto-publishes the draft and pins the resulting version
-- [schema.validate.node](schema.validate.node.md) — Validate a node's properties against the workspace schema; returns conformance score and field errors
-- [schema.validate.relationship](schema.validate.relationship.md) — Validate a relationship's type and properties against the workspace schema
-- [schema.version.create](schema.version.create.md) — Freeze the current draft into an immutable published version and open a fresh draft
-- [schema.version.diff](schema.version.diff.md) — Structural diff of two schema versions: added/removed/changed schemas, labels, types, and properties
-- [schema.version.list](schema.version.list.md) — List all schema versions with status, label, and change summary
-- [schema.version.pin](schema.version.pin.md) — Pin the workspace to a specific published schema version
-
-## Shell (1)
-
-- [shell.nav_counts.get](shell.nav_counts.get.md) — The sidebar's counts for this workspace: pending approvals, open proposals and open critical incidents, each null when its store does not exist
-
-## Skill (1)
-
-- [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
-
-## Spend (4)
-
-- [spend.drill](spend.drill.md) — Read one operator, agent or tool's spend over a trailing window in this workspace: the daily series, the average per call and per run, its share of the workspace's spend, and the tools its runs called, every figure in micros with its basis
-- [spend.get](spend.get.md) — Read this workspace's spend over a day range, rolled up by operator, agent, model, tool or task from the cost rollup, with every figure in micros and the basis that says who observed it, plus the period total with proven and accepted spend kept apart
-- [spend.statement.export](spend.statement.export.md) — Export this workspace's monthly spend statement as CSV: one line per operator, agent, model, tool and task with runs, calls, cost in micros and in cents rounded half to even once, the basis, and proven and accepted spend kept apart
-- [spend.waste](spend.waste.md) — List this workspace's wasted spend over a day range by cause, each cause a pattern read off the cost rollup with the runs that prove it: the total wasted with its basis, its share of spend, and the largest cause
-
-## Secret (8)
-
-- [secret.export](secret.export.md) — Export an environment's resolved secret set as decrypted key/value pairs and .env text; Owner/Admin only, every export is audited (api, mcp)
-- [secret.import_env](secret.import_env.md) — Parse pasted .env text and preview/commit key upserts + value sets for the defaults or a chosen environment
-- [secret.key.delete](secret.key.delete.md) — Soft-delete a vault secret key and hard-remove all of its per-environment overrides
-- [secret.key.list](secret.key.list.md) — List vault secret keys with masked metadata; never returns plaintext values
-- [secret.key.upsert](secret.key.upsert.md) — Create or update a vault secret key at the workspace root; sensitive keys are envelope-encrypted, with an optional default value
-- [secret.reveal](secret.reveal.md) — Reveal a single secret's plaintext value for an environment; Owner/Admin only, every reveal is audited (api, mcp)
-- [secret.value.set](secret.value.set.md) — Set a secret's value override for a specific environment, encrypted or plaintext per the key's sensitive flag
-- [secret.value.unset](secret.value.unset.md) — Remove a secret's per-environment override so it falls back to the key's default value
-
-## System (1)
-
-- [system.install.instructions](system.install.instructions.md) — Return ordered, copy-ready MCP/CLI installation instructions per client
-
-## Tacho (13)
-
-- [tacho.bundle.get](tacho.bundle.get.md) — The signed policy bundle a host caches and evaluates locally (docs/specs/tacho/spec
-- [tacho.command.dispatch](tacho.command.dispatch.md) — `dispatch_command`: queue a pause, resume, cancel, steer or message for one run, an agent's live runs or every live run in the workspace, with a delivery mode on steer and message resolved per recipient
-- [tacho.command.fetch](tacho.command.fetch.md) — `fetch_commands`: the idle-host control poll; acknowledge in the §7.4 status vocabulary and receive queued commands with their modes and the control envelope
-- [tacho.command.list](tacho.command.list.md) — `list_commands`: the delivery report for one run, newest first, with the status, the requested and achieved delivery mode, and the frame an applied command landed on
-- [tacho.enrollment.create](tacho.enrollment.create.md) — Enrol a machine as a Tacho host (docs/specs/tacho/spec
-- [tacho.enrollment.revoke](tacho.enrollment.revoke.md) — Revoke a Tacho host
-- [tacho.enrollment_token.create](tacho.enrollment_token.create.md) — Mint the single-use enrollment token a machine presents to enroll_host to become the named agent's host; shown once, expires unused after its TTL
-- [tacho.events.ingest](tacho.events.ingest.md) — Ingest a batch of hash-chained tacho/1
-- [tacho.host.enroll](tacho.host.enroll.md) — Enrol this machine as a registered agent's host by presenting a single-use enrollment token: mint its scoped API key, signed enrollment and initial policy bundle
-- [tacho.host.list](tacho.host.list.md) — List the machines enrolled as Tacho hosts in this workspace, newest first, with status, mode, harness and version facts, liveness (last seen, last ingest, hooks and OpenTelemetry health, spool depth), and counters (sessions, unobserved sessions, open incidents)
-- [tacho.incident.list](tacho.incident.list.md) — List the workspace's tamper and integrity incidents, newest first, cursor-paged, optionally narrowed to one agent or to open incidents
-- [tacho.session.get](tacho.session.get.md) — One session's flight-recorder index (docs/specs/tacho/data-model
-- [tacho.session.list](tacho.session.list.md) — List Tacho sessions in this workspace, newest first
-
-## Telemetry (2)
-
-- [telemetry.error.cluster](telemetry.error.cluster.md) — Cluster recent captured errors by fingerprint to see which error classes are recurring and how often across the org — the triage overview
-- [telemetry.stella.ingest](telemetry.stella.ingest.md) — Ingest an authenticated, content-free batch of Stella operational execution rollups for an explicitly enrolled Enterprise workspace
-
-## Tool (10)
-
-- [tool.declaration.list](tool.declaration.list.md) — List the tool declarations registered in the active workspace with their pinned version facts
-- [tool.declaration.publish](tool.declaration.publish.md) — Publish a tool declaration into the workspace agent-asset registry, versioned and idempotent
-- [tool.version.list](tool.version.list.md) — List the workspace registry's active tool versions with classification, schema origin and digest, the kill switch that stops each one today, and 30-day calls; cursor-paged, filterable by consequence tag
-- [tool.classification.set](tool.classification.set.md) — Set a tool version's safety classification (risk grade, side-effect class, egress class, consequence tags, measures, data classes), recording who and why
-- [tool.import](tool.import.md) — Import a registered MCP server's pinned tools into the registry, or publish declarations against it; one immutable version per changed manifest
-- [credential.grant.list](credential.grant.list.md) — List the credential broker's grants: every credential put to use for a tool server on behalf of a run, with scope, TTL and status; never a secret
-- [kill_switch.set](kill_switch.set.md) — Flip a kill switch on or off at any level of spec §6.11; bumps the deny generation in the same transaction; a security event
-- [kill_switch.list](kill_switch.list.md) — List the kill switches reaching this workspace with the current deny generation
-- [tools.load](tools.load.md) — Return the full definitions of capabilities the in-app agent may call, by name; a name outside that set is reported as unknown
-- [tools.search](tools.search.md) — Rank-search the capabilities the in-app agent may call and the workspace's runs, agents and pending approvals; at most eight rows with ids
-
-## User (4)
-
-- [get_workspace_user_preferences](get_workspace_user_preferences.md) — Read the calling user's per-workspace coding-agent defaults: default repo connection/slug, default environment, and whether the one-time repo-default prompt has been shown
-- [update_workspace_user_preferences](update_workspace_user_preferences.md) — Update the calling user's per-workspace coding-agent defaults (partial update); app-only surface
-- [user.preferences.read](user.preferences.read.md) — Read the calling user's UI and model preferences
-- [user.preferences.set](user.preferences.set.md) — Set the calling user's account preferences (locale, theme, timezone) as a partial write and return the whole set
-- [user.profile.update](user.profile.update.md) — Update the calling user's own display name and avatar
-
-## Workspace (11)
-
-- [workspace.budget_policy.read](workspace.budget_policy.read.md) — Read the workspace's governed per-turn dollar budget and enforcement mode
-- [workspace.budget_policy.write](workspace.budget_policy.write.md) — Set the workspace's governed per-turn dollar budget (partial update); Owner/Admin only
-- [workspace.archive](workspace.archive.md) — `archive_workspace`: freeze a workspace; it leaves the lists, its slug stays taken, its records stay readable
-- [workspace.create](workspace.create.md) — Create a workspace in the caller's organization together with its required main repository; refused for a taken slug, a repository the org's GitHub authorization cannot reach, or one another workspace already steers by
-- [workspace.invite.send](workspace.invite.send.md) — Send a workspace invitation to an email address with 7-day expiry
-- [workspace.list](workspace.list.md) — List the workspaces inside an organization the caller belongs to; backs the CLI workspace picker in oxagen init
-- [workspace.member.list](workspace.member.list.md) — `list_members`: the org's members and pending invitations, or a workspace's members
-- [workspace.model_settings.read](workspace.model_settings.read.md) — Read the workspace-level model defaults for text/image/video tiers
-- [workspace.model_settings.write](workspace.model_settings.write.md) — Update the workspace-level model defaults (partial update); Owner/Admin only
-- [workspace.settings.read](workspace.settings.read.md) — Read the workspace's general settings: name, slug, description
-- [workspace.settings.write](workspace.settings.write.md) — Update the workspace's general settings (partial) through the kernel with IAM, metering, and audit
-
-## Partner connectors
-
-Oxagen supports both built-in connectors (GitHub, Google Drive, Slack, Linear)
-and partner-authored connectors loaded from a hosted `schema.yaml` URL.
-
-Partner schemas follow the same `ConnectorPlugin` format as built-in schemas.
-The platform fetches, validates, and caches partner schemas transparently —
-the `plugin.schema.get` and `integration.install` capabilities handle both
-paths without separate APIs.
-
-| Resource                                                      | Description                                                                                                                                         |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Connector Authoring Guide](../guides/connector-authoring.md) | How to author a `schema.yaml` for a partner connector — schema sections, field widgets, validation patterns, AI prompt best practices, and testing. |
-| [Partner Registration](../guides/partner-registration.md)     | Registration workflow, marketplace listing requirements, security checklist, and support SLA.                                                       |
-| `packages/ingestion/src/connectors/example-saas/schema.yaml`  | Fully annotated reference schema demonstrating every section and field type.                                                                        |
-
-To install a partner connector by schema URL:
-
-```bash
-oxagen integrations install \
-  --plugin-id my-platform \
-  --schema-url https://cdn.mycompany.com/oxagen/schema.yaml \
-  --display-name "My Platform" \
-  --config '{"accountId":"acme"}'
-```
+Find a capability by its registered name. Pass that name to `invoke()` or use
+it as the MCP tool name when the contract declares the MCP surface. ADR-025
+retired dotted capability names without aliases. Dotted filenames remain in
+the repository while file paths are realigned.
+
+This index lists contract declarations, including internal contracts and
+preserved implementations. A declaration does not prove that a route, handler,
+or UI is wired into the current application. Check the contract,
+[`packages/handlers/src/register.ts`](../../packages/handlers/src/register.ts),
+and the surface bootstrap before using an entry.
+[`DEREGISTERED.md`](../../DEREGISTERED.md) records retained features and the
+scope decisions behind them.
+
+Each row links to its reference page where one exists and to the source
+contract. The contract defines the input, output, and declared surfaces.
+`none` means no public surface is declared.
+
+For graph reads available to the in-app agent, see
+[the ontology read set](_ontology-read-set.md).
+
+## Updating this reference
+
+When changing a contract, update its page and the affected row below. Run
+`node tools/scripts/check-capability-docs.mjs` from the repository root after
+refreshing the manifest with `pnpm check:manifest`. That check compares surface
+lists for matching contract and documentation filenames. Inspect pages named
+after the registered name separately when their contract uses a dotted stem.
+
+## Agent
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
+| [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
+| [bind_agent_environment](agent.environment.bind.md) | [agent.environment.bind.ts](../../packages/oxagen/src/contracts/agent.environment.bind.ts) | api, mcp, agent |
+| [cite_memory](agent.memory.cite.md) | [agent.memory.cite.ts](../../packages/oxagen/src/contracts/agent.memory.cite.ts) | api, mcp, agent |
+| [commit_agent_definition](agent.definition.commit.md) | [agent.definition.commit.ts](../../packages/oxagen/src/contracts/agent.definition.commit.ts) | api |
+| [commit_memory_import](agent.memory_import.commit.md) | [agent.memory_import.commit.ts](../../packages/oxagen/src/contracts/agent.memory_import.commit.ts) | api, mcp, agent |
+| [create_agent_def](agent.definition.create.md) | [agent.definition.create.ts](../../packages/oxagen/src/contracts/agent.definition.create.ts) | api, mcp, agent |
+| [debug_execution](agent.debug.trace.md) | [agent.debug.trace.ts](../../packages/oxagen/src/contracts/agent.debug.trace.ts) | api, mcp, agent |
+| [delete_agent_def](agent.definition.delete.md) | [agent.definition.delete.ts](../../packages/oxagen/src/contracts/agent.definition.delete.ts) | api, mcp, agent |
+| [delete_mcp_server](agent.mcp.delete.md) | [agent.mcp.delete.ts](../../packages/oxagen/src/contracts/agent.mcp.delete.ts) | api, mcp |
+| [delete_memory](agent.memory.delete.md) | [agent.memory.delete.ts](../../packages/oxagen/src/contracts/agent.memory.delete.ts) | api, mcp, agent |
+| [demote_memory](agent.memory.demote.md) | [agent.memory.demote.ts](../../packages/oxagen/src/contracts/agent.memory.demote.ts) | api, mcp, agent |
+| [deploy_agent](agent.deploy.md) | [agent.deploy.ts](../../packages/oxagen/src/contracts/agent.deploy.ts) | api, mcp, agent |
+| [dismiss_memory_promotion](agent.memory_promotion.dismiss.md) | [agent.memory_promotion.dismiss.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.dismiss.ts) | api, mcp, agent |
+| [get_agent](agent.get.md) | [agent.get.ts](../../packages/oxagen/src/contracts/agent.get.ts) | api, mcp, cli |
+| [get_agent_def](agent.definition.get.md) | [agent.definition.get.ts](../../packages/oxagen/src/contracts/agent.definition.get.ts) | api, mcp, agent |
+| [get_agent_role](agent.role.get.md) | [agent.role.get.ts](../../packages/oxagen/src/contracts/agent.role.get.ts) | api, mcp, agent |
+| [get_agent_toolbelt](agent.toolbelt.get.md) | [agent.toolbelt.get.ts](../../packages/oxagen/src/contracts/agent.toolbelt.get.ts) | api, mcp |
+| [get_citation_stats](agent.memory_citation.stats.md) | [agent.memory_citation.stats.ts](../../packages/oxagen/src/contracts/agent.memory_citation.stats.ts) | api, mcp, agent |
+| [get_execution_trace](agent.trace.get.md) | [agent.trace.get.ts](../../packages/oxagen/src/contracts/agent.trace.get.ts) | api, mcp, agent |
+| [get_memory_policy](agent.memory_policy.read.md) | [agent.memory_policy.read.ts](../../packages/oxagen/src/contracts/agent.memory_policy.read.ts) | api, mcp, agent |
+| [list_agent_defs](agent.definition.list.md) | [agent.definition.list.ts](../../packages/oxagen/src/contracts/agent.definition.list.ts) | api, mcp, agent |
+| [list_agent_environments](agent.environment.list.md) | [agent.environment.list.ts](../../packages/oxagen/src/contracts/agent.environment.list.ts) | api, mcp, agent |
+| [list_agent_roles](agent.role.list.md) | [agent.role.list.ts](../../packages/oxagen/src/contracts/agent.role.list.ts) | api, mcp, agent |
+| [list_agent_tools](agent.tool.list.md) | [agent.tool.list.ts](../../packages/oxagen/src/contracts/agent.tool.list.ts) | api, mcp, agent |
+| [list_agents](agent.list.md) | [agent.list.ts](../../packages/oxagen/src/contracts/agent.list.ts) | api, mcp |
+| [list_approvals](agent.approval.list.md) | [agent.approval.list.ts](../../packages/oxagen/src/contracts/agent.approval.list.ts) | api, mcp |
+| [list_executions](agent.execution.list.md) | [agent.execution.list.ts](../../packages/oxagen/src/contracts/agent.execution.list.ts) | api, mcp, agent |
+| [list_mcp_consents](agent.mcp_consent.list.md) | [agent.mcp_consent.list.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.list.ts) | api, mcp, agent |
+| [list_mcp_servers](agent.mcp.list.md) | [agent.mcp.list.ts](../../packages/oxagen/src/contracts/agent.mcp.list.ts) | api, mcp, agent |
+| [list_memories](agent.memory.list.md) | [agent.memory.list.ts](../../packages/oxagen/src/contracts/agent.memory.list.ts) | api, mcp, agent |
+| [list_memory_citations](agent.memory_citation.list.md) | [agent.memory_citation.list.ts](../../packages/oxagen/src/contracts/agent.memory_citation.list.ts) | api, mcp, agent |
+| [list_memory_promotions](agent.memory_promotion.list.md) | [agent.memory_promotion.list.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.list.ts) | api, mcp, agent |
+| [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | api, mcp, agent |
+| [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
+| [publish_agent_def](agent.definition.publish.md) | [agent.definition.publish.ts](../../packages/oxagen/src/contracts/agent.definition.publish.ts) | api, mcp, agent |
+| [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
+| [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
+| [register_agent](agent.register.md) | [agent.register.ts](../../packages/oxagen/src/contracts/agent.register.ts) | api, cli |
+| [register_mcp_server](agent.mcp.register.md) | [agent.mcp.register.ts](../../packages/oxagen/src/contracts/agent.mcp.register.ts) | api, mcp |
+| [resolve_approval](agent.approval.resolve.md) | [agent.approval.resolve.ts](../../packages/oxagen/src/contracts/agent.approval.resolve.ts) | api, mcp, agent |
+| [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp, agent |
+| `resolve_mcp_servers` | [agent.mcp.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp.resolve.ts) | api |
+| [retire_agent](agent.retire.md) | [agent.retire.ts](../../packages/oxagen/src/contracts/agent.retire.ts) | api |
+| [revise_agent_def](revise_agent_def.md) | [agent.definition.revise.ts](../../packages/oxagen/src/contracts/agent.definition.revise.ts) | api, mcp, agent |
+| [revoke_agent_role](agent.role.revoke.md) | [agent.role.revoke.ts](../../packages/oxagen/src/contracts/agent.role.revoke.ts) | api, mcp, agent |
+| [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
+| [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
+| [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
+| [suggest_agent_def](agent.definition.suggest.md) | [agent.definition.suggest.ts](../../packages/oxagen/src/contracts/agent.definition.suggest.ts) | api, mcp, agent |
+| [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |
+| [summarize_agent_def](agent.definition.summarize.md) | [agent.definition.summarize.ts](../../packages/oxagen/src/contracts/agent.definition.summarize.ts) | api, mcp, agent |
+| [suspend_agent](agent.suspend.md) | [agent.suspend.ts](../../packages/oxagen/src/contracts/agent.suspend.ts) | api |
+| [unbind_agent_environment](agent.environment.unbind.md) | [agent.environment.unbind.ts](../../packages/oxagen/src/contracts/agent.environment.unbind.ts) | api, mcp, agent |
+| [update_agent_def](agent.definition.update.md) | [agent.definition.update.ts](../../packages/oxagen/src/contracts/agent.definition.update.ts) | api, mcp, agent |
+| [update_memory](agent.memory.update.md) | [agent.memory.update.ts](../../packages/oxagen/src/contracts/agent.memory.update.ts) | api, mcp, agent |
+| [update_memory_policy](agent.memory_policy.write.md) | [agent.memory_policy.write.ts](../../packages/oxagen/src/contracts/agent.memory_policy.write.ts) | api, mcp, agent |
+| [write_memory](agent.memory.write.md) | [agent.memory.write.ts](../../packages/oxagen/src/contracts/agent.memory.write.ts) | api, mcp, agent |
+
+## Api key
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_api_key](api.key.create.md) | [api.key.create.ts](../../packages/oxagen/src/contracts/api.key.create.ts) | api, mcp, agent |
+| [list_api_keys](api.key.list.md) | [api.key.list.ts](../../packages/oxagen/src/contracts/api.key.list.ts) | api, mcp |
+| [revoke_api_key](api.key.revoke.md) | [api.key.revoke.ts](../../packages/oxagen/src/contracts/api.key.revoke.ts) | api, mcp, agent |
+| [rotate_api_key](api.key.rotate.md) | [api.key.rotate.ts](../../packages/oxagen/src/contracts/api.key.rotate.ts) | api, mcp, agent |
+
+## Approval rule
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [delete_approval_rule](delete_approval_rule.md) | [approval_rule.delete.ts](../../packages/oxagen/src/contracts/approval_rule.delete.ts) | api, mcp, agent |
+| [get_auto_eligibility](get_auto_eligibility.md) | [approval.auto_eligibility.get.ts](../../packages/oxagen/src/contracts/approval.auto_eligibility.get.ts) | api, mcp |
+| [list_approval_rules](list_approval_rules.md) | [approval_rule.list.ts](../../packages/oxagen/src/contracts/approval_rule.list.ts) | api, mcp |
+| [set_approval_rule_enabled](set_approval_rule_enabled.md) | [approval_rule.enabled.set.ts](../../packages/oxagen/src/contracts/approval_rule.enabled.set.ts) | api, mcp, agent |
+| [set_approval_rules](set_approval_rules.md) | [approval_rule.set.ts](../../packages/oxagen/src/contracts/approval_rule.set.ts) | api, mcp, agent |
+
+## Asset
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [upload_asset](asset.upload.md) | [asset.upload.ts](../../packages/oxagen/src/contracts/asset.upload.ts) | api, mcp, agent |
+
+## Assistant
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [ask_assistant](assistant.ask.md) | [assistant.ask.ts](../../packages/oxagen/src/contracts/assistant.ask.ts) | api, mcp |
+| [get_assistant_engine](assistant.engine.get.md) | [assistant.engine.get.ts](../../packages/oxagen/src/contracts/assistant.engine.get.ts) | api, mcp |
+
+## Audit
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [export_audit_events](audit.events.export.md) | [audit.events.export.ts](../../packages/oxagen/src/contracts/audit.events.export.ts) | api, mcp |
+| [query_audit_log](audit.log.query.md) | [audit.log.query.ts](../../packages/oxagen/src/contracts/audit.log.query.ts) | api, mcp, agent, cli |
+
+## Auth
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [authorize_cli](auth.cli.authorize.md) | [auth.cli.authorize.ts](../../packages/oxagen/src/contracts/auth.cli.authorize.ts) | none |
+
+## Billing
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_contract_rate](billing.contract_rate.get.md) | [billing.contract_rate.get.ts](../../packages/oxagen/src/contracts/billing.contract_rate.get.ts) | api, mcp, agent |
+| [get_evidence_retention](billing.evidence_retention.md) | [billing.evidence_retention.ts](../../packages/oxagen/src/contracts/billing.evidence_retention.ts) | api, mcp, agent |
+| [get_gau_bucket](billing.gau_bucket.get.md) | [billing.gau_bucket.get.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.get.ts) | api, mcp |
+| [get_rate_card](billing.action_rate_card.md) | [billing.action_rate_card.ts](../../packages/oxagen/src/contracts/billing.action_rate_card.ts) | api, mcp, agent |
+| [get_spend_budget](billing.budget.get.md) | [billing.budget.get.ts](../../packages/oxagen/src/contracts/billing.budget.get.ts) | api, mcp, agent, cli |
+| [get_subscription](billing.subscription.read.md) | [billing.subscription.read.ts](../../packages/oxagen/src/contracts/billing.subscription.read.ts) | api, mcp, agent |
+| [get_usage_breakdown](billing.usage.breakdown.md) | [billing.usage.breakdown.ts](../../packages/oxagen/src/contracts/billing.usage.breakdown.ts) | api, mcp, agent |
+| [list_invoices](billing.invoice.list.md) | [billing.invoice.list.ts](../../packages/oxagen/src/contracts/billing.invoice.list.ts) | api, mcp |
+| [preview_action_cost](billing.action_estimate.md) | [billing.action_estimate.ts](../../packages/oxagen/src/contracts/billing.action_estimate.ts) | api, mcp, agent |
+| [purchase_credits](billing.credits.purchase.md) | [billing.credits.purchase.ts](../../packages/oxagen/src/contracts/billing.credits.purchase.ts) | api, mcp, agent |
+| [purchase_gau_bucket](billing.gau_bucket.purchase.md) | [billing.gau_bucket.purchase.ts](../../packages/oxagen/src/contracts/billing.gau_bucket.purchase.ts) | api, mcp, agent |
+| [set_auto_topup](billing.auto_topup.set.md) | [billing.auto_topup.set.ts](../../packages/oxagen/src/contracts/billing.auto_topup.set.ts) | api, mcp |
+| [set_org_billing_terms](billing.org_terms.set.md) | [billing.org_terms.set.ts](../../packages/oxagen/src/contracts/billing.org_terms.set.ts) | none |
+| [set_spend_budget](billing.budget.set.md) | [billing.budget.set.ts](../../packages/oxagen/src/contracts/billing.budget.set.ts) | api, mcp, agent, cli |
+| [start_subscription_upgrade](billing.subscription_upgrade.start.md) | [billing.subscription_upgrade.start.ts](../../packages/oxagen/src/contracts/billing.subscription_upgrade.start.ts) | api, mcp, agent |
+
+## Capability
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_capability_registry](capability.registry.get.md) | [capability.registry.get.ts](../../packages/oxagen/src/contracts/capability.registry.get.ts) | api, mcp, agent |
+| [list_capability_registry](capability.registry.list.md) | [capability.registry.list.ts](../../packages/oxagen/src/contracts/capability.registry.list.ts) | api, mcp, agent |
+
+## Chat
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_message_execution](chat.message.execution.md) | [chat.message.execution.ts](../../packages/oxagen/src/contracts/chat.message.execution.ts) | api, mcp |
+| [send_message](chat.message.send.md) | [chat.message.send.ts](../../packages/oxagen/src/contracts/chat.message.send.ts) | api, mcp |
+
+## Command
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [search_command_menu](command.menu.search.md) | [command.menu.search.ts](../../packages/oxagen/src/contracts/command.menu.search.ts) | api, agent |
+| [suggest_commands](command.menu.suggest.md) | [command.menu.suggest.ts](../../packages/oxagen/src/contracts/command.menu.suggest.ts) | api, agent |
+
+## Connection
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_connection](connection.create.md) | [connection.create.ts](../../packages/oxagen/src/contracts/connection.create.ts) | api, mcp, agent |
+| [delete_connection](connection.delete.md) | [connection.delete.ts](../../packages/oxagen/src/contracts/connection.delete.ts) | api, mcp, agent |
+| [get_connection](connection.get.md) | [connection.get.ts](../../packages/oxagen/src/contracts/connection.get.ts) | api, mcp, agent |
+| [get_connection_mappings](connection.mappings.get.md) | [connection.mappings.get.ts](../../packages/oxagen/src/contracts/connection.mappings.get.ts) | api, mcp, agent |
+| [list_connections](connection.list.md) | [connection.list.ts](../../packages/oxagen/src/contracts/connection.list.ts) | api, mcp, agent |
+| [pause_connection](connection.pause.md) | [connection.pause.ts](../../packages/oxagen/src/contracts/connection.pause.ts) | api, mcp, agent |
+| [preview_connection](connection.preview.md) | [connection.preview.ts](../../packages/oxagen/src/contracts/connection.preview.ts) | api, mcp, agent |
+| [set_connection_mappings](connection.mappings.set.md) | [connection.mappings.set.ts](../../packages/oxagen/src/contracts/connection.mappings.set.ts) | api, mcp, agent |
+| [suggest_connection_mappings](connection.mappings.suggest.md) | [connection.mappings.suggest.ts](../../packages/oxagen/src/contracts/connection.mappings.suggest.ts) | api, mcp, agent |
+| [update_connection](connection.update.md) | [connection.update.ts](../../packages/oxagen/src/contracts/connection.update.ts) | api, mcp, agent |
+
+## Context
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [append_record](context.records.append.md) | [context.records.append.ts](../../packages/oxagen/src/contracts/context.records.append.ts) | api, mcp, agent |
+| [dismiss_proposal](context.proposal.dismiss.md) | [context.proposal.dismiss.ts](../../packages/oxagen/src/contracts/context.proposal.dismiss.ts) | api |
+| [get_context_pr](context.pr.get.md) | [context.pr.get.ts](../../packages/oxagen/src/contracts/context.pr.get.ts) | api, mcp |
+| [get_record](context.records.get.md) | [context.records.get.ts](../../packages/oxagen/src/contracts/context.records.get.ts) | api, mcp, agent |
+| `get_steering_freshness` | [context.steering.freshness.ts](../../packages/oxagen/src/contracts/context.steering.freshness.ts) | api, mcp, agent |
+| [list_context_records](context.record.list.md) | [context.record.list.ts](../../packages/oxagen/src/contracts/context.record.list.ts) | api, agent, mcp |
+| [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp |
+| [list_records](context.records.list.md) | [context.records.list.ts](../../packages/oxagen/src/contracts/context.records.list.ts) | api, mcp, agent |
+| [merge_context_pr](context.pr.merge.md) | [context.pr.merge.ts](../../packages/oxagen/src/contracts/context.pr.merge.ts) | api |
+| [open_context_pr](context.pr.open.md) | [context.pr.open.ts](../../packages/oxagen/src/contracts/context.pr.open.ts) | api |
+| [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
+| [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |
+| [publish_context_record](context.record.publish.md) | [context.record.publish.ts](../../packages/oxagen/src/contracts/context.record.publish.ts) | api |
+
+## Control
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [dispatch_command](tacho.command.dispatch.md) | [tacho.command.dispatch.ts](../../packages/oxagen/src/contracts/tacho.command.dispatch.ts) | api, mcp |
+| [fetch_commands](tacho.command.fetch.md) | [tacho.command.fetch.ts](../../packages/oxagen/src/contracts/tacho.command.fetch.ts) | api |
+| [list_commands](tacho.command.list.md) | [tacho.command.list.ts](../../packages/oxagen/src/contracts/tacho.command.list.ts) | api, mcp |
+
+## Conversation
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [add_conversation_attachment](conversation.attachment.add.md) | [conversation.attachment.add.ts](../../packages/oxagen/src/contracts/conversation.attachment.add.ts) | api, mcp, agent |
+| [archive_conversation](conversation.archive.md) | [conversation.archive.ts](../../packages/oxagen/src/contracts/conversation.archive.ts) | api, mcp, agent |
+| [delete_conversation](conversation.delete.md) | [conversation.delete.ts](../../packages/oxagen/src/contracts/conversation.delete.ts) | api, mcp, agent |
+| [export_conversation](conversation.export.md) | [conversation.export.ts](../../packages/oxagen/src/contracts/conversation.export.ts) | api, mcp, agent |
+| [list_conversation_files](conversation.files.list.md) | [conversation.files.list.ts](../../packages/oxagen/src/contracts/conversation.files.list.ts) | api, mcp, agent |
+| [list_conversations](conversation.list.md) | [conversation.list.ts](../../packages/oxagen/src/contracts/conversation.list.ts) | api, mcp, agent |
+| [post_conversation_message](conversation.chat.md) | [conversation.chat.ts](../../packages/oxagen/src/contracts/conversation.chat.ts) | api, mcp |
+| [purge_conversations](conversation.purge.md) | [conversation.purge.ts](../../packages/oxagen/src/contracts/conversation.purge.ts) | api, mcp, agent |
+| [rename_conversation](conversation.rename.md) | [conversation.rename.ts](../../packages/oxagen/src/contracts/conversation.rename.ts) | api, mcp, agent |
+
+## Cost
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_price_entries](cost.price_entry.list.md) | [cost.price_entry.list.ts](../../packages/oxagen/src/contracts/cost.price_entry.list.ts) | api, mcp |
+| [list_unpriced_models](cost.unpriced_model.list.md) | [cost.unpriced_model.list.ts](../../packages/oxagen/src/contracts/cost.unpriced_model.list.ts) | api, mcp |
+| [remove_price_entry](cost.price_entry.remove.md) | [cost.price_entry.remove.ts](../../packages/oxagen/src/contracts/cost.price_entry.remove.ts) | api, mcp, cli |
+| [set_price_entry](cost.price_entry.set.md) | [cost.price_entry.set.ts](../../packages/oxagen/src/contracts/cost.price_entry.set.ts) | api, mcp, cli |
+
+## Credential
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_credential_grants](credential.grant.list.md) | [credential.grant.list.ts](../../packages/oxagen/src/contracts/credential.grant.list.ts) | api, mcp |
+
+## Environment
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_environment](environment.create.md) | [environment.create.ts](../../packages/oxagen/src/contracts/environment.create.ts) | api, mcp, agent |
+| [delete_environment](environment.delete.md) | [environment.delete.ts](../../packages/oxagen/src/contracts/environment.delete.ts) | api, mcp, agent |
+| [get_environment](environment.get.md) | [environment.get.ts](../../packages/oxagen/src/contracts/environment.get.ts) | api, mcp, agent |
+| [list_environments](environment.list.md) | [environment.list.ts](../../packages/oxagen/src/contracts/environment.list.ts) | api, mcp, agent |
+| [set_default_environment](environment.set_default.md) | [environment.set_default.ts](../../packages/oxagen/src/contracts/environment.set_default.ts) | api, mcp, agent |
+| [update_environment](environment.update.md) | [environment.update.ts](../../packages/oxagen/src/contracts/environment.update.ts) | api, mcp, agent |
+
+## Evidence
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [set_disclosure_grain](evidence.disclosure_grain.set.md) | [evidence.disclosure_grain.set.ts](../../packages/oxagen/src/contracts/evidence.disclosure_grain.set.ts) | api |
+
+## Graph
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_graph_stats](graph.stats.md) | [graph.stats.ts](../../packages/oxagen/src/contracts/graph.stats.ts) | api, mcp, agent |
+| [get_node](graph.node.get.md) | [graph.node.get.ts](../../packages/oxagen/src/contracts/graph.node.get.ts) | api, mcp, agent, cli |
+| [get_node_labels](graph.node_label.get.md) | [graph.node_label.get.ts](../../packages/oxagen/src/contracts/graph.node_label.get.ts) | agent |
+| [list_nodes](graph.node.list.md) | [graph.node.list.ts](../../packages/oxagen/src/contracts/graph.node.list.ts) | api, mcp, agent |
+| [search_graph](graph.search.md) | [graph.search.ts](../../packages/oxagen/src/contracts/graph.search.ts) | api, mcp, agent, cli |
+| [search_nodes](graph.node.search.md) | [graph.node.search.ts](../../packages/oxagen/src/contracts/graph.node.search.ts) | api, mcp, agent, cli |
+
+## Iam
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_role](iam.role.create.md) | [iam.role.create.ts](../../packages/oxagen/src/contracts/iam.role.create.ts) | api, mcp, agent |
+| [delete_role](iam.role.delete.md) | [iam.role.delete.ts](../../packages/oxagen/src/contracts/iam.role.delete.ts) | api, mcp, agent |
+| [list_iam_roles](iam.role.list.md) | [iam.role.list.ts](../../packages/oxagen/src/contracts/iam.role.list.ts) | api, mcp, agent |
+| [set_role_grants](iam.role.grants.set.md) | [iam.role.grants.set.ts](../../packages/oxagen/src/contracts/iam.role.grants.set.ts) | api, mcp, agent |
+
+## Integration
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [configure_integration](integration.configure.md) | [integration.configure.ts](../../packages/oxagen/src/contracts/integration.configure.ts) | api, mcp, cli, agent |
+| [delete_integration](integration.delete.md) | [integration.delete.ts](../../packages/oxagen/src/contracts/integration.delete.ts) | api, mcp, cli, agent |
+| [get_integration](integration.get.md) | [integration.get.ts](../../packages/oxagen/src/contracts/integration.get.ts) | api, mcp, cli, agent |
+| [get_integration_metrics](integration.metrics.md) | [integration.metrics.ts](../../packages/oxagen/src/contracts/integration.metrics.ts) | api, mcp, agent |
+| [install_integration](integration.install.md) | [integration.install.ts](../../packages/oxagen/src/contracts/integration.install.ts) | api, mcp, cli, agent |
+| [list_integrations](integration.list.md) | [integration.list.ts](../../packages/oxagen/src/contracts/integration.list.ts) | api, mcp, cli, agent |
+| [sync_integration](integration.sync.md) | [integration.sync.ts](../../packages/oxagen/src/contracts/integration.sync.ts) | api, mcp, cli, agent |
+
+## Kill switch
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_kill_switches](kill_switch.list.md) | [kill_switch.list.ts](../../packages/oxagen/src/contracts/kill_switch.list.ts) | api, mcp |
+| [set_kill_switch](kill_switch.set.md) | [kill_switch.set.ts](../../packages/oxagen/src/contracts/kill_switch.set.ts) | api, mcp, agent |
+
+## Mandate
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_mandate](get_mandate.md) | [mandate.get.ts](../../packages/oxagen/src/contracts/mandate.get.ts) | api, mcp, agent |
+| [grant_mandate](grant_mandate.md) | [mandate.grant.ts](../../packages/oxagen/src/contracts/mandate.grant.ts) | api, mcp, agent |
+| [list_mandates](list_mandates.md) | [mandate.list.ts](../../packages/oxagen/src/contracts/mandate.list.ts) | api, mcp, agent |
+| [request_mandate](request_mandate.md) | [mandate.request.ts](../../packages/oxagen/src/contracts/mandate.request.ts) | api, mcp, agent |
+| [revoke_mandate](revoke_mandate.md) | [mandate.revoke.ts](../../packages/oxagen/src/contracts/mandate.revoke.ts) | api, mcp, agent |
+| [update_mandate_limits](update_mandate_limits.md) | [mandate.limits.update.ts](../../packages/oxagen/src/contracts/mandate.limits.update.ts) | api, mcp, agent |
+
+## Model
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_model_capabilities](model.capability.list.md) | [model.capability.list.ts](../../packages/oxagen/src/contracts/model.capability.list.ts) | api, mcp, agent |
+
+## Notification
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_notifications](notification.list.md) | [notification.list.ts](../../packages/oxagen/src/contracts/notification.list.ts) | api, mcp, agent |
+| [mark_notification](notification.mark.md) | [notification.mark.ts](../../packages/oxagen/src/contracts/notification.mark.ts) | api, mcp, agent |
+
+## Onboarding
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [advance_onboarding](onboarding.advance.md) | [onboarding.advance.ts](../../packages/oxagen/src/contracts/onboarding.advance.ts) | api |
+| [get_first_frame](onboarding.first_frame.get.md) | [onboarding.first_frame.get.ts](../../packages/oxagen/src/contracts/onboarding.first_frame.get.ts) | api, mcp |
+| [get_onboarding_state](onboarding.state.get.md) | [onboarding.state.get.ts](../../packages/oxagen/src/contracts/onboarding.state.get.ts) | api, mcp |
+
+## Ontology
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_ontology_neighbors](ontology.neighbors.md) | [ontology.neighbors.ts](../../packages/oxagen/src/contracts/ontology.neighbors.ts) | api, mcp, agent, cli |
+| [query_ontology](ontology.query.md) | [ontology.query.ts](../../packages/oxagen/src/contracts/ontology.query.ts) | api, mcp, agent, cli |
+
+## Org
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [accept_member_invite](org.member_invite.accept.md) | [org.member_invite.accept.ts](../../packages/oxagen/src/contracts/org.member_invite.accept.ts) | api, mcp, agent |
+| [add_org_member](org.member.add.md) | [org.member.add.ts](../../packages/oxagen/src/contracts/org.member.add.ts) | api, mcp, agent |
+| [change_member_role](org.member_role.change.md) | [org.member_role.change.ts](../../packages/oxagen/src/contracts/org.member_role.change.ts) | api, mcp, agent |
+| [create_org](org.create.md) | [org.create.ts](../../packages/oxagen/src/contracts/org.create.ts) | api, mcp, agent |
+| [decline_member_invite](org.member_invite.decline.md) | [org.member_invite.decline.ts](../../packages/oxagen/src/contracts/org.member_invite.decline.ts) | api, mcp, agent |
+| [delete_model_credential](delete_model_credential.md) | [org.model_credential.delete.ts](../../packages/oxagen/src/contracts/org.model_credential.delete.ts) | api, mcp |
+| [get_data_plane](get_data_plane.md) | [org.data_plane.get.ts](../../packages/oxagen/src/contracts/org.data_plane.get.ts) | api, mcp |
+| [get_model_credential](get_model_credential.md) | [org.model_credential.get.ts](../../packages/oxagen/src/contracts/org.model_credential.get.ts) | api, mcp |
+| [get_org_settings](org.settings.read.md) | [org.settings.read.ts](../../packages/oxagen/src/contracts/org.settings.read.ts) | api, mcp, agent |
+| [list_members](workspace.member.list.md) | [workspace.member.list.ts](../../packages/oxagen/src/contracts/workspace.member.list.ts) | api, mcp |
+| [list_orgs](org.list.md) | [org.list.ts](../../packages/oxagen/src/contracts/org.list.ts) | api, mcp, agent |
+| [remove_org_member](org.member.remove.md) | [org.member.remove.ts](../../packages/oxagen/src/contracts/org.member.remove.ts) | api, mcp, agent |
+| [set_data_plane](set_data_plane.md) | [org.data_plane.set.ts](../../packages/oxagen/src/contracts/org.data_plane.set.ts) | api, mcp |
+| [set_model_credential](set_model_credential.md) | [org.model_credential.set.ts](../../packages/oxagen/src/contracts/org.model_credential.set.ts) | api, mcp |
+| [update_org_settings](org.settings.write.md) | [org.settings.write.ts](../../packages/oxagen/src/contracts/org.settings.write.ts) | api, mcp, agent |
+| [verify_model_credential](verify_model_credential.md) | [org.model_credential.verify.ts](../../packages/oxagen/src/contracts/org.model_credential.verify.ts) | api, mcp |
+
+## Plugin
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [add_plugin_registry](plugin.registry.add.md) | [plugin.registry.add.ts](../../packages/oxagen/src/contracts/plugin.registry.add.ts) | api, mcp, agent |
+| [browse_plugin_catalog](plugin.catalog.browse.md) | [plugin.catalog.browse.ts](../../packages/oxagen/src/contracts/plugin.catalog.browse.ts) | api, mcp, agent |
+| [get_auth_alerts](plugin.settings.get_auth_alerts.md) | [plugin.settings.get_auth_alerts.ts](../../packages/oxagen/src/contracts/plugin.settings.get_auth_alerts.ts) | api, mcp, agent |
+| [get_catalog_plugin](plugin.catalog.get.md) | [plugin.catalog.get.ts](../../packages/oxagen/src/contracts/plugin.catalog.get.ts) | api, mcp, agent |
+| [get_plugin_schema](plugin.schema.get.md) | [plugin.schema.get.ts](../../packages/oxagen/src/contracts/plugin.schema.get.ts) | api, mcp, agent |
+| [install_plugin](plugin.org.install.md) | [plugin.org.install.ts](../../packages/oxagen/src/contracts/plugin.org.install.ts) | api, mcp, agent |
+| [install_plugins_bulk](plugin.org.install_bulk.md) | [plugin.org.install_bulk.ts](../../packages/oxagen/src/contracts/plugin.org.install_bulk.ts) | api, mcp, agent |
+| [list_plugin_registries](plugin.registry.list.md) | [plugin.registry.list.ts](../../packages/oxagen/src/contracts/plugin.registry.list.ts) | api, mcp, agent |
+| [list_plugin_versions](plugin.version.list.md) | [plugin.version.list.ts](../../packages/oxagen/src/contracts/plugin.version.list.ts) | api, mcp, agent |
+| [list_plugins](plugin.org.list.md) | [plugin.org.list.ts](../../packages/oxagen/src/contracts/plugin.org.list.ts) | api, mcp, agent |
+| [reauth_plugin_credential](plugin.credential.reauth.md) | [plugin.credential.reauth.ts](../../packages/oxagen/src/contracts/plugin.credential.reauth.ts) | api, mcp, agent |
+| [remove_plugin_registry](plugin.registry.remove.md) | [plugin.registry.remove.ts](../../packages/oxagen/src/contracts/plugin.registry.remove.ts) | api, mcp, agent |
+| [revoke_plugin_credential](plugin.credential.revoke.md) | [plugin.credential.revoke.ts](../../packages/oxagen/src/contracts/plugin.credential.revoke.ts) | api, mcp, agent |
+| [set_auth_alerts](plugin.settings.set_auth_alerts.md) | [plugin.settings.set_auth_alerts.ts](../../packages/oxagen/src/contracts/plugin.settings.set_auth_alerts.ts) | api, mcp, agent |
+| [set_plugin_enabled](plugin.set_enabled.md) | [plugin.set_enabled.ts](../../packages/oxagen/src/contracts/plugin.set_enabled.ts) | api, mcp, agent |
+| [set_plugin_secret](plugin.credential.set_secret.md) | [plugin.credential.set_secret.ts](../../packages/oxagen/src/contracts/plugin.credential.set_secret.ts) | api, mcp, agent |
+| [sync_plugin_catalog](plugin.catalog.sync.md) | [plugin.catalog.sync.ts](../../packages/oxagen/src/contracts/plugin.catalog.sync.ts) | api, mcp |
+| [uninstall_plugin](plugin.org.uninstall.md) | [plugin.org.uninstall.ts](../../packages/oxagen/src/contracts/plugin.org.uninstall.ts) | api, mcp, agent |
+| [validate_plugin_schema](plugin.schema.validate.md) | [plugin.schema.validate.ts](../../packages/oxagen/src/contracts/plugin.schema.validate.ts) | api, mcp, agent |
+
+## Privacy
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [erase_data](privacy.data.erase.md) | [privacy.data.erase.ts](../../packages/oxagen/src/contracts/privacy.data.erase.ts) | api, mcp, agent |
+| [export_data](privacy.data.export.md) | [privacy.data.export.ts](../../packages/oxagen/src/contracts/privacy.data.export.ts) | api, mcp, agent |
+| [get_export_status](privacy.data.export.status.md) | [privacy.data.export.status.ts](../../packages/oxagen/src/contracts/privacy.data.export.status.ts) | api |
+
+## Reference
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [cite_reference](reference.cite.md) | [reference.cite.ts](../../packages/oxagen/src/contracts/reference.cite.ts) | agent |
+| [search_references](reference.search.md) | [reference.search.ts](../../packages/oxagen/src/contracts/reference.search.ts) | api, mcp, agent |
+
+## Repo
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [configure_repo](repo.configure.md) | [repo.configure.ts](../../packages/oxagen/src/contracts/repo.configure.ts) | api, mcp, cli, agent |
+| [get_ci_status](repo.ci.status.md) | [repo.ci.status.ts](../../packages/oxagen/src/contracts/repo.ci.status.ts) | agent, api, mcp |
+| [get_pr](repo.pr.get.md) | [repo.pr.get.ts](../../packages/oxagen/src/contracts/repo.pr.get.ts) | agent, api, mcp |
+| [get_pr_diff](repo.pr.diff.md) | [repo.pr.diff.ts](../../packages/oxagen/src/contracts/repo.pr.diff.ts) | agent, api, mcp |
+| [get_repo_metrics](repo.metrics.md) | [repo.metrics.ts](../../packages/oxagen/src/contracts/repo.metrics.ts) | api, mcp, agent |
+| `list_branches` | [repo.branch.list.ts](../../packages/oxagen/src/contracts/repo.branch.list.ts) | agent, api, mcp |
+| [pause_repo](repo.pause.md) | [repo.pause.ts](../../packages/oxagen/src/contracts/repo.pause.ts) | api, mcp, cli, agent |
+| [resume_repo](repo.resume.md) | [repo.resume.ts](../../packages/oxagen/src/contracts/repo.resume.ts) | api, mcp, cli, agent |
+| [sync_repo](repo.sync.md) | [repo.sync.ts](../../packages/oxagen/src/contracts/repo.sync.ts) | api, mcp, cli, agent |
+
+## Repository
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [attach_github_installation](repository.installation.attach.md) | [repository.installation.attach.ts](../../packages/oxagen/src/contracts/repository.installation.attach.ts) | api |
+| [bind_main_repository](repository.main.bind.md) | [repository.main.bind.ts](../../packages/oxagen/src/contracts/repository.main.bind.ts) | api |
+| [get_main_repository](repository.main.get.md) | [repository.main.get.ts](../../packages/oxagen/src/contracts/repository.main.get.ts) | api, mcp |
+| [link_repository](repository.link.md) | [repository.link.ts](../../packages/oxagen/src/contracts/repository.link.ts) | api, mcp, cli |
+| [list_github_installations](repository.installation.candidates.md) | [repository.installation.candidates.ts](../../packages/oxagen/src/contracts/repository.installation.candidates.ts) | api, mcp |
+| [list_installation_repositories](repository.installation.list.md) | [repository.installation.list.ts](../../packages/oxagen/src/contracts/repository.installation.list.ts) | api, mcp |
+| [list_repositories](repository.list.md) | [repository.list.ts](../../packages/oxagen/src/contracts/repository.list.ts) | api, mcp, cli |
+| [unlink_repository](repository.unlink.md) | [repository.unlink.ts](../../packages/oxagen/src/contracts/repository.unlink.ts) | api, mcp, cli |
+
+## Router
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_routing_policy](router.policy.get.md) | [router.policy.get.ts](../../packages/oxagen/src/contracts/router.policy.get.ts) | api, mcp, cli |
+| [list_routing_stats](router.stats.list.md) | [router.stats.list.ts](../../packages/oxagen/src/contracts/router.stats.list.ts) | api, mcp, cli |
+| [preview_routing_decision](router.decision.preview.md) | [router.decision.preview.ts](../../packages/oxagen/src/contracts/router.decision.preview.ts) | api, mcp, cli |
+| [set_routing_policy](router.policy.set.md) | [router.policy.set.ts](../../packages/oxagen/src/contracts/router.policy.set.ts) | api, mcp, cli |
+
+## Run
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [bisect_runs](run.bisect.md) | [run.bisect.ts](../../packages/oxagen/src/contracts/run.bisect.ts) | api, mcp |
+| [export_run](run.export.md) | [run.export.ts](../../packages/oxagen/src/contracts/run.export.ts) | api |
+| [fork_run](run.fork.md) | [run.fork.ts](../../packages/oxagen/src/contracts/run.fork.ts) | api |
+| [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp |
+| [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp |
+| [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp |
+| [get_run_frame_body](run.frame_body.get.md) | [run.frame_body.get.ts](../../packages/oxagen/src/contracts/run.frame_body.get.ts) | api, mcp |
+| [get_run_proof](run.proof.get.md) | [run.proof.get.ts](../../packages/oxagen/src/contracts/run.proof.get.ts) | api |
+| [get_run_transcript](run.transcript.get.md) | [run.transcript.get.ts](../../packages/oxagen/src/contracts/run.transcript.get.ts) | api, mcp |
+| [list_recent_runs](run.recent.list.md) | [run.recent.list.ts](../../packages/oxagen/src/contracts/run.recent.list.ts) | api, mcp |
+| [list_runs](run.list.md) | [run.list.ts](../../packages/oxagen/src/contracts/run.list.ts) | api, mcp |
+| [summarize_run](run.summarize.md) | [run.summarize.ts](../../packages/oxagen/src/contracts/run.summarize.ts) | api |
+
+## Schema
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_schema_version](schema.version.create.md) | [schema.version.create.ts](../../packages/oxagen/src/contracts/schema.version.create.ts) | api, mcp, cli |
+| [delete_schema](schema.delete.md) | [schema.delete.ts](../../packages/oxagen/src/contracts/schema.delete.ts) | agent |
+| [delete_schema_label](schema.label.delete.md) | [schema.label.delete.ts](../../packages/oxagen/src/contracts/schema.label.delete.ts) | api, mcp, cli |
+| [delete_schema_property](schema.property.delete.md) | [schema.property.delete.ts](../../packages/oxagen/src/contracts/schema.property.delete.ts) | api, mcp, cli |
+| [delete_schema_relationship](schema.relationship.delete.md) | [schema.relationship.delete.ts](../../packages/oxagen/src/contracts/schema.relationship.delete.ts) | api, mcp, cli |
+| [diff_schema_versions](schema.version.diff.md) | [schema.version.diff.ts](../../packages/oxagen/src/contracts/schema.version.diff.ts) | api, mcp, cli |
+| [dispatch_schema_reconcile](schema.reconcile.dispatch.md) | [schema.reconcile.dispatch.ts](../../packages/oxagen/src/contracts/schema.reconcile.dispatch.ts) | api, mcp, cli |
+| [export_schema](schema.export.md) | [schema.export.ts](../../packages/oxagen/src/contracts/schema.export.ts) | api, mcp, cli |
+| [get_reconcile_status](schema.reconcile.status.md) | [schema.reconcile.status.ts](../../packages/oxagen/src/contracts/schema.reconcile.status.ts) | api, mcp, cli |
+| [get_registry_config](schema.registry.config.md) | [schema.registry.config.ts](../../packages/oxagen/src/contracts/schema.registry.config.ts) | api, mcp, cli |
+| [get_schema_registry](schema.registry.get.md) | [schema.registry.get.ts](../../packages/oxagen/src/contracts/schema.registry.get.ts) | api, mcp, cli |
+| [list_schema_versions](schema.version.list.md) | [schema.version.list.ts](../../packages/oxagen/src/contracts/schema.version.list.ts) | api, mcp, cli |
+| [list_schemas](schema.list.md) | [schema.list.ts](../../packages/oxagen/src/contracts/schema.list.ts) | api, mcp, cli, agent |
+| [pin_schema_version](schema.version.pin.md) | [schema.version.pin.ts](../../packages/oxagen/src/contracts/schema.version.pin.ts) | api, mcp, cli |
+| [recommend_schema](schema.recommend.md) | [schema.recommend.ts](../../packages/oxagen/src/contracts/schema.recommend.ts) | api, mcp, cli, agent |
+| [run_schema_chat](schema.chat.md) | [schema.chat.ts](../../packages/oxagen/src/contracts/schema.chat.ts) | api, agent |
+| [setup_schema](schema.setup.md) | [schema.setup.ts](../../packages/oxagen/src/contracts/schema.setup.ts) | api, mcp, cli, agent |
+| [toggle_schema](schema.toggle.md) | [schema.toggle.ts](../../packages/oxagen/src/contracts/schema.toggle.ts) | api, mcp, cli |
+| [upsert_schema_label](schema.label.upsert.md) | [schema.label.upsert.ts](../../packages/oxagen/src/contracts/schema.label.upsert.ts) | api, mcp, cli, agent |
+| [upsert_schema_property](schema.property.upsert.md) | [schema.property.upsert.ts](../../packages/oxagen/src/contracts/schema.property.upsert.ts) | api, mcp, cli, agent |
+| [upsert_schema_relationship](schema.relationship.upsert.md) | [schema.relationship.upsert.ts](../../packages/oxagen/src/contracts/schema.relationship.upsert.ts) | api, mcp, cli, agent |
+| [validate_schema_node](schema.validate.node.md) | [schema.validate.node.ts](../../packages/oxagen/src/contracts/schema.validate.node.ts) | api, mcp, agent, cli |
+| [validate_schema_relationship](schema.validate.relationship.md) | [schema.validate.relationship.ts](../../packages/oxagen/src/contracts/schema.validate.relationship.ts) | api, mcp, agent, cli |
+
+## Secret
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [delete_secret_key](secret.key.delete.md) | [secret.key.delete.ts](../../packages/oxagen/src/contracts/secret.key.delete.ts) | api, mcp, agent |
+| [export_secrets](secret.export.md) | [secret.export.ts](../../packages/oxagen/src/contracts/secret.export.ts) | api, mcp |
+| [import_env_secrets](secret.import_env.md) | [secret.import_env.ts](../../packages/oxagen/src/contracts/secret.import_env.ts) | api, mcp, agent |
+| [list_secret_keys](secret.key.list.md) | [secret.key.list.ts](../../packages/oxagen/src/contracts/secret.key.list.ts) | api, mcp, agent |
+| [reveal_secret](secret.reveal.md) | [secret.reveal.ts](../../packages/oxagen/src/contracts/secret.reveal.ts) | api, mcp |
+| [set_secret_value](secret.value.set.md) | [secret.value.set.ts](../../packages/oxagen/src/contracts/secret.value.set.ts) | api, mcp, agent |
+| [unset_secret_value](secret.value.unset.md) | [secret.value.unset.ts](../../packages/oxagen/src/contracts/secret.value.unset.ts) | api, mcp, agent |
+| [upsert_secret_key](secret.key.upsert.md) | [secret.key.upsert.ts](../../packages/oxagen/src/contracts/secret.key.upsert.ts) | api, mcp, agent |
+
+## Shell
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_nav_counts](shell.nav_counts.get.md) | [shell.nav_counts.get.ts](../../packages/oxagen/src/contracts/shell.nav_counts.get.ts) | api, mcp |
+
+## Skill
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [list_skills](skill.list.md) | [skill.list.ts](../../packages/oxagen/src/contracts/skill.list.ts) | api, mcp |
+
+## Spend
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [dismiss_finding](finding.dismiss.md) | [finding.dismiss.ts](../../packages/oxagen/src/contracts/finding.dismiss.ts) | api, mcp |
+| [export_statement](spend.statement.export.md) | [spend.statement.export.ts](../../packages/oxagen/src/contracts/spend.statement.export.ts) | api, mcp |
+| [get_finding_evidence](finding.evidence.get.md) | [finding.evidence.get.ts](../../packages/oxagen/src/contracts/finding.evidence.get.ts) | api, mcp |
+| [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp |
+| [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp |
+| [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp |
+| [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |
+| [record_finding_fix](finding.fix.record.md) | [finding.fix.record.ts](../../packages/oxagen/src/contracts/finding.fix.record.ts) | api, mcp, agent |
+
+## System
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_install_instructions](system.install.instructions.md) | [system.install.instructions.ts](../../packages/oxagen/src/contracts/system.install.instructions.ts) | api, mcp, agent |
+
+## Tacho
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_enrollment_token](tacho.enrollment_token.create.md) | [tacho.enrollment_token.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment_token.create.ts) | api, cli |
+| [create_tacho_enrollment](tacho.enrollment.create.md) | [tacho.enrollment.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment.create.ts) | api |
+| [enroll_host](tacho.host.enroll.md) | [tacho.host.enroll.ts](../../packages/oxagen/src/contracts/tacho.host.enroll.ts) | api, cli |
+| [get_tacho_bundle](tacho.bundle.get.md) | [tacho.bundle.get.ts](../../packages/oxagen/src/contracts/tacho.bundle.get.ts) | api |
+| [get_tacho_session](tacho.session.get.md) | [tacho.session.get.ts](../../packages/oxagen/src/contracts/tacho.session.get.ts) | api |
+| [ingest_tacho_events](tacho.events.ingest.md) | [tacho.events.ingest.ts](../../packages/oxagen/src/contracts/tacho.events.ingest.ts) | api |
+| [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp |
+| [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp |
+| [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
+| [revoke_tacho_enrollment](tacho.enrollment.revoke.md) | [tacho.enrollment.revoke.ts](../../packages/oxagen/src/contracts/tacho.enrollment.revoke.ts) | api |
+
+## Telemetry
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| `create_stella_enrollment` | [telemetry.stella.enroll.ts](../../packages/oxagen/src/contracts/telemetry.stella.enroll.ts) | api |
+| [ingest_stella_operational_telemetry](telemetry.stella.ingest.md) | [telemetry.stella.ingest.ts](../../packages/oxagen/src/contracts/telemetry.stella.ingest.ts) | api |
+| [list_error_clusters](telemetry.error.cluster.md) | [telemetry.error.cluster.ts](../../packages/oxagen/src/contracts/telemetry.error.cluster.ts) | api, mcp, agent |
+
+## Tool
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [import_tools](tool.import.md) | [tool.import.ts](../../packages/oxagen/src/contracts/tool.import.ts) | api, mcp |
+| [list_tool_declarations](tool.declaration.list.md) | [tool.declaration.list.ts](../../packages/oxagen/src/contracts/tool.declaration.list.ts) | api, agent, mcp |
+| [list_tool_versions](tool.version.list.md) | [tool.version.list.ts](../../packages/oxagen/src/contracts/tool.version.list.ts) | api, mcp |
+| [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
+| [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp |
+
+## Tools
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [load_tools](tools.load.md) | [tools.load.ts](../../packages/oxagen/src/contracts/tools.load.ts) | api, mcp, agent |
+| [search_tools](tools.search.md) | [tools.search.ts](../../packages/oxagen/src/contracts/tools.search.ts) | api, mcp, agent |
+
+## User
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [get_user_budget](budget.policy.read.md) | [budget.policy.read.ts](../../packages/oxagen/src/contracts/budget.policy.read.ts) | api, mcp, agent |
+| [get_user_preferences](user.preferences.read.md) | [user.preferences.read.ts](../../packages/oxagen/src/contracts/user.preferences.read.ts) | api, mcp, agent |
+| [get_workspace_user_preferences](get_workspace_user_preferences.md) | [user.workspace_preferences.read.ts](../../packages/oxagen/src/contracts/user.workspace_preferences.read.ts) | api, mcp, agent |
+| [set_preferences](user.preferences.set.md) | [user.preferences.set.ts](../../packages/oxagen/src/contracts/user.preferences.set.ts) | api, mcp |
+| [update_profile](user.profile.update.md) | [user.profile.update.ts](../../packages/oxagen/src/contracts/user.profile.update.ts) | api |
+| [update_user_budget](budget.policy.write.md) | [budget.policy.write.ts](../../packages/oxagen/src/contracts/budget.policy.write.ts) | api, mcp, agent |
+| [update_workspace_user_preferences](update_workspace_user_preferences.md) | [user.workspace_preferences.write.ts](../../packages/oxagen/src/contracts/user.workspace_preferences.write.ts) | api |
+
+## Workspace
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [archive_workspace](workspace.archive.md) | [workspace.archive.ts](../../packages/oxagen/src/contracts/workspace.archive.ts) | api, mcp, agent |
+| [create_workspace](workspace.create.md) | [workspace.create.ts](../../packages/oxagen/src/contracts/workspace.create.ts) | api, mcp, agent |
+| [get_budget_policy](workspace.budget_policy.read.md) | [workspace.budget_policy.read.ts](../../packages/oxagen/src/contracts/workspace.budget_policy.read.ts) | api, mcp, agent |
+| [get_model_settings](workspace.model_settings.read.md) | [workspace.model_settings.read.ts](../../packages/oxagen/src/contracts/workspace.model_settings.read.ts) | api, mcp, agent |
+| [get_prompt_settings](prompt.settings.read.md) | [prompt.settings.read.ts](../../packages/oxagen/src/contracts/prompt.settings.read.ts) | api, mcp, agent |
+| [get_workspace_settings](workspace.settings.read.md) | [workspace.settings.read.ts](../../packages/oxagen/src/contracts/workspace.settings.read.ts) | api, mcp, agent |
+| [list_workspaces](workspace.list.md) | [workspace.list.ts](../../packages/oxagen/src/contracts/workspace.list.ts) | api, mcp, agent |
+| [send_workspace_invite](workspace.invite.send.md) | [workspace.invite.send.ts](../../packages/oxagen/src/contracts/workspace.invite.send.ts) | api, mcp |
+| [update_budget_policy](workspace.budget_policy.write.md) | [workspace.budget_policy.write.ts](../../packages/oxagen/src/contracts/workspace.budget_policy.write.ts) | api, mcp, agent |
+| [update_model_settings](workspace.model_settings.write.md) | [workspace.model_settings.write.ts](../../packages/oxagen/src/contracts/workspace.model_settings.write.ts) | api, mcp, agent |
+| [update_prompt_settings](prompt.settings.write.md) | [prompt.settings.write.ts](../../packages/oxagen/src/contracts/prompt.settings.write.ts) | api, mcp, agent |
+| [update_workspace_settings](workspace.settings.write.md) | [workspace.settings.write.ts](../../packages/oxagen/src/contracts/workspace.settings.write.ts) | api, mcp, agent |

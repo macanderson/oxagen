@@ -1,4 +1,4 @@
-# audit.events.export
+# export_audit_events
 
 Export the organization's security audit events as CSV or NDJSON, signed with HMAC-SHA256 so an auditor can verify the file was not changed after download. The filters are `query_audit_log`'s, so the rows a reader pages through are the rows the export signs.
 

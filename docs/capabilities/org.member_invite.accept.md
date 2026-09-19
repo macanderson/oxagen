@@ -1,4 +1,4 @@
-# org.member.invite.accept
+# accept_member_invite
 
 **Domain:** organization
 **Mode:** sync

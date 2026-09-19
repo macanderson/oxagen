@@ -1,4 +1,4 @@
-# workspace.model.settings.write
+# update_model_settings
 
 **Domain:** workspace
 **Mode:** sync

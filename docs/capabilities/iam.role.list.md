@@ -1,4 +1,4 @@
-# iam.role.list
+# list_iam_roles
 
 List the org's IAM roles with their capability grants (`allow` / `deny` / `require_approval`), the catalogue permissions those grants cover, who created each role, and the number of principals actively assigned to each — with the permission catalogue the editor speaks and whether the kernel enforces roles for the org's tier (ADR-063). Read-only: `create_role`, `set_role_grants` and `delete_role` are the writes. Powers the Organization › Roles page.
 

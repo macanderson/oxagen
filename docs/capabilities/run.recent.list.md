@@ -1,4 +1,4 @@
-# run.recent.list
+# list_recent_runs
 
 The ⌘K Runs group (MC spec App. E): the newest runs of the workspace with the four fields a menu row shows. It reads through the `list_runs` handler, so both stores are merged newest first and the in-app agent's own turns stay out.
 

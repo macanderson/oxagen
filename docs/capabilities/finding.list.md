@@ -1,4 +1,4 @@
-# finding.list
+# list_findings
 
 The workspace's costed findings ranked by the money at stake, with the totals the Spend page leads with (Mission Control spec §12.8, App. E; ADR-062). Every figure is the findings job's: a saving is measured minus counterfactual over the runs the finding cites, at the price each run paid, with the confidence the job assigned.
 

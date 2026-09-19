@@ -1,4 +1,4 @@
-# repository.installation.candidates
+# list_github_installations
 
 The GitHub App installations this workspace could attach, read from the GitHub user token the connect leg stored.
 

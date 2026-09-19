@@ -1,4 +1,4 @@
-# repo.sync
+# sync_repo
 
 Trigger incremental or full re-index of a repository connection.
 

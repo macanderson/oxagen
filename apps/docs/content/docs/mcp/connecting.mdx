@@ -5,7 +5,7 @@ description: How to connect Claude Code, Cursor, Claude Desktop, and other MCP c
 
 ## Prerequisites
 
-You need an Oxagen API key. Create one at **Organization → Developer → Tokens**. The key acts with the role of the person who created it, so create it from an account whose role covers the tools you want to call.
+You need an Oxagen API key. Create one at **Organization → API keys**. The key's purpose and the organization's IAM rules determine its authority. See [Authentication](/docs/api/authentication).
 
 The MCP server endpoint is:
 
@@ -15,9 +15,7 @@ https://mcp.oxagen.sh/mcp
 
 Transport: **streamable HTTP** (the current MCP protocol standard).
 
-## Unified install page
 
-The fastest path for any client is the unified install page at **Organization → Developer → MCP**. It writes a copy-ready snippet for every supported client, filled in with your API key.
 
 ## Manual configuration by client
 
@@ -171,9 +169,9 @@ Supported `client` values: `claude-code`, `cursor`, `claude-desktop`, `codex`, `
 
 ## Troubleshooting
 
-**401 Unauthorized:** The API key is missing, invalid, or revoked. Check the key at **Organization → Developer → Tokens**.
+**401 Unauthorized:** The API key is missing, invalid, or revoked. Check the key at **Organization → API keys**.
 
-**Tool call denied:** On an Enterprise organization, the person who created the key has no role grant for that capability, or the grant routes the call to a person for approval. Check that person's role under **Governance → Policies**, and see [RBAC and roles](/docs/governance/rbac). Oxagen records each denial as a `capability.invoke_denied` event in **Organization → Security → Audit**.
+**Tool call denied:** On an Enterprise organization, the person who created the key has no role grant for that capability, or the grant routes the call to a person for approval. Check that person's role under **Organization → Roles**, and see [RBAC and roles](/docs/governance/rbac). Oxagen records each denial as a `capability.invoke_denied` event in **Organization → Audit**.
 
 **Tool not in the list:** The server does not filter the tool list per key. A rule answers each call when the call is made. A tool missing from the list is not exposed on the MCP surface. See [MCP tools](/docs/mcp/tools).
 

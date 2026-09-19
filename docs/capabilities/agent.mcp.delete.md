@@ -1,4 +1,4 @@
-# agent.mcp.delete
+# delete_mcp_server
 
 **Domain:** agent
 **Mode:** sync

@@ -1,4 +1,4 @@
-# schema.delete
+# delete_schema
 
 **Domain:** schema
 **Mode:** sync

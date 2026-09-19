@@ -1,4 +1,4 @@
-# integration.configure
+# configure_integration
 
 Update a plugin instance's config: credentials, sync cadence, inference toggles, and ontology prompts.
 

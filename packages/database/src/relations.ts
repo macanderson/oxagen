@@ -45,6 +45,7 @@ import {
   agentRunFinalizationObligations,
 } from "./schema/agent";
 import { mcpServers, mcpConsents, mcpToolSnapshots } from "./schema/mcp";
+import { mandates } from "./schema/tools";
 import { mcpServerChanges } from "./schema/security";
 import { conversations, messages } from "./schema/chat";
 import {
@@ -267,6 +268,14 @@ export const approvalRequestsRelations = relations(
     resolvedBy: one(users, {
       fields: [approvalRequests.resolvedByUserId],
       references: [users.id],
+    }),
+    // The mandate the parked call drew on (ADR-059). `agent.approval_requests`
+    // → `tools.mandates` crosses schemas, so it is declared here rather than
+    // joined inside a handler (AGENTS.md, Storage Boundaries). Null on a row
+    // the chat approval gate wrote, which draws on no mandate.
+    mandate: one(mandates, {
+      fields: [approvalRequests.mandateId],
+      references: [mandates.id],
     }),
   }),
 );

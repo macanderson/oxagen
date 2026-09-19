@@ -195,7 +195,7 @@
         "empty": {
           "title": "No host is enrolled under this agent",
           "body": "Enroll the host it runs on, from the repository it works in:",
-          "command": "oxagen tacho enroll"
+          "command": "oxagen agent enroll"
         }
       },
       "incidents": {

@@ -1,4 +1,4 @@
-# run.proof.get
+# get_run_proof
 
 The Run page's Proof tab (Mission Control spec §8.5; ADR-064): every witness that reported on one run, each with its attempts as the `proof.observed` frames recorded them, the run's verdict, the cost of each witness run, and the workspace's disclosure grain.
 

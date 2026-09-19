@@ -1,4 +1,4 @@
-# connection.update
+# update_connection
 
 **Domain:** connection
 **Mode:** sync

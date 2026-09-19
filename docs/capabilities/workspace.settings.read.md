@@ -1,4 +1,4 @@
-# workspace.settings.read
+# get_workspace_settings
 
 **Domain:** workspace
 **Mode:** sync

@@ -1,4 +1,4 @@
-# telemetry.stella.ingest
+# ingest_stella_operational_telemetry
 
 Accept content-free Stella execution rollups for an explicitly enrolled Oxagen Enterprise workspace. This is the Option A integration boundary: Stella remains the local execution engine and retains its raw operational telemetry; Oxagen receives only the closed operational rollup described below. A Stella client must first be enrolled and configured with a workspace API key and signed enrollment labels. This endpoint does not enroll a client.
 

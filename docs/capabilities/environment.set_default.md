@@ -1,4 +1,4 @@
-# environment.set_default
+# set_default_environment
 
 **Domain:** environment
 **Mode:** sync
@@ -9,12 +9,10 @@
 
 ## Intent
 
-Promote an environment to the workspace default. The swap is **atomic** — the
+Promote an environment to the workspace default. The swap is atomic: the
 existing default is demoted and the target is set as the single default in one
 transaction (enforced by a partial-unique constraint on `is_default`). The
-promoted environment is reactivated if it was inactive. This is the path used by
-the `settings/environments` "Default environment" selector and is also exposed
-via CLI/MCP for capability parity. Owner/Admin only.
+promoted environment is reactivated if it was inactive. Only org Owners and Admins can change the default.
 
 ## Input
 
@@ -47,7 +45,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.set_default`
+Tool name: `set_default_environment`
 
 ## Errors
 

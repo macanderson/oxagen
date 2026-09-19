@@ -76,7 +76,20 @@ export type AutoApprovalHook = (args: {
   input: unknown;
   ruleSet: RuleSet;
   verdict: Verdict;
-  ctx: { orgId: string; workspaceId: string; userId: string | null };
+  ctx: {
+    orgId: string;
+    workspaceId: string;
+    userId: string | null;
+    /**
+     * The internal id (`agent_runs.id`) of the run this call belongs to, so
+     * the receipt names the run the way `list_resolved_approvals` reads back
+     * by (#3153). Null for a call with no run in scope: a person acting
+     * under their own role, or a call parked before the in-app assistant's
+     * turn opened one (the write path there threads its own run id through
+     * a different seam; see materialize-tools.ts, #3370).
+     */
+    runId: string | null;
+  };
 }) => Promise<{ ok: boolean; commit?: () => Promise<void> } | null>;
 
 export interface DecisionRulesGateOptions {
@@ -107,6 +120,8 @@ export interface DecisionGateArgs {
     surface?: string;
     agentId?: string;
     requestId?: string;
+    /** The internal id (`agent_runs.id`) of the run this call belongs to; null or absent when none is in scope. */
+    runId?: string | null;
   };
   /** The IAM-resolved acting principal; the mandate check runs for `kind: "agent"`. */
   principal?: ResolvedPrincipal | null;
@@ -201,6 +216,7 @@ async function skipsThePerson(
         orgId: args.ctx.orgId,
         workspaceId: args.ctx.workspaceId,
         userId: args.ctx.userId,
+        runId: args.ctx.runId ?? null,
       },
     });
     if (outcome?.ok !== true) return undefined;

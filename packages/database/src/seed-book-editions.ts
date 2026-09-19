@@ -7,7 +7,12 @@
  * loads their HTML into Postgres, where the redeem route reads it.
  *
  * Idempotent: upserts on the edition slug, so re-running refreshes content
- * (e.g. after editing a source file) without creating duplicates.
+ * without creating duplicates.
+ *
+ * The two HTML files are generated. The text lives in
+ * seed-assets/books/manuscript/, and `pnpm book:build` writes both editions
+ * and the migration that carries them to production (ADR-109). Do not edit
+ * field-manual.html or page-flip-reader.html by hand.
  *
  * Direct-run entrypoint: `tsx packages/database/src/seed-book-editions.ts`
  * (wired as `pnpm --filter @oxagen/database db:seed-books`).
@@ -63,14 +68,14 @@ const EDITIONS: EditionSeed[] = [
     slug: "field-manual",
     file: "field-manual.html",
     format: "linear",
-    title: "Engineering Deterministic AI Coding Agents — Field Manual",
+    title: "Engineering Deterministic AI Coding Agents: field manual",
     transform: stripLegacyGate,
   },
   {
     slug: "page-flip-reader",
     file: "page-flip-reader.html",
     format: "page-flip",
-    title: "Engineering Deterministic AI Coding Agents — Reader",
+    title: "Engineering Deterministic AI Coding Agents: reader",
     transform: rewriteFieldManualHref,
   },
 ];

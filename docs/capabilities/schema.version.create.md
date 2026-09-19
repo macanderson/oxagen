@@ -1,4 +1,4 @@
-# schema.version.create
+# create_schema_version
 
 Freeze the current draft into an immutable published version and open a fresh empty draft. Does not automatically pin the new version — use `schema.version.pin` or `schema.toggle` to pin.
 

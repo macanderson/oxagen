@@ -1,0 +1,92 @@
+<h2 class="ch-title">A rule written in prose cannot fail CI</h2>
+<p class="ch-thesis">Constraints belong in a representation a validator can check.</p>
+
+<p class="lede">It starts with one file that tells the agent to stop repeating a mistake. Then a second for architecture, a third for conventions, a fourth for the things the first three left out. Six months later every run loads 30,000 tokens of prose, nobody can say which rules are still true, and the agent has started ignoring half of them. What you have is a second codebase written in a language with no compiler, no tests, and no dead-code detection.</p>
+
+<h3>Prompt bloat is measurable harm, not just cost</h3>
+<p>The instinct says instructions are free, and that the worst case is a model skimming the irrelevant ones. The research points the other way. Performance degrades as input grows even when the added material is task-relevant in spirit. Liu et al. showed models lose information positioned in the middle of long contexts,<sup class="cite"><a href="#r6">6</a></sup> and Chroma's 18-model study showed degradation with input length across every frontier model tested, at different rates.<sup class="cite"><a href="#r7">7</a></sup> Anthropic's context-engineering guidance is direct about the mechanism: attention is a finite budget, every token in context draws it down, and the goal is the <em>smallest set of high-signal tokens</em> that achieves the outcome.<sup class="cite"><a href="#r19">19</a></sup> Thirty thousand tokens of standing instructions are not a safety net. They are attention spent before the task begins, and billed per request.</p>
+
+<h3>The caching economics make it worse</h3>
+<p>Prompt caching looks like it rescues the large standing prompt. Cache reads cost about 10% of base input price on Anthropic's API, with a 25% premium on writes, cutting cost by up to 90% and latency by up to 85% for long stable prefixes.<sup class="cite"><a href="#r16">16</a></sup> The catch is that caching is prefix-exact. Edit one character of an early block and everything after it recomputes at full price, plus the write premium. A pile of frequently edited prose concatenated into the prompt is the worst shape for this, because each edit invalidates the cache across your whole fleet. Caching rewards small, stable, ordered context. That is an argument for structure, not for volume.</p>
+
+<div class="vs">
+  <div class="a">
+    <h4>◌ Rules as prose</h4>
+    <ul>
+      <li>Loaded whole, in every run, relevant or not</li>
+      <li>No validation, so rules rot silently as the code moves</li>
+      <li>Conflicting rules resolved probabilistically by the model</li>
+      <li>Every edit invalidates the prompt cache prefix</li>
+      <li>Grows monotonically, and nobody dares delete a line</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● Rules as data</h4>
+    <ul>
+      <li>Retrieved selectively, only the rules matching the touched domain</li>
+      <li>Machine-checkable, because rules reference real symbols and run in CI</li>
+      <li>Conflicts detected at build time</li>
+      <li>Stable structured core caches cleanly, variable tail stays small</li>
+      <li>Dead rules detected the way dead code is</li>
+    </ul>
+  </div>
+</div>
+
+<h3>What replaces the prose</h3>
+<ul class="plain">
+  <li><strong>JSON Schema or typed config</strong> for anything that is a constraint: allowed dependencies, naming patterns, review requirements. A constraint in schema form is enforced by a validator rather than suggested to a model.</li>
+  <li><strong>Tool metadata</strong>: capabilities, costs, and preconditions declared on the tools themselves, the direction MCP standardizes, so capability discovery is a lookup instead of a paragraph.</li>
+  <li><strong>Rule objects with scopes</strong>: <code>{rule, applies_to: "billing/**", verified_by: "lint:no-float-money", since: "a1b2c3"}</code>. The retrieval layer injects the three rules that bear on this diff, not the three hundred that exist.</li>
+  <li><strong>Generated docs</strong>: the part 5 dossiers, derived from code, carrying their source SHA.</li>
+</ul>
+
+<h3>One rule, both ways</h3>
+<pre><code><span class="c"># before: a line in conventions.md, loaded in full in every run</span>
+<span class="c"># "Money is cents. Do not use floats for money."</span>
+
+<span class="c"># after: a rule object, injected when the diff touches billing/</span>
+{"id": "no-float-money",
+ "applies_to": "billing/**",
+ "verified_by": "lint:no-float-money",
+ "since": "a1b2c3",
+ "text": "Money columns and money variables are integer cents."}
+<span class="c"># 40 tokens in the prompt, and CI fails on a float literal under billing/.</span></code></pre>
+
+<p>The second form costs less, arrives only when it applies, and has a witness. If the lint rule stops firing because the code moved, you learn that the rule is dead instead of carrying it for another year.</p>
+
+<h3>Order the prompt so the cache survives your edits</h3>
+<pre><code>prompt = [
+  schema_snapshot,   <span class="c"># stable for days</span>
+  domain_dossier,    <span class="c"># stable until that domain merges</span>
+  matched_rules,     <span class="c"># 3 of 300, changes per task</span>
+  task_slice,        <span class="c"># changes per task</span>
+]
+<span class="c"># Edits land in the tail. The cached prefix survives them.</span></code></pre>
+
+<p>Keep prose for what prose is good at: intent, history, and taste. Anything that functions as a rule belongs in a representation you can validate, scope, version, and retrieve selectively. If a rule cannot fail CI, it is a preference.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Count what you are loading.</strong> Run every standing prose file through a tokenizer (tiktoken, or your provider's token-count endpoint) and print a table sorted by tokens. The number at the bottom is what each run pays before it reads any code.</li>
+    <li><strong>Sort each line into constraint, context, or history.</strong> Constraints move to a rule file. Context moves to a generated dossier. History stays in prose and leaves the prompt.</li>
+    <li><strong>Give your three most repeated constraints a check.</strong> An ESLint or Ruff rule, a JSON Schema validator, or a dependency-cruiser rule. Done looks like the check failing on a violation you introduce on purpose, then passing when you revert it.</li>
+    <li><strong>Inject rules by glob.</strong> Match <code>applies_to</code> against the paths in the diff and pass only the matches. Done looks like a prompt carrying 3 rules on a billing change rather than the full registry.</li>
+    <li><strong>Reorder the prompt.</strong> Stable structured blocks first, task slice last, so an edit lands in the tail and the cached prefix holds.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>prompt_tokens_static</code>: tokens loaded before the task-specific slice. Read it from the request log. Lower is better, and it should fall in steps as files move out.</li>
+    <li><code>rules_injected_per_task</code>: rules in the prompt divided by rules in the registry. Lower is better, and a ratio near 1 means your scoping is not working.</li>
+    <li><code>rule_enforcement_rate</code>: share of rules whose <code>verified_by</code> check runs in CI. Higher is better. Rules without a check are the ones that rot.</li>
+    <li><code>cache_read_ratio</code>: cached input tokens divided by total input tokens, taken from the provider's usage fields. Higher is better, and a sudden drop means somebody edited an early block.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Natural-language configuration is configuration without a type system. Move constraints into structured, validated, selectively retrieved data, and let prose go back to being prose.</p>
+</div>

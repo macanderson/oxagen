@@ -1,4 +1,4 @@
-# router.policy.get
+# get_routing_policy
 
 **Capability name:** `get_routing_policy`
 **Domain:** router

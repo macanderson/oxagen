@@ -1,4 +1,4 @@
-# repository.main.get
+# get_main_repository
 
 What the Workspace settings dialog needs to show, and to unblock, the workspace's main repository (MC spec §10.1; #2967).
 

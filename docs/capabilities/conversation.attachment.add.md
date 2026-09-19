@@ -1,4 +1,4 @@
-# conversation.attachment.add
+# add_conversation_attachment
 
 **Domain:** conversation
 **Mode:** sync
@@ -47,8 +47,8 @@ The canonical `ConversationAssetItem` shape (reused from
 ## Surfaces
 
 - **API:** `POST /v1/:org/:workspace/conversations/attachments` — body `{ conversationId, assetPublicId }`
-- **MCP:** `conversation.attachment.add` tool (idempotent)
-- **Agent:** invoked via `invoke("conversation.attachment.add", ...)` — no approval required
+- **MCP:** `add_conversation_attachment` tool (idempotent)
+- **Agent:** invoked via `invoke("add_conversation_attachment", ...)` — no approval required
 
 ## Access control
 
