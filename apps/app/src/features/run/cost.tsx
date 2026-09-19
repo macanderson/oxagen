@@ -8,7 +8,7 @@
 // Every money figure carries the basis that says who observed it (INV-10), and
 // the price entries the frames were priced with are named, so a figure can be
 // traced to the prices that produced it.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { RunCost, RunCostRollup, TokenCounts } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
@@ -17,6 +17,7 @@ import { formatCount, formatRatio } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, NoValue, Panel } from "./parts";
+import { useFormatter } from "@/ui/formatter";
 
 const TOKEN_CLASSES = [
   "inputUncached",

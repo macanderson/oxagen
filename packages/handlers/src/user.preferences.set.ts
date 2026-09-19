@@ -8,6 +8,7 @@
 // the row rather than echoed from the input.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import {
   schema,
@@ -33,7 +34,7 @@ export const userPreferencesSetHandler: CapabilityHandler<
     updatedById: userId,
     language: input.locale ?? "en",
     theme: input.theme ?? "system",
-    timezone: input.timezone ?? "UTC",
+    timezone: input.timezone ?? DEFAULT_TIME_ZONE,
     fontSize: input.fontSize ?? "medium",
     density: input.density ?? "comfortable",
     enterToSubmit: input.enterToSubmit ?? false,

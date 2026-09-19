@@ -24,7 +24,22 @@ import { shellData } from "./shell.builders";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
 const updateProfile = vi.fn();
-vi.mock("./account-actions", () => ({ updateProfile }));
+const updateTimeZone = vi.fn();
+vi.mock("./account-actions", () => ({ updateProfile, updateTimeZone }));
+
+// The runtime lists ~420 zones, and axe walking every <option> took 52s on
+// the CI runner. Three stand in; the stored-zone rule is the real one.
+vi.mock("@/shared/time-zone", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/shared/time-zone")>();
+  return {
+    timeZoneChoices: (current: string) =>
+      real.timeZoneChoices(current, [
+        "America/Los_Angeles",
+        "Asia/Tokyo",
+        "Europe/London",
+      ]),
+  };
+});
 
 // The dialog re-renders the server tree after a save, through useNavigate ---
 // the app's one useRouter importer (INV-13).
@@ -51,7 +66,12 @@ function OpenIt() {
 }
 
 async function openDialog(
-  viewer: { name: string | null; email: string; avatarUrl: string | null } = {
+  viewer: {
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+    timeZone?: string;
+  } = {
     name: "Marcus Bell",
     email: "marcus.bell@acme.example",
     avatarUrl: null,
@@ -63,7 +83,11 @@ async function openDialog(
     <IntlProvider>
       <ShellStateProvider>
         <OpenIt />
-        <AccountDialog data={shellData({ viewer })} />
+        <AccountDialog
+          data={shellData({
+            viewer: { timeZone: "America/Los_Angeles", ...viewer },
+          })}
+        />
       </ShellStateProvider>
     </IntlProvider>,
     container ? { container } : undefined,
@@ -89,6 +113,11 @@ beforeEach(() => {
   updateProfile.mockResolvedValue({
     ok: true,
     value: { displayName: "Marcus Bell", avatarUrl: null },
+  });
+  updateTimeZone.mockReset();
+  updateTimeZone.mockResolvedValue({
+    ok: true,
+    value: { timeZone: "Europe/London" },
   });
 });
 afterEach(cleanup);
@@ -323,6 +352,79 @@ describe("AccountDialog", () => {
 
     expect(await screen.findByTestId("account-saved")).toBeTruthy();
     expect(screen.getByTestId("account-status").textContent).toBe("Saved.");
+  });
+
+  // Every date in the app reads in this zone (features/shell/viewer-clock.tsx),
+  // so the dialog is where a person sets it. It is written through
+  // set_preferences, a second capability behind the same Save.
+  it("shows the stored zone and offers the zones to choose from", async () => {
+    await openDialog({
+      name: "Marcus Bell",
+      email: "marcus.bell@acme.example",
+      avatarUrl: null,
+      timeZone: "Asia/Tokyo",
+    });
+    const select = screen.getByLabelText("Time zone");
+    expect(select).toHaveValue("Asia/Tokyo");
+    expect(screen.getByRole("option", { name: "Europe/London" })).toBeTruthy();
+  });
+
+  it("saves a changed zone through set_preferences, after the profile, and refreshes once", async () => {
+    const { user } = await openDialog();
+    await user.selectOptions(
+      screen.getByTestId("account-time-zone"),
+      "Europe/London",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByTestId("account-saved")).toBeTruthy();
+    expect(updateTimeZone).toHaveBeenCalledWith("acme", "Europe/London");
+    expect(updateProfile.mock.invocationCallOrder[0]).toBeLessThan(
+      updateTimeZone.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(screen.getByTestId("account-time-zone")).toHaveValue(
+      "Europe/London",
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not write the preference row when the zone did not move", async () => {
+    const { user } = await openDialog();
+    await user.type(screen.getByTestId("account-display-name"), "!");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByTestId("account-saved")).toBeTruthy();
+    expect(updateTimeZone).not.toHaveBeenCalled();
+  });
+
+  it("reads a refused zone back as its own refusal, with the profile still saved (negative)", async () => {
+    const { user } = await openDialog();
+    await user.selectOptions(
+      screen.getByTestId("account-time-zone"),
+      "Europe/London",
+    );
+    updateTimeZone.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "timezone",
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByTestId("account-timeZoneInvalid")).toBeTruthy();
+    expect(screen.queryByTestId("account-saved")).toBeNull();
+    expect(updateProfile).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps a stored zone the runtime's list does not carry, so the select shows what is stored", async () => {
+    await openDialog({
+      name: "Marcus Bell",
+      email: "marcus.bell@acme.example",
+      avatarUrl: null,
+      timeZone: "US/Pacific",
+    });
+    expect(screen.getByLabelText("Time zone")).toHaveValue("US/Pacific");
   });
 
   it("has no axe violations", async () => {
