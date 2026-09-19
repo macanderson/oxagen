@@ -1915,7 +1915,6 @@ type Messages = {
       signOut: string;
       signingOut: string;
       signOutFailed: string;
-      signOutHoldsCodes: string;
     };
     commands: {
       title: string;
@@ -2008,6 +2007,7 @@ type Messages = {
         issuing: string;
         cancel: string;
         codesRefused: string;
+        codesUncertain: string;
         codesIssued: string;
         codesSaved: string;
         codesHeld: string;
@@ -2022,7 +2022,6 @@ type Messages = {
         revoking: string;
         revoked: string;
         sessionsHint: string;
-        codesUncertain: string;
       };
       privacy: {
         export: string;

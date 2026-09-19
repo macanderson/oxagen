@@ -127,9 +127,16 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // exist, which is why no response can ever be a superseded one.
   const rotation: CodeRotation = {
     pending: vault.rotating,
+    uncertain: vault.uncertain,
     begin: () => recoveryCodeVault.begin(userId),
     end: () => {
       recoveryCodeVault.end();
+    },
+    refuse: () => {
+      recoveryCodeVault.refuse();
+    },
+    lose: () => {
+      recoveryCodeVault.lose(userId);
     },
   };
 
@@ -137,7 +144,9 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // organization they rotated in, by Back or by a link, before saving them.
   // The set is still in the vault, so it is put back in front of them rather
   // than left for them to go looking for.
-  const arrivedWithCodesRef = useRef(vault.rotating || vault.codes !== null);
+  const arrivedWithCodesRef = useRef(
+    vault.rotating || vault.codes !== null || vault.uncertain,
+  );
   useEffect(() => {
     if (arrivedWithCodesRef.current) openAccount("security");
   }, [openAccount]);
@@ -246,8 +255,14 @@ export function AccountDialog({ data }: { data: ShellData }) {
  */
 type CodeRotation = {
   pending: boolean;
+  /** An earlier rotation's answer was lost, so the stored set is unknown. */
+  uncertain: boolean;
   begin: () => boolean;
   end: () => void;
+  /** The server answered and refused: this rotation changed nothing. */
+  refuse: () => void;
+  /** The call threw: the old set may be void and the new one is gone. */
+  lose: () => void;
 };
 
 type CodeVault = {
@@ -772,16 +787,7 @@ type SessionsState =
 type CodesState =
   | { kind: "closed" }
   | { kind: "asking"; password: string; refused: boolean }
-  | { kind: "issued"; codes: string[] }
-  /**
-   * The rotation failed in a way that says nothing about what the server did.
-   * Better Auth voids the old codes the moment it commits, so this may be a
-   * committed rotation whose response was lost: the old set already dead, the
-   * new one gone. Reporting it as a rejected password would tell the person
-   * nothing happened and send them away with codes that no longer work, so it
-   * is its own state, and it does not clear until a rotation succeeds.
-   */
-  | { kind: "uncertain" };
+  | { kind: "issued"; codes: string[] };
 
 /** "MacBook Pro · Chrome 141" from a user agent, or the raw string when nothing is recognised. */
 function describeAgent(userAgent: string | null, fallback: string): string {
@@ -842,7 +848,7 @@ function SecurityTab({
   const [codes, setCodes] = useState<CodesState>(() =>
     heldCodes
       ? { kind: "issued", codes: heldCodes }
-      : rotation.pending
+      : rotation.pending || rotation.uncertain
         ? { kind: "asking", password: "", refused: false }
         : { kind: "closed" },
   );
@@ -930,27 +936,33 @@ function SecurityTab({
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
       } else if (result.refused) {
-        // The server read the request and declined the password, so nothing
-        // was rotated and the stored set still works. Nothing is displayed,
-        // because a set on screen would be a claim about what is stored.
-        setHeldCodes(null);
+        // Better Auth answered and refused, a wrong password for one. It read
+        // the request and declined it, so this rotation did not happen and the
+        // stored set still works. Nothing is displayed: a set left on screen
+        // would claim to be the stored set.
+        rotation.refuse();
         setCodes({ kind: "asking", password: "", refused: true });
       } else {
-        // It failed in a way that says nothing about what the server did. This
-        // is the case that used to read as "that password was not accepted",
-        // which is the one answer that can get somebody locked out: Better
-        // Auth voids the old codes as soon as it commits, so a lost response
-        // means the old set may already be dead and the new one gone. Saying
-        // so is the whole fix; pretending to know is the defect.
-        setHeldCodes(null);
-        setCodes({ kind: "uncertain" });
+        // It answered, but with a failure that says nothing about what it did
+        // first. A 5xx resolves through the client rather than throwing, so
+        // this is the same lost answer as the catch below and must not be read
+        // as a refusal: the rotation may have committed before the failure,
+        // leaving the old set void and the new one nowhere.
+        rotation.end();
+        rotation.lose();
+        setCodes({ kind: "asking", password: "", refused: false });
       }
     } catch {
-      // Unreachable now that the seam catches, and kept fail-safe rather than
-      // fail-quiet: an unexpected throw is still an unknown outcome.
+      // The call threw, so the answer is lost, and a lost answer is not a
+      // refusal. The server may have committed the rotation before the
+      // connection went, in which case the old set is already void and the
+      // new one exists nowhere. Calling that "password not accepted" would let
+      // the person leave believing nothing changed. So the vault stays at
+      // stake, the page stays guarded, and the form says what is known: the
+      // codes may have changed, and a set that does arrive is the way out.
       rotation.end();
-      setHeldCodes(null);
-      setCodes({ kind: "uncertain" });
+      rotation.lose();
+      setCodes({ kind: "asking", password: "", refused: false });
     }
   }
 
@@ -1040,6 +1052,13 @@ function SecurityTab({
                       </FormAlert>
                     </div>
                   ) : null}
+                  {rotation.uncertain && !rotation.pending ? (
+                    <div className="basis-full">
+                      <FormAlert testId="account-codes-uncertain">
+                        {t("codesUncertain")}
+                      </FormAlert>
+                    </div>
+                  ) : null}
                 </form>
               ) : null}
               {codes.kind === "issued" ? (
@@ -1073,14 +1092,9 @@ function SecurityTab({
                   </button>
                 </div>
               ) : null}
-              {codes.kind === "uncertain" ? (
-                <FormAlert testId="account-codes-uncertain">
-                  {t("codesUncertain")}
-                </FormAlert>
-              ) : null}
             </div>
             {viewer.twoFactorEnabled ? (
-              codes.kind === "closed" || codes.kind === "uncertain" ? (
+              codes.kind === "closed" ? (
                 <button
                   type="button"
                   data-testid="account-codes-open"

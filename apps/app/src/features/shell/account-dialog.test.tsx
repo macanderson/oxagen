@@ -733,22 +733,30 @@ describe("Security", () => {
   // a committed rotation: the old set already dead and the new one gone. Told
   // "that password was not accepted", the person carries on with codes that no
   // longer work and finds out when the authenticator is gone.
-  it("says the outcome is unknown when the rotation fails unexplained", async () => {
-    liveRegenerateBackupCodes.mockResolvedValue({ ok: false, refused: false });
+  it("says the outcome is unknown when the server answers with a failure", async () => {
+    // Resolved, not thrown. A 5xx comes back through the client as an error
+    // reply rather than an exception, so the lost-answer case above does not
+    // cover it, and reading it as a refusal is the claim that misleads: the
+    // rotation may have committed before the failure, leaving the old set void
+    // and the new one nowhere.
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: false,
+      refused: false,
+    });
     const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
 
-    const warned = await screen.findByTestId("account-codes-uncertain");
-    expect(warned).toHaveTextContent("could not confirm");
-    expect(warned).toHaveTextContent("may no longer work");
-    // Not reported as a rejected password, which is the claim that misleads.
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
     expect(screen.queryByTestId("account-codes-refused")).toBeNull();
-    // And nothing is shown as if it were the stored set.
+    // Nothing is shown as if it were the stored set, and the page stays
+    // guarded, because the codes may already have changed.
     expect(screen.queryByTestId("account-codes")).toBeNull();
-    // The way out stays open: generate another set and save it.
-    expect(screen.getByTestId("account-codes-open")).toBeTruthy();
+    expect(asked()).toBe(true);
   });
 
   it("reads a refused password back and shows no set at all (negative)", async () => {
@@ -1025,6 +1033,49 @@ describe("Security", () => {
     await user.type(screen.getByTestId("account-codes-password"), "wrong");
     await user.click(screen.getByTestId("account-codes-confirm"));
     await screen.findByTestId("account-codes-refused");
+    expect(asked()).toBe(false);
+  });
+
+  // A thrown call is a lost answer, not a refusal. The server may have
+  // committed the rotation before the connection went, which voids the old set
+  // and leaves the new one nowhere. Saying "password not accepted" would let
+  // the person leave thinking nothing changed, so the page stays guarded, the
+  // form says the codes may have changed, and only a set that does arrive
+  // releases it.
+  it("keeps the page guarded when a rotation's answer is lost", async () => {
+    liveRegenerateBackupCodes.mockRejectedValueOnce(new Error("offline"));
+    const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
+    expect(screen.queryByTestId("account-codes-refused")).toBeNull();
+    expect(asked()).toBe(true);
+
+    // A refusal now does not settle the earlier doubt.
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: false,
+      refused: true,
+    });
+    await user.type(screen.getByTestId("account-codes-password"), "wrong");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes-refused");
+    expect(screen.getByTestId("account-codes-uncertain")).toBeTruthy();
+    expect(asked()).toBe(true);
+
+    // A set that arrives does, once it is saved.
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: true,
+      codes: ["safe-1111", "safe-2222"],
+    });
+    await user.clear(screen.getByTestId("account-codes-password"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    await user.click(screen.getByTestId("account-codes-saved"));
     expect(asked()).toBe(false);
   });
 
