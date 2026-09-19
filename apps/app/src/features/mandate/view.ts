@@ -106,10 +106,10 @@ export function mandateLink(
 
 /**
  * Whether a movement answers the search. It matches the measure and the
- * external effect id and nothing else, because those are the only two strings
- * on the row a person could be looking for: the state has its own facet, the
- * figure is a number in a measure's own units, and the row carries no tool name
- * (`MandateLedgerRow`). Matching is case-insensitive, and on the value as
+ * external effect reference and nothing else, because those are the only two
+ * strings on the row a person could be looking for: the state has its own facet,
+ * the figure is a number in a measure's own units, and the row carries no tool
+ * name (`MandateLedgerRow`). Matching is case-insensitive, and on the value as
  * recorded — no normalisation, so what is typed is compared with what is shown.
  */
 function matches(row: MandateLedgerRow, search: string): boolean {

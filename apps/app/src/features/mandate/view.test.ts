@@ -116,7 +116,7 @@ describe("ledgerPage", () => {
     expect(page).toMatchObject({ total: 3, offset: 0, hasMore: false });
   });
 
-  it("matches a measure and an external effect id, whatever the casing", () => {
+  it("matches a measure and an external effect reference, whatever the casing", () => {
     expect(ledgerPage(three, view({ search: "CALLS" })).rows).toHaveLength(1);
     expect(ledgerPage(three, view({ search: "pi_3qa" })).rows).toHaveLength(1);
   });
