@@ -78,6 +78,7 @@
       "repositoryNotLinked": "That repository is no longer linked to this workspace. Reload the page to read the current list.",
       "branchNotFound": "GitHub has no branch by that name in this repository. Check the spelling, or push the branch first.",
       "productionBranchMissing": "The production branch this repository records no longer exists on GitHub. Set the production branch first.",
+      "productionBranchIsInitBranch": "This repository records oxagen/init as its production branch, which is where the init pull request is pushed. Set another production branch first.",
       "oxagenTreeExists": "This repository already has .oxagen/ on its production branch. Change it with an ordinary pull request.",
       "governanceTomlInvalid": "governance.toml does not declare the mode you chose. Fix the file or pick the mode it names.",
       "workspaceTomlInvalid": "workspace.toml is not valid TOML. Fix the file and open the pull request again.",

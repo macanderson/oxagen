@@ -220,6 +220,21 @@ describe("open_init_pr", () => {
     expect(client.createBranch).not.toHaveBeenCalled();
   });
 
+  it("refuses a production branch that is oxagen/init itself, before any GitHub call", async () => {
+    const client = fakeGithub();
+    const onInitBranch = createInitPrOpenHandler({
+      github: { client: async () => client },
+      readBound: async () => ({ ...BOUND, productionBranch: "oxagen/init" }),
+      now: () => NOW,
+    });
+    await expect(onInitBranch(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "production_branch_is_init_branch",
+    });
+    expect(client.findOpenPullRequest).not.toHaveBeenCalled();
+    expect(client.putFile).not.toHaveBeenCalled();
+  });
+
   it("refuses when the production branch is gone from GitHub", async () => {
     await expect(
       handler(fakeGithub({ getBranch: vi.fn(async () => null) }))(

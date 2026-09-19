@@ -857,6 +857,7 @@ function RetiredConnection({
           <SubmitButton
             pending={pending}
             fullWidth={false}
+            secondary
             label={t("bound.reconnect")}
             pendingLabel={t("bound.reconnecting")}
           />
@@ -941,6 +942,7 @@ function ReapproveDefaultRef({
         <SubmitButton
           pending={pending}
           fullWidth={false}
+          secondary
           label={t("bound.reapprove")}
           pendingLabel={t("bound.reapproving")}
         />

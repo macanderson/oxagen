@@ -81,6 +81,26 @@ describe("form feedback", () => {
     expect(pending).not.toBeDisabled();
   });
 
+  it("is gold by default and gives the gold up when drawn as secondary", () => {
+    const { rerender } = render(
+      <SubmitButton pending={false} label="Link" pendingLabel="Linking" />,
+    );
+    expect(screen.getByRole("button", { name: "Link" }).className).toContain(
+      "bg-button-primary-bg",
+    );
+    rerender(
+      <SubmitButton
+        pending={false}
+        secondary
+        label="Link"
+        pendingLabel="Linking"
+      />,
+    );
+    const secondary = screen.getByRole("button", { name: "Link" });
+    expect(secondary.className).toContain("bg-button-default-bg");
+    expect(secondary.className).not.toContain("bg-button-primary-bg");
+  });
+
   it("titles an outcome panel as its region", () => {
     render(
       <OutcomePanel tone="deny" title="Invitation closed" testId="outcome">

@@ -10,7 +10,8 @@
 //   3. The bound repository by its binding id, and a client for the
 //      workspace's installation.
 //   4. An init pull request already open is answered as it is.
-//   5. The production branch must exist, and must carry no `.oxagen/` yet.
+//   5. The production branch must not be `oxagen/init` itself, must exist,
+//      and must carry no `.oxagen/` yet.
 //   6. `oxagen/init` is created from the production branch (an existing
 //      branch is reused), the six files are pushed to it one commit each,
 //      and one pull request is opened back into the production branch.
@@ -26,7 +27,10 @@ import {
 } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { parse } from "smol-toml";
-import { GOVERNANCE_PATH, parseGovernanceMode } from "./context.steering.policy";
+import {
+  GOVERNANCE_PATH,
+  parseGovernanceMode,
+} from "./context.steering.policy";
 import { logger } from "./logger";
 import {
   githubRefused,
@@ -58,7 +62,8 @@ export function gitignoreWithOxagen(current: string | null): string | null {
   const missing = GITIGNORE_LINES.filter((line) => !present.has(line));
   if (missing.length === 0) return null;
   const base = text === "" || text.endsWith("\n") ? text : `${text}\n`;
-  const header = "# Oxagen: this machine's link to a workspace; never committed.\n";
+  const header =
+    "# Oxagen: this machine's link to a workspace; never committed.\n";
   return `${base}${base === "" ? "" : "\n"}${header}${missing.join("\n")}\n`;
 }
 
@@ -103,14 +108,28 @@ export function createInitPrOpenHandler(
 
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const bound = await deps.readBound(scope, input.bindingId);
+    const base = bound.productionBranch;
+    // The files go to `oxagen/init`. When that is also the production branch,
+    // pushing to it is a write to the production branch, which this never
+    // makes. Refused before any GitHub call.
+    if (base === INIT_BRANCH) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "production_branch_is_init_branch",
+        message: `${bound.fullName} records ${INIT_BRANCH} as its production branch. Set another production branch first.`,
+      });
+    }
     const gh = await requireWorkspaceGithub(deps.github, scope);
     const at = { owner: bound.owner, repo: bound.name };
-    const base = bound.productionBranch;
     const openedAt = deps.now().toISOString();
 
     let existing;
     try {
-      existing = await gh.findOpenPullRequest({ ...at, head: INIT_BRANCH, base });
+      existing = await gh.findOpenPullRequest({
+        ...at,
+        head: INIT_BRANCH,
+        base,
+      });
     } catch (err) {
       if (isGithubNotFound(err)) throw repositoryNotInstalled(bound.fullName);
       throw err;
@@ -154,7 +173,9 @@ export function createInitPrOpenHandler(
       { path: WORKSPACE_TOML_PATH, content: input.workspaceToml },
       { path: GOVERNANCE_PATH, content: input.governanceToml },
       ...KEEP_FILES.map((path) => ({ path, content: "" })),
-      ...(gitignore === null ? [] : [{ path: ".gitignore", content: gitignore }]),
+      ...(gitignore === null
+        ? []
+        : [{ path: ".gitignore", content: gitignore }]),
     ];
 
     try {

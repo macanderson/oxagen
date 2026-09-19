@@ -57,5 +57,6 @@ Idempotent: an init pull request already open for the repository is answered as 
 | `conflict` | `github_not_connected` | the workspace has no installation to write through |
 | `not_found` | `repository_not_installed` | the installation cannot see the repository |
 | `conflict` | `production_branch_missing` | the production branch is gone from GitHub |
+| `conflict` | `production_branch_is_init_branch` | the production branch is `oxagen/init`, so the push would land on it |
 | `conflict` | `oxagen_tree_exists` | the repository already has `.oxagen/`; change it with an ordinary pull request |
 | `conflict` | `github_refused` | GitHub refused a push or the pull request, with GitHub's own message |

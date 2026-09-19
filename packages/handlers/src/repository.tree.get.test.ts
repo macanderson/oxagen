@@ -89,11 +89,23 @@ describe("get_repository_tree", () => {
       readAt: NOW.toISOString(),
     });
     expect(repositoryTreeGet.output.safeParse(out).success).toBe(true);
-    // The tree is read at the production branch, never GitHub's default.
+    // The tree is read on the production branch, never GitHub's default, and
+    // at the head commit it answers, so every file comes from that commit.
+    expect(client.getBranch).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "widgets",
+      branch: "main",
+    });
     expect(client.getTree).toHaveBeenCalledWith({
       owner: "acme",
       repo: "widgets",
-      ref: "main",
+      ref: "abc123",
+    });
+    expect(client.getFileContent).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "widgets",
+      path: ".oxagen/workspace.toml",
+      ref: "abc123",
     });
   });
 
@@ -133,7 +145,10 @@ describe("get_repository_tree", () => {
   it("refuses with github_not_connected when no installation is attached", async () => {
     await expect(
       handler(null)({ bindingId: "rpb_0a1b" }, makeCTX()),
-    ).rejects.toMatchObject({ code: "conflict", reason: "github_not_connected" });
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "github_not_connected",
+    });
   });
 
   it("refuses with repository_not_installed when the installation cannot see the repository", async () => {

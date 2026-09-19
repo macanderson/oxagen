@@ -1914,6 +1914,7 @@ type Messages = {
       repositoryNotLinked: string;
       branchNotFound: string;
       productionBranchMissing: string;
+      productionBranchIsInitBranch: string;
       oxagenTreeExists: string;
       governanceTomlInvalid: string;
       workspaceTomlInvalid: string;

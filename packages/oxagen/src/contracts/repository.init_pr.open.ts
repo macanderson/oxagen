@@ -23,6 +23,8 @@
  * Refusals: `not_found: repository_not_linked`, `conflict: github_not_connected`,
  * `not_found: repository_not_installed`, `conflict: production_branch_missing`
  * (the branch the binding records is gone from GitHub),
+ * `conflict: production_branch_is_init_branch` (the production branch is
+ * `oxagen/init`, so pushing there would write to the production branch),
  * `conflict: oxagen_tree_exists` (the repository already has `.oxagen/`;
  * changing it is an ordinary pull request), `conflict: governance_toml_invalid`
  * and `conflict: workspace_toml_invalid`, and `conflict: github_refused` with

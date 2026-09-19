@@ -349,7 +349,10 @@ export function Repositories({
         onClose={() => {
           setSelected(null);
         }}
-        onChanged={reread}
+        onChanged={(bindingId) => {
+          setSelected(bindingId);
+          reread();
+        }}
         onAddOxagen={openWizard}
         onSeeChanges={() => {
           setSelected(null);

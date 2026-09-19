@@ -23,7 +23,10 @@ import {
   type RepositoryTreeGetOutput,
 } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { INIT_BRANCH } from "@oxagen/oxagen/contracts/repository.init_pr.open";
-import { GOVERNANCE_PATH, parseGovernanceMode } from "./context.steering.policy";
+import {
+  GOVERNANCE_PATH,
+  parseGovernanceMode,
+} from "./context.steering.policy";
 import {
   isGithubNotFound,
   readBoundRepository,
@@ -68,14 +71,20 @@ export function createRepositoryTreeGetHandler(
       throw err;
     }
 
-    const branch = await gh.getBranch({ ...at, branch: bound.productionBranch });
+    const branch = await gh.getBranch({
+      ...at,
+      branch: bound.productionBranch,
+    });
     const head = branch?.sha ?? null;
 
     let files: string[] = [];
     let workspaceToml: string | null = null;
     let governanceToml: string | null = null;
     if (head !== null) {
-      const tree = await gh.getTree({ ...at, ref: bound.productionBranch });
+      // Every read below names the commit, not the branch. A push that lands
+      // between two reads would otherwise mix two commits into one answer,
+      // and the page says the files are "at commit <head>".
+      const tree = await gh.getTree({ ...at, ref: head });
       files = tree.filter((path) => path.startsWith(OXAGEN_DIR)).sort();
       // Read only what the tree says is there: two GETs that would 404 are
       // two round trips a person waits for and learns nothing from.
@@ -84,14 +93,14 @@ export function createRepositoryTreeGetHandler(
           ? gh.getFileContent({
               ...at,
               path: WORKSPACE_TOML_PATH,
-              ref: bound.productionBranch,
+              ref: head,
             })
           : null,
         files.includes(GOVERNANCE_PATH)
           ? gh.getFileContent({
               ...at,
               path: GOVERNANCE_PATH,
-              ref: bound.productionBranch,
+              ref: head,
             })
           : null,
       ]);

@@ -186,7 +186,10 @@ function RepositoryRow({
     </span>
   );
   return (
-    <tr data-testid={`workspace-repository-row-${id}`} data-role={repository.role}>
+    <tr
+      data-testid={`workspace-repository-row-${id}`}
+      data-role={repository.role}
+    >
       <td className={cell}>
         {href === null ? (
           name
@@ -485,6 +488,7 @@ function UnlinkRepository({
         <SubmitButton
           pending={pending}
           fullWidth={false}
+          secondary
           label={t("unlinkYes")}
           pendingLabel={t("unlinking")}
         />
@@ -591,6 +595,7 @@ export function LinkRepository({
         <SubmitButton
           pending={pending}
           fullWidth={false}
+          secondary
           label={t("submit")}
           pendingLabel={t("pending")}
         />

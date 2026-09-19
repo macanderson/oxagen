@@ -9,10 +9,7 @@
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
-export type RepositoriesFailure = Exclude<
-  ActionResult<unknown>,
-  { ok: true }
->;
+export type RepositoriesFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 export function useRepositoriesFailure(): (
   failure: RepositoriesFailure,
@@ -55,6 +52,8 @@ export function useRepositoriesFailure(): (
             return t("branchNotFound");
           case "production_branch_missing":
             return t("productionBranchMissing");
+          case "production_branch_is_init_branch":
+            return t("productionBranchIsInitBranch");
           case "oxagen_tree_exists":
             return t("oxagenTreeExists");
           case "governance_toml_invalid":

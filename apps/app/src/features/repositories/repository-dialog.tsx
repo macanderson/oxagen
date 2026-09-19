@@ -48,8 +48,12 @@ export function RepositoryDialog({
   repository: BoundRepositoryRow | null;
   tree: Load<RepositoryTree> | undefined;
   onClose: () => void;
-  /** The production branch moved; the page re-reads. */
-  onChanged: () => void;
+  /**
+   * The production branch moved. The change wrote a new binding version, so
+   * the repository now answers to `bindingId`. The page follows that id and
+   * re-reads, which keeps this dialog open on the same repository.
+   */
+  onChanged: (bindingId: string) => void;
   /** Open the init wizard on this repository. */
   onAddOxagen: (bindingId: string) => void;
   /** Go to the Changes tab. */
@@ -123,7 +127,7 @@ function DialogBody({
   ws: string;
   repository: BoundRepositoryRow;
   tree: Load<RepositoryTree> | undefined;
-  onChanged: () => void;
+  onChanged: (bindingId: string) => void;
 }) {
   const t = useTranslations("repositories.dialog");
   const failureText = useRepositoriesFailure();
@@ -138,7 +142,11 @@ function DialogBody({
         </FormAlert>
       ) : null}
       {tree === undefined || tree.kind === "loading" ? (
-        <p role="status" data-testid="repository-dialog-loading" className={prose}>
+        <p
+          role="status"
+          data-testid="repository-dialog-loading"
+          className={prose}
+        >
           {t("loading")}
         </p>
       ) : null}
@@ -239,7 +247,7 @@ function ProductionBranchForm({
   repository: BoundRepositoryRow;
   /** GitHub's default branch when it differs from the production branch. */
   suggestion: string | null;
-  onChanged: () => void;
+  onChanged: (bindingId: string) => void;
 }) {
   const t = useTranslations("repositories.dialog.branch");
   const failureText = useRepositoriesFailure();
@@ -276,7 +284,7 @@ function ProductionBranchForm({
               })
             : t("unchanged", { branch: result.value.productionBranch }),
         );
-        if (result.value.changed) onChanged();
+        if (result.value.changed) onChanged(result.value.bindingId);
       } else setFailure(failureText(result));
     } catch {
       setFailure(failureText(UNANSWERED));
@@ -364,6 +372,7 @@ function ProductionBranchForm({
           <SubmitButton
             pending={pending}
             fullWidth={false}
+            secondary
             label={t("submit")}
             pendingLabel={t("pending")}
           />
