@@ -620,10 +620,10 @@ export const base64Size = (bytes: number): number => Math.ceil(bytes / 3) * 4;
 /**
  * The most bytes one frame body may carry, before base64.
  *
- * Derived from `TACHO_MAX_REQUEST_BYTES` rather than written as a number,
- * because the two have to agree and they did not. An earlier pass sized
- * these against a route that hardcoded a 1 MiB request limit, which was
- * true when it was written. The route now reads the host's own ceiling, so
+ * This cap and `TACHO_MAX_REQUEST_BYTES` have to agree, and they did not. An
+ * earlier pass sized these against a route that hardcoded a 1 MiB request
+ * limit, which was true when it was written. The route now imports the host's
+ * own ceiling, so
  * the hand-written caps silently became a downgrade: every `content_exact`
  * body over the smaller number was marked too large and its bytes were
  * never written, which is the content a workspace pays to keep.

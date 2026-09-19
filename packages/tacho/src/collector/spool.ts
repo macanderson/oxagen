@@ -21,6 +21,8 @@ import {
   type RateLimitHint,
 } from "../host/control-client";
 import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
+import { contentClassOf, retentionAllows } from "../evidence/frame-body";
+import type { RetentionMandate } from "../evidence/retention";
 import type { Wal } from "../host/wal";
 import {
   type ControlEnvelope,
@@ -44,6 +46,19 @@ export interface ShipperOptions {
   onBodyRejection?: (
     rejections: Array<{ event_id_idem: string; reason: string }>,
   ) => void;
+  /**
+   * The retention clause in force right now, asked at ship time.
+   *
+   * Retention is applied when a body is appended, but a body can wait in the
+   * WAL through an outage and leave under a mandate that has since narrowed.
+   * The control plane refuses it, which protects the record and not the
+   * machine: by then the prompt or tool content has already left. So the
+   * clause is asked again here, against the mandate the last refresh
+   * established, and a body it no longer covers is never transmitted.
+   *
+   * Optional, so a caller that does not supply it keeps the old behaviour.
+   */
+  retentionInForce?: () => RetentionMandate;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -265,9 +280,35 @@ export class Shipper {
     const { own, quarantined } = this.setAsideForeignEvents(batch);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };
+    // Filtered against the mandate as it stands now, not as it stood when the
+    // body was appended. A narrowing between those two moments is exactly the
+    // case this guards: the body is dropped here rather than sent and refused
+    // after it has already left the machine.
+    //
+    // The class comes from the body's own event rather than from the body,
+    // because the WAL stores bodies as bytes and does not persist a class.
+    // `contentClassOf` is the one table that maps a frame kind to a class, so
+    // asking it here cannot disagree with what the append path asked.
+    const retention = this.options.retentionInForce?.();
+    const kindOf = new Map(
+      own.map((event) => [event.event_id_idem, event.kind] as const),
+    );
     const bodies = new Map(
       this.options.wal
         .bodiesFor(own)
+        .filter((body) => {
+          if (retention === undefined) return true;
+          const kind = kindOf.get(body.event_id_idem);
+          const contentClass =
+            kind === undefined ? undefined : contentClassOf(kind);
+          // A body whose event is not in this batch, or whose kind names no
+          // class, is not shipped: an unclassifiable body cannot be shown to
+          // be covered, and the boundary fails closed.
+          return (
+            contentClass !== undefined &&
+            retentionAllows(retention, contentClass)
+          );
+        })
         .map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
@@ -323,7 +364,7 @@ export class Shipper {
       }
       if (
         error instanceof ControlError &&
-        (error.status === 400 || error.status === 422 || error.status === 413)
+        (error.status === 400 || error.status === 413 || error.status === 422)
       ) {
         // The control plane refused the batch: malformed (400, 422), or too
         // large for one request (413). Bisect to the event it objects to; a
@@ -331,15 +372,14 @@ export class Shipper {
         //
         // 413 belongs here and not with the retryable refusals below. The
         // ingest route caps a request at `TACHO_MAX_REQUEST_BYTES`, and a
-        // retry can never make a batch smaller, so keeping it means
-        // offering the same oversized
-        // request on every drain for ever. Because the WAL head never
-        // advances past it, every later event on that host queues behind it
-        // and the evidence pipeline stops permanently, while the host still
-        // reports itself healthy. Bisection halves the batch until the
-        // request fits, and an event that exceeds the limit on its own is
-        // quarantined rather than retried, which is the same answer this
-        // path already gives a malformed event.
+        // retry can never make a batch smaller, so keeping it means offering
+        // the same oversized request on every drain for ever. Because the
+        // WAL head never advances past it, every later event on that host
+        // queues behind it and the evidence pipeline stops permanently,
+        // while the host still reports itself healthy. Bisection halves the
+        // batch until the request fits, and an event that exceeds the limit
+        // on its own is quarantined rather than retried, which is the same
+        // answer this path already gives a malformed event.
         if (batch.length === 1) {
           this.quarantine(batch[0] as TachoEvent, error.body.slice(0, 512));
           this.succeed();

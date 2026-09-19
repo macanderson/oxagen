@@ -7,7 +7,7 @@ import {
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
-import { schema } from "@oxagen/database";
+import { resetColumnProbesForTests, schema } from "@oxagen/database";
 import { Column, Param, SQL } from "drizzle-orm";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -337,6 +337,17 @@ interface FakeDb {
     lastSeenAt: Date;
     chainGenesisHash: string | null;
   }>;
+  /**
+   * Columns this fake database does NOT have yet, as
+   * `<schema>.<table>.<column>`.
+   *
+   * Empty by default — the migrated steady state every other case here is
+   * about. A case that fills it models the deploy-before-migrate window (#1275,
+   * and nothing migrates production automatically): the node is live, the
+   * migration is not, and the readiness probe is what stands between a pending
+   * ALTER TABLE and an ingest path that rejects every batch.
+   */
+  pendingColumns: Set<string>;
   /** The workspace's latest retention policy row; none by default. */
   retentionPolicy:
     | { mode: string; retainedContentClasses: string[] }
@@ -398,6 +409,7 @@ function fakeDb(): FakeDb {
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
+    pendingColumns: new Set<string>(),
     gatewayChains: [],
     retentionPolicy: undefined,
   };
@@ -507,16 +519,35 @@ function sessionNamed(db: FakeDb, where: unknown) {
   return undefined;
 }
 
+/**
+ * What `information_schema` says about the column a readiness probe just asked
+ * about.
+ *
+ * The probe is the only statement this fixture's `execute` ever sees, and it
+ * interpolates schema, table and column as plain strings into `sql` rather than
+ * as bound `Param`s — so they are read straight off `queryChunks` and not
+ * through `boundValues`, which only sees params. A statement that is not the
+ * probe (three strings in that order) is answered "present", which keeps every
+ * case that predates `pendingColumns` on the migrated path.
+ */
+function probeAnswer(db: FakeDb, query: unknown): Array<Record<string, number>> {
+  const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
+  const named = chunks.filter((c): c is string => typeof c === "string");
+  if (named.length !== 3) return [{ "?column?": 1 }];
+  return db.pendingColumns.has(named.join(".")) ? [] : [{ "?column?": 1 }];
+}
+
 function wire(db: FakeDb): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        // The gateway-column probe asks `information_schema` before the
-        // handler reads or writes a column migration 20260917140000 adds. This
-        // fixture answers "applied", which is the state every case here is
-        // about; the half-applied and not-yet-applied states are covered as
-        // unit cases on `enforcementTierOf` and `hasColumn`.
-        execute: async () => [{ "?column?": 1 }],
+        // The readiness probe asks `information_schema` before the handler
+        // reads or writes any column a pending migration adds. It binds schema,
+        // table and column in that order, so the fixture can answer per column
+        // rather than "everything is applied": one row for present, none for
+        // absent. `db.pendingColumns` is empty by default, so every existing
+        // case still sees the migrated steady state.
+        execute: async (query: unknown) => probeAnswer(db, query),
         query: {
           apiKeys: {
             findFirst: async () => ({
@@ -764,6 +795,10 @@ function wire(db: FakeDb): void {
 beforeEach(() => {
   vi.clearAllMocks();
   clearSteeringCacheForTests();
+  // The probe cache is per process and keeps a positive answer for the life of
+  // it, so without this a case about a PENDING column would read the previous
+  // case's "applied" and pass whether or not the gate existed.
+  resetColumnProbesForTests();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
   mocks.selectTachoEvents.mockResolvedValue([]);
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
@@ -2028,6 +2063,174 @@ function bodyFor(event: TachoEvent, text = TOOL_OUTPUT) {
     bytes_base64: Buffer.from(text).toString("base64"),
   };
 }
+
+/**
+ * The deploy-before-migrate window, for the two columns this branch adds.
+ *
+ * `deploy-node` ships on merge and nothing migrates production automatically —
+ * the manual `db-migrate.yml` is the only path from a committed migration to
+ * prod — so the node runs new code against the old schema for as long as it
+ * takes someone to run the workflow. Every accepted batch reaches the session
+ * counter UPDATE and the file rollup, so an unguarded reference to
+ * `tacho.sessions.pushes` or `tacho.session_files.observed_status` does not
+ * degrade one field: 42703 aborts the transaction and the whole batch is
+ * rejected, for the whole window (discussion_r4051911079).
+ *
+ * The case that matters is therefore this one, not the migrated steady state
+ * the rest of the suite covers: the batch is accepted, and everything the
+ * schema CAN hold is still written.
+ */
+describe("ingestion survives a pending migration", () => {
+  const PENDING = [
+    "tacho.sessions.pushes",
+    "tacho.session_files.observed_status",
+  ];
+
+  function pushingSession(): TachoEvent[] {
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          tool_target: "/home/dev/proj/src/edited.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 40,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      // The push is the frame whose counter has nowhere to go yet.
+      unsealed(
+        "command",
+        { effect_kind: "git_push", tool_target: "git push origin main" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "command",
+        { effect_kind: "git_commit", tool_target: "git commit -m x" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "oxagen:worktree_reconciled",
+        {
+          observed_changes: [
+            {
+              path: "/home/dev/proj/src/edited.ts",
+              repo_relative_path: "src/edited.ts",
+              status: "modified",
+              lines_added: 12,
+              lines_removed: 3,
+            },
+          ],
+          observed_changes_total: 1,
+          observed_changes_truncated: false,
+        },
+        "collector",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    return events;
+  }
+
+  it("accepts the batch and writes every column the schema does have", async () => {
+    const db = fakeDb();
+    for (const column of PENDING) db.pendingColumns.add(column);
+    wire(db);
+    const events = pushingSession();
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    // The whole point: nothing is rejected over a column the deploy is ahead
+    // of.
+    expect(output.accepted).toBe(events.length);
+
+    const sessionUpdate = db.updates.find((u) => u.table === "sessions");
+    expect(sessionUpdate).toBeDefined();
+    // The one counter with nowhere to go is omitted from the SET, not written
+    // as null and not written as an expression over a column that does not
+    // exist.
+    expect(sessionUpdate?.values).not.toHaveProperty("pushes");
+    // Everything beside it still lands. `commits` is the control: it is the
+    // counter next to `pushes` in the same object, on a column the table has
+    // had since it was created, and a gate that took out the whole increment
+    // would drop this too.
+    const dialect = new PgDialect();
+    for (const column of ["commits", "commandsRun", "filesWritten"]) {
+      expect(sessionUpdate?.values, column).toHaveProperty(column);
+      expect(
+        dialect.sqlToQuery(sessionUpdate?.values[column] as SQL).sql,
+      ).toContain(" + ");
+    }
+
+    // The file row is written with its attested counters and its line counts;
+    // only the observed verdict is held back.
+    const file = db.files.find(
+      (row) => row["path"] === "/home/dev/proj/src/edited.ts",
+    );
+    expect(file).toBeDefined();
+    expect(file).not.toHaveProperty("observedStatus");
+    expect(file).toMatchObject({
+      repoRelativePath: "src/edited.ts",
+      linesAdded: 12,
+      linesRemoved: 3,
+      writes: 1,
+    });
+  });
+
+  it("writes both columns again once the migration lands, without a restart", async () => {
+    // The same process, the same probe cache. A negative answer expires
+    // (NEGATIVE_PROBE_TTL_MS), so an instance that started before the
+    // migration picks the columns up rather than waiting to be recycled — the
+    // half of the guard that a "skip it forever" implementation would pass the
+    // first assertion of and fail here.
+    const pending = fakeDb();
+    for (const column of PENDING) pending.pendingColumns.add(column);
+    wire(pending);
+    await tachoEventsIngestHandler(batch(pushingSession()), CONTEXT);
+    expect(
+      pending.updates.find((u) => u.table === "sessions")?.values,
+    ).not.toHaveProperty("pushes");
+
+    resetColumnProbesForTests();
+    const migrated = fakeDb();
+    wire(migrated);
+    await tachoEventsIngestHandler(batch(pushingSession()), CONTEXT);
+    expect(
+      migrated.updates.find((u) => u.table === "sessions")?.values,
+    ).toHaveProperty("pushes");
+    expect(
+      migrated.files.find(
+        (row) => row["path"] === "/home/dev/proj/src/edited.ts",
+      ),
+    ).toMatchObject({ observedStatus: "modified" });
+  });
+});
 
 describe("ingest_tacho_events: bodies and the seal", () => {
   it("writes a verified body before the row, stamps its reference, and seals view on a harness-tier host", async () => {

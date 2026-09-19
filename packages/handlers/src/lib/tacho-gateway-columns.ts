@@ -111,10 +111,44 @@ export async function hostReadColumns(
 /** The same for a `tacho.sessions` read. */
 export async function sessionReadColumns(
   tx: ProbeTx,
-): Promise<{ gatewayObservedAt: false } | undefined> {
-  return (await sessionGatewayColumnReady(tx))
+): Promise<
+  | { gatewayObservedAt: false; pushes: false }
+  | { gatewayObservedAt: false }
+  | { pushes: false }
+  | undefined
+> {
+  // Both of this table's pending columns, in one projection.
+  //
+  // `pushes` is here because a relational read selects every column the schema
+  // DECLARES, so `tacho.session.list` and `tacho.session.get` named it from the
+  // moment the declaration landed — for a column neither of them returns. The
+  // write gate on the ingest path is not enough on its own: guarding the
+  // statement the migration is about is not the same as guarding every
+  // statement the new declaration reaches (discussion_r4051911079).
+  //
+  // One projection rather than one per column, because Drizzle takes a single
+  // `columns` object and a caller holding two would have to merge them — and
+  // the merge is the part that gets forgotten when a third column arrives.
+  const gateway = await sessionGatewayColumnReady(tx);
+  const pushes = await sessionPushesColumnReady(tx);
+  if (gateway && pushes) return undefined;
+  if (!gateway && !pushes) return { gatewayObservedAt: false, pushes: false };
+  return gateway ? { pushes: false } : { gatewayObservedAt: false };
+}
+
+/**
+ * The `columns` fragment for a `tacho.session_files` read: everything, minus
+ * the observed verdict while the database lacks it.
+ *
+ * `undefined` on the ready path, for the reason {@link hostReadColumns} gives:
+ * Drizzle reads `{}` as "select nothing".
+ */
+export async function sessionFileReadColumns(
+  tx: ProbeTx,
+): Promise<{ observedStatus: false } | undefined> {
+  return (await sessionFileObservedStatusColumnReady(tx))
     ? undefined
-    : { gatewayObservedAt: false };
+    : { observedStatus: false };
 }
 
 /**
