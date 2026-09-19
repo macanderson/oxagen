@@ -289,18 +289,57 @@ describe("transcript fold", () => {
     expect(turn.response?.seq).toBe("2");
   });
 
-  it("steps opens at model and tool calls and folds the rest into the step before", () => {
+  it("steps opens at model and tool calls, folding the rest into the step before except a policy decision, which holds for the step after", () => {
     const folded = foldTranscript(frames, "steps");
     expect(
       folded.map((f) => [f.opening.seq, f.endSeq, f.kind, f.frames]),
     ).toEqual([
       ["0", "1", "frame", 2],
       ["2", "2", "model_call", 1],
-      ["3", "5", "tool_call", 3],
-      ["6", "7", "model_call", 2],
+      // policy_decision (seq 4) holds out of this step and attaches to the
+      // model_call that opens next, so this entry's frame count drops by one.
+      ["3", "5", "tool_call", 2],
+      ["6", "7", "model_call", 3],
     ]);
     expect(folded[1]?.costMicros).toBe(5);
     expect(folded[0]?.costMicros).toBeNull();
+  });
+
+  it("attaches a pre-call policy decision to the step it governs, not the step before it", () => {
+    // hook-handler.ts emits `policy_decision` immediately before
+    // `tool_requested` on PreToolUse: the decision names the call about to
+    // run, not the one that just finished.
+    const wrapped = [
+      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
+      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
+      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+    ];
+    const folded = foldTranscript(wrapped, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["0", "model_call"],
+      ["2", "tool_call"],
+    ]);
+    expect(folded[0]?.decision).toBeNull();
+    expect(folded[1]?.decision?.decision).toBe("allow");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("3");
+  });
+
+  it("falls back to the last step when a run ends on a pending policy decision", () => {
+    const wrapped = [
+      tachoFrame(tachoRow(0, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(1, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
+    ];
+    const folded = foldTranscript(wrapped, "steps");
+    expect(folded).toHaveLength(1);
+    expect(folded[0]?.decision?.decision).toBe("deny");
+    expect(folded[0]?.endSeq).toBe("1");
   });
 
   it("turns opens at turn_start and sums the turn's cost records", () => {
