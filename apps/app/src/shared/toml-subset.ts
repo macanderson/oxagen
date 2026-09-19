@@ -187,10 +187,13 @@ export function parseTomlSubset(text: string): TomlParse {
     const close = closingFence(rest, 0);
     if (close >= 0)
       return [
-        unescapeMultiline(rest.slice(0, close).replace(/^\n/, ""), line),
+        unescapeMultiline(rest.slice(0, close).replace(/^\r?\n/, ""), line),
         p + 3 + close + 3,
       ];
-    const parts = rest.length > 0 ? [rest] : [];
+    // A CRLF file leaves "\r" on the fence line; TOML trims the newline that
+    // follows an opening fence, so that carriage return is not body text.
+    const first = rest.replace(/^\r$/, "");
+    const parts = first.length > 0 ? [first] : [];
     for (index++; index < lines.length; index++) {
       const next = lines[index] ?? "";
       const end = closingFence(next, 0);

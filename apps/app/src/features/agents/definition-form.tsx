@@ -14,7 +14,7 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import { isEffective, type MandateList } from "@/data/contracts/mandates";
 import { diffStat } from "@/shared/line-diff";
 import type { SafePath } from "@/shared/safe-path";
-import { tomlLiteral, tomlMultiline, tomlSet } from "@/shared/toml-patch";
+import { tomlLiteral, tomlMultiline, tomlSet, tomlTableForm } from "@/shared/toml-patch";
 import {
   parseTomlSubset,
   type TomlParse,
@@ -75,9 +75,6 @@ function parseUsdMicros(text: string): number | null {
   return Number.isSafeInteger(micros) ? micros : null;
 }
 
-const BUDGET_HEADER = /^\s*\[budget\]/m;
-const BUDGET_DOTTED = /^\s*budget\.per_run_micros\s*=/m;
-
 /**
  * The draft with `budget.per_run_micros` set to `next` and every other budget
  * key kept. The file may spell the table three ways, and the patcher works on
@@ -87,6 +84,9 @@ const BUDGET_DOTTED = /^\s*budget\.per_run_micros\s*=/m;
  * carried across, the per-run key kept in the place it held. Writing
  * `{ per_run_micros = next }` regardless replaced the whole table and
  * silently dropped `per_day_micros`, `mode` and anything else beside it.
+ * The spelling is read by the patcher's own scan, which skips multi-line
+ * bodies: a regex over the whole source once took a `[budget]` line inside
+ * the instructions for a header and appended a second table.
  */
 function setPerRunMicros(
   current: string,
@@ -94,11 +94,10 @@ function setPerRunMicros(
   next: number,
 ): string {
   const literal = tomlLiteral(next);
-  if (BUDGET_HEADER.test(current))
+  const form = tomlTableForm(current, "budget");
+  if (form === "header")
     return tomlSet(current, "budget", "per_run_micros", literal);
-  const firstHeader = current.search(/^\s*\[/m);
-  const root = firstHeader < 0 ? current : current.slice(0, firstHeader);
-  if (BUDGET_DOTTED.test(root))
+  if (form === "dotted")
     return tomlSet(current, null, "budget.per_run_micros", literal);
   return tomlSet(
     current,
@@ -522,8 +521,15 @@ export function DefinitionForm({
                 {t("tools.sideEffects")}
               </legend>
               {SIDE_EFFECTS.map((effect) => {
+                // Adding `irreversible` needs proof of an active mandate, so a
+                // ledger that did not answer locks it the same as one that
+                // answered none. Removing it needs no authority at all: a
+                // file that already carries the effect must stay editable
+                // when the mandate behind it has lapsed.
                 const locked =
-                  effect === "irreversible" && activeMandates === 0;
+                  effect === "irreversible" &&
+                  !effects.includes(effect) &&
+                  (activeMandates === null || activeMandates === 0);
                 return (
                   <label
                     key={effect}

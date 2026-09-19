@@ -136,6 +136,12 @@ describe("parseTomlSubset", () => {
     });
   });
 
+  it("trims the CRLF after an opening fence, so a CRLF file's instructions do not start with a blank line", () => {
+    expect(
+      parseTomlSubset('body = """\r\nfirst\r\nsecond\r\n"""\r\n'),
+    ).toEqual({ ok: true, doc: { body: "first\r\nsecond\r\n" } });
+  });
+
   it("an empty file and a file of comments are an empty table", () => {
     expect(parseTomlSubset("")).toEqual({ ok: true, doc: {} });
     expect(parseTomlSubset("# only\n\n   # comments\n")).toEqual({

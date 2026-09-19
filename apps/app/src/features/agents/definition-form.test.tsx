@@ -240,12 +240,48 @@ describe("DefinitionForm", () => {
       "Needs an active mandate. This agent holds none.",
     );
     cleanup();
+    // A ledger that did not answer proves nothing, so the control fails
+    // closed rather than open: nothing here checks the effect at commit.
     renderForm(DEFINITION_SOURCE, null);
     const unknown = screen.getByRole("checkbox", { name: /^irreversible/ });
-    expect(unknown).toBeEnabled();
+    expect(unknown).toBeDisabled();
     expect(unknown.closest("label")).toHaveTextContent(
       "Needs an active mandate. The mandate ledger did not answer",
     );
+  });
+
+  it("lets an operator remove an irreversible effect the file already carries when no mandate is active", async () => {
+    const carrying = DEFINITION_SOURCE.replace(
+      'side_effects = ["read", "write"]',
+      'side_effects = ["read", "write", "irreversible"]',
+    );
+    renderForm(carrying, ledger([]));
+    const box = screen.getByRole("checkbox", { name: /^irreversible/ });
+    expect(box).toBeChecked();
+    expect(box).toBeEnabled();
+    fireEvent.click(box);
+    expect(await committedSource()).toContain(
+      'side_effects = ["read", "write"]\n',
+    );
+    // Once removed, adding it back needs the mandate again.
+    expect(
+      screen.getByRole("checkbox", { name: /^irreversible/ }),
+    ).toBeDisabled();
+  });
+
+  it("does not take a [budget] line inside the instructions for a budget table", async () => {
+    const decoy = DEFINITION_SOURCE.replace(
+      'body = """\n',
+      'body = """\n[budget]\nis a heading in the prose, not a table\n',
+    );
+    renderForm(decoy);
+    fireEvent.change(budgetField(), { target: { value: "5" } });
+    fireEvent.blur(budgetField());
+    const out = await committedSource();
+    expect(out).toContain("budget = { per_run_micros = 5000000 }\n");
+    // The decoy stays where it was and no second table was appended after it.
+    expect(out.match(/^\[budget\]/gm)).toHaveLength(1);
+    expect(out).toContain("[budget]\nis a heading in the prose");
   });
 
   it("counts only mandates that are active inside their window at the ledger's instant, so a draft, a revoked, an expired and a scheduled row do not unlock irreversible (negative)", () => {

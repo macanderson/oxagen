@@ -266,7 +266,7 @@
           "read": "May read through the gateway.",
           "write": "May write through the gateway; every write is a receipt.",
           "irreversible": "Needs an active mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
-          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so the count is not known."
+          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so none is known to be active."
         },
         "instructions": {
           "title": "Instructions",
@@ -302,7 +302,7 @@
           },
           "checks": {
             "title": "2 · Checks",
-            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every tool it names is one you hold yourself. Your repository's own checks run on the pull request."
+            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every registered capability it names is one you hold yourself. Tool patterns and MCP tools are not checked here. Your repository's own checks run on the pull request."
           },
           "review": {
             "title": "3 · Review",

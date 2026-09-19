@@ -2,7 +2,12 @@
 // byte kept, a missing key or section appended where it belongs, and a
 // multi-line value the subset parser reads back to the same text.
 import { describe, expect, it } from "vitest";
-import { tomlLiteral, tomlMultiline, tomlSet } from "./toml-patch";
+import {
+  tomlLiteral,
+  tomlMultiline,
+  tomlSet,
+  tomlTableForm,
+} from "./toml-patch";
 import { parseTomlSubset } from "./toml-subset";
 
 const FILE = `# release-bot
@@ -191,5 +196,28 @@ describe("tomlSet", () => {
     expect(tomlSet(next, "instructions", "body", tomlMultiline(body))).toBe(
       next,
     );
+  });
+});
+
+describe("tomlTableForm", () => {
+  it("names the spelling of a table, and does not read a header inside a multi-line body", () => {
+    expect(tomlTableForm("[budget]\nper_run_micros = 1\n", "budget")).toBe(
+      "header",
+    );
+    expect(tomlTableForm("budget.mode = \"hard\"\n", "budget")).toBe("dotted");
+    expect(tomlTableForm("budget = { per_run_micros = 1 }\n", "budget")).toBe(
+      "none",
+    );
+    expect(tomlTableForm("name = \"x\"\n", "budget")).toBe("none");
+    expect(
+      tomlTableForm(
+        'budget = { per_run_micros = 1 }\nbody = """\n[budget]\nprose\n"""\n',
+        "budget",
+      ),
+    ).toBe("none");
+    // A key under a [budget] header is the header form, not the dotted one.
+    expect(
+      tomlTableForm("[budget]\nlimits.per_day = 2\n", "budget"),
+    ).toBe("header");
   });
 });

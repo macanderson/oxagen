@@ -192,6 +192,28 @@ function scan(lines: readonly string[]): {
  * after dotted keys of the same table is a redefinition; a section the file
  * has in no form is appended at the end.
  */
+/**
+ * How `table` is spelled in `text`: as a `[table]` header, as dotted keys at
+ * the root (`table.key = ...`), or neither (an inline table or no table). Read
+ * from the same scan `tomlSet` uses, so a line inside a multi-line body that
+ * looks like a header is not one.
+ */
+export function tomlTableForm(
+  text: string,
+  table: string,
+): "header" | "dotted" | "none" {
+  const path = table.split(".");
+  const { headers, assignments } = scan(text.split("\n"));
+  if (headers.some((h) => samePath(h.path, path))) return "header";
+  const dotted = assignments.some(
+    (a) =>
+      a.header.length === 0 &&
+      a.path.length > path.length &&
+      samePath(a.path.slice(0, path.length), path),
+  );
+  return dotted ? "dotted" : "none";
+}
+
 export function tomlSet(
   text: string,
   section: string | null,
