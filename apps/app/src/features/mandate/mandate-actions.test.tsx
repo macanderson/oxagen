@@ -193,6 +193,43 @@ describe("ChangeLimits", () => {
 });
 
 
+// `mandateLimitSchema` requires only that a limit names `perCall`, `perPeriod` or
+// both, so a bound that caps a single call and leaves the period open is valid.
+// The dialog used to match on `perPeriod` alone and opened blank on one of those,
+// making the operator retype the measure and unit before they could lower a cap
+// the mandate already held.
+describe("ChangeLimits on a per-call-only bound", () => {
+  const perCallOnly = mandateRow({
+    authority: [
+      mandateAuthority({
+        measure: "rows",
+        period: "monthly",
+        perCall: { kind: "count", count: "25", unit: "rows" },
+        // No per-period bound, so the ratios that divide by it are null too:
+        // a fixture that carried both would not be a record this app can read.
+        perPeriod: null,
+        settledRatio: null,
+        reservedRatio: null,
+        remaining: null,
+      }),
+    ],
+  });
+
+  it("prefills the measure, the unit and the figure it does hold", async () => {
+    draw(perCallOnly);
+    const user = userEvent.setup({ delay: null });
+    await user.click(screen.getByRole("button", { name: "Change limits" }));
+    const form = dialog();
+    expect(within(form).getByLabelText("Measure")).toHaveValue("rows");
+    // The unit comes from whichever bound carries it, so it is not blank here.
+    expect(within(form).getByLabelText("Unit")).toHaveValue("rows");
+    expect(within(form).getByLabelText("Per call")).toHaveValue("25");
+    // Nothing is stored for the period, so that field stays empty rather than
+    // inventing a figure the mandate does not hold.
+    expect(within(form).getByLabelText("Per period")).toHaveValue("");
+  });
+});
+
 // `revoke_mandate` takes a draft as well as an active mandate, because declining
 // a request is the revocation of a mandate that never took effect. This component
 // is the app's only caller of it, so a draft the header refuses to act on is a

@@ -259,19 +259,61 @@ describe("changeMandateLimits", () => {
     });
   });
 
-  it("falls back to the app's default zone when the preference cannot be read", async () => {
+  // This used to fall back to Pacific, on the argument that a window disagreeing
+  // with the dates beside it is worse than one in a zone the operator did not
+  // choose. That is right for drawing a date and wrong for writing a boundary:
+  // for an operator in Tokyo, Pacific moves the end of their day 17 hours later,
+  // which is authority nobody granted, and nothing afterwards says it was
+  // guessed. A refusal is visible and retryable; the widened window was neither.
+  it("refuses a date change when the zone cannot be read (negative)", async () => {
+    kernelAnswers({ preferencesThrows: new Error("preferences unreachable") });
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...untouched,
+        validTo: "2027-01-31",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "timezone_unavailable",
+    });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  it("refuses a date change when the stored zone is one this runtime cannot read (negative)", async () => {
+    // Retrying will not help this one, so it is a conflict rather than an
+    // unavailability, and its sentence tells the person to pick a zone again.
+    kernelAnswers({ timezone: "Mars/Olympus_Mons" });
+    expect(
+      await changeMandateLimits("a-intel", "core-platform", {
+        ...untouched,
+        validTo: "2027-01-31",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "timezone_unsupported",
+    });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  it("still writes a limit change when the zone cannot be read, since no day was picked", async () => {
+    // The zone is only needed to place a day. A submission that names none is
+    // not held up by a preference read it never makes.
     kernelAnswers({ preferencesThrows: new Error("preferences unreachable") });
     await changeMandateLimits("a-intel", "core-platform", {
       ...untouched,
-      validTo: "2027-01-31",
+      callsPerDay: "70",
     });
-    // Pacific, the same fallback the pages draw dates in. A window that
-    // disagreed with the dates beside it would be worse than one in a zone the
-    // operator did not choose.
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
-      validTo: "2027-02-01T07:59:59.999Z",
+      limitChanges: { calls: { perPeriod: "70", currencyOrUnit: "calls" } },
     });
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   // A blank box means "leave this bound as it is", which is what the dialog

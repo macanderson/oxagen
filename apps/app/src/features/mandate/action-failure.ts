@@ -38,6 +38,11 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureUnitMismatch");
           case "no_principal":
             return t("noPrincipal");
+          // Not a handler reason: the action itself refuses before it writes,
+          // because a guessed zone moves a validity boundary by up to a day.
+          // `timezone_unavailable` is its retryable twin, under `unavailable`.
+          case "timezone_unsupported":
+            return t("timezoneUnsupported");
           default:
             return t("refused", { code: failure.code });
         }
@@ -48,8 +53,11 @@ export function useActionFailure(): (failure: ActionFailure) => string {
           accessRequestId: failure.accessRequestId,
         });
       case "exhausted":
-      case "unavailable":
         return t("unavailable", { code: failure.code });
+      case "unavailable":
+        return failure.code === "timezone_unavailable"
+          ? t("timezoneUnavailable")
+          : t("unavailable", { code: failure.code });
     }
   };
 }

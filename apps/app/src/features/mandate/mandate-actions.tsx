@@ -108,13 +108,28 @@ function measureDefaults(mandate: MandateRow): {
     value?.kind === "count" ? value.count : "";
   const unitOf = (value: MeasureValue | null | undefined): string =>
     value?.kind === "count" ? value.unit : "";
+  const isCount = (value: MeasureValue | null | undefined): boolean =>
+    value?.kind === "count";
+  // Either bound is enough to prefill from. `mandateLimitSchema` requires only
+  // that a limit names `perCall`, `perPeriod` or both, so a bound that caps a
+  // single call and leaves the period open is valid and common; matching on
+  // `perPeriod` alone opened this dialog blank on one, and the operator had to
+  // retype the measure and the unit before they could lower a cap that was
+  // already recorded.
   const counted = mandate.authority.find(
-    (entry) => entry.measure !== "calls" && entry.perPeriod?.kind === "count",
+    (entry) =>
+      entry.measure !== "calls" &&
+      (isCount(entry.perPeriod) || isCount(entry.perCall)),
   );
+  // The unit belongs to whichever bound carries it, so a per-call-only limit
+  // still names its own unit rather than falling back to blank.
+  const countedUnit = isCount(counted?.perPeriod)
+    ? counted?.perPeriod
+    : counted?.perCall;
   const calls = mandate.authority.find((entry) => entry.measure === "calls");
   return {
     measure: counted?.measure ?? "",
-    unit: unitOf(counted?.perPeriod),
+    unit: unitOf(countedUnit),
     period: PERIODS.find((p) => p === counted?.period) ?? "monthly",
     perCall: countOf(counted?.perCall),
     perPeriod: countOf(counted?.perPeriod),

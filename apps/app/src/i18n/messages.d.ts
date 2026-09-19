@@ -354,6 +354,8 @@ type Messages = {
         branchIsDefault: string;
         definitionSchema: string;
         definitionSlug: string;
+        timezoneUnavailable: string;
+        timezoneUnsupported: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
@@ -1213,6 +1215,8 @@ type Messages = {
         measureNotDeclared: string;
         measureUnitMismatch: string;
         noPrincipal: string;
+        timezoneUnavailable: string;
+        timezoneUnsupported: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
