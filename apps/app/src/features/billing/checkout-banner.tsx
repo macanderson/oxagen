@@ -30,7 +30,7 @@ export function CheckoutBanner({
     <p
       role="status"
       data-checkout={outcome}
-      className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground"
+      className="rounded-lg border border-border bg-banner px-4 py-3 text-sm text-foreground"
     >
       {t(outcome)}
     </p>
