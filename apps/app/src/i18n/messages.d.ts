@@ -2453,6 +2453,7 @@ type Messages = {
         headMoved: string;
         baseMoved: string;
         githubRefused: string;
+        mergeTimeUnknown: string;
         refused: string;
         invalid: string;
         pendingApproval: string;
