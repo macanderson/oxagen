@@ -913,3 +913,129 @@ describe("isSameModelIdentity", () => {
     ).toBe(true);
   });
 });
+
+// The offline case the finding describes: a fresh or offline installation gets
+// no catalog response at all, so the in-code card is the entire book. Tightening
+// `isSameModelIdentity` to stop a numeric release inheriting implicitly left the
+// other half of its own rule undone — the dotted gateway spelling of a
+// hyphenated card row had to become an EXPLICIT alias, or it matched nothing and
+// the platform's own default fast model went unpriced.
+describe("the in-code card alone, with no catalog response", () => {
+  const ORG = "00000000-0000-4000-8000-000000000001";
+  const EFFECTIVE_FROM = new Date("2026-09-01T00:00:00.000Z");
+  const AT = new Date("2026-09-02T00:00:00.000Z");
+
+  /** The book an offline sync writes: the card, merged as its only source. */
+  function offlineBook(): PriceEntry[] {
+    const merged = mergePublishedPrices([inCodeCardPrices()]);
+    return seedsFromPublishedPrices(merged.prices, EFFECTIVE_FROM).map(
+      (s, i) => ({ ...s, id: `e-${i}`, orgId: null, source: "list" as const }),
+    );
+  }
+
+  function priced(book: PriceEntry[], modelId: string) {
+    return resolvePriceEntry(book, {
+      orgId: ORG,
+      modelId,
+      tokenClass: "input_uncached",
+      at: AT,
+    });
+  }
+
+  it("prices the dotted gateway spelling of every hyphenated card release", () => {
+    const book = offlineBook();
+    // The active fast-model default (`@oxagen/ai`'s OXAGEN_LLM_FAST) and the
+    // most common traffic there is.
+    expect(priced(book, "anthropic/claude-haiku-4.5")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(1.0),
+    );
+    // The spelling `pricing.ts` documents gateway traffic arriving under.
+    expect(priced(book, "anthropic/claude-sonnet-4.6")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(3.0),
+    );
+    expect(priced(book, "anthropic/claude-opus-4.8")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(15.0),
+    );
+    // The bare form of each resolves too: a direct caller passes it without a
+    // vendor prefix.
+    expect(priced(book, "claude-haiku-4.5")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(1.0),
+    );
+    expect(priced(book, "claude-sonnet-4.6")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(3.0),
+    );
+    expect(priced(book, "claude-opus-4.8")?.microsPerMillion).toBe(
+      usdPerMillionToMicros(15.0),
+    );
+    // A stamped snapshot of the dotted release still inherits, as the stamp
+    // rule allows.
+    expect(
+      priced(book, "anthropic/claude-haiku-4.5-20260901")?.microsPerMillion,
+    ).toBe(usdPerMillionToMicros(1.0));
+  });
+
+  it("derives the dotted alias only for a hyphenated release tail", () => {
+    // The derivation is mechanical, so what it must NOT rewrite is the thing to
+    // pin: an id whose tail is not a hyphenated digit pair gains no alias, which
+    // is why no separately priced pair is joined.
+    const aliasesOf = new Map(
+      inCodeCardPrices().map((p) => [p.model, p.aliases]),
+    );
+    /** The dotted aliases the builder derives for an id outside the card. */
+    const dottedSpellingOf = (model: string): string[] =>
+      inCodeCardPrices({
+        [model]: PROVIDER_RATE_CARD["claude-haiku-4"]!,
+      })[0]!.aliases.filter((a) => a.includes("."));
+    expect(aliasesOf.get("claude-haiku-4-5")).toEqual(["claude-haiku-4.5"]);
+    expect(aliasesOf.get("claude-sonnet-4-6")).toEqual(["claude-sonnet-4.6"]);
+    expect(aliasesOf.get("claude-opus-4-8")).toEqual(["claude-opus-4.8"]);
+    // Neither a single-segment release nor an already-dotted one derives.
+    expect(aliasesOf.get("claude-opus-4")).toEqual([]);
+    expect(aliasesOf.get("gpt-5")).toEqual([]);
+    expect(aliasesOf.get("gpt-5.2")).toEqual([]);
+    expect(aliasesOf.get("gpt-5.5")).toEqual([]);
+    expect(aliasesOf.get("grok-4")).toEqual([]);
+    expect(aliasesOf.get("grok-4.3")).toEqual([]);
+    expect(aliasesOf.get("glm")).toEqual([]);
+    expect(aliasesOf.get("glm-5.2")).toEqual([]);
+    // A word tail is not a release number.
+    expect(aliasesOf.get("gpt-5-mini")).toEqual([]);
+    expect(aliasesOf.get("gpt-4o-mini")).toEqual([]);
+    // A point-in-time stamp is not a release number: both parts of a release
+    // number are one or two digits, so a compact date derives nothing.
+    expect(dottedSpellingOf("claude-sonnet-5-20260901")).toEqual([]);
+    expect(dottedSpellingOf("gpt-4o-2026-08-01")).toEqual([]);
+    expect(dottedSpellingOf("gpt-4-0613")).toEqual([]);
+    // A vendor-prefixed key still yields its bare form, and both spellings of
+    // the dotted release when it has one.
+    expect(aliasesOf.get("anthropic/claude-haiku-4")).toEqual([
+      "claude-haiku-4",
+    ]);
+  });
+
+  it("keeps every separately priced release its own identity", () => {
+    const book = offlineBook();
+    // Each pair the previous round deliberately split: the row that prices the
+    // frame must be the frame's own row, not the family's.
+    const pairs: readonly (readonly [string, string, number])[] = [
+      ["gpt-5", "gpt-5", 1.25],
+      ["gpt-5.2", "gpt-5.2", 1.75],
+      ["gpt-5.5", "gpt-5.5", 5.0],
+      ["grok-4", "grok-4", 3.0],
+      ["grok-4.3", "grok-4.3", 1.25],
+      ["grok-4.5", "grok-4.5", 2.0],
+      ["glm", "glm", 0.95],
+      ["glm-5.2", "glm-5.2", 1.4],
+      // Same price today, so the row that matched is the only proof they are
+      // still two identities.
+      ["claude-opus-4", "claude-opus-4", 15.0],
+      ["claude-opus-4-8", "claude-opus-4-8", 15.0],
+      ["claude-opus-4.8", "claude-opus-4-8", 15.0],
+    ];
+    for (const [modelId, expectedRow, usd] of pairs) {
+      const entry = priced(book, modelId);
+      expect(entry?.model, modelId).toBe(expectedRow);
+      expect(entry?.microsPerMillion, modelId).toBe(usdPerMillionToMicros(usd));
+    }
+  });
+});

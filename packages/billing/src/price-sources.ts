@@ -104,10 +104,77 @@ export function deriveCacheWrite1h(
 
 // ── The in-code card as a source ──────────────────────────────────────────────
 
-/** A vendor-prefixed id names the same model as its bare form, and vice versa. */
+/** One part of a release number: one or two digits, never a date or snapshot. */
+const RELEASE_SEGMENT = /^\d{1,2}$/;
+
+/** Whether a segment is digits only. */
+const ALL_DIGITS = /^\d+$/;
+
+/**
+ * The dotted spelling of a two-part release number the card writes with a
+ * hyphen, or null when the id carries no such number.
+ *
+ * `claude-haiku-4-5` is the card's row and `anthropic/claude-haiku-4.5` is the
+ * id the platform's default fast model arrives under, so the two spellings must
+ * name one model. What the rule must NOT rewrite is a point-in-time stamp,
+ * which the identity rule already handles and which carries digits of its own:
+ * both parts of a release number are one or two digits, so an 8-digit compact
+ * date (`claude-sonnet-5-20260901`) and a 4-digit snapshot (`gpt-4-0613`) fail
+ * that test outright, and a numeric segment in front of the pair rejects an ISO
+ * date whose own parts are two digits each (`gpt-4o-2026-08-01`).
+ */
+function dottedRelease(id: string): string | null {
+  const parts = id.split("-");
+  if (parts.length < 3) return null;
+  const minor = parts[parts.length - 1]!;
+  const major = parts[parts.length - 2]!;
+  const before = parts[parts.length - 3]!;
+  if (!RELEASE_SEGMENT.test(major) || !RELEASE_SEGMENT.test(minor)) return null;
+  if (ALL_DIGITS.test(before)) return null;
+  return `${parts.slice(0, -1).join("-")}.${minor}`;
+}
+
+/**
+ * Every other id that names the same model as `model`.
+ *
+ * Two spellings differ from a card key without naming a different product. A
+ * vendor-prefixed id names the same model as its bare form and vice versa
+ * (`anthropic/claude-sonnet-5` and `claude-sonnet-5`). And a two-part release
+ * number is hyphenated in the card and dotted at the gateway.
+ *
+ * The dotted spelling has to be declared here because {@link
+ * isSameModelIdentity} deliberately refuses to infer it: a release number
+ * names a separately priced product, so the card prices `gpt-5` at $1.25/$10
+ * and `gpt-5.5` at $5/$30, and `grok-4` above both `grok-4.3` and `grok-4.5`.
+ * That rule restricts inheritance to an explicit alias or a point-in-time
+ * stamp — and this is the explicit-alias half of it. Until it existed the
+ * in-code card, which is the only source a fresh or offline installation has,
+ * priced none of the dotted Claude ids: not the documented
+ * `anthropic/claude-sonnet-4.6`, and not `anthropic/claude-haiku-4.5`, the
+ * default fast model and so the most common traffic there is.
+ *
+ * The spelling is derived rather than listed, so the next release that ships
+ * needs no second edit and cannot be forgotten. Deriving it joins nothing that
+ * the identity rule splits, because an id whose tail is not a hyphenated digit
+ * pair derives nothing at all: `gpt-5`, `gpt-5.2`, `gpt-5.5`, `grok-4`,
+ * `grok-4.3`, `grok-4.5`, `glm`, `glm-5.2`, `gpt-5-mini` and `claude-opus-4`
+ * each yield no dotted alias, and the one alias `claude-opus-4-8` does yield is
+ * `claude-opus-4.8`, which is not the same identity as `claude-opus-4` either.
+ * A stamped id derives nothing either — see {@link dottedRelease}.
+ */
 function aliasesFor(model: string): string[] {
+  const out = new Set<string>();
   const slash = model.indexOf("/");
-  return slash >= 0 ? [model.slice(slash + 1)] : [];
+  const bare = slash >= 0 ? model.slice(slash + 1) : model;
+  if (slash >= 0) out.add(bare);
+  const dotted = dottedRelease(bare);
+  if (dotted !== null) {
+    out.add(dotted);
+    // The gateway form of the dotted spelling, when the key carries a vendor.
+    if (slash >= 0) out.add(`${model.slice(0, slash + 1)}${dotted}`);
+  }
+  out.delete(model);
+  return [...out];
 }
 
 function rateToPublished(
