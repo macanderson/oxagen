@@ -57,12 +57,16 @@
             "provider": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 160
+              "maxLength": 160,
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
             },
             "model": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 160
+              "maxLength": 160,
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
             },
             "outcome": {
               "type": "string",
@@ -160,6 +164,8 @@
       "accepted",
       "event_ids"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   }
 }

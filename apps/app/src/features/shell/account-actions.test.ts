@@ -57,7 +57,15 @@ vi.mock("@/server/tenancy-lookups", () => ({
 
 const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
 
-const { updateProfile, updateTimeZone } = await import("./account-actions");
+const {
+  updateProfile,
+  readPreferences,
+  savePreferences,
+  requestExport,
+  readExportStatus,
+} = await import("./account-actions");
+
+const EXPORT_ID = "7a000000-0000-4000-8000-0000000000e1";
 
 beforeEach(() => {
   invoke.mockReset();
@@ -136,41 +144,206 @@ describe("updateProfile", () => {
   });
 });
 
-describe("updateTimeZone", () => {
-  it("sends a signed-out visitor to log in, writing nothing (negative)", async () => {
+describe("updateProfile, avatar alone", () => {
+  // display_name is nullable and the avatar editor has no name field, so the
+  // write has to be a partial one: a key left out is left alone.
+  it("omits the display name entirely rather than sending an empty one", async () => {
+    invoke.mockResolvedValue({ displayName: null, avatarUrl: "avatar:v1:{}" });
+    await updateProfile("acme", { avatarUrl: "avatar:v1:{}" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { avatarUrl: "avatar:v1:{}" },
+      expect.anything(),
+    );
+  });
+
+  it("answers with a null display name for a person who has none", async () => {
+    invoke.mockResolvedValue({ displayName: null, avatarUrl: "avatar:v1:{}" });
+    const result = await updateProfile("acme", { avatarUrl: "avatar:v1:{}" });
+    expect(result).toEqual({
+      ok: true,
+      value: { displayName: null, avatarUrl: "avatar:v1:{}" },
+    });
+  });
+
+  it("omits the avatar entirely when the caller sends only a name", async () => {
+    invoke.mockResolvedValue({ displayName: "Marcus B", avatarUrl: null });
+    await updateProfile("acme", { displayName: "Marcus B" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B" },
+      expect.anything(),
+    );
+  });
+
+  // An empty string is still the way to clear the column; only an absent key
+  // means "leave it alone".
+  it("still clears the avatar when an empty string is sent", async () => {
+    invoke.mockResolvedValue({ displayName: "Marcus B", avatarUrl: null });
+    await updateProfile("acme", { displayName: "Marcus B", avatarUrl: "" });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_profile",
+      { displayName: "Marcus B", avatarUrl: null },
+      expect.anything(),
+    );
+  });
+});
+
+describe("readExportStatus", () => {
+  it("sends a signed-out visitor to log in, reading nothing (negative)", async () => {
     getSession.mockResolvedValue(null);
-    await expect(updateTimeZone("acme", "Europe/London")).rejects.toThrow(
+    await expect(readExportStatus("acme", EXPORT_ID)).rejects.toThrow(
       "NEXT_REDIRECT /login",
     );
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it("writes only the zone through set_preferences and answers with what the handler stored", async () => {
+  it("asks by export id alone and hands back the key once it is ready", async () => {
     invoke.mockResolvedValue({
-      locale: "en",
-      theme: "system",
-      timezone: "Europe/London",
+      exportId: EXPORT_ID,
+      status: "ready",
+      ready: true,
+      storageKey: "privacy-exports/org/exp.zip",
+      completedAt: "2026-09-18T22:00:00.000Z",
+    });
+    const result = await readExportStatus("acme", EXPORT_ID);
+    expect(invoke).toHaveBeenCalledWith(
+      "get_export_status",
+      { exportId: EXPORT_ID },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        exportId: EXPORT_ID,
+        status: "ready",
+        ready: true,
+        storageKey: "privacy-exports/org/exp.zip",
+      },
+    });
+  });
+
+  // The contract takes no user id and neither does this action: the handler
+  // matches on the principal, so one person cannot ask after another's bundle.
+  it("never sends a user id", async () => {
+    invoke.mockResolvedValue({
+      exportId: EXPORT_ID,
+      status: "queued",
+      ready: false,
+      storageKey: null,
+      completedAt: null,
+    });
+    await readExportStatus("acme", EXPORT_ID);
+    const input = invoke.mock.calls[0]?.[1];
+    expect(Object.keys(input ?? {})).toEqual(["exportId"]);
+  });
+});
+
+describe("readPreferences", () => {
+  it("sends a signed-out visitor to log in, reading nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(readPreferences("acme")).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reads get_user_preferences and answers with the three fields the tab sets", async () => {
+    invoke.mockResolvedValue({
       fontSize: "medium",
       density: "comfortable",
-      enterToSubmit: false,
+      enterToSubmit: true,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+      timezone: "America/Los_Angeles",
+      language: "en",
+      theme: "dark",
+    });
+    const result = await readPreferences("acme");
+    expect(invoke).toHaveBeenCalledWith(
+      "get_user_preferences",
+      {},
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: { locale: "en", timezone: "America/Los_Angeles", theme: "dark" },
+    });
+  });
+});
+
+describe("savePreferences", () => {
+  it("writes set_preferences as a partial of the three fields, nothing else", async () => {
+    invoke.mockResolvedValue({
+      locale: "en",
+      theme: "dark",
+      timezone: "UTC",
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: true,
       pendingPromptBehavior: "queue",
       defaultTextTier: null,
       defaultTextModel: null,
     });
-    const result = await updateTimeZone("acme", "Europe/London");
-    expect(result).toEqual({ ok: true, value: { timeZone: "Europe/London" } });
+    const result = await savePreferences("acme", {
+      locale: "en",
+      timezone: "UTC",
+      theme: "dark",
+    });
     expect(invoke).toHaveBeenCalledWith(
       "set_preferences",
-      { timezone: "Europe/London" },
+      { locale: "en", timezone: "UTC", theme: "dark" },
       expect.anything(),
     );
+    expect(result).toEqual({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "dark" },
+    });
   });
 
-  // The contract's schema refuses the value before the kernel runs, so a
-  // string that is not a zone name never reaches the handler.
-  it("answers invalid for a value that is not an IANA zone name, without invoking (negative)", async () => {
-    const result = await updateTimeZone("acme", "not a zone");
+  it("refuses a time zone the contract does not recognise before the kernel runs (negative)", async () => {
+    const result = await savePreferences("acme", {
+      locale: "en",
+      timezone: "not a zone!",
+      theme: "dark",
+    });
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("requestExport", () => {
+  it("queues the person's own export with no organization id", async () => {
+    invoke.mockResolvedValue({
+      exportId: "7a000000-0000-4000-8000-0000000000e1",
+      status: "queued",
+    });
+    const result = await requestExport("acme", "user");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_data",
+      { scope: "user" },
+      expect.anything(),
+    );
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        exportId: "7a000000-0000-4000-8000-0000000000e1",
+        status: "queued",
+      },
+    });
+  });
+
+  it("names the viewer's organization, never one from the form, for an org export", async () => {
+    invoke.mockResolvedValue({
+      exportId: "7a000000-0000-4000-8000-0000000000e2",
+      status: "queued",
+    });
+    await requestExport("acme", "org");
+    expect(invoke).toHaveBeenCalledWith(
+      "export_data",
+      { scope: "org", orgId: ORG_ID },
+      expect.anything(),
+    );
   });
 });
