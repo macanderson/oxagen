@@ -47,11 +47,16 @@ export interface DetectorDeps {
    * enrollment id and reintroducing that same false incident (#3398).
    *
    * `verified` is false when host.json could not be read or did not
-   * validate, so the pair is a remembered startup copy, not a confirmed
-   * on-disk identity. The hook-removal check must not run against an
-   * unverified pair: a host it cannot currently confirm the enrollment of
-   * is exactly the host it must stay quiet about, or it reintroduces the
-   * same false incident by another path (#3398).
+   * validate, so the pair is a remembered value, not a confirmed on-disk
+   * identity. The hook-removal check does NOT stop running when
+   * unverified: this is a tamper-evidence control, and an attacker who
+   * makes host.json unreadable and then strips the hooks must still trip
+   * `hooks_removed`, not find the one path that goes quiet. The check
+   * keeps evaluating against the last enrollment it did confirm on disk
+   * (docs/specs/tacho/spec.md §11, §14 item 8), and stamps `verified` onto
+   * the evidence of anything it seals so a reader can tell "checked
+   * against a last-verified pair" from "checked against a live-confirmed
+   * one" (#3398).
    */
   enrollment: () => {
     enrollmentId: string;
@@ -64,9 +69,10 @@ export interface DetectorDeps {
   /** Project directories whose files one tick may scan; see `MAX_DIRS_PER_TICK`. */
   maxDirsPerTick?: number;
   /**
-   * Where the hook-removal check reports it is disabling itself because the
-   * on-disk enrollment could not be verified. Absent means the reason goes
-   * unlogged; the check still disables.
+   * Where the hook-removal check reports the on-disk enrollment becoming
+   * unverified, and reports when it can be verified again. Absent means the
+   * reason goes unlogged; the check still keeps running against the last
+   * verified pair either way.
    */
   log?: (line: string) => void;
 }
@@ -283,9 +289,19 @@ export class Detector {
   private readonly scanner: TranscriptScanner;
   private lastPresence: HookPresence | undefined;
   private hooksOk: boolean | undefined;
-  /** Tracks the transition into "enrollment unverified", so the disabled
+  /** Tracks the transition into and out of "enrollment unverified", so the
    * reason logs once per transition rather than once per tick. */
   private enrollmentVerified: boolean | undefined;
+  /**
+   * The last enrollment pair this daemon actually confirmed on disk. The
+   * hook-removal check keeps evaluating against this when the live read is
+   * unverified, rather than going quiet: an attacker who makes host.json
+   * unreadable and then strips the hooks must still trip `hooks_removed`,
+   * because the check never stops running (#3398).
+   */
+  private lastVerifiedEnrollment:
+    | { enrollmentId: string; harnesses: string[] }
+    | undefined;
 
   constructor(deps: DetectorDeps) {
     this.deps = deps;
@@ -311,26 +327,47 @@ export class Detector {
   }
 
   private checkHooks(): TachoEvent[] {
-    const { enrollmentId, harnesses, verified } = this.deps.enrollment();
-    if (!verified) {
-      // host.json could not be read or did not validate on this tick, so
-      // there is no on-disk identity to check hooks against. Evaluating
-      // hooks against the daemon's startup copy anyway would reintroduce
-      // the false hooks_removed incident this dependency exists to prevent,
-      // just against a stale identity instead of a stale harness list; a
-      // host whose enrollment cannot currently be confirmed is exactly the
-      // host that must stay quiet, not the host that gets flagged.
+    const read = this.deps.enrollment();
+    let enrollmentId: string;
+    let harnesses: string[];
+    if (read.verified) {
+      this.lastVerifiedEnrollment = {
+        enrollmentId: read.enrollmentId,
+        harnesses: read.harnesses,
+      };
+      if (this.enrollmentVerified === false) {
+        this.deps.log?.(
+          "the on-disk enrollment can be read again; the Claude Code hook-removal check resumes against the confirmed identity",
+        );
+      }
+      this.enrollmentVerified = true;
+      enrollmentId = read.enrollmentId;
+      harnesses = read.harnesses;
+    } else {
+      // host.json could not be read or did not validate on this tick. Going
+      // quiet here would hand an attacker the exact evasion path this check
+      // exists to close: make the enrollment file unreadable, then strip
+      // the hooks, and nothing chains (docs/specs/tacho/spec.md §11, §14
+      // item 8). The last pair this daemon actually confirmed on disk is
+      // still the best evidence available, and it stays true unless
+      // someone changed it, which is the thing being watched for -- so keep
+      // checking against it instead of disabling. A host with no
+      // last-verified pair yet (host.json was already broken at startup)
+      // has nothing better than the caller's best-effort read; check that
+      // rather than stay silent from boot.
       if (this.enrollmentVerified !== false) {
         this.deps.log?.(
-          "the on-disk enrollment could not be read or does not validate; disabling the Claude Code hook-removal check until it can be verified again",
+          "the on-disk enrollment could not be read or does not validate; continuing the Claude Code hook-removal check against the last verified enrollment",
         );
       }
       this.enrollmentVerified = false;
-      this.hooksOk = undefined;
-      this.lastPresence = undefined;
-      return [];
+      const fallback = this.lastVerifiedEnrollment ?? {
+        enrollmentId: read.enrollmentId,
+        harnesses: read.harnesses,
+      };
+      enrollmentId = fallback.enrollmentId;
+      harnesses = fallback.harnesses;
     }
-    this.enrollmentVerified = true;
     if (!harnesses.includes("claude-code")) {
       this.hooksOk = undefined;
       this.lastPresence = undefined;
@@ -356,6 +393,7 @@ export class Detector {
             incident_severity: 3,
             incident_evidence: {
               error: error instanceof Error ? error.message : String(error),
+              enrollment_verified: read.verified,
             },
           }),
         ];
@@ -374,6 +412,7 @@ export class Detector {
             missing: presence.missing,
             env_ok: presence.envOk,
             disabled_by_flag: presence.disabledByFlag,
+            enrollment_verified: read.verified,
           },
           hook_count: presence.present.length,
         }),

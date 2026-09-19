@@ -144,33 +144,69 @@ describe("the hook-removal detector", () => {
     expect(d.hooksHealthy).toBe(true);
   });
 
-  it("disables the hook-removal check, without an incident, when the on-disk enrollment cannot be verified (#3398)", async () => {
-    // The regression this guards: falling back to the daemon's startup
-    // enrollment when host.json is missing or invalid still evaluated hooks
-    // against that startup identity, so an unreadable host.json reintroduced
-    // the same false hooks_removed incident #3398 exists to prevent, just
-    // by a different path (an unverified identity instead of a stale one).
-    let verified = false;
+  it("keeps checking against the last verified enrollment, and still chains hooks_removed, when host.json goes unreadable (#3398)", async () => {
+    // The regression this guards: disabling the check while host.json is
+    // unreadable handed an attacker the exact evasion this control exists
+    // to close -- make the enrollment file unreadable, then strip the
+    // hooks, and nothing chains (docs/specs/tacho/spec.md section 11's
+    // threat-model table, and section 14 acceptance item 8). A tamper
+    // detector must not go quiet when its own configuration becomes
+    // unreadable; that is precisely when it must keep working.
     const logged: string[] = [];
+    let verified = true;
+    // The "live" enrollment id the caller's read would report right now.
+    // While unverified this deliberately differs from the daemon's
+    // last-confirmed id, so a test failure here would mean the check
+    // trusted an unverified live read instead of the remembered one.
+    let liveEnrollmentId = TEST_ENROLLMENT;
+    const completeSettings = mergeTachoSettings(
+      {},
+      {
+        enrollmentId: TEST_ENROLLMENT,
+        hookCommand: "x",
+        port: 1,
+        localToken: "t",
+      },
+    ).settings;
+    let settings: unknown = completeSettings;
     const d = detector({
       harnesses: () => ["claude-code"],
       verified: () => verified,
-      readSettings: () => ({ hooks: {} }), // would be "removed" if checked
+      enrollmentId: () => liveEnrollmentId,
+      readSettings: () => settings,
       log: (line) => logged.push(line),
     });
+    // Establishes the last-verified pair: enrollment id TEST_ENROLLMENT,
+    // hooks present and complete.
     expect(await d.tick()).toEqual([]);
-    expect(d.hooksHealthy).toBeUndefined();
-    expect(d.presence).toBeUndefined();
+    expect(d.hooksHealthy).toBe(true);
+    // host.json becomes unreadable, and in the same window an attacker
+    // strips the hooks from settings.json. The check must still fire.
+    verified = false;
+    liveEnrollmentId = "enr_should_be_ignored_while_unverified";
+    settings = { hooks: {} };
+    const removed = await d.tick();
+    expect(removed.map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
+    expect(
+      (
+        removed[0]?.body as {
+          incident_evidence: { enrollment_verified: boolean };
+        }
+      ).incident_evidence.enrollment_verified,
+    ).toBe(false);
     expect(logged).toHaveLength(1);
     expect(logged[0]).toMatch(/enrollment/i);
-    // Ticking again while still unverified logs nothing further: the
-    // reason is reported once per transition, not once per tick.
+    // Still unreadable: no further log line for the same transition, and
+    // no further incident since hooks were already flagged as missing.
     expect(await d.tick()).toEqual([]);
     expect(logged).toHaveLength(1);
-    // Once the enrollment can be verified again, the check resumes.
+    // host.json can be read again and the hooks are restored: the check
+    // resumes against the freshly confirmed identity and reports health,
+    // logging the recovery transition once.
     verified = true;
-    expect((await d.tick()).map((e) => e.kind)).toEqual([
-      "oxagen:hooks_removed",
-    ]);
+    liveEnrollmentId = TEST_ENROLLMENT;
+    settings = completeSettings;
+    expect((await d.tick()).map((e) => e.kind)).toEqual(["oxagen:hook_health"]);
+    expect(logged).toHaveLength(2);
   });
 });
