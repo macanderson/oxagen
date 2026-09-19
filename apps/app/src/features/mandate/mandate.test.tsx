@@ -165,7 +165,7 @@ describe("Mandate › loaded", () => {
         ledger: [
           mandateMovement({
             kind: "reserve",
-            externalEffectId: null,
+            externalEffectRef: null,
             value: { kind: "money", money: { micros: "2450000000", currency: "USD" } },
           }),
         ],
@@ -400,17 +400,17 @@ describe("Mandate › not found", () => {
 
 describe("Mandate › the ledger's search, facet and pager", () => {
   const three = () => [
-    mandateMovement({ measure: "amount", externalEffectId: "pi_3QaL8f2Xk" }),
+    mandateMovement({ measure: "amount", externalEffectRef: "pi_3QaL8f2Xk" }),
     mandateMovement({
       kind: "reserve",
       measure: "amount",
-      externalEffectId: null,
+      externalEffectRef: null,
     }),
     mandateMovement({
       kind: "release",
       measure: "calls",
       value: { kind: "count", count: "1", unit: "calls" },
-      externalEffectId: null,
+      externalEffectRef: null,
     }),
   ];
 

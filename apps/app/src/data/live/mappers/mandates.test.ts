@@ -385,7 +385,7 @@ describe("toMandateDetail", () => {
         kind: "money",
         money: { micros: "884600000", currency: "USD" },
       },
-      externalEffectId: "pi_3QaL8f2Xk",
+      externalEffectRef: "pi_3QaL8f2Xk",
       periodKey: "2026-09",
       at: "2026-09-04T08:40:19.000Z",
     });
@@ -413,7 +413,7 @@ describe("toMandateDetail", () => {
     expect(row).toMatchObject({
       kind: "reserve",
       value: { kind: "count", count: "1", unit: "calls" },
-      externalEffectId: null,
+      externalEffectRef: null,
     });
   });
 
@@ -446,7 +446,7 @@ describe("toMandateDetail, an empty recorded effect id", () => {
       500,
       new Date("2026-09-19T00:00:00.000Z"),
     );
-    expect(detail.ledger[0]?.externalEffectId).toBeNull();
+    expect(detail.ledger[0]?.externalEffectRef).toBeNull();
     expect(MandateDetail.safeParse(detail).success).toBe(true);
   });
 });

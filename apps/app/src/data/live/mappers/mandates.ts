@@ -196,7 +196,7 @@ export function toMandateDetail(
       // null, so passing one through failed `MandateDetail.safeParse` and the
       // whole page answered `record_unmappable` over one settlement — a ledger
       // withheld because one row named its transaction with nothing.
-      externalEffectId:
+      externalEffectRef:
         row.externalEffectId === null || row.externalEffectId.trim() === ""
           ? null
           : row.externalEffectId,

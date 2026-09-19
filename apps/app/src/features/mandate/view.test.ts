@@ -96,17 +96,17 @@ describe("ledgerPage", () => {
     ...over,
   });
   const three = [
-    mandateMovement({ measure: "amount", externalEffectId: "pi_3QaL8f2Xk" }),
+    mandateMovement({ measure: "amount", externalEffectRef: "pi_3QaL8f2Xk" }),
     mandateMovement({
       kind: "reserve",
       measure: "amount",
-      externalEffectId: null,
+      externalEffectRef: null,
     }),
     mandateMovement({
       kind: "release",
       measure: "calls",
       value: { kind: "count", count: "1", unit: "calls" },
-      externalEffectId: null,
+      externalEffectRef: null,
     }),
   ];
 

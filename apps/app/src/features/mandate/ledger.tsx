@@ -213,13 +213,13 @@ export function MandateLedger({
                   <MovementState kind={row.kind} />
                 </td>
                 <td className={cell}>
-                  {row.externalEffectId === null ? (
+                  {row.externalEffectRef === null ? (
                     <span className="text-xs text-muted-foreground">
                       {t("notRecorded")}
                     </span>
                   ) : (
                     <span className={`${mono} break-all text-xs`}>
-                      {row.externalEffectId}
+                      {row.externalEffectRef}
                     </span>
                   )}
                 </td>

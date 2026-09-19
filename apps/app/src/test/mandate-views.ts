@@ -105,7 +105,7 @@ export function mandateMovement(
     kind: "settle",
     measure: "amount",
     value: money("884600000"),
-    externalEffectId: "pi_3QaL8f2Xk",
+    externalEffectRef: "pi_3QaL8f2Xk",
     periodKey: "2026-09",
     at: "2026-09-04T08:40:19.000Z",
     ...overrides,

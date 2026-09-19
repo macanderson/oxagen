@@ -193,11 +193,19 @@ export const MandateLedgerRow = z.object({
   measure: z.string().min(1),
   value: MeasureValue,
   /**
-   * The transaction, migration, message or deployment the settlement recorded.
+   * The transaction, migration, message or deployment the settlement recorded,
+   * as the external system named it: a payment intent, a commit, a message id.
    * Null on a reservation, which has not caused an effect yet, and on a release,
    * which never will.
+   *
+   * **It is a `…Ref`, not an id field, because it is not one of ours.** INV-11
+   * makes every `id` and `…Id` on a view model a prefixed `PublicId`, and this
+   * value is a third party's string that Oxagen mints nothing of and cannot
+   * validate — `tools.ts` carries the same kind under the same suffix. Naming it
+   * `…Id` would have forced a choice between a false `PublicId` and an exemption
+   * that any later raw uuid could hide behind.
    */
-  externalEffectId: z.string().min(1).nullable(),
+  externalEffectRef: z.string().min(1).nullable(),
   /** The accounting window the movement was counted in, as the ledger keys it. */
   periodKey: z.string().min(1),
   at: Instant,

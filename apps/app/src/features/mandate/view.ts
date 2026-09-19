@@ -116,8 +116,8 @@ function matches(row: MandateLedgerRow, search: string): boolean {
   const needle = search.toLowerCase();
   return (
     row.measure.toLowerCase().includes(needle) ||
-    (row.externalEffectId !== null &&
-      row.externalEffectId.toLowerCase().includes(needle))
+    (row.externalEffectRef !== null &&
+      row.externalEffectRef.toLowerCase().includes(needle))
   );
 }
 
