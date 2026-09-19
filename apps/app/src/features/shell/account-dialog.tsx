@@ -27,6 +27,7 @@ import {
   useState,
 } from "react";
 import { routes } from "@/shared/safe-path";
+import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -67,12 +68,7 @@ import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";
 import type { Theme } from "./theme";
 
-type Outcome =
-  | "saved"
-  | "invalid"
-  | "timeZoneInvalid"
-  | "denied"
-  | "failed";
+type Outcome = "saved" | "invalid" | "denied" | "failed";
 
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
@@ -500,7 +496,7 @@ const THEMES: readonly Theme[] = ["system", "dark", "light"];
 
 /** The zones the browser knows, plus UTC, with the stored one kept even when it is not among them. */
 function timeZones(current: string): string[] {
-  let zones: string[] = [];
+  let zones: readonly string[] = [];
   try {
     zones = Intl.supportedValuesOf("timeZone");
   } catch {
@@ -508,12 +504,15 @@ function timeZones(current: string): string[] {
   }
   // The engine's list does not contain UTC. Measured on this repo's Node: 418
   // zones, no "UTC" and no "Etc/UTC", because ICU canonicalizes those away.
-  // UTC is this app's default and the zone every seeded account starts on, so
-  // replacing the fallback with the engine's list offered it only to someone
-  // already on it, and anyone who changed to another zone could never get
-  // back. Merged rather than replaced.
+  // UTC is a zone people work in and ask for by name, and the one this app
+  // defaulted to before Pacific, so accounts still hold it. Offering the
+  // engine's list alone would show it to nobody but the people already on it,
+  // and anyone who moved away could never get back. Merged, not replaced.
   const offered = zones.includes("UTC") ? zones : ["UTC", ...zones];
-  return offered.includes(current) ? offered : [current, ...offered];
+  // Keeping the stored zone when the runtime does not name it is the shared
+  // rule, so the select and the chrome's clock resolve a zone the same way
+  // (src/shared/time-zone.ts).
+  return timeZoneChoices(current, offered);
 }
 
 /** The same three figures under the draft's locale and zone, so a change is seen before it is saved. */
@@ -539,6 +538,7 @@ function previewFor(locale: string, timeZone: string) {
 
 function PreferencesTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.preferences");
+  const navigate = useNavigate();
   const { theme, setTheme } = useShellState();
   const localeId = useId();
   const zoneId = useId();
@@ -620,6 +620,15 @@ function PreferencesTab({ data }: { data: ShellData }) {
           setState({ kind: "ready", draft: result.value });
           setOutcome("saved");
         }
+        // The zone this row holds is the one every date in the app renders in:
+        // the organization layout reads it server-side and hands it to
+        // <ViewerClock> and the chrome's <TimeZoneProvider>. Without this the
+        // stored zone changes and every date on the page keeps the zone the
+        // request started in until a full reload, across client-side
+        // navigation too, because the shell lives in the layout. Re-rendered
+        // only when the zone actually moved, and at the URL already showing,
+        // so the dialog stays open.
+        if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
@@ -703,6 +712,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
               </option>
             ))}
           </select>
+          <p className={hint}>{t("timezoneHint")}</p>
         </div>
         <div>
           <label htmlFor={themeId} className={fieldLabel}>
