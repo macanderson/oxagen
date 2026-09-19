@@ -162,7 +162,7 @@ function dottedRelease(id: string): string | null {
  * `claude-opus-4.8`, which is not the same identity as `claude-opus-4` either.
  * A stamped id derives nothing either — see {@link dottedRelease}.
  */
-function aliasesFor(model: string): string[] {
+function aliasesFor(model: string, vendor?: string): string[] {
   const out = new Set<string>();
   const slash = model.indexOf("/");
   const bare = slash >= 0 ? model.slice(slash + 1) : model;
@@ -170,8 +170,14 @@ function aliasesFor(model: string): string[] {
   const dotted = dottedRelease(bare);
   if (dotted !== null) {
     out.add(dotted);
-    // The gateway form of the dotted spelling, when the key carries a vendor.
-    if (slash >= 0) out.add(`${model.slice(0, slash + 1)}${dotted}`);
+    // Both spellings of the gateway form, so the card's row claims the dotted
+    // name in the merge and matches it on the resolver's FIRST pass. Left to
+    // the family fallback alone, a catalog row published under
+    // `anthropic/claude-haiku-4.5` would survive the merge as a second row for
+    // the same model, and the resolver's direct pass would prefer it to the
+    // hand-verified card row it was meant to be displaced by.
+    const prefix = slash >= 0 ? model.slice(0, slash) : vendor;
+    if (prefix !== undefined) out.add(`${prefix}/${dotted}`);
   }
   out.delete(model);
   return [...out];
@@ -183,7 +189,7 @@ function rateToPublished(
 ): PublishedModelPrice {
   return {
     model,
-    aliases: aliasesFor(model),
+    aliases: aliasesFor(model, rate.provider),
     provider: rate.provider,
     inputPer1M: rate.inputPer1M,
     outputPer1M: rate.outputPer1M,
@@ -344,7 +350,9 @@ export function parseModelsDevCatalog(body: unknown): PublishedModelPrice[] {
       prices.push({
         model: id,
         // The gateway-prefixed form of the same model must price too.
-        aliases: [`${vendor}/${id}`],
+        aliases: [
+          ...new Set([`${vendor}/${id}`, ...aliasesFor(id, vendor)]),
+        ],
         provider: vendor,
         inputPer1M: input,
         outputPer1M: output,
