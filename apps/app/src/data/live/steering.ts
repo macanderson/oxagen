@@ -6,6 +6,7 @@ import "server-only";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
+import { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
@@ -13,11 +14,17 @@ import {
   ProposalPage,
   RecordPage,
   STEERING_PAGE,
+  SteeringFreshness,
 } from "@/data/contracts/steering";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import { toContextPr, toProposalPage, toRecordPage } from "./mappers/steering";
+import {
+  toContextPr,
+  toProposalPage,
+  toRecordPage,
+  toSteeringFreshness,
+} from "./mappers/steering";
 
 /** The view model parsed from a mapped record, or record_unmappable reported once. */
 function parsed<T>(
@@ -71,6 +78,21 @@ export const steering: DataSource["steering"] = {
     });
     return read.ok
       ? parsed(ContextPr, toContextPr(read.value), ctx.orgId, "contextPr")
+      : read;
+  },
+  async freshness(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: contextSteeringFreshness,
+      input: {},
+      page: "steering",
+    });
+    return read.ok
+      ? parsed(
+          SteeringFreshness,
+          toSteeringFreshness(read.value),
+          ctx.orgId,
+          "freshness",
+        )
       : read;
   },
 };
