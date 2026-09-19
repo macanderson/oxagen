@@ -254,6 +254,36 @@ describe("install rig: macOS, every harness", () => {
     expect(after).not.toContain("tacho");
   });
 
+  it("keeps the Cursor file when the operator pinned their own schema version", async () => {
+    // The third form of the same loss. `mergeCursorHooks` writes `version`
+    // only when the document has none, deliberately, so an operator who pinned
+    // a future schema version keeps it. The purge then read "one key, and it is
+    // `version`" as its own scaffolding and deleted the file with their pin in
+    // it. Tacho can only take back the value Tacho wrote.
+    const seed = seedHome();
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ["cursor"] }, rig.deps)).ok).toBe(true);
+    const path = rig.deps.paths.cursorHooks[0] as string;
+    const live = JSON.parse(readFileSync(path, "utf8")) as {
+      version: number;
+      hooks: Record<string, unknown>;
+    };
+    expect(live.version).toBe(1);
+    // They pin a schema version of their own while enrolled.
+    live.version = 2;
+    writeFileSync(path, `${JSON.stringify(live, null, 2)}\n`);
+
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+
+    expect(existsSync(path)).toBe(true);
+    const after = JSON.parse(readFileSync(path, "utf8")) as {
+      version: number;
+    };
+    expect(after.version).toBe(2);
+    expect(readFileSync(path, "utf8")).not.toContain(TEST_ENROLLMENT);
+  });
+
   it("writes through a symlinked settings file and leaves the link a link", async () => {
     const seed = seedHome({ symlinkedClaudeSettings: true });
     const before = snapshotTree(seed.home);
