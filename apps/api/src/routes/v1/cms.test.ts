@@ -7,7 +7,7 @@
  * access.ts's own logic is covered separately in lib/cms/access.test.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   captureLead: vi.fn(),
@@ -228,6 +228,70 @@ describe("POST /v1/cms/leads", () => {
   it("rejects an unknown intent", async () => {
     const res = await post("/leads", { ...VALID_LEAD, intent: "newsletter" });
     expect(res.status).toBe(400);
+  });
+});
+
+describe("POST /v1/cms/leads rate-limit key resolution", () => {
+  // These mounts moved off the in-process rateLimiter's defaultKeyFn (the
+  // caller-controlled x-forwarded-for header, taken verbatim) onto
+  // distributedRateLimiter + trustedClientIpBucketKey, the same primitive
+  // apps/api/src/routes/v1/tacho.host.enroll.ts uses for its own pre-auth
+  // ceiling. trustedClientIpBucketKey and distributedRateLimiter's spoofing
+  // resistance are exhaustively unit-tested in
+  // apps/api/src/middleware/distributed-rate-limit.test.ts; this test proves
+  // only the wiring: with a trusted proxy configured, varying the
+  // caller-controlled prefix of x-forwarded-for no longer mints a fresh
+  // bucket per request, unlike the resolver this route used before.
+  const TRUSTED_PROXY = "10.0.0.1";
+  const REAL_CLIENT = "198.51.100.7";
+
+  async function postFromRealClientBehindTrustedProxy(
+    attackerPrefix: string,
+  ): Promise<Response> {
+    return cmsRoute.request(
+      new Request("http://localhost/leads", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          // The rightmost hop is the only one a trusted proxy could have
+          // written; everything left of it (including REAL_CLIENT itself,
+          // here) is exactly what an attacker sending straight to the proxy
+          // controls unless the proxy overwrote it. This models an attacker
+          // who cannot make the proxy attribute a different real address, but
+          // pads the header with a different, useless prefix each request.
+          "x-forwarded-for": `${attackerPrefix}, ${REAL_CLIENT}, ${TRUSTED_PROXY}`,
+          "user-agent": "vitest",
+        },
+        body: JSON.stringify(VALID_LEAD),
+      }),
+    );
+  }
+
+  beforeEach(async () => {
+    process.env.TRUSTED_PROXY_CIDRS = `${TRUSTED_PROXY}/32`;
+    const { __resetTrustedProxyHopsForTests } = await import(
+      "../../lib/context"
+    );
+    __resetTrustedProxyHopsForTests();
+  });
+
+  afterEach(async () => {
+    delete process.env.TRUSTED_PROXY_CIDRS;
+    const { __resetTrustedProxyHopsForTests } = await import(
+      "../../lib/context"
+    );
+    __resetTrustedProxyHopsForTests();
+  });
+
+  it("still throttles the same trusted-proxy-vouched client across requests bearing a different spoofed prefix each time", async () => {
+    // max is 10 for /leads; the trusted-proxy-vouched client is REAL_CLIENT
+    // on every one of these regardless of the attacker-controlled prefix.
+    for (let i = 0; i < 10; i += 1) {
+      const res = await postFromRealClientBehindTrustedProxy(`spoof-${i}`);
+      expect(res.status).not.toBe(429);
+    }
+    const eleventh = await postFromRealClientBehindTrustedProxy("spoof-10");
+    expect(eleventh.status).toBe(429);
   });
 });
 

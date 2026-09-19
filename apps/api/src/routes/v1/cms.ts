@@ -31,7 +31,10 @@ import {
   DEFAULT_EDITION_SLUG,
   type EditionSlug,
 } from "@oxagen/database";
-import { rateLimiter } from "../../middleware/rate-limit";
+import {
+  distributedRateLimiter,
+  trustedClientIpBucketKey,
+} from "../../middleware/distributed-rate-limit";
 import {
   captureLead,
   captureLeadAndIssueCode,
@@ -166,8 +169,20 @@ async function emailReaderLink(
 }
 
 // ── POST /v1/cms/leads ────────────────────────────────────────────────────────
-// Generous but bounded: a handful of submissions per minute per IP.
-cmsRoute.use("/leads", rateLimiter({ windowMs: 60_000, max: 10 }));
+// Generous but bounded: a handful of submissions per minute per IP. Keyed by
+// trustedClientIpBucketKey (never x-forwarded-for directly, which the caller
+// controls) and degrades to the per-process limiter if Postgres is down —
+// see distributed-rate-limit.ts.
+cmsRoute.use(
+  "/leads",
+  distributedRateLimiter({
+    keyPrefix: "cms-leads",
+    windowMs: 60_000,
+    max: 10,
+    bucketKey: trustedClientIpBucketKey,
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 cmsRoute.post("/leads", async (c) => {
   let raw: unknown;
   try {
@@ -252,7 +267,16 @@ cmsRoute.post("/leads", async (c) => {
 
 // ── POST /v1/cms/book/redeem ──────────────────────────────────────────────────
 // Higher ceiling: legitimate readers open/refresh, and each rotates a code.
-cmsRoute.use("/book/redeem", rateLimiter({ windowMs: 60_000, max: 60 }));
+cmsRoute.use(
+  "/book/redeem",
+  distributedRateLimiter({
+    keyPrefix: "cms-book-redeem",
+    windowMs: 60_000,
+    max: 60,
+    bucketKey: trustedClientIpBucketKey,
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 cmsRoute.post("/book/redeem", async (c) => {
   let raw: unknown;
   try {
@@ -285,7 +309,16 @@ cmsRoute.post("/book/redeem", async (c) => {
 
 // ── POST /v1/cms/book/resend ──────────────────────────────────────────────────
 // Stricter: this triggers an email, so bound it tightly per IP.
-cmsRoute.use("/book/resend", rateLimiter({ windowMs: 60_000, max: 5 }));
+cmsRoute.use(
+  "/book/resend",
+  distributedRateLimiter({
+    keyPrefix: "cms-book-resend",
+    windowMs: 60_000,
+    max: 5,
+    bucketKey: trustedClientIpBucketKey,
+    storeErrorPolicy: "degrade-to-local",
+  }),
+);
 cmsRoute.post("/book/resend", async (c) => {
   let raw: unknown;
   try {
