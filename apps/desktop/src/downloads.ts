@@ -197,7 +197,7 @@ footer{margin-top:36px;color:var(--muted);font-size:14px}
 <main>
 <div class="wm">o<b>x</b>agen</div>
 <h1>Download Oxagen ${version}</h1>
-<p class="lede">The Oxagen app signs a machine in to your organization and registers the Claude Code, Codex, and Stella installs it finds, so every run they make is recorded and governed.</p>
+<p class="lede">The Oxagen app signs a machine in to your organization and registers the Claude Code, Codex, Cursor, and Stella installs it finds, so every run they make is recorded and governed.</p>
 ${section("macOS", "macOS 12 or newer. Open the .dmg and drag Oxagen to Applications before the first launch; while builds are unsigned, right-click the app and choose Open the first time.")}
 ${section("Windows", "Windows 10 or newer, x64. While builds are unsigned, SmartScreen asks once: More info, then Run anyway.")}
 ${section("Linux", "x86_64. Install the package for your distribution; the AppImage runs anywhere but must be installed or linked before registering agents.")}

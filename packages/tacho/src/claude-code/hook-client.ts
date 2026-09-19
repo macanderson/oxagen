@@ -23,13 +23,14 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
+import { cursorAnswer, translateCursorPayload } from "./cursor-adapter";
 import { hookInputSchema } from "./hooks";
 import {
-  parseAnswerBody,
   psStartInstance,
   stellaAnswer,
   stellaHarnessPid,
   translateStellaPayload,
+  tryParseAnswerBody,
 } from "./stella-adapter";
 
 /** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
@@ -291,6 +292,88 @@ export function decideLocally(
         note: `daemon down; decided ${decision} from cached bundle`,
       };
     }
+    case "SubagentStart": {
+      // Cursor treats subagentStart as a permission event. An empty answer
+      // becomes allow, so a paused or revoked host would launch model-backed
+      // subagents unless this path decides. Evaluate as Task: one rule covers
+      // Claude Code's Task tool and Cursor's subagent start.
+      const block = operatorBlockLocal(host);
+      if (block !== undefined) {
+        return {
+          response: {
+            hookSpecificOutput: {
+              hookEventName: "SubagentStart",
+              permissionDecision: "deny",
+              permissionDecisionReason: block,
+            },
+          },
+          note: "blocked by host status",
+        };
+      }
+      const verified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+      const toolInput =
+        input.agent_type !== undefined || input.agent_id !== undefined
+          ? {
+              ...(input.agent_type !== undefined
+                ? { subagent_type: input.agent_type }
+                : {}),
+              ...(input.agent_id !== undefined
+                ? { subagent_id: input.agent_id }
+                : {}),
+            }
+          : undefined;
+      const evaluation = evaluatePreToolUse({
+        bundle: host.bundle,
+        bundleVerified: verified,
+        toolName: "Task",
+        ...(toolInput !== undefined ? { toolInput } : {}),
+        hostStatus: host.host_status,
+        latestDenyGeneration: host.deny_generation,
+        controlReachable: false,
+        now,
+        ...(input.cwd !== undefined ? { context: { cwd: input.cwd } } : {}),
+      });
+      const decision =
+        evaluation.decision === "defer"
+          ? host.bundle.mode === "observe"
+            ? "allow"
+            : "deny"
+          : evaluation.decision;
+      const finalEvaluation: Evaluation = { ...evaluation, decision };
+      const response =
+        decision === "deny"
+          ? {
+              hookSpecificOutput: {
+                hookEventName: "SubagentStart",
+                permissionDecision: "deny",
+                permissionDecisionReason: evaluation.reason,
+              },
+            }
+          : decision === "ask" && evaluation.rule !== undefined
+            ? {
+                hookSpecificOutput: {
+                  hookEventName: "SubagentStart",
+                  permissionDecision: "ask",
+                  permissionDecisionReason: evaluation.reason,
+                },
+              }
+            : decision === "allow" &&
+                evaluation.evaluated === "allow" &&
+                evaluation.rule !== undefined
+              ? {
+                  hookSpecificOutput: {
+                    hookEventName: "SubagentStart",
+                    permissionDecision: "allow",
+                    permissionDecisionReason: evaluation.reason,
+                  },
+                }
+              : {};
+      return {
+        response,
+        evaluation: finalEvaluation,
+        note: `daemon down; decided ${decision} from cached bundle`,
+      };
+    }
     default:
       return { response: {}, note: "daemon down; recorded for replay" };
   }
@@ -315,6 +398,10 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   const harness: TachoHarness =
     agent !== undefined ? "claude-code" : (deps.harness ?? "claude-code");
   const stella = harness === "stella";
+  const cursor = harness === "cursor";
+  // Stella and Cursor speak their own hook shapes; their adapters translate
+  // the payload in and the answer out. Every other harness is Claude Code's.
+  const translated = stella || cursor;
   let raw: unknown;
   try {
     raw = JSON.parse(deps.stdin);
@@ -339,29 +426,53 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     )(harnessPid);
     raw = translateStellaPayload(raw, harnessPid, instance);
   }
+  if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
     return {
       stdout: "{}\n",
-      stderr: `tacho-hook: payload is not a ${stella ? "Stella" : "Claude Code"} hook\n`,
+      stderr: `tacho-hook: payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",
     };
   }
   const input = parsed.data;
   // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
-  // as prompt text; every other harness reads Claude Code's answer as is.
+  // as prompt text; Cursor reads `{"permission": ...}` and friends; every
+  // other harness reads Claude Code's answer as is.
   const answer = (response: Record<string, unknown>): string =>
     stella
       ? stellaAnswer(response, input.hook_event_name)
-      : `${JSON.stringify(response)}\n`;
+      : cursor
+        ? cursorAnswer(response, input.hook_event_name)
+        : `${JSON.stringify(response)}\n`;
   const emptyAnswer = answer({});
+  // An unreadable enrollment is not an unenrolled machine, and for Cursor the
+  // difference decides whether a tool runs unchecked. Cursor treats a
+  // malformed answer as a block, so `cursorAnswer` turns "no opinion" into an
+  // explicit `{"permission":"allow"}` — which is the right reading of silence
+  // from a machine Oxagen does not govern, and the wrong one when the file
+  // that says whether it governs this machine cannot be read. A corrupt or
+  // briefly unreadable `host.json` would run every tool with no policy
+  // evaluated at all. Refuse instead: the harness is asking permission and
+  // this process cannot tell whether permission was granted.
+  //
+  // Only the read error refuses. `host === undefined` below is the honestly
+  // unenrolled machine and still answers empty, so installing the hook
+  // without enrolling does not block the person's own tools.
+  const refusedAnswer = answer({
+    hookSpecificOutput: {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Oxagen cannot read this machine's enrollment, so it cannot say whether this call is permitted.",
+    },
+  });
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
     return {
-      stdout: emptyAnswer,
+      stdout: cursor ? refusedAnswer : emptyAnswer,
       stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
       exitCode: 0,
       path: "unenrolled",
@@ -399,9 +510,18 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
     });
     if (result.status === 200) {
+      // A 200 whose body is not a JSON object is a fault, not a decision. It
+      // falls through to the local evaluator rather than being read as an
+      // empty answer, because a translated harness turns an empty answer into
+      // an explicit allow and a truncated response would permit the call.
+      const document = tryParseAnswerBody(result.body);
+      if (document === undefined)
+        throw new Error(
+          `daemon answered 200 with a body that is not a JSON object: ${result.body.slice(0, 200)}`,
+        );
       return {
-        stdout: stella
-          ? answer(parseAnswerBody(result.body))
+        stdout: translated
+          ? answer(document)
           : `${result.body.trim() || "{}"}\n`,
         stderr: "",
         exitCode: 0,

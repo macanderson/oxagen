@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  enrollCommandFor,
   hashEnrollmentToken,
   parseRepositoryRemote,
   provisionalUntil,
@@ -61,5 +62,25 @@ describe("provisionalUntil", () => {
     expect(provisionalUntil(created).toISOString()).toBe(
       "2026-09-29T12:00:00.000Z",
     );
+  });
+});
+
+describe("enrollCommandFor", () => {
+  const token = "oxe_1time_0123456789abcdefghjkmnpqrs";
+
+  it("names a hook-based harness so tacho hooks that one, not Claude Code", () => {
+    for (const harness of ["claude-code", "codex", "cursor", "stella"]) {
+      expect(enrollCommandFor(token, harness)).toBe(
+        `oxagen agent enroll --token ${token} --harness ${harness}`,
+      );
+    }
+  });
+
+  it("prints the bare command for a harness with no host hooks", () => {
+    for (const harness of ["claude-agent-sdk", "custom"]) {
+      expect(enrollCommandFor(token, harness)).toBe(
+        `oxagen agent enroll --token ${token}`,
+      );
+    }
   });
 });
