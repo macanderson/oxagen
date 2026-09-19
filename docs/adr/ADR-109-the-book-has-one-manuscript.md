@@ -7,7 +7,7 @@
   ADR-043 (the cut that dropped `cms` and took both editions offline for twelve
   days); the migrations `20260919131000_seed_cms_book_editions.sql`,
   `20260919150000_update_page_flip_reader_edition.sql`, and
-  `20260920100000_book_second_edition.sql`
+  `20260920130000_book_second_edition.sql`
 - **Numbering:** 109. ADR-104 to ADR-108 were taken on `main` while this branch
   was open
 - **Delivered by:** `packages/database/seed-assets/books/manuscript/`,
@@ -72,7 +72,7 @@ change of that size made by hand, three times, would not have stayed consistent.
 - To change the book, edit a fragment, run
   `node tools/scripts/build-book-editions.mjs`, and rehash with
   `atlas migrate hash --dir "file://atlas/migrations"` from `packages/database`.
-- An edit that must reach production after `20260920100000` has been applied
+- An edit that must reach production after `20260920130000` has been applied
   needs a new migration. Change `MIGRATION_NAME` in the script to a later
   timestamp, rebuild, and keep the old file. Atlas refuses a changed checksum
   on an applied migration, so the old file cannot be regenerated in place.
