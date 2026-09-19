@@ -41,4 +41,46 @@ describe("update_mandate_limits contract", () => {
       }).success,
     ).toBe(false);
   });
+
+  // ADR-102. `limits` replaces the record and is the only way to delete a
+  // bound; `limitChanges` names the measures to change and the handler merges
+  // it under the row lock. A request carrying both states two intentions for
+  // one field, so it is invalid rather than resolved in favour of either.
+  it("takes a limit change on its own, and never beside a whole record", () => {
+    expect(
+      mandateLimitsUpdate.input.parse({
+        mandateId: ID,
+        limitChanges: { amount: { perPeriod: "500000000" } },
+      }).limitChanges?.amount?.perPeriod,
+    ).toBe("500000000");
+    expect(
+      mandateLimitsUpdate.input.safeParse({
+        mandateId: ID,
+        limits: {
+          amount: { perCall: "1", period: "daily", currencyOrUnit: "USD" },
+        },
+        limitChanges: { amount: { perPeriod: "2" } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a change that names no measure or no field (negative)", () => {
+    expect(
+      mandateLimitsUpdate.input.safeParse({ mandateId: ID, limitChanges: {} })
+        .success,
+    ).toBe(false);
+    expect(
+      mandateLimitsUpdate.input.safeParse({
+        mandateId: ID,
+        limitChanges: { amount: {} },
+      }).success,
+    ).toBe(false);
+    // A figure is still an integer string: a change is not a way around INV-09.
+    expect(
+      mandateLimitsUpdate.input.safeParse({
+        mandateId: ID,
+        limitChanges: { amount: { perPeriod: "50.5" } },
+      }).success,
+    ).toBe(false);
+  });
 });
