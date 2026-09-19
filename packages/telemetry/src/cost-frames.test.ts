@@ -26,6 +26,14 @@ import {
 const ORG = "00000000-0000-4000-8000-000000000001";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
 
+/**
+ * The thinking figure the wrapped read prices a frame with: the transcript
+ * row joined back after the duplicate filter dropped it (`t`), and the
+ * priced row's own column only when no transcript row joins (`c`).
+ */
+const REASONING =
+  "toInt64(if(coalesce(t.thinking, 0) > 0, coalesce(t.thinking, 0), coalesce(c.thinking_tokens, 0)))";
+
 function answer(rows: unknown[]): void {
   queryMock.mockResolvedValueOnce({ json: async () => rows });
 }
@@ -34,9 +42,18 @@ function lastQuery(): QueryCall {
   return queryMock.mock.calls.at(-1)![0];
 }
 
-/** One `AS alias` per selected column, in select order. */
+/**
+ * One `AS alias` per selected column of the OUTER select, in select order.
+ * The text is cut at the outer `FROM` so a subquery's own aliases, and the
+ * aliases the joined reads give their tables, cannot be read as columns the
+ * caller receives.
+ */
 function selectedColumns(sql: string): string[] {
-  return [...sql.matchAll(/^\s*(.+?)\s+AS\s+(\w+),?$/gm)].map((m) => m[2]!);
+  const from = sql.search(/^\s*FROM /m);
+  const projection = from === -1 ? sql : sql.slice(0, from);
+  return [...projection.matchAll(/^\s*(.+?)\s+AS\s+(\w+),?$/gm)].map(
+    (m) => m[2]!,
+  );
 }
 
 beforeEach(() => queryMock.mockReset());
@@ -79,13 +96,15 @@ describe("readModelCallFrames", () => {
     expect(query).toContain("FROM tacho_events FINAL");
     expect(query).toContain("kind = 'llm_call'");
     expect(query).toContain(
-      "coalesce(cache_creation_tokens, 0) AS cache_write_5m",
+      "coalesce(c.cache_creation_tokens, 0) AS cache_write_5m",
     );
     expect(query).not.toMatch(
       /cache_creation_5m_tokens|cache_creation_1h_tokens/,
     );
     expect(selectedColumns(query)).toEqual([
       "at",
+      "model",
+      "provider",
       "input_uncached",
       "cache_read",
       "cache_write_5m",
@@ -176,10 +195,97 @@ describe("readModelCallFrames", () => {
     // `input_tokens`: a source that reports more thinking than output must
     // not drive the output class negative.
     expect(query).toContain(
-      "toInt64(greatest(0, toInt64(coalesce(output_tokens, 0)) - toInt64(coalesce(thinking_tokens, 0))))",
+      `toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${REASONING}))`,
     );
-    expect(query).toMatch(/coalesce\(thinking_tokens, 0\)\s+AS reasoning/);
+    expect(query).toContain(`${REASONING} AS reasoning`);
+    // The same figure on both sides: one that subtracted a different number
+    // from `output` than it reported as `reasoning` would price part of the
+    // call twice, or lose part of it.
+    expect(query.split(REASONING)).toHaveLength(3);
     expect(frames[0]).toMatchObject({ output: 500, reasoning: 400 });
+  });
+
+  // The finding this covers: when the host sealed the OTel or proxy sighting
+  // of a call first, the duplicate stamp lands on the TRANSCRIPT row, this
+  // read drops it, and the row left to price carries no `thinking_tokens` at
+  // all. Priced off that row alone, every reasoning token of the call is
+  // charged at the output rate and `reasoning` reports zero.
+  it("takes the thinking split from the duplicate transcript row of the same call", async () => {
+    answer([]);
+    await readModelCallFrames({
+      orgId: ORG,
+      run: { kind: "tacho", rootSessionUuid: RUN },
+    });
+    const { query } = lastQuery();
+
+    // The call is still priced from the unstamped row: one duplicate filter,
+    // on the priced side, exactly as before.
+    const priced = query.slice(0, query.indexOf("LEFT JOIN"));
+    expect(priced).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(query.match(/attrs\[\{duplicateAttr:String\}\] = ''/g)).toHaveLength(
+      1,
+    );
+
+    // The joined side is `countsLlmCallSplit`: transcript rows that are not
+    // continuation blocks, and NOT filtered by the duplicate stamp, because
+    // the row it needs is usually the stamped one.
+    const joined = query.slice(query.indexOf("LEFT JOIN"));
+    expect(joined).toContain("source = 'transcript'");
+    expect(joined).toContain("attrs[{duplicateAttr:String}] != 'transcript'");
+    expect(joined).not.toContain("attrs[{duplicateAttr:String}] = ''");
+
+    // Joined on the vendor request id, then the message id: the order
+    // `llmCallKeys` in @oxagen/tacho joins two sightings of one call by.
+    expect(query).toContain("concat('request:', request_id)");
+    expect(query).toContain("concat('message:', message_id)");
+    expect(query).toContain("ON t.call_key = c.call_key");
+
+    // One joined row per call at most, and none for a row carrying neither
+    // id: a fan-out here would turn one call into several priced frames.
+    expect(joined).toContain("toInt64(max(coalesce(thinking_tokens, 0)))");
+    expect(joined).toContain("GROUP BY call_key");
+    expect(joined).toContain("HAVING call_key != ''");
+
+    // The transcript's figure wins, and a call no transcript row joins keeps
+    // its own, which is how a collector-only call still reports reasoning.
+    expect(query).toContain(REASONING);
+  });
+
+  it("maps a joined frame's reasoning and output onto the row shape", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        // The OTel row the call is priced from reported 900 output tokens;
+        // the transcript row the filter dropped reported 400 of thinking.
+        output: "500",
+        reasoning: "400",
+        cost_micros: "4125",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      run: { kind: "tacho", rootSessionUuid: RUN },
+    });
+    expect(frames).toEqual([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        inputUncached: 1000,
+        cacheRead: 0,
+        cacheWrite5m: 0,
+        cacheWrite1h: 0,
+        output: 500,
+        reasoning: 400,
+        reportedCostMicros: "4125",
+        basis: "client_attested",
+      },
+    ]);
   });
 
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {
@@ -444,6 +550,21 @@ describe("readObservedModels", () => {
     // rows into a workspace-scoped list.
     expect(query.match(/workspace_id = \{workspaceId:UUID\}/g)).toHaveLength(2);
     expect(query_params).toMatchObject({ workspaceId: WS });
+  });
+
+  // The per-run read joins the transcript's thinking figure back because the
+  // output and reasoning classes are priced at different rates. This list
+  // ranks rather than prices, and its sum leaves thinking out on purpose, so
+  // the same join would change no total here and the duplicate filter is the
+  // whole rule.
+  it("ranks on the row it counts, without the per-run read's transcript join", async () => {
+    answer([]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const { query } = lastQuery();
+    expect(query).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(query).not.toContain("LEFT JOIN");
+    expect(query).not.toContain("call_key");
+    expect(query).not.toContain("thinking_tokens");
   });
 
   it("lets a degraded store throw", async () => {

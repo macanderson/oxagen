@@ -36,6 +36,17 @@
  * whose published reasoning rate differs from its output rate. `token_usage`
  * has no thinking column at all, so a gateway frame's `reasoning` stays zero.
  *
+ * The split and the duplicate filter pull against each other, so the wrapped
+ * read joins them back together. When the host sealed a call's OTel or proxy
+ * sighting first, the stamp lands on the transcript row, the filter above
+ * drops it, and the row left to price carries no `thinking_tokens` at all,
+ * because the transcript is the only source that records the column. The
+ * read therefore joins that dropped transcript row back on the vendor
+ * request id ({@link CALL_JOIN_KEY}) and takes its thinking figure, the same
+ * rule `countsLlmCallSplit` in @oxagen/tacho states. Nothing is added by the
+ * join: the call is still priced from one row, and the figure only moves
+ * tokens out of that row's inclusive `output_tokens` into `reasoning`.
+ *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
  */
@@ -92,6 +103,42 @@ const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
  * stamped one. Spelled once so the two reads below cannot filter differently.
  */
 const NOT_A_DUPLICATE = "attrs[{duplicateAttr:String}] = ''";
+
+/**
+ * A call's join key, strongest id first: the vendor request id, then the
+ * message id, the order `llmCallKeys` in @oxagen/tacho joins two sources'
+ * sightings of one call by. The ledger's last-resort token tuple is left out
+ * on purpose. Two calls in one session can share a tuple (a title prompt
+ * asked twice), and the ledger only falls back to it because it sees
+ * sightings in order, which a reader of the stored rows does not. A row
+ * carrying neither id joins nothing and keeps its own columns.
+ */
+const CALL_JOIN_KEY =
+  "if(request_id != '', concat('request:', request_id), if(message_id != '', concat('message:', message_id), ''))";
+
+/**
+ * The rows that carry a call's thinking split, which is `countsLlmCallSplit`
+ * in @oxagen/tacho spelled for the store: a transcript row counts whether it
+ * was the first sighting of its call or the duplicate of an OTel or proxy
+ * row, and a transcript continuation block, stamped a duplicate of
+ * `transcript`, had its usage removed and carries nothing. This is the one
+ * read that must NOT apply {@link NOT_A_DUPLICATE}, because the row it wants
+ * is usually the stamped one.
+ */
+const TRANSCRIPT_SPLIT_ROW = `source = 'transcript'
+          AND attrs[{duplicateAttr:String}] != 'transcript'`;
+
+/**
+ * The thinking figure a wrapped frame is priced with, and which row supplies
+ * it. `c` is the row the call is priced from, the sighting the host left
+ * unstamped; `t` is the same call's transcript row, joined back after the
+ * duplicate filter dropped it. The transcript wins because it is the only
+ * source that records the split. A call that no transcript row joins keeps
+ * its own figure, which is how a collector-only call still reports its
+ * reasoning.
+ */
+const FRAME_REASONING =
+  "toInt64(if(coalesce(t.thinking, 0) > 0, coalesce(t.thinking, 0), coalesce(c.thinking_tokens, 0)))";
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -155,23 +202,42 @@ export async function readModelCallFrames(args: {
     ch.query({
       query: `
       SELECT
-        formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
-        model,
-        provider,
-        coalesce(input_tokens, 0)          AS input_uncached,
-        coalesce(cache_read_tokens, 0)     AS cache_read,
-        coalesce(cache_creation_tokens, 0) AS cache_write_5m,
-        toInt64(greatest(0, toInt64(coalesce(output_tokens, 0)) - toInt64(coalesce(thinking_tokens, 0)))) AS output,
-        coalesce(thinking_tokens, 0)       AS reasoning,
-        cost_usd_micros                    AS cost_micros
-      FROM tacho_events FINAL
-      WHERE org_id = {orgId:UUID}
-        AND root_session_uuid = {rootSessionUuid:UUID}
-        AND kind = 'llm_call'
-        AND source IN {sources:Array(String)}
-        AND ${NOT_A_DUPLICATE}
-        AND model != ''
-      ORDER BY ts, seq
+        formatDateTime(c.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
+        c.model    AS model,
+        c.provider AS provider,
+        coalesce(c.input_tokens, 0)          AS input_uncached,
+        coalesce(c.cache_read_tokens, 0)     AS cache_read,
+        coalesce(c.cache_creation_tokens, 0) AS cache_write_5m,
+        toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
+        ${FRAME_REASONING} AS reasoning,
+        c.cost_usd_micros AS cost_micros
+      FROM (
+        SELECT
+          ts, seq, model, provider, input_tokens, output_tokens,
+          cache_read_tokens, cache_creation_tokens, thinking_tokens,
+          cost_usd_micros,
+          ${CALL_JOIN_KEY} AS call_key
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND kind = 'llm_call'
+          AND source IN {sources:Array(String)}
+          AND ${NOT_A_DUPLICATE}
+          AND model != ''
+      ) AS c
+      LEFT JOIN (
+        SELECT
+          ${CALL_JOIN_KEY} AS call_key,
+          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND kind = 'llm_call'
+          AND ${TRANSCRIPT_SPLIT_ROW}
+        GROUP BY call_key
+        HAVING call_key != ''
+      ) AS t ON t.call_key = c.call_key
+      ORDER BY c.ts, c.seq
     `,
       query_params: {
         orgId: args.orgId,
@@ -392,6 +458,13 @@ const OBSERVED_MODEL_LIMIT = 500;
  * {@link readModelCallFrames} splits the two because they are priced at
  * different rates; a ranking only needs the total, which `output_tokens`
  * already carries.
+ *
+ * That is also why this read does not join the transcript's thinking figure
+ * back the way {@link readModelCallFrames} does. The join exists there to
+ * move tokens between two classes priced at different rates, and this sum
+ * leaves thinking out of both, so the same join would change no total here.
+ * The duplicate filter is the whole rule: it keeps one row per call, and
+ * that row's `output_tokens` already counts the call's thinking once.
  *
  * Throws on a degraded store: a short list read off half the frames would
  * say a model is priced when nobody has priced it.
