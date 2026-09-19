@@ -352,7 +352,12 @@ describe("tachod and frame bodies", () => {
     // the drain sends what is queued. The control plane refusing it is too
     // late — the prompt has already left the machine, which is the one thing
     // the retention boundary exists to prevent.
-    let narrowed: PolicyBundle | undefined;
+    // Explicitly unset rather than merely declared: `signer` exists only
+    // after `boot(fetch, ...)`, and `fetch` closes over this, so the
+    // narrowed bundle cannot be built at the declaration. The initializer
+    // makes the later write a reassignment, which is what it is, and stops
+    // `prefer-const` collapsing the two and breaking the closure.
+    let narrowed: PolicyBundle | undefined = undefined;
     const { fetch, batches } = plane(
       () => undefined,
       () =>
