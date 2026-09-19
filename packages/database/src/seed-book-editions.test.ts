@@ -9,7 +9,8 @@
  *  1. Both editions are upserted (insert → values → onConflictDoUpdate) on slug.
  *  2. The field-manual edition's legacy client-side unlock script is stripped
  *     before the HTML is stored.
- *  3. The page-flip edition's HTML is stored unmodified (no transform).
+ *  3. The page-flip edition's `/field-manual` href is rewritten to the gated
+ *     `/read?e=field-manual` URL (AWS has no `/field-manual` object).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -49,7 +50,8 @@ const FIELD_MANUAL_FIXTURE = `<html><head>
 <script>if (!localStorage.getItem('ox_fm_unlocked')) { location.href = '/#field-manual'; }</script>
 </head><body>Field manual body</body></html>`;
 
-const PAGE_FLIP_FIXTURE = "<html><body>Page-flip body</body></html>";
+const PAGE_FLIP_FIXTURE =
+  '<html><body>See <a href="/field-manual">the field manual</a>.</body></html>';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -94,12 +96,13 @@ describe("seedBookEditions()", () => {
     expect(fieldManualValues.html).toContain("Field manual body");
   });
 
-  it("stores the page-flip edition's HTML unmodified", async () => {
+  it("rewrites the page-flip footer /field-manual link for the AWS reader URL", async () => {
     await seedBookEditions();
 
     const pageFlipValues = mocks.valuesMock.mock.calls[1]?.[0] as {
       html: string;
     };
-    expect(pageFlipValues.html).toBe(PAGE_FLIP_FIXTURE);
+    expect(pageFlipValues.html).toContain('href="/read?e=field-manual"');
+    expect(pageFlipValues.html).not.toContain('href="/field-manual"');
   });
 });
