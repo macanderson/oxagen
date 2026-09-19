@@ -12,8 +12,6 @@
     "loading": "Loading this mandate",
     "grantedBy": "granted by {user}",
     "notGranted": "not granted",
-    "requestedBy": "requested by {user}",
-    "roleAtGrant": "{role} at grant",
     "status": {
       "draft": "requested",
       "active": "active",
@@ -75,6 +73,9 @@
       "title": "The grant",
       "agent": "Agent",
       "grantedBy": "Granted by",
+      "notGranted": "not granted",
+      "requestedBy": "requested by {user}",
+      "roleAtGrant": "{role} at grant",
       "effect": "Effect",
       "counterparties": "Counterparties",
       "allow": "allow",
