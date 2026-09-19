@@ -22,6 +22,7 @@ import {
   isContentBearingFrame,
   type JsonValue,
   type Redaction,
+  type GradeEnforcementTier,
   type ReplayGrade,
   digestBytes,
   redactBytes,
@@ -181,6 +182,12 @@ export interface SealedFrameRow {
  * and the gaps below counted only the first pair, so every run the assistant
  * recorded sealed with `modelCalls: 0`, `toolCalls: 0` and no `tool_bodies`
  * gap however many calls it made.
+ *
+ * The registry is asked rather than a list kept here, so a new call event is
+ * counted the moment it declares its step. The `*_started` write-ahead
+ * intentions declare none: a started event with no matching completion is a
+ * dangling intention, and counting it would report a call the record does not
+ * claim happened.
  */
 function isToolCallEvent(eventType: string): boolean {
   return stepKindOfEventType(eventType) === "tool_call";
@@ -217,6 +224,10 @@ export function deriveSealRollup(rows: readonly SealedFrameRow[]): SealRollup {
       typeof payload === "object" && payload !== null
         ? (payload as Record<string, unknown>)["turn_index"]
         : undefined;
+    // A model call whose payload carries no turn index — an encrypted one, or
+    // an engine call, whose schema has no such field — hides the turn count.
+    // `turns: null` is "not recorded"; a number here would be a count of the
+    // calls that happened to be legible, presented as the run's turns.
     if (turn === undefined || turn === null) opaque = true;
     else turns.add(String(turn));
   }
@@ -272,19 +283,48 @@ export function countRetainedBodies(rows: readonly SealedFrameRow[]): number {
 }
 
 /**
- * A ledger run's evidence is submitted by an engine Oxagen did not host
- * (ADR-043), so its frames are client-attested: the `harness` tier, which
- * caps the grade at `view`. A gateway-observed ledger run and a harness that
- * reports a reproducible run are both seams a later lane opens; nothing here
- * infers either.
+ * Where a sealed attempt's model calls were observed, read from the rows.
+ *
+ * A model call an engine Oxagen did not host submits as evidence is
+ * client-attested (`model.call_completed`): the `harness` tier. A model call
+ * the in-app engine made through Oxagen's own gateway is recorded as the
+ * engine's own call (`model.engine_call_completed`), which means the request
+ * and the response passed through the seam that wrote the frame — the
+ * `gateway` tier, and the only tier §8.4 lets a recording reach `fork` from.
+ *
+ * A run with both was partly attested and grades at the weaker tier. A run with
+ * no model call at all is `harness`: nothing observed anything at the gateway,
+ * and inferring the stronger tier from an absence would raise a grade the
+ * record does not support.
+ */
+export function ledgerEnforcementTier(
+  rows: readonly SealedFrameRow[],
+): GradeEnforcementTier {
+  let gatewayObserved = false;
+  for (const row of rows) {
+    // A submitted receipt: evidence from an engine Oxagen did not host.
+    if (row.event_type === "model.call_completed") return "harness";
+    if (row.event_type === "model.engine_call_completed")
+      gatewayObserved = true;
+  }
+  return gatewayObserved ? "gateway" : "harness";
+}
+
+/**
+ * The grade a sealed attempt records (spec §8.4), from the gaps its rows show,
+ * the bodies it retained and the tier its model calls were observed at.
+ *
+ * `retry` is not reachable here: it needs a harness that reports a reproducible
+ * run, and no producer reports that in this revision. Nothing infers it.
  */
 export function gradeSealedAttempt(
   gaps: readonly string[],
   retainedBodies: number,
+  enforcementTier: GradeEnforcementTier = "harness",
 ): ReplayGrade {
   return computeReplayGrade({
     gaps,
-    enforcementTier: "harness",
+    enforcementTier,
     harnessReproducible: false,
     retainedBodies,
   });

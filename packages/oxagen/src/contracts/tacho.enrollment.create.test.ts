@@ -17,13 +17,7 @@ describe("tachoEnrollmentCreate", () => {
   });
 
   it("accepts a host that names every harness, cursor included", () => {
-    const all = [
-      "claude-code",
-      "codex",
-      "cursor",
-      "stella",
-      "claude-desktop",
-    ];
+    const all = ["claude-code", "codex", "cursor", "stella", "claude-desktop"];
     const parsed = tachoEnrollmentCreate.input.parse({
       hostname: "laptop.local",
       osUser: "dev",

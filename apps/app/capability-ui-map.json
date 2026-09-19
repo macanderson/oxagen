@@ -312,6 +312,30 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "get_run_chain": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain — the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "proof": "apps/app/src/features/run/chain.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
+    "fork_run": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Fork replay on a sealed ledger run graded fork calls fork_run from the dialog; a wrapped session or a weaker grade draws the control disabled with the reason (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
+    "bisect_runs": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] — Bisect compares this run with another and names the first frame at which they diverge (features/run/actions.ts, features/run/replay-actions.tsx)",
+      "proof": "apps/app/src/features/run/replay.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
+    },
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -323,10 +347,10 @@
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Cost tab reads get_run_cost when open (data/live/runs.ts, features/run/cost.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=cost — the Cost tab reads get_run_cost for the rollup, under the run waterfall (data/live/runs.ts, features/run/cost.tsx)",
+      "proof": "apps/app/src/features/run/waterfall.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -339,10 +363,10 @@
     "get_run_transcript": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] — the Transcript tab reads get_run_transcript at everything and groups it into turns and steps, with the zoom the URL names choosing what starts open (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx)",
-      "proof": "apps/app/src/features/run/run.test.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=transcript — the Transcript tab reads get_run_transcript through the chips the URL pressed, groups it into turns and steps under a transport, and pages the cursor as the playhead moves; the Cost tab reads the run's own per-turn ledger for the waterfall (data/live/runs.ts, features/run/transcript.tsx, features/run/transcript-view.tsx, features/run/waterfall.tsx)",
+      "proof": "apps/app/src/features/run/transcript.test.tsx",
       "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-c2f283fb-3282-review"
+      "verifiedBy": "session-replay-ui"
     },
     "get_spend": {
       "route": "/[org]/[ws]/spend",
@@ -429,10 +453,10 @@
     "list_approvals": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/page.tsx",
-      "entry": "/[org]/[ws] — the rev1 surface that invokes list_approvals (data/live/approvals.ts, data/live/mappers/approvals.ts, data/live/mappers/mappers.type-test.ts)",
-      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws] — the Fleet approvals panel invokes list_approvals, and /[org]/[ws]/runs/[run]?tab=approvals reads it narrowed to one run (data/live/approvals.ts, features/fleet/approvals-panel.tsx, features/run/run.tsx)",
+      "proof": "apps/app/src/features/run/run.test.tsx",
+      "verifiedAt": "2026-09-18",
+      "verifiedBy": "session-replay-ui"
     },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools",

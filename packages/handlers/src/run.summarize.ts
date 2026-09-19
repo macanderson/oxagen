@@ -20,6 +20,7 @@ import {
 } from "@oxagen/oxagen/contracts/run.summarize";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { eventClient } from "./event-client";
+import { canSummarizeRun } from "@oxagen/oxagen/contracts/run.list";
 import { recordedGaps, runScope } from "./run.list";
 import {
   defaultRunReadDeps,
@@ -53,6 +54,20 @@ function sealedGaps(run: ResolvedRun): string[] {
     : recordedGaps(run.row.session.completenessGaps);
 }
 
+/**
+ * The refusal a run earns, or null. It is `canSummarizeRun`'s rule spelled out:
+ * that predicate answers whether the action is offered and this answers why it
+ * is not, and both read the same two facts. A row that says `canSummarize` and
+ * a handler that refuses would be the guaranteed conflict #3285 records.
+ */
+function summarizeRefusal(run: ResolvedRun): string | null {
+  const gaps = sealedGaps(run);
+  if (canSummarizeRun({ status: run.item.status, completenessGaps: gaps })) {
+    return null;
+  }
+  return run.item.status === "live" ? "run_not_sealed" : "digest_only";
+}
+
 export function createRunSummarizeHandler(
   deps: RunSummarizeDeps,
 ): CapabilityHandler<typeof runSummarize> {
@@ -64,11 +79,9 @@ export function createRunSummarizeHandler(
     );
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
-    if (run.item.status === "live") {
-      throw new HandlerError({ code: "conflict", reason: "run_not_sealed" });
-    }
-    if (sealedGaps(run).includes("digest_only")) {
-      throw new HandlerError({ code: "conflict", reason: "digest_only" });
+    const refusal = summarizeRefusal(run);
+    if (refusal !== null) {
+      throw new HandlerError({ code: "conflict", reason: refusal });
     }
     await deps.dispatch({
       name: RUN_SUMMARIZE_EVENT,

@@ -109,7 +109,6 @@ describe("loadSteeringSettings", () => {
   });
 });
 
-
 /** A fake git that answers `show <spec>` from a table and fails anything else. */
 function fakeShow(blobs: Record<string, string>): {
   run: GitRunner;

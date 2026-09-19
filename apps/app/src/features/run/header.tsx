@@ -2,6 +2,13 @@
 // is, who ran it, where it stands, and what it cost, from the one row
 // `get_run` returns.
 //
+// The badges under the identity state the recorded values and nothing
+// stronger (spec §8.4): the enforcement tier says where the run's actions were
+// observed from, the replay grade is the one the seal wrote, and the gaps the
+// seal recorded are named rather than folded into a softer word. A run
+// observed from the side says so, because it is the difference between a
+// record of what an agent did and a record of what Oxagen let it do.
+//
 // The generated name is the headline when `summarize_run` wrote one, with the
 // run id under it; a run with no name is headed by its id, because a
 // placeholder headline would read as a title the record does not have. The
@@ -19,6 +26,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { NoValue } from "./parts";
 import { RecordActions } from "./record-actions";
+import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
 import { useFormatter } from "@/ui/formatter";
 
@@ -185,6 +193,12 @@ export function RunHeader({
           )}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <StatusBadge status={run.status} />
+            <span
+              data-testid="run-tier"
+              className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+            >
+              {t(`tier.${run.enforcementTier}`)}
+            </span>
             {run.replayGrade === null ? null : (
               <ReplayGradeBadge grade={run.replayGrade} />
             )}
@@ -192,6 +206,15 @@ export function RunHeader({
               {t(`source.${run.source}`)}
             </span>
           </div>
+          {run.completenessGaps.length === 0 ? null : (
+            <p
+              data-testid="run-gaps"
+              className="max-w-prose text-xs text-muted-foreground"
+            >
+              {t("gaps")}{" "}
+              {run.completenessGaps.map((gap) => t(`gap.${gap}`)).join(", ")}
+            </p>
+          )}
           {run.taskRef === null ? null : (
             <p className="text-sm">{run.taskRef}</p>
           )}
@@ -223,6 +246,7 @@ export function RunHeader({
             runId={run.id}
             status={run.status}
             source={run.source}
+            enforcementTier={run.enforcementTier}
             orgRole={orgRole}
             wsRole={wsRole}
           />
@@ -232,8 +256,12 @@ export function RunHeader({
             runId={run.id}
             sealed={run.status !== "live"}
             hasSummary={run.summary !== null}
+            summarizable={run.canSummarize}
             orgRole={orgRole}
           />
+          {run.status === "live" ? null : (
+            <ReplayActions org={org} ws={ws} run={run} />
+          )}
         </div>
       </div>
       <div

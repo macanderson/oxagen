@@ -17,12 +17,18 @@
  */
 import {
   MODEL_CALL_EVENT_TYPES,
+  type RunStepKind,
   stepKindOfEventType,
   TOOL_CALL_EVENT_TYPES,
 } from "./event-payload-registry";
 import type { AttemptEventReadRecord } from "./run-store";
 import type { FrameBodyColumns } from "./frame-body";
-import type { Redaction } from "@oxagen/tacho";
+import {
+  isTranscriptKind,
+  TRANSCRIPT_KINDS,
+  type Redaction,
+  type TranscriptKind,
+} from "@oxagen/tacho";
 
 /** What a frame did, as far as its receipt says. Null where it says nothing. */
 export interface FrameIdentity {
@@ -32,7 +38,21 @@ export interface FrameIdentity {
   policy: string | null;
   verdict: string | null;
   contextRows: number | null;
+  /**
+   * The call the frame belongs to (`tool_call_id`, `model_call_id`), so the
+   * two halves of one exchange pair on identity and not on adjacency. Null
+   * where the producer records none — a wrapped session's rows carry no call
+   * id, and those pair on adjacency within the step kind instead.
+   */
+  callId: string | null;
 }
+
+/**
+ * Which half of an exchange the frame records. A step is one request and one
+ * response; a producer that appends a single terminal receipt for the whole
+ * exchange records `single`, and its body is the result (see `TranscriptFold`).
+ */
+export type FramePhase = "request" | "response" | "single";
 
 export interface RunFrame {
   /** The ledger's `run_seq` or the session's dense `seq`, decimal. */
@@ -51,6 +71,8 @@ export interface RunFrame {
   costMicros: number | null;
   /** The turn the frame belongs to; null when the receipt carries none. */
   turnIndex: number | null;
+  /** Which half of its exchange the frame records. */
+  phase: FramePhase;
   identity: FrameIdentity;
 }
 
@@ -61,6 +83,7 @@ const NO_IDENTITY: FrameIdentity = {
   policy: null,
   verdict: null,
   contextRows: null,
+  callId: null,
 };
 
 // ── Ledger ──────────────────────────────────────────────────────────────────
@@ -103,7 +126,7 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
       // than another literal case, because a summary that falls through to
       // the raw event type is what the transcript showed for every run the
       // assistant recorded.
-      switch (stepKindOfEventType(event.eventType)) {
+      switch (ledgerStepKind(event.eventType)) {
         case "model_call": {
           const provider = field(p, "provider");
           const model = field(p, "model");
@@ -112,12 +135,51 @@ export function ledgerFrameSummary(event: AttemptEventReadRecord): string {
         case "tool_call": {
           const tool = toolNameOf(p);
           const outcome = field(p, "outcome");
-          return tool && outcome ? `${tool} ${outcome}` : event.eventType;
+          if (tool && outcome) return `${tool} ${outcome}`;
+          // An intention has no outcome by design — it is the frame that says
+          // a call is about to happen — so its tool name is the whole truth
+          // about it, and a paired step takes its label from it. A RECEIPT
+          // with no outcome is malformed, and falls through to its bare type
+          // rather than reading as a call that did something.
+          return tool && isIntention(event.eventType) ? tool : event.eventType;
         }
         default:
           return event.eventType;
       }
   }
+}
+
+/**
+ * The two write-ahead intentions and the step each opens.
+ *
+ * The registry gives a `step` only to the frame that COMPLETES a call, because
+ * counting an intention there would report every call twice. A transcript asks
+ * which frame OPENS the exchange, and that is the intention — it carries the
+ * request. Naming them here keeps both answers right without widening the
+ * registry and double-counting every run's steps.
+ */
+const INTENTION_STEP_KIND: Readonly<Record<string, RunStepKind>> = {
+  "model.engine_call_started": "model_call",
+  "tool.engine_call_started": "tool_call",
+};
+
+/** The step an event belongs to, the intention that opens it included. */
+function ledgerStepKind(eventType: string): RunStepKind | null {
+  return (
+    stepKindOfEventType(eventType) ?? INTENTION_STEP_KIND[eventType] ?? null
+  );
+}
+
+/** Is this the write-ahead frame of a call, rather than its receipt? */
+function isIntention(eventType: string): boolean {
+  return Object.hasOwn(INTENTION_STEP_KIND, eventType);
+}
+
+/** The intentions that open a step of `kind`, read off the table above. */
+function intentionsOpening(kind: RunStepKind): string[] {
+  return Object.entries(INTENTION_STEP_KIND)
+    .filter(([, step]) => step === kind)
+    .map(([type]) => type);
 }
 
 /** The called tool, under either payload's name for it. */
@@ -127,12 +189,16 @@ function toolNameOf(payload: unknown): string | null {
 
 function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
   const p = event.payload;
-  const step = stepKindOfEventType(event.eventType);
+  const step = ledgerStepKind(event.eventType);
+  // The call id is what pairs an intention with its receipt (`foldTranscript`).
+  // Only the engine's own events record one; a submitted receipt stands for a
+  // whole exchange and needs no pairing, so its null is correct.
   if (step === "tool_call")
     return {
       ...NO_IDENTITY,
       tool: toolNameOf(p),
       toolStatus: field(p, "outcome"),
+      callId: field(p, "tool_call_id"),
     };
   if (step === "model_call") {
     const provider = field(p, "provider");
@@ -140,6 +206,7 @@ function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
     return {
       ...NO_IDENTITY,
       model: provider && model ? `${provider}/${model}` : model,
+      callId: field(p, "model_call_id"),
     };
   }
   switch (event.eventType) {
@@ -152,6 +219,23 @@ function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
     default:
       return NO_IDENTITY;
   }
+}
+
+/**
+ * Which half of its exchange a recorded type is. The ledger's write-ahead
+ * intentions (`*.engine_call_started`) are the request; the engine's terminal
+ * receipts are the response; a submitting engine's single `*.call_completed`
+ * receipt stands for the whole exchange.
+ */
+const LEDGER_PHASES: Readonly<Record<string, FramePhase>> = {
+  "model.engine_call_started": "request",
+  "tool.engine_call_started": "request",
+  "model.engine_call_completed": "response",
+  "tool.engine_call_completed": "response",
+};
+
+export function ledgerPhase(eventType: string): FramePhase {
+  return LEDGER_PHASES[eventType] ?? "single";
 }
 
 /** A ledger event as a run frame. Ledger frames carry no cost record (§12). */
@@ -172,6 +256,7 @@ export function ledgerFrame(event: AttemptEventReadRecord): RunFrame {
       stepKindOfEventType(event.eventType) === "model_call"
         ? numberField(event.payload, "turn_index")
         : null,
+    phase: ledgerPhase(event.eventType),
     identity: ledgerIdentity(event),
   };
 }
@@ -190,11 +275,25 @@ export interface TachoFrameRowLike {
   redactions: string;
   toolName: string;
   toolStatus: string;
+  /** The tool_use_id the producer recorded; empty when the kind carries none. */
+  toolUseId: string;
   model: string;
   provider: string;
   policyDecision: string;
   costUsdMicros: number | null;
   turnSeq: number | null;
+}
+
+/** Which half of its exchange a wrapped kind records. */
+const TACHO_PHASES: Readonly<Record<string, FramePhase>> = {
+  "model.request": "request",
+  tool_requested: "request",
+  "model.response": "response",
+  tool_call: "response",
+};
+
+export function tachoPhase(kind: string): FramePhase {
+  return TACHO_PHASES[kind] ?? "single";
 }
 
 /** The stage a wrapped kind belongs to (tacho spec §6.1 kinds). */
@@ -303,6 +402,7 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
     body,
     costMicros: row.costUsdMicros,
     turnIndex: row.turnSeq,
+    phase: tachoPhase(row.kind),
     identity: {
       tool: blank(row.toolName),
       toolStatus: blank(row.toolStatus),
@@ -315,6 +415,11 @@ export function tachoFrame(row: TachoFrameRowLike): RunFrame {
       policy: blank(row.policyDecision),
       verdict: null,
       contextRows: null,
+      // The producer's tool_use_id: foldSteps keys pending requests on it so
+      // parallel wrapped calls (start A, start B, complete A, complete B) pair
+      // correctly. Empty for kinds that carry no call id; those still fall
+      // back to adjacency within their step kind.
+      callId: blank(row.toolUseId),
     },
   };
 }
@@ -380,9 +485,102 @@ export function bisectFrames(
 // ── Transcript ──────────────────────────────────────────────────────────────
 
 export type TranscriptZoom = "turns" | "steps" | "everything";
-export type TranscriptEntryKind = "turn" | "model_call" | "tool_call" | "frame";
+export type TranscriptEntryKind =
+  | "turn"
+  | "model_call"
+  | "tool_call"
+  | "policy"
+  | "frame";
 
-/** One transcript entry before its text is attached. */
+// The chip vocabulary is the leaf package's (`@oxagen/tacho`), so the contract
+// that publishes it as an enum and this projection that derives it read one
+// list. Re-exported here so a caller over frames has one import site.
+export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
+
+/** Frames that record a decision a rule or a person made about a call. */
+const POLICY_TYPES: ReadonlySet<string> = new Set([
+  "tool.approval_recorded",
+  "policy_decision",
+  "approval_request",
+  "approval_decision",
+  "token_issued",
+  "token_use",
+  "token_denied",
+]);
+/** Frames that record what was pulled into the model's context. */
+const RECALL_TYPES: ReadonlySet<string> = new Set([
+  "context.frames_selected",
+  "context.assembled",
+]);
+/** Tool outcomes that record a call that did not do what it was asked to. */
+const FAILED_OUTCOMES: ReadonlySet<string> = new Set([
+  "failed",
+  "denied",
+  "cancelled",
+  "error",
+  "timeout",
+  "refused",
+]);
+
+/**
+ * Every chip a frame answers to. A frame may answer several: a failed tool
+ * result is both `tools` and `errors`, and a model response that carried a
+ * cost record is both `responses` and `usage`.
+ */
+export function frameKinds(frame: RunFrame): TranscriptKind[] {
+  const kinds = new Set<TranscriptKind>();
+  if (MODEL_TYPES.has(frame.type)) {
+    kinds.add(frame.phase === "request" ? "prompt" : "responses");
+  }
+  if (TOOL_TYPES.has(frame.type)) kinds.add("tools");
+  if (POLICY_TYPES.has(frame.type)) kinds.add("policy");
+  if (RECALL_TYPES.has(frame.type)) kinds.add("recall");
+  if (frame.costMicros !== null) kinds.add("usage");
+  const status = frame.identity.toolStatus;
+  if (status !== null && FAILED_OUTCOMES.has(status)) kinds.add("errors");
+  if (frame.type === "error" || frame.type.endsWith(".error")) {
+    kinds.add("errors");
+  }
+  return [...kinds];
+}
+
+/**
+ * The frames a chip selection keeps, in order. An empty selection keeps
+ * everything: no chip pressed is not the same as every chip pressed off.
+ *
+ * The filter runs over frames and the fold runs over what is left, so a
+ * filtered transcript is the transcript of those frames — a `tools` selection
+ * pairs the two halves of each tool call exactly as the unfiltered one does.
+ */
+export function filterFramesByKind(
+  frames: readonly RunFrame[],
+  kinds: readonly TranscriptKind[],
+): RunFrame[] {
+  if (kinds.length === 0) return [...frames];
+  const wanted = new Set<TranscriptKind>(kinds);
+  return frames.filter((frame) =>
+    frameKinds(frame).some((kind) => wanted.has(kind)),
+  );
+}
+
+/** A decision a rule or a person made about the call an entry records. */
+export interface TranscriptDecision {
+  seq: string;
+  /** The recorded word: `allow`, `deny`, `route`, or whatever the rule wrote. */
+  decision: string;
+  type: string;
+  at: Date;
+}
+
+/**
+ * One transcript entry before its text is attached.
+ *
+ * `request` and `response` are the two halves of the exchange the entry
+ * records: the frame that carried what went out and the frame that carried
+ * what came back. A producer that appends a single terminal receipt for the
+ * whole exchange (`tool.call_completed`, `llm_call`) records it as the
+ * `response`, because its body is the result; `request` is then null.
+ */
 export interface TranscriptFold {
   /** The frame that opens the entry. */
   opening: RunFrame;
@@ -391,6 +589,10 @@ export interface TranscriptFold {
   frames: number;
   /** Summed cost records of the folded frames; null when none carried one. */
   costMicros: number | null;
+  request: RunFrame | null;
+  response: RunFrame | null;
+  /** The last decision frame folded into the entry; null when none was. */
+  decision: TranscriptDecision | null;
 }
 
 /**
@@ -401,15 +603,25 @@ export interface TranscriptFold {
  * ledger-recorded run folded into one `frame` entry however many calls it
  * made. The wrapped-session names are added beside them: a tacho recording
  * is not in the ledger's registry and never will be.
+ *
+ * The write-ahead intentions are here too, and are NOT in the registry's step
+ * sets. The two sets answer different questions. The registry's answers "which
+ * frame completes a call", and counting an intention there would report every
+ * call twice. This one answers "which frame opens an exchange", and the
+ * intention is exactly that: it carries the request the step was made with, so
+ * a fold that did not open on it would leave the request stranded in the entry
+ * before and make one tool call two entries again.
  */
 const MODEL_TYPES: ReadonlySet<string> = new Set([
   ...MODEL_CALL_EVENT_TYPES,
+  ...intentionsOpening("model_call"),
   "llm_call",
   "model.request",
   "model.response",
 ]);
 const TOOL_TYPES: ReadonlySet<string> = new Set([
   ...TOOL_CALL_EVENT_TYPES,
+  ...intentionsOpening("tool_call"),
   "tool_call",
   "tool_requested",
 ]);
@@ -426,6 +638,80 @@ function addCost(sum: number | null, cost: number | null): number | null {
   return (sum ?? 0) + cost;
 }
 
+function decisionOf(frame: RunFrame): TranscriptDecision | null {
+  if (!POLICY_TYPES.has(frame.type)) return null;
+  return {
+    seq: frame.seq,
+    decision: frame.identity.policy ?? frame.type,
+    type: frame.type,
+    at: frame.observedAt,
+  };
+}
+
+/**
+ * A new fold opened at `frame`. Only a step half may fill a request or
+ * response slot: a turn boundary, a policy decision or an agent start is the
+ * opening of the entry, not what the call was made with or what came back.
+ * Putting those into `response` by default blocked the real result from
+ * absorbing later, and labelled a prompt as something that came back.
+ */
+function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
+  const isStep = stepKind(frame) !== null;
+  return {
+    opening: frame,
+    endSeq: frame.seq,
+    kind,
+    frames: 1,
+    costMicros: frame.costMicros,
+    request: isStep && frame.phase === "request" ? frame : null,
+    response: isStep && frame.phase !== "request" ? frame : null,
+    decision: decisionOf(frame),
+  };
+}
+
+/**
+ * Fold `frame` into `current`, which keeps its opening frame.
+ *
+ * Only a frame that is itself a step half may fill one of the two slots. A
+ * decision, a turn boundary or a context assembly folds into the step for its
+ * timing and its cost, but it is not what the call was made with or what came
+ * back — letting one take the response slot made the real result open a
+ * second entry, which is the two-entries-per-tool-call shape this fold exists
+ * to end.
+ */
+function absorb(current: TranscriptFold, frame: RunFrame): void {
+  current.endSeq = frame.seq;
+  current.frames += 1;
+  current.costMicros = addCost(current.costMicros, frame.costMicros);
+  if (stepKind(frame) !== null) {
+    if (frame.phase === "request" && current.request === null) {
+      current.request = frame;
+    } else if (frame.phase !== "request" && current.response === null) {
+      current.response = frame;
+    }
+  }
+  const decision = decisionOf(frame);
+  if (decision !== null) current.decision = decision;
+}
+
+/**
+ * Fold a policy frame held out of turn (`foldSteps`'s `pendingPolicy`) into
+ * `current`. It counts toward the fold's frames and cost and sets its
+ * decision like `absorb`, but it never moves `endSeq`: whichever step it
+ * lands on, by seq, the held frame is not that step's own extent. Attached
+ * to the step it precedes, it is always earlier than that step's opening
+ * frame. Attached as the end-of-run fallback, to the step that already
+ * closed, moving `endSeq` forward would stretch that step's displayed range
+ * past its own last frame to cover a decision about a call that never
+ * happened.
+ */
+function absorbPending(current: TranscriptFold, frame: RunFrame): void {
+  current.frames += 1;
+  current.costMicros = addCost(current.costMicros, frame.costMicros);
+  const decision = decisionOf(frame);
+  if (decision !== null) current.decision = decision;
+}
+
 function fold(
   frames: readonly RunFrame[],
   opens: (frame: RunFrame, index: number) => TranscriptEntryKind | null,
@@ -435,29 +721,166 @@ function fold(
   frames.forEach((frame, index) => {
     const kind = opens(frame, index);
     if (kind !== null || current === null) {
-      current = {
-        opening: frame,
-        endSeq: frame.seq,
-        kind: kind ?? "frame",
-        frames: 1,
-        costMicros: frame.costMicros,
-      };
+      current = open(frame, kind ?? "frame");
       out.push(current);
       return;
     }
-    current.endSeq = frame.seq;
-    current.frames += 1;
-    current.costMicros = addCost(current.costMicros, frame.costMicros);
+    absorb(current, frame);
   });
   return out;
 }
 
 /**
- * The transcript at a zoom level. `everything` is one entry per frame.
- * `steps` opens an entry at every model call and tool call; frames before
- * the first step fold into a leading `frame` entry. `turns` opens an entry
- * at every `turn_start` frame, or wherever the turn index changes when the
- * recording carries no turn boundaries; a run with neither is one turn.
+ * Does `frame` close the step `current` opened — the response half of the same
+ * exchange? Two halves pair on call id where the producer records one, and on
+ * adjacency within the step kind where it does not (a wrapped session). A
+ * step that already has its response is closed: the next response of the same
+ * kind is a new step.
+ */
+function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
+  if (current.request === null || current.response !== null) return false;
+  if (frame.phase !== "response") return false;
+  if (stepKind(frame) !== stepKind(current.request)) return false;
+  const openId = current.request.identity.callId;
+  const closeId = frame.identity.callId;
+  if (openId !== null || closeId !== null) return openId === closeId;
+  return true;
+}
+
+/**
+ * The `steps` transcript: one entry per model call and per tool call, request
+ * and response folded together, with every other frame folding into the step
+ * before it.
+ *
+ * A step is two frames wherever the producer writes two — the write-ahead
+ * intention and the terminal receipt — so the entry carries what the call was
+ * made with and what it came back with. Folding them separately, as this did
+ * before, showed one tool call as two entries, each with half the exchange.
+ *
+ * ## Overlapping calls
+ *
+ * Tool calls run in parallel in the ordinary case, not the exotic one: a step
+ * recorder can write `start A, start B, complete A, complete B`. A response is
+ * therefore matched against every request still waiting for one
+ * (`pendingByCallId`, keyed on the call id the producer recorded), not only
+ * `current` — the one most recently opened. Comparing only `current` closed
+ * completion A against B's still-open request, found no match, and opened a
+ * response-only entry for it; completion B then did the same. Two calls
+ * became four entries with every response detached from the request it
+ * answered — the one thing a transcript exists to get right (finding 5,
+ * macanderson/oxagen#3370). A wrapped session records no call id at all, so a
+ * response with none falls back to `closesStep`'s adjacency check against
+ * `current`, exactly as before.
+ *
+ * A policy frame that arrives once the current step already has its response
+ * is held rather than absorbed into it: `PreToolUse` writes `policy_decision`
+ * immediately before `tool_requested` (`hook-handler.ts`), so a wrapped
+ * session's decision names the call it is about to gate, not the call that
+ * just finished. Absorbing it on sight put the allow or deny on the previous
+ * step and left the step it actually governed with none. The same hold applies
+ * when filtering removes the preceding model response (`kinds=policy,tools`):
+ * the decision then meets a null current, or a model fold whose response is
+ * gone, and would otherwise open a standalone frame or stick on that model
+ * step (finding 4052307523). Held frames attach to the next step that opens,
+ * in the order recorded, so two decisions ahead of one call are both kept and
+ * the later one wins, the same as `absorb`'s own overwrite; a run that ends
+ * with one or more still pending falls back to the last step rather than
+ * dropping them, or opens a policy entry when no step ever did.
+ */
+function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
+  const out: TranscriptFold[] = [];
+  let current: TranscriptFold | null = null;
+  const pendingPolicy: RunFrame[] = [];
+  // Open step folds still waiting for their response, keyed by the request's
+  // call id. Deleted the moment a response matches it, so a second response
+  // with the same id (should not happen) falls through to `closesStep` and
+  // then to a response-only entry, rather than silently overwriting the
+  // first response.
+  const pendingByCallId = new Map<string, TranscriptFold>();
+
+  const openEntry = (
+    frame: RunFrame,
+    kind: TranscriptEntryKind,
+  ): TranscriptFold => {
+    const next = open(frame, kind);
+    out.push(next);
+    for (const pending of pendingPolicy) absorbPending(next, pending);
+    pendingPolicy.length = 0;
+    return next;
+  };
+
+  /** Hold a pre-call policy for the next step rather than absorbing it here. */
+  const holdPolicyForNext = (fold: TranscriptFold | null): boolean => {
+    if (fold === null) return true;
+    if (fold.response !== null) return true;
+    // A model fold whose response was filtered away still looks open
+    // (request set, response null). The decision gates the tool after it.
+    if (fold.kind === "model_call" || fold.kind === "frame") return true;
+    return false;
+  };
+
+  for (const frame of frames) {
+    const kind = stepKind(frame);
+    if (kind !== null) {
+      if (frame.phase === "response") {
+        const callId = frame.identity.callId;
+        const pending =
+          callId !== null ? pendingByCallId.get(callId) : undefined;
+        if (pending !== undefined) {
+          absorb(pending, frame);
+          pendingByCallId.delete(callId as string);
+          current = pending;
+          continue;
+        }
+        if (current !== null && closesStep(current, frame)) {
+          absorb(current, frame);
+          continue;
+        }
+      }
+      // A request-phase step frame, or a response nothing pending could
+      // match, opens its own entry. A request with a call id registers so a
+      // later response — wherever `current` has moved on to by then — finds
+      // it above.
+      current = openEntry(frame, kind);
+      if (frame.phase === "request") {
+        const callId = frame.identity.callId;
+        if (callId !== null) pendingByCallId.set(callId, current);
+      }
+      continue;
+    }
+    if (POLICY_TYPES.has(frame.type) && holdPolicyForNext(current)) {
+      pendingPolicy.push(frame);
+      continue;
+    }
+    if (current === null) {
+      current = openEntry(frame, "frame");
+      continue;
+    }
+    absorb(current, frame);
+  }
+  if (pendingPolicy.length > 0) {
+    if (current !== null) {
+      for (const pending of pendingPolicy) absorbPending(current, pending);
+    } else {
+      // No step opened after the held decisions: surface them as their own
+      // entries rather than dropping a run that was only policy frames.
+      const held = pendingPolicy.slice();
+      pendingPolicy.length = 0;
+      for (const pending of held) {
+        current = openEntry(pending, "policy");
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The transcript at a zoom level. `everything` is one entry per frame, so the
+ * two halves of a step are two entries, each with its own body. `steps` is one
+ * entry per model call and per tool call, request and response folded
+ * together. `turns` opens an entry at every `turn_start` frame, or wherever
+ * the turn index changes when the recording carries no turn boundaries; a run
+ * with neither is one turn.
  */
 export function foldTranscript(
   frames: readonly RunFrame[],
@@ -466,9 +889,14 @@ export function foldTranscript(
   if (frames.length === 0) return [];
   switch (zoom) {
     case "everything":
-      return fold(frames, (frame) => stepKind(frame) ?? "frame");
+      return fold(
+        frames,
+        (frame) =>
+          stepKind(frame) ??
+          (POLICY_TYPES.has(frame.type) ? "policy" : "frame"),
+      );
     case "steps":
-      return fold(frames, (frame) => stepKind(frame));
+      return foldSteps(frames);
     case "turns": {
       const hasBoundaries = frames.some((frame) =>
         TURN_OPENERS.has(frame.type),

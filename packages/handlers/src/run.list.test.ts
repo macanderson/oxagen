@@ -780,6 +780,93 @@ describe("list_runs witness runs (ADR-064)", () => {
   });
 });
 
+describe("the row a caller decides from (#3285)", () => {
+  it("carries a wrapped session's recorded tier, so an observe-tier run's controls can be disabled", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_observe",
+          session: { enforcementTier: "observe" },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]?.enforcementTier).toBe("observe");
+  });
+
+  it("reads a ledger run's tier from its seal, and a seal without one as harness", async () => {
+    const { list } = handlerOver(
+      [
+        ledgerRun({
+          publicId: "arun_gateway",
+          runId: "0192d4a8-7c1e-7a00-8000-0000000000e1",
+          seal: seal("0192d4a8-7c1e-7a00-8000-0000000000e1", {
+            enforcementTier: "gateway",
+          }),
+        }),
+        ledgerRun({
+          publicId: "arun_ungraded",
+          runId: "0192d4a8-7c1e-7a00-8000-0000000000e2",
+          seal: seal("0192d4a8-7c1e-7a00-8000-0000000000e2", {
+            enforcementTier: null,
+          }),
+        }),
+      ],
+      [],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const byId = new Map(out.runs.map((r) => [r.id, r]));
+    expect(byId.get("arun_gateway")?.enforcementTier).toBe("gateway");
+    // A seal written before the column existed was graded under `harness`;
+    // reading it as anything else would raise a grade the record cannot carry.
+    expect(byId.get("arun_ungraded")?.enforcementTier).toBe("harness");
+  });
+
+  it("carries the seal's gaps and drops a word the vocabulary does not name", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_gaps",
+          session: {
+            completenessGaps: ["digest_only", "not_a_gap_kind", 7],
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]?.completenessGaps).toEqual(["digest_only"]);
+  });
+
+  it("says a digest_only recording cannot be summarised, matching what the handler refuses", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_digest",
+          session: { completenessGaps: ["digest_only"] },
+        }),
+        tachoSession({
+          publicId: "tse_bodies",
+          session: { completenessGaps: [] },
+        }),
+        tachoSession({
+          publicId: "tse_live",
+          session: { outcome: "running", sealedAt: null },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const byId = new Map(out.runs.map((r) => [r.id, r]));
+    expect(byId.get("tse_digest")?.canSummarize).toBe(false);
+    expect(byId.get("tse_bodies")?.canSummarize).toBe(true);
+    // A live run has sealed nothing, so it has recorded no gaps — not "none".
+    expect(byId.get("tse_live")?.canSummarize).toBe(false);
+    expect(byId.get("tse_live")?.completenessGaps).toEqual([]);
+  });
+});
+
 describe("a run row names who ran it, on what, with which model", () => {
   const db = drizzle.mock({ schema });
   const page = { cursor: null, limit: 50, withoutWitnessRuns: false };

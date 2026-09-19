@@ -62,6 +62,7 @@ describe("list_approvals item", () => {
         expiresAt: new Date("2026-09-13T10:05:00.000Z"),
         requesterPublicId: "usr_0123456789abcdefghjkmn",
         mandatePublicId: null,
+        runPublicId: null,
         ruleIds: [],
         autoRuleId: null,
         resolvedReasons: [],
@@ -87,6 +88,7 @@ describe("list_approvals item", () => {
       expiresAt: new Date("2026-09-14T10:00:00.000Z"),
       requesterPublicId: null,
       mandatePublicId: "mnd_0123456789abcdefghjkmn",
+      runPublicId: "arun_0123456789abcdefghjkmn",
       ruleIds: [
         "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
         "mandate:mnd_0123456789abcdefghjkmn:always_human_for:moves_money",
@@ -105,6 +107,9 @@ describe("list_approvals item", () => {
       "mandate:mnd_0123456789abcdefghjkmn:human_above:amount",
     );
     expect(item.requester).toBeNull();
+    // The run the call was parked in (#3286): the Run page's Policy tab reads
+    // this to list one run's own approvals.
+    expect(item.runId).toBe("arun_0123456789abcdefghjkmn");
   });
 });
 
@@ -120,6 +125,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     );
 
     const tag = Date.now().toString(36).slice(-6);
+    const RUN_ID = "arun_0123456789abcdefghjkmn";
     const orgA = crypto.randomUUID();
     const orgB = crypto.randomUUID();
     const wsA1 = crypto.randomUUID();
@@ -243,6 +249,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
               riskLevel: "low",
               expiresAt: inMinutes(-1),
             },
+            // Pending, and recorded on a run: the Run page's Policy tab reads
+            // one run's own parked calls (#3286).
+            {
+              orgId: orgA,
+              workspaceId: wsA1,
+              messageId,
+              capabilityName: "run_scoped_call",
+              inputPreview: {},
+              riskLevel: "medium",
+              runPublicId: RUN_ID,
+              expiresAt: inMinutes(20),
+            },
             // Pending in the org's other workspace.
             {
               orgId: orgA,
@@ -292,14 +310,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.items.map((i) => i.id)).toEqual([
         ids["create_workspace"],
         ...sameExpiryById(),
+        ids["run_scoped_call"],
       ]);
       expect(out.nextCursor).toBeNull();
       for (const item of out.items) {
         expect(item.id).toMatch(/^apr_[0-9a-z]{22}$/);
-        expect(item.runId).toBeNull();
         expect(item.chain).toEqual({ agentKey: null, rule: null });
         expect(Date.parse(item.expiresAt)).toBeGreaterThan(NOW);
       }
+      // A row parked outside any run records none; a null is "not recorded".
+      expect(out.items.filter((i) => i.runId === null)).toHaveLength(3);
     });
 
     it("names the requester through the message the call parked on, and null when that chain is not readable", async () => {
@@ -330,9 +350,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         cursor = page.nextCursor ?? undefined;
         pages += 1;
       } while (cursor);
-      expect(pages).toBe(3);
-      expect(new Set(seen).size).toBe(3);
-      expect(seen).toEqual([ids["create_workspace"], ...sameExpiryById()]);
+      expect(pages).toBe(4);
+      expect(new Set(seen).size).toBe(4);
+      expect(seen).toEqual([
+        ids["create_workspace"],
+        ...sameExpiryById(),
+        ids["run_scoped_call"],
+      ]);
       const two = await list(orgA, wsA1, { limit: 2 });
       expect(two.items.map((i) => i.id)).toEqual(seen.slice(0, 2));
       expect(two.nextCursor).not.toBeNull();
@@ -344,11 +368,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(rest.nextCursor).toBeNull();
     });
 
-    it("returns no approval for a run, because no approval row names one", async () => {
+    it("narrows to one run's own parked calls, and answers each with the run it names", async () => {
+      const out = await list(orgA, wsA1, { runId: RUN_ID });
+      expect(out.items.map((i) => i.tool)).toEqual(["run_scoped_call"]);
+      expect(out.items[0]!.runId).toBe(RUN_ID);
+      expect(out.nextCursor).toBeNull();
+    });
+
+    it("answers an empty page for a run with nothing parked (negative)", async () => {
       const out = await list(orgA, wsA1, {
-        runId: "arun_0123456789abcdefghjkmn",
+        runId: "tse_0123456789abcdefghjkmn",
       });
       expect(out).toEqual({ items: [], nextCursor: null });
+    });
+
+    it("does not leak another workspace's run-scoped approval (negative)", async () => {
+      const out = await list(orgA, wsA2, { runId: RUN_ID });
+      expect(out.items).toEqual([]);
     });
   },
 );

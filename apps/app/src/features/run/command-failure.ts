@@ -31,11 +31,28 @@ export function useActionFailure(): (failure: CommandFailure) => string {
             return t("runNotSealed");
           case "digest_only":
             return t("digestOnly");
+          case "fork_requires_ledger_run":
+            return t("forkRequiresLedger");
+          case "replay_grade_below_fork":
+            return t("gradeBelowFork");
+          case "from_seq_past_seal":
+            return t("seqPastSeal");
+          case "gap_before_from_seq":
+            return t("gapBeforeSeq");
           default:
             return t("refused", { code: failure.code });
         }
       case "invalid":
-        return failure.code === "steer_text" ? t("steerText") : t("invalid");
+        switch (failure.code) {
+          case "steer_text":
+            return t("steerText");
+          case "from_seq":
+            return t("fromSeq");
+          case "run_b":
+            return t("runB");
+          default:
+            return t("invalid");
+        }
       case "pending_approval":
         return t("pendingApproval", {
           accessRequestId: failure.accessRequestId,
