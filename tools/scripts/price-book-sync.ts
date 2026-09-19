@@ -28,24 +28,28 @@
  * for the same reason: a correction is always a later row. Negotiated and
  * override rows are never touched.
  *
- * An `--apply` that backdated rows also requests the repricing, the same way
- * the hourly job does: the cold-start path writes a newly discovered key from
- * a floor instant before any frame, which prices runs that have already
- * sealed, and `cost.price-book-reprice` is what re-rolls them. Without that
- * request a manual apply left those totals blank for ever — the next hourly
- * sync found the book already correct and wrote nothing, so it asked for
- * nothing either.
+ * An `--apply` against a book that holds backdated rows also requests the
+ * repricing, the same way the hourly job does: the cold-start path writes a
+ * newly discovered key from a floor instant before any frame, which prices
+ * runs that have already sealed, and `cost.price-book-reprice` is what
+ * re-rolls them.
  *
- * The hourly job cannot get stuck this way: its "write" and "send" are
- * separate Inngest steps, so a retry after a failed send replays from the
- * already-memoized write and only the send is retried. This script has no
- * such history — a plain re-run reads the book it just wrote as already
- * correct, so `written` comes back 0 and it would ask for nothing, leaving
- * the runs those backdated rows can now price blank for ever with no sign
- * anything is wrong. `--resend-reprice` is the direct recovery the
- * `RepriceRequestError` message below promises: it skips the sync and the
- * write entirely and only re-dispatches the event, so a failed dispatch is
- * recoverable without another `--apply` finding nothing left to do.
+ * The request survives a failed dispatch, because it is keyed on the rows the
+ * book holds rather than on the rows this run wrote. The rows are committed
+ * before the event is sent, so a send that fails leaves the book seeded and
+ * the repricing unrequested; keyed on `written` this command's own retry read
+ * a correct book, wrote nothing, and asked for nothing, and so did the hourly
+ * sync, and the affected totals stayed blank for ever. Keyed on the book,
+ * re-running `--apply` re-asks, and so does every hourly sync until the
+ * cold-start window closes. Re-asking is safe: `cost.price-book-reprice`
+ * re-rolls only runs whose cost is still blank or estimated, so a second
+ * request after a delivered one finds nothing left to do.
+ *
+ * `--resend-reprice` is the direct recovery the `RepriceRequestError` message
+ * below names: it skips the sync and the write entirely and only re-dispatches
+ * the event. It is the fast path for an operator who already knows the
+ * dispatch failed, and the only path once the cold-start window has closed
+ * and no sync asks any more.
  *
  * Runs against whatever DATABASE_URL is in scope and prints the host so the
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
@@ -148,7 +152,7 @@ export class RepriceRequestError extends Error {
   readonly code = "price_book_reprice_request_failed" as const;
   constructor(cause: unknown) {
     super(
-      `the price book was written but the repricing request could not be dispatched: ${cause instanceof Error ? cause.message : String(cause)}. The backdated prices are in force; runs sealed before them keep a blank or estimated cost until ${PRICE_BOOK_BACKDATED_EVENT} is delivered — check the event key and the Inngest endpoint, then re-run with --resend-reprice (a plain --apply re-run finds the book already correct and requests nothing).`,
+      `the price book was written but the repricing request could not be dispatched: ${cause instanceof Error ? cause.message : String(cause)}. The backdated prices are in force; runs sealed before them keep a blank or estimated cost until ${PRICE_BOOK_BACKDATED_EVENT} is delivered. Check the event key and the Inngest endpoint, then re-run with --resend-reprice, which sends the event and nothing else. The request is owed by the book rather than by this run, so a plain --apply re-run asks again too, and so does the hourly sync for as long as the book is inside its cold-start window.`,
       { cause },
     );
     this.name = "RepriceRequestError";
@@ -159,16 +163,23 @@ export class RepriceRequestError extends Error {
  * Whether this run has to ask for the runs it can now price to be re-rolled.
  *
  * The same test the hourly job makes, for the same reason: only a backdated
- * write prices something that has already run. A row effective from a future
- * instant prices nothing settled, an unchanged book writes nothing at all,
- * and a dry run wrote nothing to reprice against.
+ * row prices something that has already run, and a row effective from a
+ * future instant prices nothing settled. A dry run writes nothing and reads
+ * no book, so it reports no floored rows and asks for nothing.
+ *
+ * The test is the floored rows in force, NOT this run's write count. The rows
+ * commit before the event is sent, so keying on `written` dropped the request
+ * whenever the send failed: the retry found the book correct, wrote nothing,
+ * and asked for nothing. Keyed on the book, the retry asks again — and asking
+ * twice is safe, because the reprice chain re-rolls only runs whose cost is
+ * still blank or estimated.
  */
 export function needsReprice(args: {
   apply: boolean;
   coldStart: boolean;
-  written: number;
+  hasBackdatedRows: boolean;
 }): boolean {
-  return args.apply && args.coldStart && args.written > 0;
+  return args.apply && args.coldStart && args.hasBackdatedRows;
 }
 
 /**
@@ -292,7 +303,7 @@ export async function runPriceBookSync(
     !needsReprice({
       apply: flags.apply,
       coldStart: report.coldStart,
-      written: report.written,
+      hasBackdatedRows: report.hasBackdatedRows,
     })
   )
     return;
@@ -311,7 +322,7 @@ export async function runPriceBookSync(
     throw new RepriceRequestError(err);
   }
   log(
-    kleur.bold().cyan("  Backdated rows written. ") +
+    kleur.bold().cyan("  Backdated rows are in force. ") +
       `Requested ${PRICE_BOOK_BACKDATED_EVENT}: every run whose cost is blank or estimated and which these prices can now price will be re-rolled.\n`,
   );
 }

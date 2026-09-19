@@ -124,12 +124,18 @@ describe("runPriceBookSync", () => {
     ...over,
   });
   const writing = (
-    result: Partial<{ written: number; unchanged: number; coldStart: boolean }>,
+    result: Partial<{
+      written: number;
+      unchanged: number;
+      coldStart: boolean;
+      hasBackdatedRows: boolean;
+    }>,
   ) =>
     vi.fn().mockResolvedValue({
       written: 0,
       unchanged: 0,
       coldStart: false,
+      hasBackdatedRows: false,
       ...result,
     });
 
@@ -138,7 +144,7 @@ describe("runPriceBookSync", () => {
     await runPriceBookSync(flags(), {
       send,
       log: () => {},
-      write: writing({ written: 12, coldStart: true }),
+      write: writing({ written: 12, coldStart: true, hasBackdatedRows: true }),
     });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith({
@@ -155,9 +161,9 @@ describe("runPriceBookSync", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  // An apply against a book that is already correct writes nothing, and a
-  // forward-dated write prices nothing that has already run.
-  it("dispatches nothing when the apply wrote nothing", async () => {
+  // An apply against a book that holds no floored row prices nothing that has
+  // already run, however many forward-dated rows it wrote.
+  it("dispatches nothing when the book holds no backdated row", async () => {
     const send = vi.fn().mockResolvedValue(undefined);
     await runPriceBookSync(flags(), {
       send,
@@ -177,6 +183,76 @@ describe("runPriceBookSync", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  // The hole the failed dispatch left. The rows commit before the event is
+  // sent, so a send that fails leaves the book seeded and the repricing
+  // unrequested. Keyed on this run's write count, the retry read a correct
+  // book, wrote nothing and asked for nothing — and so did every hourly sync,
+  // so the affected totals stayed blank for ever with no way to ask again.
+  // Keyed on the floored rows the book holds, the retry asks.
+  it("re-asks on a retry after a failed dispatch, though the retry writes nothing", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("ECONNREFUSED :8288"))
+      .mockResolvedValue(undefined);
+    // The apply that commits the floored rows and cannot say so.
+    await expect(
+      runPriceBookSync(flags(), {
+        send,
+        log: () => {},
+        write: writing({
+          written: 12,
+          coldStart: true,
+          hasBackdatedRows: true,
+        }),
+      }),
+    ).rejects.toMatchObject({ code: "price_book_reprice_request_failed" });
+
+    // The retry. The book is already correct, so nothing is written — and the
+    // request is owed by the book, not by the run, so it goes out.
+    await runPriceBookSync(flags(), {
+      send,
+      log: () => {},
+      write: writing({
+        written: 0,
+        unchanged: 352,
+        coldStart: true,
+        hasBackdatedRows: true,
+      }),
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith({
+      name: "cost/price-book.backdated",
+      data: {},
+    });
+    error.mockRestore();
+  });
+
+  // The recovery is the same command, so running it again after a delivered
+  // request must be safe rather than a second pass of work: the event carries
+  // no cursor, and `cost.price-book-reprice` re-rolls only runs whose cost is
+  // still blank or estimated, so a re-ask finds nothing left to do.
+  it("re-asks with the same cursorless event however often the recovery runs", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const run = () =>
+      runPriceBookSync(flags(), {
+        send,
+        log: () => {},
+        write: writing({
+          written: 0,
+          unchanged: 352,
+          coldStart: true,
+          hasBackdatedRows: true,
+        }),
+      });
+    await run();
+    await run();
+    expect(send.mock.calls).toEqual([
+      [{ name: "cost/price-book.backdated", data: {} }],
+      [{ name: "cost/price-book.backdated", data: {} }],
+    ]);
+  });
+
   // Nowhere to send it is a failed run, not a quiet one: the prices are in
   // force and the runs they price are still blank, which reads as a success
   // to anyone watching the report alone.
@@ -187,7 +263,11 @@ describe("runPriceBookSync", () => {
       runPriceBookSync(flags(), {
         send,
         log: () => {},
-        write: writing({ written: 12, coldStart: true }),
+        write: writing({
+          written: 12,
+          coldStart: true,
+          hasBackdatedRows: true,
+        }),
       }),
     ).rejects.toMatchObject({
       code: "price_book_reprice_request_failed",
@@ -240,17 +320,17 @@ describe("runPriceBookSync", () => {
 
 describe("needsReprice", () => {
   it("is the same test the hourly job makes", () => {
-    expect(needsReprice({ apply: true, coldStart: true, written: 1 })).toBe(
-      true,
-    );
-    expect(needsReprice({ apply: false, coldStart: true, written: 1 })).toBe(
-      false,
-    );
-    expect(needsReprice({ apply: true, coldStart: false, written: 1 })).toBe(
-      false,
-    );
-    expect(needsReprice({ apply: true, coldStart: true, written: 0 })).toBe(
-      false,
-    );
+    expect(
+      needsReprice({ apply: true, coldStart: true, hasBackdatedRows: true }),
+    ).toBe(true);
+    expect(
+      needsReprice({ apply: false, coldStart: true, hasBackdatedRows: true }),
+    ).toBe(false);
+    expect(
+      needsReprice({ apply: true, coldStart: false, hasBackdatedRows: true }),
+    ).toBe(false);
+    expect(
+      needsReprice({ apply: true, coldStart: true, hasBackdatedRows: false }),
+    ).toBe(false);
   });
 });

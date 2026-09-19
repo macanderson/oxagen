@@ -50,6 +50,7 @@ const RESULT = {
   superseded: 0,
   retired: 0,
   coldStart: false,
+  hasBackdatedRows: false,
   models: 10,
   counts: {},
   failures: [],
@@ -79,6 +80,7 @@ describe("cost.price-book-sync", () => {
       written: 40,
       unchanged: 0,
       coldStart: true,
+      hasBackdatedRows: true,
     });
     const out = await handler!({ step });
     expect(sendEvent).toHaveBeenCalledWith("request-reprice", {
@@ -99,12 +101,36 @@ describe("cost.price-book-sync", () => {
     expect(out).toMatchObject({ repriceRequested: false });
   });
 
-  it("requests nothing when a cold start wrote no row", async () => {
+  it("requests nothing when a cold book holds no floored row", async () => {
     mocks.syncPriceBookFromSources.mockResolvedValue({
       ...RESULT,
+      written: 3,
       coldStart: true,
+      hasBackdatedRows: false,
     });
     await handler!({ step });
     expect(sendEvent).not.toHaveBeenCalled();
+  });
+
+  // The recovery half. A manual `--apply` can commit floored rows and fail to
+  // dispatch the event, and an hourly sync of the now-correct book writes
+  // nothing. Keyed on `written`, this sync asked for nothing, so the runs
+  // those floored rows can now price stayed blank for ever with nothing left
+  // that would ever ask again. Keyed on the book, it asks until the
+  // cold-start window closes.
+  it("requests a re-roll for floored rows an earlier run wrote, though this run wrote nothing", async () => {
+    mocks.syncPriceBookFromSources.mockResolvedValue({
+      ...RESULT,
+      written: 0,
+      unchanged: 352,
+      coldStart: true,
+      hasBackdatedRows: true,
+    });
+    const out = await handler!({ step });
+    expect(sendEvent).toHaveBeenCalledWith("request-reprice", {
+      name: "cost/price-book.backdated",
+      data: {},
+    });
+    expect(out).toMatchObject({ written: 0, repriceRequested: true });
   });
 });
