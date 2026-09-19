@@ -45,8 +45,12 @@ type Bar = {
  * The total is the last turn's cumulative cost, which is the contract's own
  * prefix sum. Taking it from anywhere else would let the bars and the running
  * totals disagree about the same run.
+ *
+ * Not exported: `Waterfall` is its only caller, and its coverage is proven
+ * through the rendered component (`waterfall.test.tsx`), not by calling this
+ * directly.
  */
-export function buildBars(
+function buildBars(
   turns: readonly TranscriptEntry[],
   steps: readonly TranscriptEntry[],
 ): { bars: Bar[]; total: TranscriptEntry["cumulativeCost"] } {

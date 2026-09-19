@@ -40,7 +40,7 @@ export const EnforcementTier = z.enum(["gateway", "harness", "observe"]);
 export type EnforcementTier = z.infer<typeof EnforcementTier>;
 
 /** The gaps a seal recorded, from the closed vocabulary (spec §13.1). */
-export const CompletenessGap = z.enum([
+const CompletenessGap = z.enum([
   "digest_only",
   "body_missing",
   "tool_bodies",
@@ -50,7 +50,6 @@ export const CompletenessGap = z.enum([
   "chain_break",
   "telemetry_gap",
 ]);
-export type CompletenessGap = z.infer<typeof CompletenessGap>;
 
 export const RunRow = z.object({
   id: PublicId,

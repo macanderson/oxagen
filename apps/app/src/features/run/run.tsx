@@ -49,7 +49,7 @@ const FRAME_SEQ = /^\d{1,19}$/;
 type Place = { org: string; ws: string; runId: string };
 
 /** `?kinds=tools,errors` as the contract's own list; an unknown word is dropped, not refused. */
-export function parseKinds(raw: string | null): TranscriptKind[] {
+function parseKinds(raw: string | null): TranscriptKind[] {
   if (raw === null) return [];
   const asked = new Set(raw.split(","));
   return TRANSCRIPT_KINDS.filter((kind) => asked.has(kind));
