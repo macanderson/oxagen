@@ -290,9 +290,16 @@ export function stripCursorHooks(
     if (Object.keys(hooks).length > 0) document.hooks = hooks;
     else delete document.hooks;
   }
-  const remaining = Object.keys(document);
-  if (remaining.length === 1 && remaining[0] === "version")
-    delete document.version;
+  // `version` is deliberately left, even when it is all that remains. It is
+  // the one key this writer adds to a document it created, so dropping it
+  // here looks like the way to let `HarnessFiles.settle` take the file back —
+  // but this function cannot see whose file it is. A user whose
+  // `hooks.json` is `{"version": 1}` and nothing else holds nothing of ours,
+  // and emptying it would report a change on a file we never wrote into and
+  // put `{}` where their content was. `settle` makes that distinction with
+  // the receipt instead: a file Tacho created whose bytes are still the ones
+  // Tacho last wrote is deleted, scaffolding and all, and a file the user
+  // brought is restored from its backup.
   return { document, changed: JSON.stringify(document) !== before };
 }
 

@@ -233,15 +233,28 @@ describe("an invalid schema version", () => {
 });
 
 describe("what an unenroll leaves behind", () => {
-  it("empties the file Tacho created, `version` included", () => {
-    // `mergeCursorHooks` is what wrote that `version` on a machine with no
-    // `hooks.json`, and `HarnessFiles.settle` removes a file Tacho created
-    // only when what is left says nothing. A leftover `{"version":1}` reads
-    // as a user edit, so the file and `~/.cursor` survived `unenroll --purge`
-    // and Cursor became the one wrapped harness that left something behind.
+  it("leaves the `version` it wrote, for `settle` to take back with the file", () => {
+    // `mergeCursorHooks` wrote that `version` on a machine with no
+    // `hooks.json`, and the file and `~/.cursor` did survive
+    // `unenroll --purge` because of it. The repair is in `HarnessFiles`,
+    // not here: this function is handed a document and cannot tell one it
+    // created from one the user brought, and the test below is the case that
+    // proves it must not guess. `settle` deletes a file Tacho created whose
+    // bytes are still the ones Tacho last wrote, scaffolding and all.
     expect(
       stripCursorHooks(mergeCursorHooks(undefined, CONFIG).document).document,
-    ).toEqual({});
+    ).toEqual({ version: CURSOR_HOOKS_VERSION });
+  });
+
+  it("does not touch a user's hooks-less file, which holds nothing of ours", () => {
+    // Someone who has started a `hooks.json` and not yet written a hook has
+    // `{"version": 1}`, which is byte for byte what our own leftover looks
+    // like. Treating it as ours reports a change on a file we never wrote
+    // into, and `unenroll` would put `{}` where their content was.
+    const theirs = { version: 1 };
+    const stripped = stripCursorHooks(theirs, "enr_1");
+    expect(stripped.changed).toBe(false);
+    expect(stripped.document).toEqual(theirs);
   });
 
   it("keeps the user's own `version` while any of their hooks stay", () => {

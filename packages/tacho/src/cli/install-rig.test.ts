@@ -196,6 +196,7 @@ describe("install rig: macOS, every harness", () => {
     // A machine where none of the harness files exist yet.
     rmSync(join(seed.home, ".claude"), { recursive: true });
     rmSync(join(seed.home, ".codex"), { recursive: true });
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
     rmSync(join(seed.home, ".stella"), { recursive: true });
     rmSync(join(seed.home, "Library", "Application Support"), {
       recursive: true,
@@ -203,6 +204,22 @@ describe("install rig: macOS, every harness", () => {
     const before = snapshotTree(seed.home);
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     expect(existsSync(rig.deps.paths.claudeSettings)).toBe(true);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("gives back a Cursor hooks file whose only member is the user's own version", async () => {
+    // The narrow case between the two Cursor files the rig otherwise covers:
+    // not one Tacho created, and not one carrying the user's hooks, but a
+    // started-and-left `{"version": 1}`. It is byte for byte what Tacho's own
+    // leftover looks like after a strip, so anything that reads the leftover
+    // by its shape reads this as the leftover too and empties a file the user
+    // wrote. Only the receipt tells them apart.
+    const seed = seedHome();
+    writeFileSync(join(seed.home, ".cursor", "hooks.json"), '{"version": 1}\n');
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });
