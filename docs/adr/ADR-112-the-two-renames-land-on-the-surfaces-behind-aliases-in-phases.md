@@ -258,6 +258,20 @@ request.**
    An earlier draft of this record and of the corpus README called it an MCP
    tool a customer's agent calls, which is the deployed API route below.
 
+**What the unshipped phases below are, and are not.** Phases 4, 5 and 6 have not
+been built. What binds is the decision: nothing an already-deployed name records
+moves without an alias, and each alias retires on the clock of whoever holds the
+old name. The file paths, line numbers, path lists and counts in those phases are
+this record's reading of the tree on 2026-09-19, and eight rounds of review on
+this pull request found nineteen errors in exactly that kind of detail: a table
+that did not exist, an MCP tool that was an API-only capability, five capability
+documents that were seven, a retirement clock borrowed from the wrong caller, a
+sequencing order that no deploy could satisfy. Every one was a claim about code
+the record was not changing. So each phase's own pull request re-derives its
+detail from the tree and treats a disagreement with this record as this record
+being stale, not as a reason to make the code match it. A decision ages well; an
+inventory does not.
+
 4. The names an enrolled host carries, each shipping alongside the old one and
    migrating on the next enroll: the runtime names `tachod` to `oxagend` and
    `tacho-hook` to `oxagen-hook`, and the deployed API paths the host calls.
