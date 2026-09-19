@@ -189,48 +189,51 @@ export class Wal {
   }
 
   /**
-   * Remove the stored bodies of the given events, keeping every other line of
-   * the files they sit in. Answers how many lines were removed.
+   * Delete the stored bytes of these events' bodies, and report how many
+   * lines went.
    *
-   * This is the on-disk half of a narrowing mandate. Withholding a body at
-   * ship time protects the network boundary; the bytes stay in
-   * `<session>.bodies.jsonl` until the session is sealed, fully shipped and
-   * past `walRetainMs`, so an unsealed session would hold prompt or tool
-   * content the workspace has already withdrawn authority for, readable by
-   * anything running as this user for the rest of that window.
+   * A mandate that narrows has to reach what is already on disk, not only
+   * what is about to leave (`docs/specs/gateway/spec.md`). Omitting a body
+   * from the outgoing request protects the network boundary and nothing
+   * else: `markShipped` only advances a cursor, and `compact` removes body
+   * bytes only once a sealed session has aged out, so an unsealed session
+   * would hold the withdrawn prompt or tool content indefinitely.
    *
-   * A rewrite is safe here because this file has exactly one writer: `append`
-   * is reached only from the daemon's own recording path, and a hook running
+   * The event line is untouched. The chain is the record, and only the
+   * content is withdrawn; a frame whose body is gone still hashes and still
+   * ships.
+   *
+   * A rewrite is safe because this file has exactly one writer: `append` is
+   * reached only from the daemon's own recording path, and a hook running
    * while the daemon is down leaves its work in the inbox rather than writing
    * here. A body file with a second writer would need a tombstone instead,
    * because a read-filter-rename loses a line appended between the read and
    * the rename.
-   *
-   * The file is rewritten through `writeSensitiveFileAtomic`, so a crash
-   * leaves either the old file or the new one, never a half-written file that
-   * `bodiesFor` would parse as a truncated line.
    */
-  dropBodies(eventIdIdems: ReadonlySet<string>): number {
-    if (eventIdIdems.size === 0) return 0;
+  dropBodies(events: readonly TachoEvent[]): number {
+    const wanted = new Map<string, Set<string>>();
+    for (const event of events) {
+      const idems = wanted.get(event.session_uuid) ?? new Set<string>();
+      idems.add(event.event_id_idem);
+      wanted.set(event.session_uuid, idems);
+    }
     let dropped = 0;
-    for (const session of this.sessions()) {
+    for (const [session, idems] of wanted) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
       const kept: string[] = [];
-      let touched = false;
+      let cut = 0;
       for (const line of readFileSync(path, "utf8").split("\n")) {
         if (line.trim().length === 0) continue;
         const stored = JSON.parse(line) as StoredBody;
-        if (eventIdIdems.has(stored.event_id_idem)) {
-          touched = true;
-          dropped += 1;
+        if (idems.has(stored.event_id_idem)) {
+          cut += 1;
           continue;
         }
         kept.push(line);
       }
-      if (!touched) continue;
-      // An emptied file is removed rather than left as a zero-byte file, so
-      // `bodiesFor` skips the session on `existsSync` instead of reading it.
+      if (cut === 0) continue;
+      dropped += cut;
       if (kept.length === 0) unlinkSync(path);
       else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
     }

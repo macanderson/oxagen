@@ -326,40 +326,48 @@ export class Shipper {
     // `contentClassOf` is the one table that maps a frame kind to a class, so
     // asking it here cannot disagree with what the append path asked.
     const retention = this.options.retentionInForce();
-    const kindOf = new Map(
-      own.map((event) => [event.event_id_idem, event.kind] as const),
+    const eventOf = new Map(
+      own.map((event) => [event.event_id_idem, event] as const),
     );
-    const withheld = new Set<string>();
-    const bodies = new Map(
-      this.options.wal
-        .bodiesFor(own)
-        .filter((body) => {
-          const kind = kindOf.get(body.event_id_idem);
-          const contentClass =
-            kind === undefined ? undefined : contentClassOf(kind);
-          // A body whose event is not in this batch, or whose kind names no
-          // class, is not shipped: an unclassifiable body cannot be shown to
-          // be covered, and the boundary fails closed.
-          const allowed =
-            contentClass !== undefined &&
-            retentionAllows(retention.mandate, contentClass);
-          if (!allowed) withheld.add(body.event_id_idem);
-          return allowed;
-        })
-        .map((body) => [body.event_id_idem, body] as const),
-    );
-    // The on-disk half of the same narrowing. Only a proven mandate purges:
-    // an unprovable one withholds and keeps, because it is usually transient
-    // and a purge is not.
-    if (retention.proven && withheld.size > 0) {
-      const dropped = this.options.wal.dropBodies(withheld);
+    const allowed: TachoBody[] = [];
+    const withdrawn: TachoEvent[] = [];
+    for (const body of this.options.wal.bodiesFor(own)) {
+      const event = eventOf.get(body.event_id_idem);
+      const contentClass =
+        event === undefined ? undefined : contentClassOf(event.kind);
+      // A body whose event is not in this batch, or whose kind names no
+      // class, is not shipped: an unclassifiable body cannot be shown to
+      // be covered, and the boundary fails closed.
+      if (
+        contentClass !== undefined &&
+        retentionAllows(retention.mandate, contentClass)
+      ) {
+        allowed.push(body);
+        continue;
+      }
+      if (event !== undefined) withdrawn.push(event);
+    }
+    // Leaving the body out of the request protects the network boundary and
+    // nothing else: `markShipped` advances a cursor, and `Wal.compact` frees
+    // body bytes only once a sealed session has aged out, so an unsealed
+    // session would keep the withdrawn content on disk indefinitely. The
+    // narrowed mandate reaches the disk here, as the spec requires.
+    //
+    // Only a proven mandate purges. An unverifiable or lapsed bundle also
+    // withholds, but keeps: that condition is usually transient and a purge
+    // is not. A control plane outage lapses every cached bundle at once, so
+    // purging on it would destroy the queued evidence of every session on
+    // this host.
+    if (retention.proven && withdrawn.length > 0) {
+      const dropped = this.options.wal.dropBodies(withdrawn);
       if (dropped > 0)
         this.options.log(
-          `retention narrowed: dropped ${dropped} withheld ${
-            dropped === 1 ? "body" : "bodies"
-          } from the WAL`,
+          `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,
         );
     }
+    const bodies = new Map(
+      allowed.map((body) => [body.event_id_idem, body] as const),
+    );
     const result = await this.shipBatch(
       this.fitRequestBudget(own, bodies),
       bodies,
