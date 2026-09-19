@@ -629,6 +629,36 @@ describe("readObservedModels", () => {
     ]);
   });
 
+  it("scopes the transcript-split joins by root_session_uuid so two sessions sharing a request or message id cannot merge figures", async () => {
+    answerBoth([
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const classCall = queryMock.mock.calls[1]![0];
+
+    // The priced row carries its own session key so the joins below can be
+    // scoped by it, the same way the per-run read is scoped by it.
+    expect(classCall.query).toContain("root_session_uuid");
+    // Both transcript-split joins (on the vendor request id and on the
+    // message id) must key on the session too, not on the id alone — two
+    // sessions in the same org can otherwise reuse an id and merge their
+    // thinking/cache-1h figures onto each other's calls.
+    expect(classCall.query).toContain("GROUP BY call_key, root_session_uuid");
+    expect(classCall.query).toContain(
+      "t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid",
+    );
+    expect(classCall.query).toContain(
+      "m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid",
+    );
+  });
+
   it("skips the class-bucket read entirely when nothing was observed", async () => {
     answer([]);
     const rows = await readObservedModels({ orgId: ORG, since: SINCE });

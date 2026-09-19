@@ -751,7 +751,7 @@ export async function readObservedModels(args: {
             toString(model) AS model, toString(provider) AS provider,
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
-            thinking_tokens, request_id, message_id
+            thinking_tokens, request_id, message_id, root_session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}
             AND model IN {models:Array(String)}
@@ -759,6 +759,7 @@ export async function readObservedModels(args: {
         LEFT JOIN (
           SELECT
             request_id AS call_key,
+            root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
           FROM tacho_events FINAL
@@ -767,12 +768,13 @@ export async function readObservedModels(args: {
             ${until.replace("{col}", "ts")}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key
+          GROUP BY call_key, root_session_uuid
           HAVING call_key != ''
-        ) AS t ON t.call_key = c.request_id
+        ) AS t ON t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid
         LEFT JOIN (
           SELECT
             message_id AS call_key,
+            root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
           FROM tacho_events FINAL
@@ -781,9 +783,9 @@ export async function readObservedModels(args: {
             ${until.replace("{col}", "ts")}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key
+          GROUP BY call_key, root_session_uuid
           HAVING call_key != ''
-        ) AS m ON m.call_key = c.message_id
+        ) AS m ON m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid
       ),
       unioned AS (
         SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM gw
