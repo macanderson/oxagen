@@ -247,6 +247,12 @@
 :root[data-theme="light"] .hero-art img {
   filter: invert(1) hue-rotate(180deg);
 }
+/* Without script there is no data-theme, and the page follows the OS. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .hero-art img {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}
 @media (max-width: 720px) {
   .hero-art img {
     object-position: 76% 0;

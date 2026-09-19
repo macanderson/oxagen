@@ -82,14 +82,21 @@
   var THEMES = ["system", "light", "dark"];
   var osLight = window.matchMedia("(prefers-color-scheme: light)");
   var root = document.documentElement;
+  /* The choice made on this page view. It is what counts when storage is
+     blocked, so the control still knows what it shows. */
+  var pageChoice = null;
+  /* The browser bar's colour for each theme: the ground on paper and on ink,
+     the same values as the theme-color meta tags in the head. */
+  var BAR = { light: "#FFFFFF", dark: "#09090B" };
 
   function readTheme() {
     var v = null;
     try {
       v = localStorage.getItem(THEME_KEY);
     } catch (e) {
-      /* storage blocked: the page follows the OS */
+      /* storage blocked: fall back to this page view's choice */
     }
+    if (THEMES.indexOf(v) === -1) v = pageChoice;
     return THEMES.indexOf(v) === -1 ? "system" : v;
   }
 
@@ -102,6 +109,15 @@
     root.setAttribute("data-theme", resolved);
     var meta = document.querySelector('meta[name="color-scheme"]');
     if (meta) meta.content = resolved;
+    /* Each theme-color tag answers one OS preference. A pinned theme sets
+       both to its own colour, so the bar matches the page whichever the OS
+       prefers; System puts each back to its own. */
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach(function (m) {
+        var own = /light/.test(m.media) ? BAR.light : BAR.dark;
+        m.content = choice === "system" ? own : BAR[resolved];
+      });
     void root.offsetWidth;
     root.classList.remove("theme-swap");
     document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
@@ -114,6 +130,7 @@
   document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
     b.addEventListener("click", function () {
       var choice = b.getAttribute("data-theme-choice");
+      pageChoice = choice;
       try {
         localStorage.setItem(THEME_KEY, choice);
       } catch (e) {
