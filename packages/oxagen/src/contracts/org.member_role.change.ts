@@ -33,11 +33,15 @@ export const orgMemberRoleChange = registerCapability({
     workspace: {},
   },
   input: z.object({
-    // UUID of the user whose role should change.
+    // The member's public id (usr_…, what list_members prints) or their raw
+    // user uuid; the handler resolves either within the org
+    // (resolveMemberUserId, packages/handlers/src/lib/org-member.ts).
     targetUserId: z
       .string()
       .min(1)
-      .describe("The UUID of the user whose role to change"),
+      .describe(
+        "The user whose role to change: their public id (usr_…) or their user uuid",
+      ),
     // New org role name — must match a system role for this org
     // (e.g. 'Owner', 'Admin', 'Member', 'Billing', 'Compliance').
     newRole: z
