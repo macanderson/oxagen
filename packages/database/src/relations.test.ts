@@ -436,13 +436,35 @@ describe("schemaPropertiesRelations", () => {
   });
 });
 
+describe("operatorUserJoin", () => {
+  it("is a SQL condition, not a Drizzle relation", () => {
+    // Not `.config` (a Relations instance) — a plain SQL join condition, so
+    // both `list_runs` selects (the ledger and the Tacho session queries)
+    // can drop it into `.leftJoin(schema.users, operatorUserJoin)` directly.
+    expect(allRelations.operatorUserJoin).toBeDefined();
+    expect(typeof allRelations.operatorUserJoin).toBe("object");
+    expect(
+      (allRelations.operatorUserJoin as unknown as { config?: unknown })
+        .config,
+    ).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Completeness guard — no exported relation is accidentally skipped
 // ---------------------------------------------------------------------------
 
+// relations.ts also exports a handful of plain SQL join-condition helpers
+// (not Drizzle `relations()` objects) for cross-domain joins that the
+// relational query API cannot express with a filter — e.g. `operatorUserJoin`,
+// which joins `principals` to `users` only for `kind = 'human'`. Those are
+// exempted from the completeness guard below by name.
+const NON_RELATION_EXPORTS = new Set(["operatorUserJoin"]);
+
 describe("relations.ts completeness guard", () => {
   it("all exported objects are Relations instances with a config callback", () => {
     for (const [name, rel] of Object.entries(allRelations)) {
+      if (NON_RELATION_EXPORTS.has(name)) continue;
       const asRel = rel as unknown as { config?: unknown };
       expect(typeof asRel.config, `${name}.config should be a function`).toBe(
         "function",
