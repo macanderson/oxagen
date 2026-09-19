@@ -119,7 +119,12 @@ const source: DataSource = {
     contextPr: vi.fn(),
     freshness: vi.fn(),
   },
-  tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+  tools: {
+    versions: vi.fn(),
+    grants: vi.fn(),
+    killSwitches: vi.fn(),
+    approvalRules: vi.fn(),
+  },
 };
 
 function withIntl(element: ReactNode) {

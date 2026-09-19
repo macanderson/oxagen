@@ -77,7 +77,12 @@ const source = {
     contextPr: vi.fn(),
     freshness: vi.fn(),
   },
-  tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+  tools: {
+    versions: vi.fn(),
+    grants: vi.fn(),
+    killSwitches: vi.fn(),
+    approvalRules: vi.fn(),
+  },
 };
 const listed = readOk({
   orgs: [{ slug: "acme", name: "Acme Robotics" }],

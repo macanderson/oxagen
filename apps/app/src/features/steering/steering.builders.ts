@@ -259,7 +259,12 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
         return Promise.resolve(reads.freshness);
       },
     },
-    tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+    tools: {
+      versions: refuse,
+      grants: refuse,
+      killSwitches: refuse,
+      approvalRules: refuse,
+    },
   };
   return { source, calls };
 }

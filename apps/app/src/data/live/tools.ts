@@ -1,16 +1,18 @@
 // The Tools ports on the kernel (ARCHITECTURE.md §3.3; #2958): the workspace
-// registry's tool versions, the credential broker's grants, and the kill
-// switches reaching this workspace. All three are `noBillingGate` reads whose
+// registry's tool versions, the credential broker's grants, the kill switches
+// reaching this workspace, and the workspace's auto-approval rules. All four are `noBillingGate` reads whose
 // role gate lives in the handler (INV-29), so a member without it comes back
 // as `denied` and the tab shows the access-denied state rather than an empty
 // table. An answer a view model refuses is reported once as record_unmappable.
 import "server-only";
+import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KILL_SWITCH_BOARD_LIMIT,
   KillSwitchBoard,
@@ -20,6 +22,7 @@ import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
+  toApprovalRuleSet,
   toCredentialGrantPage,
   toKillSwitchBoard,
   toToolVersionPage,
@@ -92,6 +95,23 @@ export const tools: DataSource["tools"] = {
       KillSwitchBoard,
       toKillSwitchBoard(read.value, KILL_SWITCH_BOARD_LIMIT),
       "tools.killSwitches",
+      ctx.orgId,
+    );
+  },
+
+  async approvalRules(ctx) {
+    // The contract returns the whole set (at most 256 rules), so there is no
+    // cursor and nothing to truncate.
+    const read = await kernelRead(ctx, {
+      contract: approvalRuleList,
+      input: {},
+      page: "tools",
+    });
+    if (!read.ok) return read;
+    return mapped(
+      ApprovalRuleSet,
+      toApprovalRuleSet(read.value),
+      "tools.approvalRules",
       ctx.orgId,
     );
   },

@@ -105,7 +105,12 @@ describe("ShellChrome", () => {
         contextPr: vi.fn(),
         freshness: vi.fn(),
       },
-      tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+      tools: {
+        versions: vi.fn(),
+        grants: vi.fn(),
+        killSwitches: vi.fn(),
+        approvalRules: vi.fn(),
+      },
     };
     // The chrome is wrapped in the viewer's zone, so its own dates agree with
     // the page's; the client shell is the provider's one child.

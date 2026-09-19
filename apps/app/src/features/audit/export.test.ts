@@ -80,7 +80,12 @@ const source: DataSource = {
     contextPr: refuse,
     freshness: refuse,
   },
-  tools: { versions: refuse, grants: refuse, killSwitches: refuse },
+  tools: {
+    versions: refuse,
+    grants: refuse,
+    killSwitches: refuse,
+    approvalRules: refuse,
+  },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };
 

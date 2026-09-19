@@ -1,12 +1,14 @@
-// The three Tools reads to the page's view models (ARCHITECTURE.md §3.4).
+// The four Tools reads to the page's view models (ARCHITECTURE.md §3.4).
 // Typed from each contract's `_output`, so a field the contract may leave null
 // cannot land in a required view field, and every figure is copied as the
 // handler counted it — no count, digest or duration is computed here.
+import type { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import type { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import type { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import type { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import type { z } from "zod";
 import type {
+  ApprovalRuleSet,
   CredentialGrantPage,
   KillSwitchBoard,
   ToolVersionPage,
@@ -109,5 +111,36 @@ export function toKillSwitchBoard(
       clearedAt: item.clearedAt,
       clearedByRef: item.clearedBy,
     })),
+  };
+}
+
+export function toApprovalRuleSet(
+  out: ContractOutput<typeof approvalRuleList>,
+): z.input<typeof ApprovalRuleSet> {
+  return {
+    rules: out.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      tools: item.tools,
+      enabled: item.enabled,
+      maxMeasures: item.maxMeasures,
+      allowTargets: item.allowTargets,
+      standingWindowMs: item.standingWindowMs,
+      businessHours:
+        item.businessHours === null
+          ? null
+          : {
+              timezone: item.businessHours.timezone,
+              days: item.businessHours.days,
+              start: item.businessHours.start,
+              end: item.businessHours.end,
+            },
+      lastWrittenBy: item.createdBy,
+      lastWrittenAt: item.createdAt,
+      authoredConsequences: item.authoredConsequences ?? null,
+      released: item.hits30d,
+      held: item.skipped30d,
+    })),
+    windowDays: out.windowDays,
   };
 }
