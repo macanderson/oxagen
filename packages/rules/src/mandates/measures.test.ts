@@ -3,6 +3,8 @@ import {
   amountToMicros,
   exceeds,
   periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
   readMeasure,
   readPath,
   remainingAfter,
@@ -147,6 +149,44 @@ describe("periodKey", () => {
     expect(periodKey("daily", new Date("2027-01-01T00:00:00Z"))).toBe(
       "2027-01-01",
     );
+  });
+});
+
+describe("periodKeyRange and periodKeysOverlap", () => {
+  it("maps a daily, weekly and monthly key to a half-open UTC range", () => {
+    expect(periodKeyRange("2026-09-14")).toEqual({
+      start: Date.UTC(2026, 8, 14),
+      end: Date.UTC(2026, 8, 15),
+    });
+    // 2026-09-14 is Monday of ISO week 38.
+    expect(periodKeyRange("2026-W38")).toEqual({
+      start: Date.UTC(2026, 8, 14),
+      end: Date.UTC(2026, 8, 21),
+    });
+    expect(periodKeyRange("2026-09")).toEqual({
+      start: Date.UTC(2026, 8, 1),
+      end: Date.UTC(2026, 9, 1),
+    });
+    expect(periodKeyRange("not-a-key")).toBeNull();
+  });
+
+  it("treats Monday's daily key as inside the week a Tuesday rename would query", () => {
+    // Daily-to-weekly on Tuesday of W38: Monday's settle overlaps 2026-W38.
+    expect(periodKeysOverlap("2026-09-14", "2026-W38")).toBe(true);
+    expect(periodKeysOverlap("2026-09-15", "2026-W38")).toBe(true);
+    // The prior week's Monday does not overlap this week's key.
+    expect(periodKeysOverlap("2026-09-07", "2026-W38")).toBe(false);
+  });
+
+  it("treats a weekly settle as overlapping a day inside that week", () => {
+    // Weekly-to-daily on Tuesday: W38 still hides Monday's share from Tuesday.
+    expect(periodKeysOverlap("2026-W38", "2026-09-15")).toBe(true);
+    expect(periodKeysOverlap("2026-W37", "2026-09-15")).toBe(false);
+  });
+
+  it("treats a day inside a month as overlapping that month", () => {
+    expect(periodKeysOverlap("2026-09-14", "2026-09")).toBe(true);
+    expect(periodKeysOverlap("2026-08-31", "2026-09")).toBe(false);
   });
 });
 

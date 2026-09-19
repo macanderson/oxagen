@@ -41,6 +41,12 @@ const doubles = vi.hoisted(() => ({
    * current window is empty.
    */
   openReservation: false,
+  /**
+   * Whether `hasSettlementOverlappingPeriod` answers that a settle row's key
+   * overlaps the destination window. Independent of `drawn` so a Monday settle
+   * can refuse a Tuesday daily-to-weekly rename when today's key is empty.
+   */
+  overlappingSettlement: false,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -107,8 +113,11 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
   // Undrawn by default so the existing merge cases still write. A case that
   // renames a drawn window stubs true here. Open reservations under any key
   // are independent: a crossed-midnight park stubs openReservation alone.
+  // Settlements under an earlier key that overlaps the destination window
+  // stub overlappingSettlement alone.
   hasDrawnInCurrentPeriod: async () => doubles.drawn,
   hasOpenReservation: async () => doubles.openReservation,
+  hasSettlementOverlappingPeriod: async () => doubles.overlappingSettlement,
 }));
 
 vi.mock("./_mandate", async (importOriginal) => ({
@@ -181,6 +190,7 @@ beforeEach(() => {
   doubles.stale = { amount: AMOUNT, calls: CALLS };
   doubles.drawn = false;
   doubles.openReservation = false;
+  doubles.overlappingSettlement = false;
 });
 
 describe("update_mandate_limits, limitChanges", () => {
@@ -360,6 +370,24 @@ describe("update_mandate_limits, limitChanges", () => {
     );
     expect(doubles.written).toHaveLength(0);
   });
+
+  // A Monday settle stays under Monday's daily key. After midnight Tuesday the
+  // current-window check queries Tuesday only and open-reservation ignores
+  // settled rows; the overlapping-settlement check must still refuse a
+  // daily-to-weekly rename that would hide Monday inside the week.
+  it("refuses a period rename while a settlement overlaps the destination window", async () => {
+    doubles.drawn = false;
+    doubles.openReservation = false;
+    doubles.overlappingSettlement = true;
+    await expect(
+      change({
+        limitChanges: { amount: { period: "weekly" } },
+      }),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+    expect(doubles.written).toHaveLength(0);
+  });
 });
 
 describe("assertPeriodChangeAllowed", () => {
@@ -395,6 +423,22 @@ describe("assertPeriodChangeAllowed", () => {
     );
   });
 
+  it("refuses when a settlement overlaps the destination window", async () => {
+    doubles.drawn = false;
+    doubles.openReservation = false;
+    doubles.overlappingSettlement = true;
+    await expect(
+      assertPeriodChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, period: "daily" } },
+        { amount: { ...AMOUNT, period: "weekly" } },
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "period_drawn",
+    );
+  });
+
   it("allows a figure change that keeps the window, and a rename with nothing drawn", async () => {
     doubles.drawn = true;
     await expect(
@@ -407,6 +451,7 @@ describe("assertPeriodChangeAllowed", () => {
     ).resolves.toBeUndefined();
     doubles.drawn = false;
     doubles.openReservation = false;
+    doubles.overlappingSettlement = false;
     await expect(
       assertPeriodChangeAllowed(
         tx,

@@ -4,8 +4,9 @@
 // new perPeriod as the ceiling over what the period has already drawn. A
 // limit over a measure a matched tool does not declare is refused as
 // grant_mandate refuses it. A change that renames the window of a measure
-// that still has reserved or settled authority in the current window is
-// refused too: ledger rows keep the old periodKey, while readAuthority and
+// that still has reserved or settled authority in the current window, or a
+// settlement whose period key overlaps the destination window, is refused
+// too: ledger rows keep the old periodKey, while readAuthority and
 // reserve would query only the new one, so the draw would vanish from the
 // balance and open a second grant of the same ceiling.
 // Roles: the consequence roles of every tag (INV-29).
@@ -30,6 +31,7 @@ import {
   lockMandate,
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
+  hasSettlementOverlappingPeriod,
 } from "@oxagen/rules";
 import {
   mandateLimitsSchema,
@@ -104,15 +106,18 @@ export function applyLimitChanges(
 
 /**
  * Refuse renaming a measure's window while that measure still has authority
- * drawn under the window the ledger already wrote, or an open reservation
- * under any period key.
+ * drawn under the window the ledger already wrote, an open reservation under
+ * any period key, or a settlement whose key overlaps the destination window.
  *
  * Settlements and open reservations keep the periodKey they were filed under.
  * `readAuthority` and `reserve` derive the key from the limit's period alone,
  * so a monthly-to-daily rename would make today's draw invisible and grant the
  * ceiling again. An open reservation that crossed midnight stays under the old
  * day's key after the current window rolls; that row must block the rename
- * too. Leaving the period alone, or changing it when the current window is
+ * too. A settlement from an earlier day in the same week (or month) is the
+ * same failure under a daily-to-weekly (or daily-to-monthly) rename: the
+ * current-window check misses it and open-reservation ignores settled rows.
+ * Leaving the period alone, or changing it when every overlapping key is
  * clear and no reservation is open anywhere, is fine: a bare figure change
  * still binds the same key.
  */
@@ -134,11 +139,18 @@ export async function assertPeriodChangeAllowed(
       at,
     );
     const open = await hasOpenReservation(tx, mandateId, measure);
-    if (!drawn && !open) continue;
+    const overlapping = await hasSettlementOverlappingPeriod(
+      tx,
+      mandateId,
+      measure,
+      next.period,
+      at,
+    );
+    if (!drawn && !open && !overlapping) continue;
     throw new HandlerError({
       code: "conflict",
       reason: "period_drawn",
-      message: `Measure "${measure}" still has authority drawn under its ${prev.period} window, or an open reservation under an earlier key; change the period only when nothing is reserved or settled in the current window and no reservation remains open`,
+      message: `Measure "${measure}" still has authority drawn under its ${prev.period} window, an open reservation under an earlier key, or a settlement that overlaps the ${next.period} window; change the period only when nothing reserved or settled would become invisible under the new key`,
     });
   }
 }

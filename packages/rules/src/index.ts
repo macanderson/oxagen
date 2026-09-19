@@ -64,6 +64,7 @@ export {
   expireApproval,
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
+  hasSettlementOverlappingPeriod,
   lockMandate,
   parseMandateRow,
   readAuthority,
@@ -71,7 +72,7 @@ export {
   releaseParked,
   type MandateRecord,
 } from "./mandates";
-export { toolMatches } from "./mandates/measures";
+export { periodKey, periodKeyRange, periodKeysOverlap, toolMatches } from "./mandates/measures";
 export {
   bootstrapDecisionRulesRuntime,
   clearDecisionRulesCache,

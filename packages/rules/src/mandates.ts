@@ -54,6 +54,8 @@ import {
   exceeds,
   isCallsMeasure,
   periodKey,
+  periodKeyRange,
+  periodKeysOverlap,
   readCallsMeasure,
   readMeasure,
   readPath,
@@ -202,6 +204,43 @@ export async function hasOpenReservation(
     .from(l)
     .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)));
   return BigInt(row?.reserved ?? "0") > 0n;
+}
+
+/**
+ * Whether this measure has a settlement under a period key whose calendar
+ * range overlaps the destination period's current window.
+ *
+ * A daily-to-weekly rename on Tuesday leaves Monday's settle under Monday's
+ * daily key. `hasDrawnInCurrentPeriod` only queries Tuesday, and
+ * `hasOpenReservation` ignores settled rows, so without this check the
+ * rename would succeed and weekly reads would see an empty `YYYY-Www` key.
+ * The ledger stays append-only: the rename is refused, not rewritten.
+ */
+export async function hasSettlementOverlappingPeriod(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  destPeriod: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const destKey = periodKey(destPeriod, at);
+  const rows = await tx
+    .select({
+      periodKey: l.periodKey,
+      settled: sql<string>`coalesce(sum(case when ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
+    })
+    .from(l)
+    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)))
+    .groupBy(l.periodKey);
+  for (const row of rows) {
+    if (BigInt(row.settled) <= 0n) continue;
+    // An unparseable settled key is treated as overlapping: refuse rather
+    // than hide a draw the destination window cannot query.
+    if (!periodKeyRange(row.periodKey) || periodKeysOverlap(row.periodKey, destKey)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
