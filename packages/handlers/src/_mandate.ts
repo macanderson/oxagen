@@ -284,9 +284,11 @@ export async function assertToolsDeclareMeasures(
  * call reached here at all (`tier_gate` bypassed IAM's resolver). On an
  * enterprise org, `checkIAM` runs the full resolver, so a caller who is
  * neither an accountable office role nor a built-in workspace Owner/Member
- * can still legitimately reach the handler through an explicit custom
- * `role_grants` entry naming this capability. Enforcing the built-in
- * workspace roles unconditionally would refuse that configured grant and
+ * can still legitimately reach the handler through any other explicit IAM
+ * allow path naming this capability (`packages/oxagen/src/iam/resolve.ts`):
+ * a custom `role_grants` entry, a workspace or organization direct grant,
+ * or an enforced org allow policy. Enforcing the built-in workspace roles
+ * unconditionally would refuse that configured grant and
  * silently revoke access the enterprise org's own IAM setup deliberately
  * gave (#3440 follow-on finding). Every caller who reaches this point has
  * already cleared the kernel's real check on that tier, so they take the

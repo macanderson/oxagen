@@ -54,14 +54,17 @@ tier gate admits every capability unconditionally regardless of
 handler and `readerFilter`'s own workspace-role check is what refuses them,
 `forbidden`/`org_role_required`. On an enterprise org, `defaultRoles`
 refuses a caller with no qualifying built-in role before the handler runs,
-the same reason, at the kernel instead. But an enterprise org can also grant
-an explicit custom `role_grants` entry naming `list_mandates` or
-`get_mandate` to a role that is neither an accountable office role nor a
-built-in workspace Owner/Member: that caller clears the kernel through the
-custom grant, and `readerFilter` does not re-check the built-in workspace
-roles on an established enterprise tier, so they are not refused. They take
-the same narrowed-reader scope a workspace Owner/Member gets (agents they
-created, mandates they requested), never the unnarrowed office view.
+the same reason, at the kernel instead. But an enterprise org's own IAM
+configuration can also admit a caller through any other explicit allow
+path naming `list_mandates` or `get_mandate` (a custom `role_grants`
+entry, a workspace or organization direct grant, or an enforced org allow
+policy, per `packages/oxagen/src/iam/resolve.ts`), to a role that is neither
+an accountable office role nor a built-in workspace Owner/Member: that
+caller clears the kernel through the explicit grant, and `readerFilter`
+does not re-check the built-in workspace roles on an established
+enterprise tier, so they are not refused. They take the same
+narrowed-reader scope a workspace Owner/Member gets (agents they created,
+mandates they requested), never the unnarrowed office view.
 
 The same skip applies to an agent-run call, on any tier. IAM's tier gate
 only bypasses the resolver for a human or service principal; an agent
@@ -79,7 +82,7 @@ narrowed-reader scope.
 | code | reason | meaning |
 | --- | --- | --- |
 | `forbidden` | `no_principal` | No signed-in user on the request. |
-| `forbidden` | `org_role_required` | Neither an accountable office role, a workspace Owner/Member, nor (on an enterprise org) an explicit custom role grant admits the caller; refused by the kernel on an enterprise org with no such grant, or by `readerFilter` itself on a non-enterprise tier (ADR-107). |
+| `forbidden` | `org_role_required` | Neither an accountable office role, a workspace Owner/Member, nor (on an enterprise org) any other explicit IAM allow path admits the caller; refused by the kernel on an enterprise org with no such grant, or by `readerFilter` itself on a non-enterprise tier (ADR-107). |
 
 ## SPEC references
 
