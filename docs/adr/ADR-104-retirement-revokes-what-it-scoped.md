@@ -93,6 +93,16 @@ workspace's API keys. Implementing that fix is left to #3123; this ADR
 records that the same reasoning should settle it, so whoever picks it up does
 not re-litigate the choice.
 
+**No route or tool change was needed on `api` or `mcp`.** `agent_retired` is a
+`HandlerError` with `code: "conflict"`. `apps/api`'s Hono `onError` middleware
+(`apps/api/src/middleware/error.ts`, `HANDLER_ERROR_STATUS`) maps every
+`HandlerError` generically by `code`, never per reason, so a new reason needs
+no route change. `apps/mcp`'s tool wrappers (`apps/mcp/src/tools/mandate.*.ts`)
+call `invoke` and return its result with no per-error handling of their own;
+a thrown `HandlerError` propagates to xmcp's own generic tool-error response.
+The same reason already reaches both surfaces unchanged for
+`rotate_agent_credential` and `suspend_agent`, which throw it today.
+
 ## Consequences
 
 - A mandate's status, once its agent is retired, is truthful: `revoked` with
