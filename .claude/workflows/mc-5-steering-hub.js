@@ -123,7 +123,7 @@ Scout facts for this lane (verify before relying on them): ${scoutFacts || 'none
 Issues: ${(lane.issues || []).join(', ') || 'none'}. Use Refs #N in commits; the integrator decides Closes.
 1. git -C <repo> fetch origin && git worktree add ${wt(session.id + '-' + lane.id)} -b mc/${session.id}-${lane.id} ${base}; push -u immediately.
 2. You own ONLY these paths: ${lane.owns.join(', ')}. Shared files (messages/en.json outside your namespace, capability-ui-map.json, data/contracts/*, data/ports.ts) may be edited only in the smallest hunk your lane needs, in its own block, so the integrator can merge sibling lanes.
-3. Build: ${lane.task}
+3. Build: ${lane.task}${lane.integrate === false ? '\nThis lane is a sidecar: its branches are not merged into the session PR. Return the branch you worked on and the per-target results in summary and open_gaps.' : ''}
 4. Done when: ${lane.done}
 5. Tests beside every component and action. Run at most one changed test file in isolation. Commit and push after every step. Do not open a PR; the integrator does.
 Return the structured result (ci_state: not-opened).`
@@ -147,7 +147,7 @@ function reviewPrompt(session, pr, specHint) {
   return `${RULES}\n${CONTEXT}
 TASK: Cold review of PR ${pr.pr_url} (branch ${pr.branch}, worktree ${pr.worktree || wt(session.id)}) for session ${session.id} (${session.title}).
 Review against: ${specHint}. Check spec fidelity (states, copy, entry points), tenancy and IAM on every new handler or action (withTenantDb, assertOrgRole where an org role is required), capability parity and the ui-map binding with a real proof file, every trust badge honest to the record, a test beside every new component and action, and clear-prose on every string.
-Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into ONE residue issue titled "Residue from #<PR>: <what is left>" with the finding verbatim, file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label; resolve nothing on the PR. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
+Fix every P0 and P1 you confirm directly on the branch, commit, push, and watch CI green again (up to three rounds). Carry P2 and below into ONE residue issue titled "Residue from #<PR>: <what is left>" with each finding verbatim, its file and line, why it matters, the pillar it moves, and a "- [ ]" DoD; apply only the triage label. Then, per AGENTS.md (Residue merges), reply on every carried thread that the finding stands and names the residue issue, and resolve that thread: resolving is an acceptance, not a dismissal. Leave a P0 or P1 thread open only if you could not fix it, and say why on the thread. Return what you fixed, what remains with severities, the residue issue URL, and the final ci_state.`
 }
 
 async function runSession(session, specHint) {
@@ -171,18 +171,23 @@ async function runSession(session, specHint) {
   )))).filter(Boolean)
   const failed = active.filter(l => !built.find(b => b.lane === l.id)).map(l => l.id)
   if (failed.length) log(`lanes that returned nothing: ${failed.join(', ')}; the integrator is told to build them`)
-  if (!built.length) return { session: session.id, scout, built: [], failed }
+  // A lane with integrate: false works on branches that are not this session's
+  // (an existing PR, a maintenance task). Its result is reported, never merged.
+  const sidecar = built.filter(b => (session.lanes.find(l => l.id === b.lane) || {}).integrate === false)
+  const mergeable = built.filter(b => !sidecar.includes(b))
+  if (sidecar.length) log(`sidecar lanes kept out of integration: ${sidecar.map(b => b.lane).join(', ')}`)
+  if (!mergeable.length) return { session: session.id, scout, built: [], sidecar, failed }
 
   phase('Integrate')
   const pr = await agent(
-    integratePrompt(session, built, base) + (failed.length ? `\nNOTE: lanes ${failed.join(', ')} returned nothing. Read their branch if one was pushed (mc/${session.id}-<lane>), finish the work yourself from BUILD-CHUNKS.md, then continue.` : ''),
+    integratePrompt(session, mergeable, base) + (failed.length ? `\nNOTE: lanes ${failed.join(', ')} returned nothing. Read their branch if one was pushed (mc/${session.id}-<lane>), finish the work yourself from BUILD-CHUNKS.md, then continue.` : ''),
     { label: `integrate:${session.id}`, phase: 'Integrate', schema: RESULT, agentType: 'general-purpose' },
   )
-  if (!pr || !pr.pr_url) return { session: session.id, scout, built, failed, pr }
+  if (!pr || !pr.pr_url) return { session: session.id, scout, built: mergeable, sidecar, failed, pr }
 
   phase('Review')
   const review = await agent(reviewPrompt(session, pr, specHint), { label: `review:${session.id}`, phase: 'Review', schema: REVIEW, agentType: 'general-purpose' })
-  return { session: session.id, scout, built, failed, pr, review }
+  return { session: session.id, scout, built: mergeable, sidecar, failed, pr, review }
 }
 
 const session = {
