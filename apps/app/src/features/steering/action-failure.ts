@@ -37,6 +37,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("baseMoved");
           case "github_refused":
             return t("githubRefused");
+          case "merge_time_unknown":
+            return t("mergeTimeUnknown");
           case "already_merged":
             return t("proposalMoved");
           default:

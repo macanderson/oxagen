@@ -25,6 +25,7 @@ const DEFAULT_PROMPT = "Reply with exactly the word OK and nothing else.";
 const BINARY: Record<WrappedHarness, string> = {
   "claude-code": "claude",
   codex: "codex",
+  cursor: "cursor-agent",
   stella: "stella",
 };
 
@@ -36,14 +37,17 @@ const BINARY: Record<WrappedHarness, string> = {
 const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
   "claude-code": 15_000,
   codex: 15_000,
+  cursor: 15_000,
   stella: 45_000,
 };
 
 /**
  * One headless turn per harness. Claude Code prints a JSON result carrying
- * its session id; Codex CLI (`codex exec`) and Stella (`stella run`) print
- * prose, so their session is matched as a chain the daemon did not have
- * before the turn ran, carrying the harness label.
+ * its session id; Codex CLI (`codex exec`), Cursor (`cursor-agent -p`) and
+ * Stella (`stella run`) are matched as a chain the daemon did not have before
+ * the turn ran, carrying the harness label. Cursor's JSON result does carry a
+ * `session_id`, but its hooks name the session by `conversation_id`, and
+ * nothing documents the two as the same value, so it is not parsed.
  */
 function headlessTurn(
   harness: TachoHarness,
@@ -54,6 +58,9 @@ function headlessTurn(
       args: ["exec", "--skip-git-repo-check", prompt],
       parsesSession: false,
     };
+  }
+  if (harness === "cursor") {
+    return { args: ["-p", prompt], parsesSession: false };
   }
   if (harness === "stella") {
     return { args: ["run", prompt], parsesSession: false };
@@ -83,12 +90,14 @@ interface DaemonSession {
 
 function factsFor(harness: TachoHarness, deps: CliDeps) {
   if (harness === "codex") return deps.codex();
+  if (harness === "cursor") return deps.cursor();
   if (harness === "stella") return deps.stella();
   return deps.claude();
 }
 
 function configPathFor(harness: TachoHarness, deps: CliDeps): string {
   if (harness === "codex") return deps.paths.codexHooks;
+  if (harness === "cursor") return deps.paths.cursorHooks;
   if (harness === "stella") return deps.readStellaHooks().path;
   return deps.paths.claudeSettings;
 }

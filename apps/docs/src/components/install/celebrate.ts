@@ -7,7 +7,7 @@
  * reduced-motion users; the button's copied state is the feedback).
  */
 
-const EMBER = ["#977017", "#D4AF37", "#F1CE65", "#7BC98A", "#FFFFFF"];
+const EMBER = ["#8A7223", "#D4AF37", "#F1CE65", "#7BC98A", "#FFFFFF"];
 
 interface Particle {
   x: number;

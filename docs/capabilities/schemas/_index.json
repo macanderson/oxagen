@@ -1509,6 +1509,18 @@
       "consumes": []
     },
     {
+      "name": "get_steering_freshness",
+      "domain": "context",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_subscription",
       "domain": "billing",
       "surfaces": [

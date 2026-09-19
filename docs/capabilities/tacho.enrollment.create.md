@@ -25,7 +25,7 @@ Refuses when `TACHO_ENROLLMENT_SIGNING_SECRET` or `TACHO_BUNDLE_SIGNING_PRIVATE_
 | `osUser` | string | yes | 1-128 chars |
 | `platform` | enum | yes | `darwin`, `linux`, `win32` |
 | `devicePublicKey` | string | yes | `ed25519:<base64>` |
-| `harnesses` | enum[] | yes | `claude-code` |
+| `harnesses` | enum[] | yes | 1 or more of `claude-code`, `codex`, `cursor`, `stella`, `claude-desktop` |
 | `claudeVersion`, `claudeExecpath`, `nodeVersion`, `wrapperVersion`, `shell`, `osVersion`, `arch` | string | no | host facts recorded on the row |
 | `managed` | boolean | no | default `false`; managed-settings enrollment |
 | `validityDays` | integer | no | 1-365, default 180 |

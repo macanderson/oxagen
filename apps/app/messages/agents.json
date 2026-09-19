@@ -4,6 +4,8 @@
     "harness": {
       "stella": "Stella",
       "claude-code": "Claude Code",
+      "codex": "Codex",
+      "cursor": "Cursor",
       "claude-agent-sdk": "Claude Agent SDK",
       "custom": "Custom harness"
     },

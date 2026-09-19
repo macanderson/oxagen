@@ -1,0 +1,12 @@
+---
+description: Oxagen operating rules for every agent session in this repository
+alwaysApply: true
+---
+
+This repository's operating rules live in two files at the root. Read both before you change anything.
+
+- `AGENTS.md`: layout, the capability system, storage boundaries, tooling, and the standing decisions.
+- `CLAUDE.md`: the prime directive, git workflow, the no-local-verification rule, the test gate, issues and labels, and the four first-class harnesses. The name says Claude, but the rules bind every agent here, Cursor included.
+
+@AGENTS.md
+@CLAUDE.md

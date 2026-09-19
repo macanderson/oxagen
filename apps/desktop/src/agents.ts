@@ -1,6 +1,6 @@
 /**
  * The "Wrapped agents" panel's rows, as a pure function of the machine's
- * state: one row per known harness (Claude Code, Codex, Stella) plus one
+ * state: one row per known harness (Claude Code, Codex, Cursor, Stella) plus one
  * row per custom agent the collector has ever seen (`tacho hook --agent
  * <name>`, reported in `daemon.agents` with `runtime: "custom"` or any
  * other runtime string this build does not have a harness for).
@@ -125,6 +125,8 @@ function hookPresenceFor(
       return tacho.hooks;
     case "codex":
       return tacho.codexHooks;
+    case "cursor":
+      return tacho.cursorHooks;
     case "stella":
       return tacho.stellaHooks;
     // A connected app has no hooks to be present or missing. Returning
@@ -142,6 +144,8 @@ function versionFor(host: HostView | null, harness: Harness): string | null {
       return host.claude_version ?? null;
     case "codex":
       return host.codex_version ?? null;
+    case "cursor":
+      return host.cursor_version ?? null;
     case "stella":
       return host.stella_version ?? null;
     // A GUI app answers no `--version`, so there is none to show.

@@ -25,7 +25,9 @@ import {
   eq,
   getTableColumns,
   inArray,
+  isNotNull,
   isNull,
+  max,
   or,
   sql,
 } from "drizzle-orm";
@@ -196,6 +198,40 @@ export interface SteeringStore {
   listActiveRecords(scope: SteeringScope): Promise<PublishedRecordRow[]>;
   /** The promotions ledger length for the workspace: its steering version. */
   ledgerLength(scope: SteeringScope): Promise<number>;
+  /**
+   * The newest publishing commit on the production branch, for the steering
+   * freshness check: a developer's checkout that cannot reach this commit is
+   * reading records that are no longer the ones in force. Null until a
+   * Context PR has merged (a record published through
+   * `publish_context_record` carries no commit).
+   */
+  latestPublication(scope: SteeringScope): Promise<{
+    commitSha: string;
+    /**
+     * Every distinct commit published at the newest instant, `commitSha`
+     * among them. GitHub reports a merge to the second, so two merges can
+     * share one, and no column here says which landed later on the branch.
+     * The store does not guess. It hands back all of them, and a checkout is
+     * current only when it can reach each one: git knows the ancestry.
+     */
+    commitShas: string[];
+    publishedAt: Date;
+  } | null>;
+  /**
+   * `ledgerLength` and `latestPublication` in one transaction, for the
+   * freshness read: a publication committing between two independent reads
+   * could pair the new steering version with the old `headCommit`, and a
+   * checkout stalled at that old commit would then read as current under
+   * the new version. One transaction gives both counts the same snapshot.
+   */
+  versionAndPublication(scope: SteeringScope): Promise<{
+    version: number;
+    publication: {
+      commitSha: string;
+      commitShas: string[];
+      publishedAt: Date;
+    } | null;
+  }>;
 
   /** Idempotent on (workspace, record_hash): `appended` is false on a repeat. */
   insertAppend(
@@ -555,6 +591,62 @@ export const postgresSteeringStore: SteeringStore = {
     );
   },
 
+  async latestPublication(scope) {
+    const published = and(
+      eq(schema.contextRecords.orgId, scope.orgId),
+      eq(schema.contextRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.contextRecords.commitSha),
+      isNotNull(schema.contextRecords.publishedAt),
+      isNull(schema.contextRecords.deletedAt),
+    );
+    const rows = await withTenantDb((tx) => {
+      const newestInstant = tx
+        .select({ at: max(schema.contextRecords.publishedAt) })
+        .from(schema.contextRecords)
+        .where(published);
+      return (
+        tx
+          .select({
+            commitSha: schema.contextRecords.commitSha,
+            publishedAt: schema.contextRecords.publishedAt,
+          })
+          .from(schema.contextRecords)
+          // Every publication at the newest instant, in one round trip.
+          // `published_at` is GitHub's merge instant (see `merge_context_pr`),
+          // so a publication retried after a later merge still sorts earlier.
+          //
+          // GitHub reports that instant to the second, and two PRs can merge
+          // inside one. An earlier version broke the tie on `id`, reading it
+          // as insert order. It is not publication order: a retried earlier
+          // merge inserts last, and a new version of an existing lineage
+          // keeps that lineage's old row and its old id. Either way the
+          // earlier commit could win, and a checkout at that commit read as
+          // current while it lacked the later record. Nothing stored here
+          // orders two commits on the branch, so the tie is returned whole.
+          .where(
+            and(
+              published,
+              eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+            ),
+          )
+          // Stable, so `commitSha` does not flip between two reads.
+          .orderBy(desc(schema.contextRecords.id))
+      );
+    });
+    const newest = rows[0];
+    if (!newest?.commitSha || !newest.publishedAt) return null;
+    const commitShas = [
+      ...new Set(
+        rows.flatMap((row) => (row.commitSha === null ? [] : [row.commitSha])),
+      ),
+    ];
+    return {
+      commitSha: newest.commitSha,
+      commitShas,
+      publishedAt: newest.publishedAt,
+    };
+  },
+
   async ledgerLength(scope) {
     const [c] = await withTenantDb((tx) =>
       tx
@@ -568,6 +660,64 @@ export const postgresSteeringStore: SteeringStore = {
         ),
     );
     return c?.total ?? 0;
+  },
+
+  async versionAndPublication(scope) {
+    const published = and(
+      eq(schema.contextRecords.orgId, scope.orgId),
+      eq(schema.contextRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.contextRecords.commitSha),
+      isNotNull(schema.contextRecords.publishedAt),
+      isNull(schema.contextRecords.deletedAt),
+    );
+    const { countRow, rows } = await withTenantDb(async (tx) => {
+      const newestInstant = tx
+        .select({ at: max(schema.contextRecords.publishedAt) })
+        .from(schema.contextRecords)
+        .where(published);
+      const [countRow] = await tx
+        .select({ total: count() })
+        .from(schema.contextPromotions)
+        .where(
+          and(
+            eq(schema.contextPromotions.orgId, scope.orgId),
+            eq(schema.contextPromotions.workspaceId, scope.workspaceId),
+          ),
+        );
+      const rows = await tx
+        .select({
+          commitSha: schema.contextRecords.commitSha,
+          publishedAt: schema.contextRecords.publishedAt,
+        })
+        .from(schema.contextRecords)
+        // Same tie-break as `latestPublication`: every publication at the
+        // newest instant, stable on id so `commitSha` does not flip between
+        // reads.
+        .where(
+          and(
+            published,
+            eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+          ),
+        )
+        .orderBy(desc(schema.contextRecords.id));
+      return { countRow, rows };
+    });
+    const newest = rows[0];
+    const publication =
+      newest?.commitSha && newest.publishedAt
+        ? {
+            commitSha: newest.commitSha,
+            commitShas: [
+              ...new Set(
+                rows.flatMap((row) =>
+                  row.commitSha === null ? [] : [row.commitSha],
+                ),
+              ),
+            ],
+            publishedAt: newest.publishedAt,
+          }
+        : null;
+    return { version: countRow?.total ?? 0, publication };
   },
 
   async insertAppend(values) {

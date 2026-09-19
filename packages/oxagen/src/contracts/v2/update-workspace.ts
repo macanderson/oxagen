@@ -119,6 +119,17 @@ export const updateWorkspace = defineTool({
      */
     consequenceRoles: workspaceSettingsWrite.input.shape.consequenceRoles,
 
+    /**
+     * The two steering-freshness gates, carried by reference from
+     * `update_workspace_settings`. They belong here for the same reason
+     * `governanceMode` does: both decide what happens to a Context record
+     * between the production branch and the agent acting on it —
+     * `governanceMode` who may publish one, these two whether a checkout that
+     * has not caught up may act at all. A patch, so setting one gate does not
+     * silently rewrite the other; omitted, both are unchanged.
+     */
+    steering: workspaceSettingsWrite.input.shape.steering,
+
     // ---- governance (new; Appendix A wrk.workspaces) ----------------------
     /**
      * §10.3 step 3 spends this value: `solo` lets the author merge a Context
@@ -216,6 +227,13 @@ export const updateWorkspace = defineTool({
      * so a partial update's caller learns the tags it did not send.
      */
     consequenceRoles: workspaceSettingsWrite.output.shape.consequenceRoles,
+
+    /**
+     * Both gates, always — the answer to "what does this workspace apply
+     * now", not an echo of what the call changed. An optional object here
+     * would be indistinguishable from "both off" at every reader.
+     */
+    steering: workspaceSettingsWrite.output.shape.steering,
 
     governanceMode: z.enum(["solo", "team", "regulated"]),
     /** Null means "inherit the organization's" — see the input field. */

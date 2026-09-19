@@ -8,7 +8,7 @@ import { SwRegister } from "@/components/pwa/sw-register";
 export const metadata: Metadata = {
   title: "Oxagen docs: the agent control plane",
   description:
-    "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
+    "Mission Control for your autonomous agents. Docs for the CLI, the REST API, the MCP server, and the web app.",
   // No explicit `manifest` string here — apps/docs/src/app/manifest.ts
   // (Next's native metadata-route convention) is auto-detected and linked at
   // /manifest.webmanifest.
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Oxagen docs: the agent control plane",
     description:
-      "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
+      "Mission Control for your autonomous agents. Docs for the CLI, the REST API, the MCP server, and the web app.",
     images: [
       {
         url: "/social/og-image-dark-1200x630.png",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Oxagen docs: the agent control plane",
     description:
-      "Documentation for Oxagen, the platform that governs and operates the autonomous agents an enterprise runs: the agent control plane and agent fleet management.",
+      "Mission Control for your autonomous agents. Docs for the CLI, the REST API, the MCP server, and the web app.",
     images: ["/social/og-image-dark-1200x630.png"],
   },
 };
