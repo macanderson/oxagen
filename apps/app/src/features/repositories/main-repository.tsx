@@ -1,22 +1,18 @@
 "use client";
-// The Workspace settings dialog: the Main repository panel (MC spec
-// §10.1–§10.2, #2967) and, below it, the Repositories section
-// (workspace-repositories.tsx; §10.1, §17 M0) that lists every repository the
-// workspace binds and links or unlinks a second one.
+// The Repositories page's GitHub setup (MC spec §10.1, §10.2, §11.4): the main
+// repository panel and, below it, the bound repositories (bound-repositories.tsx)
+// that it links and unlinks. Both used to live in a Workspace settings dialog
+// opened from the workspace menu. The menu no longer carries Settings, and
+// nothing the dialog did was dropped: installing or connecting the GitHub App,
+// attaching an installation, binding the main repository, reconnecting a retired
+// binding, re-approving its branch, and linking or unlinking a second
+// repository all happen here, on the page the mockup draws for them.
 //
-// Why it exists: the main repo is where `.oxagen/` lives — published steering
-// records, the promotion ledger, and every agent definition — and until a
-// workspace binds one it stays provisional. Before this, the only place to
-// bind was the onboarding gate's provisional banner, which offers exactly one
-// repository (the git remote the enrolling host happened to report) and
-// refuses with `github_not_connected` unless an installation is already
-// attached, which nothing in the app could produce. This panel opens the App's
+// Why the main repository matters: it is where `.oxagen/` lives (published
+// steering records, the promotion ledger, and every agent definition), and
+// until a workspace binds one it stays provisional. This panel opens the App's
 // install door and then lists what the installation actually reaches, so the
 // set on screen is the set `bind_main_repository` accepts.
-//
-// It is a `SheetDialog` like every other dialog here, so on a phone it rises
-// from the bottom edge with a drag handle, a scrim and a full-width footer
-// button (ARCHITECTURE.md §1.2; src/ui/phone.css keys on its data attributes).
 //
 // Every state it can be in is drawn, and none is faked: reading, no
 // installation, an unconfigured deployment, a picker over a live GitHub list,
@@ -47,29 +43,24 @@ import {
 } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { GitHubLink, useNavigate } from "@/ui/navigation";
-import { SheetDialog } from "@/ui/sheet-dialog";
-import type { ShellData } from "./shell-data";
-import { useShellState } from "./shell-state";
-import { useSidebarSections } from "./sidebar";
-import { RepositoriesPanel } from "./workspace-repositories";
 import {
   attachGithubInstallation,
   bindWorkspaceRepository,
   listGithubInstallations,
   listInstallationRepositories,
   readWorkspaceRepository,
-} from "./workspace-settings-actions";
+} from "./actions";
 import {
   UNANSWERED,
-  useWorkspaceSettingsFailure,
-  type WorkspaceSettingsFailure,
-} from "./workspace-settings-failure";
+  useRepositoriesFailure,
+  type RepositoriesFailure,
+} from "./failure";
 import { useFormatter } from "@/ui/formatter";
 
 /** A record being read, refused, or in hand. The refusal is kept as a value so its sentence is formatted at render. */
 type Load<T> =
   | { kind: "loading" }
-  | { kind: "failed"; failure: WorkspaceSettingsFailure }
+  | { kind: "failed"; failure: RepositoriesFailure }
   | { kind: "ready"; value: T };
 
 const sectionTitle = "text-sm font-semibold text-foreground";
@@ -94,8 +85,8 @@ type InstallAcknowledgement =
   | null;
 
 /**
- * The query values the API mints, mapped to the words above. Anything else —
- * including a word a newer API grew and this dialog has not learned — is null:
+ * The query values the API mints, mapped to the words above. Anything else,
+ * including a word a newer API grew and this page has not learned, is null:
  * no acknowledgement is the only safe default, since the one thing worse than
  * saying nothing is announcing a connection that did not happen.
  */
@@ -109,15 +100,16 @@ const ACKNOWLEDGEMENTS: Record<string, InstallAcknowledgement> = {
 
 /**
  * The query the API's OAuth callback sends a person back on:
- * `?settings=repository&github=connected` after a `returnTo=settings` connect.
- * The dialog opens on it and the params are dropped, so a reload does not
- * re-open a panel the person has closed. Read in its own component because
- * `useSearchParams` needs a Suspense boundary around whatever reads it.
+ * `/{org}/{ws}/repositories?settings=repository&github=connected` after a
+ * `returnTo=settings` connect. The acknowledgement is kept and the params are
+ * dropped, so a reload does not repeat a sentence about a round trip that is
+ * over. Read in its own component because `useSearchParams` needs a Suspense
+ * boundary around whatever reads it.
  */
-function SettingsQuery({
-  onRequested,
+function GitHubReturnQuery({
+  onReturned,
 }: {
-  onRequested: (acknowledgement: InstallAcknowledgement) => void;
+  onReturned: (acknowledgement: InstallAcknowledgement) => void;
 }) {
   const params = useSearchParams();
   const pathname = usePathname();
@@ -125,66 +117,47 @@ function SettingsQuery({
   useEffect(() => {
     if (params.get("settings") !== "repository") return;
     const github = params.get("github");
-    onRequested((github === null ? null : ACKNOWLEDGEMENTS[github]) ?? null);
-    // Back to the path with no settings query. `replace` also re-renders the
-    // server tree, which is wanted here: the workspace just gained an
-    // installation, and the provisional banner behind the dialog is stale.
+    onReturned((github === null ? null : ACKNOWLEDGEMENTS[github]) ?? null);
+    // Back to the path with no query. `replace` also re-renders the server
+    // tree, which is wanted here: the workspace just gained an installation,
+    // and the provisional banner is stale.
     navigate.replace(sanitizeNext(pathname, routes.root()));
-  }, [params, pathname, navigate, onRequested]);
+  }, [params, pathname, navigate, onReturned]);
   return null;
 }
 
-export function WorkspaceSettingsDialog({ data }: { data: ShellData }) {
-  const t = useTranslations("workspaceSettings");
-  const { workspaceSettingsOpen, setWorkspaceSettingsOpen } = useShellState();
-  const { ws } = useSidebarSections(data);
+/**
+ * The GitHub connection and the main repository, as one section of the
+ * Repositories tab. `onChanged` tells the page a bind, re-bind or attach
+ * settled, so the repository table above it re-reads.
+ */
+export function RepositorySetup({
+  org,
+  ws,
+  onChanged,
+}: {
+  org: string;
+  ws: string;
+  onChanged?: () => void;
+}) {
   const [acknowledgement, setAcknowledgement] =
     useState<InstallAcknowledgement>(null);
-  // Bumped when the main panel binds or re-binds, so the Repositories list
-  // below it re-reads: its main row is the binding the panel just moved.
-  const [version, setVersion] = useState(0);
-  const onChanged = useCallback(() => {
-    setVersion((n) => n + 1);
-  }, []);
-
-  const onRequested = useCallback(
-    (outcome: InstallAcknowledgement) => {
-      setAcknowledgement(outcome);
-      setWorkspaceSettingsOpen(true);
-    },
-    [setWorkspaceSettingsOpen],
-  );
-
-  // Without a workspace in the URL there is no workspace to settle: the
-  // sidebar hides the control in that case, and the return leg always lands on
-  // a workspace path.
-  if (ws === null) return null;
+  const changed = useCallback(() => {
+    onChanged?.();
+  }, [onChanged]);
   return (
-    <>
+    <div data-testid="repository-setup">
       <Suspense fallback={null}>
-        <SettingsQuery onRequested={onRequested} />
+        <GitHubReturnQuery onReturned={setAcknowledgement} />
       </Suspense>
-      <SheetDialog
-        open={workspaceSettingsOpen}
-        onOpenChange={setWorkspaceSettingsOpen}
-        title={t("title")}
-        testId="workspace-settings-dialog"
-      >
-        <MainRepositoryPanel
-          org={data.org.slug}
-          ws={ws}
-          open={workspaceSettingsOpen}
-          acknowledgement={acknowledgement}
-          onChanged={onChanged}
-        />
-        <RepositoriesPanel
-          org={data.org.slug}
-          ws={ws}
-          open={workspaceSettingsOpen}
-          version={version}
-        />
-      </SheetDialog>
-    </>
+      <MainRepositoryPanel
+        org={org}
+        ws={ws}
+        open
+        acknowledgement={acknowledgement}
+        onChanged={changed}
+      />
+    </div>
   );
 }
 
@@ -202,8 +175,8 @@ function MainRepositoryPanel({
   /** A bind, re-bind or attach settled: the record other sections read moved. */
   onChanged: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
-  const failureText = useWorkspaceSettingsFailure();
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
   const [reloads, setReloads] = useState(0);
   const [settings, setSettings] = useState<Load<WorkspaceRepository>>({
     kind: "loading",
@@ -455,7 +428,7 @@ function Acknowledgement({
 }: {
   acknowledgement: InstallAcknowledgement;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
+  const t = useTranslations("repositories.mainRepository");
   if (acknowledgement === null) return null;
   const sentence = ACKNOWLEDGEMENT_SENTENCES[acknowledgement];
   return (
@@ -511,7 +484,7 @@ function ConnectPanel({
   /** The sentence above the doors; the "nothing is attached yet" one by default. */
   body?: string;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
+  const t = useTranslations("repositories.mainRepository");
   const connectHref = parseGitHubUrl(connectUrl);
   const installHref = parseGitHubUrl(installUrl);
   return (
@@ -582,8 +555,8 @@ function InstallationPicker({
   candidates: Load<GitHubInstallations> | null;
   onAttached: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
-  const failureText = useWorkspaceSettingsFailure();
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
   const navigate = useNavigate();
   const [picked, setPicked] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -746,7 +719,7 @@ function BoundRepositoryPanel({
   manageUrl: string | null;
   onRepaired: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
+  const t = useTranslations("repositories.mainRepository");
   const href = parseGitHubUrl(repository.htmlUrl);
   return (
     <div data-testid="workspace-repository-bound" className={`${panel} p-4`}>
@@ -835,8 +808,8 @@ function RetiredConnection({
   connected: boolean;
   onRepaired: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
-  const failureText = useWorkspaceSettingsFailure();
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -924,8 +897,8 @@ function ReapproveDefaultRef({
   repository: NonNullable<WorkspaceRepository["repository"]>;
   onRepaired: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
-  const failureText = useWorkspaceSettingsFailure();
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
   const navigate = useNavigate();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -978,7 +951,7 @@ function ReapproveDefaultRef({
 
 /** When the binding was written, as a date a person reads; the machine value stays in `dateTime`. */
 function BoundAt({ iso }: { iso: string }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
+  const t = useTranslations("repositories.mainRepository");
   const format = useFormatter();
   return (
     <time dateTime={iso} data-testid="workspace-repository-bound-at">
@@ -990,7 +963,7 @@ function BoundAt({ iso }: { iso: string }) {
 }
 
 function ManageLink({ manageUrl }: { manageUrl: string | null }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
+  const t = useTranslations("repositories.mainRepository");
   const href = parseGitHubUrl(manageUrl);
   if (href === null) return null;
   return (
@@ -1018,8 +991,8 @@ function RepositoryPicker({
   manageUrl: string | null;
   onBound: () => void;
 }) {
-  const t = useTranslations("workspaceSettings.mainRepository");
-  const failureText = useWorkspaceSettingsFailure();
+  const t = useTranslations("repositories.mainRepository");
+  const failureText = useRepositoriesFailure();
   const navigate = useNavigate();
   const filterId = useId();
   const [query, setQuery] = useState("");

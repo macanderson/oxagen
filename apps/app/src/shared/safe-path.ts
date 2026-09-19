@@ -275,6 +275,18 @@ export const routes = {
       names: q.names,
       cursor: q.cursor,
     }),
+  /**
+   * Repositories; its tabs are path segments (`/repositories/changes`), as the
+   * mockup's route names them, and the first tab is the bare path.
+   */
+  repositories: (
+    org: string,
+    ws: string,
+    tab?: "working-copies" | "changes" | "configuration",
+  ): SafePath =>
+    tab === undefined
+      ? pathOf(org, ws, "repositories")
+      : pathOf(org, ws, "repositories", tab),
   /** Steering; a tab, a kind, a page offset and a selected proposal are query values on the one route. */
   steering: (
     org: string,

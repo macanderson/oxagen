@@ -48,7 +48,7 @@ const attachGithubInstallation = vi.fn();
 const readWorkspaceRepositories = vi.fn();
 const linkWorkspaceRepository = vi.fn();
 const unlinkWorkspaceRepository = vi.fn();
-vi.mock("./workspace-settings-actions", () => ({
+vi.mock("./actions", () => ({
   readWorkspaceRepository,
   listInstallationRepositories,
   bindWorkspaceRepository,

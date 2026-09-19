@@ -1,25 +1,26 @@
 "use server";
-// What the Workspace settings dialog reads and writes: the workspace's main
-// repository, the repositories its GitHub App installation reaches, the bind
-// that turns the second into the first (MC spec §10.1–§10.2, #2967), and the
-// Repositories section's list, link and unlink (§10.1, §17 M0: "a second repo
-// can be linked and unlinked").
+// What the Repositories page reads and writes (MC spec §10.1, §10.2, §11.4):
+// the workspace's main repository, the repositories its GitHub App
+// installation reaches, the bind that turns the second into the first
+// (#2967), the list, link and unlink of every bound repository (§17 M0: "a
+// second repo can be linked and unlinked"), what each one holds under
+// `.oxagen/`, its production branch, the pull request that adds Oxagen to
+// it, and the Context PRs Oxagen has open.
 //
-// These are reads made on demand rather than through a DataSource port,
-// because the dialog is shell chrome. The organization layout renders the
-// chrome above every page and resolves an `OrgCtx`; the workspace is in the
-// URL, which only the client knows, and `list_installation_repositories` is a
-// live call to GitHub. A port read would therefore either have the wrong ctx
-// or charge every workspace page for a network round trip nobody asked for. So
-// the dialog asks when a person opens it, through this module, which resolves
-// its own viewer exactly as a write does (§3.3, and the `features` row of §2).
+// These are reads made on demand rather than through a DataSource port. Most
+// of them are live calls to GitHub through the workspace's installation
+// (`list_installation_repositories`, `get_repository_tree`), made per
+// repository once the page knows which repositories there are, and re-made
+// after every write on the page. So the page asks for each record when it
+// needs it, through this module, which resolves its own viewer exactly as a
+// write does (§3.3, and the `features` row of §2).
 //
 // `bind_main_repository` also has an action in features/onboarding: the
 // provisional banner binds the one repository the enrolling host reported.
 // This one binds the repository a person picked out of the installation. Each
 // feature owns its own actions (§2 admits no edge between two features), and
-// the two callers refuse differently — the banner stays where it is, the
-// dialog re-reads its panel — so the duplication is the seam, not an accident.
+// the two callers refuse differently (the banner stays where it is, the page
+// re-reads its panel), so the duplication is the seam, not an accident.
 import { repositoryInstallationAttach } from "@oxagen/oxagen/contracts/repository.installation.attach";
 import { repositoryInstallationCandidates } from "@oxagen/oxagen/contracts/repository.installation.candidates";
 import { repositoryInstallationList } from "@oxagen/oxagen/contracts/repository.installation.list";
@@ -28,11 +29,20 @@ import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { repositoryUnlink } from "@oxagen/oxagen/contracts/repository.unlink";
+import { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { repositoryProductionBranchSet } from "@oxagen/oxagen/contracts/repository.production_branch.set";
+import { repositoryInitPrOpen } from "@oxagen/oxagen/contracts/repository.init_pr.open";
+import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.list";
 import type {
   AttachedInstallation,
   GitHubInstallations,
+  InitPullRequest,
   InstallationRepositories,
   LinkedRepository,
+  ProductionBranchSet,
+  RepositoryChange,
+  RepositoryChanges,
+  RepositoryTree,
   UnlinkedRepository,
   WorkspaceRepositories,
   WorkspaceRepository,
@@ -61,7 +71,7 @@ export async function readWorkspaceRepository(
   const read = await kernelRead(ctx, {
     contract: repositoryMainGet,
     input: {},
-    page: "workspaceSettings",
+    page: "repositories",
   });
   return readToActionResult(read);
 }
@@ -81,7 +91,7 @@ export async function listInstallationRepositories(
   const read = await kernelRead(ctx, {
     contract: repositoryInstallationList,
     input: {},
-    page: "workspaceSettings",
+    page: "repositories",
   });
   return readToActionResult(read);
 }
@@ -134,7 +144,7 @@ export async function listGithubInstallations(
   const read = await kernelRead(ctx, {
     contract: repositoryInstallationCandidates,
     input: {},
-    page: "workspaceSettings",
+    page: "repositories",
   });
   return readToActionResult(read);
 }
@@ -181,7 +191,7 @@ export async function readWorkspaceRepositories(
   const read = await kernelRead(ctx, {
     contract: repositoryList,
     input: {},
-    page: "workspaceSettings",
+    page: "repositories",
   });
   return readToActionResult(read);
 }
@@ -244,4 +254,131 @@ export async function unlinkWorkspaceRepository(
         },
       }
     : result;
+}
+
+/**
+ * What one bound repository holds under `.oxagen/` on its production branch,
+ * read from GitHub now. A branch GitHub no longer has answers `head: null`
+ * rather than a refusal, because the repair is on the same page.
+ */
+export async function readRepositoryTree(
+  org: string,
+  ws: string,
+  bindingId: string,
+): Promise<ActionResult<RepositoryTree>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: repositoryTreeGet,
+    input: { bindingId },
+    page: "repositories",
+  });
+  return readToActionResult(read);
+}
+
+/**
+ * Confirm or change a repository's production branch. Naming the branch the
+ * binding already records writes nothing (`changed: false`); a branch GitHub
+ * does not have is `not_found: branch_not_found`. The production branch never
+ * moves on its own (§11.4): this is the only way it moves.
+ */
+export async function setProductionBranch(
+  org: string,
+  ws: string,
+  bindingId: string,
+  branch: string,
+): Promise<ActionResult<ProductionBranchSet>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, repositoryProductionBranchSet, {
+    bindingId,
+    branch,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          bindingId: result.value.bindingId,
+          fullName: result.value.fullName,
+          productionBranch: result.value.productionBranch,
+          previousBranch: result.value.previousBranch,
+          changed: result.value.changed,
+        },
+      }
+    : result;
+}
+
+/**
+ * Open the pull request that adds `.oxagen/` to a bound repository, from
+ * `oxagen/init` into its production branch, carrying the two files the person
+ * reviewed. Nothing reaches the production branch until a person merges it.
+ */
+export async function openInitPullRequest(
+  org: string,
+  ws: string,
+  input: {
+    bindingId: string;
+    governanceMode: "solo" | "team" | "regulated";
+    workspaceToml: string;
+    governanceToml: string;
+  },
+): Promise<ActionResult<InitPullRequest>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, repositoryInitPrOpen, input);
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          fullName: result.value.fullName,
+          branch: result.value.branch,
+          base: result.value.base,
+          pullRequest: result.value.pullRequest,
+          files: result.value.files,
+          reused: result.value.reused,
+        },
+      }
+    : result;
+}
+
+/** The newest proposals the Changes tab reads; the Steering page pages the rest. */
+const CHANGES_LIMIT = 50;
+
+/**
+ * The pull requests Oxagen has open or merged on this workspace's
+ * repositories, newest first. Every one today is a context record's Context
+ * PR: a proposal with no pull request yet is not a change on GitHub, so it
+ * stays on the Steering page and off this list.
+ */
+export async function readRepositoryChanges(
+  org: string,
+  ws: string,
+): Promise<ActionResult<RepositoryChanges>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: contextProposalList,
+    input: { limit: CHANGES_LIMIT, offset: 0 },
+    page: "repositories",
+  });
+  if (!read.ok) return readToActionResult(read);
+  const changes: RepositoryChange[] = [];
+  for (const proposal of read.value.proposals) {
+    if (proposal.pr === null || proposal.status === "proposed") continue;
+    changes.push({
+      proposalId: proposal.id,
+      statement: proposal.statement,
+      kind: "context_record",
+      pullRequest: proposal.pr,
+      openedBy: proposal.source,
+      status: proposal.status,
+      checks: proposal.checks,
+      openedAt: proposal.createdAt,
+    });
+  }
+  return {
+    ok: true,
+    value: {
+      changes,
+      open: changes.filter(
+        (change) => change.status !== "merged" && change.status !== "rejected",
+      ).length,
+    },
+  };
 }

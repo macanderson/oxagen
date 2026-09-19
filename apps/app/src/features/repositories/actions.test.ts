@@ -1,12 +1,12 @@
-// The Workspace settings reads and the bind, through the real viewer and
+// The Repositories page reads and the bind, through the real viewer and
 // kernel seams: the session and the kernel's invoke() are the only fakes, so
-// each case shows what the dialog gets back and whether the capability ran.
+// each case shows what the page gets back and whether the capability ran.
 //
 // The two reads are the point of this file. They are `kernelRead` from a
 // `"use server"` module — the one place in this app where a read is made on
 // demand rather than by a page through a port — so what is proven here is that
 // they resolve a viewer first, that neither mutates, and that every refusal
-// the seam can produce arrives as something the dialog can print.
+// the seam can produce arrives as something the page can print.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke, getSession, requireViewer } = vi.hoisted(() => ({
@@ -39,7 +39,7 @@ const {
   readWorkspaceRepositories,
   readWorkspaceRepository,
   unlinkWorkspaceRepository,
-} = await import("./workspace-settings-actions");
+} = await import("./actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -176,7 +176,7 @@ describe("readWorkspaceRepository", () => {
     expect(await readWorkspaceRepository("acme", "core-platform")).toEqual({
       ok: false,
       reason: "denied",
-      code: "org.admin",
+      code: "repository.read",
     });
   });
 
@@ -192,13 +192,13 @@ describe("readWorkspaceRepository", () => {
     });
   });
 
-  // The page failure says what is down: GitHub, not a store of ours.
-  it("names GitHub when the read fails for a reason the seam cannot classify (negative)", async () => {
+  // The page failure says what is down: the installation, not a store of ours.
+  it("names the installation when the read fails for a reason the seam cannot classify (negative)", async () => {
     invoke.mockRejectedValue(new Error("socket hang up"));
     expect(await readWorkspaceRepository("acme", "core-platform")).toEqual({
       ok: false,
       reason: "unavailable",
-      code: "github_unreachable",
+      code: "installation_unreachable",
     });
   });
 
@@ -373,7 +373,7 @@ describe("listGithubInstallations", () => {
     expect(await listGithubInstallations("acme", "core-platform")).toEqual({
       ok: false,
       reason: "denied",
-      code: "org.admin",
+      code: "repository.read",
     });
   });
 });
@@ -465,7 +465,7 @@ describe("readWorkspaceRepositories", () => {
     expect(await readWorkspaceRepositories("acme", "core-platform")).toEqual({
       ok: false,
       reason: "denied",
-      code: "org.admin",
+      code: "repository.read",
     });
   });
 

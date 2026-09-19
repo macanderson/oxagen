@@ -27,7 +27,6 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import workspaceSettingsMessages from "../../../messages/workspace-settings.json";
 
 import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
@@ -150,7 +149,6 @@ function renderShell(data: ShellData) {
         ...en,
         ...shellMessages,
         ...uiMessages,
-        ...workspaceSettingsMessages,
       }}
     >
       <ShellClient data={data} />
@@ -244,7 +242,7 @@ describe("the user-menu trigger", () => {
 });
 
 describe("sidebar", () => {
-  it("renders exactly the mockup's eight links with Agent IAM naming and the current page", () => {
+  it("renders exactly the mockup's ten links with Agent IAM naming and the current page", () => {
     renderShell(shellData());
     const sidebar = screen.getByRole("complementary", { name: "Sidebar" });
     const main = within(sidebar).getByRole("navigation", { name: "Main" });
@@ -255,6 +253,7 @@ describe("sidebar", () => {
       ["Tools", "/acme/core-platform/tools"],
       ["Skills", "/acme/core-platform/skills"],
       ["Steering", "/acme/core-platform/steering"],
+      ["Repositories", "/acme/core-platform/repositories"],
       ["Spend", "/acme/core-platform/spend"],
       ["Organization", "/acme"],
       ["Billing", "/acme/billing"],
@@ -347,6 +346,7 @@ describe("command menu", () => {
       "Tools",
       "Skills",
       "Steering",
+      "Repositories",
       "Spend",
       "Organization",
       "Roles",
