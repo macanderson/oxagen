@@ -10,6 +10,7 @@ import { effectiveBalance, createCreditLot } from "./credits";
 import { CREDIT_REASONS } from "./constants";
 import { logger } from "./logger";
 import { getOrgBillingSettings } from "./billing-settings";
+import { readRecordedCustomerId } from "./recorded-customer";
 
 // ---------------------------------------------------------------------------
 // Low balance detection
@@ -190,26 +191,19 @@ export async function maybeAutoReload(
     return { reloaded: false, reason: "invalid_reload_amount" };
   }
 
-  // Resolve the Stripe customer id from one of the org's subscription rows.
-  // There is no status filter and no ORDER BY here, so an org with several
-  // subscription rows may resolve any of them — safe only while every row for
-  // an org shares the same stripe_customer_id (see ensureStripeCustomer).
-  const subRow = await withTenantDb((tx) =>
-    tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.orgId, orgId),
-      columns: { stripeCustomerId: true },
-    }),
-  );
+  // The settings column is the authoritative customer id; a subscription row
+  // is only the fallback. After a Stripe account cutover the subscription
+  // rows can still name the previous account's customer, and charging that
+  // one fails the reload (readRecordedCustomerId).
+  const customerId = await readRecordedCustomerId(orgId);
 
-  if (!subRow?.stripeCustomerId) {
+  if (!customerId) {
     logger.warn(
       { orgId },
       "billing: auto-reload — no stripe customer found, cannot charge",
     );
     return { reloaded: false, reason: "no_stripe_customer" };
   }
-
-  const customerId = subRow.stripeCustomerId;
 
   // Determine payment method: settings override or customer default.
   let paymentMethodId: string | undefined =

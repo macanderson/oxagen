@@ -71,7 +71,7 @@ import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";
 import type { Theme } from "./theme";
 
-type Outcome = "saved" | "invalid" | "denied" | "failed";
+type Outcome = "saved" | "invalid" | "timeZoneInvalid" | "denied" | "failed";
 
 const tabClass =
   "inline-flex min-h-10 items-center whitespace-nowrap border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring aria-selected:border-brand aria-selected:text-foreground";
@@ -629,7 +629,16 @@ function PreferencesTab({ data }: { data: ShellData }) {
         // only when the zone actually moved, and at the URL already showing,
         // so the dialog stays open.
         if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
-      } else if (result.reason === "invalid") setOutcome("invalid");
+      }
+      // The Profile tab's "invalid" line names the display name, which this
+      // form does not carry, so reusing it here told a person their name was
+      // refused when they had changed a zone. `set_preferences` names the field
+      // it refused, so the zone reads its own line. The locale and theme
+      // selectors offer closed sets, so a refusal naming either is a bug in this
+      // form rather than something the person can act on, and it keeps the
+      // general line.
+      else if (result.reason === "invalid")
+        setOutcome(result.field === "timezone" ? "timeZoneInvalid" : "invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
     } catch {

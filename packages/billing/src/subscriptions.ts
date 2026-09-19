@@ -3,6 +3,7 @@ import { emitSecurityEvent } from "@oxagen/database/security";
 import { eq, and, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
+import { readRecordedCustomerId } from "./recorded-customer";
 import { getOrgSeatUsage, SeatLimitError } from "./seats";
 import { hasPlanUpgradeGrant } from "./grants";
 import type { BillingInterval, BillingProrationPreview } from "./provider";
@@ -1924,13 +1925,8 @@ export async function previewPlanChange(
 // ── Internal helper used by previewPlanChange ────────────────────────────────
 
 async function resolveCustomerId(orgId: string): Promise<string> {
-  const sub = await withTenantDb((tx) =>
-    tx.query.subscriptions.findFirst({
-      where: eq(schema.subscriptions.orgId, orgId),
-      columns: { stripeCustomerId: true },
-    }),
-  );
-  if (sub?.stripeCustomerId) return sub.stripeCustomerId;
+  const recorded = await readRecordedCustomerId(orgId);
+  if (recorded) return recorded;
   const { ensureStripeCustomer } = await import("./customers");
   return ensureStripeCustomer(orgId);
 }

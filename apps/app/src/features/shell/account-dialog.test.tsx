@@ -667,8 +667,29 @@ describe("Preferences", () => {
     });
     await user.click(screen.getByTestId("account-preferences-save"));
     expect(
-      await screen.findByTestId("account-preferences-invalid"),
+      await screen.findByTestId("account-preferences-timeZoneInvalid"),
     ).toBeTruthy();
+    expect(screen.queryByTestId("account-preferences-invalid")).toBeNull();
+  });
+
+  // The Profile tab's "invalid" line names the display name, which this form
+  // does not carry. A refused zone reading it told a person their name was
+  // rejected when they had changed a zone, so the outcome follows the field the
+  // write refused.
+  it("keeps the general line for a refusal this form cannot explain", async () => {
+    const { user } = await openDialog("preferences");
+    await screen.findByTestId("account-timezone");
+    savePreferences.mockResolvedValue({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "locale",
+    });
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(await screen.findByTestId("account-preferences-invalid")).toBeTruthy();
+    expect(
+      screen.queryByTestId("account-preferences-timeZoneInvalid"),
+    ).toBeNull();
   });
 });
 

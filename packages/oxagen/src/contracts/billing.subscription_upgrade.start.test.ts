@@ -50,6 +50,10 @@ describe("billing.subscription.upgrade.start capability", () => {
     ).not.toThrow();
   });
 
+  it("declares noBillingGate so a prepaid org at remaining = 0 can still upgrade (INV-27)", () => {
+    expect(billingSubscriptionUpgradeStart.noBillingGate).toBe(true);
+  });
+
   it("rejects an invalid output", () => {
     expect(() =>
       billingSubscriptionUpgradeStart.output.parse({

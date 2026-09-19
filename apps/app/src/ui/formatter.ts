@@ -26,5 +26,7 @@ export function useFormatter(): ReturnType<typeof next> {
   const format = next();
   const locale = useLocale();
   const zone = slot().zone;
-  return zone === undefined ? format : createFormatter({ locale, timeZone: zone });
+  return zone === undefined
+    ? format
+    : createFormatter({ locale, timeZone: zone });
 }
