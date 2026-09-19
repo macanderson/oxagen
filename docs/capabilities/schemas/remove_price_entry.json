@@ -192,11 +192,15 @@
             "type": "null"
           }
         ]
+      },
+      "fallbackPriced": {
+        "type": "boolean"
       }
     },
     "required": [
       "at",
-      "closed"
+      "closed",
+      "fallbackPriced"
     ],
     "additionalProperties": false
   }
