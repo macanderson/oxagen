@@ -124,19 +124,23 @@ export interface SessionFacts {
    */
   lastHookEvent?: string;
   /**
-   * The commit this session was first observed at, and the ref every later
-   * reconciliation measures from.
+   * The commit this session was first observed at in its current worktree,
+   * and the ref every later reconciliation measures from.
    *
    * Without it a reconciliation compares the worktree with the current
    * `HEAD`, which answers what is uncommitted now rather than what this
-   * session changed — so an agent that committed its work before the
+   * session changed, so an agent that committed its work before the
    * end-of-turn `Stop` left a clean tree and recorded none of it.
    *
-   * Set on the first git read for the session, which is the earliest this
-   * daemon knows the repository at all. A session that commits before that
-   * first read measures from after the commit; that is a smaller window than
-   * measuring from `HEAD` every time, and it is the honest limit of a
-   * baseline nobody recorded at the start.
+   * Set on the first git read for the session in a given `cwd`, which is the
+   * earliest this daemon knows that repository at all. Bound to the
+   * worktree: when `ensure` sees a new `cwd`, the baseline is cleared and
+   * the next read captures the new one. Persisted through `state` /
+   * `restore` so a daemon restart does not lose it mid-session.
+   *
+   * A session that commits before that first read measures from after the
+   * commit; that is a smaller window than measuring from `HEAD` every time,
+   * and it is the honest limit of a baseline nobody recorded at the start.
    */
   baselineCommit?: string;
 }
@@ -439,10 +443,21 @@ export class SessionRegistry {
     if (existing) {
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
-      if (facts.cwd !== undefined) existing.cwd = facts.cwd;
+      if (facts.cwd !== undefined) {
+        // The baseline is a commit in the previous worktree. Keeping it
+        // after a move makes reconciliation diff against a sha that may
+        // not exist here, fall back to the new HEAD, and drop work the
+        // session already committed in the new tree.
+        if (existing.cwd !== undefined && facts.cwd !== existing.cwd) {
+          delete existing.baselineCommit;
+        }
+        existing.cwd = facts.cwd;
+      }
       if (facts.pid !== undefined) existing.pid = facts.pid;
       if (facts.lastHookEvent !== undefined)
         existing.lastHookEvent = facts.lastHookEvent;
+      if (facts.baselineCommit !== undefined)
+        existing.baselineCommit = facts.baselineCommit;
       if (facts.ambient === false) existing.ambient = false;
       existing.lastSeenAt = now;
       this.noteAgent(existing, false);
@@ -633,6 +648,9 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
     ...(facts.lastHookEvent !== undefined
       ? { lastHookEvent: facts.lastHookEvent }
+      : {}),
+    ...(facts.baselineCommit !== undefined
+      ? { baselineCommit: facts.baselineCommit }
       : {}),
   };
 }

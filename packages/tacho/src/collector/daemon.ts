@@ -1200,9 +1200,11 @@ export async function startDaemon(
       // absent HEAD, so the reconciliation still runs. Its own status read
       // is what tells the two apart: a non-repository answers nothing and
       // seals no frame. There is simply no git context to note for either.
-      // The first read that answers fixes the session's baseline. Later reads
-      // measure from it rather than from a `HEAD` that the session's own
-      // commits keep moving.
+      // The first read that answers in this worktree fixes the session's
+      // baseline. Later reads measure from it rather than from a `HEAD`
+      // that the session's own commits keep moving. `ensure` clears the
+      // baseline when `cwd` changes, so a move to another repository
+      // captures that tree's HEAD instead of diffing against the old one.
       if (facts !== undefined && session.baselineCommit === undefined)
         session.baselineCommit = facts.head_sha;
       const at = now();

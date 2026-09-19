@@ -518,3 +518,50 @@ describe("tachod agent status", () => {
     );
   });
 });
+
+describe("session baselineCommit", () => {
+  it("survives state and restore so a restart keeps the reconciliation ref", () => {
+    const clock = clockAt("2026-09-15T10:00:00.000Z");
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const { record } = registry.ensure("sess-1", {
+      cwd: "/repo-a",
+      baselineCommit: "abc123",
+    });
+    expect(record.baselineCommit).toBe("abc123");
+    const state = JSON.parse(JSON.stringify(registry.state())) as RegistryState;
+    expect(state.sessions[0]?.baselineCommit).toBe("abc123");
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    restored.restore(state);
+    expect(restored.get("sess-1")?.baselineCommit).toBe("abc123");
+    expect(restored.get("sess-1")?.cwd).toBe("/repo-a");
+  });
+
+  it("clears the baseline when the session moves to another worktree", () => {
+    const clock = clockAt("2026-09-15T10:00:00.000Z");
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const { record } = registry.ensure("sess-1", {
+      cwd: "/repo-a",
+      baselineCommit: "aaa111",
+    });
+    expect(record.baselineCommit).toBe("aaa111");
+    registry.ensure("sess-1", { cwd: "/repo-b" });
+    expect(record.cwd).toBe("/repo-b");
+    expect(record.baselineCommit).toBeUndefined();
+    // Same worktree again leaves a newly set baseline alone.
+    record.baselineCommit = "bbb222";
+    registry.ensure("sess-1", { cwd: "/repo-b" });
+    expect(record.baselineCommit).toBe("bbb222");
+  });
+});
