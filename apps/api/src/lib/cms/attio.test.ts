@@ -238,11 +238,20 @@ describe("createAttioClient", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("retries a network failure and rethrows it when attempts run out", async () => {
+  it("retries a network failure on an assert and rethrows when attempts run out", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
     const client = makeClient(fetchMock as unknown as typeof fetch, {
       maxAttempts: 2,
     });
+    await expect(
+      client.assertCompany({ domain: "x.io", name: "X" }),
+    ).rejects.toThrow("ECONNRESET");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a note whose response was lost (it may already exist)", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
     await expect(
       client.createNote({
         parentObject: "people",
@@ -251,7 +260,80 @@ describe("createAttioClient", () => {
         content: "c",
       }),
     ).rejects.toThrow("ECONNRESET");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries a note Attio refused with a 5xx (nothing was created)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(503, { error: "down" }))
+      .mockResolvedValueOnce(jsonResponse(200, NOTE_OK));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    const out = await client.createNote({
+      parentObject: "people",
+      parentRecordId: "p",
+      title: "t",
+      content: "c",
+    });
+    expect(out).toEqual({ noteId: "note-1" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds every attempt with an abort signal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, COMPANY_OK));
+    const client = makeClient(fetchMock as unknown as typeof fetch, {
+      timeoutMs: 1234,
+    });
+    await client.assertCompany({ domain: "x.io", name: "X" });
+    const init = fetchMock.mock.calls[0]![1];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.signal.aborted).toBe(false);
+  });
+
+  it("removes a record's entry from a list when it has one", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          data: [
+            { list_id: "other-list", entry_id: "e-other" },
+            { list_id: "list-1", entry_id: "e-1" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, {}));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    const out = await client.removeListEntry({
+      listId: "list-1",
+      listSlug: "nurture",
+      parentObject: "people",
+      parentRecordId: "person-1",
+    });
+    expect(out).toEqual({ removed: true });
+    const [url1, init1] = fetchMock.mock.calls[0]!;
+    expect(url1).toBe(
+      `${ATTIO_BASE_URL}/objects/people/records/person-1/entries?limit=50`,
+    );
+    expect(init1.method).toBe("GET");
+    expect(init1.body).toBeUndefined();
+    const [url2, init2] = fetchMock.mock.calls[1]!;
+    expect(url2).toBe(`${ATTIO_BASE_URL}/lists/nurture/entries/e-1`);
+    expect(init2.method).toBe("DELETE");
+  });
+
+  it("reports removed:false when the record is not on the list", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { data: [] }));
+    const client = makeClient(fetchMock as unknown as typeof fetch);
+    const out = await client.removeListEntry({
+      listId: "list-1",
+      listSlug: "nurture",
+      parentObject: "people",
+      parentRecordId: "person-1",
+    });
+    expect(out).toEqual({ removed: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a 200 that carries no record id or note id", async () => {

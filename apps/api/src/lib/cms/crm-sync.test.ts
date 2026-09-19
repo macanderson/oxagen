@@ -59,6 +59,7 @@ import type { AttioClient } from "./attio";
 import {
   ASSET_TITLES,
   CONSUMER_EMAIL_DOMAINS,
+  NURTURE_LIST_ID,
   NURTURE_LIST_SLUG,
   __resetCrmClientForTests,
   buildLeadNote,
@@ -90,8 +91,8 @@ function lead(overrides: Partial<LeadRecord> = {}): LeadRecord {
     country: "UK",
     state: null,
     city: "London",
-    address1: null,
-    address2: null,
+    address1: "1 Analytical Engine Way",
+    address2: "Floor 2",
     referralSource: "word_of_mouth",
     trackingCode: "utm_source=hn",
     source: "demo",
@@ -112,6 +113,7 @@ function fakeClient(overrides: Partial<AttioClient> = {}) {
     createNote: vi.fn().mockResolvedValue({ noteId: "note-1" }),
     assertListEntry: vi.fn().mockResolvedValue({ entryId: "entry-1" }),
     appendListEntryValues: vi.fn().mockResolvedValue(undefined),
+    removeListEntry: vi.fn().mockResolvedValue({ removed: true }),
     ...overrides,
   };
   return client;
@@ -156,6 +158,7 @@ describe("helpers", () => {
     expect(note.content).toContain("Source: demo");
     expect(note.content).toContain("Page: /#demo");
     expect(note.content).toContain("Company size: 51-200");
+    expect(note.content).toContain("Address: 1 Analytical Engine Way, Floor 2");
     expect(note.content).toContain("Location: London, UK");
     expect(note.content).toContain("Heard about us via: word of mouth");
     expect(note.content).toContain("Tracking code: utm_source=hn");
@@ -175,6 +178,8 @@ describe("helpers", () => {
         companySize: null,
         jobTitle: null,
         mobilePhone: null,
+        address1: null,
+        address2: null,
         country: null,
         city: null,
         referralSource: null,
@@ -185,6 +190,7 @@ describe("helpers", () => {
     );
     expect(note.title).toBe("Website lead: website");
     expect(note.content).not.toContain("Page:");
+    expect(note.content).not.toContain("Address:");
     expect(note.content).not.toContain("Location:");
     expect(note.content).not.toContain("What they are building");
     expect(note.content).toContain("Marketing consent: no");
@@ -255,6 +261,26 @@ describe("syncLeadToCrm", () => {
     expect(h.sets[0]!.crmSyncedAt).toBeInstanceOf(Date);
   });
 
+  it("keeps an opted-out book lead off the nurture list and removes an existing entry", async () => {
+    h.selects.push([lead({ marketingConsent: false })]);
+    h.selects.push([{ edition: "field-manual" }]);
+    const client = fakeClient();
+    const out = await syncLeadToCrm("lead-1", client);
+    expect(out.status).toBe("synced");
+    expect(client.assertListEntry).not.toHaveBeenCalled();
+    expect(client.appendListEntryValues).not.toHaveBeenCalled();
+    expect(client.removeListEntry).toHaveBeenCalledWith({
+      listId: NURTURE_LIST_ID,
+      listSlug: NURTURE_LIST_SLUG,
+      parentObject: "people",
+      parentRecordId: "person-1",
+    });
+    // The person and the note still land: consent governs the nurture
+    // list, not whether sales can see who asked.
+    expect(client.assertPerson).toHaveBeenCalled();
+    expect(client.createNote).toHaveBeenCalled();
+  });
+
   it("keeps a demo-only lead (no access codes) off the nurture list", async () => {
     h.selects.push([lead()]);
     h.selects.push([]);
@@ -263,6 +289,7 @@ describe("syncLeadToCrm", () => {
     expect(out.status).toBe("synced");
     expect(client.assertListEntry).not.toHaveBeenCalled();
     expect(client.appendListEntryValues).not.toHaveBeenCalled();
+    expect(client.removeListEntry).not.toHaveBeenCalled();
   });
 
   it("ignores a code whose edition is unknown or null", async () => {

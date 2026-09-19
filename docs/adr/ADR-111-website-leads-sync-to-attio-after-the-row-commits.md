@@ -34,18 +34,25 @@ note on the person carrying the fields Attio has no attribute for, and, for
 a lead who asked for the book, adds the person to the "Inbound lead
 nurture" list with Asset set to each edition their access codes name and
 Branch left blank for the nurture sequence's day-3 job. A demo request is
-a conversation, not a nurture, so it stays off the list. The result is
+a conversation, not a nurture, so it stays off the list, and so does a lead
+who declined marketing contact: consent gates the list, and a consent
+withdrawn on a later form takes the person off it. The result is
 written back to the row: `crm_record_id` and `crm_synced_at` on
 success, `crm_sync_error` on failure. The client retries 429 and 5xx with
 backoff and honours `Retry-After`. `pnpm --filter @oxagen/api
 cms:crm-backfill` re-runs the same sync for every row with `crm_synced_at`
 null, oldest first, so an outage or a key rotation is recovered with one
-command instead of a database export.
+command instead of a database export. Every resubmission clears
+`crm_synced_at` (the record id stays), so a lead who comes back is pending
+again until the CRM has seen the new version.
 
 Person and company asserts are idempotent (Attio matches on the one unique
 attribute of each object), so a retry or a backfill cannot create a second
 record. A note is a new object each time, which is intended: a visitor who
-submits twice shows two notes, and the second one is the signal. The list
+submits twice shows two notes, and the second one is the signal. Within one
+sync, though, a note whose response was lost is not retried, because Attio
+offers no idempotency key for notes and the first attempt may have landed;
+the failure is recorded on the row and the backfill writes the note once. The list
 entry is asserted with no values and the asset is then appended with the
 PATCH form, because a PUT with values overwrites a multi-select (verified
 against the workspace on 2026-09-19): a second form must add its asset to

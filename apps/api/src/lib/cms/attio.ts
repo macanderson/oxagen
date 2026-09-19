@@ -10,7 +10,12 @@
  * only after the record asserts succeed.
  *
  * Transient failures (429 and 5xx) are retried with backoff, honouring
- * `Retry-After`. Anything else is an `AttioRequestError` carrying the status
+ * `Retry-After`, and every attempt carries a deadline so a stalled
+ * connection cannot hold the sync (or the backfill's loop) open. A lost
+ * connection is retried for the idempotent calls only: a `POST /notes`
+ * whose response never arrived may already have created the note, and
+ * Attio offers no idempotency key for it, so that one is reported instead
+ * of repeated. Anything else is an `AttioRequestError` carrying the status
  * and the response body, which the sync records on the lead row.
  *
  * API reference: https://docs.attio.com/rest-api/endpoint-reference
@@ -82,6 +87,17 @@ export interface AttioClient {
    */
   assertListEntry(input: AttioListEntryInput): Promise<{ entryId: string }>;
   appendListEntryValues(input: AttioListEntryValuesInput): Promise<void>;
+  /**
+   * Remove a record's entry from a list, if it has one. Lists are
+   * identified by id here because the record's entries endpoint reports
+   * list ids, not slugs.
+   */
+  removeListEntry(input: {
+    listId: string;
+    listSlug: string;
+    parentObject: "people" | "companies";
+    parentRecordId: string;
+  }): Promise<{ removed: boolean }>;
 }
 
 export interface AttioClientOptions {
@@ -94,6 +110,17 @@ export interface AttioClientOptions {
   backoffMs?: number;
   /** Injected for tests so retries do not sleep. */
   sleep?: (ms: number) => Promise<void>;
+  /** Deadline per attempt in ms. Default 15 000. */
+  timeoutMs?: number;
+}
+
+interface RequestOptions {
+  /**
+   * Whether a failed connection (no response at all) may be retried. True
+   * for asserts and updates, which match on a key; false for a create with
+   * no key, where the first attempt may have succeeded unseen.
+   */
+  retryOnNetworkError: boolean;
 }
 
 interface RecordResponse {
@@ -106,6 +133,10 @@ interface NoteResponse {
 
 interface EntryResponse {
   data?: { id?: { entry_id?: string } };
+}
+
+interface RecordEntriesResponse {
+  data?: Array<{ list_id?: string; entry_id?: string }>;
 }
 
 const RETRYABLE = (status: number) => status === 429 || status >= 500;
@@ -124,11 +155,13 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
   const backoffMs = opts.backoffMs ?? 250;
   const sleep =
     opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const timeoutMs = opts.timeoutMs ?? 15_000;
 
   async function request<T>(
-    method: "PUT" | "POST" | "PATCH",
+    method: "GET" | "PUT" | "POST" | "PATCH" | "DELETE",
     path: string,
     body: unknown,
+    { retryOnNetworkError }: RequestOptions = { retryOnNetworkError: true },
   ): Promise<T> {
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -141,12 +174,13 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
             "content-type": "application/json",
             accept: "application/json",
           },
-          body: JSON.stringify(body),
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (err) {
-        // Network failure: retry like a 5xx.
+        // No response at all (refused, reset, or past the deadline).
         lastError = err instanceof Error ? err : new Error(String(err));
-        if (attempt < maxAttempts) {
+        if (retryOnNetworkError && attempt < maxAttempts) {
           await sleep(backoffMs * 2 ** (attempt - 1));
           continue;
         }
@@ -221,15 +255,21 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
 
     async createNote(input) {
       const path = "/notes";
-      const res = await request<NoteResponse>("POST", path, {
-        data: {
-          parent_object: input.parentObject,
-          parent_record_id: input.parentRecordId,
-          title: input.title,
-          format: "plaintext",
-          content: input.content,
+      const res = await request<NoteResponse>(
+        "POST",
+        path,
+        {
+          data: {
+            parent_object: input.parentObject,
+            parent_record_id: input.parentRecordId,
+            title: input.title,
+            format: "plaintext",
+            content: input.content,
+          },
         },
-      });
+        // A note has no matching key: a lost response is not retried.
+        { retryOnNetworkError: false },
+      );
       const noteId = res.data?.id?.note_id;
       if (!noteId) {
         throw new AttioRequestError(200, path, "response carried no note_id");
@@ -258,6 +298,23 @@ export function createAttioClient(opts: AttioClientOptions): AttioClient {
       await request<EntryResponse>("PATCH", path, {
         data: { entry_values: input.values },
       });
+    },
+
+    async removeListEntry(input) {
+      const listPath = `/objects/${input.parentObject}/records/${encodeURIComponent(input.parentRecordId)}/entries?limit=50`;
+      const res = await request<RecordEntriesResponse>(
+        "GET",
+        listPath,
+        undefined,
+      );
+      const entry = (res.data ?? []).find((e) => e.list_id === input.listId);
+      if (!entry?.entry_id) return { removed: false };
+      await request<unknown>(
+        "DELETE",
+        `/lists/${encodeURIComponent(input.listSlug)}/entries/${encodeURIComponent(entry.entry_id)}`,
+        undefined,
+      );
+      return { removed: true };
     },
   };
 }

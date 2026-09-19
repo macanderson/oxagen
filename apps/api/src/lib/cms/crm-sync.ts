@@ -16,11 +16,12 @@
  *   - a note on the person carrying everything the form said that Attio has
  *     no attribute for: source, page, message, tracking code, company size,
  *     referral source, location, consent;
- *   - for a lead who asked for the book, an entry on the "Inbound lead
- *     nurture" list with Asset set to each edition they requested (read from
- *     their access codes) and Branch left blank, which is what the nurture
- *     sequence's day-3 job fills in. A second form appends its asset; it
- *     never resets the entry.
+ *   - for a lead who asked for the book and consented to marketing contact,
+ *     an entry on the "Inbound lead nurture" list with Asset set to each
+ *     edition they requested (read from their access codes) and Branch left
+ *     blank, which is what the nurture sequence's day-3 job fills in. A
+ *     second form appends its asset; it never resets the entry. A lead who
+ *     withdraws consent on a later form is taken off the list.
  *
  * Person and company asserts are idempotent, so a retry cannot duplicate
  * them. A note is a new object each time, so a resubmitted form adds a new
@@ -40,6 +41,8 @@ const { leads, bookAccessCodes } = schema;
 
 /** The Attio list the nurture sequence reads (People object). */
 export const NURTURE_LIST_SLUG = "inbound_lead_nurture";
+/** Its id: the record-entries endpoint reports lists by id, not slug. */
+export const NURTURE_LIST_ID = "657c389d-5dc4-4518-a81c-caea59cd7923";
 
 /**
  * The list's `asset` options, by edition. These are the option titles as
@@ -155,6 +158,10 @@ export function buildLeadNote(lead: LeadRecord): {
   add("Role", lead.jobTitle);
   add("Phone", lead.mobilePhone);
   add(
+    "Address",
+    [lead.address1, lead.address2].filter(Boolean).join(", ") || null,
+  );
+  add(
     "Location",
     [lead.city, lead.state, lead.country].filter(Boolean).join(", ") || null,
   );
@@ -269,8 +276,17 @@ export async function syncLeadToCrm(
     });
 
     // A demo request is a conversation, not a nurture; only book leads join
-    // the list. Assert first (keeps an existing entry intact), then append.
-    if (assets.length > 0) {
+    // the list, and only with consent. Assert first (keeps an existing
+    // entry intact), then append. A lead who has opted out is taken off the
+    // list, so a consent withdrawn on a later form is honoured too.
+    if (!lead.marketingConsent) {
+      await client.removeListEntry({
+        listId: NURTURE_LIST_ID,
+        listSlug: NURTURE_LIST_SLUG,
+        parentObject: "people",
+        parentRecordId: recordId,
+      });
+    } else if (assets.length > 0) {
       const { entryId } = await client.assertListEntry({
         list: NURTURE_LIST_SLUG,
         parentObject: "people",
