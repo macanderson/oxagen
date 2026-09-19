@@ -1895,8 +1895,23 @@ async function rollupFiles(
     })
     .from(schema.tachoSessionFiles)
     .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
+  //
+  // A repo-relative identity is only an identity inside one worktree. One
+  // session can work in two repositories that both hold `src/a.ts`, and
+  // keying on the relative form alone would hand the second repository's
+  // reconciliation the first repository's row and merge two different files
+  // into one. So a stored row joins the map only when its absolute path sits
+  // under the root this batch is measured against; a row from elsewhere
+  // keeps its own absolute path and stays a separate row, which is what it
+  // is. With no root to measure against nothing is relative and the question
+  // does not arise.
   const pathByIdentity = new Map<string, string>();
+  const inThisWorktree = (path: string): boolean =>
+    root === undefined ||
+    !path.startsWith("/") ||
+    repoRelativePathOf(path, root) !== undefined;
   for (const row of stored) {
+    if (!inThisWorktree(row.path)) continue;
     pathByIdentity.set(row.repoRelativePath ?? row.path, row.path);
     pathByIdentity.set(identityOf(row.path), row.path);
   }
@@ -1963,9 +1978,16 @@ async function rollupFiles(
           // A commit moves HEAD, and the lines the agent wrote are then in
           // HEAD rather than in the diff, so the next observation of that
           // path is honestly zero. Assigning it would erase work the record
-          // already watched happen. GREATEST keeps the largest single
-          // observation, which is a number one reconciliation actually
-          // made, and it never doubles a repeated one.
+          // already watched happen.
+          //
+          // Within an observation the two counts are assigned together,
+          // because they are one measurement of one worktree against HEAD,
+          // not two running totals. Taking the larger of each column on its
+          // own crossed observations: 12/3 followed by 2/10 left 12/10, a
+          // state git never reported and nobody could have produced. The
+          // envelope contract says these are assigned rather than
+          // accumulated, and this is the same reasoning `observedStatus`
+          // below already follows.
           //
           // Left alone when this batch carried no observation of the path,
           // so an attested frame arriving later does not zero a count that
@@ -1973,8 +1995,8 @@ async function rollupFiles(
           ...(entry.observed === undefined
             ? {}
             : {
-                linesAdded: sql`GREATEST(${schema.tachoSessionFiles.linesAdded}, ${entry.observed.linesAdded})`,
-                linesRemoved: sql`GREATEST(${schema.tachoSessionFiles.linesRemoved}, ${entry.observed.linesRemoved})`,
+                linesAdded: entry.observed.linesAdded,
+                linesRemoved: entry.observed.linesRemoved,
                 // Assigned, not kept: the latest observation is the current
                 // condition of the path, and a file created and then deleted
                 // is deleted.
@@ -2025,7 +2047,13 @@ async function refreshSessionTitle(
       .where(
         and(
           eq(schema.tachoSessionFiles.sessionId, sessionId),
-          sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
+          // A file changed by a shell command, a formatter or a build has
+          // no attested write, edit or delete, only the `observed_status`
+          // the reconciliation gave it. Counting the attested columns alone
+          // titled a run that plainly changed files as though it had
+          // changed none, and fell back to the command count.
+          sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
+              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`,
         ),
       ),
     tx

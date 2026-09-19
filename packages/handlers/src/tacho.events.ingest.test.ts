@@ -957,7 +957,13 @@ describe("ingest_tacho_events", () => {
    * so the same numbers repeated are the same state observed again, not more
    * work done.
    */
-  function reconciledSession(times: number): TachoEvent[] {
+  function reconciledSession(
+    times: number,
+    editedCounts: { lines_added: number; lines_removed: number } = {
+      lines_added: 12,
+      lines_removed: 3,
+    },
+  ): TachoEvent[] {
     const context = {
       cwd: "/home/dev/proj",
       worktree_path: "/home/dev/proj",
@@ -969,8 +975,7 @@ describe("ingest_tacho_events", () => {
         path: "/home/dev/proj/src/edited.ts",
         repo_relative_path: "src/edited.ts",
         status: "modified",
-        lines_added: 12,
-        lines_removed: 3,
+        ...editedCounts,
       },
       {
         // Untracked, so git reports it in `status` and in no diff at all.
@@ -1080,11 +1085,13 @@ describe("ingest_tacho_events", () => {
     expect(sets.length).toBeGreaterThan(0);
     for (const set of sets) {
       for (const column of ["linesAdded", "linesRemoved"]) {
-        const query = dialect.sqlToQuery(set[column] as SQL);
-        // GREATEST, never `+`: a second batch reporting the same numbers
-        // must not double them.
-        expect(query.sql, column).toContain("GREATEST");
-        expect(query.sql, column).not.toContain(" + ");
+        // A plain number, not an expression over the stored one: a second
+        // batch reporting the same measurement must not double it, and the
+        // pair must stay the pair git reported. Taking the larger of each
+        // column on its own was the earlier reading of "do not double", and
+        // it let 12/3 followed by 2/10 settle at 12/10, which no
+        // reconciliation ever saw.
+        expect(typeof set[column], column).toBe("number");
       }
       // The counters on the same row DO accumulate, which is the contrast
       // this assertion exists to hold.

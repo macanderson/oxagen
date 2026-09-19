@@ -90,16 +90,44 @@ const TIER_WORDS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Which classes each provider actually ships, so a class is only ever read
+ * against the vocabulary of the vendor that has one.
+ *
+ * A provider absent from here has no classes this codebase has confirmed,
+ * which is the same thing the table above says about a word it does not
+ * carry: no class established, not no class.
+ */
+const TIERS_BY_PROVIDER: Readonly<Record<string, readonly string[]>> = {
+  anthropic: ["haiku", "sonnet", "opus", "fable"],
+  openai: ["mini", "nano", "pro"],
+  google: ["flash", "flash-lite", "pro", "ultra"],
+};
+
+/**
  * The capability class the id names, or undefined. Tokens are matched whole,
  * so a class word buried inside a longer word is not a match.
+ *
+ * The class is read against the vendor that ships it, never on the word
+ * alone. A custom or proxied id can carry a token that looks like a class —
+ * `internal/pro`, `vendor/flash-model` — and reporting `pro` for it would
+ * put a vendor's capability class on a Run row for a model whose vendor the
+ * record never established. So an unrecognised provider yields nothing, and
+ * a recognised one yields only from its own vocabulary: `anthropic/…-flash`
+ * is not a Google class.
  */
 export function modelTierOf(modelId: string): string | undefined {
+  const provider = modelProviderOf(modelId);
+  const vocabulary =
+    provider === undefined ? undefined : TIERS_BY_PROVIDER[provider];
+  if (vocabulary === undefined) return undefined;
   const name = modelSegment(modelId);
   if (name.length === 0) return undefined;
   for (const [needle, tier] of COMPOUND_TIERS)
-    if (name.includes(needle)) return tier;
+    if (name.includes(needle) && vocabulary.includes(tier)) return tier;
   for (const token of name.split(/[^a-z0-9]+/)) {
-    if (Object.hasOwn(TIER_WORDS, token)) return TIER_WORDS[token];
+    if (!Object.hasOwn(TIER_WORDS, token)) continue;
+    const tier = TIER_WORDS[token];
+    if (tier !== undefined && vocabulary.includes(tier)) return tier;
   }
   return undefined;
 }

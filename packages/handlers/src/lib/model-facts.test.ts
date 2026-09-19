@@ -46,6 +46,22 @@ describe("modelTierOf", () => {
     expect(modelTierOf("gpt-5")).toBeUndefined();
   });
 
+  it("names no class for a vendor the record never established", () => {
+    // A proxy or an internal alias can carry a word that looks like a
+    // class. Reporting it would put a vendor's capability class on a Run
+    // row for a model whose vendor nothing here recognises.
+    expect(modelTierOf("internal/pro")).toBeUndefined();
+    expect(modelTierOf("vendor/flash-model")).toBeUndefined();
+  });
+
+  it("reads a class only against the vocabulary of its own vendor", () => {
+    // `flash` is Google's word. An Anthropic id carrying it names no
+    // Anthropic class, and saying `flash` would describe the model by a
+    // ladder its vendor does not use.
+    expect(modelTierOf("anthropic/claude-flash-9")).toBeUndefined();
+    expect(modelTierOf("google/gemini-2.5-flash")).toBe("flash");
+  });
+
   it("answers undefined for an id it does not know", () => {
     expect(modelTierOf("some-internal-model-v3")).toBeUndefined();
   });
