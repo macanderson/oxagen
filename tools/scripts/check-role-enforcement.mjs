@@ -210,7 +210,9 @@ function main() {
         "removed again) as an already-known gap instead of failing the build:",
     );
     for (const g of staleBaselineEntries) {
-      console.error(`  - ${g.stem} -> ${g.name} (remove from ROLE_ENFORCEMENT_BASELINE)`);
+      console.error(
+        `  - ${g.stem} -> ${g.name} (remove from ROLE_ENFORCEMENT_BASELINE)`,
+      );
     }
   }
 
