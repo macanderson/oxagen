@@ -115,10 +115,10 @@ export default function HomePage(): ReactNode {
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Set each agent's identity, authority, budget, tools, and skills.
-              Inspect its recorded work in Mission Control. These docs cover the
-              CLI, REST API, and MCP surfaces whose capability calls pass
-              through the{" "}
+              Set each agent&apos;s identity, authority, budget, tools, and
+              skills. Inspect its recorded work in Mission Control. These docs
+              cover the CLI, REST API, and MCP surfaces whose capability calls
+              pass through the{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
