@@ -93,6 +93,36 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // actually been received.
   const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
 
+  // A reload is the one way out of this dialog the vault above cannot survive,
+  // and the set is already the only one that works: Better Auth voided the old
+  // codes the moment it issued these, and it keeps only hashes of the new ones,
+  // so nothing anywhere can show them a second time.
+  //
+  // The review that found this asked for the pending set to be held in
+  // server-backed state until it is acknowledged. That is the wrong trade, and
+  // deliberately not what this does. It would put a full second factor bypass
+  // in Oxagen's own database in recoverable form, for as long as nobody presses
+  // a button, replicated to whichever data plane the organisation is on
+  // (ADR-042), in its backups, and inside the very export bundle this dialog
+  // queues. Losing an unsaved set costs one more rotation, with the password,
+  // by someone who is signed in and still holds the authenticator that got them
+  // here. Storing the codes costs the factor itself, to anyone who reaches the
+  // row. The cheaper failure is the one to keep.
+  //
+  // So the loss is made deliberate instead of silent: while a set is unsaved,
+  // the browser asks before it unloads the page. `preventDefault` is the
+  // specified opt-in; the wording is the browser's and cannot be set.
+  useEffect(() => {
+    if (!heldCodes) return;
+    const ask = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => {
+      window.removeEventListener("beforeunload", ask);
+    };
+  }, [heldCodes]);
+
   // The rotation itself is held here too, and for the same reason the codes
   // are: every state the Security tab owns is destroyed by Cancel, by a tab
   // switch and by a close, and a rotation that is in flight must survive all
@@ -275,6 +305,12 @@ function ProfileTab({ data }: { data: ShellData }) {
   const [pending, setPending] = useState(false);
 
   /**
+   * Counts edits, so a save that lands late can tell whether the field it is
+   * about to overwrite is still the field that was sent. See `onSubmit`.
+   */
+  const editsRef = useRef(0);
+
+  /**
    * "Saved." describes the draft that was submitted, so the first edit after a
    * save makes it false: the field in front of the person now holds a change
    * that is not persisted, under a line claiming it is. A refusal is left
@@ -283,12 +319,14 @@ function ProfileTab({ data }: { data: ShellData }) {
    */
   function editDraft(apply: () => void) {
     if (outcome === "saved") setOutcome(null);
+    editsRef.current += 1;
     apply();
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
+    const sentAt = editsRef.current;
     setOutcome(null);
     setPending(true);
     try {
@@ -298,8 +336,17 @@ function ProfileTab({ data }: { data: ShellData }) {
       // it is given.
       const result = await updateProfile(org.slug, { displayName });
       if (result.ok) {
-        setDisplayName(result.value.displayName ?? displayName);
-        setOutcome("saved");
+        // Only if the field is still the one that was sent. A save is a round
+        // trip, and typing does not stop while it is in flight: adopting the
+        // server's echo unconditionally deletes every character entered since
+        // the button was pressed, and then says "Saved." about the value it
+        // just put back — the one claim the person has no reason to doubt and
+        // every reason to act on. When the draft has moved on, the newer text
+        // stands, and nothing claims it is saved, which is the truth.
+        if (editsRef.current === sentAt) {
+          setDisplayName(result.value.displayName ?? displayName);
+          setOutcome("saved");
+        }
         // The shell renders the same person: the top bar's user menu reads
         // `data.viewer`, resolved on the server from the session. A re-render
         // of the server tree at the URL already showing, not a navigation:
@@ -493,6 +540,8 @@ function PreferencesTab({ data }: { data: ShellData }) {
   const [state, setState] = useState<PrefsState>({ kind: "loading" });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [pending, setPending] = useState(false);
+  /** Edit counter, for the same reason as the Profile tab's: see `onSubmit`. */
+  const editsRef = useRef(0);
 
   useEffect(() => {
     let live = true;
@@ -537,6 +586,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
 
   function edit(patch: Partial<PreferencesDraft>) {
     if (outcome === "saved") setOutcome(null);
+    editsRef.current += 1;
     setState((s) =>
       s.kind === "ready"
         ? { kind: "ready", draft: { ...s.draft, ...patch } }
@@ -547,13 +597,23 @@ function PreferencesTab({ data }: { data: ShellData }) {
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending || state.kind !== "ready") return;
+    const sentAt = editsRef.current;
     setOutcome(null);
     setPending(true);
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
-        setState({ kind: "ready", draft: result.value });
-        setOutcome("saved");
+        // Only if the form is still the one that was sent, and for the same
+        // reason as the Profile tab: a selection made while the save was in
+        // flight is a decision the person has taken, and replacing it with the
+        // older answer under a "Saved." line hides that it was thrown away.
+        // It bites harder here, because the theme selector commits on change:
+        // the page would already be following the newer theme while the form
+        // reverted to the older one and called it saved.
+        if (editsRef.current === sentAt) {
+          setState({ kind: "ready", draft: result.value });
+          setOutcome("saved");
+        }
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
