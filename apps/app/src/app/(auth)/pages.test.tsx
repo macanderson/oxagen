@@ -21,6 +21,7 @@ vi.mock("@/features/auth", async () => ({
   ForgotPasswordForm: () => <form />,
   LoginForm: () => <form />,
   OAuthButtons: () => null,
+  oauthQueryOutcome: () => null,
   ResetPasswordForm: () => <form />,
   SignupForm: () => <form />,
   TwoFactorForm: () => <form />,
