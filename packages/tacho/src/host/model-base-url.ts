@@ -11,6 +11,21 @@
  *     way, so one value covers both. Managed settings are applied after user
  *     settings and win, which is why the state below reports a managed value
  *     that shadows ours instead of pretending the write took effect.
+ *
+ *     The base URL alone breaks Claude Code. Claude Code defers its MCP tool
+ *     catalog behind a `ToolSearch` tool, and it turns that off the moment
+ *     `ANTHROPIC_BASE_URL` is not a first-party Anthropic host, on the theory
+ *     that an unknown proxy may not forward `tool_reference` blocks. With it
+ *     off, every request carries the whole catalog. On a machine with a few
+ *     hundred MCP tools that is ~500k tokens before the first word of the
+ *     prompt, which is over the context window: Claude Code auto-compacts,
+ *     the next turn is just as large, and after three rounds it stops the
+ *     session with `autocompact_thrashing`. `ENABLE_TOOL_SEARCH=true` is
+ *     Claude Code's own override for a proxy that does forward the blocks,
+ *     and the loopback proxy forwards every request byte and header as it
+ *     received them, so apply writes it beside the base URL and restore
+ *     takes it out again. A value the user already set that enables the
+ *     search (`true`, `auto`, `auto:N`) is left alone.
  *   - Codex reads the top-level `openai_base_url` key of `~/.codex/config.toml`
  *     as the base URL of its built-in `openai` provider. That provider cannot
  *     be redefined under `model_providers`, and the key applies to both the
@@ -82,6 +97,13 @@ export interface ModelBaseUrlHarnessState {
    * user settings, so when this is set the harness does not use our value.
    */
   shadowedBy?: { file: string; value: string };
+  /**
+   * Claude Code only: what `env.ENABLE_TOOL_SEARCH` holds now, and whether
+   * that value keeps tool search on behind the proxy. `false` with `ours`
+   * true means the base URL is set but every request carries the whole
+   * tool catalog, which is the shape that thrashed autocompact.
+   */
+  toolSearch?: { current: string | null; enabled: boolean };
 }
 
 export interface ModelBaseUrlState {
@@ -90,7 +112,21 @@ export interface ModelBaseUrlState {
 
 const SIDECAR_SCHEMA = "oxagen.model-base-url.v1";
 const CLAUDE_KEY = "ANTHROPIC_BASE_URL";
+/** Claude Code's override that keeps tool search on behind a non-Anthropic host. */
+export const CLAUDE_TOOL_SEARCH_KEY = "ENABLE_TOOL_SEARCH";
+const CLAUDE_TOOL_SEARCH_VALUE = "true";
 const CODEX_KEY = "openai_base_url";
+
+/**
+ * Whether a `ENABLE_TOOL_SEARCH` value keeps the search on. Claude Code reads
+ * `true`, `auto` and `auto:N`; anything else, and an absent key, turns it off
+ * once the base URL is not an Anthropic host.
+ */
+export function claudeToolSearchEnabled(
+  value: string | null | undefined,
+): boolean {
+  return typeof value === "string" && /^(true|auto(:\d+)?)$/i.test(value);
+}
 
 /** The base URL each harness is given for a port. */
 export function modelBaseUrlFor(
@@ -148,6 +184,13 @@ interface Sidecar {
   previous_line: string | null;
   /** Claude Code only: whether apply had to create the `env` object. */
   created_env: boolean;
+  /**
+   * Claude Code only: the `ENABLE_TOOL_SEARCH` value apply displaced, or null
+   * when the key was absent. Absent from the sidecar when apply never wrote
+   * the key, either because the user's own value already enabled the search
+   * or because the sidecar predates the key, and restore then leaves it be.
+   */
+  previous_tool_search?: string | null;
 }
 
 function readSidecar(path: string): Sidecar | undefined {
@@ -169,6 +212,14 @@ function readSidecar(path: string): Sidecar | undefined {
       previous_line:
         typeof parsed.previous_line === "string" ? parsed.previous_line : null,
       created_env: parsed.created_env === true,
+      ...("previous_tool_search" in parsed
+        ? {
+            previous_tool_search:
+              typeof parsed.previous_tool_search === "string"
+                ? parsed.previous_tool_search
+                : null,
+          }
+        : {}),
     };
   } catch {
     return undefined;
@@ -263,6 +314,11 @@ function envOf(settings: JsonObject): JsonObject | undefined {
 
 function claudeValue(settings: JsonObject): string | null {
   const value = envOf(settings)?.[CLAUDE_KEY];
+  return typeof value === "string" ? value : null;
+}
+
+function claudeToolSearchValue(settings: JsonObject): string | null {
+  const value = envOf(settings)?.[CLAUDE_TOOL_SEARCH_KEY];
   return typeof value === "string" ? value : null;
 }
 
@@ -412,13 +468,20 @@ function describe(
   const file = fileFor(harness, options.home);
   const backup = sidecarFor(file);
   const expected = modelBaseUrlFor(harness, options.port);
-  const current = currentValue(harness, file, readTextIfExists(file));
+  const text = readTextIfExists(file);
+  const current = currentValue(harness, file, text);
   const sidecar = readSidecar(backup);
   const shadow =
     harness === "claude-code"
       ? managedShadow(
           internals.managedSettingsFile ?? claudeManagedSettingsPath(),
           expected,
+        )
+      : undefined;
+  const toolSearch =
+    harness === "claude-code"
+      ? claudeToolSearchValue(
+          text === undefined ? {} : parseSettings(text, file),
         )
       : undefined;
   return {
@@ -432,6 +495,14 @@ function describe(
     backup,
     changed,
     ...(shadow !== undefined ? { shadowedBy: shadow } : {}),
+    ...(harness === "claude-code"
+      ? {
+          toolSearch: {
+            current: toolSearch ?? null,
+            enabled: claudeToolSearchEnabled(toolSearch),
+          },
+        }
+      : {}),
   };
 }
 
@@ -448,6 +519,9 @@ function applyOne(
   let previous: string | null = null;
   let previousLine: string | null = null;
   let createdEnv = false;
+  // Set only when this apply writes `ENABLE_TOOL_SEARCH`; a value the user
+  // already had that enables the search is not ours to displace or restore.
+  let previousToolSearch: string | null | undefined;
   // Our value with no sidecar: somebody wrote it by hand, or the sidecar was
   // lost. The file before Oxagen is unknowable then, so restore must never
   // treat this text as an original to put back.
@@ -456,13 +530,26 @@ function applyOne(
   if (harness === "claude-code") {
     const settings = parseSettings(text, file);
     const current = claudeValue(settings);
-    if (current === url && existing !== undefined) return false;
+    const toolSearch = claudeToolSearchValue(settings);
+    // A sidecar from before the tool-search key has the base URL in place and
+    // the catalog still inlined, so that host is re-applied rather than
+    // reported unchanged.
+    const needsToolSearch = !claudeToolSearchEnabled(toolSearch);
+    if (current === url && !needsToolSearch && existing !== undefined)
+      return false;
     const env = envOf(settings);
     createdEnv = env === undefined;
     orphan = existing === undefined && isModelProxyBaseUrl(harness, current);
     if (current !== null && !isModelProxyBaseUrl(harness, current))
       previous = current;
-    settings["env"] = { ...(env ?? {}), [CLAUDE_KEY]: url };
+    if (needsToolSearch) previousToolSearch = toolSearch;
+    settings["env"] = {
+      ...(env ?? {}),
+      [CLAUDE_KEY]: url,
+      ...(needsToolSearch
+        ? { [CLAUDE_TOOL_SEARCH_KEY]: CLAUDE_TOOL_SEARCH_VALUE }
+        : {}),
+    };
     next = serializeLike(text, settings);
   } else {
     const lines = splitLines(text ?? "");
@@ -487,7 +574,16 @@ function applyOne(
   // A re-apply (a new port) keeps what the first apply remembered: the
   // original is the file before Oxagen touched it, not before this call.
   const sidecar: Sidecar = existing
-    ? { ...existing, written_sha256: sha256(next) }
+    ? {
+        ...existing,
+        written_sha256: sha256(next),
+        // The first apply that wrote the key is the one whose displaced
+        // value restore puts back; a later re-apply keeps that record.
+        ...(existing.previous_tool_search === undefined &&
+        previousToolSearch !== undefined
+          ? { previous_tool_search: previousToolSearch }
+          : {}),
+      }
     : {
         schema: SIDECAR_SCHEMA,
         harness,
@@ -504,6 +600,9 @@ function applyOne(
         previous,
         previous_line: previousLine,
         created_env: createdEnv,
+        ...(previousToolSearch !== undefined
+          ? { previous_tool_search: previousToolSearch }
+          : {}),
       };
   // The sidecar lands first: a crash between the two writes leaves a backup
   // with nothing to restore, never a displaced value with no record of it.
@@ -548,17 +647,31 @@ function restoreOne(
   if (harness === "claude-code") {
     const settings = parseSettings(text, file);
     const env = envOf(settings);
-    if (
-      env !== undefined &&
-      isModelProxyBaseUrl(harness, claudeValue(settings))
-    ) {
+    if (env !== undefined) {
       const rest: JsonObject = { ...env };
-      if (sidecar?.previous != null) rest[CLAUDE_KEY] = sidecar.previous;
-      else delete rest[CLAUDE_KEY];
-      if (Object.keys(rest).length === 0 && sidecar?.created_env === true)
-        delete settings["env"];
-      else settings["env"] = rest;
-      next = serializeLike(text, settings);
+      let touched = false;
+      if (isModelProxyBaseUrl(harness, claudeValue(settings))) {
+        if (sidecar?.previous != null) rest[CLAUDE_KEY] = sidecar.previous;
+        else delete rest[CLAUDE_KEY];
+        touched = true;
+      }
+      // Only the value apply wrote comes out. A user who changed it since,
+      // or set it before Oxagen did, keeps it.
+      if (
+        sidecar?.previous_tool_search !== undefined &&
+        rest[CLAUDE_TOOL_SEARCH_KEY] === CLAUDE_TOOL_SEARCH_VALUE
+      ) {
+        if (sidecar.previous_tool_search !== null)
+          rest[CLAUDE_TOOL_SEARCH_KEY] = sidecar.previous_tool_search;
+        else delete rest[CLAUDE_TOOL_SEARCH_KEY];
+        touched = true;
+      }
+      if (touched) {
+        if (Object.keys(rest).length === 0 && sidecar?.created_env === true)
+          delete settings["env"];
+        else settings["env"] = rest;
+        next = serializeLike(text, settings);
+      }
     }
   } else {
     const lines = splitLines(text);

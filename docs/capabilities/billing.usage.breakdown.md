@@ -1,4 +1,4 @@
-# billing.usage.breakdown
+# get_usage_breakdown
 
 **Domain:** billing
 **Mode:** sync
@@ -73,5 +73,5 @@ explicitly.
 ## Surfaces
 
 - **API:** `GET /v1/:org/:workspace/billing/usage/breakdown?start&end&workspace_id`
-- **MCP:** tool `billing.usage.breakdown`
+- **MCP:** tool `get_usage_breakdown`
 - **App:** `/{org}/billing/usage` dashboard

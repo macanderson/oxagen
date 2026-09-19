@@ -1,4 +1,4 @@
-# integration.sync
+# sync_integration
 
 Trigger synchronization of a plugin instance.
 

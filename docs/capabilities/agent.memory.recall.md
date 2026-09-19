@@ -1,4 +1,4 @@
-# agent.memory.recall
+# recall_memory
 
 **Domain:** agent
 **Mode:** sync

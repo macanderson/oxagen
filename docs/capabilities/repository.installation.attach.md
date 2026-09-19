@@ -1,4 +1,4 @@
-# repository.installation.attach
+# attach_github_installation
 
 Make one of the workspace's candidate GitHub App installations the one it acts through.
 

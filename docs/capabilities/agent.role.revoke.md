@@ -1,4 +1,4 @@
-# agent.role.revoke (`revoke_agent_role`)
+# revoke_agent_role
 
 **Domain:** agent
 **Mode:** sync

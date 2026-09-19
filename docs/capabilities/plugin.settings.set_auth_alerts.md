@@ -1,4 +1,4 @@
-# plugin.settings.set_auth_alerts
+# set_auth_alerts
 
 **Domain:** plugin
 **Mode:** sync

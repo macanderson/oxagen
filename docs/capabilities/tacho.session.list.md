@@ -1,4 +1,4 @@
-# tacho.session.list
+# list_tacho_sessions
 
 List Tacho sessions in this workspace, newest first. Root sessions only unless `includeChildren` is set; a subagent is its own chain linked by `parentSessionUuid`. Filter by host, outcome, or start time. Cursor-paginated.
 

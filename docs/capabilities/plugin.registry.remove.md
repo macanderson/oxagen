@@ -1,4 +1,4 @@
-# plugin.registry.remove
+# remove_plugin_registry
 
 **Domain:** plugin
 **Mode:** sync

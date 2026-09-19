@@ -1,5 +1,7 @@
 # Oxagen Mission Control: build plan
 
+> **Historical planning snapshot (September 2026):** The measurements and delivery instructions below predate the completed app rebuild. Use [the current app architecture](../../apps/app/ARCHITECTURE.md) and [Mission Control spec](../specs/mission-control/spec.md) when implementing changes.
+
 | | |
 |---|---|
 | **Status** | Draft |

@@ -1,4 +1,4 @@
-# conversation.chat
+# post_conversation_message
 
 **Domain:** conversation
 **Mode:** sync

@@ -1,4 +1,4 @@
-# repo.metrics
+# get_repo_metrics
 
 Get sync statistics and metrics for a repository connection.
 

@@ -65,14 +65,13 @@ await tx.execute(
 | Workspace-nullable | `org_id = GUC.org AND (workspace_id IS NULL OR workspace_id = GUC.ws)` | `iam.principals`, `security.security_events` |
 | Org-only | `org_id = GUC.org` | `billing.*`, `org.org_users`, `workspace.workspaces` |
 | Workspace-only | `workspace_id = GUC.ws` (no `org_id` column) | `workspace.workspace_users` |
-| Standard-or-builtin | `org_id = GUC.org AND workspace_id = GUC.ws`, or nil-UUID sentinel rows (platform builtins readable by all tenants) | `agent.skills`, `agent.skill_versions` |
 | Global identity | No policy (Better Auth managed) | `auth.users`, `auth.sessions` |
 
-The RLS manifest (`packages/database/src/tenant-policy.manifest.ts`) covers 77 tables. The count grows as tables are added, and the manifest file is the authoritative reference. A CI test asserts that every `orgScopeMixin` table has a manifest entry, so a new table without a policy fails CI before it ships.
+The RLS manifest (`packages/database/src/tenant-policy.manifest.ts`) is the authoritative table list. A CI test asserts that every `orgScopeMixin` table has a manifest entry, so a new table without a policy fails CI before it ships.
 
 ### Enforcement flag
 
-RLS ships with a server-side bypass GUC (`app.rls_bypass`) that the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable controls. When the flag is `false`, `withTenantDb` sets the bypass GUC and RLS policies allow all rows. Manual `WHERE` predicates stay active as the enforcement layer. When the flag is `true`, `withTenantDb` does not set the bypass, and the policies enforce at the database layer. Production has run with the flag set to `true` since 2026-06-06.
+RLS ships with a server-side bypass GUC (`app.rls_bypass`) that the `TENANT_RLS_ENFORCEMENT_ENABLED` environment variable controls. When the flag is `false`, `withTenantDb` sets the bypass GUC and RLS policies allow all rows. Manual `WHERE` predicates stay active as the enforcement layer. When the flag is `true`, `withTenantDb` does not set the bypass, and the policies enforce at the database layer. Inspect the deployment configuration to confirm the active value.
 
 The cutover is reversible. Flip the environment variable, with no schema migration.
 

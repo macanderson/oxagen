@@ -1,4 +1,4 @@
-# plugin.registry.list
+# list_plugin_registries
 
 **Domain:** plugin
 **Mode:** sync

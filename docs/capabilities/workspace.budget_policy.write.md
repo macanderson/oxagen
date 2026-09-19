@@ -1,4 +1,4 @@
-# workspace.budget.policy.write
+# update_budget_policy
 
 **Domain:** workspace
 **Mode:** sync

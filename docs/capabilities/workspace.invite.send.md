@@ -1,4 +1,4 @@
-# workspace.invite.send
+# send_workspace_invite
 
 **Domain:** workspace
 **Mode:** sync

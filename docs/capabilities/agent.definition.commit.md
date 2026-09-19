@@ -1,4 +1,4 @@
-# agent.definition.commit
+# commit_agent_definition
 
 **Capability:** `commit_agent_definition`
 **Domain:** agent

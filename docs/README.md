@@ -1,113 +1,28 @@
-# `docs/`
+# Internal documentation
 
-Long-lived documentation for the Oxagen v2 monorepo. Code-level comments
-stay in the code; this directory is for the *durable* explanations that
-describe how the platform is shaped, what was decided and why, what's
-planned, and how to operate it.
+Start with [engineering onboarding](ONBOARDING.md) to find the code and rules for your change. Read [VISION.md](VISION.md) for product direction.
 
-**New here? Start at [`ONBOARDING.md`](./ONBOARDING.md)** — one page
-covering how we write code, the current database schema, and an indexed
-map of every architecture decision. Everything below is supporting detail.
+## Find the right reference
 
-## Layout
-
-```
-docs/
-├── README.md                ← you are here
-├── ONBOARDING.md              start here — principles, schema, ADR index
-├── VISION.md                  product north star (metered/governed/graph-grounded control plane)
-├── adr/                       architectural decision records
-├── audits/                    committed release-audit HTML reports
-├── brand/                     brand assets
-├── capabilities/              contract surface documentation (per-capability)
-├── cli/                       CLI-specific docs (incl. point-in-time competitive snapshots)
-├── compliance/                 SOC 2 / compliance references
-├── erd/                        entity-relationship diagrams
-├── guides/                     how-to guides
-├── ops/                        operational runbooks
-├── queries/                    canonical SQL / Cypher / ClickHouse queries
-├── reference/                   generated-artifact-shaped reference docs
-├── site/                        static marketing/reference page(s)
-├── specs/                       per-topic spec.md / plan.md (the actual home of
-│                                 design specs — see below)
-├── superpowers/                  plans/specs (candidate for folding into specs/)
-└── CODEMAPS/                     generated architecture codemaps
-```
-
-### `adr/` — Architectural Decision Records
-
-One-shot decisions captured with their reasoning. Format: short markdown
-describing the decision, the context that produced it, alternatives
-considered, and the consequences. ADRs are **immutable once accepted** —
-when a decision is overturned, a new ADR is written that supersedes the
-old one. See [`adr/README.md`](adr/README.md) for the full index.
-
-Use ADRs to record decisions like "we chose X over Y because Z." Use the
-`specs/` folder for the durable design intent that ADRs feed into.
-
-### `specs/` — Specs and plans
-
-Each topic lives in its own folder under `specs/`, typically with:
-
-| File | Purpose |
+| Need | Reference |
 |---|---|
-| `spec.md` | **What** we're building, **why**, the constraints. Product + design + engineering align here. Updated when scope changes. |
-| `plan.md` | **How** we'll build it. Sequenced work, dependencies, milestones. Lives until implementation is complete, then archived. |
+| Repository setup and contribution workflow | [Root README](../README.md), [CONTRIBUTING.md](../CONTRIBUTING.md), and [AGENTS.md](../AGENTS.md) |
+| Current app structure | [App architecture](../apps/app/ARCHITECTURE.md) and [source map](CODEMAPS/architecture.md) |
+| Design intent and implementation plans | [Specs](specs/README.md) |
+| Why a decision was made | [ADR index](adr/README.md) |
+| Standing decisions | [SCR corpus](scr/) |
+| Capability inputs, outputs, and surfaces | [Capability index](capabilities/_index.md) |
+| Operational procedures | [Runbooks](ops/) |
+| Connector and storage extensions | [Guides](guides/) |
+| Dated findings | [Audits](audits/) |
+| Preserved, unreachable features | [DEREGISTERED.md](../DEREGISTERED.md) |
 
-Current topics (non-exhaustive — `ls docs/specs/` for the full, growing list):
+## Keep one source
 
-| Topic | Status |
-|---|---|
-| [`specs/information-architecture/`](specs/information-architecture/spec.md) | Spec'd |
-| [`specs/application-shell/`](specs/application-shell/spec.md) | Spec'd |
-| [`specs/command-menu/`](specs/command-menu/spec.md) | Spec'd |
-| [`specs/iam/`](specs/iam/plan.md) | Spec'd |
-| [`specs/tacho/`](specs/tacho/spec.md) | Proposed — Oxagen as the control plane for Claude Code, Claude Agent SDK, and custom agents |
+Update a guide with the code it describes. Link to source files for route lists, schema fields, dependencies, and commands instead of copying inventories that drift.
 
-A number of specs describe features that have since shipped but carry no
-"Shipped"/"Archived" status header at the file itself — treat `apps/docs`'
-specs-and-plans section as the more current shipped/partial verdict until
-each spec is stamped or moved to an archive.
+Specs record design intent. A proposed feature is not evidence that the feature ships. Dated audits and implementation plans describe the checkout they examined. Use the current source and CI results to establish implementation status.
 
-### `capabilities/` — Contract surface docs
+Keep accepted ADRs as historical decisions. Record a changed decision in a new ADR. Keep the shared SCR corpus and vendored house specifications under their cross-repository maintenance workflows.
 
-Per-capability reference documentation generated from (and consistent
-with) the contract registry in `@oxagen/oxagen`. Each capability gets
-a stable URL that the audit log, the access matrix, and customer
-support escalations can deep-link to. When a contract ships, it gets a
-markdown counterpart here. See [`capabilities/_index.md`](capabilities/_index.md).
-
-### `queries/` — Canonical queries
-
-The "official" version of frequently-needed read queries. Currently a flat
-directory (`docs/queries/*.sql`) rather than the per-store subfolder
-structure below — adopt the subfolders as more queries are added, or treat
-this section as aspirational:
-
-- `queries/postgres/` — Drizzle-shape SQL for one-off reports
-- `queries/clickhouse/` — audit log + telemetry analysis queries
-- `queries/neo4j/` — Cypher patterns for ontology traversal
-
-Used as source-of-truth references when ad-hoc queries are needed; also
-the seed corpus for the AI agent's query suggestions.
-
-## When to write what
-
-| You want to … | Write a … |
-|---|---|
-| Capture *why* a decision was made and what was rejected | `adr/ADR-NNN-title.md` |
-| Define a new system or surface and how it should be built | `specs/<topic>/spec.md` + `plan.md` |
-| Document a contract for users and integrators | `capabilities/<capability-name>.md` |
-| Share a canonical query pattern | `queries/<purpose>.sql` |
-
-## Editing rules
-
-- Keep all docs in Markdown. No Word / Notion exports in the repo.
-- Treat `spec.md` as a published interface. Substantive changes go
-  through review.
-- Update docs in the same PR as the code change that motivates them.
-- ADRs append; specs evolve. Never edit a past ADR's body — write a new
-  one that supersedes it.
-- The architecture and IAM specs are the **single source of truth** for
-  product/IA decisions. If something contradicts them in code, the code
-  is wrong (or the spec needs a versioned update).
+Remove duplicate documents and completed task instructions when they add no explanation. Git history retains the removed text. Check DEREGISTERED.md before deleting a file that belongs to a preserved feature.

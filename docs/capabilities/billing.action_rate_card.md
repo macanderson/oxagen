@@ -1,4 +1,4 @@
-# billing.action_rate_card
+# get_rate_card
 
 **Domain:** billing
 **Mode:** sync

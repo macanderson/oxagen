@@ -1,4 +1,4 @@
-# secret.import_env
+# import_env_secrets
 
 **Domain:** secret
 **Mode:** sync
@@ -66,7 +66,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.import_env`
+Tool name: `import_env_secrets`
 
 ## Errors
 

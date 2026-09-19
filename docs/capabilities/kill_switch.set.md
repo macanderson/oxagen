@@ -1,4 +1,4 @@
-# kill_switch.set
+# set_kill_switch
 
 **Capability:** `set_kill_switch`
 **Domain:** kill_switch

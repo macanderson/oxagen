@@ -1,4 +1,4 @@
-# ontology.query
+# query_ontology
 
 Typed multi-hop traversal over the knowledge graph. The caller names a start node, the relationship type(s) to follow, a direction, and a depth; the handler walks the tenant-scoped graph and returns the reachable subgraph as nodes and edges. This governed shape is the supported agent traversal surface; callers cannot submit raw Cypher.
 

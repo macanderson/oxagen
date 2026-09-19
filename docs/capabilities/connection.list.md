@@ -1,4 +1,4 @@
-# connection.list
+# list_connections
 
 **Domain:** connection
 **Mode:** sync

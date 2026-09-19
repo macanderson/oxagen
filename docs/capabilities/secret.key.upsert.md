@@ -1,4 +1,4 @@
-# secret.key.upsert
+# upsert_secret_key
 
 **Domain:** secret
 **Mode:** sync
@@ -57,7 +57,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.key.upsert`
+Tool name: `upsert_secret_key`
 
 ## Errors
 

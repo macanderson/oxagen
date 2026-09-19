@@ -230,7 +230,7 @@ jobs:
       # merge base, not against main's current tip, so a branch cut before a
       # later fix can carry the old copy of any file that fix touched, and a
       # clean, conflict-free squash merge can silently take that old copy over
-      # the newer one. See ADR-109 for the incident and why this stays
+      # the newer one. See ADR-110 for the incident and why this stays
       # advisory rather than blocking: never fails the build, only reports.
       # `fetch-depth: 0` above gives it the full history the merge-base
       # computation needs; the pull-request branch above already fetched

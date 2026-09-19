@@ -1,4 +1,4 @@
-# repo.configure
+# configure_repo
 
 Set repo-specific configuration: filters, inference toggles, sync cadence, and field mappings. Specializes `connection.configure` for code repository connectors.
 

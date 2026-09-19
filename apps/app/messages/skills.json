@@ -18,7 +18,7 @@
     },
     "empty": {
       "title": "No skill reported in this window",
-      "hint": "Enroll a machine with <code>oxagen tacho enroll</code>: every wrapped session reports the skills its harness had when it started."
+      "hint": "Enroll a machine with <code>oxagen agent enroll</code>: every wrapped session reports the skills its harness had when it started."
     },
     "failure": {
       "denied": {

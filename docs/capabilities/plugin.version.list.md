@@ -1,4 +1,4 @@
-# plugin.version.list
+# list_plugin_versions
 
 List version history for a connector plugin, including changelog entries and breaking-change flags. Used by org admins to review update impact before upgrading.
 

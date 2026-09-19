@@ -1,4 +1,4 @@
-# context.records.list
+# list_records
 
 **Name:** `list_records`
 **Domain:** context

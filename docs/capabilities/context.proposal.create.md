@@ -1,4 +1,4 @@
-# context.proposal.create
+# propose_record
 
 **Name:** `propose_record`
 **Domain:** context
