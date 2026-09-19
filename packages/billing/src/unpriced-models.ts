@@ -28,7 +28,7 @@ import {
   resolvePriceEntryFromClassBook,
   type PriceBook,
 } from "./price-book";
-import { readObservedModels } from "@oxagen/telemetry";
+import { OBSERVED_TOKEN_CLASSES, readObservedModels } from "@oxagen/telemetry";
 import type { PriceTokenClass } from "@oxagen/database/schema";
 
 /**
@@ -233,6 +233,11 @@ export function findUnpricedModels(args: {
  * The book is loaded first, not in parallel with the observation: its
  * boundaries ({@link priceBookBoundaries}) are what the observed-usage read
  * buckets calls by, so the book must be in hand before that read is made.
+ * Which boundaries, though, is decided inside that read, once its summary
+ * query has named the models this organization actually ran: only the rows
+ * that could price one of those models, in a class a token read can even
+ * observe, contribute one. The whole book's history would make every frame
+ * scan every rate change any model has ever had.
  */
 export async function readUnpricedModels(args: {
   orgId: string;
@@ -241,7 +246,6 @@ export async function readUnpricedModels(args: {
   at: Date;
 }): Promise<UnpricedModel[]> {
   const book = await loadPriceBook({ orgId: args.orgId });
-  const boundaries = priceBookBoundaries(book).map((t) => new Date(t));
   // Bounded above by `at` as well as below by `since`: the book is judged
   // as of `at`, so a model first run after `at` — and every later call and
   // token — would otherwise be reported against a snapshot from before it
@@ -251,7 +255,17 @@ export async function readUnpricedModels(args: {
     workspaceId: args.workspaceId,
     since: args.since,
     until: args.at,
-    boundaries,
+    // The boundaries are chosen from the models the window actually holds,
+    // not from the whole book: `loadPriceBook` returns every list row's full
+    // history plus the organization's own, and that array is rescanned for
+    // every frame. An organization that ran one model paid for every other
+    // model's rate changes, and had its one model's report split into buckets
+    // whose price answer is identical on both sides of the split.
+    boundariesFor: (models) =>
+      priceBookBoundaries(book, {
+        models,
+        tokenClasses: OBSERVED_TOKEN_CLASSES,
+      }).map((t) => new Date(t)),
   });
   return findUnpricedModels({
     observed: observed.map((row) => ({

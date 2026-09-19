@@ -360,17 +360,67 @@ export function indexPriceBookByClass(
 }
 
 /**
- * The instants, in ascending order, at which the book's answer for ANY
- * (model, class) pair could change: the two ends of every entry's effective
- * window. The book's answer is constant between two consecutive boundaries,
- * so a caller bucketing observed usage by these boundaries (`readObservedModels`'s
- * `boundaries` argument) groups every call whose price-book answer could not
- * have differed, and probing once per bucket is probing the whole bucket.
+ * True when `entry` is one of the rows {@link resolvePriceEntryFromClassBook}
+ * would even consider for `modelId`: a name match on the id as given, or on
+ * the bare family behind a `creator/` prefix, which is the same fallback the
+ * resolver applies. An entry this answers false for can never be the book's
+ * answer for that model, at any instant.
  */
-export function priceBookBoundaries(book: PriceBook): number[] {
+function entryCouldPrice(entry: PriceEntry, modelId: string): boolean {
+  if (matchLength(entry, modelId) !== null) return true;
+  const slash = modelId.indexOf("/");
+  if (slash < 0) return false;
+  return matchLength(entry, modelId.slice(slash + 1)) !== null;
+}
+
+/**
+ * The instants, in ascending order, at which the book's answer could change
+ * for the (model, class) pairs `filter` names: the two ends of every entry's
+ * effective window. The book's answer is constant between two consecutive
+ * boundaries, so a caller bucketing observed usage by these boundaries
+ * (`readObservedModels`'s `boundariesFor` argument) groups every call whose
+ * price-book answer could not have differed, and probing once per bucket is
+ * probing the whole bucket.
+ *
+ * `filter` is how a report asks for its own boundaries rather than the
+ * catalog's whole history, and it is a correctness matter as well as a cost
+ * one. The observed-usage read scans this array once per frame, so every
+ * boundary an unrelated model's rate change contributes is both a per-frame
+ * scan the report pays for and an extra bucket split off a model whose price
+ * answer is identical on both sides of it. With the catalog growing on every
+ * sync, an unfiltered list is O(frames × all history) and eventually a
+ * timeout.
+ *
+ * - `models` keeps only the entries that could price one of those model ids,
+ *   by the resolver's own matching ({@link entryCouldPrice}) — never a loose
+ *   prefix test, so the narrowing cannot drop a boundary the resolver would
+ *   have honoured.
+ * - `tokenClasses` keeps only those classes' rows, for a caller that can
+ *   observe some of the eleven and never the rest: a token read never reports
+ *   `image` or `video_second` usage, so those rows' boundaries can only ever
+ *   split a bucket nobody probes.
+ *
+ * Omitting a key leaves that dimension unnarrowed, and omitting `filter`
+ * entirely returns every boundary in the book.
+ */
+export function priceBookBoundaries(
+  book: PriceBook,
+  filter?: {
+    models?: readonly string[];
+    tokenClasses?: readonly PriceTokenClass[];
+  },
+): number[] {
+  const classes =
+    filter?.tokenClasses === undefined ? null : new Set(filter.tokenClasses);
+  const models = filter?.models;
+  const relevant = book.filter((e) => {
+    if (classes !== null && !classes.has(e.tokenClass)) return false;
+    if (models === undefined) return true;
+    return models.some((m) => entryCouldPrice(e, m));
+  });
   return [
     ...new Set(
-      book.flatMap((e) => [
+      relevant.flatMap((e) => [
         e.effectiveFrom.getTime(),
         ...(e.effectiveTo === null ? [] : [e.effectiveTo.getTime()]),
       ]),

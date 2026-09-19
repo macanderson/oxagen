@@ -3,8 +3,28 @@
 // frame store, so the ordering and the partial-miss rule are exercised
 // directly rather than inferred from a query.
 import { describe, expect, it, vi } from "vitest";
+
+// The store half (`readUnpricedModels`) is exercised against a mocked frame
+// read: what it hands that read is the whole behaviour under test, and a real
+// ClickHouse would prove nothing about it.
+const readObservedModelsMock = vi.hoisted(() =>
+  vi.fn(async (_args: unknown): Promise<unknown[]> => []),
+);
+vi.mock("@oxagen/telemetry", () => ({
+  readObservedModels: readObservedModelsMock,
+  OBSERVED_TOKEN_CLASSES: [
+    "input_uncached",
+    "cache_read",
+    "cache_write_5m",
+    "cache_write_1h",
+    "output",
+    "reasoning",
+  ],
+}));
+
 import {
   findUnpricedModels,
+  readUnpricedModels,
   UNPRICED_MODEL_REPORT_LIMIT,
   type ObservedModel,
   type ObservedModelClassUsage,
@@ -563,5 +583,106 @@ describe("findUnpricedModels", () => {
       expect.objectContaining({ modelId: "sparse" }),
     );
     resolveSpy.mockRestore();
+  });
+});
+
+describe("readUnpricedModels", () => {
+  const SINCE = new Date("2026-09-01T00:00:00.000Z");
+  const LATER = new Date("2026-09-05T00:00:00.000Z");
+  const LATEST = new Date("2026-09-07T00:00:00.000Z");
+
+  // `loadPriceBook` returns every list row's full history plus the
+  // organization's own. Handing all of it to the frame read makes every frame
+  // scan every rate change any model has ever had — O(frames × all history),
+  // which times out as the catalog grows — and splits the report into buckets
+  // whose price answer is identical on both sides, so an unrelated model's
+  // price change fragments a report about a model the org never ran.
+  it("hands the frame read only the boundaries the observed models could actually be repriced at", async () => {
+    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([
+      // The observed model's own token rows: one boundary, at FROM.
+      ...fullyPriced("watched"),
+      // A model this organization never ran, repriced twice.
+      entry({ model: "unrelated", effectiveFrom: LATER, effectiveTo: LATEST }),
+      // The observed model, in a class no token frame can ever report.
+      entry({
+        model: "watched",
+        tokenClass: "image",
+        effectiveFrom: LATEST,
+      }),
+    ]);
+    let handed: Date[] | null = null;
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as {
+        boundariesFor: (models: readonly string[]) => readonly Date[];
+      };
+      handed = [...typed.boundariesFor(["watched"])];
+      return [];
+    });
+
+    const out = await readUnpricedModels({ orgId: ORG, since: SINCE, at: AT });
+
+    expect(out).toEqual([]);
+    expect(handed).toEqual([FROM]);
+    expect(readObservedModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: ORG, since: SINCE, until: AT }),
+    );
+    loadSpy.mockRestore();
+  });
+
+  it("reports what the frame read observed, judged against the book", async () => {
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBook")
+      .mockResolvedValue(fullyPriced("priced"));
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as {
+        boundariesFor: (models: readonly string[]) => readonly Date[];
+      };
+      typed.boundariesFor(["priced", "nameless"]);
+      return [
+        {
+          model: "nameless",
+          provider: "vendor",
+          calls: 2,
+          tokens: 30,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-03T00:00:00.000Z",
+          classes: [
+            {
+              tokenClass: "output",
+              calls: 2,
+              tokens: 30,
+              firstSeen: "2026-09-02T00:00:00.000Z",
+              lastSeen: "2026-09-03T00:00:00.000Z",
+            },
+          ],
+        },
+        {
+          model: "priced",
+          provider: null,
+          calls: 1,
+          tokens: 10,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-02T00:00:00.000Z",
+          classes: [
+            {
+              tokenClass: "output",
+              calls: 1,
+              tokens: 10,
+              firstSeen: "2026-09-02T00:00:00.000Z",
+              lastSeen: "2026-09-02T00:00:00.000Z",
+            },
+          ],
+        },
+      ];
+    });
+
+    const out = await readUnpricedModels({ orgId: ORG, since: SINCE, at: AT });
+
+    expect(out).toHaveLength(1);
+    expect(out[0]!.model).toBe("nameless");
+    expect(out[0]!.fullyUnpriced).toBe(true);
+    expect(out[0]!.missingClasses).toEqual(["output"]);
+    expect(out[0]!.firstSeen).toEqual(new Date("2026-09-02T00:00:00.000Z"));
+    loadSpy.mockRestore();
   });
 });

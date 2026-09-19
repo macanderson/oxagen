@@ -584,7 +584,14 @@ describe("readObservedModels", () => {
       boundaries: [],
     });
     expect(classCall.query).toContain("ARRAY JOIN");
-    expect(classCall.query).toContain("WHERE tok > 0");
+    // The array is an array of (class, tokens) tuples under ONE alias, read
+    // with `tupleElement`. `AS (class, tok)` is not ClickHouse alias syntax —
+    // an ARRAY JOIN expression takes a single identifier — and the server
+    // refused the whole query, so every nonempty report failed.
+    expect(classCall.query).toContain("] AS class_token");
+    expect(classCall.query).not.toMatch(/AS\s*\(\s*class\s*,/);
+    expect(classCall.query).toContain("tupleElement(class_token, 1)");
+    expect(classCall.query).toContain("WHERE tupleElement(class_token, 2) > 0");
     expect(classCall.query).toContain("GROUP BY model, class, bucket_index");
     // Reasoning IS split out here, unlike the ranking total above: the
     // per-run read's transcript join is needed to attribute it correctly.
@@ -629,7 +636,7 @@ describe("readObservedModels", () => {
     ]);
   });
 
-  it("scopes the transcript-split joins by root_session_uuid so two sessions sharing a request or message id cannot merge figures", async () => {
+  it("scopes the transcript-split joins by session_uuid so a parent and its subagent sharing a request or message id cannot merge figures", async () => {
     answerBoth([
       {
         model: "claude-sonnet-5",
@@ -644,19 +651,22 @@ describe("readObservedModels", () => {
     const classCall = queryMock.mock.calls[1]![0];
 
     // The priced row carries its own session key so the joins below can be
-    // scoped by it, the same way the per-run read is scoped by it.
-    expect(classCall.query).toContain("root_session_uuid");
+    // scoped by it.
+    expect(classCall.query).toContain("session_uuid");
     // Both transcript-split joins (on the vendor request id and on the
-    // message id) must key on the session too, not on the id alone — two
-    // sessions in the same org can otherwise reuse an id and merge their
-    // thinking/cache-1h figures onto each other's calls.
-    expect(classCall.query).toContain("GROUP BY call_key, root_session_uuid");
+    // message id) must key on the SESSION, not on the id alone and not on
+    // the root. A recorder's `LlmCallLedger` is its own and a subagent
+    // session has its own `session_uuid` under the parent's root, so a root
+    // key would take max() across parent and subagent and credit one call's
+    // thinking and one-hour cache split to both.
+    expect(classCall.query).toContain("GROUP BY call_key, session_uuid");
     expect(classCall.query).toContain(
-      "t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid",
+      "t.call_key = c.request_id AND t.session_uuid = c.session_uuid",
     );
     expect(classCall.query).toContain(
-      "m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid",
+      "m.call_key = c.message_id AND m.session_uuid = c.session_uuid",
     );
+    expect(classCall.query).not.toContain("root_session_uuid");
   });
 
   it("skips the class-bucket read entirely when nothing was observed", async () => {
@@ -689,6 +699,61 @@ describe("readObservedModels", () => {
     expect(classCall.query_params).toMatchObject({
       boundaries: ["2026-09-01 00:00:00.000", "2026-09-12 00:00:00.000"],
     });
+  });
+
+  // The boundary array is scanned once per frame, so a caller that hands in
+  // a whole price catalog's history pays for every model's rate changes on
+  // every frame and splits the report into buckets that answer identically.
+  // `boundariesFor` lets the caller narrow it to the models actually run.
+  it("offers the observed model list to `boundariesFor` and buckets on what it returns", async () => {
+    answerBoth([
+      {
+        model: "vendor/brand-new",
+        provider: "vendor",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "5",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    const seen: string[][] = [];
+    await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      // The unrelated boundary here must lose to the callback's answer.
+      boundaries: [new Date("2026-01-01T00:00:00.000Z")],
+      boundariesFor: (models) => {
+        seen.push([...models]);
+        return [new Date("2026-09-05T00:00:00.000Z")];
+      },
+    });
+
+    expect(seen).toEqual([["vendor/brand-new", "claude-sonnet-5"]]);
+    expect(queryMock.mock.calls[1]![0].query_params).toMatchObject({
+      boundaries: ["2026-09-05 00:00:00.000"],
+    });
+  });
+
+  // No models, no class read at all, so nothing asks for boundaries either:
+  // the price book is never scanned for an organization that ran nothing.
+  it("does not ask for boundaries when the summary found nothing", async () => {
+    answer([]);
+    const boundariesFor = vi.fn(() => []);
+    const rows = await readObservedModels({
+      orgId: ORG,
+      since: SINCE,
+      boundariesFor,
+    });
+    expect(rows).toEqual([]);
+    expect(boundariesFor).not.toHaveBeenCalled();
   });
 
   it("reads the whole organization when no workspace is named", async () => {

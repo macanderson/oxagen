@@ -30,6 +30,7 @@ import {
   BOUNDARY_MARGIN_MS,
   COLD_BOOK_EFFECTIVE_FROM,
   nextPriceBookBoundary,
+  priceBookBoundaries,
   priceEntriesFromRateCards,
   resolvePriceEntry,
   setNegotiatedPriceEntry,
@@ -2236,9 +2237,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       completedCatalogs: ["in_code_card", "openrouter"],
     });
     expect(first.coldStart).toBe(true);
-    expect(
-      fake.rows.every((r) => r.catalog === "in_code_card"),
-    ).toBe(true);
+    expect(fake.rows.every((r) => r.catalog === "in_code_card")).toBe(true);
     // The record carries both, which is the fact the rows cannot carry.
     expect(fake.initializations[0]!.completedCatalogs).toEqual([
       "in_code_card",
@@ -3230,5 +3229,87 @@ describe("nextPriceBookBoundary", () => {
     expect(nextPriceBookBoundary(new Date("2026-09-18T23:30:00Z"))).toEqual(
       new Date("2026-09-19T00:00:00.000Z"),
     );
+  });
+});
+
+describe("priceBookBoundaries", () => {
+  const T2 = new Date("2026-09-02T00:00:00.000Z");
+  const T3 = new Date("2026-09-03T00:00:00.000Z");
+  const T4 = new Date("2026-09-04T00:00:00.000Z");
+
+  it("returns both ends of every window, ascending and deduplicated", () => {
+    const book = [
+      entry({ id: "a", model: "claude-sonnet-5", effectiveTo: T3 }),
+      entry({ id: "b", model: "claude-sonnet-5", effectiveFrom: T3 }),
+      entry({
+        id: "c",
+        model: "claude-sonnet-5",
+        tokenClass: "output",
+        effectiveTo: T3,
+      }),
+    ];
+    expect(priceBookBoundaries(book)).toEqual([FROM.getTime(), T3.getTime()]);
+  });
+
+  // The observed-usage read scans this array once per frame, so a boundary
+  // that no observed model could ever be priced at is both a per-frame cost
+  // and a bucket split whose two sides answer identically. An organization
+  // running one model must not pay for every other model's rate changes.
+  it("keeps only the rows that could price one of the named models", () => {
+    const book = [
+      entry({ id: "a", model: "claude-sonnet-5", effectiveTo: T2 }),
+      entry({ id: "b", model: "gpt-5", effectiveTo: T3 }),
+      entry({ id: "c", model: "gemini-3", effectiveTo: T4 }),
+    ];
+    expect(priceBookBoundaries(book, { models: ["claude-sonnet-5"] })).toEqual([
+      FROM.getTime(),
+      T2.getTime(),
+    ]);
+    expect(priceBookBoundaries(book, { models: [] })).toEqual([]);
+    // Unfiltered is still every boundary, so the default is unchanged.
+    expect(priceBookBoundaries(book)).toHaveLength(4);
+  });
+
+  // The narrowing uses the resolver's own matching, never a loose prefix
+  // test, so it can neither drop a boundary the resolver would honour nor
+  // keep one for a model that merely shares a stem.
+  it("matches a model the way the resolver does, family fallback and stamp included", () => {
+    const book = [
+      entry({ id: "a", model: "claude-sonnet-5", effectiveTo: T2 }),
+      entry({ id: "b", model: "gpt-4", effectiveTo: T3 }),
+      entry({
+        id: "c",
+        model: "legacy",
+        modelAliases: ["vendor-brand-new"],
+        effectiveTo: T4,
+      }),
+    ];
+    // `anthropic/claude-sonnet-5` reaches the bare family, the way
+    // `resolvePriceEntryFromClassBook` falls back to it.
+    expect(
+      priceBookBoundaries(book, { models: ["anthropic/claude-sonnet-5"] }),
+    ).toEqual([FROM.getTime(), T2.getTime()]);
+    // A point-in-time stamp is the same product.
+    expect(
+      priceBookBoundaries(book, { models: ["claude-sonnet-5-20260901"] }),
+    ).toEqual([FROM.getTime(), T2.getTime()]);
+    // `gpt-4` prefixes `gpt-4o` and prices nothing of it.
+    expect(priceBookBoundaries(book, { models: ["gpt-4o"] })).toEqual([]);
+    // An alias reaches its row.
+    expect(priceBookBoundaries(book, { models: ["vendor-brand-new"] })).toEqual(
+      [FROM.getTime(), T4.getTime()],
+    );
+  });
+
+  // A token read never observes `image` or `video_second` usage, so those
+  // rows' boundaries can only split a bucket nobody probes.
+  it("keeps only the named token classes", () => {
+    const book = [
+      entry({ id: "a", model: "m", tokenClass: "output", effectiveTo: T2 }),
+      entry({ id: "b", model: "m", tokenClass: "image", effectiveTo: T3 }),
+    ];
+    expect(
+      priceBookBoundaries(book, { tokenClasses: ["output", "input_uncached"] }),
+    ).toEqual([FROM.getTime(), T2.getTime()]);
   });
 });

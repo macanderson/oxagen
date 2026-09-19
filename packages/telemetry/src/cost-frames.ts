@@ -610,9 +610,20 @@ export async function readObservedModels(args: {
   /**
    * Price-book boundaries ({@link import("@oxagen/billing").priceBookBoundaries})
    * to bucket usage by, sorted ascending. Omitted or empty puts every call in
-   * one bucket per model and class, the whole window.
+   * one bucket per model and class, the whole window. Ignored when
+   * {@link boundariesFor} is given.
    */
   boundaries?: readonly Date[];
+  /**
+   * The same list, chosen once the summary read has named the models the
+   * organization actually ran, so a caller can hand in only the boundaries
+   * that could move a price for THOSE models rather than the whole book's
+   * history. Preferred over {@link boundaries} for that reason: the list is
+   * scanned per frame, so an unrelated model's rate change would otherwise
+   * both cost the scan and split this report into buckets whose price
+   * answers are identical.
+   */
+  boundariesFor?: (models: readonly string[]) => readonly Date[];
 }): Promise<ObservedModelRow[]> {
   const ch = clickhouse();
   const workspace =
@@ -705,13 +716,31 @@ export async function readObservedModels(args: {
   if (summaryRows.length === 0) return [];
 
   const models = [...new Set(summaryRows.map((r) => r.model))];
-  const boundaries = (args.boundaries ?? []).map(chDateTime);
+  // The boundary list is chosen AFTER the summary named the models, so a
+  // caller can narrow it to the models this organization actually ran. The
+  // array is scanned once per frame by `bucketIndexExpr`, so handing in a
+  // whole price catalog's history would cost every frame a scan over
+  // boundaries no observed model could ever have been priced at, and would
+  // fragment the report into buckets that differ only by an unrelated
+  // model's rate change.
+  const boundaryDates =
+    args.boundariesFor === undefined
+      ? (args.boundaries ?? [])
+      : args.boundariesFor(models);
+  const boundaries = boundaryDates.map(chDateTime);
   const gatewayCacheWrite = "toInt64(coalesce(cache_write_tokens, 0))";
   const tachoCacheWrite = "toInt64(coalesce(c.cache_creation_tokens, 0))";
   const tachoCache1h = classBucketCache1h("c", tachoCacheWrite);
   const tachoCache5m = `toInt64(greatest(0, ${tachoCacheWrite} - ${tachoCache1h}))`;
   const tachoReasoning = classBucketReasoning("c");
 
+  // The transcript-split joins below key on `session_uuid`, not on
+  // `root_session_uuid`. A recorder's `LlmCallLedger` is its own, and a
+  // subagent session records under its own `session_uuid` while sharing the
+  // parent's root, so a request or message id reused across a parent and its
+  // subagent would otherwise take `max()` over both and credit ONE call's
+  // thinking and one-hour cache split to both. The id is unique within the
+  // recorder that issued it, which is the session, so the session is the key.
   const classResult = await breaker().exec(() =>
     ch.query({
       query: `
@@ -751,7 +780,7 @@ export async function readObservedModels(args: {
             toString(model) AS model, toString(provider) AS provider,
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
-            thinking_tokens, request_id, message_id, root_session_uuid
+            thinking_tokens, request_id, message_id, session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}
             AND model IN {models:Array(String)}
@@ -759,7 +788,7 @@ export async function readObservedModels(args: {
         LEFT JOIN (
           SELECT
             request_id AS call_key,
-            root_session_uuid AS root_session_uuid,
+            session_uuid AS session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
           FROM tacho_events FINAL
@@ -768,13 +797,13 @@ export async function readObservedModels(args: {
             ${until.replace("{col}", "ts")}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, root_session_uuid
+          GROUP BY call_key, session_uuid
           HAVING call_key != ''
-        ) AS t ON t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid
+        ) AS t ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid
         LEFT JOIN (
           SELECT
             message_id AS call_key,
-            root_session_uuid AS root_session_uuid,
+            session_uuid AS session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
             toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
           FROM tacho_events FINAL
@@ -783,9 +812,9 @@ export async function readObservedModels(args: {
             ${until.replace("{col}", "ts")}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, root_session_uuid
+          GROUP BY call_key, session_uuid
           HAVING call_key != ''
-        ) AS m ON m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid
+        ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
       ),
       unioned AS (
         SELECT model, bucket_index, input_uncached, cache_read, cache_write_5m, cache_write_1h, output, reasoning, ts FROM gw
@@ -794,18 +823,18 @@ export async function readObservedModels(args: {
       )
       SELECT
         model,
-        class,
+        tupleElement(class_token, 1)                                    AS class,
         bucket_index                                                    AS bucket_index,
         count()                                                         AS calls,
-        sum(tok)                                                        AS tokens,
+        sum(tupleElement(class_token, 2))                               AS tokens,
         formatDateTime(min(ts), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')         AS first_seen,
         formatDateTime(max(ts), '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')         AS last_seen
       FROM unioned
       ARRAY JOIN
         [('input_uncached', input_uncached), ('cache_read', cache_read),
          ('cache_write_5m', cache_write_5m), ('cache_write_1h', cache_write_1h),
-         ('output', output), ('reasoning', reasoning)] AS (class, tok)
-      WHERE tok > 0
+         ('output', output), ('reasoning', reasoning)] AS class_token
+      WHERE tupleElement(class_token, 2) > 0
       GROUP BY model, class, bucket_index
       ORDER BY model, class, bucket_index
     `,
