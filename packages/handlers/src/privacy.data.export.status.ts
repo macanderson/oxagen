@@ -20,7 +20,7 @@
 // refusal that distinguished the two would answer whether a stranger's export
 // id is real.
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { HandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { HandlerError } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { schema, withSystemDb } from "@oxagen/database";
@@ -134,26 +134,27 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     // above remains the authorization; this observes the revocation it cannot
     // see.
     //
-    // And it is asked in the scope that governed the QUEUE, not the scope the
-    // download happens to arrive in. Both download routes are mounted under a
-    // workspace slug, so `ctx.workspaceId` is whichever workspace the browser
-    // is in. With the question put there, an explicit `export_data` deny
-    // written in the workspace the export was queued through was evaded by
-    // opening the same archive from a sibling workspace of the same
-    // organization — the administrator's deny did not deny
-    // (discussion_r4052100710). The row now carries that workspace, and a row
-    // that carries none is asked at org scope, which is what an org-wide
-    // archive with no recorded workspace is: an org-level rule still binds it,
-    // and no workspace's rules can unlock it.
-    await assertCapabilityNotRevoked(
-      privacyDataExport,
-      { ...ctx, workspaceId: row.workspaceId ?? ORG_ONLY_WORKSPACE_ID },
-      {
-        reason: "org_export_not_permitted",
-        message:
-          "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
-      },
-    );
+    // And it is asked in the workspace that queued the export, not only in the
+    // one the download arrives through. The download route is mounted under
+    // any workspace slug, so a deny written in the queuing workspace A would
+    // otherwise be stepped around by downloading through workspace B, whose
+    // policy never governed the export. So the queuing workspace is asked first
+    // and the calling scope second, and either one refusing refuses the read.
+    // A row with no recorded workspace (queued in no workspace, or written
+    // before the column existed) is asked in the calling scope alone.
+    const revoked = {
+      reason: "org_export_not_permitted",
+      message:
+        "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
+    };
+    if (row.workspaceId && row.workspaceId !== ctx.workspaceId) {
+      await assertCapabilityNotRevoked(
+        privacyDataExport,
+        { ...ctx, workspaceId: row.workspaceId },
+        revoked,
+      );
+    }
+    await assertCapabilityNotRevoked(privacyDataExport, ctx, revoked);
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a

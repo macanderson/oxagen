@@ -111,13 +111,10 @@ export const privacyDataExportHandler: CapabilityHandler<
         publicId: generatePublicId("prexp"),
         userId: ctx.userId!,
         orgId,
-        // The workspace whose rules the kernel put this request to, kept with
-        // the request. The download re-asks `export_data`'s policy minutes
-        // later from a route mounted under a workspace slug, and without this
-        // it would ask whichever workspace the browser is then in: a deny
-        // written here would be evaded by opening the archive from a sibling
-        // workspace. The org-only sentinel is not a workspace, so it is stored
-        // as no workspace (discussion_r4052100710).
+        // The workspace whose `export_data` policy just governed this queue.
+        // `get_export_status` asks that policy again before it hands over an
+        // organization archive, wherever the download is requested from. The
+        // org-only sentinel is no workspace, so it is stored as none.
         workspaceId:
           ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
             ? ctx.workspaceId
