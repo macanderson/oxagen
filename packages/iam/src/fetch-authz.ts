@@ -24,11 +24,11 @@
 // questions and, read past each other, used to sound like they disagreed
 // (#3151). This module's `_fetchAuthz` still resolves a purpose-scoped key
 // (a Tacho host, its gateway, a Stella telemetry install) to its CREATOR's
-// role grants — that is deliberate and unchanged, and it is what lets a
+// role grants. That is deliberate and unchanged, and it is what lets a
 // machine key pass the full resolver on an enterprise org at all (rule 7).
-// `resolveOperatorUserId` answers a narrower question — "did a PERSON
-// request this operator action (mint, revoke, rotate a key or enrollment)?"
-// — and a purpose-scoped key never does, because inheriting a role grant is
+// `resolveOperatorUserId` answers a narrower question, "did a PERSON
+// request this operator action (mint, revoke, rotate a key or enrollment)?",
+// and a purpose-scoped key never does, because inheriting a role grant is
 // not the same act as a person presenting a request. Neither function is
 // the security boundary for what a machine key may invoke at all: that is
 // `machineKeyDenial` (`packages/iam/src/machine-key-scope.ts`), which runs
@@ -36,7 +36,7 @@
 // question by the key's purpose, never by whose role grants it would
 // inherit. What THIS module changed to close the gap: `apiKeyPurpose` on
 // `AuthzData` lets `checkIAM` tell a machine-bound key's calls apart from a
-// person's for EVIDENCE — the audit row for a call a purpose-scoped key made
+// person's for EVIDENCE. The audit row for a call a purpose-scoped key made
 // records the credential, never the creator it borrowed role grants from.
 // A purpose-scoped key still never "acts for a person" in
 // `resolveOperatorUserId`'s sense; this module's return value now says so
@@ -245,7 +245,7 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
   const { userId, apiKeyId, orgId, workspaceId, capability } = args;
 
   // An API-key request authenticates with no session user (userId null,
-  // apiKeyId set). It authorizes AS THE KEY'S CREATOR (see below) — that is
+  // apiKeyId set). It authorizes AS THE KEY'S CREATOR (see below): that is
   // the role-grant question. It is never ATTRIBUTED to the creator for
   // evidence when the key is purpose-scoped; see the module note above and
   // `apiKeyPurpose` on AuthzData.
@@ -268,12 +268,12 @@ async function _fetchAuthz(args: FetchAuthzArgs): Promise<AuthzData> {
     // The key's own scope, read in the same query as its creator so a
     // purpose-scoped key is identifiable without a second round trip. It
     // plays no part in resolving effectiveUserId or in the role-grant match
-    // below — those are unchanged, and a machine-bound key still inherits its
-    // creator's grants, which is what lets it work on enterprise orgs at all
-    // (see the module note above). It answers a narrower question this
+    // below (those are unchanged, and a machine-bound key still inherits its
+    // creator's grants, which is what lets it work on enterprise orgs at all,
+    // see the module note above). It answers a narrower question this
     // function did not used to: whether the identity checkIAM is about to
     // attribute a call to is a person, or a credential wearing that person's
-    // role grants — see the apiKeyPurpose doc on AuthzData.
+    // role grants. See the apiKeyPurpose doc on AuthzData.
     let apiKeyPurpose: string | null = null;
     if (isApiKey) {
       const keyRows = await tx
