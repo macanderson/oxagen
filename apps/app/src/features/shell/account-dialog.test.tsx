@@ -102,19 +102,32 @@ function OpenIt() {
       {/* Probe links. Each records the click and stops jsdom navigating, so a
           click that arrives here is one the shell let through. */}
       {["/acme/core-platform/fleet", "/other-org/people"].map((href) => (
-        <a
-          key={href}
-          href={href}
-          data-testid={`probe-${href.split("/")[1] ?? ""}`}
-          onClick={(event) => {
-            linkClicks.push(href);
-            event.preventDefault();
-          }}
-        >
-          {href}
-        </a>
+        <ProbeLink key={href} href={href} />
       ))}
     </>
+  );
+}
+
+/**
+ * A plain anchor, on purpose. INV-13 asks every link to be a `SafeLink`, and a
+ * `SafeLink` is exactly what this must not be: the probe exists to prove the
+ * shell's document-level click guard catches an ordinary anchor, which is what
+ * a surface outside this lane renders. It records the click and stops jsdom
+ * navigating, so a click that arrives here is one the shell let through.
+ */
+function ProbeLink({ href }: { href: string }) {
+  return (
+    <a
+      // eslint-disable-next-line no-restricted-syntax -- see above: a checked target would defeat what this probe is for
+      href={href}
+      data-testid={`probe-${href.split("/")[1] ?? ""}`}
+      onClick={(event) => {
+        linkClicks.push(href);
+        event.preventDefault();
+      }}
+    >
+      {href}
+    </a>
   );
 }
 

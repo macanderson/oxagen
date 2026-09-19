@@ -197,8 +197,13 @@ export function AccountDialog({ data }: { data: ShellData }) {
       if (!(link instanceof HTMLAnchorElement)) return;
       if (link.target && link.target !== "_self") return;
       if (link.hasAttribute("download")) return;
-      const url = new URL(link.href, window.location.href);
-      if (url.origin !== window.location.origin) return;
+      // `document.baseURI`, not `window.location`: INV-13 bans reading
+      // `location.*` in this app, and the base URI answers the same question
+      // for an origin comparison. `link.href` is already absolute, so the base
+      // only matters for a malformed one.
+      const here = new URL(document.baseURI);
+      const url = new URL(link.href, here);
+      if (url.origin !== here.origin) return;
       if (url.pathname.split("/")[1] === orgSlug) return;
       event.preventDefault();
       event.stopPropagation();
