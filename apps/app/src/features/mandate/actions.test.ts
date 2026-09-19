@@ -118,42 +118,151 @@ describe("changeMandateLimits", () => {
     validTo: "2026-12-31",
   };
 
-  it("sends the whole limits record and the window's last day, for the workspace viewer", async () => {
-    invoke.mockResolvedValue(mandateOutput());
+  /** The stored record the fixture carries: one monthly amount limit in USD. */
+  const STORED_AMOUNT = {
+    perCall: "250000000",
+    perPeriod: "2000000000",
+    period: "monthly",
+    currencyOrUnit: "USD",
+  };
+
+  it("writes the edit merged over the stored record, with the window's last day", async () => {
+    kernelAnswers({});
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: true, value: { mandateId: MANDATE_ID, status: "active" } },
     );
     expect(requireViewer).toHaveBeenCalledWith("a-intel", "core-platform");
-    expect(invoke).toHaveBeenCalledWith(
-      "update_mandate_limits",
-      {
-        mandateId: MANDATE_ID,
-        limits: {
-          rows: {
-            perCall: "50",
-            perPeriod: "1000",
-            period: "monthly",
-            currencyOrUnit: "rows",
-          },
-          calls: {
-            perPeriod: "40",
-            period: "daily",
-            currencyOrUnit: "calls",
-          },
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        // Untouched, and resubmitted exactly as recorded.
+        amount: STORED_AMOUNT,
+        rows: {
+          perCall: "50",
+          perPeriod: "1000",
+          period: "monthly",
+          currencyOrUnit: "rows",
         },
-        // The last day runs through its end, so a window to 2026-12-31 expires
-        // as that day ends rather than as it begins.
-        validTo: "2026-12-31T23:59:59.999Z",
+        calls: {
+          perPeriod: "40",
+          period: "daily",
+          currencyOrUnit: "calls",
+        },
       },
+      // The last day runs through its end, so a window to 2026-12-31 expires
+      // as that day ends rather than as it begins.
+      validTo: "2026-12-31T23:59:59.999Z",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "get_mandate",
+      { mandateId: MANDATE_ID, ledgerLimit: 1 },
       expect.objectContaining(TENANT),
     );
+  });
+
+  // The defect this exists for: `update_mandate_limits` SETS `limits`, so an
+  // edit naming one measure would delete the bounds on the others, and a deleted
+  // bound is unbounded authority for that measure. Editing one measure of a
+  // two-measure mandate must leave the other's bound present and unchanged.
+  it("keeps every bound the edit did not name, digit for digit", async () => {
+    kernelAnswers({
+      stored: {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "USD",
+          },
+          recipients: {
+            perCall: "25",
+            perPeriod: "500",
+            period: "weekly",
+            currencyOrUnit: "recipients",
+          },
+        },
+      },
+    });
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...draft,
+      measure: "recipients",
+      unit: "recipients",
+      perCall: "10",
+      perPeriod: "200",
+      period: "weekly",
+      callsPerDay: "",
+      validTo: "",
+    });
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        // The money measure the form cannot express, carried through untouched.
+        amount: STORED_AMOUNT,
+        recipients: {
+          perCall: "10",
+          perPeriod: "200",
+          period: "weekly",
+          currencyOrUnit: "recipients",
+        },
+      },
+    });
+  });
+
+  it("does not read the record when there is no limit to merge into (negative)", async () => {
+    kernelAnswers({});
+    await changeMandateLimits("a-intel", "core-platform", {
+      ...draft,
+      measure: "",
+      unit: "",
+      perCall: "",
+      perPeriod: "",
+      callsPerDay: "",
+      validTo: "2027-01-31",
+    });
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "get_mandate"),
+    ).toHaveLength(0);
+  });
+
+  // The merge is authoritative only if it comes from the store, so a read that
+  // did not answer stops the write rather than falling back to the edit alone.
+  it("writes nothing when the record could not be read (negative)", async () => {
+    kernelAnswers({
+      readThrows: new kernel.HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+        message: "an accountable org role is required",
+      }),
+    });
+    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
+      { ok: false, reason: "denied", code: "org_role_required" },
+    );
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
+  });
+
+  it("reports a mandate nobody recorded as not found, from the read (negative)", async () => {
+    kernelAnswers({
+      readThrows: new kernel.HandlerError({
+        code: "not_found",
+        reason: "mandate_not_found",
+        message: "no such mandate",
+      }),
+    });
+    expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
+      { ok: false, reason: "not_found", code: "mandate_not_found" },
+    );
+    expect(
+      invoke.mock.calls.filter(([name]) => name === "update_mandate_limits"),
+    ).toHaveLength(0);
   });
 
   // The figure typed is the figure stored. Scaling one to micros is correct only
   // for a measure a tool declares as an `amount`, and no read answers that, so a
   // form that scaled could store a millionfold wider bound than was entered.
   it("stores the figure exactly as typed, digit for digit", async () => {
-    invoke.mockResolvedValue(mandateOutput());
+    kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       ...draft,
       perCall: "50",
@@ -161,25 +270,22 @@ describe("changeMandateLimits", () => {
       callsPerDay: "",
       validTo: "",
     });
-    expect(invoke).toHaveBeenCalledWith(
-      "update_mandate_limits",
-      {
-        mandateId: MANDATE_ID,
-        limits: {
-          rows: {
-            perCall: "50",
-            perPeriod: "1000",
-            period: "monthly",
-            currencyOrUnit: "rows",
-          },
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        amount: STORED_AMOUNT,
+        rows: {
+          perCall: "50",
+          perPeriod: "1000",
+          period: "monthly",
+          currencyOrUnit: "rows",
         },
       },
-      expect.objectContaining(TENANT),
-    );
+    });
   });
 
   it("changes the window alone, with no limits record, when only a date is given", async () => {
-    invoke.mockResolvedValue(mandateOutput());
+    kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       mandateId: MANDATE_ID,
       measure: "",
@@ -190,15 +296,14 @@ describe("changeMandateLimits", () => {
       callsPerDay: "",
       validTo: "2027-01-31",
     });
-    expect(invoke).toHaveBeenCalledWith(
-      "update_mandate_limits",
-      { mandateId: MANDATE_ID, validTo: "2027-01-31T23:59:59.999Z" },
-      expect.objectContaining(TENANT),
-    );
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      validTo: "2027-01-31T23:59:59.999Z",
+    });
   });
 
-  it("writes a calls cap on its own, which is a mandate shape in its own right", async () => {
-    invoke.mockResolvedValue(mandateOutput());
+  it("writes a calls cap on its own, over the record's other measures", async () => {
+    kernelAnswers({});
     await changeMandateLimits("a-intel", "core-platform", {
       mandateId: MANDATE_ID,
       measure: "",
@@ -209,20 +314,17 @@ describe("changeMandateLimits", () => {
       callsPerDay: "500",
       validTo: "",
     });
-    expect(invoke).toHaveBeenCalledWith(
-      "update_mandate_limits",
-      {
-        mandateId: MANDATE_ID,
-        limits: {
-          calls: {
-            perPeriod: "500",
-            period: "daily",
-            currencyOrUnit: "calls",
-          },
+    expect(writtenLimits()).toEqual({
+      mandateId: MANDATE_ID,
+      limits: {
+        amount: STORED_AMOUNT,
+        calls: {
+          perPeriod: "500",
+          period: "daily",
+          currencyOrUnit: "calls",
         },
       },
-      expect.objectContaining(TENANT),
-    );
+    });
   });
 
   // A limit denominated in an ISO 4217 code reads back as money while the figure
@@ -316,34 +418,34 @@ describe("changeMandateLimits", () => {
   // The handler's own gate: a caller whose roles are not accountable for the
   // mandate's consequences is refused before any row is touched, and the app
   // reports it as a denial rather than as a page error.
-  it("reports the handler's role refusal as a denial (negative)", async () => {
-    invoke.mockRejectedValue(
-      new kernel.HandlerError({
+  it("reports the write handler's role refusal as a denial (negative)", async () => {
+    kernelAnswers({
+      writeThrows: new kernel.HandlerError({
         code: "forbidden",
         reason: "org_role_required",
         message: "an accountable org role is required",
       }),
-    );
+    });
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: false, reason: "denied", code: "org_role_required" },
     );
   });
 
   it("reports an IAM denial as a denial (negative)", async () => {
-    invoke.mockRejectedValue(denied("update_mandate_limits"));
+    kernelAnswers({ writeThrows: denied("update_mandate_limits") });
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: false, reason: "denied", code: "authz_denied" },
     );
   });
 
   it("reports a mandate that has already ended as a conflict (negative)", async () => {
-    invoke.mockRejectedValue(
-      new kernel.HandlerError({
+    kernelAnswers({
+      writeThrows: new kernel.HandlerError({
         code: "conflict",
         reason: "mandate_ended",
         message: "already revoked",
       }),
-    );
+    });
     expect(await changeMandateLimits("a-intel", "core-platform", draft)).toEqual(
       { ok: false, reason: "conflict", code: "mandate_ended" },
     );
