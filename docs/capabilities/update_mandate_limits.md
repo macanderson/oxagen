@@ -34,6 +34,15 @@ At least one field is named.
 
 The mandate.
 
+## App surface
+
+The Change limits dialog in the mandate page's header, `/[org]/[ws]/agents/[agent]/mandates/[mandate]`. The dialog collects the measure set as one
+record, defaulted from what the mandate holds, because this capability replaces
+`limits` rather than merging into it. It writes counts only and stores each
+figure exactly as typed: whether a measure is money is a property of the tool
+version's declaration, which no read answers, so a money limit is changed over
+the API or MCP by a caller that holds the declaration.
+
 ## Roles
 
 The consequence roles of every tag on the mandate, as `grant_mandate`.

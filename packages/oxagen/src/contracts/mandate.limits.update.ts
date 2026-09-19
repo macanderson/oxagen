@@ -29,7 +29,7 @@ export const mandateLimitsUpdate = registerCapability({
     "Change an active mandate's limits, targets, approval rule or validity end. Omitted fields are unchanged; the ledger and remaining authority carry forward.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "governance" },
