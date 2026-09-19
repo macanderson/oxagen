@@ -43,6 +43,7 @@ import {
   issueCodeForLead,
   redeemAndRotate,
 } from "../../lib/cms/access";
+import { queueCrmSync } from "../../lib/cms/crm-sync";
 import { logger } from "../../middleware/logger";
 import { extractClientIp } from "../../lib/context";
 import type { Context } from "hono";
@@ -264,7 +265,8 @@ cmsRoute.post("/leads", async (c) => {
   try {
     if (intent === "demo") {
       // Demo requests capture the lead only — no book code, no book email.
-      await captureLead(leadInput);
+      const lead = await captureLead(leadInput);
+      queueCrmSync(lead.id);
     } else {
       // The homepage "Get the manual" form sends source: "field-manual" but
       // no explicit edition; fall back to the edition its own source names
@@ -281,6 +283,9 @@ cmsRoute.post("/leads", async (c) => {
         "signup",
         clientCtx(c),
       );
+      // The row is committed, so the CRM sync can start now; it runs after
+      // this response and never changes the visitor's answer.
+      queueCrmSync(leadId);
       const delivered = await emailReaderLink(data.email, edition, readUrl);
       await finalizeCodeDelivery(leadId, codeId, delivered);
       if (!delivered) {

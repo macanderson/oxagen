@@ -146,6 +146,14 @@ endpoint is the public, rate-limited route in `apps/api/src/routes/v1/cms.ts`
 migration. The API's CORS allowlist must include the marketing origin
 (`MARKETING_URL=https://oxagen.sh` in production).
 
+When `ATTIO_API_KEY` is set on the API, each captured lead is also upserted
+into Attio after the form has been answered: a company by email domain
+(skipped for consumer mailboxes), a person by email linked to it, and a note
+on the person with the source, page, message and tracking code. The row in
+`cms.leads` keeps the Attio record id and the last sync error, and
+`pnpm --filter @oxagen/api cms:crm-backfill` re-syncs any lead Attio has not
+confirmed (ADR-111).
+
 The ebook gate is a marketing gate, not access control: form success mints a
 single-use `/read?e=...&c=` link server-side and emails it. The reader never
 stores an unlock flag client-side.

@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
       Promise.resolve({ accepted: [opts.to], rejected: [] }),
     ),
   isEmailTransportConfigured: vi.fn().mockReturnValue(true),
+  queueCrmSync: vi.fn(),
 }));
 
 vi.mock("../../lib/cms/access", () => ({
@@ -31,6 +32,12 @@ vi.mock("../../lib/cms/access", () => ({
   findLeadByEmail: mocks.findLeadByEmail,
   issueCodeForLead: mocks.issueCodeForLead,
   redeemAndRotate: mocks.redeemAndRotate,
+}));
+
+// The CRM sync runs after the response and reaches the database, so the route
+// test only asserts it was handed the committed lead id.
+vi.mock("../../lib/cms/crm-sync", () => ({
+  queueCrmSync: mocks.queueCrmSync,
 }));
 
 vi.mock("@oxagen/notifications", () => ({
@@ -130,6 +137,7 @@ describe("POST /v1/cms/leads", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, message: SENT });
     expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
+    expect(mocks.queueCrmSync).toHaveBeenCalledWith("lead_1");
     // email lowercased + default edition applied
     const [, edition, reason] = mocks.captureLeadAndIssueCode.mock.calls[0]!;
     expect(edition).toBe("page-flip-reader");
@@ -249,6 +257,7 @@ describe("POST /v1/cms/leads", () => {
     expect(input.source).toBe("demo");
     expect(mocks.captureLeadAndIssueCode).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
+    expect(mocks.queueCrmSync).toHaveBeenCalledWith("lead_2");
   });
 
   it("intent:demo honeypot echoes the demo success copy without capturing", async () => {
@@ -261,6 +270,7 @@ describe("POST /v1/cms/leads", () => {
     expect(await res.json()).toEqual({ ok: true, message: DEMO_SENT });
     expect(mocks.captureLead).not.toHaveBeenCalled();
     expect(mocks.captureLeadAndIssueCode).not.toHaveBeenCalled();
+    expect(mocks.queueCrmSync).not.toHaveBeenCalled();
   });
 
   it("intent:demo returns 500 when capture throws", async () => {
