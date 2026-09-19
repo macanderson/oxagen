@@ -1,0 +1,113 @@
+{
+  "name": "get_steering_freshness",
+  "domain": "context",
+  "description": "The workspace's steering version, the commit its newest record was published at, its production branch, and whether the workspace requires agents to auto-sync .oxagen/ or refuses prompts on stale steering.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "low",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "context"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "steeringVersion": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "headCommit": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "headCommits": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "publishedAt": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "repository": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "defaultBranch": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "policy": {
+        "type": "object",
+        "properties": {
+          "autoSync": {
+            "type": "boolean",
+            "description": "Pull .oxagen/ forward from the production branch without being asked, when the checkout is behind it"
+          },
+          "blockStaleRuns": {
+            "type": "boolean",
+            "description": "Refuse to run a prompt while .oxagen/ is behind the production branch"
+          }
+        },
+        "required": [
+          "autoSync",
+          "blockStaleRuns"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "steeringVersion",
+      "headCommit",
+      "headCommits",
+      "publishedAt",
+      "repository",
+      "defaultBranch",
+      "policy"
+    ],
+    "additionalProperties": false
+  }
+}

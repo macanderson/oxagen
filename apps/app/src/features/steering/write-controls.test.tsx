@@ -302,6 +302,10 @@ describe("the sentence for each refusal", () => {
       "GitHub refused the change. Nothing was published.",
     ],
     [
+      { reason: "conflict", code: "merge_time_unknown" },
+      "GitHub has not said when, so nothing was published. Merge again",
+    ],
+    [
       { reason: "conflict", code: "already_merged" },
       "This proposal changed after the page loaded.",
     ],
