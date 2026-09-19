@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { digestBytes } from "../digest";
 import type { ExecAsync, ExecResult } from "../host/service";
 import {
+  canonicalRemote,
   MAX_UNTRACKED_LINE_COUNTS,
   parseNumstat,
   parsePorcelainZ,
@@ -53,7 +54,8 @@ describe("readGitFacts", () => {
       head_sha: "a".repeat(40),
       branch: "feature/one",
       dirty: true,
-      remote_digest: digestBytes("git@github.com:acme/widgets.git"),
+      // Canonical, so the ssh and https spellings of one repository agree.
+      remote_digest: digestBytes("github.com/acme/widgets"),
     });
   });
 
@@ -66,9 +68,27 @@ describe("readGitFacts", () => {
       "remote get-url origin": `${url}\n`,
     });
     const facts = await readGitFacts(exec, "/repo");
-    expect(facts?.remote_digest).toBe(digestBytes(url));
+    // The digest is of the canonical repository, not of the URL as this
+    // machine spells it. Hashing the raw URL made the identity depend on
+    // the credential in its userinfo, so the same repository digested
+    // differently on two machines and after every token rotation.
+    expect(facts?.remote_digest).toBe(digestBytes("github.com/acme/widgets"));
+    expect(facts?.remote_digest).not.toBe(digestBytes(url));
     expect(JSON.stringify(facts)).not.toContain("token");
     expect(JSON.stringify(facts)).not.toContain("github.com");
+
+    // The same repository over ssh, with no credential at all, is the same
+    // identity. That is the property the digest exists for.
+    const viaSsh = await readGitFacts(
+      fakeGit({
+        "rev-parse --abbrev-ref HEAD": "main\n",
+        "rev-parse HEAD": "b".repeat(40) + "\n",
+        "status --porcelain": "",
+        "remote get-url origin": "git@github.com:acme/widgets.git\n",
+      }),
+      "/repo",
+    );
+    expect(viaSsh?.remote_digest).toBe(facts?.remote_digest);
   });
 
   it("reports a clean tree as not dirty", async () => {
@@ -501,5 +521,42 @@ describe("worktreeReconciledBody", () => {
     expect(body["observed_changes"]).toEqual([]);
     expect(body["observed_changes_total"]).toBe(0);
     expect(body["observed_changes_truncated"]).toBe(false);
+  });
+});
+
+describe("canonicalRemote", () => {
+  // The digest exists to tell repositories apart without naming them, so it
+  // has to depend on the repository and nothing else.
+  const forms = [
+    "https://github.com/acme/repo.git",
+    "https://github.com/acme/repo",
+    "https://user:ghp_secret@github.com/acme/repo.git",
+    "https://x-access-token:ghs_other@github.com/acme/repo.git",
+    "git@github.com:acme/repo.git",
+    "ssh://git@github.com/acme/repo.git",
+    "https://GitHub.com/acme/repo.git",
+    "https://github.com/acme/repo.git/",
+  ];
+
+  it("gives every form of one repository the same identity", () => {
+    const identities = new Set(forms.map(canonicalRemote));
+    expect(identities).toEqual(new Set(["github.com/acme/repo"]));
+  });
+
+  it("keeps different repositories apart", () => {
+    expect(canonicalRemote("https://github.com/acme/other.git")).not.toBe(
+      canonicalRemote("https://github.com/acme/repo.git"),
+    );
+    // A repository name is case sensitive on most forges, so the path is
+    // not folded even though the host is.
+    expect(canonicalRemote("https://github.com/acme/Repo.git")).not.toBe(
+      canonicalRemote("https://github.com/acme/repo.git"),
+    );
+  });
+
+  it("carries no credential into the identity", () => {
+    for (const secret of ["ghp_secret", "ghs_other", "user", "x-access-token"])
+      for (const form of forms)
+        expect(canonicalRemote(form)).not.toContain(secret);
   });
 });

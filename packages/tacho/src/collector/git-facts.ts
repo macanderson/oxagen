@@ -190,8 +190,48 @@ export async function readGitFacts(
   // Undefined here is a failed read, not a clean tree, so the field is left
   // off rather than asserting cleanliness nobody observed.
   if (status !== undefined) facts.dirty = status.trim().length > 0;
-  if (remote !== undefined) facts.remote_digest = digestBytes(remote);
+  if (remote !== undefined)
+    facts.remote_digest = digestBytes(canonicalRemote(remote));
   return facts;
+}
+
+/**
+ * The remote URL reduced to the repository it names, so two hosts working
+ * the same repository digest to the same value.
+ *
+ * The digest exists to tell repositories apart without saying which one, so
+ * it has to depend on the repository and nothing else. A remote often
+ * carries per-machine credentials in its userinfo
+ * (`https://user:token@host/acme/repo.git`), and hashing that raw made the
+ * identity depend on the token: two developers, or one developer after a
+ * rotation, produced different digests for the same repository and nothing
+ * downstream could correlate them.
+ *
+ * So the userinfo goes, the scheme and the `.git` suffix go, `scp` syntax
+ * (`git@host:acme/repo.git`) is folded onto the same shape as its URL form,
+ * and the host is lowercased. The path is not, because a repository name is
+ * case sensitive on most forges. None of this is reversible and none of it
+ * needs to be: nothing reads the digest back, it is only compared.
+ */
+export function canonicalRemote(remote: string): string {
+  let value = remote.trim();
+  // `git@host:acme/repo.git` is the same repository as
+  // `ssh://git@host/acme/repo.git`.
+  const scp = /^([^/@]+)@([^/:]+):(.+)$/.exec(value);
+  if (scp !== null && !value.includes("://"))
+    value = `ssh://${scp[2] ?? ""}/${scp[3] ?? ""}`;
+  value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
+  // Userinfo, which is where a token rides.
+  const at = value.indexOf("@");
+  const firstSlash = value.indexOf("/");
+  if (at !== -1 && (firstSlash === -1 || at < firstSlash))
+    value = value.slice(at + 1);
+  // Trailing slashes first: the `.git` anchor does not match with one after
+  // it, so the other order left `repo.git/` carrying its suffix.
+  value = value.replace(/\/+$/, "").replace(/\.git$/, "");
+  const slash = value.indexOf("/");
+  if (slash === -1) return value.toLowerCase();
+  return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
 }
 
 /** The index and worktree letters of a porcelain v1 entry, mapped to a status. */
