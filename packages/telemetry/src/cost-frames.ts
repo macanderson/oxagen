@@ -18,13 +18,16 @@
  * `oxagen.llm_call_duplicate_of`, and every reader below drops a stamped row
  * ({@link NOT_A_DUPLICATE}). That is the same rule `countsLlmCallUsage` in
  * @oxagen/tacho folds session totals by, so the rollup and the fold cannot
- * price a call a different number of times. Those
- * sources carry cache writes as one `cache_creation_tokens` figure (the
- * 5m/1h split is a transcript column, docs/specs/tacho/data-model.md §2.7),
- * so a wrapped run's cache writes are priced as 5m writes, the same rule the
- * ledger branch applies to `cache_write_tokens`.
+ * price a call a different number of times. Those sources carry cache writes
+ * as one `cache_creation_tokens` figure; the 5m/1h split is a transcript
+ * column (docs/specs/tacho/data-model.md §2.7). The book prices the two TTLs
+ * at different rates, so the wrap below recovers the one-hour portion the
+ * same way it recovers thinking: from the transcript row, joined back when
+ * the duplicate filter dropped it. The remainder of `cache_creation_tokens`
+ * is the five-minute write, matching `priceObservedUsage` in @oxagen/tacho.
+ * A gateway frame has no 1h column, so its `cacheWrite1h` stays zero.
  *
- * Reasoning is the one class a wrapped call reports that the gateway does
+ * Reasoning is another class a wrapped call reports that the gateway does
  * not. Both vendors count thinking INSIDE the output figure they publish.
  * Anthropic states it as `usage.output_tokens_details.thinking_tokens` and
  * OpenAI as `output_tokens_details.reasoning_tokens`, and the tacho
@@ -39,13 +42,14 @@
  * The split and the duplicate filter pull against each other, so the wrapped
  * read joins them back together. When the host sealed a call's OTel or proxy
  * sighting first, the stamp lands on the transcript row, the filter above
- * drops it, and the row left to price carries no `thinking_tokens` at all,
- * because the transcript is the only source that records the column. The
- * read therefore joins that dropped transcript row back on the vendor
- * request id or the message id ({@link TRANSCRIPT_THINKING}) and takes its thinking figure, the same
- * rule `countsLlmCallSplit` in @oxagen/tacho states. Nothing is added by the
- * join: the call is still priced from one row, and the figure only moves
- * tokens out of that row's inclusive `output_tokens` into `reasoning`.
+ * drops it, and the row left to price carries neither `thinking_tokens` nor
+ * `cache_creation_1h_tokens`, because the transcript is the only source that
+ * records those columns. The read therefore joins that dropped transcript
+ * row back on the vendor request id or the message id
+ * ({@link TRANSCRIPT_THINKING}, {@link TRANSCRIPT_CACHE_1H}) and takes both
+ * figures, the same rule `countsLlmCallSplit` in @oxagen/tacho states.
+ * Nothing is added by the join: the call is still priced from one row, and
+ * the figures only move tokens between classes that row already counted.
  *
  * The findings job reads a workspace's tool calls with their digests and
  * result tokens through the same client (`readTachoToolCallObservations`).
@@ -124,13 +128,21 @@ const TRANSCRIPT_THINKING =
   "greatest(coalesce(t.thinking, 0), coalesce(m.thinking, 0))";
 
 /**
- * The rows that carry a call's thinking split, which is `countsLlmCallSplit`
- * in @oxagen/tacho spelled for the store: a transcript row counts whether it
- * was the first sighting of its call or the duplicate of an OTel or proxy
- * row, and a transcript continuation block, stamped a duplicate of
- * `transcript`, had its usage removed and carries nothing. This is the one
- * read that must NOT apply {@link NOT_A_DUPLICATE}, because the row it wants
- * is usually the stamped one.
+ * The one-hour cache-write figure from the same transcript joins that carry
+ * thinking. `cache_creation_tokens` on the priced row is the total write;
+ * this is the portion of that total that was a one-hour TTL.
+ */
+const TRANSCRIPT_CACHE_1H =
+  "greatest(coalesce(t.cache_1h, 0), coalesce(m.cache_1h, 0))";
+
+/**
+ * The rows that carry a call's thinking and cache-TTL split, which is
+ * `countsLlmCallSplit` in @oxagen/tacho spelled for the store: a transcript
+ * row counts whether it was the first sighting of its call or the duplicate
+ * of an OTel or proxy row, and a transcript continuation block, stamped a
+ * duplicate of `transcript`, had its usage removed and carries nothing. This
+ * is the one read that must NOT apply {@link NOT_A_DUPLICATE}, because the
+ * row it wants is usually the stamped one.
  */
 const TRANSCRIPT_SPLIT_ROW = `source = 'transcript'
           AND attrs[{duplicateAttr:String}] != 'transcript'`;
@@ -145,6 +157,16 @@ const TRANSCRIPT_SPLIT_ROW = `source = 'transcript'
  * reasoning.
  */
 const FRAME_REASONING = `toInt64(if(${TRANSCRIPT_THINKING} > 0, ${TRANSCRIPT_THINKING}, coalesce(c.thinking_tokens, 0)))`;
+
+/**
+ * The one-hour write figure, joined the same way as thinking. Capped at the
+ * priced row's total `cache_creation_tokens` so a transcript that over-reports
+ * cannot invent writes the call did not make; the five-minute class is the
+ * remainder (`priceObservedUsage` in @oxagen/tacho).
+ */
+const FRAME_CACHE_WRITE = "toInt64(coalesce(c.cache_creation_tokens, 0))";
+const FRAME_CACHE_1H = `toInt64(least(${FRAME_CACHE_WRITE}, if(${TRANSCRIPT_CACHE_1H} > 0, ${TRANSCRIPT_CACHE_1H}, coalesce(c.cache_creation_1h_tokens, 0))))`;
+const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE_1H}))`;
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -213,15 +235,16 @@ export async function readModelCallFrames(args: {
         c.provider AS provider,
         coalesce(c.input_tokens, 0)          AS input_uncached,
         coalesce(c.cache_read_tokens, 0)     AS cache_read,
-        coalesce(c.cache_creation_tokens, 0) AS cache_write_5m,
+        ${FRAME_CACHE_5M} AS cache_write_5m,
+        ${FRAME_CACHE_1H} AS cache_write_1h,
         toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
         ${FRAME_REASONING} AS reasoning,
         c.cost_usd_micros AS cost_micros
       FROM (
         SELECT
           ts, seq, model, provider, input_tokens, output_tokens,
-          cache_read_tokens, cache_creation_tokens, thinking_tokens,
-          cost_usd_micros, request_id, message_id
+          cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
+          thinking_tokens, cost_usd_micros, request_id, message_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
@@ -233,7 +256,8 @@ export async function readModelCallFrames(args: {
       LEFT JOIN (
         SELECT
           request_id AS call_key,
-          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking
+          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
+          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
@@ -245,7 +269,8 @@ export async function readModelCallFrames(args: {
       LEFT JOIN (
         SELECT
           message_id AS call_key,
-          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking
+          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
+          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
@@ -272,6 +297,7 @@ export async function readModelCallFrames(args: {
     input_uncached: string;
     cache_read: string;
     cache_write_5m: string;
+    cache_write_1h: string;
     output: string;
     reasoning: string;
     cost_micros: string | null;
@@ -284,7 +310,7 @@ export async function readModelCallFrames(args: {
     inputUncached: Number(r.input_uncached),
     cacheRead: Number(r.cache_read),
     cacheWrite5m: Number(r.cache_write_5m),
-    cacheWrite1h: 0,
+    cacheWrite1h: Number(r.cache_write_1h),
     output: Number(r.output),
     reasoning: Number(r.reasoning),
     reportedCostMicros: r.cost_micros,

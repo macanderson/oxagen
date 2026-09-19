@@ -34,6 +34,11 @@ const RUN = "00000000-0000-4000-8000-0000000000aa";
  */
 const TRANSCRIPT = "greatest(coalesce(t.thinking, 0), coalesce(m.thinking, 0))";
 const REASONING = `toInt64(if(${TRANSCRIPT} > 0, ${TRANSCRIPT}, coalesce(c.thinking_tokens, 0)))`;
+const TRANSCRIPT_CACHE_1H =
+  "greatest(coalesce(t.cache_1h, 0), coalesce(m.cache_1h, 0))";
+const CACHE_WRITE = "toInt64(coalesce(c.cache_creation_tokens, 0))";
+const CACHE_1H = `toInt64(least(${CACHE_WRITE}, if(${TRANSCRIPT_CACHE_1H} > 0, ${TRANSCRIPT_CACHE_1H}, coalesce(c.cache_creation_1h_tokens, 0))))`;
+const CACHE_5M = `toInt64(greatest(0, ${CACHE_WRITE} - ${CACHE_1H}))`;
 
 function answer(rows: unknown[]): void {
   queryMock.mockResolvedValueOnce({ json: async () => rows });
@@ -60,10 +65,10 @@ function selectedColumns(sql: string): string[] {
 beforeEach(() => queryMock.mockReset());
 
 describe("readModelCallFrames", () => {
-  it("reads a wrapped run's token-bearing sources and prices OTel cache creation as 5m writes", async () => {
-    // The OTel log, collector and hook sources carry `cache_creation_tokens`
-    // and no 5m/1h split, which is a transcript column, so a wrapped run's
-    // cache writes come from the one column every admitted source populates.
+  it("reads a wrapped run's token-bearing sources and splits cache writes by TTL", async () => {
+    // OTel, collector and hook carry only the total `cache_creation_tokens`.
+    // The 5m/1h split is a transcript column, joined back the same way as
+    // thinking. With no transcript 1h figure the whole total prices as 5m.
     answer([
       {
         at: "2026-09-14T10:00:00.000Z",
@@ -72,6 +77,7 @@ describe("readModelCallFrames", () => {
         input_uncached: "1000",
         cache_read: "200",
         cache_write_5m: "300",
+        cache_write_1h: "0",
         output: "50",
         reasoning: "0",
         cost_micros: "4125",
@@ -83,6 +89,7 @@ describe("readModelCallFrames", () => {
         input_uncached: "10",
         cache_read: "0",
         cache_write_5m: "0",
+        cache_write_1h: "0",
         output: "5",
         reasoning: "0",
         cost_micros: null,
@@ -96,12 +103,9 @@ describe("readModelCallFrames", () => {
     const { query, query_params } = lastQuery();
     expect(query).toContain("FROM tacho_events FINAL");
     expect(query).toContain("kind = 'llm_call'");
-    expect(query).toContain(
-      "coalesce(c.cache_creation_tokens, 0) AS cache_write_5m",
-    );
-    expect(query).not.toMatch(
-      /cache_creation_5m_tokens|cache_creation_1h_tokens/,
-    );
+    expect(query).toContain(`${CACHE_5M} AS cache_write_5m`);
+    expect(query).toContain(`${CACHE_1H} AS cache_write_1h`);
+    expect(query).toContain("cache_creation_1h_tokens");
     expect(selectedColumns(query)).toEqual([
       "at",
       "model",
@@ -109,6 +113,7 @@ describe("readModelCallFrames", () => {
       "input_uncached",
       "cache_read",
       "cache_write_5m",
+      "cache_write_1h",
       "output",
       "reasoning",
       "cost_micros",
@@ -178,6 +183,7 @@ describe("readModelCallFrames", () => {
         input_uncached: "1000",
         cache_read: "0",
         cache_write_5m: "0",
+        cache_write_1h: "0",
         // The query has done the subtraction: a call that reported 900
         // output tokens of which 400 were thinking leaves 500 to price at
         // the output rate and 400 at the reasoning rate.
@@ -248,12 +254,50 @@ describe("readModelCallFrames", () => {
     // One joined row per call at most, and none for a row carrying neither
     // id: a fan-out here would turn one call into several priced frames.
     expect(joined.match(/toInt64\(max\(coalesce\(thinking_tokens, 0\)\)\)/g)).toHaveLength(2);
+    expect(
+      joined.match(/toInt64\(max\(coalesce\(cache_creation_1h_tokens, 0\)\)\)/g),
+    ).toHaveLength(2);
     expect(joined.match(/GROUP BY call_key/g)).toHaveLength(2);
     expect(joined.match(/HAVING call_key != ''/g)).toHaveLength(2);
 
     // The transcript's figure wins, and a call no transcript row joins keeps
     // its own, which is how a collector-only call still reports reasoning.
     expect(query).toContain(REASONING);
+    expect(query).toContain(CACHE_1H);
+  });
+
+  // The book prices one-hour cache writes at a premium over five-minute
+  // writes. Left entirely in `cache_write_5m`, every 1h token is undercharged.
+  it("takes the one-hour cache-write split from the duplicate transcript row", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        // Query already split: 2_000 total writes, 1_200 of them one-hour.
+        cache_write_5m: "800",
+        cache_write_1h: "1200",
+        output: "50",
+        reasoning: "0",
+        cost_micros: null,
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      run: { kind: "tacho", rootSessionUuid: RUN },
+    });
+    const { query } = lastQuery();
+    expect(query).toContain(`${CACHE_5M} AS cache_write_5m`);
+    expect(query).toContain(`${CACHE_1H} AS cache_write_1h`);
+    // Cap at the priced row's total so a transcript over-report cannot invent
+    // writes; the five-minute class is the remainder.
+    expect(query).toContain(`least(${CACHE_WRITE}`);
+    expect(frames[0]).toMatchObject({
+      cacheWrite5m: 800,
+      cacheWrite1h: 1200,
+    });
   });
 
   it("maps a joined frame's reasoning and output onto the row shape", async () => {
@@ -265,6 +309,7 @@ describe("readModelCallFrames", () => {
         input_uncached: "1000",
         cache_read: "0",
         cache_write_5m: "0",
+        cache_write_1h: "0",
         // The OTel row the call is priced from reported 900 output tokens;
         // the transcript row the filter dropped reported 400 of thinking.
         output: "500",
