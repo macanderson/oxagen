@@ -1,0 +1,160 @@
+<h2 class="ch-title">Field kit</h2>
+<p class="ch-thesis">Templates and worksheets to copy. Print this section and fill it in with the people who own each line.</p>
+
+<p class="lede">Every template here is referenced from a part of the book. They are starting points. Change the fields to match your systems, and keep the owners.</p>
+
+<div class="sheet-h">Sheet 1 · Agent inventory (part 14)</div>
+<p>One row per agent that can write to a system. A row without an operator is the first thing to fix.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Agent id</th><th>Purpose, one sentence</th><th>Operator</th><th>Harness</th><th>Bounded or ongoing</th><th>Credentials it can reach</th><th>Shared with</th></tr></thead>
+  <tbody>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+  </tbody>
+</table></div>
+
+<div class="sheet-h">Sheet 2 · Mandate (part 15)</div>
+<p>One file per agent. Each clause has one owner who can change it by pull request.</p>
+<pre><code>agent:
+operator:
+boundary: "Governs actions routed through ____. Does not govern ____."
+
+access:                      # owner:
+  acts_as:
+  may_request:
+    - system:
+      scope:
+      actions: []
+
+budget_and_rules:            # owner:
+  monthly_limit_usd:
+  per_run_ceiling_usd:
+  at_limit:                  # hold_and_notify | route_to_operator | continue_and_flag
+  rules: []
+
+equipment:                   # owner:
+  tools: []
+  skills: []
+  context_scope: []
+  tool_budget: { max_tools: , max_tokens: }
+
+record:
+  covers:
+  retention_days:
+last_reviewed:               # date, and the three owners who were present</code></pre>
+
+<div class="sheet-h">Sheet 3 · Decision rule (part 16)</div>
+<pre><code>id:
+owner:
+when:
+  action:
+  resource:
+effect:                      # allow | deny | route
+route_to:                    # a role or a named person, when effect is route
+timeout:
+on_timeout:                  # deny | allow
+reason: ""                   # written as the agent's next step
+
+# At the top of the rules directory:
+default_when_no_rule_matches:   # deny | identity_alone</code></pre>
+<div class="tablewrap"><table>
+  <thead><tr><th>Write action</th><th>Calls per week</th><th>Answer you want</th><th>Routed to</th><th>Rule id</th></tr></thead>
+  <tbody>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+  </tbody>
+</table></div>
+
+<div class="sheet-h">Sheet 4 · Scoped rule object (part 6)</div>
+<pre><code>{
+  "rule": "Money is integer cents. No float arithmetic on amounts.",
+  "applies_to": "billing/**",
+  "verified_by": "lint:no-float-money",
+  "since": "a1b2c3",
+  "owner": "payments-platform"
+}</code></pre>
+<p>A rule with no <code>verified_by</code> is a preference. Keep it in prose, or write the check.</p>
+
+<div class="sheet-h">Sheet 5 · Domain dossier (part 5)</div>
+<pre><code>domain: billing
+source_sha:                  # the commit this was generated from
+entry_points: []             # routes, jobs, and consumers
+core_types: []               # with one line each
+invariants: []               # each links to the check that holds it
+owned_tables: []
+covering_tests: []
+may_call: []                 # other domains
+must_not_call: []
+recent_decisions: []         # ADR ids
+budget_tokens: 300</code></pre>
+
+<div class="sheet-h">Sheet 6 · Cost row (part 17)</div>
+<pre><code>person, agent, run, turn, step,
+model, input_tokens, cached_tokens, output_tokens,
+price_version, cost_usd, cost_basis,      # measured | reported | estimated
+rule_id, started_at</code></pre>
+
+<div class="sheet-h">Sheet 7 · Production scorecard (part 13)</div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Metric</th><th>This quarter</th><th>Last quarter</th><th>Owner</th></tr></thead>
+  <tbody>
+    <tr><td><code>cost_per_completed_task</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>tokens_consumed</code> per task, by phase</td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>retrieval_precision</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>first_attempt_rate</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>time_to_green</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>files_touched</code> per task</td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td>Variance across 10 repeats of one task</td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>attributed_spend_ratio</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>agents_with_mandate</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+    <tr><td><code>time_to_answer_review</code></td><td><span class="blank"></span></td><td><span class="blank"></span></td><td><span class="blank"></span></td></tr>
+  </tbody>
+</table></div>
+
+<div class="sheet-h">Sheet 8 · Completion checks for a bounded task (part 20)</div>
+<pre><code>task: ""
+checks:
+  - run:   ""                # a command that must exit 0
+  - diff:  { only_paths: [] }
+  - file:  { exists: "" }
+  - human: { role: , question: "" }
+on_fail: { retries: , then: route_to_operator }
+# Hash this file when the run opens. Record the digest as the first row.</code></pre>
+
+<div class="sheet-h">Sheet 9 · The operator's week (part 20)</div>
+<div class="tablewrap"><table>
+  <thead><tr><th>When</th><th>Do</th><th>Read</th></tr></thead>
+  <tbody>
+    <tr><td>Daily</td><td>Answer routed requests. Look at anything held at a budget limit.</td><td><code>open_requests_age</code>, <code>budget_holds</code></td></tr>
+    <tr><td>Weekly</td><td>Read spend and denials per agent. Review runs that tripped a threshold.</td><td><code>requests_by_answer</code>, <code>cost_per_run_p99</code></td></tr>
+    <tr><td>Monthly</td><td>Re-read each mandate with its owners. Turn repeated approvals into narrower rules. Retire agents nobody can justify.</td><td><code>days_since_mandate_review</code>, <code>tool_use_ratio</code></td></tr>
+    <tr><td>Quarterly</td><td>Run a tabletop review with someone outside the team. Fill in the scorecard.</td><td><code>time_to_answer_review</code>, sheet 7</td></tr>
+  </tbody>
+</table></div>
+
+<div class="sheet-h">Sheet 10 · A 30, 60, and 90 day plan</div>
+<div class="tablewrap"><table>
+  <thead><tr><th>By day</th><th>Engineering half</th><th>Operating half</th><th>You can now answer</th></tr></thead>
+  <tbody>
+    <tr><td>30</td><td>Per-step token and cost logging. Trace slicing in one agent.</td><td>Inventory complete. Every agent has an operator and an id.</td><td>Where do the tokens go, and who answers for each agent?</td></tr>
+    <tr><td>60</td><td>Prompt parsing, a symbol index, a schema slice, and a test lookup.</td><td>One mandate per agent. Rules for the top ten write actions. A stated default.</td><td>What is each agent allowed to do, and which rule said so?</td></tr>
+    <tr><td>90</td><td>A workflow skeleton with budgets. Per-agent tool assignment. The scorecard filled in twice.</td><td>Attributed spend. A chained run record. Completion checks for one bounded task type. Review dates booked.</td><td>What did it cost, per agent and per person, and can someone else verify what happened?</td></tr>
+  </tbody>
+</table></div>
+
+<div class="sheet-h">One task through the whole system</div>
+<p>To see how the parts connect, follow one prompt. "The <code>POST /api/v2/refunds</code> endpoint throws <code>DecimalConversionError</code> in <code>billing/processors.py</code> after #4821 merged."</p>
+<ol>
+  <li><strong>The run opens.</strong> The record stores the agent, the operator, the initiator, and the mandate version (parts 14, 15, and 19). The completion checks are hashed (part 20).</li>
+  <li><strong>Code parses the prompt</strong> into a route, an exception class, a file path, and an issue, and resolves each against an index (part 3).</li>
+  <li><strong>The graph expands the anchors</strong> one hop. The schema index adds the two tables. The test lookup adds three covering tests. The billing dossier adds its invariants. Everything is cut to an 8,000 token budget (parts 4, 5, 7, 8, and 10).</li>
+  <li><strong>The workflow engine runs the failing test</strong> under a tracer, and the slicer returns about 1,200 tokens of frames and locals (parts 2 and 9).</li>
+  <li><strong>The model writes the patch.</strong> This is the first step where judgment is needed, and the first large model call.</li>
+  <li><strong>The runner executes the checks.</strong> On a failure, the sliced result feeds one more attempt, and working memory drops the superseded one (parts 10 and 11).</li>
+  <li><strong>The agent requests <code>github.push</code></strong> to a release branch. The rule routes it to the release owner, who approves. The push goes through a mediated connection (part 16).</li>
+  <li><strong>Every step wrote a cost row</strong> with the person, the agent, and the run (part 17). The run closes, the checks held, and the chain is signed (parts 19 and 20).</li>
+  <li><strong>The scorecard updates:</strong> tokens by phase, retrieval precision, attempts, time to green, and cost (part 13).</li>
+</ol>
+<p>The model made one kind of decision in that sequence: what the patch should be. Code, rules, and people made the rest, and each of those decisions is in the record.</p>
