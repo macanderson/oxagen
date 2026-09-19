@@ -513,7 +513,9 @@ describe("sealing an OTLP export", () => {
   /** One OTLP export carrying several log records, as Claude Code batches them. */
   function exportOf(...records: Array<[string, Record<string, unknown>]>) {
     return {
-      resourceLogs: records.flatMap(([name, attrs]) => log(name, attrs).resourceLogs),
+      resourceLogs: records.flatMap(
+        ([name, attrs]) => log(name, attrs).resourceLogs,
+      ),
     };
   }
 

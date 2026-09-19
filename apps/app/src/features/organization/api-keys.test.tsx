@@ -595,9 +595,9 @@ describe("the workspace a key names", () => {
   });
 
   it("keeps an archived workspace in the picker, named as archived, so its live keys stay revocable", async () => {
-    // archive_workspace records archived_at and nothing else, and resolveApiKey
-    // never consults it: a key in an archived workspace keeps authenticating.
-    // Off the picker it would be a working credential nobody can reach.
+    // A key in an archived workspace stops authenticating (ADR-104) but is not
+    // revoked: restoring the workspace restores it. Off the picker it would be
+    // a live credential nobody can revoke for good.
     const ctx = wsCtx();
     const { source } = orgSource({ apiKeys: readOk([live]) });
     const view = render(
