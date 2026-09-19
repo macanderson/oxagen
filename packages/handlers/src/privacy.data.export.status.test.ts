@@ -54,6 +54,10 @@ const authz = vi.hoisted(() => ({
     policies: [] as unknown[],
   },
   calls: [] as { capability: string; orgId: string; userId: string | null }[],
+  /** The workspace each policy read was asked in, in order. */
+  workspaces: [] as string[],
+  /** When set, the configured policy applies in this workspace only. */
+  onlyIn: null as string | null,
 }));
 
 vi.mock("@oxagen/iam", () => ({
@@ -62,12 +66,23 @@ vi.mock("@oxagen/iam", () => ({
     capability: string;
     orgId: string;
     userId: string | null;
+    workspaceId: string;
   }) => {
     authz.calls.push({
       capability: args.capability,
       orgId: args.orgId,
       userId: args.userId,
     });
+    authz.workspaces.push(args.workspaceId);
+    if (authz.onlyIn !== null && args.workspaceId !== authz.onlyIn) {
+      return Promise.resolve({
+        principal: null,
+        grants: [],
+        roles: [],
+        roleGrants: [],
+        policies: [],
+      });
+    }
     return Promise.resolve(authz.value);
   },
 }));
@@ -169,6 +184,8 @@ beforeEach(() => {
   mocks.selects.length = 0;
   mocks.wheres.length = 0;
   authz.calls.length = 0;
+  authz.workspaces.length = 0;
+  authz.onlyIn = null;
   authz.value = {
     principal: null,
     grants: [],
@@ -535,5 +552,72 @@ describe("an export_data deny written after the archive was queued", () => {
     );
     expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
     expect(authz.calls).toHaveLength(1);
+  });
+});
+
+// The download route is mounted under any workspace slug, so the policy of the
+// workspace a download arrives through is not the policy that governed the
+// export. A deny written in the queuing workspace has to hold wherever the
+// archive is asked for from.
+describe("an export_data deny in the workspace that queued the export", () => {
+  const QUEUED_IN = "66666666-6666-4666-8666-666666666666";
+  const CALLING_FROM = "33333333-3333-4333-8333-333333333333";
+
+  function readyOrgExportQueuedIn(workspaceId: string | null): void {
+    queueSelects(
+      [personalRow({ scope: "org", workspaceId })],
+      [{ role: "owner" }],
+    );
+  }
+
+  it("refuses a download through another workspace (negative)", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    denyExportData();
+    authz.onlyIn = QUEUED_IN;
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_not_permitted",
+    );
+    expect(authz.workspaces).toEqual([QUEUED_IN]);
+  });
+
+  it("still refuses on a deny in the calling workspace alone", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    denyExportData();
+    authz.onlyIn = CALLING_FROM;
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+    expect(authz.workspaces).toEqual([QUEUED_IN, CALLING_FROM]);
+  });
+
+  it("hands the key over when neither workspace denies it", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+    expect(authz.workspaces).toEqual([QUEUED_IN, CALLING_FROM]);
+  });
+
+  it("asks once when the download comes through the queuing workspace", async () => {
+    readyOrgExportQueuedIn(CALLING_FROM);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(authz.workspaces).toEqual([CALLING_FROM]);
+  });
+
+  // Rows written before the column existed, or queued in no workspace, carry
+  // none. They keep the check they had: the calling scope alone.
+  it("asks in the calling scope alone for a row with no workspace", async () => {
+    readyOrgExportQueuedIn(null);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(authz.workspaces).toEqual([CALLING_FROM]);
   });
 });

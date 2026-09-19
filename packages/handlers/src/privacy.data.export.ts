@@ -1,4 +1,8 @@
-import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
+import {
+  type CapabilityHandler,
+  HandlerError,
+  ORG_ONLY_WORKSPACE_ID,
+} from "@oxagen/oxagen";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { withSystemDb, schema } from "@oxagen/database";
 import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
@@ -107,6 +111,14 @@ export const privacyDataExportHandler: CapabilityHandler<
         publicId: generatePublicId("prexp"),
         userId: ctx.userId!,
         orgId,
+        // The workspace whose `export_data` policy just governed this queue.
+        // `get_export_status` asks that policy again before it hands over an
+        // organization archive, wherever the download is requested from. The
+        // org-only sentinel is no workspace, so it is stored as none.
+        workspaceId:
+          ctx.workspaceId && ctx.workspaceId !== ORG_ONLY_WORKSPACE_ID
+            ? ctx.workspaceId
+            : null,
         scope: input.scope,
         status: "queued",
       })

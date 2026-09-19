@@ -3445,7 +3445,7 @@
       "writes": []
     }
   ],
-  "contentHash": "6a56108ae84f0755f2acb6ca4d8b22a9cc1740c2e40da142d4b880c109ef412c",
+  "contentHash": "78e70160ac9542a268e998f90634e92f80d1ee3def8cacdc7f926a4236d14c69",
   "domains": [
     {
       "name": "agent",
@@ -17054,6 +17054,12 @@
         {
           "name": "org_id",
           "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": true,
           "primaryKey": false,
           "type": "uuid"
         },

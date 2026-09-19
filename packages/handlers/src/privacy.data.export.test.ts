@@ -10,6 +10,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
   insertReturning: vi.fn<() => Promise<unknown>>(),
+  inserted: [] as Record<string, unknown>[],
   eventSend: vi.fn<(arg: unknown) => Promise<unknown>>(),
   emitSecurityEvent: vi.fn<(arg: unknown) => void>(),
 }));
@@ -62,7 +63,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       }),
     }),
     insert: () => ({
-      values: () => ({ returning: () => mocks.insertReturning() }),
+      values: (row: Record<string, unknown>) => {
+        mocks.inserted.push(row);
+        return { returning: () => mocks.insertReturning() };
+      },
     }),
   });
   return {
@@ -102,6 +106,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectResults.length = 0;
+    mocks.inserted.length = 0;
     mocks.insertReturning.mockResolvedValue([{ id: "exp_1" }]);
     authz.value = {
       principal: null,
@@ -170,6 +175,24 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
       code: "forbidden",
       reason: "org_export_requires_admin",
     });
+  });
+
+  // get_export_status asks export_data's policy again in the workspace that
+  // queued the export, so the queue has to record which one that was. Without
+  // it, a deny written there could be stepped around by downloading through a
+  // different workspace of the same organisation.
+  it("records the workspace whose policy governed the queue", async () => {
+    queueSelects([{ role: "owner" }]);
+    await privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX);
+    expect(mocks.inserted[0]?.workspaceId).toBe("ws_1");
+  });
+
+  it("records no workspace for a request made in no workspace", async () => {
+    await privacyDataExportHandler(
+      { scope: "user" },
+      { ...CTX, workspaceId: "00000000-0000-0000-0000-000000000000" },
+    );
+    expect(mocks.inserted[0]?.workspaceId).toBeNull();
   });
 
   it("allows org-scope export for an Owner of the org", async () => {

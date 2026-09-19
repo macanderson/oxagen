@@ -65,6 +65,7 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
       .select({
         id: schema.privacyExportRequests.id,
         scope: schema.privacyExportRequests.scope,
+        workspaceId: schema.privacyExportRequests.workspaceId,
         status: schema.privacyExportRequests.status,
         exportUrl: schema.privacyExportRequests.exportUrl,
         completedAt: schema.privacyExportRequests.completedAt,
@@ -132,11 +133,28 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     // governed the export: has an explicit rule revoked it? The role check
     // above remains the authorization; this observes the revocation it cannot
     // see.
-    await assertCapabilityNotRevoked(privacyDataExport, ctx, {
+    //
+    // And it is asked in the workspace that queued the export, not only in the
+    // one the download arrives through. The download route is mounted under
+    // any workspace slug, so a deny written in the queuing workspace A would
+    // otherwise be stepped around by downloading through workspace B, whose
+    // policy never governed the export. So the queuing workspace is asked first
+    // and the calling scope second, and either one refusing refuses the read.
+    // A row with no recorded workspace (queued in no workspace, or written
+    // before the column existed) is asked in the calling scope alone.
+    const revoked = {
       reason: "org_export_not_permitted",
       message:
         "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
-    });
+    };
+    if (row.workspaceId && row.workspaceId !== ctx.workspaceId) {
+      await assertCapabilityNotRevoked(
+        privacyDataExport,
+        { ...ctx, workspaceId: row.workspaceId },
+        revoked,
+      );
+    }
+    await assertCapabilityNotRevoked(privacyDataExport, ctx, revoked);
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a
