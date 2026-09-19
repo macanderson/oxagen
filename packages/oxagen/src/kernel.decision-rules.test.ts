@@ -103,6 +103,25 @@ describe("kernel decision-rules gate", () => {
     expect(seenRunIds).toEqual([null]);
   });
 
+  // The in-app assistant opens its run only after materializing tools, so
+  // ctx.agentRun (Agent RBAC context) is unset when a tool's execute closure
+  // is built — invoke()'s caller reads the live run id itself at call time
+  // and hands it in as opts.runId, which must win over ctx.agentRun?.runId.
+  it("prefers opts.runId over ctx.agentRun?.runId for the receipt's run", async () => {
+    registerRefund();
+    registerHandler("test.refund", async () => async () => ({ ok: true }));
+    const seenRunIds: (string | null | undefined)[] = [];
+    setDecisionRulesGate(async ({ ctx: gateCtx }) => {
+      seenRunIds.push(gateCtx.runId);
+    });
+
+    await invoke("test.refund", { amount_usd: 10 }, ctx, {
+      runId: "arun_live",
+    });
+
+    expect(seenRunIds).toEqual(["arun_live"]);
+  });
+
   it("a passing gate lets the handler run and return", async () => {
     registerRefund();
     registerHandler("test.refund", async () => async () => ({ ok: true }));
