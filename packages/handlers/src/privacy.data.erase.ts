@@ -50,21 +50,18 @@ export const privacyDataEraseHandler: CapabilityHandler<
   if (input.scope === "org") {
     if (!input.orgId)
       throw new Error("orgId is required for org-scope erasure");
-    // The erasure target must be the org the kernel governed.
+    // The erasure target must be the org the kernel governed, the same rule
+    // `export_data` applies and for a sharper reason: the recheck below asks
+    // `ctx.orgId`'s policy, while the role read and the scheduled delete use
+    // `input.orgId`. With the two allowed to differ, an owner of both A and B
+    // could invoke in A and name B, and B's explicit `erase_data` deny would
+    // never be read while B's records were scheduled for hard-delete. The
+    // decision would be made in one tenant and executed in another, on the
+    // one capability where that is unrecoverable.
     //
-    // `invoke()` resolves IAM against `ctx.orgId`, and the revocation re-check
-    // below reads `ctx.orgId` too. A body-supplied `orgId` naming a DIFFERENT
-    // org would have the decision made in one tenant and every record deleted
-    // from another: the target org's grants, including an explicit `erase_data`
-    // deny, are never evaluated, so an owner of both could schedule the
-    // hard-delete of the denying org by invoking through the other one. A
-    // membership-role read is not a substitute; it cannot see a deny grant at
-    // all.
-    //
-    // Same rule and same wording as privacy.data.export, because it is the same
-    // defect: a caller who wants another org erased invokes in that org's
-    // context, where the kernel governs it. The app already passes `ctx.orgId`
-    // here, so nothing legitimate changes.
+    // So they must name the same org, and an owner erasing another
+    // organization invokes in that organization's context, where its own
+    // rules govern the request.
     if (input.orgId !== ctx.orgId) {
       throw new HandlerError({
         code: "forbidden",

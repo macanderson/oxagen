@@ -570,6 +570,10 @@ describe("Security", () => {
     expect(sessions).toHaveTextContent("Mac · Chrome 141");
     expect(sessions).toHaveTextContent("this device");
     expect(sessions).toHaveTextContent("iPhone · Safari 26");
+    // The house vocabulary reserves "session" for an agent's run, so a human
+    // authentication record is a signed-in device. A customer who saw both
+    // words in one product could not tell which one this list was about.
+    expect(sessions).not.toHaveTextContent(/session/i);
     expect(
       within(sessions).getAllByTestId("account-session-revoke"),
     ).toHaveLength(1);
