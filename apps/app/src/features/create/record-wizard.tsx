@@ -15,9 +15,9 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect } from "react";
 import {
-  type ConstraintEffect,
+  ConstraintEffect,
   RECORD_KINDS,
-  type RecordForce,
+  RecordForce,
   type RecordKind,
 } from "@/data/contracts/steering";
 import type { ActionResult } from "@/server/kernel";
@@ -144,7 +144,7 @@ function useFailureText(): (failure: Failure) => string {
 const code = (chunks: ReactNode) => <span className={mono}>{chunks}</span>;
 
 /** What the draft adds up to: the record propose_record will be sent. */
-function useRecordOf(api: Api, ctx: CreateContext) {
+function recordOf(api: Api, ctx: CreateContext) {
   const d = api.draft;
   const kind = d.kind ?? "rule";
   const seed = seedStatement(d.desc, d.kind);
@@ -240,7 +240,7 @@ function KindStep({ api }: StepProps<RecordDraft>) {
 
 function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.statement");
-  const record = useRecordOf(api, ctx);
+  const record = recordOf(api, ctx);
   const d = api.draft;
   const kind = record.choice.kind;
   const forces = forcesFor(kind);
@@ -298,7 +298,10 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             value={force}
             aria-describedby="record-force-hint"
             onChange={(event) => {
-              api.update({ force: event.target.value as RecordForce });
+              const chosen = RecordForce.options.find(
+                (f) => f === event.target.value,
+              );
+              if (chosen !== undefined) api.update({ force: chosen });
             }}
             className={`${inputBase} ${mono}`}
           >
@@ -355,12 +358,18 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
             value={d.effect}
             aria-describedby="record-effect-hint"
             onChange={(event) => {
-              api.update({ effect: event.target.value as ConstraintEffect });
+              const chosen = ConstraintEffect.options.find(
+                (e) => e === event.target.value,
+              );
+              if (chosen !== undefined) api.update({ effect: chosen });
             }}
             className={`${inputBase} ${mono} sm:max-w-60`}
           >
-            <option value="forbid">forbid</option>
-            <option value="require">require</option>
+            {ConstraintEffect.options.map((effect) => (
+              <option key={effect} value={effect}>
+                {effect}
+              </option>
+            ))}
           </select>
           <p id="record-effect-hint" className="text-xs text-muted-foreground">
             {t("effect.hint")}
@@ -394,7 +403,7 @@ function StatementStep({ api, ctx }: StepProps<RecordDraft>) {
 
 function ChecksStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.checks");
-  const record = useRecordOf(api, ctx);
+  const record = recordOf(api, ctx);
   const effect = record.choice.constraintEffect;
   const detail: Record<(typeof CHECKS)[number], ReactNode> = {
     schema: t.rich("items.schema.detail", { code }),
@@ -435,7 +444,7 @@ function ChecksStep({ api, ctx }: StepProps<RecordDraft>) {
 function PullRequestStep({ api, ctx }: StepProps<RecordDraft>) {
   const t = useTranslations("createRecord.pr");
   const failureText = useFailureText();
-  const record = useRecordOf(api, ctx);
+  const record = recordOf(api, ctx);
   const d = api.draft;
   const repo = ctx.repo;
   const lineage = record.choice.lineageId;
@@ -623,7 +632,7 @@ function useRecordStep(props: StepProps<RecordDraft>): StepView {
   const t = useTranslations("createRecord");
   const { api, ctx, step } = props;
   const d = api.draft;
-  const record = useRecordOf(api, ctx);
+  const record = recordOf(api, ctx);
   if (step === 1)
     return {
       title: t("describe.title"),

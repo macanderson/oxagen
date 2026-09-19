@@ -142,6 +142,7 @@
         "noName": "no name in the frontmatter",
         "noVersion": "no version in the frontmatter",
         "badVersion": "version {version} is not major.minor.patch",
+        "version": "v{version}",
         "noScope": "no scope in the frontmatter",
         "tokens": "about {tokens, number} tokens to load",
         "revert": "Revert",

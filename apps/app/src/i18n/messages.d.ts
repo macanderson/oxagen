@@ -1153,6 +1153,7 @@ type Messages = {
         noName: string;
         noVersion: string;
         badVersion: string;
+        version: string;
         noScope: string;
         tokens: string;
         revert: string;

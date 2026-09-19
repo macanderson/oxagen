@@ -36,25 +36,17 @@ vi.mock("./actions", () => ({
   proposeRecord,
   openRecordPr,
 }));
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
 vi.mock("@/ui/navigation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/ui/navigation")>();
   const navigate = { push, replace: vi.fn(), refresh: vi.fn() };
   return {
     ...actual,
     useNavigate: () => navigate,
-    SafeLink: ({
-      to,
-      children,
-      className,
-    }: {
-      to: string;
-      children: ReactNode;
-      className?: string;
-    }) => (
-      <a href={to} className={className}>
-        {children}
-      </a>
-    ),
   };
 });
 
@@ -399,13 +391,10 @@ describe("the context-record wizard: pull request", () => {
     });
     fireEvent.click(primary());
     await screen.findByTestId("pr-opened");
-    const [, , input] = proposeRecord.mock.calls[0] as [
-      string,
-      string,
-      { record: { kind: string; constraintEffect?: string } },
-    ];
-    expect(input.record.kind).toBe("constraint");
-    expect(input.record.constraintEffect).toBe("require");
+    const call: unknown[] = proposeRecord.mock.calls[0] ?? [];
+    expect(call[2]).toMatchObject({
+      record: { kind: "constraint", constraintEffect: "require" },
+    });
   });
 
   it("says a failed check stops the merge and nothing is in force", async () => {

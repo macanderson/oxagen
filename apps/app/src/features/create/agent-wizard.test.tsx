@@ -166,7 +166,7 @@ describe("the agent wizard: describe", () => {
     mount();
     await screen.findByTestId("create-agent");
     expect(currentStep()).toContain(shell("steps.describe"));
-    const rail = screen.getByTestId("wizard-rail").textContent ?? "";
+    const rail = screen.getByTestId("wizard-rail").textContent;
     for (const step of ["identity", "definition", "toolbelt", "pullRequest"])
       expect(rail).toContain(shell(`steps.${step}`));
     expect(screen.getByTestId("not-register").textContent).toBe(
@@ -193,9 +193,9 @@ describe("the agent wizard: describe", () => {
     mount();
     await screen.findByTestId("wizard-desc");
     fireEvent.click(screen.getByText(t("describe.suggestions.triage")));
-    expect(
-      screen.getByTestId<HTMLTextAreaElement>("wizard-desc").value,
-    ).toBe(t("describe.suggestions.triage"));
+    expect(screen.getByTestId<HTMLTextAreaElement>("wizard-desc").value).toBe(
+      t("describe.suggestions.triage"),
+    );
     expect(primary().disabled).toBe(false);
   });
 });
@@ -204,9 +204,9 @@ describe("the agent wizard: identity", () => {
   it("derives the slug from the description and waits for a harness, preselecting none", async () => {
     const slug = await toIdentity();
     expect(slug.value).toBe(SLUG);
-    expect(
-      screen.getByTestId<HTMLSelectElement>("wizard-harness").value,
-    ).toBe("");
+    expect(screen.getByTestId<HTMLSelectElement>("wizard-harness").value).toBe(
+      "",
+    );
     expect(primary().disabled).toBe(true);
     chooseHarness("codex");
     expect(primary().disabled).toBe(false);
@@ -215,7 +215,9 @@ describe("the agent wizard: identity", () => {
   it("refuses a slug register_agent would refuse, and says why (negative)", async () => {
     const slug = await toIdentity();
     chooseHarness("stella");
-    fireEvent.change(slug, { target: { value: "a-very-long-agent-slug-here" } });
+    fireEvent.change(slug, {
+      target: { value: "a-very-long-agent-slug-here" },
+    });
     expect(screen.getByText(t("identity.slugInvalid"))).toBeTruthy();
     expect(slug.getAttribute("aria-invalid")).toBe("true");
     expect(primary().disabled).toBe(true);
@@ -270,7 +272,9 @@ describe("the agent wizard: definition", () => {
   it("flags a slug in the file that is not the identity's (negative)", async () => {
     const file = await toDefinition();
     fireEvent.change(file, {
-      target: { value: file.value.replace(`slug = "${SLUG}"`, 'slug = "other"') },
+      target: {
+        value: file.value.replace(`slug = "${SLUG}"`, 'slug = "other"'),
+      },
     });
     expect(screen.getByTestId("derived").textContent).toContain("other");
   });
@@ -286,7 +290,9 @@ describe("the agent wizard: toolbelt", () => {
       "search_graph",
     );
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Create pull request/ }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Create pull request/ }),
+    );
     expect(screen.getByTestId("belt-note").textContent).toBe(
       t("toolbelt.noneParks"),
     );
@@ -309,7 +315,9 @@ describe("the agent wizard: toolbelt", () => {
     fireEvent.change(file, { target: { value: `${file.value}# mine\n` } });
     fireEvent.click(primary());
     await screen.findByTestId("belt");
-    fireEvent.click(screen.getByRole("checkbox", { name: /Create pull request/ }));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Create pull request/ }),
+    );
     expect(screen.getByTestId("belt-hand-edited").textContent).toBe(
       t("toolbelt.handEdited"),
     );
@@ -361,8 +369,9 @@ describe("the agent wizard: toolbelt", () => {
     );
     await toToolbelt();
     expect(screen.getByText(t("toolbelt.loading"))).toBeTruthy();
-    await act(async () => {
+    await act(() => {
       answer({ ok: true, value: { tools: [PR_TOOL], more: true } });
+      return Promise.resolve();
     });
     expect(await screen.findByTestId("belt")).toBeTruthy();
     expect(screen.getByText(t("toolbelt.more"))).toBeTruthy();
@@ -373,9 +382,7 @@ describe("the agent wizard: pull request", () => {
   it("plans the definition and the generated file, then opens the pull request with the file the person saw", async () => {
     proposeAgent.mockResolvedValue(opened());
     await toPullRequest();
-    expect(screen.getByTestId("pr-branch").textContent).toBe(
-      `agents/${SLUG}`,
-    );
+    expect(screen.getByTestId("pr-branch").textContent).toBe(`agents/${SLUG}`);
     expect(screen.getByText(`.oxagen/agents/${SLUG}.toml`)).toBeTruthy();
     expect(screen.getByText(`.claude/agents/${SLUG}.md`)).toBeTruthy();
     expect(await screen.findByText("acme/platform:main")).toBeTruthy();
@@ -383,16 +390,14 @@ describe("the agent wizard: pull request", () => {
     fireEvent.click(primary());
     await screen.findByTestId("pr-opened");
     expect(proposeAgent).toHaveBeenCalledTimes(1);
-    const [org, ws, input] = proposeAgent.mock.calls[0] as [
-      string,
-      string,
-      { slug: string; harness: string; source: string; rationale: string },
-    ];
-    expect([org, ws]).toEqual(["acme", "core-platform"]);
-    expect(input.slug).toBe(SLUG);
-    expect(input.harness).toBe("cursor");
-    expect(input.source).toContain(`slug = "${SLUG}"`);
-    expect(input.rationale).toBe(DESC);
+    const call: unknown[] = proposeAgent.mock.calls[0] ?? [];
+    expect(call.slice(0, 2)).toEqual(["acme", "core-platform"]);
+    expect(call[2]).toMatchObject({
+      slug: SLUG,
+      harness: "cursor",
+      source: expect.stringContaining(`slug = "${SLUG}"`),
+      rationale: DESC,
+    });
 
     const link = screen.getByRole("link", { name: "acme/platform#526" });
     expect(link.getAttribute("href")).toBe(

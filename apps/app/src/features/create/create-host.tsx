@@ -132,8 +132,8 @@ function Wizard({
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("create");
-  const api = useDraft(() => wizard.init() as object);
-  const [requested, setStep] = useState(1);
+  const api = useDraft(() => wizard.init());
+  const [requested, setRequested] = useState(1);
   const [running, setRunning] = useState(false);
   const steps = wizard.steps(api.draft);
   const step = clampStep(requested, steps.length);
@@ -144,7 +144,7 @@ function Wizard({
   async function press() {
     if (primary === undefined || !primary.enabled || pending) return;
     if (primary.run === undefined) {
-      setStep(step + 1);
+      setRequested(step + 1);
       return;
     }
     setRunning(true);
@@ -171,7 +171,7 @@ function Wizard({
               className={buttonSecondary}
               disabled={pending}
               onClick={() => {
-                setStep(step - 1);
+                setRequested(step - 1);
               }}
             >
               {t("back")}
@@ -225,11 +225,11 @@ export function CreateHost({
   // fresh draft rather than the one a person closed.
   const [open, setOpen] = useState<Opening | null>(null);
   const [repo, setRepo] = useState<RepoState>({ state: "loading" });
-  const sessions = useRef(0);
-  const reads = useRef(0);
+  const sessionsRef = useRef(0);
+  const readsRef = useRef(0);
 
   const readRepo = useCallback(async () => {
-    const read = ++reads.current;
+    const read = ++readsRef.current;
     setRepo({ state: "loading" });
     let next: RepoState;
     try {
@@ -247,12 +247,12 @@ export function CreateHost({
     } catch {
       next = { state: "unavailable", code: "unanswered" };
     }
-    if (read === reads.current) setRepo(next);
+    if (read === readsRef.current) setRepo(next);
   }, [org, ws]);
 
   const show = useCallback((kind: CreateKind | null) => {
-    sessions.current += 1;
-    setOpen({ kind, session: sessions.current });
+    sessionsRef.current += 1;
+    setOpen({ kind, session: sessionsRef.current });
   }, []);
 
   useEffect(() => {

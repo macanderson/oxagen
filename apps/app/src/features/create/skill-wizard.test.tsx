@@ -184,9 +184,9 @@ describe("the skill wizard: describe it", () => {
     const revert = screen.getByRole("button", {
       name: t("skill.review.revert"),
     });
-    expect((revert as HTMLButtonElement).disabled).toBe(true);
+    expect(revert).toHaveProperty("disabled", true);
     fireEvent.change(file, { target: { value: `${file.value}\nMore.` } });
-    expect((revert as HTMLButtonElement).disabled).toBe(false);
+    expect(revert).toHaveProperty("disabled", false);
     fireEvent.click(revert);
     expect(
       screen.getByTestId<HTMLTextAreaElement>("wizard-file").value,
@@ -215,16 +215,14 @@ describe("the skill wizard: describe it", () => {
     fireEvent.click(primary());
     await screen.findByTestId("pr-opened");
     expect(proposeSkill).toHaveBeenCalledTimes(1);
-    const [org, ws, input] = proposeSkill.mock.calls[0] as [
-      string,
-      string,
-      { origin: string; name: string; body: string; rationale: string },
-    ];
-    expect([org, ws]).toEqual(["acme", "core-platform"]);
-    expect(input.origin).toBe("describe");
-    expect(input.name).toBe("cut-release-notes-group");
-    expect(input.body).toContain("name: cut-release-notes-group");
-    expect(input.rationale).toBe("Cut release notes group merged PRs");
+    const call: unknown[] = proposeSkill.mock.calls[0] ?? [];
+    expect(call.slice(0, 2)).toEqual(["acme", "core-platform"]);
+    expect(call[2]).toMatchObject({
+      origin: "describe",
+      name: "cut-release-notes-group",
+      body: expect.stringContaining("name: cut-release-notes-group"),
+      rationale: "Cut release notes group merged PRs",
+    });
 
     const link = screen.getByRole("link", { name: "acme/platform#525" });
     expect(link.getAttribute("href")).toBe(

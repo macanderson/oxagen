@@ -316,7 +316,7 @@ function useFileOf(api: StepProps<SkillDraft>["api"], ctx: CreateContext) {
     text,
     edited: text !== seed,
     name: skillNameOf(text, fallbackName(d)),
-    set(value: string) {
+    set: (value: string) => {
       api.update({ edits: { ...d.edits, [key]: value } });
     },
   };
@@ -344,7 +344,7 @@ function ReviewStep({ api, ctx }: StepProps<SkillDraft>) {
         {version === undefined ? (
           <span className={bad}>{t("noVersion")}</span>
         ) : isSemver(version) ? (
-          <span className={`${chip} ${mono}`}>v{version}</span>
+          <span className={`${chip} ${mono}`}>{t("version", { version })}</span>
         ) : (
           <span className={bad}>{t("badVersion", { version })}</span>
         )}

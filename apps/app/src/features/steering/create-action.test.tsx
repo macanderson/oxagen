@@ -34,8 +34,9 @@ describe("SteeringCreate", () => {
       mount({ tab: "skills" });
       fireEvent.click(screen.getByRole("button", { name: "Add a skill" }));
       expect(heard).toHaveBeenCalledTimes(1);
-      const event = heard.mock.calls[0]?.[0] as CustomEvent;
-      expect(event.detail).toEqual({ kind: "skill" });
+      const event: unknown = heard.mock.calls[0]?.[0];
+      expect(event).toBeInstanceOf(CustomEvent);
+      expect(event).toHaveProperty("detail", { kind: "skill" });
     } finally {
       window.removeEventListener(CREATE_EVENT, heard);
     }
@@ -60,8 +61,8 @@ describe("SteeringCreate", () => {
         cleanup();
       }
       expect(heard).toHaveBeenCalledTimes(tabs.length);
-      for (const [event] of heard.mock.calls as [CustomEvent][])
-        expect(event.detail).toEqual({ kind: "record" });
+      for (const [event] of heard.mock.calls)
+        expect(event).toHaveProperty("detail", { kind: "record" });
     } finally {
       window.removeEventListener(CREATE_EVENT, heard);
     }

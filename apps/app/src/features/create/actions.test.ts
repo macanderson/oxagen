@@ -148,9 +148,9 @@ describe("proposeSkill", () => {
       origin: "upload",
       rationale: "   ",
     });
-    const sent = kernelWrite.mock.calls[0]?.[2] as Record<string, unknown>;
+    const sent: unknown = kernelWrite.mock.calls[0]?.[2];
     expect(sent).not.toHaveProperty("rationale");
-    expect(sent.origin).toBe("upload");
+    expect(sent).toMatchObject({ origin: "upload" });
   });
 
   it("hands a failed check back as the conflict it was (negative)", async () => {

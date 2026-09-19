@@ -47,7 +47,7 @@ describe("the wizard registry", () => {
     const skill = WIZARDS.skill;
     expect(skill?.need).toBe("skills.admin");
     for (const path of ["describe", "upload", "registry", null]) {
-      const draft = { ...(skill?.init() as object), path };
+      const draft = { ...skill?.init(), path };
       expect(skill?.steps(draft).at(-1)).toBe("pullRequest");
     }
   });
@@ -67,8 +67,7 @@ describe("the wizard registry", () => {
   it("carries the context-record wizard: five steps, ending on a pull request", () => {
     const record = WIZARDS.record;
     expect(record?.need).toBe("steering.write");
-    const draft = record?.init();
-    expect(record?.steps(draft)).toEqual([
+    expect(record?.steps({ ...record.init() })).toEqual([
       "describe",
       "kind",
       "statement",

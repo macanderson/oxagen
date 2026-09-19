@@ -112,7 +112,7 @@ export function draftAgentDefinition(args: {
     `tools = ${list(tools)}`,
     `deny_tools = ${list(DENY)}`,
     'side_effects = ["read", "write"]',
-    `budget = { per_run_micros = ${DEFAULT_RUN_MICROS} }`,
+    `budget = { per_run_micros = ${String(DEFAULT_RUN_MICROS)} }`,
     "",
     "[instructions]",
     'body = """',
@@ -174,7 +174,7 @@ export type BeltTool = {
 
 /** The pattern a pick writes into `tools`: the slug pinned to the version on screen. */
 export function beltPattern(tool: Pick<BeltTool, "slug" | "version">): string {
-  return `${tool.slug}@${tool.version}`;
+  return `${tool.slug}@${String(tool.version)}`;
 }
 
 /**

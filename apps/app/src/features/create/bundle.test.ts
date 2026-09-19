@@ -111,9 +111,7 @@ describe("readBundle", () => {
       { path: "__MACOSX/release-notes/._SKILL.md", text: "junk" },
       { path: "release-notes/.DS_Store", text: "junk" },
     ]);
-    const bundle = await readBundle(
-      file("release-notes-2.2.0.skill", archive),
-    );
+    const bundle = await readBundle(file("release-notes-2.2.0.skill", archive));
     expect(bundle.fileName).toBe("release-notes-2.2.0.skill");
     expect(bundle.body).toBe(SKILL);
     expect(bundle.files).toEqual([
@@ -151,7 +149,7 @@ describe("readBundle", () => {
     const archive = await zip([
       { path: "SKILL.md", text: SKILL },
       ...Array.from({ length: 17 }, (_, i) => ({
-        path: `examples/${i}.md`,
+        path: `examples/${String(i)}.md`,
         text: "x",
       })),
     ]);

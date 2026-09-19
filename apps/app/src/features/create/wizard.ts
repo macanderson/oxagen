@@ -128,12 +128,16 @@ export type WizardKind<D> = {
 };
 
 /** A kind module with its draft type erased, as the registry holds it. */
-export type AnyWizardKind = WizardKind<unknown>;
+export type AnyWizardKind = WizardKind<object>;
 
 /**
  * Erase a kind module's draft type for the registry. Sound because the shell
- * hands each module only drafts that module's own `init` made.
+ * hands each module only drafts that module's own `init` made. No assertion
+ * is needed: `WizardKind` declares its functions as methods, so a module's
+ * draft type widens to `object` on assignment.
  */
-export function wizardKind<D>(kind: WizardKind<D>): AnyWizardKind {
-  return kind as unknown as AnyWizardKind;
+export function wizardKind<D extends object>(
+  kind: WizardKind<D>,
+): AnyWizardKind {
+  return kind;
 }

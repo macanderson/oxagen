@@ -164,10 +164,10 @@ function useFile(api: StepProps<AgentDraft>["api"]) {
     seed,
     text: edited ?? seed,
     edited: edited !== undefined && edited !== seed,
-    set(value: string) {
+    set: (value: string) => {
       api.update({ edits: { ...d.edits, [slug]: value } });
     },
-    revert() {
+    revert: () => {
       api.update({
         edits: Object.fromEntries(
           Object.entries(d.edits).filter(([key]) => key !== slug),
@@ -247,9 +247,7 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
             onChange={(event) => {
               const value = event.target.value;
               api.update({
-                harness: (AGENT_HARNESSES as readonly string[]).includes(value)
-                  ? (value as AgentHarness)
-                  : null,
+                harness: AGENT_HARNESSES.find((h) => h === value) ?? null,
               });
             }}
             className={inputBase}
@@ -277,9 +275,8 @@ function IdentityStep({ api }: StepProps<AgentDraft>) {
             value={d.tier}
             aria-describedby="wizard-tier-hint"
             onChange={(event) => {
-              const value = event.target.value;
-              if ((MODEL_TIERS as readonly string[]).includes(value))
-                api.update({ tier: value as ModelTier });
+              const tier = MODEL_TIERS.find((m) => m === event.target.value);
+              if (tier !== undefined) api.update({ tier });
             }}
             className={`${inputBase} ${mono}`}
           >
@@ -325,9 +322,7 @@ function DefinitionStep({ api }: StepProps<AgentDraft>) {
             {reading.tier === null ? null : (
               <span className={chip}>{reading.tier}</span>
             )}
-            <span className={chip}>
-              {t("tools", { count: reading.tools })}
-            </span>
+            <span className={chip}>{t("tools", { count: reading.tools })}</span>
             <span className={chip}>
               {t("denied", { count: reading.denied })}
             </span>

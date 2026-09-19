@@ -37,10 +37,8 @@ export function createRequestOf(event: Event): CreateRequest | null {
   const detail: unknown = event.detail;
   if (typeof detail !== "object" || detail === null || !("kind" in detail))
     return null;
-  const { kind } = detail as { kind: unknown };
+  const kind: unknown = detail.kind;
   if (kind === null) return { kind: null };
-  return typeof kind === "string" &&
-    (CREATE_KINDS as readonly string[]).includes(kind)
-    ? { kind: kind as CreateKind }
-    : null;
+  const known = CREATE_KINDS.find((k) => k === kind);
+  return known === undefined ? null : { kind: known };
 }

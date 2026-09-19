@@ -69,7 +69,10 @@ const OPENED = {
   baseRef: "main",
   digest: `sha256:${"a".repeat(64)}`,
   commitSha: "c0ffee",
-  pullRequest: { number: 526, url: "https://github.com/acme/platform/pull/526" },
+  pullRequest: {
+    number: 526,
+    url: "https://github.com/acme/platform/pull/526",
+  },
   // Fields the wizard does not show, so the action must not pass them on.
   checks: [],
 };
@@ -204,15 +207,13 @@ describe("proposeAgent", () => {
   it("leaves an empty rationale out of the input (empty)", async () => {
     kernelWrite.mockResolvedValue({ ok: true, value: OPENED });
     await proposeAgent("acme", "core-platform", { ...input, rationale: " " });
-    const sent = kernelWrite.mock.calls[0]?.[2] as Record<string, unknown>;
+    const sent: unknown = kernelWrite.mock.calls[0]?.[2];
     expect(sent).not.toHaveProperty("rationale");
   });
 
   it("hands a failed check back as the conflict it was (negative)", async () => {
     const refusal = { ok: false, reason: "conflict", code: "agent_check_key" };
     kernelWrite.mockResolvedValue(refusal);
-    expect(await proposeAgent("acme", "core-platform", input)).toEqual(
-      refusal,
-    );
+    expect(await proposeAgent("acme", "core-platform", input)).toEqual(refusal);
   });
 });

@@ -4,7 +4,7 @@
 // already runs. The two stay distinct, and only New agent is gold.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CREATE_EVENT } from "@/shared/create";
+import { CREATE_EVENT, createRequestOf } from "@/shared/create";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider, translator } from "@/test/intl";
@@ -31,7 +31,7 @@ function mount() {
 
 describe("AgentsCreate", () => {
   it("opens the agent wizard from New agent, the one gold action", () => {
-    const seen = vi.fn((event: Event) => (event as CustomEvent).detail);
+    const seen = vi.fn((event: Event) => createRequestOf(event));
     window.addEventListener(CREATE_EVENT, seen);
     mount();
     const button = screen.getByRole("button", { name: t("newAgent") });
