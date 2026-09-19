@@ -26,6 +26,8 @@
 import {
   checkSteeringFreshness,
   isStale,
+  DEFAULT_HOOK_BUDGET_MS,
+  MIN_LOCAL_SLICE_MS,
   type CheckOptions,
   type FreshnessVerdict,
 } from "./check";
@@ -105,8 +107,22 @@ function tightenedBy(
 /** Check, optionally sync, and decide. */
 export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
   const { readOnly = false, reloadPolicy } = opts;
+  const now = opts.now ?? Date.now;
+  // One deadline for the whole gate, anchored before the check starts: the
+  // check, the optional sync, and the re-check after it all run inside the
+  // hook the harness kills after `HOOK_TIMEOUT_SECONDS`. The check has always
+  // had its own copy of this budget; the sync had none, so it could spend 30
+  // seconds per git call after the check had already spent most of the
+  // twenty, the harness killed the process, and the prompt ran unjudged with
+  // `.oxagen/` part-written.
+  const hookDeadline = now() + (opts.hookBudgetMs ?? DEFAULT_HOOK_BUDGET_MS);
+  const remaining = (): number =>
+    Math.max(MIN_LOCAL_SLICE_MS, hookDeadline - now());
   let policy = opts.policy;
-  let verdict = await checkSteeringFreshness(opts);
+  let verdict = await checkSteeringFreshness({
+    ...opts,
+    hookBudgetMs: remaining(),
+  });
   let sync: SyncResult | null = null;
 
   // The check has just fetched, so the ref the committed gates are read from
@@ -144,6 +160,11 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
         // A sync only ever refuses when it is not safe, so it is never forced
         // from the automatic path however the developer configured things.
         force: false,
+        // What is left of the hook's own timeout, so each git call the sync
+        // makes is clamped to it and the sync refuses rather than overrunning
+        // it. Without this the sync's default was 30 seconds per call.
+        deadlineMs: hookDeadline,
+        now,
       });
     } catch (error) {
       // A sync that throws (a locked index, a permission error, a `restore`
@@ -168,7 +189,10 @@ export async function evaluateGate(opts: GateOptions): Promise<GateDecision> {
       // Re-ask rather than assume. The sync wrote files; the cheapest way to
       // be sure the gate is judging the post-sync state is to look at it,
       // and the remote was already fetched, so this costs no network.
-      verdict = await checkSteeringFreshness(opts);
+      verdict = await checkSteeringFreshness({
+        ...opts,
+        hookBudgetMs: remaining(),
+      });
     }
   }
 

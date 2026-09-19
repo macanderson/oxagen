@@ -195,6 +195,14 @@ own `.oxagen/` changes, and when anything under `.oxagen/` is uncommitted,
 including a file this sync would not have written. `--force` covers the first
 two and never the `unknown` case.
 
+A sync the gate starts shares the hook's deadline. It refuses with
+`out_of_time` rather than starting a write it cannot finish inside the twenty
+seconds the harness gives the hook, and a deadline that arrives between
+batches stops it and reports how many files landed. `applied` stays false in
+both cases, so a blocking policy still refuses the prompt rather than the
+harness killing the gate and letting it through over a part-written
+`.oxagen/`.
+
 ### Reaching the agent
 
 Oxagen wraps whatever agent a team runs, so the gate is one command with a
@@ -204,6 +212,12 @@ Codex CLI both take it as a `UserPromptSubmit` hook, which
 `oxagen steering hooks install` writes for them; the warning goes into the
 turn as `additionalContext`, so it reaches the transcript and not only a
 terminal nobody is watching.
+
+`--harness all` is those two, and it says so. Oxagen wraps four harnesses
+(`WRAPPED_HARNESSES` in `@oxagen/tacho`); Cursor and Stella have no hook
+config Oxagen can write, so `install` names them as ungated and prints how to
+wire the gate by hand. The gate runs for either one already: a harness name it
+does not know renders as text and signals by exit code.
 
 For an agent with no pre-prompt hook, the `get_steering_freshness` MCP tool
 is the reach that is guaranteed. It answers later, at the first tool call

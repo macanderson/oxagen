@@ -288,3 +288,97 @@ describe("syncSteering applying", () => {
     expect(restores).toHaveLength(3);
   });
 });
+
+// A sync started from the gate runs inside the hook the harness kills after
+// 20 seconds, and by the time it starts the freshness check has spent part of
+// that. With no deadline each git call took its own `timeoutMs`: 30 seconds
+// by default, one and a half times the whole hook, so a slow `restore`, `rm`
+// or `clean` let the harness kill the process before the gate rendered its
+// decision, and the prompt ran with `blockStaleRuns` on over a part-written
+// `.oxagen/`.
+describe("syncSteering and the hook deadline", () => {
+  it("clamps each git call to what is left of the deadline", async () => {
+    let clock = 1_000_000;
+    const seen: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seen.push(opts.timeoutMs);
+      clock += 1_000;
+      return args[0] === "rev-parse" ? REMOTE_SHA : "";
+    };
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict(),
+      run,
+      timeoutMs: 30_000,
+      deadlineMs: clock + 6_000,
+      now: () => clock,
+    });
+    expect(result.applied).toBe(true);
+    // Never the 30-second default: the ref probe gets the six seconds left,
+    // the restore the five that follow it.
+    expect(seen).toEqual([6_000, 5_000]);
+  });
+
+  it("refuses before touching anything when too little time is left", async () => {
+    const run = vi.fn(okRunner);
+    const clock = 1_000_000;
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict(),
+      run,
+      deadlineMs: clock + 200,
+      now: () => clock,
+    });
+    expect(result.refusal).toBe("out_of_time");
+    expect(result.applied).toBe(false);
+    // Nothing ran, so the working copy is exactly as the sync found it.
+    expect(run).not.toHaveBeenCalled();
+    expect(result.message).toContain("oxagen steering sync");
+  });
+
+  // A deadline that arrives between batches leaves some files written. The
+  // honest report is a refusal naming it: `applied` false keeps the gate's
+  // verdict stale, so a blocking policy still blocks instead of the prompt
+  // going through on a sync that claimed success.
+  it("stops between batches and reports the part that landed", async () => {
+    let clock = 1_000_000;
+    const deadlineMs = clock + 3_000;
+    const missing = Array.from({ length: 250 }, (_, i) => ({
+      status: "added" as const,
+      path: `.oxagen/rules/ctx.${i}.toml`,
+    }));
+    const run: GitRunner = async (args) => {
+      if (args[0] === "rev-parse") return REMOTE_SHA;
+      // The first restore batch eats the rest of the deadline.
+      clock += 2_900;
+      return "";
+    };
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict({ missing }),
+      run,
+      deadlineMs,
+      now: () => clock,
+    });
+    expect(result.applied).toBe(false);
+    expect(result.refusal).toBe("out_of_time");
+    expect(result.message).toContain("200 of 250 file(s)");
+    expect(result.message).toContain("git restore --staged --worktree .oxagen");
+  });
+
+  it("is unbounded for a person running it from the command line", async () => {
+    const seen: number[] = [];
+    const run: GitRunner = async (args, opts) => {
+      seen.push(opts.timeoutMs);
+      return args[0] === "rev-parse" ? REMOTE_SHA : "";
+    };
+    const result = await syncSteering({
+      cwd: "/repo",
+      verdict: verdict(),
+      run,
+      timeoutMs: 30_000,
+    });
+    expect(result.applied).toBe(true);
+    expect(new Set(seen)).toEqual(new Set([30_000]));
+  });
+});

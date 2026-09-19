@@ -17,6 +17,11 @@
  *                     file this sync would not touch. It is unreviewed, it is
  *                     not recoverable from git, and the sync's blast radius is
  *                     the directory, not the file list.
+ *   - out of time     the caller shared a deadline (the gate does: the hook
+ *                     the harness kills after 20 seconds) and too little of
+ *                     it is left to finish. Nothing is started, or what was
+ *                     started is reported as unfinished. Either way `applied`
+ *                     is false, so a blocking policy still blocks.
  *
  * `force` exists for the one case the refusals get wrong — a developer who
  * knows the local changes are disposable — and it still refuses on `unknown`,
@@ -40,10 +45,15 @@ import {
   type GitContext,
   type GitRunner,
 } from "./git";
-import type { FreshnessVerdict } from "./check";
+import {
+  clampedToDeadline,
+  MIN_LOCAL_SLICE_MS,
+  type FreshnessVerdict,
+} from "./check";
 
 export type SyncRefusal =
   | "not_behind"
+  | "out_of_time"
   | "diverged"
   | "dirty"
   | "unknown_state"
@@ -75,7 +85,39 @@ export interface SyncOptions {
   commit?: boolean;
   /** Do everything except write. */
   dryRun?: boolean;
+  /**
+   * Absolute deadline (epoch ms) this sync shares with whatever called it.
+   *
+   * The gate runs this on the path of someone's prompt, inside a hook the
+   * harness kills after `HOOK_TIMEOUT_SECONDS`, and by the time the sync
+   * starts the freshness check has already spent part of that. Left
+   * unbounded, each git call below took its own `timeoutMs`: 30 seconds by
+   * default, one and a half times the whole hook, so a slow `restore`, `rm`
+   * or `clean` let the harness kill the process before the gate rendered its
+   * decision, and the prompt ran with `blockStaleRuns` on and the tree half
+   * written.
+   *
+   * With a deadline, every git call is clamped to what is left of it, the
+   * sync refuses to START a write it cannot expect to finish
+   * ({@link MIN_SYNC_BUDGET_MS}), and a deadline that arrives between
+   * batches stops the run with `out_of_time` rather than reporting a sync
+   * that only partly happened. A caller with no deadline (a person running
+   * `oxagen steering sync`) passes nothing and nothing is clamped.
+   */
+  deadlineMs?: number;
+  now?: () => number;
 }
+
+/**
+ * The least time the sync will start a write with.
+ *
+ * Under it the answer is `out_of_time` before anything is touched: a run that
+ * cannot reach its first `restore` leaves the working copy exactly as it
+ * found it, which is the outcome a developer can act on. Sized as four local
+ * git calls at the {@link MIN_LOCAL_SLICE_MS} floor: the ref probe, a
+ * restore, an rm, and the margin between them.
+ */
+export const MIN_SYNC_BUDGET_MS = MIN_LOCAL_SLICE_MS * 4;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -101,7 +143,11 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
     force = false,
     commit = false,
     dryRun = false,
+    deadlineMs,
+    now = Date.now,
   } = opts;
+  const timeLeft = (): number =>
+    deadlineMs === undefined ? Number.POSITIVE_INFINITY : deadlineMs - now();
 
   if (verdict.status === "unknown") {
     return refuse(
@@ -150,7 +196,28 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
     );
   }
 
-  const ctx: GitContext = { cwd, run, timeoutMs };
+  // Refused before the first write, not during it. The refusals above are
+  // all of this shape: a sync that cannot be done safely does nothing at all
+  // and says why, and a sync that cannot be finished inside the hook's own
+  // timeout is the same case. `applied` stays false, so a blocking policy
+  // still refuses the prompt rather than the harness killing the gate and
+  // letting it through.
+  if (timeLeft() < MIN_SYNC_BUDGET_MS) {
+    return refuse(
+      "out_of_time",
+      `The freshness check used the time this prompt's hook had, so nothing was synced. Run \`oxagen steering sync\` to pull \`.oxagen/\` forward.`,
+    );
+  }
+
+  const base: GitContext = { cwd, run, timeoutMs };
+  // Every call clamped to what is left of the shared deadline at the moment
+  // it is made, floored so a call that could still answer is not handed a
+  // zero timeout. Same helper the check uses, so there is one budget concept
+  // in this package rather than two.
+  const ctx: GitContext =
+    deadlineMs === undefined
+      ? base
+      : clampedToDeadline(base, deadlineMs, MIN_LOCAL_SLICE_MS, now);
   const target = verdict.branch
     ? `${verdict.remote}/${verdict.branch}`
     : verdict.remote;
@@ -231,12 +298,27 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
     };
   }
 
+  // Between batches, not inside one. A deadline that arrives mid-run leaves
+  // some files written, and the honest report of that is a refusal naming it:
+  // `applied` false keeps the gate's verdict stale, so a blocking policy
+  // blocks and the developer is told the tree is part-way rather than being
+  // let through over a sync that reported success.
+  let written = 0;
+  const outOfTime = (): SyncResult =>
+    refuse(
+      "out_of_time",
+      `The prompt's hook ran out of time after ${written} of ${
+        updated.length + removed.length
+      } file(s) under \`.oxagen/\` were taken from ${target}. Run \`oxagen steering sync\` to finish, or \`git restore --staged --worktree .oxagen\` to undo it.`,
+    );
+
   if (updated.length > 0) {
     // `--staged --worktree` writes both the index and the file, so the result
     // is a staged change rather than an unexplained working-copy edit.
     // Batched in chunks so a repository with a very large rules directory
     // cannot overrun the platform's argv limit.
     for (const batch of chunk(updated, 200)) {
+      if (timeLeft() < MIN_LOCAL_SLICE_MS) return outOfTime();
       await git(
         ctx,
         "restore",
@@ -251,10 +333,12 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
         "--",
         ...batch,
       );
+      written += batch.length;
     }
   }
   if (removed.length > 0) {
     for (const batch of chunk(removed, 200)) {
+      if (timeLeft() < MIN_LOCAL_SLICE_MS) return outOfTime();
       // `--ignore-unmatch` because a file the production branch deleted may
       // already be absent here; that is the desired end state, not an error.
       await git(
@@ -266,6 +350,7 @@ export async function syncSteering(opts: SyncOptions): Promise<SyncResult> {
         "--",
         ...batch,
       );
+      written += batch.length;
     }
     // `git rm` removes what the index knows. A copy the developer left on
     // disk untracked or ignored, at a path production retired, is not in the
