@@ -408,13 +408,14 @@ describe("readWorkingTreeChanges", () => {
     expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
   });
 
-  it("falls back to the unstaged diff in a repository with no commits", async () => {
+  it("diffs against the empty tree in a repository with no commits", async () => {
     const calls: string[][] = [];
     const exec = fakeGit(
       {
         "status --porcelain=v1 -z": " M src/a.ts\0",
         "diff --numstat HEAD": FAIL,
-        "diff --numstat": "4\t1\tsrc/a.ts\n",
+        "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+          "4\t1\tsrc/a.ts\n",
         "rev-parse --show-toplevel": "/repo\n",
       },
       calls,
@@ -423,6 +424,53 @@ describe("readWorkingTreeChanges", () => {
       ((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.lines_added,
     ).toBe(4);
     expect(calls.some((call) => call.includes("HEAD"))).toBe(true);
+  });
+
+  it("measures a partly staged initial file against nothing, not twice", async () => {
+    // Staged at three lines, then one line replaced and one added. A staged
+    // diff says 3/0 and an unstaged diff says 2/1 for the same path, so
+    // reading both and keying by path kept whichever came last. The file's
+    // real distance from an empty repository is 4/0, and one diff naming
+    // the empty tree is what asks for it.
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": "A  src/a.ts\0",
+      "diff --numstat HEAD": FAIL,
+      "diff --numstat 4b825dc642cb6eb9a060e54bf8d69288fbee4904":
+        "4\t0\tsrc/a.ts\n",
+      "diff --numstat --cached": "3\t0\tsrc/a.ts\n",
+      "diff --numstat": "2\t1\tsrc/a.ts\n",
+      "rev-parse --show-toplevel": "/repo\n",
+    });
+    const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
+    expect(only?.lines_added).toBe(4);
+    expect(only?.lines_removed).toBe(0);
+  });
+
+  it("asks git to name every file inside an untracked directory", async () => {
+    // Without `all`, git collapses a new directory into a single `?? dir/`
+    // entry, and the run records one synthetic path with no line counts
+    // instead of the files the agent actually created.
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "?? new/a.ts\0?? new/b.ts\0",
+        "diff --numstat HEAD": "",
+        "rev-parse --show-toplevel": "/repo\n",
+        "--no-index": {
+          status: 1,
+          stdout: "7\t0\t/dev/null => /repo/new/a.ts\n",
+          stderr: "",
+        },
+      },
+      calls,
+    );
+    const changes = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
+    expect(changes.map((change) => change.repo_relative_path)).toEqual([
+      "new/a.ts",
+      "new/b.ts",
+    ]);
+    const statusCall = calls.find((call) => call.includes("--porcelain=v1"));
+    expect(statusCall).toContain("--untracked-files=all");
   });
 
   it("falls back to the repo-relative path when the root cannot be read", async () => {

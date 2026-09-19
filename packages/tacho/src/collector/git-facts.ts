@@ -402,7 +402,7 @@ async function untrackedLineCount(
  * `git diff` reports the unstaged half only, so an agent that ran `git add`
  * would have its work counted as zero lines, which is the same blindness
  * this pass exists to remove. A repository with no commits has no `HEAD` to
- * diff, and falls back to the unstaged form.
+ * diff, and names the empty tree in its place.
  *
  * The status listing gates everything else, so it is read on its own. The
  * numstat and the repository root are then read together: they answer
@@ -414,7 +414,18 @@ export async function readWorkingTreeChanges(
   exec: ExecAsync,
   cwd: string,
 ): Promise<GitWorkingTreeChange[] | undefined> {
-  const status = await git(exec, cwd, ["status", "--porcelain=v1", "-z"]);
+  const status = await git(exec, cwd, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    // Default `normal` mode collapses a new directory into one `?? dir/`
+    // entry, so an agent that created a directory of files had all of them
+    // recorded as a single synthetic path with zero lines. `all` names each
+    // file, which is what the run is supposed to show. Both bounds still
+    // apply above it: `parsePorcelainZ` stops at `MAX_CHANGED_PATHS`, and
+    // only `MAX_UNTRACKED_LINE_COUNTS` of the untracked files are probed.
+    "--untracked-files=all",
+  ]);
   // Undefined is a read that did not happen: a timeout, a non-zero exit, a
   // directory that is not a repository. An empty list is a read that did
   // happen and found nothing. Collapsing the two would seal
@@ -433,18 +444,18 @@ export async function readWorkingTreeChanges(
       // `git diff` then reports only what is unstaged, so a file already
       // staged in a fresh repository counted as zero added lines even
       // though `git status` reported it. The empty tree is what HEAD would
-      // be if it existed, so the cached diff against it gives the staged
-      // file its real count, and the unstaged diff still covers the rest.
-      const staged = await git(exec, cwd, [
-        "diff",
-        "--numstat",
-        "--cached",
-        EMPTY_TREE_OBJECT,
-      ]);
-      const unstaged = await git(exec, cwd, ["diff", "--numstat"]);
-      return [staged ?? "", unstaged ?? ""]
-        .filter((part) => part.length > 0)
-        .join("\n");
+      // be if it existed, so diffing against it asks the same question the
+      // `HEAD` form asks everywhere else.
+      //
+      // It is one diff, not a staged one plus an unstaged one. Those two
+      // overlap: a file staged and then edited again appears in both, and
+      // `parseNumstat` keys by path, so the second row replaced the first
+      // and the file was reported with the later edit's counts instead of
+      // its distance from nothing. Naming the tree without `--cached`
+      // compares the worktree to it directly, which is that distance.
+      return (
+        (await git(exec, cwd, ["diff", "--numstat", EMPTY_TREE_OBJECT])) ?? ""
+      );
     }),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
