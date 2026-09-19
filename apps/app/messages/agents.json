@@ -53,6 +53,10 @@
         "body": "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the workspace repository.",
         "register": "Register one from the repository it works in:",
         "command": "oxagen agent register"
+      },
+      "create": {
+        "newAgent": "New agent",
+        "register": "Register an agent"
       }
     },
     "detail": {

@@ -9,6 +9,12 @@ const buttonBase =
 
 export const buttonPrimary = `${buttonBase} border border-button-primary-border bg-button-primary-bg text-button-primary-fg hover:bg-button-primary-hover-bg active:bg-button-primary-active-bg`;
 
+/**
+ * The one gold action a screen may carry (creation-spec §6: gold is identity,
+ * never state). Ink on gold is 9.5:1 in both themes.
+ */
+export const buttonGold = `${buttonBase} border border-brand bg-brand text-brand-foreground hover:bg-brand/90 active:bg-brand/80`;
+
 export const buttonSecondary = `${buttonBase} border border-button-default-border bg-button-default-bg text-button-default-fg hover:bg-button-default-hover-bg active:bg-button-default-active-bg`;
 
 export const linkText =

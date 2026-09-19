@@ -83,6 +83,43 @@ describe("tool.declaration.publish capability", () => {
     ).toThrow();
   });
 
+  // #3448 (residue from #3442, ADR-111): a non-ISO-4217 unit on an `amount`
+  // measure is refused here, at the one boundary every tool declaration
+  // passes through, rather than reaching the mandate page and failing
+  // `Money.safeParse` for every mandate naming the measure at once.
+  it("rejects an amount measure whose unit is not an ISO 4217 currency code", () => {
+    expect(() =>
+      toolDeclarationPublish.input.parse({
+        ...VALID_INPUT,
+        measures: {
+          amount: { path: "amount", type: "amount", unit: "USDC", scale: 2 },
+        },
+      }),
+    ).toThrow(/ISO 4217/);
+  });
+
+  it("accepts an amount measure denominated in a real ISO 4217 code", () => {
+    expect(() =>
+      toolDeclarationPublish.input.parse({
+        ...VALID_INPUT,
+        measures: {
+          amount: { path: "amount", type: "amount", unit: "USD", scale: 2 },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("accepts a count measure denominated in a non-ISO unit (e.g. a token)", () => {
+    expect(() =>
+      toolDeclarationPublish.input.parse({
+        ...VALID_INPUT,
+        measures: {
+          balance: { path: "balance", type: "count", unit: "USDC" },
+        },
+      }),
+    ).not.toThrow();
+  });
+
   // ── output ────────────────────────────────────────────────────────────────
 
   it("parses a valid output", () => {

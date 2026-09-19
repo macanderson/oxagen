@@ -99,7 +99,12 @@ async function renderWorkspaces(
       contextPr: vi.fn(),
       freshness: vi.fn(),
     },
-    tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
+    tools: {
+      versions: vi.fn(),
+      grants: vi.fn(),
+      killSwitches: vi.fn(),
+      approvalRules: vi.fn(),
+    },
   };
   const view = render(
     <IntlProvider>{await Workspaces({ ctx, source })}</IntlProvider>,

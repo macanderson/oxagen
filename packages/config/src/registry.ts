@@ -1322,6 +1322,22 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     staticValue: { "*": "Oxagen (DO NOT REPLY)" },
   },
 
+  // ── CRM (Attio) ──────────────────────────────────────────────────────────────
+  ATTIO_API_KEY: {
+    group: "CRM",
+    description:
+      "Attio API access token. When set, apps/api upserts every lead captured by " +
+      "/v1/cms/leads into Attio as a person (and a company by email domain) with " +
+      "a note carrying the form details. Unset disables the sync; leads stay in " +
+      "cms.leads. Needs the record_permission:read-write, " +
+      "object_configuration:read and note:read-write scopes.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   // ── Linear (capability provenance) ───────────────────────────────────────────
   LINEAR_API_KEY: {
     group: "Linear",

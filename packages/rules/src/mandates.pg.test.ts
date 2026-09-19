@@ -1001,6 +1001,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     });
 
+    it("reads a human_above measure the mandate does not limit, and parks a call it cannot read", async () => {
+      // A threshold on a measure outside `limits` was never read, so the
+      // promised person never saw a call above it.
+      const agent = randomUUID();
+      await insertMandate(agent, {
+        limits: {
+          calls: {
+            perPeriod: "1000",
+            period: "monthly",
+            currencyOrUnit: "calls",
+          },
+        },
+        approvalRules: {
+          humanAbove: { amount: "100000000" },
+          alwaysHumanFor: [],
+          approvers: [],
+        },
+      });
+      const over = await decide(
+        checkArgs(agent, { amount: { value: "150.00" }, vendor: "vendor:aws" }),
+      );
+      expect(over.kind).toBe("pending");
+      const under = await decide(
+        checkArgs(agent, { amount: { value: "15.00" }, vendor: "vendor:aws" }),
+      );
+      expect(under.kind).toBe("proceed");
+      const unreadable = await decide(
+        checkArgs(agent, { vendor: "vendor:aws" }),
+      );
+      expect(unreadable.kind).toBe("pending");
+    });
+
     it("releaseParked gives back what parked calls hold and nothing else", async () => {
       const agent = randomUUID();
       const id = await insertMandate(agent, {

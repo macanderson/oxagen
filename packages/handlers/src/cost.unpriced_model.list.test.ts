@@ -24,6 +24,18 @@ beforeEach(() => {
   gate.assertOrgRole.mockResolvedValue("Member");
 });
 
+const DEFAULT_WINDOWS = [
+  "input_uncached",
+  "cache_read",
+  "cache_write_5m",
+  "output",
+].map((tokenClass) => ({
+  tokenClass:
+    tokenClass as UnpricedModel["missingClassWindows"][number]["tokenClass"],
+  unpricedFrom: new Date("2026-09-02T09:00:00.000Z"),
+  unpricedTo: new Date("2026-09-13T21:30:00.000Z"),
+}));
+
 function model(over: Partial<UnpricedModel> = {}): UnpricedModel {
   return {
     model: "vendor/brand-new",
@@ -32,12 +44,14 @@ function model(over: Partial<UnpricedModel> = {}): UnpricedModel {
     tokens: 480_000,
     firstSeen: new Date("2026-09-02T09:00:00.000Z"),
     lastSeen: new Date("2026-09-13T21:30:00.000Z"),
+    classes: [],
     missingClasses: [
       "input_uncached",
       "cache_read",
       "cache_write_5m",
       "output",
     ],
+    missingClassWindows: DEFAULT_WINDOWS,
     fullyUnpriced: true,
     ...over,
   };
@@ -126,6 +140,13 @@ describe("list_unpriced_models", () => {
         calls: 4,
         tokens: 900,
         missingClasses: ["cache_read"],
+        missingClassWindows: [
+          {
+            tokenClass: "cache_read",
+            unpricedFrom: new Date("2026-09-02T09:00:00.000Z"),
+            unpricedTo: new Date("2026-09-13T21:30:00.000Z"),
+          },
+        ],
         fullyUnpriced: false,
       }),
     ]);
@@ -144,6 +165,11 @@ describe("list_unpriced_models", () => {
           "cache_write_5m",
           "output",
         ],
+        missingClassWindows: DEFAULT_WINDOWS.map((w) => ({
+          tokenClass: w.tokenClass,
+          unpricedFrom: w.unpricedFrom.toISOString(),
+          unpricedTo: w.unpricedTo.toISOString(),
+        })),
         fullyUnpriced: true,
       },
       {
@@ -154,6 +180,13 @@ describe("list_unpriced_models", () => {
         firstSeen: "2026-09-02T09:00:00.000Z",
         lastSeen: "2026-09-13T21:30:00.000Z",
         missingClasses: ["cache_read"],
+        missingClassWindows: [
+          {
+            tokenClass: "cache_read",
+            unpricedFrom: "2026-09-02T09:00:00.000Z",
+            unpricedTo: "2026-09-13T21:30:00.000Z",
+          },
+        ],
         fullyUnpriced: false,
       },
     ]);

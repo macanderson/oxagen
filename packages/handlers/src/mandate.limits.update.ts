@@ -301,10 +301,25 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: "validTo is after validFrom",
       });
     }
+    // Which measures THIS call actually named, used below for two separate
+    // things: which stamped kinds `assertToolsDeclareMeasures` is allowed
+    // to re-derive (immediately below), and, inside `assertToolsDeclareMeasures`
+    // itself, which measures its ADR-111 ISO-4217 check runs against
+    // (Codex P2 on #3484). A `limits` replacement or a `limitChanges` entry
+    // means the operator is looking at that measure, so both apply; an
+    // update that only changes validTo, targets or approval names nothing,
+    // so neither should touch a measure it never asked about.
+    const touchedMeasures =
+      input.limits !== undefined
+        ? new Set(Object.keys(input.limits))
+        : input.limitChanges !== undefined
+          ? new Set(Object.keys(input.limitChanges))
+          : new Set<string>();
     const stampedLimits = await assertToolsDeclareMeasures(tx, workspaceId, {
       tools: locked.tools,
       limits,
       targets,
+      isoCheckedMeasures: touchedMeasures,
     });
     // assertToolsDeclareMeasures re-derives every measure's kind from the
     // *current* declaration, for every measure in `limits`, whether this
@@ -321,12 +336,6 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
     // (`locked.legacyKindMeasures`) is exempt from this preservation: it
     // has no earlier fact to protect, and refreshing it is the same
     // attrition either way.
-    const touchedMeasures =
-      input.limits !== undefined
-        ? new Set(Object.keys(input.limits))
-        : input.limitChanges !== undefined
-          ? new Set(Object.keys(input.limitChanges))
-          : new Set<string>();
     for (const measure of Object.keys(stampedLimits)) {
       if (touchedMeasures.has(measure)) continue;
       if (locked.legacyKindMeasures.has(measure)) continue;
