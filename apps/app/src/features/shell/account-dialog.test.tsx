@@ -568,6 +568,68 @@ describe("Security", () => {
     expect(screen.queryByTestId("account-codes")).toBeNull();
   });
 
+  // Better Auth rotates the codes server-side the moment the call lands, so
+  // the old set is void whether or not anyone is still looking. The tab is
+  // keyed on the tab name and unmounted when the dialog closes, so if it held
+  // the only copy, a switch or a close mid-flight voided one set and dropped
+  // the next. That is a locked-out account on the next lost authenticator.
+  it("keeps codes that arrive after the tab is left, and shows them on return", async () => {
+    let issue: ((result: unknown) => void) | undefined;
+    liveRegenerateBackupCodes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          issue = resolve;
+        }),
+    );
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+
+    // Away while it is in flight, which unmounts the tab that asked.
+    await user.click(screen.getByTestId("account-tab-profile"));
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+    issue?.({ ok: true, codes: ["zzzz-1111", "zzzz-2222"] });
+
+    await user.click(screen.getByTestId("account-tab-security"));
+    const shown = await screen.findByTestId("account-codes");
+    expect(shown).toHaveTextContent("zzzz-1111");
+    expect(shown).toHaveTextContent("zzzz-2222");
+    expect(screen.getByTestId("account-codes-held")).toBeTruthy();
+  });
+
+  it("holds them across a closed dialog too", async () => {
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "open security" }));
+    expect(await screen.findByTestId("account-codes")).toHaveTextContent(
+      "aaaa-bbbb",
+    );
+  });
+
+  // Acknowledgement is the only signal that the single showing landed, so it
+  // is what clears them rather than a close or a tab switch.
+  it("lets them go once the person says they are saved", async () => {
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+    expect(await screen.findByTestId("account-codes-open")).toBeTruthy();
+  });
+
   it("offers enrolment, not codes, to a person without two-factor", async () => {
     await openDialog("security", viewerWith({ twoFactorEnabled: false }));
     expect(screen.getByTestId("account-two-factor-enroll")).toHaveAttribute(

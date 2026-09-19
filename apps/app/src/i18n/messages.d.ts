@@ -2002,6 +2002,8 @@ type Messages = {
         cancel: string;
         codesRefused: string;
         codesIssued: string;
+        codesSaved: string;
+        codesHeld: string;
         sessions: string;
         sessionsLoading: string;
         sessionsFailed: string;

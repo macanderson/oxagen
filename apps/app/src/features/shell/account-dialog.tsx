@@ -76,6 +76,23 @@ export function AccountDialog({ data }: { data: ShellData }) {
   const { accountOpen, setAccountOpen, accountTab, setAccountTab } =
     useShellState();
 
+  // Recovery codes are shown exactly once, so they are held here rather than
+  // in the Security tab that renders them.
+  //
+  // `AccountPanel` is keyed on the tab and the panel is unmounted when the
+  // dialog closes, so both switching tab and closing the dialog destroy
+  // anything the tab holds. Better Auth rotates the codes server-side the
+  // moment the call lands, which means a person who closed the dialog while
+  // the request was in flight had their old codes voided and the new ones
+  // dropped on the floor with nothing left to read them from. That is a
+  // locked-out account on the next lost authenticator.
+  //
+  // `AccountDialog` itself stays mounted across both, so the codes survive
+  // and are shown again on return. They are cleared only when the person says
+  // they have saved them, which is the one signal that the single showing has
+  // actually been received.
+  const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
+
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
   // Right to move between them and Home and End to reach the ends, and expects
@@ -156,16 +173,40 @@ export function AccountDialog({ data }: { data: ShellData }) {
           id={`account-panel-${accountTab}`}
           aria-labelledby={`account-tab-${accountTab}`}
         >
-          <AccountPanel key={accountTab} tab={accountTab} data={data} />
+          <AccountPanel
+            key={accountTab}
+            tab={accountTab}
+            data={data}
+            heldCodes={heldCodes}
+            setHeldCodes={setHeldCodes}
+          />
         </div>
       ) : null}
     </SheetDialog>
   );
 }
 
-function AccountPanel({ tab, data }: { tab: AccountTab; data: ShellData }) {
+type CodeVault = {
+  /** Codes issued and not yet acknowledged, held above the tab that shows them. */
+  heldCodes: string[] | null;
+  setHeldCodes: (codes: string[] | null) => void;
+};
+
+function AccountPanel({
+  tab,
+  data,
+  heldCodes,
+  setHeldCodes,
+}: { tab: AccountTab; data: ShellData } & CodeVault) {
   if (tab === "preferences") return <PreferencesTab data={data} />;
-  if (tab === "security") return <SecurityTab data={data} />;
+  if (tab === "security")
+    return (
+      <SecurityTab
+        data={data}
+        heldCodes={heldCodes}
+        setHeldCodes={setHeldCodes}
+      />
+    );
   if (tab === "privacy") return <PrivacyTab data={data} />;
   return <ProfileTab data={data} />;
 }
@@ -628,11 +669,19 @@ function describeAgent(userAgent: string | null, fallback: string): string {
   return [device, browser].filter(Boolean).join(" · ");
 }
 
-function SecurityTab({ data }: { data: ShellData }) {
+function SecurityTab({
+  data,
+  heldCodes,
+  setHeldCodes,
+}: { data: ShellData } & CodeVault) {
   const t = useTranslations("shell.account.security");
   const passwordId = useId();
   const [sessions, setSessions] = useState<SessionsState>({ kind: "loading" });
-  const [codes, setCodes] = useState<CodesState>({ kind: "closed" });
+  // Seeded from the vault, so a return to this tab shows codes issued while
+  // it was unmounted rather than an empty panel over a rotated secret.
+  const [codes, setCodes] = useState<CodesState>(
+    heldCodes ? { kind: "issued", codes: heldCodes } : { kind: "closed" },
+  );
   const [revoking, setRevoking] = useState<string | null>(null);
   const [revoked, setRevoked] = useState(false);
 
@@ -685,8 +734,13 @@ function SecurityTab({ data }: { data: ShellData }) {
     setCodes({ ...codes, pending: true, refused: false });
     try {
       const result = await liveRegenerateBackupCodes(codes.password);
-      if (result.ok) setCodes({ kind: "issued", codes: result.codes });
-      else
+      if (result.ok) {
+        // The vault first, and deliberately: this component may already be
+        // unmounted, in which case its own setState is a no-op and this write
+        // to the still-mounted dialog is the only thing keeping the codes.
+        setHeldCodes(result.codes);
+        setCodes({ kind: "issued", codes: result.codes });
+      } else
         setCodes({
           kind: "asking",
           password: "",
@@ -788,6 +842,27 @@ function SecurityTab({ data }: { data: ShellData }) {
                       <li key={code}>{code}</li>
                     ))}
                   </ol>
+                  {/* Whether these were issued on this visit to the tab or
+                      recovered from the vault, so the line is not a claim
+                      about which. */}
+                  <p
+                    className={`${hint} mt-1.5`}
+                    data-testid="account-codes-held"
+                  >
+                    {t("codesHeld")}
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="account-codes-saved"
+                    className={`${buttonSmall} mt-2`}
+                    onClick={() => {
+                      // The only signal that the single showing landed.
+                      setHeldCodes(null);
+                      setCodes({ kind: "closed" });
+                    }}
+                  >
+                    {t("codesSaved")}
+                  </button>
                 </div>
               ) : null}
             </div>

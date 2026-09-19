@@ -140,6 +140,8 @@
         "cancel": "Cancel",
         "codesRefused": "That password was not accepted. Try again.",
         "codesIssued": "New recovery codes. The old set is void. Keep these somewhere only you can reach; they are not shown again.",
+        "codesSaved": "I have saved these",
+        "codesHeld": "Your new codes are still here. The Account dialog held them because they are shown only once.",
         "sessions": "Active sessions",
         "sessionsLoading": "Reading your sessions.",
         "sessionsFailed": "Your sessions could not be read. Try again.",
