@@ -45,6 +45,25 @@ describe("compileSteering", () => {
     ).toBeNull();
   });
 
+  it("delivers a record published through publish_context_record, now that the handler requires a classification (#3302)", () => {
+    // Before #3302, publish_context_record wrote only the body: kind, force
+    // and statement were all NULL, `rec({ force: null })` above is exactly
+    // that row, and compileSteering excludes it. The contract now requires
+    // kind, force and statement on every call, so the handler's write can
+    // only ever produce a row shaped like this one — and this one steers.
+    const published = rec({
+      slug: "no-bare-unwrap",
+      kind: "rule",
+      force: "must",
+      statement:
+        "Never unwrap a Result on runtime data without handling the error.",
+    });
+    const text = compileSteering([published]);
+    expect(text).not.toBeNull();
+    expect(text).toContain("no-bare-unwrap");
+    expect(text).toContain(published.statement);
+  });
+
   it("prints MUST before SHOULD, each sorted by slug, whatever order the rows arrive in", () => {
     const rows = [
       rec({ slug: "b-should", force: "should", statement: "Prefer B." }),

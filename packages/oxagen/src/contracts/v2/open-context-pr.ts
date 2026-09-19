@@ -1,8 +1,15 @@
 import { z } from "zod";
 import { defineTool } from "./_define";
-import { contextRecordPublish } from "../context.record.publish";
+import {
+  contextRecordPublish,
+  contextRecordPublishShape,
+} from "../context.record.publish";
 
-const publishIn = contextRecordPublish.input.shape;
+// `contextRecordPublish.input` is `contextRecordPublishShape` wrapped in a
+// `superRefine` (#3302's constraint-effect check), and `ZodEffects` drops the
+// `.shape` accessor a plain `ZodObject` carries — go through the shape
+// directly for the fields this draft still needs.
+const publishIn = contextRecordPublishShape.shape;
 const publishOut = contextRecordPublish.output.shape;
 
 /**

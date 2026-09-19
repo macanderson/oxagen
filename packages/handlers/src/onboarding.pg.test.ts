@@ -736,6 +736,9 @@ describe.skipIf(!enabled)("the onboarding gate against Postgres", () => {
       record_id: `rule-${tag}`,
       title: "No bare unwrap",
       body: "[rule]\nid = 'no-bare-unwrap'\n",
+      kind: "rule" as const,
+      force: "must" as const,
+      statement: "Never unwrap a Result without handling the error.",
     };
     await expect(
       inScope(() => contextRecordPublishHandler(record, ctxFor(ownerId))),

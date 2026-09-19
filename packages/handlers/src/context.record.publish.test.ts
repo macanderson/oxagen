@@ -81,6 +81,10 @@ const INPUT = {
   record_id: "No-Bare-Unwrap",
   title: "No bare unwrap on runtime data",
   body: 'id = "no-bare-unwrap"\n',
+  kind: "rule" as const,
+  force: "must" as const,
+  statement:
+    "Never unwrap a Result on runtime data without handling the error.",
   provenance: [{ type: "file", uri: ".stella/rules/no-bare-unwrap.toml" }],
 };
 
@@ -122,9 +126,15 @@ describe("context.record.publish handler", () => {
       published: true,
     });
     // The record id is lowercased into the slug; provenance rides the version.
+    // Both rows carry the caller's classification (#3302) — a record this
+    // handler writes can never have a NULL kind or force.
     expect(mocks.insertedValues[0]).toMatchObject({
       slug: "no-bare-unwrap",
       status: "active",
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      statement: INPUT.statement,
     });
     expect(mocks.insertedValues[1]).toMatchObject({
       recordId: "record-uuid",
@@ -132,6 +142,10 @@ describe("context.record.publish handler", () => {
       isLatest: true,
       checksum: BODY_CHECKSUM,
       provenance: INPUT.provenance,
+      kind: "rule",
+      force: "must",
+      constraintEffect: null,
+      statement: INPUT.statement,
     });
     expect(mocks.updateSets.at(-1)).toMatchObject({
       activeVersionId: "version-uuid",
@@ -172,7 +186,34 @@ describe("context.record.publish handler", () => {
       versionNumber: 2,
       parentVersionId: "v1-uuid",
       checksum: BODY_CHECKSUM,
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
     });
+    // The record row's classification moves with the new version, the same
+    // way `promote_context_record` and `merge_context_pr` keep the pin's
+    // classification in sync (#3312).
+    expect(mocks.updateSets.at(-1)).toMatchObject({
+      activeVersionId: "v2-uuid",
+      kind: "rule",
+      force: "must",
+      statement: INPUT.statement,
+    });
+  });
+
+  it("requires a constraint effect on a constraint kind and rejects one on any other kind", async () => {
+    const { contextRecordPublish } = await import(
+      "@oxagen/oxagen/contracts/context.record.publish"
+    );
+    expect(() =>
+      contextRecordPublish.input.parse({ ...INPUT, kind: "constraint" }),
+    ).toThrow();
+    expect(() =>
+      contextRecordPublish.input.parse({
+        ...INPUT,
+        constraintEffect: "forbid",
+      }),
+    ).toThrow();
   });
 
   it("refuses a provisional workspace before touching the registry (#2967)", async () => {

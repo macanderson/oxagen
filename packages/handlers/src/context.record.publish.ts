@@ -13,6 +13,13 @@ import { sha256Hex } from "./registry-digest";
  * a new immutable version row only when the body checksum changed; an
  * unchanged body is idempotent (published: false). Same shape as
  * tool.declaration.publish.
+ *
+ * Writes the caller's classification (kind, force, constraintEffect,
+ * statement) onto both the record row and the version row, mirroring
+ * `publishMerge` (context.steering.store.ts). Before #3302 this handler wrote
+ * only the body, leaving all four NULL: `readWorkspaceSteering` only ever
+ * delivers a record whose force is `must` or `should`, so a record published
+ * this way sat active in the registry and never reached an agent.
  */
 export const contextRecordPublishHandler: CapabilityHandler<
   typeof contextRecordPublish
@@ -55,6 +62,19 @@ export const contextRecordPublishHandler: CapabilityHandler<
     return rows[0] ?? null;
   };
 
+  // The classification a caller must now supply (#3302): a record with no
+  // force never reaches `readWorkspaceSteering`'s must/should filter, so a
+  // record published without one sat in the registry and never steered
+  // anything. Written onto both the version (what this body says) and the
+  // record row (what `list_records`, `listActiveRecords` and the steering
+  // page filter and display), the same split `merge_context_pr` keeps.
+  const classification = {
+    kind: input.kind,
+    force: input.force,
+    constraintEffect: input.constraintEffect ?? null,
+    statement: input.statement,
+  };
+
   const versionValues = {
     orgId,
     workspaceId,
@@ -63,6 +83,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
     provenance,
     isLatest: true,
     publishedAt: sql`now()`,
+    ...classification,
     createdById: ctx.userId ?? undefined,
     updatedById: ctx.userId ?? undefined,
   };
@@ -134,6 +155,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           activeVersionId: versionRow.id,
           activatedByUserId: ctx.userId ?? undefined,
           activatedAt: sql`now()`,
+          ...classification,
           updatedById: ctx.userId ?? undefined,
           updatedAt: sql`now()`,
         })
@@ -171,6 +193,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
           slug,
           title: input.title,
           status: "active",
+          ...classification,
           createdById: ctx.userId ?? undefined,
           updatedById: ctx.userId ?? undefined,
         })
@@ -202,6 +225,8 @@ export const contextRecordPublishHandler: CapabilityHandler<
           updatedAt: sql`now()`,
         })
         .where(eq(schema.contextRecords.id, recordRow.id));
+      // classification was already written on the insert above; the pin
+      // update is the same as merge_context_pr's version-1 path.
       return { publicId: recordRow.publicId, slug: recordRow.slug };
     });
 

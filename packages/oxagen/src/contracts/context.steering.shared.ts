@@ -203,7 +203,13 @@ export const publishedRecordSchema = z
     id: z.string().regex(/^ctr_[0-9A-Za-z]+$/),
     lineageId: z.string(),
     title: z.string(),
-    /** Null on a record published through publish_context_record. */
+    /**
+     * agent.context_records.kind is NOT NULL since migration
+     * `20260920130000` (#3302) — every record carries a real classification.
+     * Kept nullable here only because context_record_versions.kind still is
+     * (a legacy version merge_context_pr never wrote): a record's active
+     * version can, in principle, be one of those on a database this old.
+     */
     kind: recordKindSchema.nullable(),
     force: recordForceSchema.nullable(),
     constraintEffect: constraintEffectSchema.nullable(),
