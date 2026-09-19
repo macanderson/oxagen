@@ -17,10 +17,11 @@
 // the approval rule is spelled as sentences rather than as a JSON shape: an empty
 // `approvers` list is not "nobody", it is "the roles accountable for the
 // consequence", and printing it as empty would read as the opposite.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { MandateRow } from "@/data/contracts/mandates";
 import { mono, panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { MandateScope } from "@/ui/mandate-scope";
 import { useMeasureText } from "@/ui/measure";
 

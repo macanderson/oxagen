@@ -23,7 +23,7 @@
 // itself a disclosure; the shell, its navigation and its search stay, so a
 // reader who cannot see this mandate can still leave.
 import { notFound } from "next/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { OrgRole } from "@/data/contracts/common";
 import type { MandateDetail, MandateRow } from "@/data/contracts/mandates";
@@ -32,6 +32,7 @@ import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { SafeLink } from "@/ui/navigation";
 import { MandateGrant } from "./grant";

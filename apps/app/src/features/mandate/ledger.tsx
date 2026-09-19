@@ -15,13 +15,14 @@
 // because receipt frames have no read yet. Each is explained once beneath the
 // table rather than repeated on every row, and neither prints a uuid or a zero
 // in place of a fact nobody recorded.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import {
   isEffective,
   type MandateDetail,
   type MandateMovement,
 } from "@/data/contracts/mandates";
 import { linkText, mono, panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Measure } from "@/ui/measure";
 import { SafeForm, SafeLink } from "@/ui/navigation";
 import { cell, numericCell, Table } from "@/ui/table";
