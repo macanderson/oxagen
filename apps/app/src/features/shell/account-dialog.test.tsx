@@ -1079,6 +1079,32 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
+  // Cancel closes the password form, and a rotation nobody heard back from is
+  // not cancelled by it. While the notice lived inside that form, Cancel took
+  // the only line on screen saying the codes may already be void away and left
+  // an ordinary Regenerate button, so the notice sits on the two-factor row
+  // instead and outlasts the form, a tab switch and a closed dialog.
+  it("keeps the notice up through Cancel, a tab switch and a close", async () => {
+    liveRegenerateBackupCodes.mockRejectedValue(new Error("offline"));
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes-uncertain");
+
+    await user.click(screen.getByTestId("account-codes-cancel"));
+    expect(screen.queryByTestId("account-codes-password")).toBeNull();
+    expect(screen.getByTestId("account-codes-uncertain")).toBeTruthy();
+
+    await user.click(screen.getByTestId("account-tab-profile"));
+    await user.click(screen.getByTestId("account-tab-security"));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "open security" }));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
+  });
+
   // The second rotation is never started, so no late first response can exist
   // to be sorted out: "runs one rotation at a time" above is what closes this,
   // and it also closes the tab-switch bypass, which a ticket held inside the

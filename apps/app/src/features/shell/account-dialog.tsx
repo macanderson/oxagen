@@ -1000,6 +1000,18 @@ function SecurityTab({
                   ? t("authenticatorOn")
                   : t("authenticatorOff")}
               </p>
+              {/* Outside the password form on purpose. Cancel closes that
+                  form, and a rotation nobody heard back from is not cancelled
+                  by it. Inside the form, Cancel took the only line on screen
+                  saying the codes may already be void away, and left an
+                  ordinary Regenerate button in its place. */}
+              {rotation.uncertain && !rotation.pending ? (
+                <div className="mt-2">
+                  <FormAlert testId="account-codes-uncertain">
+                    {t("codesUncertain")}
+                  </FormAlert>
+                </div>
+              ) : null}
               {codes.kind === "asking" ? (
                 <form
                   className="mt-2 flex flex-wrap items-end gap-2"
@@ -1049,13 +1061,6 @@ function SecurityTab({
                     <div className="basis-full">
                       <FormAlert testId="account-codes-refused">
                         {t("codesRefused")}
-                      </FormAlert>
-                    </div>
-                  ) : null}
-                  {rotation.uncertain && !rotation.pending ? (
-                    <div className="basis-full">
-                      <FormAlert testId="account-codes-uncertain">
-                        {t("codesUncertain")}
                       </FormAlert>
                     </div>
                   ) : null}

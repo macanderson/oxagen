@@ -122,8 +122,8 @@ describe("revoking", () => {
 // Better Auth voids the old recovery codes the moment the rotation lands and
 // keeps only hashes of the new ones, so what the caller needs from a failure is
 // whether the server got that far. It checks the password, and the two-factor
-// row, before it writes, and answers 4xx from there. That answer is the only
-// failure that proves nothing rotated. Everything else leaves the outcome
+// row, before it writes, and declines from there with a 4xx. That answer is the
+// only failure that proves nothing rotated. Everything else leaves the outcome
 // unknown, and the caller has to treat the account as at risk.
 describe("rotating the recovery codes", () => {
   it("returns the set the server issued", async () => {
@@ -134,7 +134,7 @@ describe("rotating the recovery codes", () => {
     expect(generateBackupCodes).toHaveBeenCalledWith({ password: "hunter2" });
   });
 
-  it("reports a rejected password as the one confirmed refusal", async () => {
+  it("reports a declined password as the one confirmed refusal", async () => {
     generateBackupCodes.mockResolvedValue({
       error: {
         status: 400,
@@ -144,30 +144,17 @@ describe("rotating the recovery codes", () => {
     });
     expect(await liveRegenerateBackupCodes("wrong")).toEqual({
       ok: false,
-      reason: "invalid",
+      refused: true,
     });
   });
 
-  it("reports a server error as unknown, not as a rejection (negative)", async () => {
+  it("reports a server error as unknown, not as a refusal (negative)", async () => {
     generateBackupCodes.mockResolvedValue({
       error: { status: 503, statusText: "Service Unavailable" },
     });
     expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
       ok: false,
-      reason: "failed",
-    });
-  });
-
-  // better-fetch turns a transport failure into status 500 with this status
-  // text when `catchAllError` is on, so the status alone would read as a server
-  // answer that never existed.
-  it("reports a transport failure as unknown (negative)", async () => {
-    generateBackupCodes.mockResolvedValue({
-      error: { status: 500, statusText: "Fetch Error" },
-    });
-    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
-      ok: false,
-      reason: "failed",
+      refused: false,
     });
   });
 
@@ -175,17 +162,25 @@ describe("rotating the recovery codes", () => {
     generateBackupCodes.mockRejectedValue(new Error("network"));
     expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
       ok: false,
-      reason: "failed",
+      refused: false,
     });
   });
 
-  // A success with no set means the server rotated and this page has nothing to
-  // show, which is the at-risk case, not a rotation done.
-  it("reports an empty set as unknown (negative)", async () => {
+  // An answer carrying no set is the same unknown outcome: Better Auth returns
+  // the plaintext codes once, so a missing or empty field may sit after a write
+  // that landed, and the set it wrote is then nobody's. Read as success, the
+  // tab showed an empty list under "New recovery codes" and offered the button
+  // that says they are saved.
+  it("reports an empty set as unknown, not as a rotation done (negative)", async () => {
     generateBackupCodes.mockResolvedValue({ data: { backupCodes: [] } });
     expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
       ok: false,
-      reason: "failed",
+      refused: false,
+    });
+    generateBackupCodes.mockResolvedValue({ data: {} });
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: false,
+      refused: false,
     });
   });
 });

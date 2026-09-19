@@ -99,9 +99,9 @@ export async function liveRevokeSession(token: string): Promise<boolean> {
   return !reply.error;
 }
 
-/** Issues a fresh set of two-factor recovery codes; the old set is void. Needs the password. */
 /**
- * Rotates the recovery codes, and says whether a failure is one we can explain.
+ * Issues a fresh set of two-factor recovery codes, and says whether a failure
+ * is one that can be explained. Needs the password; the old set is void.
  *
  * `refused` separates two outcomes a single `ok: false` used to collapse. A
  * 400, 401 or 403 is the server declining the password: it read the request and
@@ -134,7 +134,15 @@ export async function liveRegenerateBackupCodes(
           failure.status === 403);
       return { ok: false, refused };
     }
-    return { ok: true, codes: reply.data?.backupCodes ?? [] };
+    const codes = reply.data?.backupCodes;
+    // An answer with no set is the same unknown outcome, not a rotation done.
+    // Better Auth returns the plaintext codes exactly once, so if that field
+    // is missing or empty the write may still have landed, and the set it
+    // wrote is now nobody's. Reading it as success showed an empty list under
+    // "New recovery codes" and let the person acknowledge it.
+    if (!Array.isArray(codes) || codes.length === 0)
+      return { ok: false, refused: false };
+    return { ok: true, codes };
   } catch {
     // Never reached the server, or never came back from it. Either way the
     // outcome is unknown, which is not the same as refused.
