@@ -9,6 +9,7 @@
  *   pnpm billing:price-book-sync --apply                 # write the rows
  *   pnpm billing:price-book-sync --offline               # skip the catalogs
  *   pnpm billing:price-book-sync --effective-from=<RFC 3339>
+ *   pnpm billing:price-book-sync --resend-reprice        # re-ask for the reroll, no write
  *
  * **Nothing depends on anyone running this.** The `cost.price-book-sync` job
  * runs the same merge hourly, which is what keeps a fresh installation from
@@ -35,6 +36,17 @@
  * sync found the book already correct and wrote nothing, so it asked for
  * nothing either.
  *
+ * The hourly job cannot get stuck this way: its "write" and "send" are
+ * separate Inngest steps, so a retry after a failed send replays from the
+ * already-memoized write and only the send is retried. This script has no
+ * such history — a plain re-run reads the book it just wrote as already
+ * correct, so `written` comes back 0 and it would ask for nothing, leaving
+ * the runs those backdated rows can now price blank for ever with no sign
+ * anything is wrong. `--resend-reprice` is the direct recovery the
+ * `RepriceRequestError` message below promises: it skips the sync and the
+ * write entirely and only re-dispatches the event, so a failed dispatch is
+ * recoverable without another `--apply` finding nothing left to do.
+ *
  * Runs against whatever DATABASE_URL is in scope and prints the host so the
  * target is always visible (CLAUDE.md: echo the target DB before a mutation).
  */
@@ -57,6 +69,14 @@ export interface Flags {
   apply: boolean;
   offline: boolean;
   effectiveFrom: Date;
+  /**
+   * Skip the sync and the write; only re-dispatch `PRICE_BOOK_BACKDATED_EVENT`.
+   * The recovery path for a prior `--apply` whose write committed but whose
+   * dispatch failed: a plain re-run of `--apply` finds the book already
+   * correct (`written: 0`) and asks for nothing, so this is the only way to
+   * resend without another write.
+   */
+  resendReprice: boolean;
 }
 
 export function parseFlags(argv: string[], now: Date): Flags {
@@ -68,10 +88,12 @@ export function parseFlags(argv: string[], now: Date): Flags {
     apply: false,
     offline: false,
     effectiveFrom: nextPriceBookBoundary(now),
+    resendReprice: false,
   };
   for (const arg of argv) {
     if (arg === "--apply") flags.apply = true;
     else if (arg === "--offline") flags.offline = true;
+    else if (arg === "--resend-reprice") flags.resendReprice = true;
     else if (arg.startsWith("--effective-from=")) {
       const at = new Date(arg.slice("--effective-from=".length));
       if (Number.isNaN(at.getTime()))
@@ -126,7 +148,7 @@ export class RepriceRequestError extends Error {
   readonly code = "price_book_reprice_request_failed" as const;
   constructor(cause: unknown) {
     super(
-      `the price book was written but the repricing request could not be dispatched: ${cause instanceof Error ? cause.message : String(cause)}. The backdated prices are in force; runs sealed before them keep a blank or estimated cost until ${PRICE_BOOK_BACKDATED_EVENT} is delivered — check the event key and the Inngest endpoint, then re-run with --apply (an unchanged book writes nothing and requests nothing, so send the event directly instead).`,
+      `the price book was written but the repricing request could not be dispatched: ${cause instanceof Error ? cause.message : String(cause)}. The backdated prices are in force; runs sealed before them keep a blank or estimated cost until ${PRICE_BOOK_BACKDATED_EVENT} is delivered — check the event key and the Inngest endpoint, then re-run with --resend-reprice (a plain --apply re-run finds the book already correct and requests nothing).`,
       { cause },
     );
     this.name = "RepriceRequestError";
@@ -184,6 +206,11 @@ export interface RunDeps {
  * prices had no way to know. The event is the hourly job's own chain —
  * `cost.price-book-reprice` pages through every incomplete run behind a
  * keyset cursor — so this dispatches it rather than walking runs itself.
+ *
+ * `--resend-reprice` skips the sync and the write entirely and only
+ * re-dispatches the event: the recovery path for a write that committed but
+ * whose dispatch failed, since a plain `--apply` re-run reads that same book
+ * back as already correct (`written: 0`) and asks for nothing.
  */
 export async function runPriceBookSync(
   flags: Flags,
@@ -192,6 +219,30 @@ export async function runPriceBookSync(
   const { log } = deps;
   log(kleur.bold().cyan("\n══ Price book ══\n"));
   log(`  Target database: ${describeTarget(process.env["DATABASE_URL"])}`);
+
+  if (flags.resendReprice) {
+    log(
+      kleur.dim(
+        "  --resend-reprice: skipping the sync and the write, re-dispatching the reprice request only.\n",
+      ),
+    );
+    try {
+      await deps.send({ name: PRICE_BOOK_BACKDATED_EVENT, data: {} });
+    } catch (err) {
+      console.error(
+        kleur.red("  ! requesting the repricing failed:"),
+        err,
+        `\n    event: ${PRICE_BOOK_BACKDATED_EVENT}`,
+      );
+      throw new RepriceRequestError(err);
+    }
+    log(
+      kleur.bold().cyan("  Requested ") +
+        `${PRICE_BOOK_BACKDATED_EVENT}: every run whose cost is blank or estimated and which the current book can now price will be re-rolled.\n`,
+    );
+    return;
+  }
+
   log(`  Effective from:  ${flags.effectiveFrom.toISOString()}`);
   log(
     `  Catalogs:        ${flags.offline ? "skipped (--offline)" : "OpenRouter, models.dev"}\n`,

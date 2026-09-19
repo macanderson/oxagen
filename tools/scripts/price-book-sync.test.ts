@@ -59,6 +59,12 @@ describe("parseFlags", () => {
     );
     expect(() => parseFlags(["--force"], NOW)).toThrow(/unknown flag/);
   });
+
+  it("takes --resend-reprice", () => {
+    const flags = parseFlags(["--resend-reprice"], NOW);
+    expect(flags.resendReprice).toBe(true);
+    expect(flags.apply).toBe(false);
+  });
 });
 
 describe("reportLines", () => {
@@ -114,6 +120,7 @@ describe("runPriceBookSync", () => {
     apply: true,
     offline: true,
     effectiveFrom: FROM,
+    resendReprice: false,
     ...over,
   });
   const writing = (
@@ -187,6 +194,46 @@ describe("runPriceBookSync", () => {
       name: "RepriceRequestError",
     });
     expect(error).toHaveBeenCalled();
+    error.mockRestore();
+  });
+
+  // The recovery path the RepriceRequestError message promises: a prior
+  // --apply committed the write but the dispatch failed, and a plain
+  // --apply re-run would read that same book back as already correct
+  // (written: 0) and ask for nothing. --resend-reprice skips the sync and
+  // the write entirely and only re-dispatches, so the write helper must
+  // never be called.
+  it("--resend-reprice re-dispatches without syncing or writing", async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const write = vi.fn();
+    await runPriceBookSync(flags({ resendReprice: true }), {
+      send,
+      log: () => {},
+      write,
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith({
+      name: "cost/price-book.backdated",
+      data: {},
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("--resend-reprice fails loudly when the event cannot be dispatched", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("ECONNREFUSED :8288"));
+    const write = vi.fn();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(
+      runPriceBookSync(flags({ resendReprice: true }), {
+        send,
+        log: () => {},
+        write,
+      }),
+    ).rejects.toMatchObject({
+      code: "price_book_reprice_request_failed",
+      name: "RepriceRequestError",
+    });
+    expect(write).not.toHaveBeenCalled();
     error.mockRestore();
   });
 });
