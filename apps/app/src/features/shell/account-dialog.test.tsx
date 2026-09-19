@@ -481,6 +481,31 @@ describe("Preferences", () => {
     });
   });
 
+  // `useTheme` seeds from the theme cookie, which is per browser, so a new
+  // browser or a cleared cookie left a stored "dark" selected in the form
+  // while the page rendered the system theme. The tab contradicted the page,
+  // and the saved preference was honoured only if the person toggled the
+  // control that already showed the value they wanted.
+  it("applies a stored theme the page is not already on", async () => {
+    // jsdom's document is shared by every case in this file, so an earlier
+    // one leaves both the theme cookie and the root element on dark. Both are
+    // cleared, which is also the state this test is about: a browser that has
+    // never been told a theme. Without clearing the cookie, `useTheme` seeds
+    // itself dark and the assertion passes whether or not the read applies
+    // anything.
+    document.cookie = "theme=; Path=/; Max-Age=0";
+    delete document.documentElement.dataset.theme;
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: { locale: "en", timezone: "UTC", theme: "dark" },
+    });
+    await openDialog("preferences");
+    expect(await screen.findByTestId("account-theme")).toHaveValue("dark");
+    await vi.waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("dark");
+    });
+  });
+
   it("applies the theme to the page the moment it is chosen", async () => {
     const { user } = await openDialog("preferences");
     const theme = await screen.findByTestId("account-theme");

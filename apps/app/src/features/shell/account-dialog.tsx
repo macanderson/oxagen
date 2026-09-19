@@ -456,6 +456,30 @@ function PreferencesTab({ data }: { data: ShellData }) {
     };
   }, [data.org.slug]);
 
+  // The page follows the draft theme, wherever the draft came from: the store
+  // on load, or the selector after that.
+  //
+  // It used to follow only the selector, and `useTheme` seeds itself from the
+  // theme cookie, which is per browser. So in a new browser, or after the
+  // cookie was cleared, a stored "dark" was shown selected in this form while
+  // the page rendered the system theme: the tab contradicted the page, and
+  // the saved preference was honoured only if the person toggled the control
+  // that already showed the value they wanted.
+  //
+  // Writing the cookie on load is a commit rather than a preview, which is the
+  // distinction #3333 §13 turns on: the value came from the store, so the
+  // cookie is being brought into line with a decision already taken.
+  //
+  // What this does not do is fix the first paint. Someone who never opens
+  // Preferences still gets the cookie's answer, because the shell does not
+  // read the preference server-side. Closing that means seeding the theme
+  // from the preference before the page renders, which is a change to the
+  // shell's data loading and the pre-paint script rather than to this tab.
+  const draftTheme = state.kind === "ready" ? state.draft.theme : null;
+  useEffect(() => {
+    if (draftTheme !== null && draftTheme !== theme) setTheme(draftTheme);
+  }, [draftTheme, theme, setTheme]);
+
   function edit(patch: Partial<PreferencesDraft>) {
     if (outcome === "saved") setOutcome(null);
     setState((s) =>
@@ -570,9 +594,9 @@ function PreferencesTab({ data }: { data: ShellData }) {
             value={draft.theme}
             onChange={(e) => {
               const next = THEMES.find((v) => v === e.target.value) ?? "system";
+              // The effect above follows the draft, so the page changes at
+              // once without this handler applying it a second time.
               edit({ theme: next });
-              // The page follows the choice at once; Save records it.
-              if (next !== theme) setTheme(next);
             }}
           >
             {THEMES.map((value) => (
