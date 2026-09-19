@@ -1072,8 +1072,6 @@ type Messages = {
     loading: string;
     grantedBy: string;
     notGranted: string;
-    requestedBy: string;
-    roleAtGrant: string;
     status: {
       draft: string;
       active: string;
@@ -1135,6 +1133,9 @@ type Messages = {
       title: string;
       agent: string;
       grantedBy: string;
+      notGranted: string;
+      requestedBy: string;
+      roleAtGrant: string;
       effect: string;
       counterparties: string;
       allow: string;
