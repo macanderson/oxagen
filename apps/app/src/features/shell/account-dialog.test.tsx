@@ -491,6 +491,44 @@ describe("Preferences", () => {
     expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
   });
 
+  // The zone the row holds is the one the organization layout reads and hands
+  // to <ViewerClock> and the chrome, so a saved zone the page does not re-read
+  // in leaves every date on the old clock until a full reload.
+  it("re-renders the server tree when the saved zone is not the one the page rendered in", async () => {
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-timezone"),
+      "Europe/London",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(savePreferences).toHaveBeenCalledWith("acme", {
+      locale: "en",
+      timezone: "Europe/London",
+      theme: "system",
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the tree alone when the zone did not move (negative)", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: {
+        locale: "en",
+        timezone: shellData().viewer.timeZone,
+        theme: "system",
+      },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "light",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   // The same clobber as the Profile tab's, and it bites harder here: the theme
   // selector commits on change, so the page would already be following the
   // newer theme while the form reverted to the older one and called it saved.

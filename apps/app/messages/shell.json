@@ -105,6 +105,7 @@
         "localeName": "{code, select, en {English} other {{code}}}",
         "localeHint": "Dates, numbers, and currencies format to this. Machine-readable fields in records, receipts, and exports are never translated.",
         "timezone": "Time zone",
+        "timezoneHint": "Every date and time in Oxagen is shown in this zone. New accounts start on Pacific time.",
         "theme": "Theme",
         "themes": {
           "system": "Match the system",
