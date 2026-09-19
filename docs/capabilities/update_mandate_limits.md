@@ -36,12 +36,19 @@ The mandate.
 
 ## App surface
 
-The Change limits dialog in the mandate page's header, `/{org}/{ws}/mandates/{mandate}`. The dialog collects the measure set as one
-record, defaulted from what the mandate holds, because this capability replaces
-`limits` rather than merging into it. It writes counts only and stores each
-figure exactly as typed: whether a measure is money is a property of the tool
-version's declaration, which no read answers, so a money limit is changed over
-the API or MCP by a caller that holds the declaration.
+The Change limits dialog in the mandate page's header,
+`/{org}/{ws}/mandates/{mandate}`. Because this capability **replaces** `limits`
+rather than merging into it, the app reads the mandate first (`get_mandate`,
+`ledgerLimit: 1`) and lays the edited measure over the stored record, so every
+bound the operator did not touch is resubmitted exactly as recorded. A field left
+blank in the dialog therefore leaves that measure's bound as it is; removing a
+limit altogether means sending a `limits` record without it, which is this
+capability over the API or MCP.
+
+The dialog writes counts only and stores each figure exactly as typed: whether a
+measure is money is a property of the tool version's declaration, which no read
+answers, so a money limit is changed over the API or MCP by a caller that holds
+the declaration.
 
 ## Roles
 
