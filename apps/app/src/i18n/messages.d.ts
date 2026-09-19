@@ -1988,7 +1988,6 @@ type Messages = {
         saving: string;
         saved: string;
         invalid: string;
-        timeZoneInvalid: string;
       };
       security: {
         signIn: string;
