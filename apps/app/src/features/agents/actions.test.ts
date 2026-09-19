@@ -156,6 +156,7 @@ describe("retireAgent", () => {
       status: "retired",
       revokedCredentials: 1,
       revokedHosts: 2,
+      revokedMandates: 0,
       retiredAt: AT,
     });
     expect(

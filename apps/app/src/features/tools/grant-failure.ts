@@ -69,6 +69,10 @@ export function useGrantFailure(): (failure: ActionFailure) => string {
             return t("measureNotDeclared");
           case "measure_unit_mismatch":
             return t("measureUnitMismatch");
+          case "measure_kind_conflict":
+            return t("measureKindConflict");
+          case "agent_retired":
+            return t("agentRetired");
           // Not a handler reason: the action refuses before it writes, because
           // a guessed zone moves a validity boundary by up to a day.
           case "time_zone_unsupported":

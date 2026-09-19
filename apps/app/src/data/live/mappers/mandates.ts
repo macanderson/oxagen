@@ -4,24 +4,27 @@
 // per-period figure — is null in the view model and nothing is invented.
 //
 // A limit names either an ISO 4217 currency or a unit of a count
-// (`mandates/schemas.ts`), told apart by `isCurrencyCode` rather than by the
-// shape of the name, so a three-letter unit such as GAU stays a count. **This
-// is the one place in the system that guesses whether a measure is money**, and
-// it is a stand-in, not a rule: the gate does not guess — `readMeasure`
-// (packages/rules/src/mandates/measures.ts) switches on `declaration.type`,
-// which is the fact — and `assertToolsDeclareMeasures` now holds that same
-// declaration while it validates the write. A tool may legitimately declare
-// `{ type: "count", unit: "USD" }`, and the handler accepts a limit matching
-// that unit while this branch reads its whole-unit count as micros: 50 counted
-// units rendered as $0.00. The fix is to carry the declared `type` from the
-// write, where it is known, onto the limit and through `mandateAuthoritySchema`
-// — not a further test on the unit string, because no test on a unit string can
-// answer a question about a type. It needs the stored limit shape to change
-// (#3024's jsonb) and so is not this PR's; ARCHITECTURE.md §9 carries the
-// analysis and the reader list. Every
-// figure of one measure is carried in that measure's form, counts as the
-// integer string the ledger recorded. The ratios the meter draws are computed
-// here, on integers, so the component does no arithmetic (INV-09).
+// (`mandates/schemas.ts`). Whether a given measure is money or a count is
+// carried on the wire as `kind` (ADR-108), stamped by the handler from the
+// declaration it validated at write time, the same fact `readMeasure`
+// (packages/rules/src/mandates/measures.ts) switches on to enforce the gate,
+// `switch (declaration.type)`, never guessed. **This mapper reads that stored
+// kind instead of guessing**: `measureValue` takes it and switches on it, the
+// same way the gate does. A ledger row whose limit was later deleted
+// (`update_mandate_limits`' whole-record replacement) has no stored kind to
+// read, since the ledger is append-only and outlives the limit that once
+// bounded it; that one case falls back to `legacyMeasureKindGuess`, the same
+// guess a pre-ADR-108 row without a stored kind takes. Before ADR-108 this
+// branch called
+// `isCurrencyCode(currencyOrUnit)`, which read a declared **count**
+// denominated in a currency code (`{ type: "count", unit: "USD" }`) as money:
+// a whole-unit count of 50 printed as $0.00 while the gate enforced 50
+// counted units. `isCurrencyCode` still has one legitimate job, refusing a
+// currency-code unit on the request form in `actions.ts`, and stays there;
+// it decides nothing here any more. Every figure of one measure is carried
+// in that measure's form, counts as the integer string the ledger recorded.
+// The ratios the meter draws are computed here, on integers, so the
+// component does no arithmetic (INV-09).
 //
 // The answer is stamped `asOf` with the instant it was mapped, because whether
 // a mandate is in effect is a question about an instant and a component may
@@ -35,23 +38,28 @@ import type {
   MeasureValue,
 } from "@/data/contracts/mandates";
 import {
-  isCurrencyCode,
   moneyFromMicros,
   ratioOfIntegers,
   sumExceeds,
 } from "@/data/contracts/money";
 import type { ContractOutput } from "@/server/kernel";
+import { legacyMeasureKindGuess } from "@oxagen/rules";
 
 type Out = ContractOutput<typeof mandateList>;
 type MandateOut = Out["items"][number];
 type AuthorityOut = MandateOut["authority"][number];
 type DetailOut = ContractOutput<typeof mandateGet>;
+// Not `@oxagen/oxagen/mandates/schemas`' `MeasureKind`: §2 keeps that module
+// out of the app (`data/contracts/mandates.ts`), so this is derived from the
+// contract output already in scope, the same as every other type on this file.
+type MeasureKind = AuthorityOut["kind"];
 
 function measureValue(
   value: string,
   currencyOrUnit: string,
+  kind: MeasureKind,
 ): z.input<typeof MeasureValue> {
-  return isCurrencyCode(currencyOrUnit)
+  return kind === "money"
     ? { kind: "money", money: moneyFromMicros(value, currencyOrUnit) }
     : { kind: "count", count: value, unit: currencyOrUnit };
 }
@@ -59,7 +67,8 @@ function measureValue(
 function toAuthority(
   authority: AuthorityOut,
 ): z.input<typeof MandateList>["mandates"][number]["authority"][number] {
-  const of = (value: string) => measureValue(value, authority.currencyOrUnit);
+  const of = (value: string) =>
+    measureValue(value, authority.currencyOrUnit, authority.kind);
   const { perPeriod } = authority;
   return {
     measure: authority.measure,
@@ -94,24 +103,29 @@ function toAuthority(
  * same measure — which is exactly where `authority` got its own. A threshold on a
  * measure the mandate does not limit therefore has no form, and `value` is null
  * rather than assumed: the rule is still in force, and the page prints the
- * recorded digits beside the measure's name. Guessing dollars there would be the
- * same mistake `isCurrencyCode` is a stand-in for above, one layer further from
- * the evidence.
+ * recorded digits beside the measure's name. Guessing money or a count there
+ * would be the mistake ADR-108 removed from `measureValue` above, one layer
+ * further from the evidence.
  */
 function toApproval(
   item: MandateOut,
 ): z.input<typeof MandateList>["mandates"][number]["approval"] {
-  const formOf = (measure: string): string | null => {
+  const formOf = (
+    measure: string,
+  ): { unit: string; kind: MeasureKind } | null => {
     const limit = item.authority.find((entry) => entry.measure === measure);
-    return limit?.currencyOrUnit ?? null;
+    return limit === undefined
+      ? null
+      : { unit: limit.currencyOrUnit, kind: limit.kind };
   };
   return {
     humanAbove: Object.entries(item.approval.humanAbove).map(
       ([measure, recorded]) => {
-        const unit = formOf(measure);
+        const form = formOf(measure);
         return {
           measure,
-          value: unit === null ? null : measureValue(recorded, unit),
+          value:
+            form === null ? null : measureValue(recorded, form.unit, form.kind),
           recorded,
         };
       },
@@ -185,23 +199,39 @@ export function toMandateDetail(
     // has-more flag and no cursor to tell them apart (`MandateDetail.readBound`).
     readBound: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
     mandate: toMandateRow(out.mandate),
-    ledger: out.ledger.map((row) => ({
-      kind: row.kind,
-      measure: row.measure,
-      value: measureValue(row.value, row.unitOrCurrency),
-      // Empty means "nothing recorded" here, not "a value of no length".
-      // `packages/rules/src/mandates.ts` stores whatever the tool's configured
-      // effect-id path returned, an empty string included, and `get_mandate`
-      // answers it unchanged. The view model requires a non-empty string or
-      // null, so passing one through failed `MandateDetail.safeParse` and the
-      // whole page answered `record_unmappable` over one settlement — a ledger
-      // withheld because one row named its transaction with nothing.
-      externalEffectRef:
-        row.externalEffectId === null || row.externalEffectId.trim() === ""
-          ? null
-          : row.externalEffectId,
-      periodKey: row.periodKey,
-      at: row.at,
-    })),
+    ledger: out.ledger.map((row) => {
+      // The row's own `measureKind` (ADR-108) is the fact: stamped once
+      // when the row was written and never re-derived, it survives a later
+      // whole-record `limits` replacement that removes the measure, where
+      // `authority` has nothing left to look up. A row written before that
+      // column existed falls back to `authority` (the measure's current
+      // limit, if it still has one), then to the same guess a pre-ADR-108
+      // row without a stored kind takes (`legacyMeasureKindGuess`, from the
+      // row's own `unitOrCurrency`), a guess only for a row this old AND
+      // whose measure is gone, never for one ADR-108 already resolved.
+      const authorityKind =
+        row.measureKind ??
+        out.mandate.authority.find((a) => a.measure === row.measure)?.kind ??
+        legacyMeasureKindGuess(row.unitOrCurrency);
+      return {
+        kind: row.kind,
+        measure: row.measure,
+        value: measureValue(row.value, row.unitOrCurrency, authorityKind),
+        // Empty means "nothing recorded" here, not "a value of no length".
+        // `packages/rules/src/mandates.ts` stores whatever the tool's
+        // configured effect-id path returned, an empty string included, and
+        // `get_mandate` answers it unchanged. The view model requires a
+        // non-empty string or null, so passing one through failed
+        // `MandateDetail.safeParse` and the whole page answered
+        // `record_unmappable` over one settlement, a ledger withheld
+        // because one row named its transaction with nothing.
+        externalEffectRef:
+          row.externalEffectId === null || row.externalEffectId.trim() === ""
+            ? null
+            : row.externalEffectId,
+        periodKey: row.periodKey,
+        at: row.at,
+      };
+    }),
   };
 }

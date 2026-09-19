@@ -363,6 +363,7 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        measureKindConflict: string;
       };
     };
     source: {
@@ -1219,8 +1220,11 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        measureKindConflict: string;
         periodDrawn: string;
+        measureKindDrawn: string;
         noPrincipal: string;
+        agentRetired: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;
         refused: string;
@@ -3470,6 +3474,8 @@ type Messages = {
         noToolMatches: string;
         measureNotDeclared: string;
         measureUnitMismatch: string;
+        measureKindConflict: string;
+        agentRetired: string;
         timeZoneUnavailable: string;
         timeZoneUnsupported: string;
         refused: string;
