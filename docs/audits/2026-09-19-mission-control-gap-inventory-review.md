@@ -60,7 +60,7 @@ The build plan needs to know whether a gap is UI-only over a live handler or nee
 | Revoke enrollment as a UI write | `revoke_tacho_enrollment` registered, surfaces `["api"]` only | UI-only plus `app` layer |
 | Connections table and add connection | `list_connections`, `get_connection`, `create_connection` registered | UI-only. Owner and review date need a contract field |
 | Servers in the registry, import server | `list_mcp_servers`, `register_mcp_server` registered, unbound | UI-only |
-| Send an invitation | `send_workspace_invite` registered, workspace-scoped. People is an org page | UI-only plus a workspace picker |
+| Send an invitation | `send_workspace_invite` registered. Its handler records an organization invitation with an org role and no workspace, and a repeat for a pending email returns the existing invitation | UI-only. An organization invitation with no workspace picker; the scoped contract takes a workspace as invocation scope only |
 | Proof tab on Run | `get_run_proof` registered, surfaces `["api"]` | UI-only for the tab. Certificate, checks, Stops, and signing a human check have no contract and follow Phase 5 |
 | Run export download | `export_run` returns `{exportId, status}`. Nothing reads `evidence.run_exports` back. `get_export_status` is the privacy export, not runs | Backend: a status read and a download route (#2952) |
 | Toolbelt input schemas | `get_agent_toolbelt` output has no schema field | Contract change plus UI |
