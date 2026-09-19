@@ -52,7 +52,7 @@
         "title": "No runs yet in {workspace}",
         "body": "Nothing has reached Oxagen from this workspace. A run appears when an enrolled agent makes its first model call; agents start runs, and this page is where you open one.",
         "enroll": "Enroll the host an agent runs on, from its repository:",
-        "command": "oxagen tacho enroll"
+        "command": "oxagen agent enroll"
       }
     }
   }
