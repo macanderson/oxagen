@@ -555,6 +555,43 @@ describe("assertKindChangeAllowed", () => {
       ),
     ).resolves.toBeUndefined();
   });
+
+  // A legacy measure's stored `kind` is only a guess, but `reserve` stamps
+  // every ledger row from the live declaration once a real call has been
+  // made, guess or not. A measure present in `before` but named in
+  // `legacyKindMeasures` must therefore be checked against the ledger's own
+  // stamp, not skipped outright the way it used to be.
+  it("refuses a legacy measure present in `before` when the ledger's own stamp disagrees and authority is drawn", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = "money";
+    const legacyMeasure = new Set(["amount"]);
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacyMeasure,
+      ),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "measure_kind_drawn",
+    );
+  });
+
+  it("allows a legacy measure present in `before` when the ledger has no real stamp yet", async () => {
+    doubles.drawn = true;
+    doubles.lastLedgerKind = null;
+    const legacyMeasure = new Set(["amount"]);
+    await expect(
+      assertKindChangeAllowed(
+        tx,
+        mandateId,
+        { amount: { ...AMOUNT, kind: "money" } },
+        { amount: { ...AMOUNT, kind: "count" } },
+        legacyMeasure,
+      ),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("applyLimitChanges", () => {

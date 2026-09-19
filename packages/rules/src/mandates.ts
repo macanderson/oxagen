@@ -46,6 +46,7 @@ import {
   desc,
   eq,
   gt,
+  isNotNull,
   isNull,
   lte,
   sql,
@@ -303,16 +304,23 @@ export async function hasSettlementOverlappingPeriod(
 }
 
 /**
- * The kind the most recent ledger row for this measure was stamped under, or
- * null when the measure has no ledger rows at all.
+ * The kind the most recent *stamped* ledger row for this measure carries, or
+ * null when the measure has no stamped ledger rows at all.
  *
- * `assertKindChangeAllowed` compares a mandate's stored `before` limit
- * against the caller's `after`, but a whole-record `limits` replacement can
- * delete a measure entirely and a later call can re-add it: `before` then
- * carries no entry for that measure at all, even though the append-only
- * ledger may still hold open or current-period rows stamped under the kind
- * the measure counted as before it was removed. This reads the ledger's own
- * stamp directly, for that one case `before` cannot see.
+ * Both callers need this to distinguish real history from none: a
+ * whole-record `limits` replacement can delete a measure entirely and a
+ * later call can re-add it (`assertKindChangeAllowed`'s `before` then
+ * carries no entry to compare), and a legacy measure's stored `limits[
+ * measure].kind` is only a guess even after real calls have stamped its
+ * ledger rows from the live declaration (`decideMandate`'s drift check).
+ * Both read the ledger's own stamp directly, since neither `before` nor a
+ * legacy stored `kind` can see it.
+ *
+ * Filtered to non-null rows: `measure_kind` is null only on a row written
+ * before the column existed, and `settle`/`release` carry a reservation's
+ * own stamp forward, so a pre-migration reservation's later null-stamped
+ * close would otherwise outrank an earlier row's real one, the most recent
+ * row by `createdAt` is not always the most recent *stamped* one.
  */
 export async function lastLedgerKind(
   tx: Tx,
@@ -322,7 +330,13 @@ export async function lastLedgerKind(
   const [row] = await tx
     .select({ measureKind: l.measureKind })
     .from(l)
-    .where(and(eq(l.mandateId, mandateId), eq(l.measure, measure)))
+    .where(
+      and(
+        eq(l.mandateId, mandateId),
+        eq(l.measure, measure),
+        isNotNull(l.measureKind),
+      ),
+    )
     .orderBy(desc(l.createdAt))
     .limit(1);
   return (row?.measureKind as MeasureKind | null | undefined) ?? null;

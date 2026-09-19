@@ -173,25 +173,21 @@ export async function assertPeriodChangeAllowed(
  * it was filed under, the same as a period rename: a call parked past a
  * boundary still holds a row `hasOpenReservation` finds.
  *
- * `legacyKindMeasures` skips a measure whose "before" kind is
- * `legacyMeasureKindGuess`'s fallback, not a real stamp: that guess never
- * drove any enforcement arithmetic (`reserve`/`decideMandate` always read
- * the raw value against the tool's actual current declaration, not the
- * guess), so a ledger row under it already carries the right raw figure.
- * Refreshing that measure's kind to what the declaration actually says is
- * the same attrition ADR-108 §3 already documents for every other read, not
- * a change that could mix an old interpretation into a new sum. Requiring
- * an operator to wait out a live reservation before this attrition can land
- * would refuse a routine `validTo`/`limitChanges` update for no
- * corruption risk this check exists to prevent.
- *
- * A measure absent from `before` is not necessarily a fresh one: a whole-
- * record `limits` replacement can delete a measure while the append-only
- * ledger still holds open or current-period rows for it, and a later call
- * can re-add the same measure under a different kind. `before[measure]`
- * cannot see that history, so this falls back to `lastLedgerKind`, the
- * kind the ledger's own most recent row for the measure was stamped under,
- * and refuses the same way a change from a present `before` entry would.
+ * `legacyKindMeasures` names a measure whose `before[measure].kind` is only
+ * `legacyMeasureKindGuess`'s fallback, not a real stamp: comparing that guess
+ * to `next.kind` would refuse routine attrition the same disagreement a
+ * legacy row's stored kind can legitimately have with no drift underneath
+ * it. But the guess is not the only source of truth available: `reserve`
+ * has stamped every ledger row for a legacy measure from the live tool
+ * declaration since ADR-108's ledger column shipped, whether the mandate's
+ * own stored kind is a real stamp or still a guess, so a legacy measure that
+ * has made a real call already has real ledger history. This falls back to
+ * `lastLedgerKind` for a legacy measure the same way it does for a measure
+ * absent from `before` entirely (a whole-record `limits` replacement can
+ * delete a measure while the ledger still holds rows for it, and a later
+ * call can re-add it with no `before` entry to compare), refusing the
+ * change when that history disagrees, and skipping only when there truly is
+ * none yet to protect.
  */
 export async function assertKindChangeAllowed(
   tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
@@ -205,11 +201,12 @@ export async function assertKindChangeAllowed(
     const prev = before[measure];
     const period = prev?.period ?? next.period;
     let priorKind: MandateLimits[string]["kind"] | null;
-    if (prev) {
+    if (prev && !legacyKindMeasures.has(measure)) {
       if (prev.kind === next.kind) continue;
-      if (legacyKindMeasures.has(measure)) continue;
       priorKind = prev.kind;
     } else {
+      // No `before` entry, or a legacy measure whose stored kind is only a
+      // guess: the ledger's own last stamped kind is the fact to check.
       priorKind = await lastLedgerKind(tx, mandateId, measure);
       if (priorKind === null || priorKind === next.kind) continue;
     }
