@@ -319,6 +319,10 @@ describe("changeMandateLimits", () => {
       ...untouched,
       callsPerDay: "70",
     });
+    expect(result).toEqual({
+      ok: true,
+      value: { mandateId: MANDATE_ID, status: "active" },
+    });
     expect(written()).toEqual({
       mandateId: MANDATE_ID,
       limitChanges: { calls: { perPeriod: "70", currencyOrUnit: "calls" } },

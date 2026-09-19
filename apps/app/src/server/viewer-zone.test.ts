@@ -3,6 +3,8 @@
 // moves a validity boundary by up to a day, in the widening direction for every
 // zone east of the default, and nothing on screen afterwards says it was guessed.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { OrgCtx, type OrgFields } from "./viewer";
+import { unsafeMint } from "./viewer.testing";
 
 const { kernelRead } = vi.hoisted(() => ({ kernelRead: vi.fn() }));
 vi.mock("./kernel", async (importOriginal) => ({
@@ -13,7 +15,14 @@ vi.mock("./kernel", async (importOriginal) => ({
 const { viewerTimeZone } = await import("./viewer-zone");
 
 // The helper only forwards this to kernelRead, which is mocked.
-const ctx = {} as Parameters<typeof viewerTimeZone>[0];
+const orgFields: OrgFields = {
+  userId: "u1",
+  orgId: "11111111-1111-4111-8111-111111111111",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "owner",
+};
+const ctx = unsafeMint(OrgCtx, orgFields);
 
 beforeEach(() => {
   kernelRead.mockReset();

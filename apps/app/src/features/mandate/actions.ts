@@ -31,11 +31,7 @@
 // currency-denominated unit is refused here, and a money limit is changed over
 // the API or MCP by a caller that holds the declaration. The app reads one back
 // as money either way.
-import type { z } from "zod";
-import {
-  mandateLimitsUpdate,
-  mandateLimitsUpdateFields,
-} from "@oxagen/oxagen/contracts/mandate.limits.update";
+import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
@@ -92,14 +88,21 @@ export type LimitsDraft = {
  * means the stored one is kept. The handler merges it under the row lock
  * (ADR-102).
  */
-// Derived from the field schema rather than from the contract's `input`. That
-// input is `.object().strict().refine(...)`, so it is a ZodEffects and indexing
-// `z.input<...>` on it answers `unknown`, which typechecks here and loses every
-// bound the moment it is written to. The field is exported for the same reason
-// the xmcp tool needs it.
-type MandateLimitChanges = NonNullable<
-  z.input<typeof mandateLimitsUpdateFields.limitChanges>
->;
+// A hand-written copy of `mandateLimitChangeSchema` / `mandateLimitChangesSchema`
+// (`@oxagen/oxagen/mandates/schemas`, ADR-102), which the app may not import
+// (§2, `data/contracts/mandates.ts`). Deriving it from the field schema instead
+// — `NonNullable<z.input<typeof mandateLimitsUpdateFields.limitChanges>>` —
+// resolved to the generated empty-object type `{}` rather than the record
+// shape, losing every bound the moment it was written to; a hand-written copy
+// is what this file's own convention prescribes for a contract bound the app
+// mirrors, pinned the same way (`actions.test.ts` exercises every field).
+type MandateLimitChange = {
+  perCall?: string;
+  perPeriod?: string;
+  period?: "daily" | "weekly" | "monthly";
+  currencyOrUnit?: string;
+};
+type MandateLimitChanges = Record<string, MandateLimitChange>;
 
 /**
  * The one built-in measure (`CALLS_MEASURE`): every call draws exactly one of
