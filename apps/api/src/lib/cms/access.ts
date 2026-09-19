@@ -364,6 +364,24 @@ export async function redeemAndRotate(
       .limit(1);
     if (!edition) return { ok: false, reason: "unknown_edition" };
 
+    // Lock order is lead, then code, everywhere. mintCodeTx locks the lead
+    // before it touches any code row, so locking the code first here would
+    // deadlock against a concurrent resend for the same lead. Resolve the
+    // lead without a lock, take the lead lock, then lock and re-read the code.
+    const [target] = await tx
+      .select({ leadId: bookAccessCodes.leadId })
+      .from(bookAccessCodes)
+      .where(eq(bookAccessCodes.code, code))
+      .limit(1);
+    if (!target) return { ok: false, reason: "invalid" };
+
+    await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(eq(leads.id, target.leadId))
+      .for("update")
+      .limit(1);
+
     // Lock the code row so concurrent redemptions of the same code serialize.
     const [codeRow] = await tx
       .select({

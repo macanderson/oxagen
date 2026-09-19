@@ -246,7 +246,7 @@ describe("redeemAndRotate — single-use enforcement", () => {
     });
   });
 
-  it("returns invalid when the code does not exist", async () => {
+  it("returns invalid when the code does not exist, before taking any lock", async () => {
     h.tx = makeFakeTx({ selects: [editionRow, []] });
     expect(await redeemAndRotate("page-flip-reader", "nope")).toEqual({
       ok: false,
@@ -258,6 +258,8 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
+        [{ leadId: "l1" }], // unlocked lookup of the code's lead
+        [{ id: "l1" }], // lead lock, taken before the code lock
         [{ id: "c1", leadId: "l1", status: "consumed", expiresAt: null }],
       ],
     });
@@ -271,6 +273,8 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
+        [{ leadId: "l1" }], // unlocked lookup of the code's lead
+        [{ id: "l1" }], // lead lock, taken before the code lock
         [
           {
             id: "c1",
@@ -291,6 +295,8 @@ describe("redeemAndRotate — single-use enforcement", () => {
     h.tx = makeFakeTx({
       selects: [
         editionRow,
+        [{ leadId: "l1" }], // unlocked lookup of the code's lead
+        [{ id: "l1" }], // lead lock, taken before the code lock
         [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
         [{ id: "l1" }], // mintCodeTx: lock lead
         [], // mintCodeTx: prior-active lookup — none, c1 was just consumed
@@ -306,6 +312,54 @@ describe("redeemAndRotate — single-use enforcement", () => {
       expect(res).not.toHaveProperty("leadEmail");
       expect(res.editions).toHaveLength(1);
     }
+  });
+});
+
+describe("redeemAndRotate — lock order", () => {
+  it("locks the lead before the code row, the same order mintCodeTx uses", async () => {
+    const { schema } = await import("@oxagen/database");
+    const queue: unknown[][] = [
+      [{ html: "<html>book</html>", title: "Reader" }],
+      [{ leadId: "l1" }],
+      [{ id: "l1" }],
+      [{ id: "c1", leadId: "l1", status: "active", expiresAt: null }],
+      [{ id: "l1" }],
+      [],
+      [],
+    ];
+    // Each select records the table it read and whether it took a row lock.
+    const locks: unknown[] = [];
+    const selectChain = () => {
+      let table: unknown;
+      const result = queue.shift() ?? [];
+      const chain: Record<string, unknown> = {
+        from: (t: unknown) => ((table = t), chain),
+        where: () => chain,
+        limit: () => chain,
+        for: () => (locks.push(table), chain),
+        then: (resolve: (v: unknown) => unknown) => resolve(result),
+      };
+      return chain;
+    };
+    const passthrough = (value: unknown) => {
+      const chain: Record<string, unknown> = {
+        values: () => chain,
+        set: () => chain,
+        where: () => chain,
+        returning: () => chain,
+        then: (resolve: (v: unknown) => unknown) => resolve(value),
+      };
+      return chain;
+    };
+    h.tx = {
+      select: selectChain,
+      insert: () => passthrough([{ id: "code_new" }]),
+      update: () => passthrough([]),
+    };
+    const res = await redeemAndRotate("page-flip-reader", "good");
+    expect(res.ok).toBe(true);
+    expect(locks[0]).toBe(schema.leads);
+    expect(locks[1]).toBe(schema.bookAccessCodes);
   });
 });
 

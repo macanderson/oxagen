@@ -504,6 +504,27 @@ main{flex:1;position:relative}
   var LEADS_URL = API_BASE + "/v1/cms/leads";
   var REDEEM_URL = API_BASE + "/v1/cms/book/redeem";
   var RESEND_URL = API_BASE + "/v1/cms/book/resend";
+
+  /* Every API call here is bounded. A connection the API accepts but never
+     answers would otherwise leave the loading state or a disabled submit
+     button up forever; aborting rejects the promise, and each caller's
+     existing catch branch offers the retry. */
+  var REQUEST_TIMEOUT_MS = 15000;
+  function postJson(url, body) {
+    var controller = typeof AbortController === "function" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
+    /* The timer is left running after the headers arrive: it also bounds a
+       body that stalls mid-read, and aborting a finished request is a no-op. */
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller ? controller.signal : undefined
+    }).catch(function (err) {
+      if (timer) clearTimeout(timer);
+      throw err;
+    });
+  }
   var EDITIONS = ["field-manual", "page-flip-reader"];
   var DEFAULT_EDITION = "page-flip-reader";
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -607,11 +628,7 @@ main{flex:1;position:relative}
 
   if (code) {
     showLoading();
-    fetch(REDEEM_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edition: effectiveEdition, code: code })
-    }).then(function (res) {
+    postJson(REDEEM_URL, { edition: effectiveEdition, code: code }).then(function (res) {
       return res.json().then(function (data) { return { status: res.status, data: data }; }).catch(function () {
         return { status: res.status, data: {} };
       });
@@ -685,11 +702,7 @@ main{flex:1;position:relative}
       btn.disabled = true;
       setStatus(statusEl, "Sending…");
 
-      fetch(LEADS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      }).then(function (res) {
+      postJson(LEADS_URL, payload).then(function (res) {
         return res.json().then(function (data) { return { status: res.status, data: data }; });
       }).then(function (r) {
         var data = r.data || {};
@@ -752,11 +765,7 @@ main{flex:1;position:relative}
       btn.disabled = true;
       setStatus(statusEl, "Sending…");
 
-      fetch(RESEND_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, edition: edition })
-      }).then(function (res) {
+      postJson(RESEND_URL, { email: email, edition: edition }).then(function (res) {
         return res.json().then(function (data) { return { status: res.status, data: data }; });
       }).then(function (r) {
         var data = r.data || {};
