@@ -2,7 +2,7 @@
 // first is the bare path and the rest are one path segment each, so a tab
 // survives a reload and a shared link.
 
-export const REPOSITORY_TABS = [
+const REPOSITORY_TABS = [
   "repositories",
   "working-copies",
   "changes",

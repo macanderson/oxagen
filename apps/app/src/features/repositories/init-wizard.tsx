@@ -39,7 +39,7 @@ import {
 import { UNANSWERED, useRepositoriesFailure } from "./failure";
 import { type Load, prose, sectionTitle } from "./parts";
 
-export const WIZARD_STEPS = [
+const WIZARD_STEPS = [
   "repository",
   "branch",
   "permissions",
@@ -49,7 +49,7 @@ export const WIZARD_STEPS = [
 type WizardStep = (typeof WIZARD_STEPS)[number];
 
 /** The permissions the App needs for this lifecycle, writes included. */
-export const APP_PERMISSIONS = [
+const APP_PERMISSIONS = [
   { key: "contents", access: "readWrite" },
   { key: "pullRequests", access: "readWrite" },
   { key: "checks", access: "write" },
@@ -70,7 +70,7 @@ export const APP_CANNOT = [
  * branch, and no `.oxagen/` yet. A repository that already has the tree is
  * changed with an ordinary pull request, and `open_init_pr` refuses it.
  */
-export function initCandidates(
+function initCandidates(
   repositories: readonly BoundRepositoryRow[],
   trees: Readonly<Record<string, Load<RepositoryTree>>>,
 ): BoundRepositoryRow[] {
