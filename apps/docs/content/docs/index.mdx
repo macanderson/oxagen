@@ -1,9 +1,9 @@
 ---
 title: Oxagen docs
-description: Mission Control for your autonomous agents. It is the agent control plane and agent fleet management, with one mandate per agent, checked on the actions routed through Oxagen.
+description: Mission Control for agent operators. It is the agent control plane and agent fleet management, with one mandate per agent, checked on the actions routed through Oxagen.
 ---
 
-Oxagen is Mission Control for the autonomous agents your organization runs. It is your organization's agent control plane, and your operator's agent fleet management. Every agent operates under a mandate: its access, its budget, its tools, and its rules, set by the teams accountable for it and checked on the actions routed through Oxagen. Security writes the access clause. When a task needs a system, the agent asks, a rule you wrote answers, and the record keeps the answer.
+Oxagen is Mission Control for agent operators. It governs the agents your organization runs, autonomous and supervised alike, and does not run them. It is your organization's agent control plane, and your operator's agent fleet management. Every agent operates under a mandate: its access, its budget, its tools, and its rules, set by the teams accountable for it and checked on the actions routed through Oxagen. Security writes the access clause. When a task needs a system, the agent asks, a rule you wrote answers, and the record keeps the answer.
 
 ## Where you are
 
@@ -40,7 +40,7 @@ Oxagen saves every run next to the data it touched: who asked, what the agent re
 
 ### Spend
 
-Oxagen prices every model call and tool call by token class and attributes it to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
+Oxagen prices every model call and tool call routed through it by token class and attributes it to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and per workspace stop a run between steps, never mid-tool. See [billing](/docs/billing) and [budgets](/docs/cli/budget).
 
 ### Ground
 

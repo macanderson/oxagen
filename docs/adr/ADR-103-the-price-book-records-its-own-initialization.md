@@ -1,4 +1,4 @@
-# ADR-102: The price book records its own initialization
+# ADR-103: The price book records its own initialization
 
 - **Status:** Accepted
 - **Date:** 2026-09-19

@@ -16,7 +16,7 @@ export const mandateGet = registerCapability({
     "Read one mandate: the grant, remaining authority by measure from the ledger, and the ledger rows (reservations, settlements, releases) newest first.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

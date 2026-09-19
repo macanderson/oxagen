@@ -12,9 +12,9 @@ The product's vocabulary is Mission Control's vocabulary (spec §3). How exactly
 
 | Word | Meaning | Not |
 |---|---|---|
-| Mission Control | the product and the experience where operators manage the autonomous agent workforce | mission control center, the dashboard, the console (as the product name) |
+| Mission Control | the product and the experience where operators manage the agent workforce | mission control center, the dashboard, the console (as the product name) |
 | agent control plane | the technical category: decides what agents may do, hands them what they need, keeps the record, and does not run them | agent fleet management (as a category), orchestration layer, trust layer |
-| workforce | the autonomous agents an organization runs, managed by its operators | swarm, army |
+| workforce | the agents an organization runs, autonomous or supervised, managed by its operators | swarm, army |
 | identity | the agent's own principal, with its roles and accountable operator, distinct from any connection credential | the agent's token, service account, API key |
 | operator's job | give each agent an identity, set its authority and budget, equip it with tools and skills, and oversee its work | orchestration, agent ops, AgentOps, babysitting |
 | run | one session of one agent under one operator, on one task | session, trace, execution, job |

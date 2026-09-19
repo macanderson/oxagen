@@ -63,18 +63,26 @@ const SPEEDS = [1, 1.5, 2, 4] as const;
 /** How often a followed live run re-reads itself. */
 const LIVE_REFRESH_MS = 5000;
 
+/*
+ * A step's kind is a STATE, and the house rule is that the gold never encodes
+ * one: it is identity, and at most one action per screen. So `control` — a
+ * frame Oxagen itself wrote, a steer or a pause — is told apart by SHAPE, the
+ * square dot among round ones, which is also the only difference that survives
+ * greyscale and colour blindness. It used to take the gold, which put the
+ * brand metal inside the same axis as info, success and destructive.
+ */
 const DOT: Record<StepNode, string> = {
   model: "border-info",
   tool: "border-muted-foreground",
   policy: "border-success",
-  control: "border-brand rounded-[2px]",
+  control: "border-foreground rounded-[2px]",
   deny: "border-destructive bg-destructive",
 };
 const NAME: Record<StepNode, string> = {
   model: "text-info",
   tool: "text-foreground",
   policy: "text-foreground",
-  control: "text-brand",
+  control: "text-foreground",
   deny: "text-destructive",
 };
 
@@ -346,7 +354,9 @@ function TurnBlock({
             ▶
           </span>
           <span className="text-[13px] font-semibold text-foreground">
-            <span aria-hidden="true" className="text-brand">
+            {/* A turn marker is structure, not identity and not an action, so
+                it does not spend the screen's one gold. */}
+            <span aria-hidden="true" className="text-muted-foreground">
               ▍
             </span>
             {turn.turn === null ? t("runStart") : t("turn", { n: turn.turn })}

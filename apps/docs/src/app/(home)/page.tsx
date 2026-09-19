@@ -10,7 +10,7 @@ import { HexField } from "@/components/ui/hex-field";
 export const metadata: Metadata = {
   title: "Oxagen docs: the agent control plane",
   description:
-    "Mission Control for your autonomous agents: one mandate per agent, checked on the actions routed through Oxagen, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
+    "Oxagen governs the agents an enterprise runs, autonomous and supervised alike: one mandate per agent, checked on the calls routed through Oxagen, and one fleet on one page. Docs for the CLI, the REST API, the MCP server, and Mission Control.",
 };
 
 /* What the control plane holds, mirrored from docs.oxagen.sh/docs. */
@@ -35,7 +35,7 @@ const FOUR_JOBS = [
   },
   {
     title: "Spend",
-    body: "Every model call and tool call is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and workspace stop a run between steps, never mid-tool.",
+    body: "Every model call and tool call routed through Oxagen is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and workspace stop a run between steps, never mid-tool.",
     href: "/docs/billing",
     cta: "Billing and budgets",
   },
@@ -114,11 +114,11 @@ export default function HomePage(): ReactNode {
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen is Mission Control for the autonomous agents you run. Each
-              agent works under one mandate, set by security, FinOps, and
-              engineering, and checked on every call routed through Oxagen.
-              Every run is on the record with its cost. These docs cover the
-              CLI, the REST API, the MCP server, and Mission Control, all
+              Oxagen governs the agents you run, autonomous and supervised
+              alike. Each agent works under one mandate, set by security,
+              FinOps, and engineering, and checked on the calls routed through
+              Oxagen. Every run is on the record with its cost. These docs cover
+              the CLI, the REST API, the MCP server, and Mission Control, all
               behind one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
@@ -160,16 +160,15 @@ export default function HomePage(): ReactNode {
           <div>
             <span className="ox-eyebrow">The knowledge graph</span>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Never re-explain yourself{" "}
-              <span className="lp-grad-text">to AI ever again</span>.
+              Give agents the business context{" "}
+              <span className="lp-grad-text">their work requires</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              Taught once, known by every agent you run. Oxagen hands the agent
-              a typed knowledge graph at run time instead of training a model.
-              Stuffing every document into the prompt saturates the window.
-              Oxagen retrieves only the slice the task needs and the
-              agent&apos;s mandate lets it read, so the window stays open and
-              the model stays sharp.
+              Oxagen hands the agent a typed knowledge graph at run time instead
+              of training a model. Stuffing every document into the prompt
+              saturates the window. Oxagen retrieves only the slice the task
+              needs and the agent&apos;s mandate lets it read, so the window
+              stays open and the model stays sharp.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
@@ -288,8 +287,8 @@ export default function HomePage(): ReactNode {
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center px-6 py-24 text-center">
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-            See which agent{" "}
-            <span className="lp-grad-text">spent what, and on whose behalf</span>.
+            See which agent spent what,{" "}
+            <span className="lp-grad-text">and on whose behalf</span>.
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and wrap one machine, or read the getting-started

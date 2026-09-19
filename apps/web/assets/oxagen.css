@@ -1,9 +1,12 @@
+@import "./house-tokens.css";
+
 /* ==========================================================================
    oxagen.sh — shared shell
-   Palette: the Oxagen house brand system, byte-for-byte, so this site and the
-   app (@oxagen/ui) are one surface. The generated source of these values is
-   tokens/house-tokens.css in macanderson/oxagen-house-brand.
-   Two layers: --st-* primitives hold every hex, --<name> semantics alias them.
+   Palette: the Oxagen house brand system, so this site and the app
+   (@oxagen/ui) are one surface. house-tokens.css above is the kit's own
+   generated file, vendored here by tools/scripts/sync-brand-assets.mjs.
+   Three layers: the kit's --ox-* table holds every hex, --st-* primitives
+   name the ones this site uses, and --<name> semantics alias those.
    Repoint an alias to reskin; never re-hex, and never hardcode a palette value
    in a rule or a page.
    Gold is identity and action only — never a state. States are pass/fail.
@@ -17,34 +20,44 @@
 
 :root {
   /* ── LAYER 1 · PRIMITIVES ────────────────────────────────────────────────
-     The house table, byte-for-byte off tokens/house-tokens.css, so the site,
-     the app and the terminal all name the same colours the same way. This is
-     the ONLY place a hex appears.
-     The light-mode paper ramp (--st-paper*) is deliberately omitted: this site
-     is dark-only, and a paper ramp here would be tokens nothing can consume. */
-  --st-void: #000000; /* below the canvas */
-  --st-bg: #09090B; /* the canvas */
-  --st-panel: #18181B; /* panels, cards, code blocks */
-  --st-hl: #27272A; /* selected and hover rows */
-  --st-border: #27272A; /* hairlines, dividers */
-  --st-rule: #3F3F46; /* section rules, boundaries */
-  --st-gold: #D4AF37; /* the brand metal: actions, active, money, the mark */
-  --st-gold-bright: #F1CE65; /* tiny live indicators only */
-  --st-gold-ink: #8A7223; /* gold as TEXT where the metal itself is illegible */
-  --st-paper-text: #FFFFFF; /* primary text in dark */
-  --st-text: #e8e8ec; /* cooler alternate ink */
-  --st-silver-type: #bfc1cc; /* types, tertiary labels */
-  --st-silver: #A1A1AA; /* secondary emphasis */
-  --st-muted: #A1A1AA; /* secondary text */
-  --st-dim: #52525B; /* hints, captions, line numbers */
-  --st-green: #74c991; /* pass, additive */
-  --st-green-ink: #006933;
-  --st-red: #e0687a; /* fail, destructive */
-  --st-red-ink: #96213c;
-  --st-amber: #e78d54; /* warning — never the gold, which is not a state */
-  --st-amber-ink: #8a3f00;
-  --st-diff-add: #10201a;
-  --st-diff-del: #241019;
+     The stops this site uses, each a reference into the kit's own --ox-* table
+     in house-tokens.css. No hex is written here: a colour that moves in the
+     kit moves here on the next sync.
+     The site is dark-only, so every stop is the kit's value on ink and the
+     light-mode paper ramp is omitted rather than carried as tokens nothing can
+     consume. Two diff washes are the exception, and they are named as such. */
+  --st-void: var(--ox-void); /* below the canvas */
+  --st-bg: var(--ox-ink); /* the canvas */
+  --st-panel: var(--ox-panel); /* panels, cards, code blocks */
+  --st-hl: var(--ox-hl); /* selected and hover rows */
+  --st-border: var(--ox-border); /* hairlines, dividers */
+  --st-rule: var(--ox-rule); /* section rules, boundaries */
+  --st-gold: var(--ox-gold); /* the brand metal: actions, active, money, the mark */
+  --st-gold-bright: var(--ox-gold-bright); /* tiny live indicators only */
+  --st-gold-ink: var(--ox-gold-deep); /* gold as TEXT where the metal itself is illegible */
+  --st-paper-text: var(--ox-text); /* primary text in dark */
+  --st-text: var(--ox-text-body); /* body ink */
+  --st-silver-type: var(--ox-muted); /* types, tertiary labels */
+  --st-silver: var(--ox-muted); /* secondary emphasis */
+  --st-muted: var(--ox-muted); /* secondary text */
+  --st-dim: var(--ox-dim); /* hints, captions, line numbers */
+  --st-green: var(--ox-st-allowed); /* pass, additive */
+  --st-green-ink: var(--ox-st-allowed-ink);
+  --st-red: var(--ox-st-failed); /* fail, destructive */
+  --st-red-ink: var(--ox-st-failed-ink);
+  /* The kit ships two stops per state and both are MARKS: the bare name is the
+     mark on ink, the -ink suffix the mark on paper. A mark needs 3:1, so
+     neither is a text colour, and this site is dark, so the paper stop is the
+     wrong direction anyway. #C0453C as words on the #18181B panel is 3.77:1,
+     under the 4.5:1 body floor. This is the failed state lightened until it
+     clears it, the same derived stop @oxagen/ui carries for --error-ink. */
+  --st-red-type: oklch(0.7 0.16 25); /* failed as TEXT on ink: 6.6:1 canvas, 6.3:1 panel */
+  --st-amber: var(--ox-st-denied); /* warning — never the gold, which is not a state */
+  --st-amber-ink: var(--ox-st-denied-ink);
+  /* The two diff washes the kit has no stop for: its allowed and failed states
+     laid over the canvas at low strength, so they move with the ramp. */
+  --st-diff-add: color-mix(in srgb, var(--ox-st-allowed) 12%, var(--ox-ink));
+  --st-diff-del: color-mix(in srgb, var(--ox-st-failed) 12%, var(--ox-ink));
 
   /* ── LAYER 2 · SEMANTIC ──────────────────────────────────────────────────
      The names the rest of this stylesheet and every page actually consume.
@@ -63,7 +76,8 @@
   --muted: var(--st-muted);
   --faint: var(--st-dim);
   --pass: var(--st-green);
-  --fail: var(--st-red);
+  --fail: var(--st-red); /* the MARK: dots, borders, washes */
+  --fail-ink: var(--st-red-type); /* failed as words, the way --gold-ink is gold as words */
   --warn: var(--st-amber);
   --add-bg: var(--st-diff-add);
   --del-bg: var(--st-diff-del);
@@ -778,7 +792,7 @@ figcaption b {
   color: var(--pass);
 }
 .t-bad {
-  color: var(--fail);
+  color: var(--fail-ink);
 }
 
 /* ============ cards ============ */
@@ -990,7 +1004,7 @@ figcaption b {
   min-height: 1.5em;
 }
 .form-status.err {
-  color: var(--fail);
+  color: var(--fail-ink);
 }
 .form-status a {
   color: var(--gold);
