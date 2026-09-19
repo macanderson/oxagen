@@ -112,9 +112,7 @@ const GATEWAY_CTX: CapabilityContext = {
  * call through this, not through either function alone, so a passing test
  * proves the WIRING closes the gap, not just one function's own logic.
  */
-async function invokeAsGateway(
-  capability: string,
-): Promise<{
+async function invokeAsGateway(capability: string): Promise<{
   outcome: "allow" | "deny" | "pending_approval";
   reason?: string;
 }> {
