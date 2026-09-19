@@ -13,67 +13,62 @@
 const MODEL_ID_BOUNDARY = new Set(["-", "/", ":", ".", "_", "@"]);
 
 /**
- * A segment that names which RELEASE of a product this is: a version number
- * (`5`, `4.8`, `v2`), a part of a date stamp (`20260901`, or `2026`, `08`,
- * `01`), a snapshot ordinal (`002`), or the moving `latest` pointer.
+ * A suffix that stamps WHEN a product was snapshot, rather than naming a
+ * product: an ISO date (`2026-08-01`), the compact form (`20260801`), an
+ * OpenAI-style four-digit snapshot (`0613`), or the moving `latest` pointer.
  *
- * Anything else — `mini`, `nano`, `turbo`, `pro`, `flash`, `thinking`, `free`
- * — names a different product that the vendor prices separately, even though
- * it hangs off the same family name.
+ * Everything else names a different product that the vendor prices
+ * separately, **including a bare or dotted number.** `gpt-5.2` is not a
+ * version of `gpt-5` in any sense this file cares about: the repository's own
+ * rate card prices `gpt-5` at $1.25/$10, `gpt-5.2` at $1.75/$14 and `gpt-5.5`
+ * at $5/$30, and gives each its own row rather than letting one inherit from
+ * another. The same card prices `grok-4` at $3/$15 above both `grok-4.5`
+ * ($2/$6) and `grok-4.3` ($1.25/$2.50), so a numeric suffix rule gets the
+ * direction of the error wrong as readily as its size.
  */
-const VERSION_SEGMENT = /^(?:v?\d+(?:\.\d+)*|latest)$/;
-
-function segmentsOf(rest: string): string[] {
-  const out: string[] = [];
-  let current = "";
-  for (const char of rest) {
-    if (MODEL_ID_BOUNDARY.has(char)) {
-      out.push(current);
-      current = "";
-    } else current += char;
-  }
-  out.push(current);
-  return out;
-}
+const POINT_IN_TIME_STAMP = /^(?:latest|\d{4}(?:[-._/]?\d{2}[-._/]?\d{2})?)$/;
 
 /**
  * Whether `name` is the same model as the `claimed` family: the same id, or
- * that family plus segments that name nothing but a version, a date stamp or
- * the `latest` pointer.
+ * that family plus a stamp that says which point-in-time snapshot of it this
+ * is.
  *
- * **This is not a prefix test, and deliberately not a boundary test either.**
- * Three rounds of review taught the same lesson from three directions. Keying
- * on the model id alone ignored aliases, so an override never bound the
- * gateway form of the name it overrode. A raw `startsWith` let `gpt-4`
- * displace `gpt-4o`, and an operator who overrode one model silently repriced
- * three. Requiring the match to land on a separator fixed that pair and left
- * the real hole open: `-` is a separator, so `gpt-4o` still swallowed
- * `gpt-4o-mini` — a tenth of its price — and an organization that negotiated
- * `gpt-4o` was billed the frontier rate for every cheap call whose name starts
- * the same way.
+ * **This is not a prefix test, not a boundary test, and not a version test.**
+ * Four rounds of review taught the same lesson from four directions. Keying on
+ * the model id alone ignored aliases, so an override never bound the gateway
+ * form of the name it overrode. A raw `startsWith` let `gpt-4` displace
+ * `gpt-4o`, and an operator who overrode one model silently repriced three.
+ * Requiring the match to land on a separator fixed that pair and left the real
+ * hole open: `-` is a separator, so `gpt-4o` still swallowed `gpt-4o-mini` — a
+ * tenth of its price. Admitting a version suffix closed that pair and opened
+ * the numeric one: `gpt-5` then claimed `gpt-5.2` and `gpt-5.5`, which the
+ * rate card prices as three separate products.
  *
- * A fourth punctuation tweak could not close that, because the distinction is
- * not in the punctuation. `gpt-4o-2026-08-01` is the same product as `gpt-4o`
- * and `gpt-4o-mini` is a different one, yet both differ from `gpt-4o` by a
- * hyphen and one token. So inheritance is restricted to the two relationships
- * that are actually stated somewhere: an **explicit alias** (settled by the
- * exact-name test in the callers, which is what binds `claude-sonnet-5` to
- * `anthropic/claude-sonnet-5`), and a **recognized version suffix** —
- * {@link VERSION_SEGMENT}, the vocabulary the catalogs publish for releases of
- * one product.
+ * The distinction that holds is not in the punctuation and not in whether the
+ * suffix looks like a number. It is whether the suffix names **one product at
+ * a point in time** or **a different product**. A date or snapshot stamp is
+ * the first. A release number is the second, because a vendor reprices between
+ * releases and the card already carries a row per release. So inheritance is
+ * restricted to the two relationships that are actually stated somewhere: an
+ * **explicit alias** (settled by the exact-name test in the callers, which is
+ * what binds `claude-sonnet-5` to `anthropic/claude-sonnet-5`), and a
+ * **point-in-time stamp** — {@link POINT_IN_TIME_STAMP}.
  *
  * An unrecognized suffix is a DISTINCT identity, which is the safe direction.
- * A model that fails to inherit resolves to no row, and the rollup records it
- * as `estimated` with a null cost and the Pricing tab shows the gap. A model
- * that inherits the wrong row bills a customer at another product's rate.
+ * A model that fails to inherit resolves to no row, the rollup records it as
+ * `estimated` with a null cost, and the Pricing tab shows the gap for a person
+ * to fix. A model that inherits the wrong row bills a customer at another
+ * product's rate and says nothing.
  *
  * ```
- * gpt-4o            ← gpt-4o-2026-08-01   same: a date stamp
- * claude-sonnet     ← claude-sonnet-5     same: a version
- * gemini-1.5-pro    ← gemini-1.5-pro-002  same: a snapshot ordinal
- * gpt-4o            ✗ gpt-4o-mini         different products
- * gpt-4             ✗ gpt-4o              not even a segment boundary
- * claude-sonnet-5   ✗ claude-sonnet-50    not even a segment boundary
+ * gpt-4o            ← gpt-4o-2026-08-01      same: an ISO date stamp
+ * gpt-4             ← gpt-4-0613             same: a snapshot stamp
+ * claude-sonnet-5   ← claude-sonnet-5-latest same: the moving pointer
+ * gpt-5             ✗ gpt-5.2                $1.25/$10 against $1.75/$14
+ * grok-4            ✗ grok-4.5               $3/$15 against $2/$6
+ * claude-sonnet     ✗ claude-sonnet-5        two rows in the card, not one
+ * gpt-4o            ✗ gpt-4o-mini            different products
+ * gpt-4             ✗ gpt-4o                 not even a segment boundary
  * ```
  */
 export function isSameModelIdentity(name: string, claimed: string): boolean {
@@ -86,12 +81,12 @@ export function isSameModelIdentity(name: string, claimed: string): boolean {
   const rest =
     last !== undefined && MODEL_ID_BOUNDARY.has(last)
       ? // `claimed` already ends at a boundary (`anthropic/`), so the rest of
-        // `name` is the suffix — and it has to be a version like any other.
+        // `name` is the suffix — and it has to be a stamp like any other.
         // Ending at a separator does not let a name own every id beneath it.
         name.slice(claimed.length)
       : MODEL_ID_BOUNDARY.has(name.charAt(claimed.length))
         ? name.slice(claimed.length + 1)
         : null;
   if (rest === null || rest === "") return false;
-  return segmentsOf(rest).every((segment) => VERSION_SEGMENT.test(segment));
+  return POINT_IN_TIME_STAMP.test(rest);
 }

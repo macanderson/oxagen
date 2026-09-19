@@ -420,10 +420,14 @@ export function mergePublishedPrices(
   // family. Within one group both survive, since the same source published
   // both and the longer match is the more specific price it meant.
   //
-  // Same identity, not the same leading characters and not merely a segment
-  // boundary either: only an explicit alias or a recognized version suffix
-  // inherits, so an override for `gpt-4o` leaves the catalog's separately
-  // priced `gpt-4o-mini` row alone — see {@link isSameModelIdentity}.
+  // Same identity, not the same leading characters, not merely a segment
+  // boundary and not a version number either: only an explicit alias or a
+  // point-in-time stamp inherits. So an override for `gpt-4o` leaves the
+  // catalog's separately priced `gpt-4o-mini` row alone, and an override for
+  // `gpt-5` leaves the `gpt-5.2` and `gpt-5.5` rows alone — three products at
+  // three prices in the card, and dropping two of them would have priced
+  // their calls at the negotiated `gpt-5` rate — see
+  // {@link isSameModelIdentity}.
   const claimedAbove: string[] = [];
   const counts: Record<PriceSourceId, number> = {
     operator_override: 0,

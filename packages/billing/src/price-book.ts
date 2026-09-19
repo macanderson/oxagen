@@ -245,15 +245,16 @@ function effectiveAt(entry: PriceEntry, at: Date): boolean {
  *
  * The test is {@link isSameModelIdentity}, not a prefix test of any kind. An
  * entry's name reaches another model id only through an explicit alias or a
- * recognized version suffix, because the resolver reads the organization's
- * rows before the list rows and returns the first name that matched — so a
- * name that over-claims never reaches the more specific list row, and the
+ * point-in-time stamp, because the resolver reads the organization's rows
+ * before the list rows and returns the first name that matched — so a name
+ * that over-claims never reaches the more specific list row, and the
  * organization is billed its negotiated rate for a product it did not
  * negotiate. `gpt-4` over-claiming `gpt-4o` billed a frontier model at an
  * older model's contracted rate; `gpt-4o` over-claiming `gpt-4o-mini` billed a
- * tenth-price model at the frontier rate. `gpt-4-0613` and
- * `claude-sonnet-5-20260901` are still the releases of their families they
- * look like, which is what the suffix rule admits.
+ * tenth-price model at the frontier rate; `gpt-5` over-claiming `gpt-5.2` and
+ * `gpt-5.5` billed two separately priced products at a third one's rate.
+ * `gpt-4-0613` and `claude-sonnet-5-20260901` are the same products at a
+ * stamped moment, which is what the stamp rule admits and all it admits.
  */
 function matchLength(entry: PriceEntry, modelId: string): number | null {
   let best: number | null = null;
