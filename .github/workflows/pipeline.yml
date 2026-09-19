@@ -208,6 +208,15 @@ jobs:
       - name: UI capability parity (strict ratchet)
         run: pnpm check:ui-parity --strict
 
+      # The prose gate for the two customer-facing sites. It existed as a
+      # package.json script and nothing ran it, while apps/web/CLAUDE.md,
+      # CLAUDE.md and AGENTS.md all told contributors CI enforced it. That is how
+      # apps/web/read/index.html reached main carrying seven em dashes, and it is
+      # why the retired-line entries in check-prose.mjs would never have fired:
+      # a gate nobody runs is a comment.
+      - name: Prose gate (oxagen.sh and docs.oxagen.sh)
+        run: pnpm check:prose
+
       # `Org-only sentinel reads` (check-org-sentinel-reads.mjs) stood here and
       # is gone. It read the source to prove no org-level read was narrowed by
       # RLS, and it could not converge: eight blind spots in eight review

@@ -96,6 +96,19 @@ pre-push:
       glob: "apps/app/{messages/*.json,src/i18n/messages.d.ts,src/**/*.tsx,src/**/*.ts}"
       run: pnpm --filter @oxagen/app check:messages
 
+    # The house prose rules for the two customer-facing sites: no em dash, no
+    # exclamation point, no avoid-list word, no retired positioning line. This
+    # ran nowhere for as long as it existed, while three files of contributor
+    # docs said CI enforced it, so apps/web/read/index.html reached main with
+    # seven em dashes. It is a gate in CI now; catching it here saves the round
+    # trip, and it reads only the two sites it scans.
+    prose:
+      # Kept broad on purpose: the script decides what it scans, and a glob
+      # carrying the literal parentheses of apps/docs/src/app/(home) is a bet on
+      # the matcher's escaping that a hook should not make.
+      glob: "apps/{web,docs}/**"
+      run: pnpm check:prose
+
     # Registered env vars must validate against the schema — an unregistered var
     # (NEXT_PUBLIC_DOCS_URL, OXAGEN_LOCAL_DEV, …) silently red-jobs the CI gate.
     env-check:
