@@ -42,6 +42,12 @@ const SCAN = [
   },
   { dir: "apps/docs/content", ext: [".mdx", ".md"], skip: [] },
   { dir: "apps/docs/src/app/(home)", ext: [".tsx"], skip: [] },
+  // The published sales decks and the narration a presenter reads aloud. These
+  // were outside the scan while the retired-line entries were added to the avoid
+  // list, so the one surface that had carried a retired headline into a customer
+  // meeting was the one surface the new check could not see. `.js` is here for
+  // `script-data.js`, which holds the spoken script.
+  { dir: "apps/docs/public/decks", ext: [".html", ".js"], skip: [] },
 ];
 
 // Words that mean nothing, intensifiers, emotional and fear sells, category
@@ -142,6 +148,15 @@ const AVOID_RE = new RegExp(
 export function proseOf(text, ext) {
   const blank = (m) => m.replace(/[^\n]/g, " ");
   let s = text;
+  if (ext === ".js") {
+    // A deck's narration file (`script-data.js`) holds the spoken script in
+    // exported data, so this cannot borrow the .tsx branch: that one blanks
+    // `export` lines as module plumbing, which is exactly where the words are.
+    // Comments go, because this script's contract is the words a reader sees
+    // (see the header), and the data stays.
+    s = s.replace(/\/\*[\s\S]*?\*\//g, blank).replace(/\/\/[^\n]*/g, blank);
+    return s;
+  }
   if (ext === ".html" || ext === ".tsx") {
     s = s.replace(/<(script|style|svg|pre|code)\b[\s\S]*?<\/\1>/gi, blank);
     s = s.replace(/<!--[\s\S]*?-->/g, blank);
@@ -207,7 +222,7 @@ function main() {
   const args = process.argv.slice(2);
   const list = args.includes("--list");
   const paths = args.filter((a) => !a.startsWith("--"));
-  const ALL_EXT = [".html", ".mdx", ".md", ".yaml", ".tsx"];
+  const ALL_EXT = [".html", ".mdx", ".md", ".yaml", ".tsx", ".js"];
   const files = paths.length
     ? paths.flatMap((p) => {
         const full = join(ROOT, p);

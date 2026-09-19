@@ -98,6 +98,19 @@ describe("check-prose", () => {
     ]);
   });
 
+  // A deck's narration lives in exported data in script-data.js, which is why
+  // .js cannot borrow the .tsx handling: that branch blanks `export` lines as
+  // module plumbing, and the spoken script is on them.
+  it("reads a deck's narration out of exported data, and ignores its comments", () => {
+    const js = [
+      "/* a header comment with an em dash \u2014 not read aloud */",
+      'export const SCRIPT = [{ say: "Mission Control for your autonomous agents." }];',
+    ].join("\n");
+    expect(findHits(js, ".js").map((h) => h.kind)).toEqual([
+      "avoid: Mission Control for your autonomous agents",
+    ]);
+  });
+
   it("flags an exclamation point but not a shell negation", () => {
     expect(findHits("Done!", ".mdx")[0].kind).toBe("exclamation");
     expect(findHits("if [ ! -f x ]", ".mdx")).toEqual([]);
