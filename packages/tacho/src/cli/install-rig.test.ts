@@ -196,6 +196,7 @@ describe("install rig: macOS, every harness", () => {
     // A machine where none of the harness files exist yet.
     rmSync(join(seed.home, ".claude"), { recursive: true });
     rmSync(join(seed.home, ".codex"), { recursive: true });
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
     rmSync(join(seed.home, ".stella"), { recursive: true });
     rmSync(join(seed.home, "Library", "Application Support"), {
       recursive: true,
@@ -205,6 +206,82 @@ describe("install rig: macOS, every harness", () => {
     expect(existsSync(rig.deps.paths.claudeSettings)).toBe(true);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("gives back a Cursor hooks file whose only member is the user's own version", async () => {
+    // The narrow case between the two Cursor files the rig otherwise covers:
+    // not one Tacho created, and not one carrying the user's hooks, but a
+    // started-and-left `{"version": 1}`. It is byte for byte what Tacho's own
+    // leftover looks like after a strip, so anything that reads the leftover
+    // by its shape reads this as the leftover too and empties a file the user
+    // wrote. Only the receipt tells them apart.
+    const seed = seedHome();
+    writeFileSync(join(seed.home, ".cursor", "hooks.json"), '{"version": 1}\n');
+    const before = snapshotTree(seed.home);
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  it("keeps a hook the user added to the Cursor file enrollment created", async () => {
+    // The other half of the receipt that lets a purge take back a file Tacho
+    // made. The teardown writes the stripped document through
+    // `HarnessFiles.write`, so those bytes are by definition the bytes Tacho
+    // wrote last — and a hook the user added while enrolled is inside them.
+    // Deleting on that digest alone would take their hook with the file, out
+    // of their home directory. Only `cursorDocumentIsVestigial` saying the
+    // strip left nothing but our own `version` may delete it, and here it
+    // cannot say that.
+    const seed = seedHome();
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ["cursor"] }, rig.deps)).ok).toBe(true);
+    const path = rig.deps.paths.cursorHooks[0] as string;
+    expect(existsSync(path)).toBe(true);
+    // They add one of their own to the file enrollment created for them.
+    const live = JSON.parse(readFileSync(path, "utf8")) as {
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    live.hooks["afterFileEdit"] = [{ command: "~/bin/my-own-hook.sh" }];
+    writeFileSync(path, `${JSON.stringify(live, null, 2)}\n`);
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    // Their hook and their file are still there; every Tacho entry is gone.
+    expect(existsSync(path)).toBe(true);
+    const after = readFileSync(path, "utf8");
+    expect(after).toContain("~/bin/my-own-hook.sh");
+    expect(after).not.toContain(TEST_ENROLLMENT);
+    expect(after).not.toContain("tacho");
+  });
+
+  it("keeps the Cursor file when the operator pinned their own schema version", async () => {
+    // The third form of the same loss. `mergeCursorHooks` writes `version`
+    // only when the document has none, deliberately, so an operator who pinned
+    // a future schema version keeps it. The purge then read "one key, and it is
+    // `version`" as its own scaffolding and deleted the file with their pin in
+    // it. Tacho can only take back the value Tacho wrote.
+    const seed = seedHome();
+    rmSync(join(seed.home, ".cursor"), { recursive: true });
+    const rig = buildRig(seed);
+    expect((await enroll({ harnesses: ["cursor"] }, rig.deps)).ok).toBe(true);
+    const path = rig.deps.paths.cursorHooks[0] as string;
+    const live = JSON.parse(readFileSync(path, "utf8")) as {
+      version: number;
+      hooks: Record<string, unknown>;
+    };
+    expect(live.version).toBe(1);
+    // They pin a schema version of their own while enrolled.
+    live.version = 2;
+    writeFileSync(path, `${JSON.stringify(live, null, 2)}\n`);
+
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+
+    expect(existsSync(path)).toBe(true);
+    const after = JSON.parse(readFileSync(path, "utf8")) as {
+      version: number;
+    };
+    expect(after.version).toBe(2);
+    expect(readFileSync(path, "utf8")).not.toContain(TEST_ENROLLMENT);
   });
 
   it("writes through a symlinked settings file and leaves the link a link", async () => {

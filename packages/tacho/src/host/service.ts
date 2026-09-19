@@ -22,6 +22,24 @@ export interface ExecResult {
 /** Run a command and capture it; the daemon and the CLI inject the real one. */
 export type Exec = (command: string, args: string[]) => ExecResult;
 
+/**
+ * The same port, without blocking the caller's event loop.
+ *
+ * `Exec` is implemented with `spawnSync` everywhere it is injected, which is
+ * correct for the CLI and the service manager: both are short programs whose
+ * next step depends on the command they just ran, and neither is serving
+ * anything while it waits. The daemon is the opposite case. It answers hooks
+ * on one event loop, and a synchronous spawn there stops it answering any
+ * hook until the child exits. A hook that waits out its budget falls back to
+ * deciding locally, which is the mandate going unenforced, so the daemon's
+ * probes take this port instead and the synchronous one stays for its other
+ * callers.
+ */
+export type ExecAsync = (
+  command: string,
+  args: string[],
+) => Promise<ExecResult>;
+
 export interface ServiceSpec {
   /** Program and arguments that run the daemon in the foreground. */
   command: string[];

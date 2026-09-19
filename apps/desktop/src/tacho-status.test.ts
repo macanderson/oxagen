@@ -23,7 +23,9 @@ const ENROLLED = {
     missing: ["Stop"],
   },
   codexHooks: { complete: true, present: ["PreToolUse"], missing: [] },
-  cursorHooks: { complete: false, present: ["stop"], missing: ["preToolUse"] },
+  cursorHooks: [
+    { complete: false, present: ["stop"], missing: ["preToolUse"] },
+  ],
   stellaHooks: { complete: false, present: [], missing: ["PreToolUse"] },
   wal: {
     sessions: 2,
@@ -249,5 +251,67 @@ describe("the gateway, model base URLs and tiers", () => {
         )?.modelBaseUrls,
       ).toBeUndefined();
     }
+  });
+});
+
+/**
+ * `tacho status` reports Cursor as one entry per hooks file, because a moved
+ * config directory means Oxagen writes two. The app shows one row per
+ * harness, so the list is folded here.
+ */
+describe("Cursor's hooks fold to one row", () => {
+  const parse = (cursorHooks: unknown) =>
+    parseTachoStatus(JSON.stringify({ enrolled: true, cursorHooks }))
+      ?.cursorHooks;
+
+  it("is complete only when every file is complete", () => {
+    expect(
+      parse([
+        {
+          complete: true,
+          present: ["preToolUse", "stop"],
+          missing: [],
+          failOpenEnforcement: [],
+        },
+        {
+          complete: true,
+          present: ["preToolUse", "stop"],
+          missing: [],
+          failOpenEnforcement: [],
+        },
+      ]),
+    ).toEqual({ complete: true, present: ["preToolUse", "stop"], missing: [] });
+    expect(
+      parse([
+        {
+          complete: true,
+          present: ["preToolUse", "stop"],
+          missing: [],
+          failOpenEnforcement: [],
+        },
+        { complete: false, present: ["stop"], missing: ["preToolUse"] },
+      ]),
+    ).toEqual({ complete: false, present: ["stop"], missing: ["preToolUse"] });
+  });
+
+  it("counts a veto hook that fails open as missing, not present", () => {
+    // Cursor allows the action when a fail-open hook cannot answer, so a
+    // hook in that state is not the hook Oxagen wrote.
+    expect(
+      parse([
+        {
+          complete: false,
+          present: ["preToolUse", "stop"],
+          missing: [],
+          failOpenEnforcement: ["preToolUse"],
+        },
+      ]),
+    ).toEqual({ complete: false, present: ["stop"], missing: ["preToolUse"] });
+  });
+
+  it("is absent when the CLI reported none", () => {
+    expect(parse(undefined)).toBeUndefined();
+    expect(parse([])).toBeUndefined();
+    expect(parse("nope")).toBeUndefined();
   });
 });

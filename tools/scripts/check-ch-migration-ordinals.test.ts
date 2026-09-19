@@ -140,7 +140,7 @@ describe("a new duplicate", () => {
 
   it("is NOT reported when it takes the next free ordinal", () => {
     const offending = offendingDuplicates(
-      [...REAL, "0028_brand_new.sql"].sort(),
+      [...REAL, "0029_brand_new.sql"].sort(),
     ).filter((g) => g.unexempt.length > 0);
     expect(offending).toEqual([]);
   });
@@ -383,7 +383,7 @@ describe("an ordinal at or below the pre-ledger baseline cutover", () => {
   });
 
   it("accepts the next free ordinal on the real tree", () => {
-    expect(baselineBackfills([...REAL, "0028_brand_new.sql"].sort())).toEqual(
+    expect(baselineBackfills([...REAL, "0029_brand_new.sql"].sort())).toEqual(
       [],
     );
     expect(baselineBackfills([...REAL, "0031_much_later.sql"].sort())).toEqual(
@@ -472,7 +472,7 @@ describe("a shipped migration filename is frozen", () => {
     expect([...SHIPPED_MIGRATIONS].sort()).toEqual(REAL);
     expect(
       SHIPPED_MIGRATIONS.filter((f) => f > PRE_LEDGER_BASELINE_CUTOVER),
-    ).toEqual(["0027_tacho_events.sql"]);
+    ).toEqual(["0027_tacho_events.sql", "0028_tacho_observed_changes.sql"]);
   });
 
   it("covers every grandfathered name", () => {
@@ -582,8 +582,9 @@ describe("a shipped migration filename is frozen", () => {
 
   it("accepts a brand-new migration above the tip, with no constant edited", () => {
     // The mirror. The roster is a snapshot of what has shipped and does not
-    // grow: an ordinary migration PR adds 0028 and touches nothing here.
-    const withNew = [...REAL, "0028_brand_new.sql"].sort();
+    // grow: an ordinary migration PR adds the next ordinal and declares it in the
+    // roster, which is the one line it touches here.
+    const withNew = [...REAL, "0029_brand_new.sql"].sort();
     expect(shippedRenames(withNew)).toEqual([]);
     expect(baselineBackfills(withNew)).toEqual([]);
     expect(malformed(withNew)).toEqual([]);
@@ -600,8 +601,8 @@ describe("a shipped migration filename is frozen", () => {
     // Closing that needs the roster to grow with every migration, which is the
     // friction the "touches no constant" property buys. Written down in the
     // guard and in the PR body; not silently absent.
-    const added = [...REAL, "0028_first_name.sql"].sort();
-    const thenRenamed = [...REAL, "0028_second_name.sql"].sort();
+    const added = [...REAL, "0029_first_name.sql"].sort();
+    const thenRenamed = [...REAL, "0029_second_name.sql"].sort();
     expect(shippedRenames(added)).toEqual([]);
     expect(shippedRenames(thenRenamed)).toEqual([]);
   });

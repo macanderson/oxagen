@@ -298,11 +298,22 @@ function readCapabilities() {
     )
     .map((file) => {
       const src = readFileSync(join(CAP_DIR, file), "utf8");
-      const nameMatch = src.match(/name:\s*["'`]([^"'`]+)["'`]/);
-      const domainMatch = src.match(/domain:\s*["'`]([^"'`]+)["'`]/);
-      const modeMatch = src.match(/mode:\s*["'`]([^"'`]+)["'`]/);
-      const layersMatch = src.match(/layers:\s*\[([^\]]*)\]/);
-      const surfacesMatch = src.match(/surfaces:\s*\[([^\]]*)\]/);
+      // Anchored to the start of a line so a prose mention inside a JSDoc
+      // block cannot be read as a contract field. A comment line begins
+      // with `*`, an object property does not. `check_ui_parity.mjs`
+      // parses contracts the same way and must stay in step.
+      // Anchored to the registerCapability(...) call, not only to a line start.
+      // `^\\s*name:` stops the run.list.ts doc comment, whose line begins " * ",
+      // but not an object literal elsewhere in the file whose own `name:` starts
+      // a line — and a contract file is mostly schemas with defaults. These are
+      // fields of that call, so the call is where they are read from.
+      const declStart = src.search(/registerCapability\s*\(/);
+      const decl = declStart === -1 ? "" : src.slice(declStart);
+      const nameMatch = decl.match(/^\s*name:\s*["'`]([^"'`]+)["'`]/m);
+      const domainMatch = decl.match(/^\s*domain:\s*["'`]([^"'`]+)["'`]/m);
+      const modeMatch = decl.match(/^\s*mode:\s*["'`]([^"'`]+)["'`]/m);
+      const layersMatch = decl.match(/^\s*layers:\s*\[([^\]]*)\]/m);
+      const surfacesMatch = decl.match(/^\s*surfaces:\s*\[([^\]]*)\]/m);
       const name = nameMatch ? nameMatch[1] : file.replace(/\.ts$/, "");
       const domain = domainMatch ? domainMatch[1] : "unknown";
       const mode = modeMatch ? modeMatch[1] : "sync";

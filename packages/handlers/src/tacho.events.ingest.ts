@@ -42,6 +42,8 @@ import { PROOF_OBSERVED_KIND } from "@oxagen/run-evidence";
 import {
   countsLlmCallSplit,
   countsLlmCallUsage,
+  deriveSessionTitle,
+  retainsBody,
   TACHO_GATEWAY_TIER,
   TACHO_METERING_ATTR,
   TACHO_METERING_OBSERVED,
@@ -56,10 +58,19 @@ import {
 import { recordSpend } from "@oxagen/billing";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import {
+  languageOf,
+  observedChangesOf,
+  repoRelativePathOf,
+  WORKTREE_RECONCILED_KIND,
+  worktreeRootOf,
+} from "./lib/file-facts";
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
+  sessionFileObservedStatusColumnReady,
   sessionGatewayColumnReady,
+  sessionPushesColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
@@ -120,6 +131,31 @@ interface SessionDelta {
   filesDeleted: number;
   commandsRun: number;
   networkCalls: number;
+  commits: number;
+  pushes: number;
+  pullRequests: number;
+}
+
+/**
+ * Count a frame that acted on a repository rather than on a file.
+ *
+ * The frame kind does not decide this and must not: a pull request opened
+ * from the shell seals a `command` frame and one opened through the GitHub
+ * MCP server seals a `network` frame, and they are the same act. The
+ * `effect_kind` is the discriminator, so both call sites ask the same
+ * question of it.
+ *
+ * These count intent, not confirmed outcome. The collector seals an effect
+ * frame only for a call that succeeded, so a push rejected for a
+ * non-fast-forward is not counted here. What is still not observed is the
+ * remote: nothing in this path reads the branch afterwards to confirm the
+ * ref moved, and a push performed inside a script the agent invoked is
+ * invisible to the classifier that produced these kinds.
+ */
+function countRepoEffect(delta: SessionDelta, effectKind: unknown): void {
+  if (effectKind === "git_commit") delta.commits += 1;
+  else if (effectKind === "git_push") delta.pushes += 1;
+  else if (effectKind === "pr_open") delta.pullRequests += 1;
 }
 
 function emptyDelta(): SessionDelta {
@@ -154,6 +190,9 @@ function emptyDelta(): SessionDelta {
     filesDeleted: 0,
     commandsRun: 0,
     networkCalls: 0,
+    commits: 0,
+    pushes: 0,
+    pullRequests: 0,
   };
 }
 
@@ -275,9 +314,11 @@ export function foldDelta(delta: SessionDelta, event: TachoEvent): void {
       break;
     case "command":
       delta.commandsRun += 1;
+      countRepoEffect(delta, body["effect_kind"]);
       break;
     case "network":
       delta.networkCalls += 1;
+      countRepoEffect(delta, body["effect_kind"]);
       break;
     case "policy_decision":
     case "token_denied":
@@ -853,14 +894,27 @@ export const tachoEventsIngestHandler: CapabilityHandler<
   const verified = verifyBatchBodies(input.events, input.bodies);
   const bodyRejections: BodyRejection[] = [...verified.rejected];
   const retained: VerifiedBody[] = [];
-  if (retention.mode === "digest_only") {
-    for (const body of verified.accepted)
+  for (const body of verified.accepted) {
+    // Both halves of the mandate bind here as they do on the host: the mode
+    // says exact bytes may be kept at all, the classes say which content the
+    // workspace authorised. `retainsBody` is the same rule the collector
+    // applies before it writes, so a body can never be kept at one end and
+    // refused at the other.
+    if (retention.mode === "digest_only") {
       bodyRejections.push({
         event_id_idem: body.eventIdIdem,
         reason: "retention_digest_only",
       });
-  } else {
-    retained.push(...verified.accepted);
+      continue;
+    }
+    if (!retainsBody(body.kind, retention)) {
+      bodyRejections.push({
+        event_id_idem: body.eventIdIdem,
+        reason: "retention_class_excluded",
+      });
+      continue;
+    }
+    retained.push(body);
   }
   const bytesRefs = new Map<string, string>();
   for (const body of retained) {
@@ -909,6 +963,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
     const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    // The two columns this branch adds, asked the same way and for the same
+    // window. Probed separately from each other because one migration adds
+    // both and a run that fails between its two statements leaves exactly the
+    // half-applied state an inference would get wrong.
+    const pushesColumn = await sessionPushesColumnReady(tx);
+    const observedStatusColumn = await sessionFileObservedStatusColumnReady(tx);
     // Which of this batch's chains the control plane's own records say it
     // served a gateway call for (#3221). One grouped read for the whole batch,
     // and skipped entirely when no promotion is possible — including while
@@ -1154,6 +1214,17 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         filesDeleted: sql`${schema.tachoSessions.filesDeleted} + ${delta.filesDeleted}`,
         commandsRun: sql`${schema.tachoSessions.commandsRun} + ${delta.commandsRun}`,
         networkCalls: sql`${schema.tachoSessions.networkCalls} + ${delta.networkCalls}`,
+        commits: sql`${schema.tachoSessions.commits} + ${delta.commits}`,
+        // Skipped while the column is unmigrated. Every other counter here
+        // is on a column that has shipped, so naming this one before its
+        // migration lands would raise 42703 and refuse the whole batch —
+        // ingestion stopped outright, on a host still reporting healthy.
+        ...(pushesColumn
+          ? {
+              pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}`,
+            }
+          : {}),
+        pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
       const common = {
         lastEventAt: now,
@@ -1392,8 +1463,16 @@ export const tachoEventsIngestHandler: CapabilityHandler<
       // them is the same defect as the counters were.
       if (sessionId && accepted) {
         await rollupModels(tx, ctx, sessionId, counted, now);
-        await rollupFiles(tx, ctx, sessionId, fresh, now);
+        await rollupFiles(tx, ctx, sessionId, fresh, now, observedStatusColumn);
         await rollupCommands(tx, ctx, sessionId, fresh, now);
+        await refreshSessionTitle(
+          tx,
+          ctx,
+          sessionId,
+          fresh,
+          now,
+          observedStatusColumn,
+        );
       }
       if (accepted) {
         for (const event of fresh) {
@@ -1718,7 +1797,15 @@ async function rollupFiles(
   sessionId: string,
   events: TachoEvent[],
   now: Date,
+  // Whether `tacho.session_files.observed_status` exists yet. Same window as
+  // the gateway columns: the node deploys on merge and the migration is
+  // applied by hand afterwards, so naming the column in between raises 42703
+  // and takes the batch with it.
+  observedStatusColumn: boolean,
 ): Promise<void> {
+  // The worktree the batch agrees on, used to turn every absolute path into
+  // the repo-relative form that is stable across hosts.
+  const root = worktreeRootOf(events.map((event) => event.context));
   const byPath = new Map<
     string,
     {
@@ -1729,8 +1816,47 @@ async function rollupFiles(
       first: number;
       last: number;
       bytes: number;
+      /** The path the row stores, preferring an absolute one. */
+      path: string;
+      /** What the last reconciliation in this batch observed, if any. */
+      observed?: {
+        status: string;
+        linesAdded: number;
+        linesRemoved: number;
+        repoRelativePath?: string;
+      };
     }
   >();
+  /**
+   * The identity two passes agree on for one file.
+   *
+   * The attested pass keys on whatever the tool reported, which is often a
+   * relative `src/a.ts`. The observed pass keys on what git reported, which
+   * is the absolute `/repo/src/a.ts`. Keyed on those raw strings the same
+   * file became two rows, one carrying the writes and the other the observed
+   * status and line counts, and the Run page showed the file twice with half
+   * the truth on each. The repo-relative form is what both can reach, so it
+   * is the key, and a path with no root to measure against keeps its own
+   * string rather than colliding with anything.
+   */
+  const identityOf = (path: string): string =>
+    repoRelativePathOf(path, root) ?? path;
+  const entryFor = (path: string, seq: number) => {
+    const existing = byPath.get(identityOf(path));
+    if (existing !== undefined) return existing;
+    return {
+      reads: 0,
+      writes: 0,
+      edits: 0,
+      deletes: 0,
+      first: seq,
+      last: seq,
+      bytes: 0,
+      // The path the row stores. An absolute one wins if either pass has it,
+      // since it is the one a person can act on.
+      path,
+    };
+  };
   for (const event of events) {
     if (event.kind !== "tool_call" && event.kind !== "file_io") continue;
     if (event.kind === "tool_call" && event.source !== "hook") continue;
@@ -1739,15 +1865,7 @@ async function rollupFiles(
     const target = str(body["tool_target"]);
     if (!target || !kind || !kind.startsWith("file_")) continue;
     if (event.kind === "tool_call" && kind !== "file_read") continue;
-    const entry = byPath.get(target) ?? {
-      reads: 0,
-      writes: 0,
-      edits: 0,
-      deletes: 0,
-      first: event.seq,
-      last: event.seq,
-      bytes: 0,
-    };
+    const entry = entryFor(target, event.seq);
     if (kind === "file_read") entry.reads += 1;
     else if (kind === "file_write") {
       entry.writes += 1;
@@ -1756,9 +1874,80 @@ async function rollupFiles(
     else if (kind === "file_delete") entry.deletes += 1;
     entry.first = Math.min(entry.first, event.seq);
     entry.last = Math.max(entry.last, event.seq);
-    byPath.set(target, entry);
+    byPath.set(identityOf(target), entry);
   }
-  for (const [path, entry] of byPath) {
+  // The observed pass, second so that a path both announced and seen lands
+  // on one row. A reconciliation frame reports the whole worktree as git
+  // holds it, so a path it names may have no attested frame at all: that is
+  // the point of reading it, since a `sed -i`, a formatter or a build
+  // changes files no tool announced.
+  for (const event of events) {
+    if (event.kind !== WORKTREE_RECONCILED_KIND) continue;
+    for (const change of observedChangesOf(event.body)) {
+      const entry = entryFor(change.path, event.seq);
+      entry.observed = {
+        status: change.status,
+        linesAdded: change.lines_added,
+        linesRemoved: change.lines_removed,
+        ...(change.repo_relative_path.length > 0
+          ? { repoRelativePath: change.repo_relative_path }
+          : {}),
+      };
+      entry.first = Math.min(entry.first, event.seq);
+      entry.last = Math.max(entry.last, event.seq);
+      // Git reports an absolute path, which is the better one to store when
+      // the attested pass only had a relative one.
+      if (change.path.startsWith("/")) entry.path = change.path;
+      byPath.set(identityOf(change.path), entry);
+    }
+  }
+  if (byPath.size === 0) return;
+  // Identity has to hold across batches, not only inside one.
+  //
+  // The conflict key on this table is (session_id, path), so two batches
+  // naming one file differently still make two rows: the attested frame
+  // arrives with a relative `src/a.ts` and the reconciliation, which is
+  // asynchronous and usually lands a batch or more later, arrives with the
+  // absolute `/repo/src/a.ts`. Normalizing inside the batch fixed only the
+  // case where both happen to travel together, which is the case a test
+  // constructs and the rarer one in practice.
+  //
+  // So the rows this session already has are read once and keyed the same
+  // way, and an entry that matches one reuses that row's stored path. The
+  // insert then conflicts as it should and enriches the row rather than
+  // adding a second. One query per rollup, not one per file.
+  const stored = await tx
+    .select({
+      path: schema.tachoSessionFiles.path,
+      repoRelativePath: schema.tachoSessionFiles.repoRelativePath,
+    })
+    .from(schema.tachoSessionFiles)
+    .where(eq(schema.tachoSessionFiles.sessionId, sessionId));
+  //
+  // A repo-relative identity is only an identity inside one worktree. One
+  // session can work in two repositories that both hold `src/a.ts`, and
+  // keying on the relative form alone would hand the second repository's
+  // reconciliation the first repository's row and merge two different files
+  // into one. So a stored row joins the map only when its absolute path sits
+  // under the root this batch is measured against; a row from elsewhere
+  // keeps its own absolute path and stays a separate row, which is what it
+  // is. With no root to measure against nothing is relative and the question
+  // does not arise.
+  const pathByIdentity = new Map<string, string>();
+  const inThisWorktree = (path: string): boolean =>
+    root === undefined ||
+    !path.startsWith("/") ||
+    repoRelativePathOf(path, root) !== undefined;
+  for (const row of stored) {
+    if (!inThisWorktree(row.path)) continue;
+    pathByIdentity.set(row.repoRelativePath ?? row.path, row.path);
+    pathByIdentity.set(identityOf(row.path), row.path);
+  }
+  for (const entry of byPath.values()) {
+    const path =
+      pathByIdentity.get(
+        entry.observed?.repoRelativePath ?? identityOf(entry.path),
+      ) ?? entry.path;
     await tx
       .insert(schema.tachoSessionFiles)
       .values({
@@ -1766,11 +1955,24 @@ async function rollupFiles(
         workspaceId: ctx.workspaceId,
         sessionId,
         path,
+        // The observed frame carries the repository it read the path in, so
+        // it is preferred over deriving one from the batch's worktree
+        // context: git answered the question the derivation guesses at.
+        repoRelativePath:
+          entry.observed?.repoRelativePath ?? repoRelativePathOf(path, root),
+        language: languageOf(path),
         reads: entry.reads,
         writes: entry.writes,
         edits: entry.edits,
         deletes: entry.deletes,
         bytesWritten: entry.bytes,
+        // Zero for a row with no observation, which is the column's default
+        // and stays honest: nobody looked.
+        linesAdded: entry.observed?.linesAdded ?? 0,
+        linesRemoved: entry.observed?.linesRemoved ?? 0,
+        ...(observedStatusColumn
+          ? { observedStatus: entry.observed?.status }
+          : {}),
         firstSeq: entry.first,
         lastSeq: entry.last,
         createdAt: now,
@@ -1787,11 +1989,130 @@ async function rollupFiles(
           edits: sql`${schema.tachoSessionFiles.edits} + ${entry.edits}`,
           deletes: sql`${schema.tachoSessionFiles.deletes} + ${entry.deletes}`,
           bytesWritten: sql`${schema.tachoSessionFiles.bytesWritten} + ${entry.bytes}`,
+          // COALESCE and not an overwrite: a later batch may carry no
+          // worktree context, and a path that was once placed in its
+          // repository does not stop being there because the next frame
+          // arrived without the fact.
+          repoRelativePath: sql`COALESCE(${entry.observed?.repoRelativePath ?? null}, ${schema.tachoSessionFiles.repoRelativePath}, ${repoRelativePathOf(path, root) ?? null})`,
+          language: sql`COALESCE(${schema.tachoSessionFiles.language}, ${languageOf(path) ?? null})`,
           lastSeq: sql`GREATEST(${schema.tachoSessionFiles.lastSeq}, ${entry.last})`,
+          // The two line counts do NOT accumulate, alone on this row among
+          // columns that all do. Every other column here counts events, and
+          // two batches carrying two tool calls are two tool calls. These
+          // two are a measurement, not a count: each reconciliation reports
+          // the whole difference between the worktree and HEAD, so the same
+          // unchanged file observed on three turns would add up to three
+          // times the lines it holds.
+          //
+          // GREATEST rather than a plain set, because the measure resets.
+          // A commit moves HEAD, and the lines the agent wrote are then in
+          // HEAD rather than in the diff, so the next observation of that
+          // path is honestly zero. Assigning it would erase work the record
+          // already watched happen.
+          //
+          // Within an observation the two counts are assigned together,
+          // because they are one measurement of one worktree against HEAD,
+          // not two running totals. Taking the larger of each column on its
+          // own crossed observations: 12/3 followed by 2/10 left 12/10, a
+          // state git never reported and nobody could have produced. The
+          // envelope contract says these are assigned rather than
+          // accumulated, and this is the same reasoning `observedStatus`
+          // below already follows.
+          //
+          // Left alone when this batch carried no observation of the path,
+          // so an attested frame arriving later does not zero a count that
+          // git supplied.
+          ...(entry.observed === undefined
+            ? {}
+            : {
+                linesAdded: entry.observed.linesAdded,
+                linesRemoved: entry.observed.linesRemoved,
+                // Assigned, not kept: the latest observation is the current
+                // condition of the path, and a file created and then deleted
+                // is deleted.
+                ...(observedStatusColumn
+                  ? { observedStatus: entry.observed.status }
+                  : {}),
+              }),
           updatedAt: now,
         },
       });
   }
+}
+
+/**
+ * Re-derive the run's title from what the record now shows.
+ *
+ * It runs on every accepted batch rather than at seal, because a name that
+ * arrives when the run ends is no use to someone watching the run. The
+ * model-authored `name` and `summary` that `summarize_run` writes are the
+ * better read once they exist; this is what the list shows until then, and
+ * for every workspace recording `digest_only`, which that capability refuses
+ * outright.
+ *
+ * Derived from place and counts, never from prompt text, so it says the same
+ * thing at every retention setting. The place comes off the batch's own
+ * events rather than a re-read of the session row: the facts are already in
+ * hand, and a transaction does not need another round trip to learn them.
+ */
+async function refreshSessionTitle(
+  tx: Tx,
+  ctx: Scope,
+  sessionId: string,
+  events: TachoEvent[],
+  now: Date,
+  // As in `rollupFiles`: the observed half of the file count is only asked
+  // for once the column exists. Before then the title counts the attested
+  // writes alone, which is what it counted before that column was added.
+  observedStatusColumn: boolean,
+): Promise<void> {
+  const place = events.find(
+    (event) =>
+      event.context?.cwd !== undefined ||
+      event.context?.project_dir !== undefined ||
+      event.context?.worktree_path !== undefined,
+  )?.context;
+  const branch = events.find((event) => event.context?.git_branch !== undefined)
+    ?.context?.git_branch;
+  if (place === undefined && branch === undefined) return;
+
+  const [files, commands] = await Promise.all([
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tachoSessionFiles)
+      .where(
+        and(
+          eq(schema.tachoSessionFiles.sessionId, sessionId),
+          // A file changed by a shell command, a formatter or a build has
+          // no attested write, edit or delete, only the `observed_status`
+          // the reconciliation gave it. Counting the attested columns alone
+          // titled a run that plainly changed files as though it had
+          // changed none, and fell back to the command count.
+          observedStatusColumn
+            ? sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
+              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`
+            : sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`,
+        ),
+      ),
+    tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.tachoSessionCommands)
+      .where(eq(schema.tachoSessionCommands.sessionId, sessionId)),
+  ]);
+
+  const title = deriveSessionTitle({
+    projectDir: place?.project_dir ?? null,
+    cwd: place?.cwd ?? null,
+    worktreePath: place?.worktree_path ?? null,
+    gitBranch: branch ?? null,
+    filesChanged: Number(files[0]?.count ?? 0),
+    commandsRun: Number(commands[0]?.count ?? 0),
+  });
+  if (title === undefined) return;
+  await tx
+    .update(schema.tachoSessions)
+    .set({ title, updatedAt: now })
+    .where(eq(schema.tachoSessions.id, sessionId));
 }
 
 async function rollupCommands(

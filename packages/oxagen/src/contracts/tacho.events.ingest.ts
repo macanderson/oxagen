@@ -96,6 +96,9 @@ export const tachoEventsIngest = registerCapability({
                 "digest_mismatch",
                 "credential_detected",
                 "retention_digest_only",
+                // The workspace retains exact bytes, but not for this
+                // frame's content class.
+                "retention_class_excluded",
                 "no_content_digest",
               ]),
             })

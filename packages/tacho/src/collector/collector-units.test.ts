@@ -3,7 +3,13 @@
  * inbox, the detector, the exporters, the shipper's failure handling, the
  * registry's sweep and persistence, and the listener's request handling.
  */
-import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
@@ -21,8 +27,10 @@ import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
+  base64Size,
   TACHO_MAX_BODY_BYTES,
   TACHO_MAX_REQUEST_BYTES,
+  TACHO_REQUEST_ENVELOPE_BYTES,
   type DeliveredCommand,
   type TachoBody,
 } from "../wire";
@@ -566,6 +574,15 @@ describe("shipper", () => {
       onControl: (c) => {
         controls.push(c);
       },
+      // These cases are about batching, backoff and quarantine, so the mandate
+      // is the permissive one and never the thing under test.
+      retentionInForce: () => ({
+        mandate: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call", "approval_receipt"],
+        },
+        proven: true,
+      }),
       log: (l) => logs.push(l),
       now,
       minBackoffMs: 1_000,
@@ -613,6 +630,42 @@ describe("shipper", () => {
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
   });
 
+  it("drains past a request the route refuses as too large, rather than wedging", async () => {
+    // The ingest route caps a request at `TACHO_MAX_REQUEST_BYTES` and answers
+    // 413 above it. A retry
+    // cannot make a batch smaller, so treating 413 as retryable meant
+    // offering the same oversized request on every drain for ever. The WAL
+    // head never advanced past it and every later event on the host queued
+    // behind it, so that host stopped recording while still reporting
+    // itself healthy. This is the test that says it drains instead.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    // One event the route will never accept, whatever it is batched with.
+    const oversized = events[2]?.seq;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.seq === oversized))
+            throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+
+    // The one event nobody can ship is set aside, and everything behind it
+    // reaches the control plane.
+    expect(result.quarantined).toBe(1);
+    expect(result.shipped).toBe(events.length - 1);
+    // The queue is empty, which is the property that was lost: a wedged host
+    // leaves every later event unshipped for ever.
+    expect(wal.stats().unshipped).toBe(0);
+  });
   it("splits a batch the route refuses as too large, and ships an oversized event without its body", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
@@ -690,6 +743,29 @@ describe("shipper", () => {
         (seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling,
       ),
     ).toBe(false);
+  });
+
+  it("keeps the body caps inside the request budget they are spent against", () => {
+    // These numbers are only correct with respect to each other, in both
+    // directions. A cap above the budget yields a request nobody can ship.
+    // A cap far below it discards recordings for nothing.
+    //
+    // The earlier version of this test hardcoded the route's limit as a
+    // literal, which is how the drift got through: the route moved from a
+    // hardcoded 1 MiB to the host's own ceiling, the caps stayed sized for
+    // the old number, and the test went on agreeing with the copy rather
+    // than the source. It asserts against the real constant now.
+    const batchBudget = TACHO_MAX_REQUEST_BYTES - TACHO_REQUEST_ENVELOPE_BYTES;
+    expect(base64Size(TACHO_MAX_BODY_BYTES)).toBeLessThan(
+      TACHO_MAX_REQUEST_BYTES,
+    );
+    expect(base64Size(TACHO_MAX_BODY_BYTES)).toBeLessThan(batchBudget);
+    // A full batch of bodies has to leave room for the events carrying
+    // them, so a body at the cap may not fill the budget on its own.
+    expect(base64Size(TACHO_MAX_BODY_BYTES)).toBeLessThan(batchBudget * 0.8);
+    // And the budget is not so far above the cap that bodies a workspace
+    // pays to keep are discarded while the request had room for them.
+    expect(base64Size(TACHO_MAX_BODY_BYTES)).toBeGreaterThan(batchBudget * 0.2);
   });
 
   // ── Orphaned events after a re-enrollment ──────────────────────────────────
@@ -990,7 +1066,11 @@ describe("shipper", () => {
     const wal = new Wal(paths.wal);
     const events = minimalSession();
     const prompt = events[1] as TachoEvent;
-    const last = events[events.length - 1] as TachoEvent;
+    // `turn_end`, not the closing `agent_stop`: a body only exists for a kind
+    // the retention table classifies, and the ship-time gate drops one whose
+    // kind names no class. A fixture that hung a body on `agent_stop` was
+    // testing a body the recorder never writes.
+    const last = events[6] as TachoEvent;
     wal.append(events, [bodyFor(prompt, "p"), bodyFor(last, "l")]);
     const bad = events[2]?.seq;
     const sent: Array<{
@@ -1032,10 +1112,13 @@ describe("shipper", () => {
     // would ship in one request the route refuses with 413. Measured on the
     // wire, the third waits for the next batch with its event.
     const full = "x".repeat(TACHO_MAX_BODY_BYTES);
+    // Hung on classified kinds (`turn_start`, `llm_call`, `tool_requested`):
+    // the opening `agent_start` has no retention class, so the ship-time gate
+    // would drop its body and the cut under test would never happen.
     wal.append(events, [
-      bodyFor(events[0] as TachoEvent, full),
       bodyFor(events[1] as TachoEvent, full),
       bodyFor(events[2] as TachoEvent, full),
+      bodyFor(events[3] as TachoEvent, full, "tool_call"),
     ]);
     const sent: Array<{
       events: TachoEvent[];
@@ -1065,9 +1148,9 @@ describe("shipper", () => {
     const result = await s.drain();
     expect(result.shipped).toBe(events.length);
     expect(sent).toHaveLength(2);
-    expect(sent[0]?.events.map((e) => e.seq)).toEqual([0, 1]);
+    expect(sent[0]?.events.map((e) => e.seq)).toEqual([0, 1, 2]);
     expect(sent[0]?.bodies).toHaveLength(2);
-    expect(sent[1]?.events[0]?.seq).toBe(2);
+    expect(sent[1]?.events[0]?.seq).toBe(3);
     expect(sent[1]?.bodies).toHaveLength(1);
     expect(wal.stats().unshipped).toBe(0);
   });
@@ -1149,6 +1232,177 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
   });
 
+  it("does not ship a queued body the mandate no longer covers", async () => {
+    // The leak this guards: a body appended under `content_exact` waits in
+    // the WAL through an outage, the workspace narrows to `digest_only`, and
+    // the drain sends it anyway. The control plane refuses it, which protects
+    // the record and not the machine — the prompt has already left.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const sent: Array<readonly TachoBody[] | undefined> = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(bodies);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      // Narrowed since the append, and proven, so this also purges.
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: true,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // The events still ship; only the bytes stay home.
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
+    expect(wal.stats().unshipped).toBe(0);
+    // And the bytes do not stay home: a narrowed mandate reaches the disk.
+    // Omitting the body from the request alone would leave the prompt in the
+    // WAL until the session sealed and aged out.
+    expect(wal.bodiesFor(events)).toEqual([]);
+  });
+
+  /** What `<session>.bodies.jsonl` holds for a session, or "" when gone. */
+  function bodyFileText(walDir: string, sessionUuid: string): string {
+    const path = join(walDir, `${sessionUuid}.bodies.jsonl`);
+    return existsSync(path) ? readFileSync(path, "utf8") : "";
+  }
+
+  it("purges a withheld body from the WAL when the narrowing is proven", async () => {
+    // Withholding protects the network boundary and nothing else. The bytes
+    // sit in `<session>.bodies.jsonl` until the session seals, ships and ages
+    // out, so an unsealed session would keep prompt content the workspace has
+    // already withdrawn authority for, readable by anything running as this
+    // user. `docs/specs/gateway/spec.md` requires the narrowing to drop what
+    // is already on disk.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the secret prompt")]);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (batch: TachoEvent[]) => okResponse(batch),
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: true,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // Not merely unshipped: gone from disk, bytes and all.
+    expect(wal.bodiesFor([prompt])).toEqual([]);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).not.toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
+  });
+
+  it("keeps a withheld body when the mandate cannot be proven", async () => {
+    // The other half, and the reason the two are distinguished. A control
+    // plane outage lapses every cached bundle at once. If withholding alone
+    // purged, an outage would destroy the queued evidence of every session on
+    // the host — permanent loss, committed by the component whose job is the
+    // record, on a condition that usually clears at the next poll.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the secret prompt")]);
+    const sent: Array<readonly TachoBody[] | undefined> = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(bodies);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      // NO_RETENTION because nothing can be shown to be covered, which is not
+      // the workspace narrowing anything.
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: false,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // Withheld from the wire, kept on disk.
+    expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
+  });
+
+  it("still ships a queued body the mandate does cover", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const sent: TachoBody[] = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(...(bodies ?? []));
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call"],
+        },
+        proven: true,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    expect(sent.some((b) => b.event_id_idem === prompt.event_id_idem)).toBe(
+      true,
+    );
+  });
+
   it("surfaces the bodies the control plane refused", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
@@ -1170,6 +1424,10 @@ describe("shipper", () => {
       health: () => ({ version: "1" }),
       onControl: () => undefined,
       onBodyRejection: (rejections) => refused.push(...rejections),
+      retentionInForce: () => ({
+        mandate: { mode: "content_exact", classes: ["model_call"] },
+        proven: true,
+      }),
       log: () => undefined,
       now: () => 0,
     });

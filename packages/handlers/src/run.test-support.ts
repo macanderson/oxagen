@@ -164,6 +164,8 @@ export function ledgerRun(
       workspaceNamespace: "core",
       agentSlug: "reviewer",
       operatorPublicId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorUserName: "Marcus Bell",
       goal: "review the PR",
     },
     ...rest,
@@ -190,6 +192,8 @@ export function tachoSession(
       seqCount: 207,
       startedAt: new Date("2026-09-11T09:00:00.000Z"),
       sealedAt: new Date("2026-09-11T09:05:00.000Z"),
+      modelInitial: "claude-haiku-4-5-20251001",
+      modelFinal: "claude-sonnet-5",
       replayGrade: null,
       completenessGaps: [],
       enforcementTier: "observe",
@@ -200,7 +204,27 @@ export function tachoSession(
       ...session,
     },
     operatorPublicId: "prn_0123456789abcdefghjkmn",
+    operatorKind: "human",
+    operatorUserName: "Marcus Bell",
+    host: {
+      hostname: "mac-studio.local",
+      platform: "darwin",
+      osVersion: "15.6",
+      arch: "arm64",
+      nodeVersion: "v24.4.0",
+    },
     ...rest,
+  };
+}
+
+/** The row shape `tachoPage` and `tachoSession` answer, from a fixture. */
+function tachoRowOf(row: TachoFixture): TachoSessionRow {
+  return {
+    session: row.session,
+    operatorPublicId: row.operatorPublicId,
+    operatorKind: row.operatorKind,
+    operatorUserName: row.operatorUserName,
+    host: row.host,
   };
 }
 
@@ -307,20 +331,13 @@ export function memoryStores(
                 row: r,
               })),
             q,
-          ).map(({ row }) => ({
-            session: row.session,
-            operatorPublicId: row.operatorPublicId,
-          })),
+          ).map(({ row }) => tachoRowOf(row)),
         ),
       tachoSession: (scope, publicId) => {
         const row = inScope(scope).tacho.find(
           (r) => r.session.publicId === publicId && !r.child,
         );
-        return Promise.resolve(
-          row
-            ? { session: row.session, operatorPublicId: row.operatorPublicId }
-            : null,
-        );
+        return Promise.resolve(row ? tachoRowOf(row) : null);
       },
     },
     readRunRollups: (scope, runIds) => {
