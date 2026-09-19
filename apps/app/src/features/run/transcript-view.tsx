@@ -614,7 +614,9 @@ export function TranscriptView({
       }
     }
   }, [kinds, org, runId, ws]);
-  loadMoreRef.current = loadMore;
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
 
   // A followed live run reads its tail when the stream says a frame landed.
   const stream = useRunStream({
@@ -898,7 +900,9 @@ export function TranscriptView({
                     count: formatCount(entries.length, locale),
                   })
                 : complete
-                  ? t("complete", { count: formatCount(entries.length, locale) })
+                  ? t("complete", {
+                      count: formatCount(entries.length, locale),
+                    })
                   : t("cut", { count: formatCount(entries.length, locale) })}
         </span>
         {cursor === null ? null : (
@@ -916,8 +920,7 @@ export function TranscriptView({
         )}
         {pageFailure === null ? null : (
           <span data-testid="transcript-page-failed" className="basis-full">
-            {!pageFailure.ok &&
-            pageFailure.reason === "unavailable" &&
+            {pageFailure.reason === "unavailable" &&
             pageFailure.code === "invalid_input"
               ? t("badCursor")
               : t("pageFailed")}

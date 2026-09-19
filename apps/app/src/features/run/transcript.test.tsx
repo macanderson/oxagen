@@ -35,9 +35,14 @@ const pageFailed = (code: string): ActionResult<RunTranscript> => ({
   code,
 });
 
+/** A successful page-action answer. */
+const pageOk = (value: RunTranscript): ActionResult<RunTranscript> => ({
+  ok: true,
+  value,
+});
+
 const { readTranscriptPage } = vi.hoisted(() => ({
-  readTranscriptPage:
-    vi.fn<typeof import("./actions").readTranscriptPage>(),
+  readTranscriptPage: vi.fn<typeof import("./actions").readTranscriptPage>(),
 }));
 vi.mock("./actions", () => ({ readTranscriptPage }));
 vi.mock("next/link", () => ({
@@ -184,7 +189,7 @@ describe("paging past the cursor", () => {
   it("reads the next page from the cursor, through the same chips, and appends it", async () => {
     const more = mockupTranscript();
     readTranscriptPage.mockResolvedValue(
-      readOk({ ...more, cursor: null, complete: true }),
+      pageOk({ ...more, cursor: null, complete: true }),
     );
     renderSection({ read: paged, kinds: ["tools"] });
     const before = screen.getAllByTestId("transcript-frame").length;
@@ -209,7 +214,7 @@ describe("paging past the cursor", () => {
 
   it("stops offering more once the page it read carried no cursor", async () => {
     readTranscriptPage.mockResolvedValue(
-      readOk({ ...mockupTranscript(), cursor: null, complete: true }),
+      pageOk({ ...mockupTranscript(), cursor: null, complete: true }),
     );
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
@@ -292,7 +297,9 @@ describe("following a live run", () => {
   it("keeps the transport and the frames reachable while following", () => {
     renderSection({ read: readOk(mockupTranscript()), status: "live" });
     const transcript = screen.getByTestId("transcript");
-    expect(within(transcript).getByTestId("transport-readout")).toBeInTheDocument();
+    expect(
+      within(transcript).getByTestId("transport-readout"),
+    ).toBeInTheDocument();
   });
 
   it("reads the tail once more for a frame that landed during an active read, rather than dropping it (negative)", async () => {
@@ -357,7 +364,7 @@ describe("following a live run", () => {
       if (resolveFirst === undefined) throw new Error("no pending read");
       await act(async () => {
         resolveFirst(
-          readOk({ ...mockupTranscript(), cursor: "next", complete: false }),
+          pageOk({ ...mockupTranscript(), cursor: "next", complete: false }),
         );
         // Flush the microtask queue: the promise's own continuation, the
         // state updates it triggers, and the follow-up loadMore's call into
