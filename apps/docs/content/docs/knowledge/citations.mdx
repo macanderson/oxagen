@@ -3,9 +3,7 @@ title: Citations
 description: Workspace-wide analytics on which memories and graph nodes agents cite, how useful those citations were, and where promoted rules get violated.
 ---
 
-When a memory recall, a knowledge-graph lookup, or an `@`-mention grounds an agent's answer, Oxagen records a **citation** in the graph. The **Citations** dashboard totals those citations across every run, so you can see which knowledge carries weight, which is dead weight, and where your promoted rules are broken.
-
-Open it at **Workspace → Knowledge → Citations**.
+Inspect which workspace memories and graph nodes were cited with `oxagen memory citations` or `get_citation_stats`. The current app has no Citations dashboard.
 
 ## What a citation records
 
@@ -18,42 +16,15 @@ A citation links a run to the memory or graph node it cited, and carries two jud
 
 Citations accrue on their own, and you instrument nothing. A recall made while answering records a `CONSIDERED` citation (this is the "citation pressure" that surfaces promotion candidates). An `@`-mentioned node records a `DECISIVE` one. An agent can also cite explicitly, with a full influence and compliance judgment.
 
-## The dashboard
+## Read the results
 
-The period switcher (7d, 30d, or 90d) sets the window for everything on the page:
+The statistics include influence and compliance breakdowns, daily totals, most-cited and least-useful memories, violated rules, and cited nodes. These are recorded judgments about context use. They do not prove that an agent complied with every instruction.
 
-- **Totals**: citations in the window, distinct runs that cited anything, distinct memories cited, and distinct graph nodes cited.
-- **Useful vs. not useful**: the influence breakdown. A healthy workspace leans toward `DECISIVE` and `CONTRIBUTING`. A large `IGNORED` share means recall surfaces knowledge nobody uses.
-- **Daily series**: citations and violations per day across the window.
-- **Most cited memories**: the memories that carry the most weight, each with its influence breakdown.
-- **Least useful memories**: cited again and again but never `DECISIVE` or `CONTRIBUTING`. This is your cleanup queue. [Demote them](/docs/agent/memory#the-promotion-lifecycle) back to observations, retire them, or dismiss them from the promotion queue.
-- **Most violated rules**: RULE and FACT memories ranked by `VIOLATION` citations. Either the rule needs stronger enforcement, or it is wrong and should be demoted.
-- **Top cited nodes**: the non-memory graph entities agents rely on most. Each one shows its human label. Hover or click the chip to inspect the full property bag.
-
-<Mermaid
-  chart="
-flowchart LR
-  A[Agent grounds an answer] --> B[Recall or @-mention]
-  B --> C[Citation: influence + compliance]:::accent
-  C --> D[Citations dashboard]
-  D --> E[Promote what works]
-  D --> F[Demote what doesn't]
-  D --> G[Fix violated rules]"
-/>
-
-*Citations accrue as agents ground answers. The dashboard rolls them up into the promote, demote, and fix loop below.*
-
-## Acting on the numbers
-
-The dashboard closes the loop on memory quality:
-
-1. **Promote what works.** Memories climbing "Most cited" with decisive influence are the ones the promotion-candidate queue surfaces. Promote them to RULE or FACT from the [Memory page](/docs/agent/memory#the-promotion-lifecycle).
-2. **Demote what does not.** "Least useful" is a ready-made demotion list: memories the agents keep seeing and never use.
-3. **Fix what is violated.** A rule that is violated often either needs its enforcement score raised (agents treat a higher score as more binding) or no longer matches reality and should be demoted or edited.
+Review candidates with `oxagen memory candidates`, then promote, demote, or dismiss them with the [memory commands](/docs/cli/memory).
 
 ## Programmatic access
 
-The `get_citation_stats` capability backs the dashboard, and it is on every surface:
+The `get_citation_stats` capability provides these statistics:
 
 ```bash
 # API

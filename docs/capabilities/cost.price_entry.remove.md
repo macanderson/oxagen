@@ -1,4 +1,4 @@
-# cost.price_entry.remove
+# remove_price_entry
 
 End this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). From `at` on, every frame that resolves to this model and class is priced at the provider list price again — when one exists. `fallbackPriced` in the output says whether it does: a model this organization negotiated alone, with no list or override row of its own, has nothing to fall back to, and the class goes unpriced rather than list-priced.
 

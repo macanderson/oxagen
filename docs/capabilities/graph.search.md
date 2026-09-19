@@ -1,4 +1,4 @@
-# graph.search
+# search_graph
 
 Natural-language semantic search across eligible shared workspace knowledge — customer entities, provider metadata, agent memories, execution metadata, documents, messages, and generated assets — ranked by vector similarity.
 

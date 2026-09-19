@@ -1,4 +1,4 @@
-# kill_switch.list
+# list_kill_switches
 
 **Capability:** `list_kill_switches`
 **Domain:** kill_switch

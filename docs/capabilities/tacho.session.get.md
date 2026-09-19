@@ -1,4 +1,4 @@
-# tacho.session.get
+# get_tacho_session
 
 One session's flight-recorder index (`docs/specs/tacho/data-model.md` section 3): the full session row (identity, harness, place, inventory, totals, policy counters, chain state), its subagent chains, per-model usage, files touched, commands run, incidents, and the checkpoint count. The events themselves live in ClickHouse `tacho_events` keyed by `session_uuid`.
 

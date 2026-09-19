@@ -1,4 +1,4 @@
-# secret.value.set
+# set_secret_value
 
 **Domain:** secret
 **Mode:** sync
@@ -52,7 +52,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.value.set`
+Tool name: `set_secret_value`
 
 ## Errors
 

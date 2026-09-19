@@ -1,4 +1,4 @@
-# auth.cli.authorize
+# authorize_cli
 
 **Capability:** `authorize_cli`
 **Domain:** auth

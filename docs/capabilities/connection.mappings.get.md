@@ -1,4 +1,4 @@
-# connection.mappings.get
+# get_connection_mappings
 
 **Domain:** connection
 **Mode:** sync

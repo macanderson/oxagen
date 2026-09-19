@@ -1,4 +1,4 @@
-# router.policy.set
+# set_routing_policy
 
 **Capability name:** `set_routing_policy`
 **Domain:** router

@@ -1,4 +1,4 @@
-# user.preferences.read
+# get_user_preferences
 
 **Domain:** user
 **Mode:** sync

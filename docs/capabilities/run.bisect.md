@@ -1,4 +1,4 @@
-# run.bisect
+# bisect_runs
 
 The first frame at which two recordings diverge (Mission Control spec §8.4 "bisect between any two runs of the same task"; ADR-058). Both runs are read frame by frame and each frame is reduced to a bisect key from its receipt; bodies are never read, so bisect works at grade `inspect` and above.
 

@@ -1,4 +1,4 @@
-# finding.dismiss
+# dismiss_finding
 
 Dismiss an open finding without applying its fix (Mission Control spec §12.8; ADR-062). The finding keeps its evidence and the decision; the findings job opens it again only on runs that start after the dismissal.
 

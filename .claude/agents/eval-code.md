@@ -71,7 +71,7 @@ Only escalate to P0/P1 when you can point to the exact line(s) and explain the c
 ### 2. Auto-fix every confirmed P0/P1 — in a grouped PR
 Read the real source and confirm the defect before changing anything (don't fix a guess). For each P0/P1:
 - Fix the **root cause** in place, plus every co-located instance of the same defect.
-- Add at least one **regression test** that fails on the old code and passes on the new (Vitest; follow the package's conventions). Add an `apps/app/e2e/` test **only** if the defect sits on a critical user path (login/signup, org creation, the chat/ask path, billing/checkout) — your judgement; don't burn CI minutes on non-critical e2e.
+- Add at least one **regression test** that fails on the old code and passes on the new (Vitest; follow the package's conventions). Use component and action tests for flows. `apps/app/e2e/` stays limited to `login`, `pay`, and `page-load`; extend an existing spec only when the change affects that journey.
 - Run **only the narrow test** tied to your change (`pnpm --filter <pkg> test:unit <file>`). **Never** run the whole suite, `pnpm test`, `turbo run test`, or a repo-wide gate — that is a hard rule for every agent here. Check `pgrep -fl vitest` and wait rather than stack onto an in-flight run.
 - **Group all your fixes by module/domain into ONE branch and ONE PR**, cut from a fresh, synced `main`. **Commit each fix the moment its narrow test is green** — parallel agents share this working tree, so uncommitted work can be lost. Open the PR for Mac to merge; **never push to `main`** (the no-push rule in CLAUDE.md). One PR per domain, not one per finding — conserve tokens and CI minutes.
 

@@ -340,6 +340,9 @@ describe("install rig: the gateway's model base URLs", () => {
     expect((await enroll({ harnesses: ALL }, rig.deps)).ok).toBe(true);
     const settings = rig.deps.readSettings() as { env: Record<string, string> };
     expect(settings.env["ANTHROPIC_BASE_URL"]).toBe(CLAUDE_URL);
+    // Without this Claude Code inlines its whole MCP catalog behind the
+    // proxy, and a large one overflows the context before the first prompt.
+    expect(settings.env["ENABLE_TOOL_SEARCH"]).toBe("true");
     expect(text(seed.home, ".codex", "config.toml")).toContain(CODEX_URL);
     // The user's own Codex config is otherwise as they wrote it.
     expect(text(seed.home, ".codex", "config.toml")).toContain(
@@ -354,6 +357,10 @@ describe("install rig: the gateway's model base URLs", () => {
       ["claude-code", true],
       ["codex", true],
     ]);
+    expect(report.modelBaseUrls?.[0]?.toolSearch).toEqual({
+      current: "true",
+      enabled: true,
+    });
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
   });

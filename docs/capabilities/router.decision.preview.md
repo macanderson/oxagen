@@ -1,4 +1,4 @@
-# router.decision.preview
+# preview_routing_decision
 
 **Capability name:** `preview_routing_decision`
 **Domain:** router

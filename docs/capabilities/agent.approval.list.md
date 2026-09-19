@@ -1,4 +1,4 @@
-# agent.approval.list
+# list_approvals
 
 **Name:** `list_approvals`
 **Domain:** agent

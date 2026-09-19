@@ -3406,7 +3406,6 @@ type Messages = {
   };
   ui: {
     brand: {
-      name: string;
       home: string;
     };
     dialog: {

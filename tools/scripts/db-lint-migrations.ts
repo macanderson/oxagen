@@ -185,7 +185,11 @@ export function atlasFilesAtRef(
   run: GitRunner = defaultGitRunner,
 ): string[] | null {
   try {
-    const out = run(["ls-tree", "--name-only", `${ref}:${ATLAS_MIGRATIONS_REL}`]);
+    const out = run([
+      "ls-tree",
+      "--name-only",
+      `${ref}:${ATLAS_MIGRATIONS_REL}`,
+    ]);
     return out
       .split("\n")
       .map((s) => s.trim())
@@ -265,10 +269,8 @@ export function checkAtlasBaseline(
   // DB_LINT_HEAD_REF (to github.event.pull_request.head.sha, which GitHub
   // Actions expands to an empty string outside a pull_request event), and an
   // empty string is not the caller's request for a different ref.
-  const headRef =
-    opts.headRef ?? (process.env.DB_LINT_HEAD_REF || "HEAD");
-  const baseRef =
-    opts.baseRef ?? process.env.DB_LINT_BASE_REF ?? "origin/main";
+  const headRef = opts.headRef ?? (process.env.DB_LINT_HEAD_REF || "HEAD");
+  const baseRef = opts.baseRef ?? process.env.DB_LINT_BASE_REF ?? "origin/main";
   const run = opts.run ?? defaultGitRunner;
 
   const mergeBase = mergeBaseOf(headRef, baseRef, run);

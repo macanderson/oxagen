@@ -1,4 +1,4 @@
-# agent.role.assign (`assign_agent_role`)
+# assign_agent_role
 
 **Domain:** agent
 **Mode:** sync

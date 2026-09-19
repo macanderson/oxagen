@@ -1,4 +1,6 @@
 ---
+
+> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
 # Sources
 
 - **Route:** `/{orgSlug}/{workspaceSlug}/knowledge/sources`

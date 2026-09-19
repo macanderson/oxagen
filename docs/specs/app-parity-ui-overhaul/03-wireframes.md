@@ -1,5 +1,7 @@
 # 03 — Wireframes (low-fidelity, line-drawn)
 
+> **Historical design:** This document predates the Mission Control rebuild. It does not describe the current app or authorize restoring retired surfaces. See [app architecture](../../../apps/app/ARCHITECTURE.md) for the current implementation boundaries.
+
 Line-drawn, structure-only. No color, no final copy. Every field maps to a real contract
 field; annotations in `«…»` call out the binding. The golden path (Brand Voice skill →
 audit agent → saved prompt → `/audit` command) runs through the examples so the screens

@@ -1,4 +1,4 @@
-# context.records.get
+# get_record
 
 **Name:** `get_record`
 **Domain:** context

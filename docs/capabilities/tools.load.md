@@ -1,4 +1,4 @@
-# tools.load
+# load_tools
 
 The belt definitions meta-tool (MC spec App. E, §6.6): the full definition of capabilities named from `search_tools`. Only a capability the in-app agent may call — one exposed on the `agent` surface — is described; a name outside that set comes back in `unknown` and describes nothing, so what the model cannot call it cannot be shown.
 

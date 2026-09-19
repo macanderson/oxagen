@@ -3,7 +3,7 @@ title: Capability registry
 description: "Every governed action in Oxagen is a typed capability contract: declared once, enforced on every surface, and listed in the governance catalog."
 ---
 
-A **capability** is the unit of action in Oxagen. The in-process registry declares each one once as a typed contract, and Oxagen exposes it the same way on every surface it opts into: the REST API, the MCP server, the in-app agent, and the CLI. If an action exists, it exists as a capability. Every call runs through the `invoke()` kernel, which applies IAM, metering, and audit. There is no side door.
+A **capability** is the unit of action in Oxagen. The in-process registry declares each one once as a typed contract, and Oxagen exposes it the same way on every surface it opts into: the REST API, the MCP server, the in-app agent, and the CLI. Calls to these capabilities run through the `invoke()` kernel, which applies IAM, metering, and audit.
 
 ## What a contract declares
 
@@ -12,7 +12,7 @@ A **capability** is the unit of action in Oxagen. The in-process registry declar
 | Name | Verb-first snake_case identifier, for example `query_audit_log`. See [Capability naming](/docs/api/capabilities#capability-naming). |
 | Domain | Functional grouping (billing, graph, agent, …) |
 | Surfaces | Where it is mounted: `api`, `mcp`, `agent`, `cli` |
-| Sensitivity | `low`, `medium`, `high`, or `destructive`. A destructive capability waits for a person's approval before it runs. |
+| Sensitivity | Data sensitivity classification. Approval behavior is declared separately in agent metadata and IAM grants. |
 | IAM grants | Default role grants, each with one effect: allow, deny, or require_approval |
 | Entitlement gate | Which plan or entitlement pack unlocks it |
 | Input/output specs | Typed field schemas, validated on every call |
@@ -20,8 +20,10 @@ A **capability** is the unit of action in Oxagen. The in-process registry declar
 
 ## Browsing the catalog
 
-Org admins browse the full registry in **Organization → Governance → Capabilities**. Filter by domain, surface, sensitivity, or coverage gaps (capabilities missing a declared layer). The same catalog is queryable over the API and MCP. An agent reads it to learn which capabilities it may request.
+Read the generated [Architecture atlas](/docs/architecture) for the contract catalog. **Organization → Roles** shows roles and the permissions they carry, not a complete route and schema browser.
+
+An MCP client can request `tools/list` for the tool names and input schemas its server exposes.
 
 ## Per-capability reference
 
-The governance catalog is the authoritative reference for every capability's surfaces, inputs, and outputs. Oxagen generates it from the live registry, so it stays current. A hand-maintained mirror of the same data lives in the repository at `docs/capabilities/`, one page per capability.
+The source contracts in `packages/oxagen/src/contracts/` define surfaces, inputs, and outputs. The repository's `docs/capabilities/` pages explain individual capabilities. Check the contract when a hand-maintained page disagrees with it.

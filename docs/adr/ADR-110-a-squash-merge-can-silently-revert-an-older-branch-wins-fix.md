@@ -181,3 +181,72 @@ only a purpose that is meant to reach this gate and does not.
   as `needs:decision` on the issue that carries the fix (#3237), which
   already carries this framing in its own body, not a fresh ticket that would
   only restate it.
+
+## Addendum (2026-09-19): the one-time audit this ADR deferred
+
+The "what this PR does not do" section above deferred auditing every merge
+since some cutover for the same pattern, calling it a follow-up task. #3237
+was reopened because that audit, and two smaller items, had not actually been
+done. This addendum records the audit and its result.
+
+**Scope.** Every squash-merge commit on `main` since 2026-09-17 (the day of
+the #3222/#3178 incident this ADR documents): 87 commits, 86 adjacent pairs.
+A wider window back to `main`'s root (2026-05-28, 3,967 commits) was
+considered and rejected: this incident's cause, the burst-merge pattern
+ADR-046 deliberately enabled, only became live risk once several sessions
+began merging in parallel, which the reproduce section's own timestamps place
+in this window, and re-deriving the *true* historical merge base of a
+squash-merged, since-deleted branch further back is not reliably possible
+from git alone (the branch tip is gone; only the PR's first-commit metadata
+survives, and the tool surface available to this audit does not expose that
+commit's parent).
+
+**Method.** For every adjacent pair of commits `(P, C)` on `main` in the
+window, where `C`'s only parent is `P`: find the files `P` itself changed
+(against its own parent) and the files `C` changed (against `P`); for every
+file in both sets, run this ADR's own `fileMergeRisk` (the pure function
+`check-stale-merge-base.mjs` uses live) with `baseContent` = the file before
+`P`, `mainContent` = the file at `P`, `branchContent` = the file at `C`. A hit
+means `C`'s merge is missing a line `P` added immediately before it, exactly
+the #3222/#3178 shape, generalized to every adjacent pair rather than that one
+instance. This needs no reconstruction of a deleted branch's real merge base:
+`P` and `C` are both real, present commits.
+
+**Result: 19 raw hits, 0 confirmed after review, no live revert found.**
+Every hit was checked by hand against the "missing" lines and against
+current `main`:
+
+- 12 hits were `packages/database/atlas/migrations/atlas.sum`,
+  `packages/database/storage-manifest.json`, and
+  `docs/capabilities/schemas/_index.json` (contentHash and generated-count
+  fields). These are regenerated, monotonically-changing artifacts: two
+  concurrently-developed PRs each regenerate them from their own branch
+  state, so `C`'s copy naturally differs from what `P` last wrote, with
+  nothing lost. This is a real, separate risk class (migration-manifest
+  drift under concurrent merges), already caught by a different guard
+  (`pnpm db:lint-migrations`'s `checkAtlasBaseline()`, #3387), not this
+  incident's shape.
+- 3 hits (`apps/api/src/lib/cms/access.ts` and its two test files) were the
+  fix, not a revert of one: the "missing" line was the `leadEmail` field a
+  follow-on HOTFIX (#3392-adjacent) deliberately removed to stop leaking a
+  lead's email, and current `main` confirms it via
+  `expect(res).not.toHaveProperty("leadEmail")`.
+- 2 hits (`apps/app/src/features/shell/account-dialog.{tsx,test.tsx}`) trace
+  to a value (`timeZoneInvalid`) that current `main` explicitly documents
+  omitting on purpose, in a comment at the omission site.
+- 1 hit (`packages/tacho/src/envelope.ts`) was one `pick()` call among
+  several not naming two fields. Both fields are still declared and used
+  elsewhere in the same file: a per-call field list, not a dropped field.
+- 1 hit (`packages/tacho/src/claude-code/otel.test.ts`) was a reformatted
+  line (single-line call broken across lines), an exact-line-match false
+  positive from the coarse comparison `fileMergeRisk` deliberately uses (see
+  its docstring).
+- 2 hits (`docs/specs/repository-binding/README.md`,
+  `packages/handlers/src/mandate.handlers.pg.test.ts`) trace to normal later
+  edits (an ADR renumbering, a comment already present) unrelated to any
+  revert.
+
+No second occurrence of the incident this ADR documents was found in the
+audited window. The script and its raw output are not committed to the tree,
+since it is a one-time forensic tool, not a check anything runs again, but
+the method is recorded here so it can be rerun exactly if ever needed.

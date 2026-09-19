@@ -1,4 +1,4 @@
-# schema.property.delete
+# delete_schema_property
 
 Remove a property from a node label or relationship type in the current draft version. Does not affect published versions — publish a new version to make the deletion permanent.
 

@@ -1,4 +1,4 @@
-# onboarding.state.get
+# get_onboarding_state
 
 Where the signed-in person is in the onboarding gate (MC spec App. F: "the app does not open until an agent has talked to Oxagen"; mockup `OB_STEPS`; #2967). A caller with no organization is at `organization`; a caller with one reads its `org.onboarding_state` row — `wrap`, `run` or `unlocked` — with the first frame `ingest_tacho_events` recorded and the provisional window `bind_main_repository` closes. Sign-up and email verification belong to the session, so the row starts at `wrap` the moment `create_org` returns.
 

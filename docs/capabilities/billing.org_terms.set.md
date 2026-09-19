@@ -1,4 +1,4 @@
-# billing.org_terms.set
+# set_org_billing_terms
 
 **Capability:** `set_org_billing_terms`
 **Domain:** billing

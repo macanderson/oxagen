@@ -1,4 +1,4 @@
-# agent.memory.update
+# update_memory
 
 **Domain:** agent
 **Mode:** sync

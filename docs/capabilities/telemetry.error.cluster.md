@@ -1,11 +1,10 @@
-# telemetry.error.cluster
+# list_error_clusters
 
 **Domain:** telemetry
 **Mode:** sync
 **Scope:** tenant (org + workspace)
 **Requires approval:** no
 **Risk level:** low
-**Aliases:** `telemetry_error_cluster` (agent-surface tool name)
 
 ## Intent
 
@@ -16,10 +15,10 @@ a bounded `GROUP BY fingerprint` over ClickHouse `error_events`, pure SQL,
 **zero model calls**. Raw error rows never reach the caller — only the
 clustered, capped summary.
 
-Prefer `telemetry.error.cluster` over reading raw errors when you want the
+Prefer `list_error_clusters` over reading raw errors when you want the
 **shape** of what's failing platform-wide. Anti-trigger: to diagnose **one**
 specific failed execution (failing step, stack, suspect files), use
-[`agent.debug.trace`](agent.debug.trace.md) instead — this is the fleet-wide
+[`debug_execution`](agent.debug.trace.md) instead — this is the fleet-wide
 histogram, not a single-run frame.
 
 ## How it works (deterministic, pure SQL)
@@ -61,6 +60,6 @@ histogram, not a single-run frame.
 
 ## Surfaces
 
-`agent` (as `telemetry_error_cluster`),
+`agent` (as `list_error_clusters`),
 `api` (`GET /v1/{org}/telemetry/error/cluster?sinceHours=&severity=&source=&limit=`),
-`mcp` (`telemetry.error.cluster`).
+`mcp` (`list_error_clusters`).

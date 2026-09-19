@@ -1,4 +1,4 @@
-# evidence.disclosure_grain.set
+# set_disclosure_grain
 
 Set how much a worker is told when a witness it cannot see fails (Mission Control spec §8.5 invariant 3; ADR-064). `L0` is the word pass or fail and nothing else; `L1` names the criterion, `L2` describes a symptom, `L3` hands over a regenerated reproduction. A workspace with no stored grain is `L0`.
 

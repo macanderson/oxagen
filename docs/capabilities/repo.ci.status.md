@@ -1,4 +1,4 @@
-# repo.ci.status
+# get_ci_status
 
 Read CI check-run and commit-status results for a ref in a GitHub repository.
 

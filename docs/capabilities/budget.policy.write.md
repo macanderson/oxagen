@@ -1,4 +1,4 @@
-# budget.policy.write
+# update_user_budget
 
 **Domain:** user
 **Mode:** sync

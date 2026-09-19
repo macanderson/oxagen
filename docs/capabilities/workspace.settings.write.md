@@ -1,4 +1,4 @@
-# workspace.settings.write
+# update_workspace_settings
 
 **Domain:** workspace
 **Mode:** sync

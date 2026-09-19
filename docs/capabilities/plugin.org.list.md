@@ -1,4 +1,4 @@
-# plugin.org.list
+# list_plugins
 
 **Domain:** plugin
 **Mode:** sync

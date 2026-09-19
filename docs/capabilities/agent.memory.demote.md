@@ -1,4 +1,4 @@
-# agent.memory.demote
+# demote_memory
 
 **Domain:** agent
 **Mode:** sync

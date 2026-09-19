@@ -13,7 +13,7 @@ Every capability is declared once, in the platform contract registry. A declarat
 - Its risk level, and whether a person must approve it before it runs
 - Its default IAM roles and effects
 
-The registry is the one source of truth. Every API route and every MCP tool reads from it, so a capability behaves the same way on every surface it declares. Parity is structural. Nobody keeps the surfaces in sync by hand.
+The registry is the one source of truth. Every API route and every MCP tool reads from it, so a capability behaves the same way on every surface it declares. Surface adapters are wired separately, and repository checks detect missing routes and tools.
 
 `pnpm check:manifest` compares the registry against the routes and tools that exist and reports each gap as a warning.
 
@@ -35,121 +35,13 @@ model-facing spelling.
 
 **Names are stable, and there is no alias layer.** If a capability is
 renamed, the old name stops resolving. The registry carries no
-compatibility alias, so a rename is a breaking change and ships in a new API
-version. Pin your integration to the names in the tables below, and read the
-release notes before you upgrade across a version boundary.
+compatibility alias, so a rename is a breaking change. Check the current contract and release notes before upgrading.
 
 ## Capability list
 
-These tables are a selection of the capabilities in the current release, grouped by domain. This page is written by hand and covers the common surface. The governance catalog in the app (**Organization → Governance → Capabilities**) is generated from the live registry and holds the complete, current list.
+Inspect `packages/oxagen/src/contracts/` for a capability's input, output, surfaces, and approval metadata. The generated [Architecture atlas](/docs/architecture) includes the contract catalog. Per-capability reference pages live in the repository at `docs/capabilities/`.
 
-### Agent
-
-| Capability               | Surfaces        | Risk   |
-| ------------------------ | --------------- | ------ |
-| `create_agent_def`       | API, MCP, agent | Medium |
-| `list_agent_defs`        | API, MCP, agent | Low    |
-| `deploy_agent`           | API, MCP, agent | Medium |
-| `assign_agent_role`      | API, MCP, agent | High   |
-| `revoke_agent_role`      | API, MCP, agent | High   |
-| `bind_agent_environment` | API, MCP, agent | Medium |
-| `list_agent_tools`       | API, MCP, agent | Low    |
-| `list_mcp_servers`       | API, MCP, agent | Low    |
-| `register_mcp_server`    | API, MCP        | Medium |
-| `resolve_approval`       | API, agent      | Low    |
-| `resolve_mcp_consent`    | API, agent      | Low    |
-| `recall_memory`          | API, MCP, agent | Low    |
-| `write_memory`           | API, MCP, agent | Low    |
-| `list_executions`        | API, MCP, agent | Low    |
-| `get_execution_trace`    | API, MCP, agent | Low    |
-
-`list_executions` and `get_execution_trace` read runs. The names predate the run vocabulary and stay as they are, because a rename would break every integration that calls them.
-
-### Chat and conversations
-
-| Capability             | Surfaces        | Risk   |
-| ---------------------- | --------------- | ------ |
-| `send_message`         | API, MCP, agent | Low    |
-| `list_conversations`   | API, MCP, agent | Low    |
-| `archive_conversation` | API, MCP, agent | Low    |
-| `rename_conversation`  | API, MCP, agent | Low    |
-| `delete_conversation`  | API, MCP, agent | Medium |
-| `purge_conversations`  | API, MCP, agent | High   |
-
-### Knowledge and assets
-
-| Capability     | Surfaces        | Risk |
-| -------------- | --------------- | ---- |
-| `upload_asset` | API, MCP, agent | Low  |
-
-### Organization and workspace
-
-| Capability              | Surfaces        | Risk   |
-| ----------------------- | --------------- | ------ |
-| `create_org`            | API, MCP, agent | Medium |
-| `add_org_member`        | API, MCP        | Medium |
-| `remove_org_member`     | API, MCP        | High   |
-| `change_member_role`    | API, MCP        | High   |
-| `accept_member_invite`  | API, MCP        | Low    |
-| `decline_member_invite` | API, MCP        | Low    |
-| `create_workspace`      | API, MCP, agent | Medium |
-| `get_model_settings`    | API, MCP, agent | Low    |
-| `update_model_settings` | API, MCP        | Medium |
-
-### Billing
-
-| Capability                 | Surfaces        | Risk |
-| -------------------------- | --------------- | ---- |
-| `get_subscription`         | API, MCP, agent | Low  |
-| `start_subscription_upgrade` | API           | High |
-| `purchase_credits`         | API             | High |
-
-### Notifications
-
-| Capability          | Surfaces        | Risk |
-| ------------------- | --------------- | ---- |
-| `list_notifications`| API, MCP, agent | Low  |
-| `mark_notification` | API, MCP, agent | Low  |
-
-### User preferences
-
-| Capability                 | Surfaces        | Risk |
-| -------------------------- | --------------- | ---- |
-| `get_user_preferences`     | API, MCP, agent | Low  |
-
-### API keys
-
-| Capability       | Surfaces | Risk |
-| ---------------- | -------- | ---- |
-| `create_api_key` | API, MCP | High |
-| `revoke_api_key` | API, MCP | High |
-
-### Plugins
-
-| Capability                 | Surfaces        | Risk   |
-| -------------------------- | --------------- | ------ |
-| `browse_plugin_catalog`    | API, MCP, agent | Low    |
-| `get_catalog_plugin`       | API, MCP, agent | Low    |
-| `install_plugin`           | API, MCP        | High   |
-| `install_plugins_bulk`     | API, MCP        | High   |
-| `uninstall_plugin`         | API, MCP        | High   |
-| `list_plugins`             | API, MCP, agent | Low    |
-| `set_plugin_enabled`       | API, MCP        | Medium |
-| `add_plugin_registry`      | API, MCP        | High   |
-| `remove_plugin_registry`   | API, MCP        | High   |
-| `list_plugin_registries`   | API, MCP, agent | Low    |
-| `sync_plugin_catalog`      | API, MCP        | Medium |
-| `reauth_plugin_credential` | API, MCP        | Medium |
-| `set_plugin_secret`        | API, MCP        | High   |
-| `set_auth_alerts`          | API, MCP        | Low    |
-
-`set_plugin_enabled` is one capability, not two. The same call turns a plugin on or off at org scope or at workspace scope, depending on the scope you pass.
-
-### System
-
-| Capability                 | Surfaces        | Risk |
-| -------------------------- | --------------- | ---- |
-| `get_install_instructions` | API, MCP, agent | Low  |
+An MCP client's `tools/list` response describes the tools that server exposes. Use the returned schemas instead of assuming API, MCP, and agent expose identical sets.
 
 ## REST route convention
 
@@ -162,12 +54,6 @@ Two rules hold everywhere:
 
 Run `pnpm check:manifest --json` in the monorepo to print the full route and tool parity table. There is no runtime `/v1/capabilities` endpoint.
 
-## Parity caveat
+## Browser flows
 
-These flows exist only in the app. They have no contract, so the API and MCP cannot reach them:
-
-- In-stream tool-call approval. It needs the chat UI's live stream. Call `resolve_approval` afterwards instead.
-- The Stripe Customer Portal redirect. For programmatic upgrades, use `start_subscription_upgrade`.
-- OAuth plugin credential flows, which need a browser redirect.
-
-This list is kept by hand. When a contract lands for one of these flows, the flow moves into the capability list above.
+Some operations need a browser redirect or a live approval interaction in addition to a capability call. Read the operation's contract and route reference. The presence of an API route does not imply an identical MCP interaction.

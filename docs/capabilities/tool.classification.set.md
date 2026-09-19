@@ -1,4 +1,4 @@
-# tool.classification.set
+# set_tool_classification
 
 **Capability:** `set_tool_classification`
 **Domain:** tool

@@ -139,13 +139,7 @@ The runtime does not connect to or probe a disabled server.
 
 ## Project root detection
 
-The runtime finds the project root by walking up from the current directory to the nearest `.oxagen/` directory. If it finds none, it uses the current working directory. The example below uses the retired `oxagen mcp list` command, which prints a retirement notice. The lookup it illustrates is the one the runtime performs.
-
-```bash
-# These all work from any subdirectory of the project:
-cd my-project/src/deep/nested
-oxagen mcp list  # finds my-project/.oxagen/settings.json
-```
+The runtime finds the project root by walking up from its current directory to the nearest `.oxagen/` directory. If it finds none, it uses the current directory. These files configure that runtime host, not a remote workspace through the CLI.
 
 ## Initializing a project
 
@@ -155,9 +149,4 @@ echo '{}' > .oxagen/settings.json
 echo 'settings.local.json' >> .oxagen/.gitignore
 ```
 
-The `add` command below is retired in the Oxagen CLI. It prints a retirement notice, exits non-zero, and creates nothing, so create the directory and file with the commands above.
-
-```bash
-oxagen mcp add my-server --url https://example.com/mcp
-# Creates .oxagen/settings.json if it doesn't exist
-```
+Edit `settings.json` using the schema above. The `oxagen mcp` commands are retired and do not write these files.

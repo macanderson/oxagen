@@ -1,4 +1,4 @@
-# plugin.org.uninstall
+# uninstall_plugin
 
 **Domain:** plugin
 **Mode:** sync

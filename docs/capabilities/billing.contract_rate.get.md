@@ -1,4 +1,4 @@
-# billing.contract_rate.get
+# get_contract_rate
 
 **Domain:** billing
 **Mode:** sync

@@ -3,7 +3,7 @@ title: Installing the CLI
 description: Install the oxagen CLI with the install script, from the monorepo, as a portable single-file bundle, or from npm.
 ---
 
-The `oxagen` CLI needs **Node.js 20 or newer**. Check your version with `node --version`.
+Source and JavaScript-bundle installs need **Node.js 20 or newer**. Prebuilt executables include their runtime. Check `node --version` when using a JavaScript install.
 
 There are four ways to get it. Use the install script unless you have a reason not to.
 
@@ -46,19 +46,19 @@ Two environment variables change where it looks and where it writes:
 | `OXAGEN_INSTALL_DIR` | `~/.local/bin` | Where the binary is written |
 | `OXAGEN_INSTALL_BASE` | `https://cli.oxagen.sh/releases/latest` | Where releases are fetched from |
 
-If `~/.local/bin` is not on your `PATH`, the script prints the line to add to your shell profile. Read the script before you run it. It is 79 lines and does nothing else.
+If `~/.local/bin` is not on your `PATH`, the script prints the line to add to your shell profile. Read the script before you run it.
 
 ## From the monorepo
 
 Clone the repo, install dependencies, and run the CLI directly from source:
 
 ```bash
-git clone https://github.com/oxagen/oxagen-monorepo.git
-cd oxagen-monorepo
+git clone https://github.com/macanderson/oxagen.git
+cd oxagen
 pnpm install
 
 # Run straight from source (TypeScript via tsx):
-pnpm --filter @oxagen/cli start -- --version
+pnpm --filter @oxagen/cli start --version
 
 # …or compile once and run the built output:
 pnpm --filter @oxagen/cli build
@@ -68,7 +68,7 @@ node apps/cli/dist/index.js --version
 To get a short `oxagen` command, alias it in your shell profile (`~/.zshrc`, `~/.bashrc`):
 
 ```bash
-alias oxagen='pnpm --filter @oxagen/cli start --'
+alias oxagen='pnpm --filter @oxagen/cli start'
 # then:  oxagen budget show
 ```
 
