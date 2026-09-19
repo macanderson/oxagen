@@ -306,6 +306,32 @@ export function isEffective(mandate: MandateRow, at: Date): boolean {
 }
 
 /**
+ * Whether `update_mandate_limits` would accept a change to this mandate, which
+ * is a different question from whether it authorizes anything now.
+ *
+ * Mirrors the handler's own two conditions (`packages/handlers/src/
+ * mandate.limits.update.ts`): the locked row must be `active`, and its
+ * exclusive `validTo` must not have elapsed. It deliberately says nothing about
+ * `validFrom`, because the handler does not either: a granted mandate whose
+ * window has not opened is exactly the one an operator most needs to correct
+ * before its authority starts.
+ *
+ * `isEffective` is the wrong gate for an edit control and was used as one. It
+ * answers "could this authorize a call now", so it excludes a scheduled
+ * mandate, and the app's only limit-change control vanished for the rows that
+ * are still safe to change. Being stricter than the kernel is not the safe
+ * direction here: it removes the last surface that can fix a scheduled bound,
+ * leaving an operator to revoke and re-grant to change a number.
+ *
+ * A draft is excluded by the status test, which is correct: the handler takes
+ * an active mandate alone, and a draft is declined rather than edited.
+ */
+export function isChangeable(mandate: MandateRow, at: Date): boolean {
+  if (mandate.status !== "active") return false;
+  return at.getTime() < Date.parse(mandate.validTo);
+}
+
+/**
  * Whether this mandate is granted and has simply not started. `isEffective`
  * excludes it correctly — a window that has not opened authorizes nothing —
  * but the exclusion loses why, and the row still reads `active` wherever the

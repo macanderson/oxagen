@@ -278,6 +278,27 @@ describe("MandateActions on a draft", () => {
     }
   });
 
+  // The opposite edge of the same window, and the reason this gate is not
+  // `isEffective`. A granted mandate whose window has not opened is `active`,
+  // and `update_mandate_limits` accepts it: the handler requires active status
+  // and an unelapsed validTo, and says nothing about validFrom. This component
+  // is the app's only limit-change control, so gating it on `isEffective` left
+  // no way to correct a scheduled bound short of revoking and re-granting.
+  it("offers Change limits on a granted mandate whose window has not opened", () => {
+    draw(
+      mandateRow({
+        status: "active",
+        validFrom: "2026-11-01T00:00:00.000Z",
+        validTo: "2026-12-31T00:00:00.000Z",
+      }),
+      new Date("2026-10-01T00:00:00.000Z"),
+    );
+    expect(
+      screen.getByRole("button", { name: "Change limits" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+  });
+
   // Status can still read active after exclusive validTo, before the expiry
   // job flips the row. Change limits must not appear: submitting a future
   // validTo through it would reopen ended authority. Revoke stays so the

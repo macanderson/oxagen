@@ -16,7 +16,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
-import { isEffective } from "@/data/contracts/mandates";
+import { isChangeable } from "@/data/contracts/mandates";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -445,12 +445,23 @@ function Revoke({ org, ws, mandate, here }: Place) {
  * control is a capability the API has and the app does not, which is the one
  * gap this repo treats as seriously as a missing route.
  *
- * Change limits only while the mandate is inside its validity window
- * (`isEffective`), matching enforcement: a row that is still `active` but past
- * exclusive `validTo` (before the expiry job flips the status) must not expose
- * a control that could push validTo forward and reopen ended authority. Revoke
- * stays available so an operator can end a draft request or mark a lapsed row
- * revoked before the cron does. A revoked or expired status offers neither.
+ * Change limits while `update_mandate_limits` would still accept a change
+ * (`isChangeable`), which mirrors that handler's own two conditions: active
+ * status, and an exclusive `validTo` that has not elapsed. A row still reading
+ * `active` past `validTo`, before the expiry job flips it, must not expose a
+ * control that could push validTo forward and reopen ended authority.
+ *
+ * It is deliberately not `isEffective`, which this used and which also requires
+ * `validFrom` to have passed. That hid the control on a granted mandate whose
+ * window has not opened yet, and this component is the app's only limit-change
+ * control, so a scheduled bound could not be corrected here at all. The handler
+ * accepts that state, so being stricter than it did not protect anything: it
+ * left revoke-and-re-grant as the only way to change a number before the
+ * window opens. Upcoming is the case an operator most needs to edit.
+ *
+ * Revoke stays available so an operator can end a draft request or mark a
+ * lapsed row revoked before the cron does. A revoked or expired status offers
+ * neither.
  *
  * **`now` is a prop, not a local clock read.** This component is `"use
  * client"`, and a client component still server-renders once in the App
@@ -469,7 +480,7 @@ export function MandateActions(place: Place & { now: Date }) {
   if (mandate.status !== "active" && mandate.status !== "draft") return null;
   return (
     <>
-      {isEffective(mandate, now) ? <ChangeLimits {...place} /> : null}
+      {isChangeable(mandate, now) ? <ChangeLimits {...place} /> : null}
       <Revoke {...place} />
     </>
   );
