@@ -102,6 +102,11 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
       agentPrincipalId: "prn_1",
       consequenceTags: ["moves_money"],
       limits: doubles.locked.limits,
+      // Every case here writes through limitChanges naming the measure it
+      // asserts on, so nothing needs the untouched-measure kind preserved
+      // from a real (non-legacy) prior stamp; an empty set keeps that path
+      // out of these cases' way.
+      legacyKindMeasures: new Set<string>(),
       targets: {},
       tools: ["stripe__create_payment@*"],
       approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },

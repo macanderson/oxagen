@@ -209,6 +209,38 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
       limits,
       targets,
     });
+    // assertToolsDeclareMeasures re-derives every measure's kind from the
+    // *current* declaration, for every measure in `limits`, whether this
+    // call touched it or not. That is correct for a measure the operator
+    // named (a `limits` replacement or a `limitChanges` entry): they are
+    // looking at the figure, so re-stamping it is the "attrition" ADR-108
+    // documents. It is wrong for a measure this call did not name (an
+    // update that only changes validTo, targets or approval): re-stamping
+    // it would silently flip its enforced denomination the moment a tool
+    // republish changes that measure's kind, with the operator never having
+    // looked at the figure, and would quietly make a mandate the gate had
+    // started refusing under `measure_kind_changed` (ADR-108 §4) start
+    // passing again with no one asking. A measure with no real stamp yet
+    // (`locked.legacyKindMeasures`) is exempt from this preservation: it
+    // has no earlier fact to protect, and refreshing it is the same
+    // attrition either way.
+    const touchedMeasures =
+      input.limits !== undefined
+        ? new Set(Object.keys(input.limits))
+        : input.limitChanges !== undefined
+          ? new Set(Object.keys(input.limitChanges))
+          : new Set<string>();
+    for (const measure of Object.keys(stampedLimits)) {
+      if (touchedMeasures.has(measure)) continue;
+      if (locked.legacyKindMeasures.has(measure)) continue;
+      const previousKind = locked.limits[measure]?.kind;
+      if (previousKind !== undefined) {
+        stampedLimits[measure] = {
+          ...stampedLimits[measure]!,
+          kind: previousKind,
+        };
+      }
+    }
     // Under the same lock as the write, so a concurrent reserve cannot sneak a
     // draw past the refusal: the row lock serialises both writers.
     await assertPeriodChangeAllowed(tx, locked.id, locked.limits, limits);

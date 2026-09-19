@@ -100,6 +100,18 @@ export interface MandateRecord {
   status: MandateStatus;
   validFrom: Date;
   validTo: Date;
+  /**
+   * Measures in `limits` whose `kind` was not actually stored and is instead
+   * `legacyMeasureKindGuess`'s fallback. A guess is not a fact: it must never
+   * be compared against a tool's current declaration to detect drift (a
+   * legacy row's guess can legitimately disagree with a declaration the gate
+   * has always enforced correctly, since the gate reads the declaration
+   * directly and never the guess), and an unrelated write must not use it to
+   * decide what to preserve versus refresh. Both call sites key off this set
+   * instead of `limit.kind === undefined`, which is never true once
+   * `withResolvedKinds` has run.
+   */
+  legacyKindMeasures: ReadonlySet<string>;
 }
 
 /**
@@ -109,20 +121,34 @@ export interface MandateRecord {
  * fallback runs; every reader downstream (`readAuthority`, `mapMandates`,
  * the mapped `mandate.limits` a get/list response carries) takes `kind` as a
  * fact already resolved, never guessing again from `currencyOrUnit` itself.
+ * Also returns which measures took the fallback, so a caller that must tell
+ * a persisted fact from a guess (the gate's drift check, an update that must
+ * not silently refresh a kind the operator never touched) can.
  */
-function withResolvedKinds(limits: MandateLimits): MandateLimits {
-  return Object.fromEntries(
-    Object.entries(limits).map(([measure, limit]) => [
-      measure,
-      {
-        ...limit,
-        kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
-      },
-    ]),
+function withResolvedKinds(limits: MandateLimits): {
+  limits: MandateLimits;
+  legacyKindMeasures: ReadonlySet<string>;
+} {
+  const legacyKindMeasures = new Set<string>();
+  const resolved = Object.fromEntries(
+    Object.entries(limits).map(([measure, limit]) => {
+      if (limit.kind === undefined) legacyKindMeasures.add(measure);
+      return [
+        measure,
+        {
+          ...limit,
+          kind: limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
+        },
+      ];
+    }),
   );
+  return { limits: resolved, legacyKindMeasures };
 }
 
 export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
+  const { limits, legacyKindMeasures } = withResolvedKinds(
+    mandateLimitsSchema.parse(row.limits),
+  );
   return {
     id: row.id,
     publicId: row.publicId,
@@ -130,7 +156,8 @@ export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
     workspaceId: row.workspaceId,
     agentPrincipalId: row.agentPrincipalId,
     consequenceTags: row.consequenceTags,
-    limits: withResolvedKinds(mandateLimitsSchema.parse(row.limits)),
+    limits,
+    legacyKindMeasures,
     targets: mandateTargetsSchema.parse(row.targets),
     tools: row.tools,
     approval: mandateApprovalSchema.parse(row.approvalRules),
@@ -674,21 +701,28 @@ export async function decideMandate(
         };
       }
       // ADR-108 stamps a limit's kind from the declaration matched at write
-      // time (or, for a row written before ADR-108, the documented
-      // `legacyMeasureKindGuess` fallback `parseMandateRow` already resolved
-      // it to). An unpinned mandate pattern (`slug`, `slug@*`) can still
-      // match a version published after that write, and that version can
-      // declare this measure's kind differently with the same unit spelling
-      // (count to amount or back) without the mandate ever being touched
-      // again. A stored kind that disagrees with what governs this call
-      // right now is the same disagreement ADR-108 already refuses at
-      // write time when two matched tools disagree, moved to the moment it
-      // can also happen between then and now: refused here rather than
-      // enforced against a figure entered under a kind that no longer
-      // holds.
+      // time. An unpinned mandate pattern (`slug`, `slug@*`) can still match
+      // a version published after that write, and that version can declare
+      // this measure's kind differently with the same unit spelling (count
+      // to amount or back) without the mandate ever being touched again. A
+      // stored kind that disagrees with what governs this call right now is
+      // the same disagreement ADR-108 already refuses at write time when two
+      // matched tools disagree, moved to the moment it can also happen
+      // between then and now: refused here rather than enforced against a
+      // figure entered under a kind that no longer holds.
+      //
+      // `mandate.legacyKindMeasures` excludes a row written before ADR-108:
+      // its `kind` is `legacyMeasureKindGuess`'s fallback, not a fact this
+      // measure was ever actually written under, and the gate has always
+      // enforced that row correctly by reading the declaration directly
+      // (never the guess). Comparing a guess against the current declaration
+      // would deny a legacy mandate the fallback happens to guess wrong,
+      // even though nothing about it has drifted, since there is no earlier
+      // fact to drift from.
       const storedKind = mandate.limits[measure]?.kind;
       if (
         storedKind !== undefined &&
+        !mandate.legacyKindMeasures.has(measure) &&
         storedKind !== measureKindOf(declaration.type)
       ) {
         return {

@@ -129,11 +129,18 @@ replacement removed it while the append-only ledger kept the movement. There,
 is the same documented, single-function fallback, not a second heuristic.
 
 The fallback is removable once every stored limit carries a real `kind`,
-either by a future backfill migration or by attrition as `update_mandate_limits`
-re-stamps every row it touches (§1: a `limitChanges` edit reruns
-`assertToolsDeclareMeasures` on the merged record and persists its stamped
-output, so touching *any* field of an old mandate's limits refreshes every
-measure's `kind`, not only the one the operator changed).
+either by a future backfill migration or by attrition as
+`update_mandate_limits` re-stamps a measure the operator actually names in
+`limits` or `limitChanges` (§4 says why it stops there, not at every measure
+the mandate holds).
+
+`MandateRecord.legacyKindMeasures` names exactly the measures a resolved
+record's `kind` came from the fallback rather than a real stamp. It exists
+because `withResolvedKinds` makes `kind` unconditionally present, so nothing
+downstream of `parseMandateRow` can otherwise tell a guess from a fact by
+inspecting the value alone; two places need to (§4's drift check, and
+`update_mandate_limits`'s decision about which measures to re-stamp), and
+both take this set rather than re-deriving the distinction their own way.
 
 ### 4. The gate refuses a call if the declaration has drifted from the stamped kind
 
@@ -147,15 +154,31 @@ declares before reading a value for that measure, and refuses the call
 (`measure_kind_changed`) on a mismatch instead of enforcing a stored figure
 against a kind that no longer holds. This is the same disagreement §2
 already refuses at write time between two matched tools, closed at the
-other moment it can happen: between the write and the call.
+other moment it can happen: between the write and the call. The comparison
+skips a measure in `legacyKindMeasures`: a legacy row's `kind` is a guess,
+not a fact the gate ever enforced against, so comparing it to today's
+declaration would deny a mandate the gate has always read correctly (the
+gate takes the declaration directly, never the stored guess) over a
+disagreement that was never real.
 
 This is a refusal, not a repair: nothing revalidates or restamps the
 mandate's limit automatically. The accountable office sees the refusal
 through the ordinary `mandate.exception` audit trail and fixes it with
-`update_mandate_limits`, which restamps every measure's kind from the
-current declaration the moment any field of the limits is touched (§3).
-Binding a mandate to the specific tool version matched at write time, so an
-unpinned pattern could never drift under it at all, was considered and
+`update_mandate_limits`. That restamp is itself scoped to the measure the
+operator actually names in `limits` or `limitChanges`: an `update_mandate_limits`
+call that touches only `validTo`, `targets` or `approval` leaves every
+measure's stored `kind` exactly as it was, restoring it after
+`assertToolsDeclareMeasures` re-derives it from the current declaration for
+every measure in the merged record regardless of which one the caller named
+(a broader recompute the write-time checks in §2 and the unit check both
+still need, over the whole record). Restamping on an untouched measure would
+let a mandate this refusal is already blocking start passing again, or flip
+a money limit to a count limit, the moment an unrelated field changes and
+with nobody having looked at the figure. A legacy measure (`legacyKindMeasures`)
+is exempt from this preservation, since restamping it is the ordinary
+attrition §3 describes, not a silent change to a fact anyone already relied
+on. Binding a mandate to the specific tool version matched at write time, so
+an unpinned pattern could never drift under it at all, was considered and
 rejected: it would refuse `stripe__create_payment@*` from ever picking up a
 routine patch release that does not touch a limited measure's kind, for the
 sake of a case only a kind-changing release creates.
@@ -202,4 +225,11 @@ classification) and is unchanged.
   enforced against a figure entered under a kind that no longer holds. No
   existing fixture exercised a kind change after grant; this refusal is new
   and only fires once a tool's active version disagrees with what a mandate
-  was stamped with.
+  was stamped with, and never on a `legacyKindMeasures` guess.
+- `update_mandate_limits` re-derives a measure's `kind` only for a measure
+  the caller names in `limits` or `limitChanges` (§4), not for every measure
+  the merged record holds. A prior version of this decision restamped the
+  whole record on any write; that let an untouched measure's kind change as
+  a side effect of an unrelated field (`validTo`, `targets`, `approval`),
+  silently clearing a `measure_kind_changed` refusal or flipping a limit's
+  denomination with nobody having looked at its figure.

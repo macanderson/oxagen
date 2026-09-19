@@ -969,5 +969,59 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
     });
+
+    // #3130 (ADR-108 §4): a measure's kind is only re-derived from the
+    // active declaration when the operator actually touches that measure's
+    // limit. An update that names only validTo, targets or approval must
+    // leave every measure's stored kind exactly as it was, or a mandate the
+    // gate had started refusing under measure_kind_changed would silently
+    // start passing again (or worse, a money limit would silently become a
+    // count limit) without anyone looking at its figures.
+    it("limits: a validTo-only change never re-derives a measure's kind", async () => {
+      const m = await grant(billingUserId, body());
+      expect(m.limits.amount).toMatchObject({ kind: "money" });
+      // Simulate the state after a tool republish changed `amount`'s kind:
+      // the stored limit disagrees with what a fresh stamp would produce
+      // (the fixture's active declaration still says "amount"/money), which
+      // is exactly the state a real drift leaves behind.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      const untouched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            validTo: "2026-12-30T23:59:59.000Z",
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(untouched.limits.amount).toMatchObject({ kind: "count" });
+      // Touching the measure explicitly is still how an operator confirms
+      // the new kind and re-derives it.
+      const touched = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
   },
 );

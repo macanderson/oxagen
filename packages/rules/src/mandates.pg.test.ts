@@ -690,6 +690,39 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    // A legacy row's kind is `legacyMeasureKindGuess`'s fallback, not a
+    // fact: the gate has always enforced it correctly by reading the
+    // declaration directly, so the drift check above must never compare a
+    // guess to the current declaration. Here the guess (from a non-currency
+    // unit, "widgets") disagrees with the declared "amount"/money kind on
+    // purpose, and the call still proceeds.
+    it("does not deny a legacy row whose guessed kind disagrees with the declaration", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`: parseMandateRow guesses "count" from "widgets" (not
+            // an ISO currency code), which disagrees with the tool's
+            // declared "amount" (money).
+          },
+        },
+      });
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out.kind).not.toBe("deny");
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
+      );
+    });
+
     it("parks a call over human_above with the reservation held, then lets the approved retry proceed once and settles it from the output", async () => {
       const agent = randomUUID();
       const id = await insertMandate(agent, {
