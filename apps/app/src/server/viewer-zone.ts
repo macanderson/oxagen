@@ -15,8 +15,10 @@ import type { ActionResult } from "./kernel";
 import { kernelRead } from "./kernel";
 import type { OrgCtx } from "./viewer";
 
+// Not exported: viewer.ts re-exports `viewerTimeZone` alone, and every caller
+// lets `await viewerTimeZone(...)` infer this rather than naming it.
 /** The zone, or the refusal a write should answer with instead of guessing. */
-export type ViewerZone =
+type ViewerZone =
   | { ok: true; timeZone: string }
   | Exclude<ActionResult<never>, { ok: true }>;
 

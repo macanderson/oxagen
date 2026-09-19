@@ -45,10 +45,9 @@ export type { InvitationRecord } from "./tenancy-lookups";
 // `@/server/viewer` (ARCHITECTURE.md §2); they may not reach `viewer-zone`
 // directly. Re-export keeps one seam and avoids a layer violation.
 //
-// The function only. `ViewerZone` stays where it is declared: a caller awaits
-// `viewerTimeZone` and switches on the result, so no feature ever names the
-// type, and re-exporting it here put a second name on the seam that nothing
-// read. knip --production --strict fails an export nothing imports.
+// `ViewerZone` (the return type) is not re-exported: nothing outside
+// viewer-zone.ts names it, every caller lets `await viewerTimeZone(...)`
+// infer it, and knip flags an export nothing imports.
 export { viewerTimeZone } from "./viewer-zone";
 
 /** The stored set: packages/database/src/schema/org.ts:96 and :170 CHECK lower(role) IN (…). */
