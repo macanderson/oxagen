@@ -31,7 +31,7 @@ Mint the single-use enrollment token a machine presents to `enroll_host` to beco
 | `expiresAt` | string | RFC 3339 |
 | `agentId` | string | `agt_…` |
 | `agentKey` | string | `org_ns.ws_ns.slug` (ADR-024): the key the enrolled host reports as |
-| `enrollCommand` | string | `oxagen agent enroll --token <token>` |
+| `enrollCommand` | string | `oxagen agent enroll --token <token>`, plus `--harness <harness>` when the agent runs under a hook-based harness (`claude-code`, `codex`, `cursor`, `stella`) |
 
 ## Refusals
 

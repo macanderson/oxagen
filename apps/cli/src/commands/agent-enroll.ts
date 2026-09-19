@@ -11,7 +11,7 @@ import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
 export interface AgentEnrollOptions {
   token: string;
-  /** `claude-code`, `codex`, or a comma list. */
+  /** `claude-code`, `codex`, `cursor`, `stella`, or a comma list. */
   harness?: string;
   port?: number;
   service?: boolean;

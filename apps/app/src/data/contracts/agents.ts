@@ -15,6 +15,8 @@ const Count = z.number().int().nonnegative();
 const AgentHarness = z.enum([
   "stella",
   "claude-code",
+  "codex",
+  "cursor",
   "claude-agent-sdk",
   "custom",
 ]);

@@ -203,8 +203,9 @@ export class TranscriptTailer {
   }
 
   /**
-   * Advance every live cursor by at most the budget, and drop the cursors of
-   * sessions that sealed and drained or left the registry.
+   * Advance every live cursor by at most the budget, give a sealed session
+   * one final unbounded pass, and drop the cursors of sessions that left the
+   * registry.
    */
   async tick(): Promise<void> {
     const live = new Set<string>();
@@ -212,13 +213,14 @@ export class TranscriptTailer {
       live.add(session.harnessSessionId);
       if (session.transcriptPath === undefined) continue;
       const cursor = this.cursorFor(session, session.transcriptPath);
-      if (cursor.drained) {
-        this.cursors.delete(session.harnessSessionId);
-        this.dirty = true;
-        continue;
-      }
+      // A drained cursor stays as a tombstone for as long as the registry
+      // keeps the sealed session (days, not ticks). Deleting it here let the
+      // next tick recreate the cursor at offset 0 and append the whole
+      // transcript again after `agent_stop`, every other tick. It goes with
+      // the session, in the sweep below.
+      if (cursor.drained) continue;
       if (session.sealed) {
-        // One unbounded pass after the chain closed, then the cursor goes.
+        // One unbounded pass after the chain closed; nothing reads it after.
         await this.advance(session, cursor, Number.POSITIVE_INFINITY);
         cursor.drained = true;
         this.dirty = true;

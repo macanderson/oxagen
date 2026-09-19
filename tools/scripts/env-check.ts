@@ -88,7 +88,8 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "BASH_SOURCE",
   // Windows' equivalents, set by the OS for every process: the home
   // directory and the two application-data roots tacho's harness lookup
-  // checks for `claude` / `codex` (packages/tacho/src/cli/deps.ts).
+  // checks for `claude` / `codex` / `cursor-agent`
+  // (packages/tacho/src/cli/deps.ts).
   "USERPROFILE",
   "APPDATA",
   "LOCALAPPDATA",

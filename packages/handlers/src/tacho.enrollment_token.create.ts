@@ -15,18 +15,13 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { cryptoRandom } from "@oxagen/database/schema";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
-import { hashEnrollmentToken } from "./lib/onboarding";
+import { enrollCommandFor, hashEnrollmentToken } from "./lib/onboarding";
 import { logger } from "./logger";
 
 const MINUTE_MS = 60 * 1000;
 const TOKEN_PREFIX = "oxe_1time_";
 
 const ENROLLMENT_TOKEN_ROLES = ["Owner", "Admin"] as const;
-
-/** The scripted path the mockup prints beside the token (spec §14.1). */
-function enrollCommandFor(token: string): string {
-  return `oxagen agent enroll --token ${token}`;
-}
 
 export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
   typeof tachoEnrollmentTokenCreate
@@ -48,6 +43,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         id: schema.agents.id,
         publicId: schema.agents.publicId,
         slug: schema.agents.slug,
+        harness: schema.agents.harness,
         orgNamespace: schema.organizations.namespace,
         workspaceNamespace: schema.workspaces.namespace,
       })
@@ -94,6 +90,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
       tokenId: row.publicId,
       agentId: agent.publicId,
       agentKey: `${agent.orgNamespace}.${agent.workspaceNamespace}.${agent.slug}`,
+      harness: agent.harness,
     };
   });
 
@@ -114,6 +111,6 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
     expiresAt: expiresAt.toISOString(),
     agentId: result.agentId,
     agentKey: result.agentKey,
-    enrollCommand: enrollCommandFor(token),
+    enrollCommand: enrollCommandFor(token, result.harness),
   };
 };

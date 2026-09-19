@@ -55,6 +55,8 @@ type Messages = {
     harness: {
       stella: string;
       "claude-code": string;
+      codex: string;
+      cursor: string;
       "claude-agent-sdk": string;
       custom: string;
     };

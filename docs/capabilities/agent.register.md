@@ -21,7 +21,7 @@ Registration writes no definition: the definition of record is the file `.oxagen
 | `slug` | `string` | 1–18 chars, lowercase words joined by hyphens. Reserved for good in the workspace: a soft-deleted agent keeps its slug (ADR-024). |
 | `name` | `string` | 1–128 chars. |
 | `description` | `string?` | Up to 1024 chars. |
-| `harness` | `"stella" \| "claude-code" \| "claude-agent-sdk" \| "custom"` | |
+| `harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
 | `validityDays` | `number` | Credential lifetime, 1–365; default 180. |
 
 ## Output
