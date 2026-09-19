@@ -45,6 +45,9 @@ type Bar = {
  * The total is the last turn's cumulative cost, which is the contract's own
  * prefix sum. Taking it from anywhere else would let the bars and the running
  * totals disagree about the same run.
+ *
+ * @internal exported only for waterfall.test.tsx; not part of this module's
+ * production surface (knip production mode drops `@internal` exports).
  */
 export function buildBars(
   turns: readonly TranscriptEntry[],

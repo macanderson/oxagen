@@ -292,7 +292,7 @@ const ChainCheckpoint = z.object({
 });
 export type ChainCheckpoint = z.infer<typeof ChainCheckpoint>;
 
-export const COMPLETENESS_GAPS = [
+const COMPLETENESS_GAPS = [
   "digest_only",
   "body_missing",
   "tool_bodies",
@@ -336,7 +336,7 @@ const ReplayLadderRung = z.object({
   met: z.boolean(),
   reason: z.string().min(1),
 });
-export type ReplayLadderRung = z.infer<typeof ReplayLadderRung>;
+type ReplayLadderRung = z.infer<typeof ReplayLadderRung>;
 
 export const RunChain = z.object({
   /** How each frame is chained to the one before it; a verifier needs this and nothing else. */
