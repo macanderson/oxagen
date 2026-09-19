@@ -1,12 +1,11 @@
 // Every date under the organization layout renders in the person's own zone.
 //
-// The app formats dates in one way, next-intl's `useFormatter().dateTime`, and
-// next-intl takes its zone from the nearest provider. The root layout's
-// provider inherits the request config, which names no zone because the config
-// is read while the static shell prerenders (Cache Components) and a person's
-// preference is request data. So the zone is read here, inside the <Suspense>
-// the organization layout gives its pages, and <TimeZoneProvider> hands it
-// down; locale and messages are inherited from the root provider.
+// Client components take the zone from <TimeZoneProvider> below. Server
+// components cannot: next-intl's request config is read while the static shell
+// prerenders, so it carries only Pacific time. This component writes the
+// viewer's zone into `@/ui/formatter`'s per-request slot via
+// `setViewerTimeZone` before returning children, then wraps them in
+// <TimeZoneProvider> for the client tree.
 //
 // A person's zone is a preference, not a session claim: `get_user_preferences`
 // through the shell port, the same read the chrome makes (deduplicated per
@@ -34,5 +33,8 @@ export async function ViewerClock({
   const timeZone = preferences.ok
     ? preferences.value.timeZone
     : DEFAULT_TIME_ZONE;
+  // Write before returning children so server components under this tree
+  // format through `@/ui/formatter` in the same zone the client provider shows.
+  setViewerTimeZone(timeZone);
   return <TimeZoneProvider timeZone={timeZone}>{children}</TimeZoneProvider>;
 }
