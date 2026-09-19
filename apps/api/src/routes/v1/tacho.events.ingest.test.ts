@@ -230,9 +230,7 @@ describe("POST /v1/tacho/events", () => {
     const atCapBody = {
       event_id_idem: eventIdIdem,
       content_type: "text/plain; charset=utf-8",
-      bytes_base64: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString(
-        "base64",
-      ),
+      bytes_base64: Buffer.alloc(TACHO_MAX_BODY_BYTES, 0x61).toString("base64"),
     };
     const atCap = { ...VALID_BATCH, bodies: [atCapBody] };
     const response = await post(atCap);

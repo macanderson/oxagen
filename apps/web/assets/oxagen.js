@@ -113,12 +113,10 @@
     /* Each theme-color tag answers one OS preference. A pinned theme sets
        both to its own colour, so the bar matches the page whichever the OS
        prefers; System puts each back to its own. */
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach(function (m) {
-        var own = /light/.test(m.media) ? BAR.light : BAR.dark;
-        m.content = choice === "system" ? own : BAR[resolved];
-      });
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      var own = /light/.test(m.media) ? BAR.light : BAR.dark;
+      m.content = choice === "system" ? own : BAR[resolved];
+    });
     void root.offsetWidth;
     root.classList.remove("theme-swap");
     document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
