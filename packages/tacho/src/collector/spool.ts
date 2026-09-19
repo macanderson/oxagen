@@ -21,6 +21,8 @@ import {
   type RateLimitHint,
 } from "../host/control-client";
 import { ensureDir, writeSensitiveFileAtomic } from "../host/fs";
+import { contentClassOf, retentionAllows } from "../evidence/frame-body";
+import type { RetentionMandate } from "../evidence/retention";
 import type { Wal } from "../host/wal";
 import {
   type ControlEnvelope,
@@ -44,6 +46,19 @@ export interface ShipperOptions {
   onBodyRejection?: (
     rejections: Array<{ event_id_idem: string; reason: string }>,
   ) => void;
+  /**
+   * The retention clause in force right now, asked at ship time.
+   *
+   * Retention is applied when a body is appended, but a body can wait in the
+   * WAL through an outage and leave under a mandate that has since narrowed.
+   * The control plane refuses it, which protects the record and not the
+   * machine: by then the prompt or tool content has already left. So the
+   * clause is asked again here, against the mandate the last refresh
+   * established, and a body it no longer covers is never transmitted.
+   *
+   * Optional, so a caller that does not supply it keeps the old behaviour.
+   */
+  retentionInForce?: () => RetentionMandate;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -265,9 +280,35 @@ export class Shipper {
     const { own, quarantined } = this.setAsideForeignEvents(batch);
     if (own.length === 0)
       return { shipped: 0, quarantined, reachable: this.reachable };
+    // Filtered against the mandate as it stands now, not as it stood when the
+    // body was appended. A narrowing between those two moments is exactly the
+    // case this guards: the body is dropped here rather than sent and refused
+    // after it has already left the machine.
+    //
+    // The class comes from the body's own event rather than from the body,
+    // because the WAL stores bodies as bytes and does not persist a class.
+    // `contentClassOf` is the one table that maps a frame kind to a class, so
+    // asking it here cannot disagree with what the append path asked.
+    const retention = this.options.retentionInForce?.();
+    const kindOf = new Map(
+      own.map((event) => [event.event_id_idem, event.kind] as const),
+    );
     const bodies = new Map(
       this.options.wal
         .bodiesFor(own)
+        .filter((body) => {
+          if (retention === undefined) return true;
+          const kind = kindOf.get(body.event_id_idem);
+          const contentClass =
+            kind === undefined ? undefined : contentClassOf(kind);
+          // A body whose event is not in this batch, or whose kind names no
+          // class, is not shipped: an unclassifiable body cannot be shown to
+          // be covered, and the boundary fails closed.
+          return (
+            contentClass !== undefined &&
+            retentionAllows(retention, contentClass)
+          );
+        })
         .map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(

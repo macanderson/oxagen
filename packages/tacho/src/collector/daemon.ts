@@ -603,6 +603,12 @@ export async function startDaemon(
     // control plane 403s a batch containing any of them, and a 403 is
     // retryable, so without this the queue wedges forever.
     hostEnrollmentId: host.host_enrollment_id,
+    // Asked at ship time, not only at append time. A body appended under
+    // `content_exact` can wait in the WAL through an outage and leave under a
+    // mandate that has since narrowed to `digest_only`; the control plane
+    // refuses it, but by then it has left the machine, which is the one thing
+    // the retention boundary exists to prevent.
+    retentionInForce,
     health,
     onControl: async (control) => {
       lastIngestAt = now();

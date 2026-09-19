@@ -1198,6 +1198,79 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
   });
 
+  it("does not ship a queued body the mandate no longer covers", async () => {
+    // The leak this guards: a body appended under `content_exact` waits in
+    // the WAL through an outage, the workspace narrows to `digest_only`, and
+    // the drain sends it anyway. The control plane refuses it, which protects
+    // the record and not the machine — the prompt has already left.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const sent: Array<readonly TachoBody[] | undefined> = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(bodies);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      // Narrowed since the append.
+      retentionInForce: () => ({ mode: "digest_only", classes: [] }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // The events still ship; only the bytes stay home.
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("still ships a queued body the mandate does cover", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the prompt")]);
+    const sent: TachoBody[] = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(...(bodies ?? []));
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mode: "content_exact",
+        classes: ["model_call", "tool_call"],
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    expect(sent.some((b) => b.event_id_idem === prompt.event_id_idem)).toBe(
+      true,
+    );
+  });
+
   it("surfaces the bodies the control plane refused", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
