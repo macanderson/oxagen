@@ -352,19 +352,21 @@ describe("tachod and frame bodies", () => {
     // the drain sends what is queued. The control plane refusing it is too
     // late — the prompt has already left the machine, which is the one thing
     // the retention boundary exists to prevent.
-    let narrowed: PolicyBundle | undefined;
+    // A holder rather than a `let`: the bundle is read inside the closure
+    // before it is written below, and `prefer-const` cannot see that.
+    const narrowed: { bundle?: PolicyBundle } = {};
     const { fetch, batches } = plane(
       () => undefined,
       () =>
-        narrowed === undefined
+        narrowed.bundle === undefined
           ? BUNDLE_UNCHANGED
           : {
               ok: true,
               status: 200,
               payload: {
                 not_modified: false,
-                etag: narrowed.etag,
-                bundle: narrowed,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
               },
             },
     );
@@ -375,7 +377,7 @@ describe("tachod and frame bodies", () => {
     await runSession(handle.port as number, host.local_token);
     // Queued, not shipped: the bodies are sitting in the WAL.
     expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
-    narrowed = signer.sign(
+    narrowed.bundle = signer.sign(
       unsignedBundle({
         version: 4,
         etag: "etag-4",
