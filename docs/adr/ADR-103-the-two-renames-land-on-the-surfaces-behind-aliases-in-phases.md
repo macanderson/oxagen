@@ -153,20 +153,24 @@ request.**
    take, rather than dropping them. `--purge` against an agent handle means
    nothing this CLI does, and an operator who passes it and reads a success
    line has been told a local spool was deleted when nothing went near it.
-3. The docs. Measured on `756469151`, 119 files under `docs/` carry the word,
-   and the count is the wrong unit of work. Four categories are excluded, for
-   reasons decision 1 already gives:
+3. The docs. One predicate, `grep -ril tacho`, run over every row below, on
+   `01de2ea5f`. Case matters: a case-sensitive scan misses `Tacho` and
+   undercounts three of the excluded files, which is how an earlier draft of
+   this table read 26 and 2. 119 files under `docs/` carry the word, and the
+   count is the wrong unit of work. Four categories are excluded, for reasons
+   decision 1 already gives:
 
    | Where | Files | Why it is excluded |
    | --- | --- | --- |
    | `docs/capabilities/schemas/` | 16 | Generated from the contracts. The name follows the contract, which keeps it under decision 1. |
-   | `docs/capabilities/*.md` | 26 | Filename and `**Surfaces:**` track the registered name, and `check-capability-docs` enforces the match. |
+   | `docs/capabilities/*.md` | 28 | Filename and `**Surfaces:**` track the registered name, and `check-capability-docs` enforces the match. |
    | `docs/adr/` | 33 | A dated record of what was decided. Two carry the word in the filename. Rewriting one is rewriting the record. |
-   | `docs/audits/` | 2 | Dated records, same reason. |
+   | `docs/audits/` | 3 | Dated records, same reason. |
 
-   That leaves the 17 files of `docs/specs/tacho/`, which are the canonical
-   description, and the current-tense product prose in about 20 other files,
-   which is where a reader meets the word.
+   That is 80 excluded. The remaining 39 are the 17 files of
+   `docs/specs/tacho/`, which are the canonical description, and 22 others
+   carrying current-tense product prose, which is where a reader meets the
+   word. 16 + 28 + 33 + 3 + 17 + 22 = 119.
 
    **The directory keeps its path.** `docs/specs/tacho` is referenced 59 times,
    and most of those are comments in source files across `packages/database`,
@@ -177,11 +181,14 @@ request.**
    changed for another reason, not as a campaign.
 
    **The prose keeps naming what exists.** `tachod`, `tacho-hook`,
-   `oxagen.frame`, `tacho_sessions` and `ingest_tacho_events` are live until
-   phases 4 through 6 rename them. A doc that calls them something else is a
-   doc that is wrong, so each one keeps its name and says which phase moves it.
-   The word goes from the concept, which has no product name: doing it is
-   wrapping an agent.
+   `oxagen.frame` and `tacho_sessions` are live until phases 4, 5 and 6 rename
+   them. `@oxagen/tacho` and `ingest_tacho_events` are not renamed by any
+   phase: decision 1 keeps the package name, and the capability name is an MCP
+   tool a customer's agent calls, which ADR-025 retired the dotted form of with
+   no alias fallback. A doc that calls any of the six something else is a doc
+   that is wrong, so each keeps its name, and the ones that move say which
+   phase moves them. The word goes from the concept, which has no product name:
+   doing it is wrapping an agent.
 4. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
    each shipping the new name alongside the old and migrating on the next
    enroll.
