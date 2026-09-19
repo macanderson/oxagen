@@ -19,8 +19,7 @@ import {
 import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
-import { viewerTimeZone } from "@/server/viewer-zone";
+import { requireViewer, viewerTimeZone } from "@/server/viewer";
 import { endOfZonedDay, startOfZonedDay } from "@/shared/calendar-day";
 
 /** Retires the current key and mints a replacement; the secret is returned once and never again. */
@@ -324,7 +323,7 @@ export async function requestMandate(
   // cosmetic error a reader can see. A validity boundary written in the wrong
   // zone is not: for an operator in Tokyo, Pacific moves the end of their day 17
   // hours later, and nothing afterwards says the zone was guessed
-  // (`server/viewer-zone.ts`).
+  // (`server/viewer.ts` → `viewerTimeZone`).
   const zone = await viewerTimeZone(ctx, "agents");
   if (!zone.ok) return zone;
   const validFrom = startOfZonedDay(draft.validFrom, zone.timeZone);

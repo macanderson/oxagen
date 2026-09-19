@@ -220,9 +220,9 @@ describe("Mandate › loaded", () => {
 
   // Approvers only mean something once something can park a call. The gate
   // fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
-  // `humanAbove` threshold and proceeds when it is empty
+  // `humanAbove` threshold, and proceeds when it is empty
   // (`packages/rules/src/mandates.ts`). A mandate with neither parks nothing,
-  // so naming approvers on it would describe a review path that does not run.
+  // so naming approvers on it would describe a review path that never runs.
   it("says no call waits for a person when the rule can park none", async () => {
     await renderMandate(
       mandateDetailRead({
@@ -460,7 +460,9 @@ describe("Mandate › access denied", () => {
     expect(panel.textContent).toContain("Signed in as: Member");
     expect(panel.textContent).toContain("Needed:");
     expect(panel.textContent).toContain("Decided by:");
-    expect(panel.textContent).toContain("An owner can grant an accountable role");
+    expect(panel.textContent).toContain(
+      "An owner can grant an accountable role",
+    );
     expect(
       within(panel).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/a-intel/core-platform");
