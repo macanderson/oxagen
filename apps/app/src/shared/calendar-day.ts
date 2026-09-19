@@ -12,6 +12,24 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 86_400_000;
 
 /**
+ * True when this runtime's ICU data can format in `name`. The stored zone is
+ * free text and the contract admits any zone-shaped string, so a value this
+ * runtime has never heard of can reach here, and `Intl.DateTimeFormat` throws a
+ * RangeError on it rather than answering. Every resolver below asks first, so an
+ * unsupported zone reads as no answer — the same as a malformed day — instead of
+ * throwing out of a date conversion. A caller that would rather draw the page in
+ * the default zone than lose the bound asks too, and picks the default itself.
+ */
+export function supportsTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The parts of `instant` as `timeZone` reads them, as a comparable UTC number,
  * plus the zone's offset from UTC at that instant in milliseconds.
  */
@@ -88,7 +106,9 @@ function zonedPartsToUtc(
   return new Date(before);
 }
 
-function parseDay(day: string): { year: number; month: number; day: number } | null {
+function parseDay(
+  day: string,
+): { year: number; month: number; day: number } | null {
   if (!DAY.test(day)) return null;
   const [year, month, dayNum] = day.split("-").map(Number);
   if (year === undefined || month === undefined || dayNum === undefined) {
@@ -107,7 +127,7 @@ export function startOfZonedDay(
   timeZone: string = DEFAULT_TIME_ZONE,
 ): string | null {
   const parts = parseDay(day);
-  if (parts === null) return null;
+  if (parts === null || !supportsTimeZone(timeZone)) return null;
   const instant = zonedPartsToUtc(
     parts.year,
     parts.month,

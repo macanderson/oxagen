@@ -31,10 +31,11 @@ const file = {
 
 const refuse = () => Promise.reject(new Error("not the audit export read"));
 const exportEvents = vi.fn();
+const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse, preferences: refuse },
+  shell: { context: refuse, preferences },
   runs: {
     list: refuse,
     get: refuse,
@@ -82,6 +83,8 @@ const context = { params: Promise.resolve({ org: "acme" }) };
 
 beforeEach(() => {
   exportEvents.mockReset();
+  preferences.mockReset();
+  preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
   resolveViewer.mockReset();
   resolveViewer.mockResolvedValue({ kind: "ok", ctx });
   exportEvents.mockResolvedValue(readOk(file));
@@ -112,15 +115,31 @@ describe("handleAuditExport", () => {
       context,
       deps,
     );
+    // The same window the page reads: the reader's days as instants in their
+    // zone (PDT, UTC-7 in September), inclusive of the last day.
     expect(exportEvents).toHaveBeenCalledWith(ctx, {
       format: "ndjson",
       eventType: null,
       outcome: "deny",
       actor: "usr_7k2m9q4x8r1t5v3w",
       capability: "query_audit_log",
-      from: "2026-09-01",
-      to: "2026-09-15",
+      since: "2026-09-01T07:00:00.000Z",
+      until: "2026-09-16T07:00:00.000Z",
     });
+  });
+
+  it("exports the whole record without reading a zone when no day is filtered", async () => {
+    await handleAuditExport(request("?outcome=deny"), context, deps);
+    expect(exportEvents).toHaveBeenCalledWith(ctx, {
+      format: "csv",
+      eventType: null,
+      outcome: "deny",
+      actor: null,
+      capability: null,
+      since: null,
+      until: null,
+    });
+    expect(preferences).not.toHaveBeenCalled();
   });
 
   it("exports CSV when the request names no format the contract knows (negative)", async () => {

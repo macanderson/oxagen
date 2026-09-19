@@ -4,6 +4,7 @@ import {
   endOfZonedDay,
   startOfNextZonedDay,
   startOfZonedDay,
+  supportsTimeZone,
 } from "./calendar-day";
 
 describe("startOfZonedDay", () => {
@@ -112,5 +113,24 @@ describe("civil days whose midnight a DST jump skips", () => {
     expect(endOfZonedDay("2026-10-31", "America/Havana")).toBe(
       "2026-11-01T03:59:59.999Z",
     );
+  });
+});
+
+describe("supportsTimeZone", () => {
+  it("knows the zones this runtime can format in, and the ones it cannot", () => {
+    expect(supportsTimeZone("America/Los_Angeles")).toBe(true);
+    expect(supportsTimeZone("UTC")).toBe(true);
+    expect(supportsTimeZone(DEFAULT_TIME_ZONE)).toBe(true);
+    expect(supportsTimeZone("Mars/Olympus_Mons")).toBe(false);
+    expect(supportsTimeZone("")).toBe(false);
+  });
+
+  it("answers no day at all for a zone nothing can be formatted in (negative)", () => {
+    // The stored zone is free text and the contract admits any zone-shaped
+    // name, so an unknown one reaches the resolvers. It reads as no answer,
+    // never as a thrown RangeError out of a date conversion.
+    expect(startOfZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
+    expect(startOfNextZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
+    expect(endOfZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
   });
 });

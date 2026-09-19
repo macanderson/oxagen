@@ -7,10 +7,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MANDATE_ID, mandateOutput } from "@/test/mandate-outputs";
 
-const { invoke, requireViewer, preferences } = vi.hoisted(() => ({
+const { invoke, requireViewer, kernelRead } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
   requireViewer: vi.fn(),
-  preferences: vi.fn(),
+  kernelRead: vi.fn(),
 }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
@@ -25,8 +25,11 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/viewer")>()),
   requireViewer,
 }));
-vi.mock("@/data/live/shell", () => ({
-  shell: { preferences },
+// The writes run through the real seam; the one read a mandate request makes —
+// the person's saved zone — is faked here, so `invoke` answers writes alone.
+vi.mock("@/server/kernel", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/kernel")>()),
+  kernelRead,
 }));
 
 const kernel =
@@ -67,8 +70,8 @@ beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
-  preferences.mockReset();
-  preferences.mockResolvedValue({ ok: true, value: { timeZone: "UTC" } });
+  kernelRead.mockReset();
+  kernelRead.mockResolvedValue({ ok: true, value: { timezone: "UTC" } });
 });
 
 describe("rotateAgentCredential", () => {
@@ -460,9 +463,9 @@ describe("requestMandate", () => {
   });
 
   it("bounds the mandate days in the viewer's zone, not UTC", async () => {
-    preferences.mockResolvedValue({
+    kernelRead.mockResolvedValue({
       ok: true,
-      value: { timeZone: "America/Los_Angeles" },
+      value: { timezone: "America/Los_Angeles" },
     });
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {
@@ -471,6 +474,44 @@ describe("requestMandate", () => {
       validTo: "2026-01-15",
     });
     // PST (UTC-8): local midnight through 23:59:59.999.
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      validFrom: "2026-01-15T08:00:00.000Z",
+      validTo: "2026-01-16T07:59:59.999Z",
+    });
+  });
+
+  it("falls back to the default zone when the saved one cannot be read (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: false,
+      reason: "error",
+      code: "control_plane_unavailable",
+      status: 503,
+    });
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      validFrom: "2026-01-15",
+      validTo: "2026-01-15",
+    });
+    // Pacific is the default every page prints in, so the window agrees with
+    // the dates on screen rather than silently becoming a UTC day.
+    expect(invoke.mock.calls[0]?.[1]).toMatchObject({
+      validFrom: "2026-01-15T08:00:00.000Z",
+      validTo: "2026-01-16T07:59:59.999Z",
+    });
+  });
+
+  it("falls back to the default zone for a saved one this runtime cannot format in (negative)", async () => {
+    kernelRead.mockResolvedValue({
+      ok: true,
+      value: { timezone: "Mars/Olympus_Mons" },
+    });
+    invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
+    await requestMandate("acme", "core-platform", {
+      ...good,
+      validFrom: "2026-01-15",
+      validTo: "2026-01-15",
+    });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
       validFrom: "2026-01-15T08:00:00.000Z",
       validTo: "2026-01-16T07:59:59.999Z",
