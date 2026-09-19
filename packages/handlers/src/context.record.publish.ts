@@ -1,6 +1,13 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { contextRecordPublish } from "@oxagen/oxagen/contracts/context.record.publish";
-import { schema, withTenantDb, isUniqueViolation } from "@oxagen/database";
+import {
+  ambientPlaneKey,
+  CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+  hasColumnFresh,
+  schema,
+  withTenantDb,
+  isUniqueViolation,
+} from "@oxagen/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { assertWorkspaceNotProvisional } from "./lib/onboarding";
 import { logger } from "./logger";
@@ -76,7 +83,7 @@ export const contextRecordPublishHandler: CapabilityHandler<
     statement: input.statement,
   };
 
-  const versionValues = {
+  const versionValuesBase = {
     orgId,
     workspaceId,
     body: input.body,
@@ -84,10 +91,23 @@ export const contextRecordPublishHandler: CapabilityHandler<
     provenance,
     isLatest: true,
     publishedAt: sql`now()`,
-    ...classification,
     createdById: ctx.userId ?? undefined,
     updatedById: ctx.userId ?? undefined,
   };
+
+  // Codex P1 on #3486: `context_record_versions.kind/force/constraintEffect/
+  // statement` were added by migration `20260918160000`, which -- like every
+  // Postgres migration in this repo -- is applied by the manual
+  // `db-migrate.yml` workflow, never automatically alongside a deploy
+  // (`pipeline.yml`'s `deploy-node` runs right after `test`, with no
+  // ordering against a migration run). A deployment can therefore run this
+  // handler's code before that migration has been applied, and an
+  // unconditional SELECT/INSERT naming those columns fails every publish
+  // with Postgres 42703 in that window. `publishMerge`
+  // (`context.steering.store.ts`) and `context.record.promote.ts` already
+  // guard the exact same columns with `hasColumnFresh` +
+  // `CONTEXT_VERSION_CLASSIFICATION_COLUMN`; this handler follows the same
+  // pattern rather than inventing a second one.
 
   // Version-publish path against an existing record row: idempotent when the
   // latest version already carries this checksum AND this classification,
@@ -101,17 +121,38 @@ export const contextRecordPublishHandler: CapabilityHandler<
     publicId: string;
     slug: string;
   }) => {
-    const [latest] = await withTenantDb((tx) =>
-      tx
-        .select({
-          id: schema.contextRecordVersions.id,
-          versionNumber: schema.contextRecordVersions.versionNumber,
-          checksum: schema.contextRecordVersions.checksum,
-          kind: schema.contextRecordVersions.kind,
-          force: schema.contextRecordVersions.force,
-          constraintEffect: schema.contextRecordVersions.constraintEffect,
-          statement: schema.contextRecordVersions.statement,
-        })
+    const { latest, readAtLookup } = await withTenantDb(async (tx) => {
+      // ACCESS SHARE, same as context.record.promote.ts's read of these
+      // columns: information_schema locks nothing on its own, so without
+      // this the migration's ALTER TABLE (ACCESS EXCLUSIVE) could commit
+      // between a `false` readiness answer and this SELECT reading a
+      // column that no longer -- or not yet -- matches that answer.
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in access share mode`,
+      );
+      const ready = await hasColumnFresh(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
+      const [row] = await tx
+        .select(
+          ready
+            ? {
+                id: schema.contextRecordVersions.id,
+                versionNumber: schema.contextRecordVersions.versionNumber,
+                checksum: schema.contextRecordVersions.checksum,
+                kind: schema.contextRecordVersions.kind,
+                force: schema.contextRecordVersions.force,
+                constraintEffect: schema.contextRecordVersions.constraintEffect,
+                statement: schema.contextRecordVersions.statement,
+              }
+            : {
+                id: schema.contextRecordVersions.id,
+                versionNumber: schema.contextRecordVersions.versionNumber,
+                checksum: schema.contextRecordVersions.checksum,
+              },
+        )
         .from(schema.contextRecordVersions)
         .where(
           and(
@@ -119,16 +160,25 @@ export const contextRecordPublishHandler: CapabilityHandler<
             eq(schema.contextRecordVersions.isLatest, true),
           ),
         )
-        .limit(1),
-    );
+        .limit(1);
+      return { latest: row, readAtLookup: ready };
+    });
 
+    // Before the migration lands, this handler cannot compare a
+    // classification the version row has no columns for -- fall back to the
+    // pre-#3302 checksum-only idempotency for that window rather than
+    // guessing. Once the migration is applied, every republish is compared
+    // in full again.
     const unchanged =
       latest !== undefined &&
       latest.checksum === checksum &&
-      latest.kind === classification.kind &&
-      latest.force === classification.force &&
-      (latest.constraintEffect ?? null) === classification.constraintEffect &&
-      (latest.statement ?? null) === classification.statement;
+      (!readAtLookup ||
+        ("kind" in latest &&
+          latest.kind === classification.kind &&
+          latest.force === classification.force &&
+          (latest.constraintEffect ?? null) ===
+            classification.constraintEffect &&
+          (latest.statement ?? null) === classification.statement));
 
     if (latest && unchanged) {
       logger.info(
@@ -152,10 +202,24 @@ export const contextRecordPublishHandler: CapabilityHandler<
           .set({ isLatest: false, updatedAt: sql`now()` })
           .where(eq(schema.contextRecordVersions.id, latest.id));
       }
+      // ROW EXCLUSIVE, same as publishMerge: this is what the INSERT below
+      // acquires anyway, and taking it before the readiness probe closes the
+      // same window -- the migration's ALTER TABLE committing between a
+      // `false` answer and a write that would otherwise name the four
+      // columns regardless.
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+      );
+      const ready = await hasColumnFresh(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
       const [versionRow] = await tx
         .insert(schema.contextRecordVersions)
         .values({
-          ...versionValues,
+          ...versionValuesBase,
+          ...(ready ? classification : {}),
           recordId: existing.id,
           versionNumber: nextVersion,
           parentVersionId: latest?.id ?? undefined,
@@ -225,9 +289,19 @@ export const contextRecordPublishHandler: CapabilityHandler<
           "[context.record.publish] Record insert returned no row.",
         );
       }
+      const versionReady = await hasColumnFresh(
+        tx,
+        CONTEXT_VERSION_CLASSIFICATION_COLUMN,
+        await ambientPlaneKey(),
+      );
       const [versionRow] = await tx
         .insert(schema.contextRecordVersions)
-        .values({ ...versionValues, recordId: recordRow.id, versionNumber: 1 })
+        .values({
+          ...versionValuesBase,
+          ...(versionReady ? classification : {}),
+          recordId: recordRow.id,
+          versionNumber: 1,
+        })
         .returning({ id: schema.contextRecordVersions.id });
       if (!versionRow) {
         throw new Error(

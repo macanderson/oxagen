@@ -11,12 +11,19 @@ const mocks = vi.hoisted(() => ({
   insertReturning: [] as Array<() => Promise<unknown>>,
   insertedValues: [] as Array<Record<string, unknown>>,
   updateSets: [] as Array<Record<string, unknown>>,
+  /** Whether migration `20260918160000` has run on this database. */
+  classificationColumns: true,
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
 
   const makeTx = () => ({
+    // The deploy-before-migrate column probe (#3486): `hasColumnFresh` reads
+    // presence from the row count, same fixture shape as
+    // context.record.promote.test.ts's.
+    execute: () =>
+      Promise.resolve(mocks.classificationColumns ? [{ "?column?": 1 }] : []),
     select: () => ({
       from: () => ({
         where: () => ({
@@ -65,6 +72,7 @@ vi.mock("./lib/onboarding", () => ({
 }));
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
+import { resetColumnProbesForTests } from "@oxagen/database";
 import { contextRecordPublishHandler } from "./context.record.publish";
 
 const CTX: CapabilityContext = {
@@ -113,6 +121,8 @@ beforeEach(() => {
   mocks.insertReturning.length = 0;
   mocks.insertedValues.length = 0;
   mocks.updateSets.length = 0;
+  mocks.classificationColumns = true;
+  resetColumnProbesForTests();
   provisional.assertWorkspaceNotProvisional.mockReset();
   provisional.assertWorkspaceNotProvisional.mockResolvedValue(undefined);
 });
@@ -270,6 +280,80 @@ describe("context.record.publish handler", () => {
       kind: "rule",
       force: "must",
       statement: INPUT.statement,
+    });
+  });
+
+  // Codex P1 on #3486: migration 20260918160000 (which added kind/force/
+  // constraintEffect/statement to context_record_versions) is applied by a
+  // manual workflow, never automatically alongside a deploy, so this
+  // handler's code can run before those columns exist on a given database.
+  describe("before migration 20260918160000 has run (deploy-before-migrate window)", () => {
+    it("registers a fresh record without naming the version's classification columns", async () => {
+      mocks.classificationColumns = false;
+      queueSelects([]); // no existing record
+      mocks.insertReturning.push(
+        () =>
+          Promise.resolve([
+            { id: "record-uuid", publicId: "ctr_new", slug: "no-bare-unwrap" },
+          ]),
+        () => Promise.resolve([{ id: "version-uuid" }]),
+      );
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out.published).toBe(true);
+      // The record row's columns predate this migration, so they are still
+      // written unconditionally.
+      expect(mocks.insertedValues[0]).toMatchObject({
+        kind: "rule",
+        force: "must",
+      });
+      // The version row's columns do not exist yet on this database.
+      expect(mocks.insertedValues[1]).not.toHaveProperty("kind");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("force");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("constraintEffect");
+      expect(mocks.insertedValues[1]).not.toHaveProperty("statement");
+    });
+
+    it("falls back to checksum-only idempotency when it cannot read the version's classification", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 2, checksum: BODY_CHECKSUM }],
+      );
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toEqual({
+        publicId: "ctr_1",
+        recordId: "no-bare-unwrap",
+        version: 2,
+        checksum: BODY_CHECKSUM,
+        published: false,
+      });
+      expect(mocks.insertedValues).toHaveLength(0);
+    });
+
+    it("publishes a new version without the classification columns when the body changed", async () => {
+      mocks.classificationColumns = false;
+      queueSelects(
+        [{ id: "record-uuid", publicId: "ctr_1", slug: "no-bare-unwrap" }],
+        [{ id: "v1-uuid", versionNumber: 1, checksum: "0".repeat(64) }],
+      );
+      mocks.insertReturning.push(() => Promise.resolve([{ id: "v2-uuid" }]));
+
+      const out = await contextRecordPublishHandler(INPUT, CTX);
+
+      expect(out).toMatchObject({ version: 2, published: true });
+      expect(mocks.insertedValues[0]).not.toHaveProperty("kind");
+      expect(mocks.insertedValues[0]).not.toHaveProperty("force");
+      // The record row is written regardless — its columns predate the
+      // migration this window is about.
+      expect(mocks.updateSets.at(-1)).toMatchObject({
+        activeVersionId: "v2-uuid",
+        kind: "rule",
+        force: "must",
+      });
     });
   });
 
