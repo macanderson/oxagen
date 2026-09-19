@@ -3,7 +3,10 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoSessionGet } from "@oxagen/oxagen/contracts/tacho.session.get";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, count, desc, eq } from "drizzle-orm";
-import { sessionReadColumns } from "./lib/tacho-gateway-columns";
+import {
+  sessionFileReadColumns,
+  sessionReadColumns,
+} from "./lib/tacho-gateway-columns";
 import { hostPublicIds, sessionSummary } from "./tacho.session.list";
 
 export const tachoSessionGetHandler: CapabilityHandler<
@@ -30,6 +33,7 @@ export const tachoSessionGetHandler: CapabilityHandler<
     // Resolved before the fan-out: `Promise.all` would otherwise start each
     // probe concurrently, and they answer from one per-process cache anyway.
     const childColumns = await sessionReadColumns(tx);
+    const fileColumns = await sessionFileReadColumns(tx);
     const [children, models, files, commands, incidents, checkpoints] =
       await Promise.all([
         tx.query.tachoSessions.findMany({
@@ -46,6 +50,13 @@ export const tachoSessionGetHandler: CapabilityHandler<
           where: eq(schema.tachoSessionFiles.sessionId, row.id),
           orderBy: [asc(schema.tachoSessionFiles.firstSeq)],
           limit: 1000,
+          // A relational read selects every column the schema declares, so this
+          // one names `observed_status` from the moment the declaration lands —
+          // and raises 42703 until the migration does. Nothing below reads it;
+          // it is projected away only so that reading a run does not go dark
+          // for the deploy-before-migrate window
+          // (discussion_r4051911079).
+          columns: fileColumns,
         }),
         tx.query.tachoSessionCommands.findMany({
           where: eq(schema.tachoSessionCommands.sessionId, row.id),

@@ -68,7 +68,9 @@ import {
 import { unlockOnboardingGate } from "./lib/onboarding";
 import {
   gatewayInvocationColumnReady,
+  sessionFileObservedStatusColumnReady,
   sessionGatewayColumnReady,
+  sessionPushesColumnReady,
 } from "./lib/tacho-gateway-columns";
 import { eventClient } from "./event-client";
 import { recordProofFrames } from "./lib/proof";
@@ -961,6 +963,12 @@ export const tachoEventsIngestHandler: CapabilityHandler<
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
     const sessionGatewayColumn = await sessionGatewayColumnReady(tx);
+    // Likewise once for the whole batch, and for the same reason. Unlike the
+    // gateway column this one is asked afresh (`hasColumnFresh`): the counter it
+    // guards is written once per batch and never backfilled, so trusting a miss
+    // recorded up to a minute ago would silently drop a push count that the
+    // database could by then have accepted.
+    const pushesColumn = await sessionPushesColumnReady(tx);
     // Which of this batch's chains the control plane's own records say it
     // served a gateway call for (#3221). One grouped read for the whole batch,
     // and skipped entirely when no promotion is possible — including while
@@ -1207,7 +1215,18 @@ export const tachoEventsIngestHandler: CapabilityHandler<
         commandsRun: sql`${schema.tachoSessions.commandsRun} + ${delta.commandsRun}`,
         networkCalls: sql`${schema.tachoSessions.networkCalls} + ${delta.networkCalls}`,
         commits: sql`${schema.tachoSessions.commits} + ${delta.commits}`,
-        pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}`,
+        // Gated, alone among these counters, because `pushes` is the one this
+        // branch's migration adds (`20260918223000`). Naming a column the
+        // database has not got raises 42703 and aborts the transaction, and
+        // this UPDATE is on the path of EVERY accepted batch — so for the whole
+        // deploy-before-migrate window (#1275, and nothing migrates production
+        // automatically) the evidence pipeline would reject every run rather
+        // than record the thirty-odd counters it can. Degrading to "no push
+        // count for these batches" is the smaller loss by a wide margin
+        // (discussion_r4051911079).
+        ...(pushesColumn
+          ? { pushes: sql`${schema.tachoSessions.pushes} + ${delta.pushes}` }
+          : {}),
         pullRequests: sql`${schema.tachoSessions.pullRequests} + ${delta.pullRequests}`,
       };
       const common = {
@@ -1874,6 +1893,10 @@ async function rollupFiles(
     }
   }
   if (byPath.size === 0) return;
+  // Asked once for the whole rollup rather than per path: the probe answers
+  // from a per-process cache, but a fresh probe is a real round trip while the
+  // migration is pending and a batch can name hundreds of files.
+  const observedStatusColumn = await sessionFileObservedStatusColumnReady(tx);
   // Identity has to hold across batches, not only inside one.
   //
   // The conflict key on this table is (session_id, path), so two batches
@@ -1942,7 +1965,12 @@ async function rollupFiles(
         // and stays honest: nobody looked.
         linesAdded: entry.observed?.linesAdded ?? 0,
         linesRemoved: entry.observed?.linesRemoved ?? 0,
-        observedStatus: entry.observed?.status,
+        // Omitted rather than null while `20260918230000` is pending: the
+        // column does not exist, and naming it in the INSERT would abort the
+        // transaction and take the whole batch with it.
+        ...(observedStatusColumn
+          ? { observedStatus: entry.observed?.status }
+          : {}),
         firstSeq: entry.first,
         lastSeq: entry.last,
         createdAt: now,
@@ -2000,7 +2028,12 @@ async function rollupFiles(
                 // Assigned, not kept: the latest observation is the current
                 // condition of the path, and a file created and then deleted
                 // is deleted.
-                observedStatus: entry.observed.status,
+                //
+                // Gated on the same answer as the INSERT above, so a batch
+                // either writes the verdict on both branches or on neither.
+                ...(observedStatusColumn
+                  ? { observedStatus: entry.observed.status }
+                  : {}),
               }),
           updatedAt: now,
         },
@@ -2040,6 +2073,18 @@ async function refreshSessionTitle(
     ?.context?.git_branch;
   if (place === undefined && branch === undefined) return;
 
+  // A predicate over a column the database has not got fails the SELECT just as
+  // an INSERT of it would, and this SELECT runs on every accepted batch. So the
+  // observed half of the condition is dropped while `20260918230000` is
+  // pending: the title is then derived from attested writes alone, which is
+  // what it was derived from before this branch, and it becomes right again on
+  // the first batch after the migration lands, because the derivation re-runs
+  // (discussion_r4051911079).
+  const observedStatusColumn = await sessionFileObservedStatusColumnReady(tx);
+  const changed = observedStatusColumn
+    ? sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
+              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`
+    : sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0`;
   const [files, commands] = await Promise.all([
     tx
       .select({ count: sql<number>`count(*)::int` })
@@ -2052,8 +2097,7 @@ async function refreshSessionTitle(
           // the reconciliation gave it. Counting the attested columns alone
           // titled a run that plainly changed files as though it had
           // changed none, and fell back to the command count.
-          sql`${schema.tachoSessionFiles.writes} + ${schema.tachoSessionFiles.edits} + ${schema.tachoSessionFiles.deletes} > 0
-              OR ${schema.tachoSessionFiles.observedStatus} IN ('added', 'modified', 'deleted', 'renamed')`,
+          changed,
         ),
       ),
     tx

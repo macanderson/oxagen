@@ -896,6 +896,39 @@ export const SESSION_GATEWAY_COLUMN = {
 } as const;
 
 /**
+ * `tacho.sessions.pushes`, added by migration `20260918223000`.
+ *
+ * Named here for the same probe the gateway columns use, and for the same
+ * reason: `deploy-node` ships on merge while production migrations are applied
+ * by hand (#1275), so between the two this schema declares a column the
+ * database does not have. A counter increment naming it raises 42703 and
+ * aborts the transaction, which on this table means every accepted Tacho batch
+ * is rejected — the evidence pipeline drops the window's runs outright instead
+ * of recording what it can (discussion_r4051911079).
+ */
+export const SESSION_PUSHES_COLUMN = {
+  schema: "tacho",
+  table: "sessions",
+  column: "pushes",
+} as const;
+
+/**
+ * `tacho.session_files.observed_status`, added by migration `20260918230000`.
+ *
+ * Reached from three directions, which is why one ref serves all of them: the
+ * file rollup writes it, the rollup's conflict branch assigns it, and the
+ * title derivation reads it inside a WHERE. The WHERE is the one worth naming
+ * — a predicate over a missing column fails the enclosing statement just as an
+ * INSERT of it does, so a run's title cannot be derived from a column the
+ * database has not got yet.
+ */
+export const SESSION_FILE_OBSERVED_STATUS_COLUMN = {
+  schema: "tacho",
+  table: "session_files",
+  column: "observed_status",
+} as const;
+
+/**
  * Which of a host's daemon chains the control plane has served a gateway call
  * for, and when it last did.
  *
