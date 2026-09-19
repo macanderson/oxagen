@@ -55,7 +55,11 @@ export async function handleExportDownload(
     // An id that is not this person's is not_found, the same answer as an id
     // that does not exist: distinguishing them would say whether a stranger's
     // export id is real.
-    return refusal(404, "not_found");
+    if (read.reason === "not_found") return refusal(404, "not_found");
+    // Everything else is the read failing, not the export missing. Postgres or
+    // the kernel being down must not tell someone their archive is gone: a 404
+    // is permanent and says do not come back, and the bundle is still there.
+    return refusal(503, "unavailable");
   }
   // Still being written, or written and then failed. Either way there is
   // nothing to hand over yet.

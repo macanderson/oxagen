@@ -53,7 +53,7 @@ export function SheetDialog({
   tabs?: ReactNode;
   /** Actions drawn before the Close button; the primary action goes here. */
   footer?: ReactNode;
-  /** What the dismiss button says when "Close" is not the word — "Cancel" beside a Save. */
+  /** What the dismiss button says when "Close" is not the word, such as "Cancel" beside a Save. */
   closeLabel?: string;
   /** The mockup's dialog width (600px) for editors that need two columns. */
   wide?: boolean;

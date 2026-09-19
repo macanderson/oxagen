@@ -32,7 +32,7 @@ type ShellState = {
   setAccountOpen: (open: boolean) => void;
   accountTab: AccountTab;
   setAccountTab: (tab: AccountTab) => void;
-  /** Open the Account dialog on one of its tabs — the user menu's deep links. */
+  /** Open the Account dialog on one of its tabs: the user menu's deep links. */
   openAccount: (tab: AccountTab) => void;
   /**
    * The avatar editor is its own dialog (mockup `avatarDlg`), opened from the

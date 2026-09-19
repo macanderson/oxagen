@@ -23,7 +23,7 @@ Request a machine-readable ZIP archive of personal or organizational data under 
 |---|---|---|
 | `exportId` | `string (UUID)` | Stable ID for polling. |
 | `status` | `"queued" \| "processing" \| "ready" \| "failed"` | Always `"queued"` on initial response. |
-| `downloadUrl` | — | Not returned. The archive is written `access: "private"`, and the storage contract forbids rendering a private object's url, so the bytes come from the authenticated download route instead. See `privacy.data.export.status`. |
+| `downloadUrl` | not returned |  The archive is written `access: "private"`, and the storage contract forbids rendering a private object's url, so the bytes come from the authenticated download route instead. See `privacy.data.export.status`. |
 
 ## ZIP archive contents
 

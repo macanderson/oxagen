@@ -105,10 +105,20 @@ describe("the gates", () => {
   // refuses there. The route answers not_found either way, so a refusal never
   // says whether a stranger's export id is real.
   it("refuses another person's export without touching storage (negative)", async () => {
-    readStatus.mockResolvedValue({ ok: false, reason: "unavailable" });
+    readStatus.mockResolvedValue({ ok: false, reason: "not_found" });
     const response = await call();
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ code: "not_found" });
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  // A read that failed is not an export that is missing. A 404 is permanent
+  // and tells the person not to come back; the archive is still there.
+  it("answers 503, not 404, when the read is unavailable (negative)", async () => {
+    readStatus.mockResolvedValue({ ok: false, reason: "unavailable" });
+    const response = await call();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: "unavailable" });
     expect(get).not.toHaveBeenCalled();
   });
 
