@@ -17,7 +17,7 @@
 // A live run re-reads itself every few seconds while the viewer follows its
 // head and the tab is visible. Scrubbing back stops following, and "go live"
 // resumes it; a sealed or halted run is never re-read.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   useCallback,
@@ -55,6 +55,7 @@ import {
   type TranscriptStep,
   type TranscriptTurn,
 } from "./transcript-model";
+import { useFormatter } from "@/ui/formatter";
 
 type Place = { org: string; ws: string; runId: string };
 

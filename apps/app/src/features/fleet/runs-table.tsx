@@ -1,7 +1,8 @@
 // The runs table: one list_runs page, newest first, with links to the next
 // page and back to the newest. A value the store did not record reads "not
 // recorded". The empty state tells a new workspace how its first run arrives.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useFormatter } from "@/ui/formatter";
 import type { RunPage } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";

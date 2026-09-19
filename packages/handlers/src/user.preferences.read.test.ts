@@ -89,7 +89,8 @@ describe("userPreferencesReadHandler (@oxagen/handlers)", () => {
     expect(result.pendingPromptBehavior).toBe("queue");
     expect(result.defaultTextTier).toBeNull();
     expect(result.defaultTextModel).toBeNull();
-    expect(result.timezone).toBe("UTC");
+    // Pacific, not UTC: the default the column and the app share.
+    expect(result.timezone).toBe("America/Los_Angeles");
     expect(result.language).toBe("en");
     expect(result.theme).toBe("system");
   });
