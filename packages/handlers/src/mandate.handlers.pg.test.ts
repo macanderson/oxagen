@@ -1230,5 +1230,28 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.organizations.id, enterpriseOrgId)),
       );
     });
+
+    it("list: an agent-run call never runs the human workspace-role fallback", async () => {
+      // Mirrors the enterprise custom-grant case above, but for an agent
+      // principal on the shared fixture org's non-enterprise tier.
+      // checkIAM never gives an agent principal the tier_gate bypass
+      // (packages/iam/src/check-iam.ts): an agent run resolves the full
+      // delegation-ceiling resolver at every tier, before the tier check
+      // is even consulted, so an agent explicitly authorized for this
+      // capability already cleared the kernel the same way an enterprise
+      // custom grant does. readerFilter's workspace-role fallback exists
+      // only to close the gap the tier_gate bypass leaves for human/
+      // service calls; running it for an agent-run call would refuse an
+      // agent the kernel already admitted (#3440 follow-on finding).
+      const agentUserId = randomUUID();
+      doubles.roles.set(agentUserId, { org: null, workspace: null });
+      const agentCtx = {
+        ...ctx(agentUserId),
+        agentRun: { principalKind: "agent" },
+      } as unknown as CapabilityContext;
+      await expect(
+        inScope(() => mandateListHandler({ limit: 50 }, agentCtx)),
+      ).resolves.toMatchObject({ items: [] });
+    });
   },
 );

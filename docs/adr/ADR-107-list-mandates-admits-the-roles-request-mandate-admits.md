@@ -116,6 +116,18 @@ naming the capability; enforcing the built-in workspace roles unconditionally
 would have refused that custom grant, an access-control regression the first
 version of this check introduced and a follow-up fixed the same day.
 
+The check is also skipped outright for an agent-run call, on any tier.
+`checkIAM` never gives an agent principal the non-enterprise tier gate's
+bypass: an agent run always resolves the full delegation-ceiling resolver
+(`packages/iam/src/check-iam.ts`), so an agent explicitly authorized for this
+capability has already cleared the kernel by the time it reaches this
+handler, on Free/Build/Scale exactly as on enterprise. The first version of
+this check ran the workspace-role fallback for every non-enterprise call
+regardless of principal kind, which refused an authorized agent the kernel
+had already admitted, the human/service equivalent of the custom-grant
+regression above; a follow-up excluded `ctx.agentRun?.principalKind ===
+"agent"` from the fallback the same way.
+
 ## Consequences
 
 - A workspace Owner or Member can now read the mandates of the agents they

@@ -246,6 +246,17 @@ export async function assertToolsDeclareMeasures(
  * gave (#3440 follow-on finding). Every caller who reaches this point has
  * already cleared the kernel's real check on that tier, so they take the
  * narrowed-reader scope without a second role assertion.
+ *
+ * The same skip applies to an agent-run call regardless of tier. `checkIAM`
+ * never gives an agent principal the non-enterprise `tier_gate` bypass
+ * (`packages/iam/src/check-iam.ts`'s agent-run branch runs the full
+ * delegation-ceiling resolver at every tier, before the tier check is even
+ * consulted): an agent explicitly authorized for this capability, whose
+ * invoking human holds a direct or custom grant rather than a built-in
+ * workspace role, already cleared the kernel on a Free/Build/Scale org the
+ * same way an enterprise custom grant clears it. Re-running the workspace
+ * check here for an agent run would refuse an authorized agent call the
+ * kernel already allowed (#3440 follow-on finding).
  */
 export async function readerFilter(
   ctx: CheckedContext,
@@ -260,13 +271,19 @@ export async function readerFilter(
       throw err;
     }
   }
-  const tierResolution = await resolveOrgTierDetailed(ctx.orgId);
-  if (!tierResolution.established || !canAccessACL(tierResolution.tier)) {
-    // Non-enterprise (or an org tier nothing established, which fails
-    // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
-    // admitted every signed-in user regardless of role, so this is the
-    // only place a Viewer is actually refused.
-    await assertOrgRole(actingCtx, { org: [], workspace: ["Owner", "Member"] });
+  const isAgentRun = ctx.agentRun?.principalKind === "agent";
+  if (!isAgentRun) {
+    const tierResolution = await resolveOrgTierDetailed(ctx.orgId);
+    if (!tierResolution.established || !canAccessACL(tierResolution.tier)) {
+      // Non-enterprise (or an org tier nothing established, which fails
+      // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
+      // admitted every signed-in human/service principal regardless of
+      // role, so this is the only place a Viewer is actually refused.
+      await assertOrgRole(actingCtx, {
+        org: [],
+        workspace: ["Owner", "Member"],
+      });
+    }
   }
   // assertOrgRole refused a call with no acting user; on an enterprise org
   // that ran the full resolver, reaching this line already means the

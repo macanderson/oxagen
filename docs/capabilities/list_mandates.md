@@ -63,6 +63,17 @@ roles on an established enterprise tier, so they are not refused. They take
 the same narrowed-reader scope a workspace Owner/Member gets (agents they
 created, mandates they requested), never the unnarrowed office view.
 
+The same skip applies to an agent-run call, on any tier. IAM's tier gate
+only bypasses the resolver for a human or service principal; an agent
+principal always runs the full delegation-ceiling resolver
+(`packages/iam/src/check-iam.ts`), so an agent explicitly authorized for
+this capability has already cleared the kernel by the time it reaches
+`readerFilter`. The workspace-role check exists only to enforce the roles
+`defaultRoles` cannot enforce on a non-enterprise tier for a human/service
+call; running it for an agent run would refuse an agent the kernel already
+admitted, so `readerFilter` skips it there too and returns the same
+narrowed-reader scope.
+
 ## Errors
 
 | code | reason | meaning |
