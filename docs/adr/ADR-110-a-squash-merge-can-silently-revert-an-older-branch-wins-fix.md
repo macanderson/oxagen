@@ -1,4 +1,4 @@
-# ADR-109: A squash merge against a stale base gets an advisory check, not a ruleset flip
+# ADR-110: A squash merge against a stale base gets an advisory check, not a ruleset flip
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
@@ -7,9 +7,10 @@
   merge that lost it); #3234 (the restore); ADR-046 (per-commit CI concurrency
   on `main`, the reason a strict-status-checks flip has a real merge-speed
   cost)
-- **Numbering:** 109. ADR-102 through ADR-108 are taken; several parallel PRs
-  in the same P1 batch independently drafted colliding numbers and were
-  renumbered at merge time as each collision surfaced.
+- **Numbering:** 110. ADR-102 through ADR-108 were already taken when this was
+  drafted; several parallel PRs in the same P1 batch independently drafted
+  colliding numbers, this one first claimed 109 and was renumbered to 110
+  once #3467's independently-drafted ADR-109 was found to have opened first.
 - **Delivered by:** `tools/scripts/check-stale-merge-base.mjs` (the advisory
   check, wired into `.github/workflows/pipeline.yml`'s `checks` job);
   `tools/scripts/check-machine-key-purpose-coverage.mjs` (the narrower guard,

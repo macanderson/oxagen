@@ -45,11 +45,11 @@ If `gate` fails on any step, fix it before requesting review. The CI gate is ide
 
 ### Stale merge base (#3237)
 
-A squash merge applies your branch's diff against its MERGE BASE (where it split from `main`), not against `main`'s current tip. A branch cut before a later PR's fix landed can carry the old copy of any file that fix touched, and if the merge resolves without a textual conflict, GitHub merges the old copy over the newer one silently. This happened on 2026-09-17: a squash merge deleted another PR's fix and its regression test with every check green, and broke `oxagen login` in production for eight hours (issue #3237, ADR-109).
+A squash merge applies your branch's diff against its MERGE BASE (where it split from `main`), not against `main`'s current tip. A branch cut before a later PR's fix landed can carry the old copy of any file that fix touched, and if the merge resolves without a textual conflict, GitHub merges the old copy over the newer one silently. This happened on 2026-09-17: a squash merge deleted another PR's fix and its regression test with every check green, and broke `oxagen login` in production for eight hours (issue #3237, ADR-110).
 
 `pipeline.yml`'s `checks` job runs `tools/scripts/check-stale-merge-base.mjs` as an advisory step: when your branch is behind `main`, it names every file changed on both sides since the merge base and flags any whose copy is missing content `main` added there since. It never blocks the merge, so treat a flag as a reason to `git rebase origin/main` (or merge `main` in) before merging, not as a failure to work around.
 
-Flipping GitHub's "require branches to be up to date before merging" setting (`strict_required_status_checks_policy` on the `main` ruleset) closes the gap completely, but it is a live repository setting with a real merge-speed cost across every session working this tree, so it is a maintainer decision, not something a PR changes. ADR-109 has the full reasoning and how to make that change if you are the maintainer deciding to.
+Flipping GitHub's "require branches to be up to date before merging" setting (`strict_required_status_checks_policy` on the `main` ruleset) closes the gap completely, but it is a live repository setting with a real merge-speed cost across every session working this tree, so it is a maintainer decision, not something a PR changes. ADR-110 has the full reasoning and how to make that change if you are the maintainer deciding to.
 
 Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` (the file the 2026-09-17 incident actually broke) branches on every scope `purpose` value a live API key can carry, so that file cannot lose a purpose branch again regardless of how it happens.
 
