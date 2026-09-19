@@ -80,6 +80,7 @@
       "allow": "allow",
       "deny": "deny",
       "anyTarget": "no target rule",
+      "noPattern": "no pattern",
       "tools": "Tools",
       "approval": "Approval",
       "approvalAbove": "A person answers above {value} on {measure}.",

@@ -27,9 +27,6 @@ import { useMeasureText } from "@/ui/measure";
 const term = "text-xs font-medium text-muted-foreground";
 const value = "text-sm text-foreground";
 
-/** What an empty allow or deny list reads as: no pattern, and so no rule of that side. */
-const NONE = "none";
-
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
@@ -140,13 +137,17 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
                   <span>
                     {t("allow")}{" "}
                     <span className={`${mono} break-all`}>
-                      {rule.allow.length === 0 ? NONE : rule.allow.join(", ")}
+                      {rule.allow.length === 0
+                        ? t("noPattern")
+                        : rule.allow.join(", ")}
                     </span>
                   </span>
                   <span>
                     {t("deny")}{" "}
                     <span className={`${mono} break-all`}>
-                      {rule.deny.length === 0 ? NONE : rule.deny.join(", ")}
+                      {rule.deny.length === 0
+                        ? t("noPattern")
+                        : rule.deny.join(", ")}
                     </span>
                   </span>
                 </span>
