@@ -11,15 +11,16 @@ import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.g
 import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, requireViewer } = vi.hoisted(() => ({
+const { invoke, requireViewer, captureError } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
   requireViewer: vi.fn(),
+  captureError: vi.fn(),
 }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
   invoke,
 }));
-vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -87,6 +88,7 @@ beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
+  captureError.mockReset();
 });
 
 describe("haltRun", () => {
@@ -295,19 +297,22 @@ describe("bisectRuns", () => {
       keyB: null,
       aligned: 431,
     });
-    expect(
-      await bisectRuns("acme", "core-platform", RUN, "arun_9f2a"),
-    ).toEqual({
-      ok: true,
-      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
-    });
+    expect(await bisectRuns("acme", "core-platform", RUN, "arun_9f2a")).toEqual(
+      {
+        ok: true,
+        value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
+      },
+    );
   });
 
   it("refuses an empty second run, and this run compared with itself, before the kernel (negative)", async () => {
     for (const other of ["", "   ", RUN]) {
-      expect(
-        await bisectRuns("acme", "core-platform", RUN, other),
-      ).toEqual({ ok: false, reason: "invalid", code: "run_b", field: "runB" });
+      expect(await bisectRuns("acme", "core-platform", RUN, other)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "run_b",
+        field: "runB",
+      });
     }
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -430,4 +435,14 @@ describe("readTranscriptPage", () => {
       field: "after",
     });
   });
+
+  // A page whose mapped shape the app's own `RunTranscript` schema refuses
+  // cannot be produced through this file's fake boundary: `kernelRead`'s real
+  // `contract.output.safeParse` already validates the mocked `invoke` result
+  // against the (`.strict()`, identically-shaped) contract schema before this
+  // module ever sees it, so a value that clears that gate always clears the
+  // app's looser view schema too. The `captureError` report on that branch is
+  // proved directly against `data/live/runs.ts`'s `view()` helper instead
+  // (`data/live/runs.test.ts`), which is the same defensive parse this file's
+  // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
 });

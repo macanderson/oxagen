@@ -22,6 +22,7 @@ import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_DEFAULT,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import { moneyFromMicros } from "@/data/contracts/money";
 import {
@@ -181,7 +182,12 @@ function asActionResult<T>(read: Read<T>): ActionResult<T> {
       };
     case "error":
       return read.code === "invalid_input"
-        ? { ok: false, reason: "invalid", code: "invalid_cursor", field: "after" }
+        ? {
+            ok: false,
+            reason: "invalid",
+            code: "invalid_cursor",
+            field: "after",
+          }
         : { ok: false, reason: "unavailable", code: read.code };
   }
 }
@@ -224,9 +230,14 @@ export async function readTranscriptPage(
   });
   if (!read.ok) return asActionResult(read);
   const view = RunTranscript.safeParse(toTranscriptPage(read.value));
-  return view.success
-    ? { ok: true, value: view.data }
-    : { ok: false, reason: "unavailable", code: "record_unmappable" };
+  if (view.success) return { ok: true, value: view.data };
+  captureError({
+    error: view.error,
+    source: "app",
+    orgId: ctx.orgId,
+    context: "readTranscriptPage record_unmappable",
+  });
+  return { ok: false, reason: "unavailable", code: "record_unmappable" };
 }
 
 /**
