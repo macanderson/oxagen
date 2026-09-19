@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { isHandlerError } from "@oxagen/oxagen";
+import { isHandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // The handler issues one read for a personal export:
@@ -53,7 +53,12 @@ const authz = vi.hoisted(() => ({
     roleGrants: [] as unknown[],
     policies: [] as unknown[],
   },
-  calls: [] as { capability: string; orgId: string; userId: string | null }[],
+  calls: [] as {
+    capability: string;
+    orgId: string;
+    workspaceId: string;
+    userId: string | null;
+  }[],
 }));
 
 vi.mock("@oxagen/iam", () => ({
@@ -61,11 +66,13 @@ vi.mock("@oxagen/iam", () => ({
   fetchAuthz: (args: {
     capability: string;
     orgId: string;
+    workspaceId: string;
     userId: string | null;
   }) => {
     authz.calls.push({
       capability: args.capability,
       orgId: args.orgId,
+      workspaceId: args.workspaceId,
       userId: args.userId,
     });
     return Promise.resolve(authz.value);
@@ -80,11 +87,15 @@ import {
 const EXPORT_ID = "550e8400-e29b-41d4-a716-446655440000";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const ORG_ID = "22222222-2222-4222-8222-222222222222";
+/** The workspace the download arrives in — both routes are under a slug. */
+const READING_WS = "33333333-3333-4333-8333-333333333333";
+/** The workspace the export was queued through, stored on the row. */
+const QUEUED_WS = "66666666-6666-4666-8666-666666666666";
 
 function ctx(overrides: Partial<CapabilityContext> = {}): CapabilityContext {
   return {
     orgId: ORG_ID,
-    workspaceId: "33333333-3333-4333-8333-333333333333",
+    workspaceId: READING_WS,
     userId: USER_ID,
     ...overrides,
   } as CapabilityContext;
@@ -125,6 +136,9 @@ function personalRow(overrides: Record<string, unknown> = {}) {
   return {
     id: EXPORT_ID,
     scope: "user",
+    // The scope that governed the queue, which is not the scope the download
+    // arrives in. Every org test below reads this row from READING_WS.
+    workspaceId: QUEUED_WS,
     status: "ready",
     exportUrl: "privacy-exports/org/exp.zip",
     completedAt: null,
@@ -420,14 +434,51 @@ describe("an export_data deny written after the archive was queued", () => {
   // The question asked is `export_data`'s, in the organisation that governed
   // the export, for the person reading it. Asking about `get_export_status`
   // instead would miss the deny entirely: no rule is keyed to that name.
-  it("asks about export_data in the governed organisation", async () => {
+  //
+  // And it is asked in the workspace the export was QUEUED through, not the
+  // one the download arrives in. Both download routes are mounted under a
+  // workspace slug, so a question put to `ctx.workspaceId` let a deny written
+  // where the export was queued be evaded by opening the archive from a
+  // sibling workspace of the same organization (discussion_r4052100710).
+  it("asks about export_data in the governed organisation and the queued workspace", async () => {
     readyOrgExportForAnOwner();
     denyExportData();
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
       () => undefined,
     );
     expect(authz.calls).toEqual([
-      { capability: "export_data", orgId: ORG_ID, userId: USER_ID },
+      {
+        capability: "export_data",
+        orgId: ORG_ID,
+        workspaceId: QUEUED_WS,
+        userId: USER_ID,
+      },
+    ]);
+    // The workspace the reader is in is not the workspace the question went to.
+    expect(QUEUED_WS).not.toBe(READING_WS);
+  });
+
+  // A row written before the column existed, or by a request made in no
+  // workspace, records no workspace. An org-wide archive with no recorded
+  // workspace is an org-scope thing: the question goes to the org-only
+  // sentinel, where an org-level rule still binds it and no workspace's rules
+  // can unlock it.
+  it("asks at org scope for a row that records no workspace", async () => {
+    queueSelects(
+      [personalRow({ scope: "org", workspaceId: null })],
+      [{ role: "owner" }],
+    );
+    denyExportData();
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
+      () => undefined,
+    );
+    expect(authz.calls).toEqual([
+      {
+        capability: "export_data",
+        orgId: ORG_ID,
+        workspaceId: ORG_ONLY_WORKSPACE_ID,
+        userId: USER_ID,
+      },
     ]);
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { isHandlerError } from "@oxagen/oxagen";
+import { isHandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import type { CapabilityContext } from "@oxagen/oxagen";
 
 // ── hoisted stubs ─────────────────────────────────────────────────────────────
@@ -9,6 +9,8 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 // For scope="user" it skips step 1.
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
+  /** Every row handed to insert().values(), so the stored scope is assertable. */
+  inserted: [] as Record<string, unknown>[],
   insertReturning: vi.fn<() => Promise<unknown>>(),
   eventSend: vi.fn<(arg: unknown) => Promise<unknown>>(),
   emitSecurityEvent: vi.fn<(arg: unknown) => void>(),
@@ -62,7 +64,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       }),
     }),
     insert: () => ({
-      values: () => ({ returning: () => mocks.insertReturning() }),
+      values: (row: Record<string, unknown>) => {
+        mocks.inserted.push(row);
+        return { returning: () => mocks.insertReturning() };
+      },
     }),
   });
   return {
@@ -102,6 +107,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectResults.length = 0;
+    mocks.inserted.length = 0;
     mocks.insertReturning.mockResolvedValue([{ id: "exp_1" }]);
     authz.value = {
       principal: null,
@@ -260,5 +266,33 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     // Nothing queued, so no archive is ever assembled to be downloaded.
     expect(mocks.insertReturning).not.toHaveBeenCalled();
     expect(mocks.eventSend).not.toHaveBeenCalled();
+  });
+
+  // The scope that governed the queue is part of the record of the queue. The
+  // download re-asks `export_data`'s policy minutes later from a route mounted
+  // under a workspace slug, so without this the question would go to whichever
+  // workspace the browser is then in, and a deny written here would be evaded
+  // from a sibling workspace of the same organization
+  // (discussion_r4052100710).
+  it("stores the workspace the request was governed in", async () => {
+    queueSelects([{ role: "owner" }]);
+    await privacyDataExportHandler({ scope: "org", orgId: "org_A" }, CTX);
+    expect(mocks.inserted).toHaveLength(1);
+    expect(mocks.inserted[0]).toMatchObject({
+      orgId: "org_A",
+      workspaceId: "ws_1",
+      scope: "org",
+    });
+  });
+
+  // The org-only sentinel (ADR-068) names no workspace, so it is stored as
+  // none rather than as a workspace id that no workspace answers to. The
+  // status handler reads that back as org scope, which is the same decision.
+  it("stores no workspace for a request made in the org-only scope", async () => {
+    await privacyDataExportHandler(
+      { scope: "user" },
+      { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+    );
+    expect(mocks.inserted[0]).toMatchObject({ workspaceId: null });
   });
 });

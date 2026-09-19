@@ -39,6 +39,19 @@ export const privacyExportRequests = privacySchema.table(
     userId: uuid("user_id").notNull(),
     /** Org context — always set; for user-scope exports this is their primary org. */
     orgId: uuid("org_id").notNull(),
+    /**
+     * The workspace whose rules governed the request, as the kernel saw it.
+     *
+     * The download re-asks `export_data`'s policy, and both download routes are
+     * mounted under a workspace slug, so without this the question would be put
+     * to whichever workspace the browser is in — and a deny written where the
+     * export was queued would be evaded from a sibling workspace.
+     *
+     * Null on rows written before the column existed, and on a request made in
+     * no workspace. A null reads as org scope: an org-level deny still binds,
+     * and no workspace's rules can unlock the archive.
+     */
+    workspaceId: uuid("workspace_id"),
     scope: privacyRequestScopeEnum("scope").notNull(),
     status: privacyExportStatusEnum("status").notNull().default("queued"),
     /** Signed Vercel Blob URL — set when status transitions to "ready". */
