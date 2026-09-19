@@ -157,15 +157,18 @@ regression above; a follow-up excluded `ctx.agentRun?.principalKind ===
 - The API route, MCP tool and CLI carry no capability-specific role logic
   (the kernel enforces `defaultRoles` centrally), so no other surface needed
   a change beyond these two contracts.
-- **Existing enterprise orgs need `pnpm db:seed-iam` re-run in production.**
-  A contract's `defaultRoles` only takes effect for an already-provisioned
-  enterprise org once its role grants are materialized into
-  `iam.role_grants`; `db:seed-iam` does that (idempotently, via
-  `ON CONFLICT DO NOTHING`) but is not part of `db:migrate` or any deploy
-  workflow, so it is a genuine external action this PR cannot perform from
-  its own commits. A non-enterprise org is unaffected either way: `checkIAM`
-  gives it an unconditional allow, so this fix already applies there the
-  moment the deploy lands.
+- **A migration backfills the grants for orgs that already exist.** An
+  enterprise org reads its permissions from `iam.role_grants`, and
+  provisioning writes those rows once, when the org is created. A change to
+  a contract's `defaultRoles` therefore reaches new orgs only. The
+  production migration path runs `atlas migrate apply` and never runs
+  `pnpm db:seed-iam`. Migration `20260920120000_backfill_mandate_read_grants.sql`
+  writes the six grants this decision added (workspace Owner and Member on
+  `list_mandates` and `get_mandate`, org Billing and Compliance on
+  `request_mandate`) for every org that holds the system roles. It uses the
+  same deterministic public ids as `db:seed-iam`, and it skips a role that
+  already holds any grant on the capability. A non-enterprise org never
+  reads these rows: `checkIAM` allows it before it looks.
 
 ## Alternatives considered
 
