@@ -134,10 +134,17 @@ remove a measure that already has reserved or settled movements, and once
 it is gone from `limits` there is no current authority row left to read a
 kind from. `tools.mandate_ledger.measure_kind` (migration
 `20260919200000_mandate_ledger_measure_kind.sql`) closes this the same way
-the limit itself is closed: `reserve` stamps it from the mandate's own
-resolved `limits[measure].kind` at write time, and `settle`/`release` carry
-forward whatever the reservation they close was stamped with, never
-re-deriving it. The app's mapper, `toMandateDetail` in
+the limit itself is closed, with one difference: `reserve` stamps it from
+the live tool declaration `decideMandate` already reads for that call
+("count" for the built-in `calls` measure, `measureKindOf(declaration.type)`
+for everything else), never from `mandate.limits[measure].kind`. For a
+legacy measure the stored `kind` is only `legacyMeasureKindGuess`'s
+fallback, not a fact; stamping the guess onto a ledger row would turn it
+into a durable one no later mandate write could correct, so the ledger's
+answer is the declaration's, the same source of truth the limit's own
+`kind` is stamped from at write time (§2). `settle`/`release` carry forward
+whatever the reservation they close was stamped with, never re-deriving it.
+The app's mapper, `toMandateDetail` in
 `apps/app/src/data/live/mappers/mandates.ts`, reads a ledger row's own
 `measureKind` first; only a row written before this column existed falls
 back to the current `authority` entry for that measure, then to

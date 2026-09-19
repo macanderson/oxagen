@@ -7,10 +7,13 @@
 -- ADR-108 exists to close (a count legitimately denominated in a
 -- currency-code unit reads as money).
 --
--- Stamped at write time on every `reserve` and `settle`/`release` row from
--- the mandate's own resolved `kind` for that measure, never re-derived.
--- Null only on a row written before this column existed; a reader falls
--- back to `legacyMeasureKindGuess` for those, the same fallback
--- `withResolvedKinds` already documents for a stored limit with no kind.
+-- Stamped at write time: `reserve` takes it from the live tool declaration
+-- the call is decided against, never from the mandate's own stored
+-- `limits[measure].kind` (a legacy row's stored kind is only a guess, not a
+-- fact worth making durable), and `settle`/`release` carry the reservation
+-- row's stamp forward unchanged. Null only on a row written before this
+-- column existed; a reader falls back to `legacyMeasureKindGuess` for those,
+-- the same fallback `withResolvedKinds` already documents for a stored
+-- limit with no kind.
 ALTER TABLE "tools"."mandate_ledger"
   ADD COLUMN IF NOT EXISTS "measure_kind" text;
