@@ -77,9 +77,23 @@ const keyByName = new Map<string, string>(
 
 export interface FakePriceStore {
   rows: PriceRow[];
+  /**
+   * `cost.price_book_initializations`, keyed by `book` as the primary key is.
+   * The sync reads this to learn which catalogs answered at initialization,
+   * and writes one row on the run that creates the book.
+   */
+  initializations: PriceRow[];
   /** Every statement the executor ran, in order. */
   log: {
-    op: "select" | "update" | "insert" | "upsert" | "lock" | "delete";
+    op:
+      | "select"
+      | "update"
+      | "insert"
+      | "upsert"
+      | "lock"
+      | "delete"
+      | "select_initialization"
+      | "insert_initialization";
     sql?: string;
   }[];
   /** Runs when a lock is taken, standing in for the wait on another holder. */
@@ -87,11 +101,18 @@ export interface FakePriceStore {
 }
 
 export function makeFakePriceStore(): FakePriceStore {
-  return { rows: [], log: [] };
+  return { rows: [], initializations: [], log: [] };
 }
 
+/** Column object → the row's JS key, for `cost.price_book_initializations`. */
+const initKeyByColumn = new Map<unknown, string>(
+  Object.entries(getTableColumns(schema.priceBookInitializations)).map(
+    ([k, c]) => [c, k],
+  ),
+);
+
 function valueOf(row: PriceRow, col: unknown): unknown {
-  const key = keyByColumn.get(col);
+  const key = keyByColumn.get(col) ?? initKeyByColumn.get(col);
   if (key === undefined)
     throw new Error("fake price tx: unknown column in a condition");
   return row[key];
@@ -366,6 +387,26 @@ export function fakePriceExecutor(store: FakePriceStore) {
   return {
     select: () => ({
       from: (table: unknown) => {
+        // The initialization record: one row per book, read by primary key.
+        // Modelled as its own read because it is its own table, and a fake
+        // that answered it out of `price_entries` would prove nothing about
+        // the fact this record exists to hold.
+        if (table === schema.priceBookInitializations) {
+          let initRows = store.initializations.slice();
+          const initChain = {
+            where: (cond: PriceCond) => {
+              initRows = initRows.filter((r) => matches(r, cond));
+              return initChain;
+            },
+            then: <R>(onFulfilled: (v: PriceRow[]) => R) => {
+              store.log.push({ op: "select_initialization" });
+              return Promise.resolve(initRows.map((r) => ({ ...r }))).then(
+                onFulfilled,
+              );
+            },
+          };
+          return initChain;
+        }
         assertTable(table);
         let rows = store.rows.slice();
         const chain = {
@@ -384,6 +425,42 @@ export function fakePriceExecutor(store: FakePriceStore) {
         };
         return chain;
       },
+    }),
+
+    // The one INSERT issued through the builder rather than raw SQL: the
+    // initialization record, `ON CONFLICT DO NOTHING` on its primary key so a
+    // second first-sync cannot overwrite the first's view of which catalogs
+    // answered.
+    insert: (table: unknown) => ({
+      values: (row: PriceRow) => ({
+        onConflictDoNothing: () =>
+          thenable(() => {
+            if (table !== schema.priceBookInitializations)
+              throw new Error(
+                "fake price tx: unexpected insert() target; only the initialization record is written this way",
+              );
+            store.log.push({ op: "insert_initialization" });
+            if (row.book !== "list")
+              throw new Error(
+                "fake price tx: violates price_book_initializations_book_check",
+              );
+            if (!(row.initializedAt instanceof Date))
+              throw new Error(
+                "fake price tx: price_book_initializations.initialized_at is NOT NULL",
+              );
+            if (store.initializations.some((r) => r.book === row.book))
+              return [];
+            store.initializations.push({
+              createdAt: fakeClock.now ?? new Date(),
+              updatedAt: fakeClock.now ?? new Date(),
+              createdById: null,
+              updatedById: null,
+              completedCatalogs: [],
+              ...row,
+            });
+            return [];
+          }),
+      }),
     }),
 
     update: (table: unknown) => ({
@@ -492,4 +569,22 @@ export function priceRow(over: Partial<PriceRow> = {}): PriceRow {
   };
   assertChecks(row);
   return row;
+}
+
+/**
+ * A seeded `cost.price_book_initializations` row. `completedCatalogs` is the
+ * set the first sync vouched for; a book seeded without one of these is a book
+ * initialized before the record existed.
+ */
+export function initializationRow(over: Partial<PriceRow> = {}): PriceRow {
+  return {
+    book: "list",
+    createdAt: new Date("2026-09-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+    createdById: null,
+    updatedById: null,
+    initializedAt: new Date("2026-09-01T00:00:00.000Z"),
+    completedCatalogs: [],
+    ...over,
+  };
 }

@@ -15,6 +15,12 @@
 // tables can be dropped and rebuilt. Every money column is integer micro-USD;
 // a null cost is a run or group no frame priced, never a zero.
 //
+// `price_book_initializations` is one row per price book: when it was
+// initialized and which catalogs answered completely then. The cold-start
+// floor needs that set, and it cannot be read back off `price_entries`,
+// because a catalog whose every model lost to a higher-precedence source
+// contributed no row (ADR-102).
+//
 // `findings` is the findings job's output (spec §12.8; ADR-062): one open row
 // per (workspace, kind, subject) the detectors see in the trailing window,
 // replaced on every pass; a row a person applied or dismissed is kept with
@@ -60,6 +66,14 @@ export const PRICE_UNITS = ["token", "request", "image", "second"] as const;
 export type PriceUnit = (typeof PRICE_UNITS)[number];
 
 export const PRICE_SOURCES = ["list", "negotiated", "override"] as const;
+
+/**
+ * The book `price_book_initializations` records. One value today: the platform
+ * list book every organization reads, which is the only book with a cold
+ * start.
+ */
+export const PRICE_BOOK_LIST = "list";
+
 export type PriceSource = (typeof PRICE_SOURCES)[number];
 
 /** Who observed a figure (spec §12.3, §12.9). `mixed` is a run whose frames differ. */
@@ -177,6 +191,60 @@ export const priceEntries = costSchema.table(
     rangeCheck: check(
       "price_entries_effective_range_check",
       sql`${t.effectiveTo} IS NULL OR ${t.effectiveTo} > ${t.effectiveFrom}`,
+    ),
+  }),
+);
+
+// ── price_book_initializations ───────────────────────────────────────────────
+/**
+ * One row per price book, recording that the book was initialized and which
+ * catalogs answered completely at that instant (ADR-102).
+ *
+ * The cold-start floor backdates a key the book has never priced to an
+ * instant before every frame, so frames recorded before the first sync price
+ * at the first known rate rather than at nothing. It must fire only for a
+ * source that was down at initialization and has since come back. That set
+ * used to be reconstructed from `price_entries`: the `catalog` stamped on the
+ * rows created at the book's earliest instant. A catalog that answered at the
+ * first sync and lost every model to a higher-precedence source writes no row,
+ * so the reconstruction could not tell it from a catalog that was down, and
+ * its first unique model inside the cold window was backdated and repriced
+ * runs that had already settled.
+ *
+ * Per install, not per organization: `book = 'list'` is the platform list
+ * price book, the only book with a cold start. No org or workspace column and
+ * no RLS policy, like the other shared catalogs. The sync reads and writes it
+ * through `withSystemDb`.
+ */
+export const priceBookInitializations = costSchema.table(
+  "price_book_initializations",
+  {
+    book: text("book").primaryKey(),
+    ...auditMixin(),
+    /** The instant the book's first rows were written, in their transaction. */
+    initializedAt: timestamp("initialized_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    /**
+     * The catalogs that answered completely at that instant, by id. A key a
+     * catalog outside this set names for the first time while the book is
+     * still cold is that source recovering, and is floored; a key a catalog
+     * inside it names for the first time is a model that did not exist before,
+     * and starts at the requested boundary.
+     */
+    completedCatalogs: text("completed_catalogs")
+      .array()
+      .notNull()
+      .default([]),
+  },
+  (t) => ({
+    // One book has a cold start: the platform list book. A negotiated book is
+    // an organization's own and begins when its contract does, so there is no
+    // window in which its first rows stand in for earlier frames.
+    bookCheck: check(
+      "price_book_initializations_book_check",
+      sql`${t.book} IN ('${sql.raw(PRICE_BOOK_LIST)}')`,
     ),
   }),
 );

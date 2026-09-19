@@ -29,6 +29,7 @@ import { schema, withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 // that touches billing — which is nearly all of them — and broke each test
 // suite that partially mocks `@oxagen/config/env`, for the sake of one class.
 import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { PRICE_BOOK_LIST } from "@oxagen/database/schema";
 import type { PriceTokenClass, PriceUnit } from "@oxagen/database/schema";
 import { and, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { isSameModelIdentity } from "./model-identity";
@@ -504,6 +505,12 @@ export async function syncPriceBook(args: {
    * published and no longer names is retired; a row from any other catalog
    * is preserved. `retireAbsent` remains the book-wide statement, used for
    * rows with no catalog recorded.
+   *
+   * On the run that creates the book this set is also persisted, to
+   * `cost.price_book_initializations`, because the cold-start floor needs to
+   * know which sources answered at initialization and no later read of the
+   * rows can tell: precedence drops the rows of a catalog whose every model
+   * lost, leaving it indistinguishable from one that was down.
    */
   completedCatalogs?: readonly string[];
   /** The write instant; a row effective at or before it is not corrected in place. */
@@ -536,6 +543,16 @@ export async function syncPriceBook(args: {
           inArray(schema.priceEntries.source, ["list", "override"]),
         ),
       );
+
+    // The book's own record of its initialization: the instant, and the
+    // catalogs that answered completely at it. One row, `book = 'list'`,
+    // written by the sync that created the book (below). It is the authority
+    // for both facts; neither can be read back off the rows (see
+    // `initialCatalogs`).
+    const [initialization] = await tx
+      .select()
+      .from(schema.priceBookInitializations)
+      .where(eq(schema.priceBookInitializations.book, PRICE_BOOK_LIST));
 
     // A cold book starts before every frame, not at this instant. On a fresh
     // installation the hourly job is the first writer, and any run accepted
@@ -586,8 +603,10 @@ export async function syncPriceBook(args: {
       existing.map((r) => `${r.model}|${r.tokenClass}|${r.region ?? ""}`),
     );
     // Cold start is bounded in time, by the book's own creation, and by
-    // nothing else. The first row's `created_at` is the one durable record
-    // of initialization. Once COLD_START_WINDOW_MS has passed since it, the
+    // nothing else. `price_book_initializations.initialized_at` is the record
+    // of when that was; the earliest row's `created_at` answers for a book
+    // written before that record existed. Once COLD_START_WINDOW_MS has
+    // passed since it, the
     // book is established and a new key starts at the requested instant
     // like any other change. The window stays long enough for a catalog
     // that was down at first sync to come back and have its models
@@ -612,9 +631,11 @@ export async function syncPriceBook(args: {
           : earliest,
       null,
     );
+    const initializedAt =
+      initialization?.initializedAt.getTime() ?? bookCreatedAt;
     const withinColdWindow =
-      bookCreatedAt === null ||
-      now.getTime() - bookCreatedAt < COLD_START_WINDOW_MS;
+      initializedAt === null ||
+      now.getTime() - initializedAt < COLD_START_WINDOW_MS;
     const coldStart = withinColdWindow;
     // Rows the book already carries at the floor. A floored row is the only
     // kind that prices a run which has already sealed, so its presence — not
@@ -626,36 +647,33 @@ export async function syncPriceBook(args: {
       (r) => r.effectiveFrom.getTime() === COLD_BOOK_EFFECTIVE_FROM.getTime(),
     );
     let flooredHere = false;
-    // Which sources wrote at initialization, read off the book itself. Every
-    // row the first sync inserted carries that transaction's `now()` as its
-    // `created_at`, so the catalogs stamped on rows created at that instant
-    // are the sources that answered then; every other source was incomplete.
-    // Deriving it this way needs no new column and no migration: the
-    // `catalog` stamp the retirement pass already relies on carries it.
+    // Which sources answered at initialization, read off the record the first
+    // sync wrote. Not off the rows: a catalog that answered then and lost
+    // every model to a higher-precedence source contributed no row, so rows
+    // cannot tell it from a catalog that was down. Reading them anyway called
+    // that catalog incomplete, so its first unique model inside the cold
+    // window was floored as a recovery, and the next rollup changed costs on
+    // runs that had already settled. Precedence filters the rows; it does not
+    // filter the record.
+    const initialCatalogs = new Set<string>(
+      initialization?.completedCatalogs ?? [],
+    );
+    // A key is floored as a recovery only on positive evidence that its source
+    // was absent at initialization: the record exists, the seed names its
+    // catalog, and that catalog is not in the record.
     //
-    // The window alone said when initialization might still be recovering,
-    // never from what. So a model a catalog or the in-code card ADDED days
-    // after a complete first sync was floored like a recovery, and calls made
-    // before that model existed acquired its rate on the reprice pass or a
-    // later rollup retry, changing costs that had already settled. Only a key
-    // whose source wrote nothing at initialization can be a recovery.
-    const initialCatalogs = new Set<string>();
-    if (bookCreatedAt !== null)
-      for (const row of existing)
-        if (
-          row.createdAt.getTime() === bookCreatedAt &&
-          row.catalog !== null &&
-          row.catalog !== undefined
-        )
-          initialCatalogs.add(row.catalog);
-    // A seed with no catalog recorded cannot attest where it came from, and a
-    // book whose first rows predate the `catalog` column records nothing at
-    // all. Both fall back to flooring every unseen key while cold, which is
-    // what this did before the stamp existed: the cost of that fallback is a
-    // backdated rate, and the cost of the other choice is a model that stays
-    // unpriced for ever. Every seed a real sync writes carries its catalog.
+    // Everything else declines to floor, which is the only direction that
+    // cannot move a settled cost. A book with no record (one initialized
+    // before the record existed) and a seed that names no catalog both leave
+    // the source unknown, and flooring on an unknown hands a rate to every
+    // frame recorded since the first sync, changing what runs already sealed
+    // cost. Declining costs a frame that stays unpriced until a real sync
+    // prices its model forward, which a person can see and repair; a repriced
+    // settled run is silent. So the unknown case does nothing.
     const recoveredFromIncompleteSource = (seed: PriceEntrySeed): boolean =>
-      seed.catalog === undefined || !initialCatalogs.has(seed.catalog);
+      initialization !== undefined &&
+      seed.catalog !== undefined &&
+      !initialCatalogs.has(seed.catalog);
     const effectiveFrom = args.effectiveFrom;
 
     // The boundary is checked HERE, under the lock, against the write
@@ -1079,6 +1097,27 @@ export async function syncPriceBook(args: {
       closedIds.add(row.id);
       superseded += 1;
     }
+
+    // Record the initialization, in the transaction that performed it. Only
+    // the run that created the book writes this, and only if it created rows:
+    // a run that wrote nothing left no book, so the next run is still the
+    // first. `completedCatalogs` is what the caller vouched for on this run,
+    // which is the set no later read can reconstruct, because precedence
+    // filters the rows and a catalog that lost every model leaves none.
+    //
+    // `onConflictDoNothing` so a concurrent first sync cannot overwrite the
+    // record with its own view. The advisory lock above already serialises
+    // list-book writers, and the primary key is the second answer if the lock
+    // ever moves.
+    if (emptyBook && written > 0)
+      await tx
+        .insert(schema.priceBookInitializations)
+        .values({
+          book: PRICE_BOOK_LIST,
+          initializedAt: now,
+          completedCatalogs: [...new Set(args.completedCatalogs ?? [])],
+        })
+        .onConflictDoNothing();
 
     return {
       written,

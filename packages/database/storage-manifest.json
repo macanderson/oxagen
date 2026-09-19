@@ -3468,7 +3468,7 @@
       "writes": []
     }
   ],
-  "contentHash": "d2a1aaa7044d7c177c7142b0862780474786108f560f1976de44f35961a656ea",
+  "contentHash": "061d1bb7c0506995ce45c264ac0577cd7bff0aeee50d2d93a47606316cdfd10c",
   "domains": [
     {
       "name": "agent",
@@ -3608,6 +3608,7 @@
       "tables": [
         "postgres:cost.daily_totals",
         "postgres:cost.findings",
+        "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
         "postgres:cost.run_totals"
       ]
@@ -3891,7 +3892,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 131
+      "tableCount": 132
     },
     {
       "domains": [
@@ -11679,6 +11680,57 @@
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "book",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "initialized_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_catalogs",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.price_book_initializations",
+      "name": "price_book_initializations",
+      "store": "postgres",
+      "tenantScoped": false
     },
     {
       "columns": [

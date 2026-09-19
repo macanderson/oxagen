@@ -40,6 +40,7 @@ import {
   type PriceEntrySeed,
 } from "./price-book";
 import {
+  initializationRow,
   makeFakePriceStore,
   fakeClock,
   makeFakePriceTx,
@@ -1670,6 +1671,9 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
   it("writes a cold book effective from before any frame, so runs before the first sync still price", async () => {
     const result = await syncPriceBook({
       effectiveFrom: T1,
+      // models.dev was down at the first sync, so the card is the only source
+      // that answered, and that is what the initialization record says.
+      completedCatalogs: ["in_code_card"],
       seeds: [
         {
           provider: "anthropic",
@@ -1682,12 +1686,20 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
           microsPerMillion: 3_000_000n,
           effectiveFrom: T1,
           effectiveTo: null,
+          catalog: "in_code_card",
         },
       ],
     });
     expect(result.coldStart).toBe(true);
     expect(fake.rows).toHaveLength(1);
     expect(fake.rows[0]!.effectiveFrom).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+    // The run that created the book recorded what answered at it, because no
+    // later read of the rows can reconstruct that set.
+    expect(fake.initializations).toHaveLength(1);
+    expect(fake.initializations[0]).toMatchObject({
+      book: "list",
+      completedCatalogs: ["in_code_card"],
+    });
     // A frame from a week before the first sync resolves.
     const book: PriceEntry[] = fake.rows.map((r) => ({
       ...(r as unknown as PriceEntry),
@@ -1707,6 +1719,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     const again = await syncPriceBook({
       effectiveFrom: T2,
       retireAbsent: true,
+      completedCatalogs: ["in_code_card"],
       seeds: [
         {
           provider: "anthropic",
@@ -1719,6 +1732,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
           microsPerMillion: 2_000_000n,
           effectiveFrom: T2,
           effectiveTo: null,
+          catalog: "in_code_card",
         },
       ],
     });
@@ -1734,10 +1748,12 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(successor.effectiveFrom).toEqual(T2);
     expect(successor.microsPerMillion).toBe(2_000_000n);
     // That successor is not proof that initialization completed. Only the
-    // window is, so a key the book has never priced is still backdated.
+    // window is, so a key from the source that wrote nothing at initialization
+    // is still backdated.
     const T3 = new Date(T2.getTime() + 3_600_000);
     const still = await syncPriceBook({
       effectiveFrom: T3,
+      completedCatalogs: ["in_code_card", "models_dev"],
       seeds: [
         {
           provider: "openai",
@@ -1750,6 +1766,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
           microsPerMillion: 1_000_000n,
           effectiveFrom: T3,
           effectiveTo: null,
+          catalog: "models_dev",
         },
       ],
     });
@@ -1770,6 +1787,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       model: string,
       micros: bigint,
       at: Date,
+      catalog = "openrouter",
     ): PriceEntrySeed => ({
       provider: "anthropic",
       model,
@@ -1781,18 +1799,22 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       microsPerMillion: micros,
       effectiveFrom: at,
       effectiveTo: null,
+      catalog,
     });
-    // First sync, partial: one catalog's model, at the floor.
+    // First sync, partial: one catalog's model, at the floor. models.dev was
+    // down, so the record names only OpenRouter.
     await syncPriceBook({
       effectiveFrom: T1,
       seeds: [seedFor("claude-sonnet-5", 3_000_000n, T1)],
       retireAbsent: false,
+      completedCatalogs: ["openrouter"],
     });
     // Second sync, still partial, but that model's rate moved.
     const repriced = await syncPriceBook({
       effectiveFrom: T2,
       seeds: [seedFor("claude-sonnet-5", 2_500_000n, T2)],
       retireAbsent: false,
+      completedCatalogs: ["openrouter"],
     });
     expect(repriced.coldStart).toBe(true);
     // The floor row, which every frame so far was priced with, is untouched
@@ -1808,9 +1830,10 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       effectiveFrom: T3,
       seeds: [
         seedFor("claude-sonnet-5", 2_500_000n, T3),
-        seedFor("gpt-9", 1_000_000n, T3),
+        seedFor("gpt-9", 1_000_000n, T3, "models_dev"),
       ],
       retireAbsent: true,
+      completedCatalogs: ["openrouter", "models_dev"],
     });
     expect(recovered.coldStart).toBe(true);
     expect(fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom).toEqual(
@@ -1822,7 +1845,7 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
   // If that alone ended cold start, the catalog's models would arrive at
   // recovery time and calls made before recovery would stay unpriced.
   it("stays cold after a partial first sync, so a model a recovered catalog adds is backdated too", async () => {
-    const seed = (model: string): PriceEntrySeed => ({
+    const seed = (model: string, catalog = "in_code_card"): PriceEntrySeed => ({
       provider: "moonshot",
       model,
       modelAliases: [],
@@ -1833,13 +1856,19 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
       microsPerMillion: 2_000_000n,
       effectiveFrom: T2,
       effectiveTo: null,
+      catalog,
     });
-    // First tick: only the card answered.
-    await syncPriceBook({ effectiveFrom: T1, seeds: [seed("card-model")] });
+    // First tick: only the card answered, and the record says so.
+    await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed("card-model")],
+      completedCatalogs: ["in_code_card"],
+    });
     // Next tick: the catalog is back and names a model the book never saw.
     const result = await syncPriceBook({
       effectiveFrom: T2,
-      seeds: [seed("card-model"), seed("catalog-model")],
+      seeds: [seed("card-model"), seed("catalog-model", "openrouter")],
+      completedCatalogs: ["in_code_card", "openrouter"],
     });
     expect(result.coldStart).toBe(true);
     expect(
@@ -1878,7 +1907,13 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     // floored, like everything else in the first snapshot.
     const first = await syncPriceBook({
       effectiveFrom: T1,
-      seeds: [seed("card-model"), seed("day-one-override", override)],
+      seeds: [
+        seed("card-model", { catalog: "in_code_card" }),
+        seed("day-one-override", override),
+      ],
+      // The catalog was down at the first sync, so the record names only the
+      // card and the operator's own overrides.
+      completedCatalogs: ["in_code_card", "operator_override"],
     });
     expect(first.coldStart).toBe(true);
     expect(
@@ -1890,11 +1925,12 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     const result = await syncPriceBook({
       effectiveFrom: T2,
       seeds: [
-        seed("card-model"),
+        seed("card-model", { catalog: "in_code_card" }),
         seed("day-one-override", override),
         seed("new-override", override),
-        seed("catalog-model"),
+        seed("catalog-model", { catalog: "openrouter" }),
       ],
+      completedCatalogs: ["in_code_card", "operator_override", "openrouter"],
     });
     expect(result.coldStart).toBe(true);
     const byModel = (m: string) => fake.rows.find((r) => r.model === m)!;
@@ -2003,6 +2039,141 @@ describe("syncPriceBook supersedes a row whose provider changed", () => {
     expect(
       fake.rows.find((r) => r.model === "recovered-model")!.effectiveFrom,
     ).toEqual(COLD_BOOK_EFFECTIVE_FROM);
+  });
+
+  // The reconstruction this replaced read the answering sources off the rows:
+  // the `catalog` stamped on the rows created at the book's earliest instant.
+  // `mergePublishedPrices` gives each model to one source outright, so a
+  // catalog that answered at the first sync and lost every model to a
+  // higher-precedence source contributes no row, and the rows cannot tell it
+  // from a catalog that was down. Its first unique model inside the window was
+  // then floored as a recovery, and the next rollup changed what runs that had
+  // already sealed cost. The record says which sources answered; precedence
+  // does not filter it.
+  it("does not floor a model from a catalog that answered at initialization and won nothing", async () => {
+    const seed = (
+      model: string,
+      catalog: string,
+      at: Date,
+    ): PriceEntrySeed => ({
+      provider: "anthropic",
+      model,
+      modelAliases: [],
+      region: null,
+      tokenClass: "input_uncached",
+      unit: "token",
+      currency: "USD",
+      microsPerMillion: 2_000_000n,
+      effectiveFrom: at,
+      effectiveTo: null,
+      catalog,
+    });
+    // A complete first sync: both catalogs answered. OpenRouter lost every one
+    // of its models to the card, so the book carries no OpenRouter row.
+    const first = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [seed("card-model", "in_code_card", T1)],
+      retireAbsent: true,
+      completedCatalogs: ["in_code_card", "openrouter"],
+    });
+    expect(first.coldStart).toBe(true);
+    expect(
+      fake.rows.every((r) => r.catalog === "in_code_card"),
+    ).toBe(true);
+    // The record carries both, which is the fact the rows cannot carry.
+    expect(fake.initializations[0]!.completedCatalogs).toEqual([
+      "in_code_card",
+      "openrouter",
+    ]);
+
+    // Still inside the window, and OpenRouter names a model of its own for the
+    // first time. It answered at initialization, so this is a model that did
+    // not exist then, not a recovery: it starts at the requested boundary.
+    const result = await syncPriceBook({
+      effectiveFrom: T2,
+      seeds: [
+        seed("card-model", "in_code_card", T2),
+        seed("openrouter-newcomer", "openrouter", T2),
+      ],
+      retireAbsent: true,
+      completedCatalogs: ["in_code_card", "openrouter"],
+    });
+    expect(result.coldStart).toBe(true);
+    expect(
+      fake.rows.find((r) => r.model === "openrouter-newcomer")!.effectiveFrom,
+    ).toEqual(T2);
+    // The only floored row is the one the first sync wrote. The new rate is
+    // not among them, so no rollup can move a settled cost onto it.
+    expect(
+      fake.rows
+        .filter(
+          (r) =>
+            (r.effectiveFrom as Date).getTime() ===
+            COLD_BOOK_EFFECTIVE_FROM.getTime(),
+        )
+        .map((r) => r.model),
+    ).toEqual(["card-model"]);
+  });
+
+  // A book written before `price_book_initializations` existed has no record,
+  // and the record is precisely the fact its rows cannot answer. So nothing is
+  // floored on that book: an unpriced frame is visible in the unpriced-models
+  // report and can be priced forward, while a repriced settled run is silent.
+  it("floors nothing on a book that has no initialization record", async () => {
+    fake.rows.push(
+      priceRow({
+        model: "claude-sonnet-5",
+        effectiveFrom: COLD_BOOK_EFFECTIVE_FROM,
+        createdAt: TEST_NOW,
+        catalog: "in_code_card",
+      }),
+    );
+    expect(fake.initializations).toHaveLength(0);
+
+    const result = await syncPriceBook({
+      effectiveFrom: T1,
+      seeds: [
+        {
+          provider: "anthropic",
+          model: "claude-sonnet-5",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 3_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+          catalog: "in_code_card",
+        },
+        {
+          provider: "openai",
+          model: "gpt-9",
+          modelAliases: [],
+          region: null,
+          tokenClass: "input_uncached",
+          unit: "token",
+          currency: "USD",
+          microsPerMillion: 1_000_000n,
+          effectiveFrom: T1,
+          effectiveTo: null,
+          catalog: "models_dev",
+        },
+      ],
+      completedCatalogs: ["in_code_card", "models_dev"],
+    });
+    // The window is still open, read off the earliest row as it was before the
+    // record existed, so the run is cold.
+    expect(result.coldStart).toBe(true);
+    // The new key starts at the requested boundary. Floored, it would have
+    // priced every frame since the book was written, and the next rollup would
+    // have changed what those runs cost.
+    expect(fake.rows.find((r) => r.model === "gpt-9")!.effectiveFrom).toEqual(
+      T1,
+    );
+    // No record is invented for the book either: the fact is unknown, and a
+    // guess is what caused the defect.
+    expect(fake.initializations).toHaveLength(0);
   });
 
   it("reports a row whose price and names both match as unchanged", async () => {
@@ -2235,6 +2406,14 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
         catalog: "models_dev",
       }),
     );
+    // The book's initialization, with OpenRouter down at it, so a key
+    // OpenRouter names here is a recovery and lands at the floor.
+    fake.initializations.push(
+      initializationRow({
+        initializedAt: TEST_NOW,
+        completedCatalogs: ["models_dev"],
+      }),
+    );
     // A key already priced, at a changed rate: its successor would land at
     // T1, which has passed. Refused, and the floor row is left as it was.
     await expect(
@@ -2261,7 +2440,14 @@ describe("syncPriceBook retires what a complete refresh no longer emits", () => 
     // frame, and is the one write the passed boundary does not touch.
     const result = await syncPriceBook({
       effectiveFrom: T1,
-      seeds: [seed(), seed({ model: "gpt-9", microsPerMillion: 1_000_000n })],
+      seeds: [
+        seed({ catalog: "models_dev" }),
+        seed({
+          model: "gpt-9",
+          microsPerMillion: 1_000_000n,
+          catalog: "openrouter",
+        }),
+      ],
       now: late,
     });
     expect(result.coldStart).toBe(true);
