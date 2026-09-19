@@ -176,12 +176,39 @@ describe("findGaps", () => {
       { stem: "widget.make", name: "make_widget" },
     ]);
   });
+
+  // Codex P2 on #3487: a baseline stem whose handler already asserts the
+  // role is a stale exception, and leaving it in the list would let a
+  // future regression (the assertion later deleted) silently fall back
+  // into `baselineHits` as "already known" instead of failing the build.
+  it("flags a baseline stem whose handler already asserts the role as stale", () => {
+    setup();
+    writeFileSync(
+      join(contractsDir, "widget.make.ts"),
+      contract("make_widget"),
+    );
+    writeFileSync(
+      join(handlersDir, "widget.make.ts"),
+      "export const h = (ctx) => { assertOrgRole(ctx, {}); };\n",
+    );
+    const { gaps, baselineHits, staleBaselineEntries } = findGaps({
+      contractsDir,
+      handlersDir,
+      baseline: new Set(["widget.make"]),
+    });
+    expect(gaps).toEqual([]);
+    expect(baselineHits).toEqual([]);
+    expect(staleBaselineEntries).toEqual([
+      { stem: "widget.make", name: "make_widget" },
+    ]);
+  });
 });
 
 describe("against the real tree", () => {
   it("finds no gap outside the checked-in baseline (connection.create is fixed, #3258)", () => {
-    const { gaps } = findGaps();
+    const { gaps, staleBaselineEntries } = findGaps();
     expect(gaps).toEqual([]);
+    expect(staleBaselineEntries).toEqual([]);
   });
 
   it("connection.create is no longer in the baseline — it is enforced now", () => {

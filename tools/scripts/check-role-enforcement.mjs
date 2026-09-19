@@ -147,6 +147,15 @@ export function findGaps({
 } = {}) {
   const gaps = [];
   const baselineHits = [];
+  // Stems the baseline still lists but whose handler now carries a role
+  // assertion (Codex P2 on #3487): the early `continue` above would
+  // otherwise let a fixed handler skip the baseline check entirely, so
+  // nothing ever asks for the exception's removal. Left in place, that
+  // stale entry is a live hole — if the assertion is later deleted (a
+  // regression, not a fix), the stem falls straight back into
+  // `baselineHits` as a "known, already-tracked" gap instead of a NEW one,
+  // so the regression never fails the build.
+  const staleBaselineEntries = [];
 
   for (const file of listContractFiles(contractsDir)) {
     const src = readFileSync(file, "utf8");
@@ -158,7 +167,10 @@ export function findGaps({
     if (!existsSync(handlerPath)) continue; // a different gap; check:manifest's job
 
     const handlerSrc = readFileSync(handlerPath, "utf8");
-    if (ROLE_ASSERTION_PATTERN.test(handlerSrc)) continue;
+    if (ROLE_ASSERTION_PATTERN.test(handlerSrc)) {
+      if (baseline.has(stem)) staleBaselineEntries.push({ stem, name });
+      continue;
+    }
 
     if (baseline.has(stem)) {
       baselineHits.push({ stem, name });
@@ -167,7 +179,7 @@ export function findGaps({
     gaps.push({ stem, name, contractFile: file, handlerPath });
   }
 
-  return { gaps, baselineHits };
+  return { gaps, baselineHits, staleBaselineEntries };
 }
 
 function main() {
@@ -180,7 +192,7 @@ function main() {
     process.exit(2);
   }
 
-  const { gaps, baselineHits } = findGaps();
+  const { gaps, baselineHits, staleBaselineEntries } = findGaps();
 
   if (baselineHits.length > 0) {
     console.log(
@@ -188,6 +200,18 @@ function main() {
         "(not failing the build):",
     );
     for (const g of baselineHits) console.log(`  - ${g.stem} -> ${g.name}`);
+  }
+
+  if (staleBaselineEntries.length > 0) {
+    console.error(
+      "\nSTALE ROLE_ENFORCEMENT_BASELINE ENTRIES — the handler now asserts the role " +
+        "the contract declares, so the exception is no longer covering anything real. " +
+        "Left in place, it would silently re-absorb a later regression (the assertion " +
+        "removed again) as an already-known gap instead of failing the build:",
+    );
+    for (const g of staleBaselineEntries) {
+      console.error(`  - ${g.stem} -> ${g.name} (remove from ROLE_ENFORCEMENT_BASELINE)`);
+    }
   }
 
   if (gaps.length > 0) {
@@ -208,6 +232,9 @@ function main() {
         "A genuinely deferred fix goes in tools/scripts/check-role-enforcement.mjs's " +
         "ROLE_ENFORCEMENT_BASELINE with a tracking issue, never silently.",
     );
+  }
+
+  if (gaps.length > 0 || staleBaselineEntries.length > 0) {
     process.exit(1);
   }
 
