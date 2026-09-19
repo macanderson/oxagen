@@ -95,7 +95,9 @@
       "followSealed": "The run sealed while you were following it. This is the whole recording.",
       "request": "Sent",
       "response": "Returned",
-      "decision": "Decision: {decision}, at frame {seq}"
+      "decision": "Decision: {decision}, at frame {seq}",
+      "calledWith": "Called with",
+      "noHalves": "Neither half of this exchange was recorded. Its envelope is on the Frames tab."
     },
     "frames": {
       "title": "Frames",
@@ -374,6 +376,7 @@
         "keyB": "The other run",
         "noFrame": "no frame at this position"
       }
-    }
+    },
+    "loading": "Loading this run"
   }
 }

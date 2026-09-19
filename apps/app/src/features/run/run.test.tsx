@@ -66,6 +66,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Run } = await import("./run");
+const { RunLoading } = await import("./loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -1023,9 +1024,7 @@ describe("chain and seal", () => {
 
   it("names its own failure when the chain read is refused (negative)", async () => {
     await renderRun({ detail: ok(runDetail()), chain: DOWN }, { tab: "chain" });
-    expect(
-      screen.getByText(/frame_store_unreachable/),
-    ).toBeTruthy();
+    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
   });
 });
 
@@ -1098,10 +1097,38 @@ describe("cost", () => {
       { tab: "cost" },
     );
     expect(calls.cost).toHaveLength(1);
-    expect(calls.transcript.map((call) => call[2])).toEqual([
-      "turns",
-      "steps",
-    ]);
+    expect(calls.transcript.map((call) => call[2])).toEqual(["turns", "steps"]);
     expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
+  });
+});
+
+describe("loading", () => {
+  it("replaces the page body with a skeleton shaped like the answer, and never the shell", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <RunLoading />
+      </IntlProvider>,
+    );
+    const loading = screen.getByRole("status");
+    expect(loading).toHaveAttribute("aria-busy", "true");
+    expect(loading).toHaveTextContent("Loading this run");
+    await expectNoAxe(container);
+  });
+
+  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+    render(
+      <IntlProvider>
+        <RunLoading />
+      </IntlProvider>,
+    );
+    // Next swaps page.tsx's whole return value for this default export while
+    // the route suspends, so the skip-to-content target and the page frame
+    // have to come from here too, or a stranger's tab-order loses its anchor
+    // and the layout jumps once the real page takes the same container.
+    const main = document.getElementById("main");
+    expect(main).not.toBeNull();
+    expect(main?.tagName).toBe("MAIN");
+    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
+    expect(main).toContainElement(screen.getByRole("status"));
   });
 });

@@ -983,8 +983,8 @@ export function App() {
                   !detecting &&
                   detected.harnesses.every((d) => !d.installed) && (
                     <div className="notice">
-                      None of Claude Code, Codex, Cursor, or Stella was found on your
-                      PATH. Install one, then rescan:{" "}
+                      None of Claude Code, Codex, Cursor, or Stella was found on
+                      your PATH. Install one, then rescan:{" "}
                       {HARNESSES.map((h, i) => (
                         <span key={h}>
                           {i > 0 && " · "}

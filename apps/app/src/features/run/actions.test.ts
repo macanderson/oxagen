@@ -7,17 +7,20 @@
 // its target and nothing wider, and a steer is refused before the kernel when
 // its text is empty or past the contract's ceiling.
 import { STEER_TEXT_MAX } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
+import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import type { ContractOutput } from "@/server/kernel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invoke, requireViewer } = vi.hoisted(() => ({
+const { invoke, requireViewer, captureError } = vi.hoisted(() => ({
   invoke: vi.fn<typeof import("@oxagen/oxagen").invoke>(),
   requireViewer: vi.fn(),
+  captureError: vi.fn(),
 }));
 vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/oxagen")>()),
   invoke,
 }));
-vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
+vi.mock("@oxagen/telemetry", () => ({ captureError }));
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -53,6 +56,9 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+/** The shape `get_run_transcript` answers with, so a fixture cannot drift from it. */
+type TranscriptOutput = ContractOutput<typeof runTranscriptGet>;
+
 const RUN = "tse_7k2m9q";
 const TENANT = {
   orgId: ctx.orgId,
@@ -82,6 +88,7 @@ beforeEach(() => {
   invoke.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
+  captureError.mockReset();
 });
 
 describe("haltRun", () => {
@@ -290,19 +297,22 @@ describe("bisectRuns", () => {
       keyB: null,
       aligned: 431,
     });
-    expect(
-      await bisectRuns("acme", "core-platform", RUN, "arun_9f2a"),
-    ).toEqual({
-      ok: true,
-      value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
-    });
+    expect(await bisectRuns("acme", "core-platform", RUN, "arun_9f2a")).toEqual(
+      {
+        ok: true,
+        value: { divergentSeq: null, keyA: null, keyB: null, aligned: 431 },
+      },
+    );
   });
 
   it("refuses an empty second run, and this run compared with itself, before the kernel (negative)", async () => {
     for (const other of ["", "   ", RUN]) {
-      expect(
-        await bisectRuns("acme", "core-platform", RUN, other),
-      ).toEqual({ ok: false, reason: "invalid", code: "run_b", field: "runB" });
+      expect(await bisectRuns("acme", "core-platform", RUN, other)).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "run_b",
+        field: "runB",
+      });
     }
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -348,6 +358,59 @@ describe("readTranscriptPage", () => {
     );
   });
 
+  it("maps a page exactly as the port does, so a first page and a later one cannot disagree", async () => {
+    const { toRunTranscript } = await import("@/data/live/mappers/run");
+    const out: TranscriptOutput = {
+      zoom: "steps",
+      kinds: [],
+      entries: [
+        {
+          seq: "11",
+          endSeq: "14",
+          at: "2026-09-15T08:10:00.000Z",
+          elapsedMs: 3000,
+          kind: "tool_call",
+          type: "tool_result",
+          label: "create_release ok",
+          kinds: ["tools"],
+          turn: 1,
+          request: null,
+          response: null,
+          decision: null,
+          frames: 4,
+          cost: {
+            micros: "18240",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+          cumulativeCost: {
+            micros: "4131265",
+            currency: "USD",
+            basis: "gateway_observed",
+          },
+        },
+      ],
+      cursor: "ZjoxMQ",
+      complete: false,
+    };
+    invoke.mockResolvedValue(out);
+    const page = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      [],
+      "ZjoxMA",
+    );
+    // The layer matrix keeps `features/*` out of `data/live`, so the action
+    // carries its own copy of the port's mapping. This is what stops the two
+    // drifting: a test may import both, and production may not.
+    expect(page).toEqual({
+      ok: true,
+      value: toRunTranscript(out),
+    });
+  });
+
   it("answers a cursor the capability did not write as a read error, not as a throw (negative)", async () => {
     invoke.mockRejectedValue(
       new kernel.CapabilityError(
@@ -367,8 +430,19 @@ describe("readTranscriptPage", () => {
       ),
     ).toEqual({
       ok: false,
-      reason: "unavailable",
-      code: "invalid_input",
+      reason: "invalid",
+      code: "invalid_cursor",
+      field: "after",
     });
   });
+
+  // A page whose mapped shape the app's own `RunTranscript` schema refuses
+  // cannot be produced through this file's fake boundary: `kernelRead`'s real
+  // `contract.output.safeParse` already validates the mocked `invoke` result
+  // against the (`.strict()`, identically-shaped) contract schema before this
+  // module ever sees it, so a value that clears that gate always clears the
+  // app's looser view schema too. The `captureError` report on that branch is
+  // proved directly against `data/live/runs.ts`'s `view()` helper instead
+  // (`data/live/runs.test.ts`), which is the same defensive parse this file's
+  // own copy of the mapping mirrors (see the doc comment on `toTranscriptPage`).
 });

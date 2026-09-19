@@ -159,9 +159,13 @@ describe("cursorAnswer", () => {
   });
 
   it("always answers a permission event with allow or deny", () => {
-    expect(JSON.parse(cursorAnswer(pre("deny", "no push"), "PreToolUse"))).toEqual(
-      { permission: "deny", user_message: "no push", agent_message: "no push" },
-    );
+    expect(
+      JSON.parse(cursorAnswer(pre("deny", "no push"), "PreToolUse")),
+    ).toEqual({
+      permission: "deny",
+      user_message: "no push",
+      agent_message: "no push",
+    });
     expect(JSON.parse(cursorAnswer(pre("allow"), "PreToolUse"))).toEqual({
       permission: "allow",
     });
@@ -194,7 +198,10 @@ describe("cursorAnswer", () => {
   it("blocks or passes a prompt with continue", () => {
     expect(
       JSON.parse(
-        cursorAnswer({ decision: "block", reason: "host paused" }, "UserPromptSubmit"),
+        cursorAnswer(
+          { decision: "block", reason: "host paused" },
+          "UserPromptSubmit",
+        ),
       ),
     ).toEqual({ continue: false, user_message: "host paused" });
     expect(JSON.parse(cursorAnswer({}, "UserPromptSubmit"))).toEqual({
@@ -205,7 +212,10 @@ describe("cursorAnswer", () => {
   it("tells the agent at session start why its calls will be refused, since it cannot veto the start", () => {
     expect(
       JSON.parse(
-        cursorAnswer({ continue: false, stopReason: "Host revoked." }, "SessionStart"),
+        cursorAnswer(
+          { continue: false, stopReason: "Host revoked." },
+          "SessionStart",
+        ),
       ),
     ).toEqual({
       additional_context: "Oxagen: Host revoked. Tool calls will be refused.",
@@ -228,7 +238,9 @@ describe("cursorAnswer", () => {
 
   it("turns a blocked stop into a follow-up message", () => {
     expect(
-      JSON.parse(cursorAnswer({ decision: "block", reason: "run the tests" }, "Stop")),
+      JSON.parse(
+        cursorAnswer({ decision: "block", reason: "run the tests" }, "Stop"),
+      ),
     ).toEqual({ followup_message: "run the tests" });
     expect(JSON.parse(cursorAnswer({}, "Stop"))).toEqual({});
   });

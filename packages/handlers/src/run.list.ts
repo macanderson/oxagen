@@ -452,6 +452,10 @@ export function ledgerAllSealsQuery(
 
 const tachoColumns = {
   session: {
+    // Internal UUID: `tacho.checkpoints.session_id` (and the other child
+    // tables) reference this, not `session_uuid`. `get_run_chain` needs it
+    // to load the signed checkpoints.
+    id: sessions.id,
     publicId: sessions.publicId,
     sessionUuid: sessions.sessionUuid,
     agentKey: sessions.agentKey,
@@ -617,6 +621,8 @@ export type RunCost = {
 type RunRollup = { cost: RunCost | null; verdict: RunItem["verdict"] };
 
 export type TachoSessionColumns = GeneratedSummaryColumns & {
+  /** `tacho.sessions.id`; foreign key for checkpoints and rollups. */
+  id: string;
   publicId: string;
   sessionUuid: string;
   agentKey: string;

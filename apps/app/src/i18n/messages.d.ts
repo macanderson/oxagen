@@ -1736,6 +1736,8 @@ type Messages = {
       request: string;
       response: string;
       decision: string;
+      calledWith: string;
+      noHalves: string;
     };
     frames: {
       title: string;
@@ -2015,6 +2017,7 @@ type Messages = {
         noFrame: string;
       };
     };
+    loading: string;
   };
   shell: {
     skipToContent: string;

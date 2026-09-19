@@ -118,8 +118,8 @@ export default function HomePage(): ReactNode {
               agent works under one mandate, set by security, FinOps, and
               engineering, and checked on every call routed through Oxagen.
               Every run is on the record with its cost. These docs cover the
-              CLI, the REST API, the MCP server, and Mission Control, all
-              behind one audited{" "}
+              CLI, the REST API, the MCP server, and Mission Control, all behind
+              one audited{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
@@ -289,7 +289,10 @@ export default function HomePage(): ReactNode {
           <OxagenIcon className="size-12" />
           <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
             See which agent{" "}
-            <span className="lp-grad-text">spent what, and on whose behalf</span>.
+            <span className="lp-grad-text">
+              spent what, and on whose behalf
+            </span>
+            .
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and wrap one machine, or read the getting-started

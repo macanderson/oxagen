@@ -22,39 +22,22 @@ import {
   runTranscriptGet,
   TRANSCRIPT_ENTRY_DEFAULT,
 } from "@oxagen/oxagen/contracts/run.transcript.get";
-import type {
+import { captureError } from "@oxagen/telemetry";
+import type { z } from "zod";
+import { moneyFromMicros } from "@/data/contracts/money";
+import {
   RunTranscript,
-  TranscriptKind,
-  TranscriptZoom,
+  type TranscriptKind,
+  type TranscriptZoom,
 } from "@/data/contracts/run";
-import { RunTranscript as RunTranscriptSchema } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
-import type { ActionResult } from "@/server/kernel";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type QueuedCommand = { commandIds: string[] };
 
-/**
- * A read, as the player consumes it. INV-19 has every exported function of a
- * `"use server"` module answer with an `ActionResult`, so the `Read` the seam
- * produces is carried across in the same shape a write's refusal takes.
- */
-function asActionResult<T>(read: Read<T>): ActionResult<T> {
-  if (read.ok) return read;
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
-    case "pending_approval":
-      return {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: read.accessRequestId,
-      };
-    case "error":
-      return { ok: false, reason: "unavailable", code: read.code };
-  }
-}
+type RunTranscriptGetOutput = ContractOutput<typeof runTranscriptGet>;
 
 /** Pause at the next boundary, or resume a run paused earlier. The reason reaches the model. */
 export async function haltRun(
@@ -138,19 +121,92 @@ export async function exportRun(
 }
 
 /**
+ * A read carried in the shape a write's answer takes. Every caller of this
+ * module is a client component, and INV-19 has every exported function of a
+ * `"use server"` module answer with an `ActionResult`, so a `Read` is carried
+ * across rather than returned: `denied` keeps the permission the page failure
+ * names, and an error keeps its code. The Workspace settings dialog does the
+ * same for its two on-demand reads; the layer matrix (INV-07) keeps
+ * `features/*` out of `data/live`, so each of the two owns its own copy.
+ *
+ * `invalid_input` becomes `invalid` rather than `unavailable`, because the
+ * only input a caller varies here is the cursor: the run, the zoom and the
+ * chips come from the page. That is what lets the view say "this resume point
+ * is not one the read wrote" instead of "something went wrong".
+ */
+function toTranscriptPage(
+  out: RunTranscriptGetOutput,
+): z.input<typeof RunTranscript> {
+  const cost = (value: RunTranscriptGetOutput["entries"][number]["cost"]) =>
+    value === null
+      ? null
+      : {
+          ...moneyFromMicros(value.micros, value.currency),
+          basis: value.basis,
+        };
+  return {
+    zoom: out.zoom,
+    kinds: out.kinds,
+    entries: out.entries.map((entry) => ({
+      seq: entry.seq,
+      endSeq: entry.endSeq,
+      at: entry.at,
+      elapsedMs: entry.elapsedMs,
+      kind: entry.kind,
+      type: entry.type,
+      label: entry.label,
+      kinds: entry.kinds,
+      turn: entry.turn,
+      request: entry.request,
+      response: entry.response,
+      decision: entry.decision,
+      frames: entry.frames,
+      cost: cost(entry.cost),
+      cumulativeCost: cost(entry.cumulativeCost),
+    })),
+    cursor: out.cursor,
+    complete: out.complete,
+  };
+}
+
+function asActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return read.code === "invalid_input"
+        ? {
+            ok: false,
+            reason: "invalid",
+            code: "invalid_cursor",
+            field: "after",
+          }
+        : { ok: false, reason: "unavailable", code: read.code };
+  }
+}
+
+/**
  * One later page of the transcript, for the player's own pagination
- * (`get_run_transcript`). A read, not a write: it exists as a server action so
- * the player can append a page without a navigation, which is what keeps the
- * scroll position and the playhead where the person left them.
+ * (`get_run_transcript`).
  *
- * The cursor is the one the previous page answered with. A cursor this
- * capability did not write is refused as invalid input, and the player says
- * that rather than starting the transcript again.
+ * A read that must happen on demand has nowhere else to live (INV-07's
+ * `features` row): a page's reads go through a `DataSource` port and are made
+ * when the route renders, and a navigation is exactly what appending a page
+ * must not cost, because it would throw away the playhead and the scroll
+ * position. So this resolves its own viewer and reads through the kernel seam,
+ * as a write does.
  *
- * Made on demand through `kernelRead` rather than a DataSource port: the
- * player asks from the client after the page has rendered, so a port read on
- * the route would either miss the cursor or re-render the whole page (§2,
- * ADR-089).
+ * The mapping is the port's, written out here because the layer matrix keeps
+ * `features/*` out of `data/live`. `actions.test.ts` holds the two to the same
+ * answer for the same contract output, so the first page and a later one
+ * cannot come to disagree about one run.
  */
 export async function readTranscriptPage(
   org: string,
@@ -173,14 +229,15 @@ export async function readTranscriptPage(
     page: "run",
   });
   if (!read.ok) return asActionResult(read);
-  // The contract output matches the view model for this read: the entry shape
-  // and the cost basis are the same vocabulary, so a parse at the boundary is
-  // the mapper (INV-09) without reaching into `data/live`.
-  const parsed = RunTranscriptSchema.safeParse(read.value);
-  if (!parsed.success) {
-    return { ok: false, reason: "unavailable", code: "record_unmappable" };
-  }
-  return { ok: true, value: parsed.data };
+  const view = RunTranscript.safeParse(toTranscriptPage(read.value));
+  if (view.success) return { ok: true, value: view.data };
+  captureError({
+    error: view.error,
+    source: "app",
+    orgId: ctx.orgId,
+    context: "readTranscriptPage record_unmappable",
+  });
+  return { ok: false, reason: "unavailable", code: "record_unmappable" };
 }
 
 /**

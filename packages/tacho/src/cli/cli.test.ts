@@ -687,7 +687,9 @@ describe("enroll → status → unenroll", () => {
     expect(commands.length).toBeGreaterThan(0);
     expect(
       commands.every((command) =>
-        command.startsWith("/Applications/Oxagen.app/Contents/MacOS/tacho-hook"),
+        command.startsWith(
+          "/Applications/Oxagen.app/Contents/MacOS/tacho-hook",
+        ),
       ),
     ).toBe(true);
     expect(

@@ -282,10 +282,7 @@ function nextSurface(publicDir, brand) {
  * it must be the same hive favicon the kit emits — never a retired mark.
  */
 function nextAppIcon(appDir, brand) {
-  emit(
-    `${appDir}/src/app/icon.svg`,
-    readFileSync(svg(`${brand}-favicon.svg`)),
-  );
+  emit(`${appDir}/src/app/icon.svg`, readFileSync(svg(`${brand}-favicon.svg`)));
 }
 
 /** apps/web is a flat static site: assets sit beside index.html. */

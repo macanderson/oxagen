@@ -42,26 +42,26 @@ import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
   TRANSCRIPT_ZOOMS,
+  type TranscriptBody,
   type TranscriptDecision,
   type TranscriptEntry,
   type TranscriptKind,
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
-import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
 import {
   buildTranscript,
   type Frames,
   frameAt,
-  frameBody,
   frameCost,
   idsAt,
   openAtZoom,
@@ -76,8 +76,8 @@ import { useRunStream } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
 
-/** A page-read refusal the player shows under the transport. */
-type PageFailure = Extract<ActionResult<unknown>, { ok: false }>;
+/** Why a later page did not arrive, in the shape the action answers with. */
+type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 
 const SPEEDS = [1, 1.5, 2, 4] as const;
 /** How close to the end the playhead gets before the next page is read ahead of it. */
@@ -145,6 +145,57 @@ function Decision({ decision }: { decision: TranscriptDecision }) {
   );
 }
 
+/**
+ * One half of an exchange: what went out, or what came back. The label says
+ * which, so a reader never has to work out whether a body is an input or a
+ * result, and a half whose bytes were not retained says so rather than
+ * drawing an empty box.
+ */
+function FrameHalf({
+  body,
+  label,
+  seq,
+  org,
+  ws,
+  runId,
+}: { body: TranscriptBody; label: string; seq: string } & Place) {
+  const t = useTranslations("run.transcript");
+  return (
+    <div
+      data-testid="transcript-half"
+      data-half={label}
+      className="flex flex-col gap-1.5"
+    >
+      <span className="text-[10.5px] font-medium text-muted-foreground">
+        {label}
+      </span>
+      {body.text === null ? (
+        <p className="m-0 text-xs text-muted-foreground">
+          {t(body.fidelity === "digest_only" ? "digestOnly" : "noBody")}
+        </p>
+      ) : (
+        <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+          {body.text}
+        </pre>
+      )}
+      {body.truncated ? (
+        <p
+          data-testid="entry-truncated"
+          className="m-0 text-xs text-muted-foreground"
+        >
+          {t("truncated")}{" "}
+          <SafeLink
+            to={routes.run(org, ws, runId, { tab: "frames", body: seq })}
+            className={linkText}
+          >
+            {t("openFrame", { seq })}
+          </SafeLink>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function FrameDetail({
   frame,
   org,
@@ -153,11 +204,26 @@ function FrameDetail({
 }: { frame: TranscriptEntry } & Place) {
   const t = useTranslations("run.transcript");
   const format = useFormatter();
-  // One frame carries one half of an exchange: what went out, or what came
-  // back. The heading says which, so a reader never has to guess whether a
-  // body is a prompt or a reply.
-  const body = frameBody(frame);
-  const half = frame.response === null ? t("request") : t("response");
+  const place = { org, ws, runId };
+  // The halves are read by name, never positionally. At `everything` a frame
+  // carries one of them; at a folded zoom a tool step carries its input in
+  // `request` and its result in `response`, and both are drawn. Picking one of
+  // the two would put a tool's input where its result belongs, and the page
+  // would look no different for it.
+  const { request, response } = frame;
+  const both = request !== null && response !== null;
+  // A tool was called with its input and returned its result; every other kind
+  // sent and received. The words differ because the actions do.
+  const sent = frame.kind === "tool_call" ? t("calledWith") : t("request");
+  // The header names one fidelity, and the one a reader is here for is the
+  // result's: a step whose input was kept and whose result was not is a step
+  // with no result to read. Where no result was recorded the outgoing half is
+  // the only half, so it is the one named. This is a summary and never the
+  // only place the fidelity appears. Each half below states its own, so it
+  // is a deliberate choice of which to headline, not a pick between two
+  // bodies. The bodies themselves are read by name.
+  const headline = response ?? request;
+  const neither = request === null && response === null;
   return (
     <div
       data-testid="transcript-frame"
@@ -167,20 +233,11 @@ function FrameDetail({
         <span className="font-mono text-[11px] text-foreground">
           {frame.type}
         </span>
-        {body === null ? null : (
-          <span
-            data-testid="transcript-half"
-            data-half={half}
-            className="text-[10.5px] font-medium text-muted-foreground"
-          >
-            {half}
-          </span>
-        )}
         <span className="ml-auto font-mono text-[10.5px] text-muted-foreground">
           {t("frameHead", {
             seq: frame.seq,
             time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
-            fidelity: t(`fidelity.${body?.fidelity ?? "digest_only"}`),
+            fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
           })}
         </span>
       </div>
@@ -193,32 +250,34 @@ function FrameDetail({
         {frame.decision === null ? null : (
           <Decision decision={frame.decision} />
         )}
-        {body === null || body.text === null ? (
-          <p className="m-0 text-xs text-muted-foreground">
-            {t(body?.fidelity === "digest_only" ? "digestOnly" : "noBody")}
-          </p>
-        ) : (
-          <pre className="m-0 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-card p-2.5 font-mono text-[11.5px] leading-relaxed text-foreground">
-            {body.text}
-          </pre>
-        )}
-        {body?.truncated === true ? (
+        {neither ? (
           <p
-            data-testid="entry-truncated"
+            data-testid="entry-no-halves"
             className="m-0 text-xs text-muted-foreground"
           >
-            {t("truncated")}{" "}
-            <SafeLink
-              to={routes.run(org, ws, runId, {
-                tab: "frames",
-                body: frame.seq,
-              })}
-              className={linkText}
-            >
-              {t("openFrame", { seq: frame.seq })}
-            </SafeLink>
+            {t("noHalves")}
           </p>
         ) : (
+          <>
+            {request === null ? null : (
+              <FrameHalf
+                body={request}
+                label={both ? sent : t("request")}
+                seq={request.seq}
+                {...place}
+              />
+            )}
+            {response === null ? null : (
+              <FrameHalf
+                body={response}
+                label={t("response")}
+                seq={response.seq}
+                {...place}
+              />
+            )}
+          </>
+        )}
+        {headline?.truncated === true ? null : (
           <SafeLink
             to={routes.run(org, ws, runId, { tab: "frames", body: frame.seq })}
             className={`${linkText} self-start text-[11px]`}
@@ -563,42 +622,53 @@ export function TranscriptView({
    * Read the page past the cursor and append it. Nothing already on screen is
    * replaced, so the scroll position and the playhead survive the read.
    */
+  const readPending = () => pendingReadRef.current;
+
   const loadMore = useCallback(async (): Promise<void> => {
     // A read already in flight cannot see a frame that lands while it runs,
-    // so record the signal and let the finally block below run a follow-up
-    // read once that request settles, rather than dropping it here.
+    // so record the signal and loop below for a follow-up read once that
+    // request settles, rather than dropping it or calling this function
+    // recursively (which React Compiler cannot memoize safely).
     if (readingRef.current) {
       pendingReadRef.current = true;
       return;
     }
-    // A sealed run stops when the page answers no cursor. A live run must
-    // keep a resume cursor from the handler so SSE can ask for the next page.
-    if (cursorRef.current === null) return;
     readingRef.current = true;
     setReading(true);
     try {
-      const read = await readTranscriptPage(
-        org,
-        ws,
-        runId,
-        "everything",
-        kinds,
-        cursorRef.current,
-      );
-      if (!read.ok) {
-        setPageFailure(read);
-        return;
-      }
-      setPageFailure(null);
-      const [firstNew, ...rest] = read.value.entries;
-      cursorRef.current = read.value.cursor;
-      setCursor(read.value.cursor);
-      setComplete(read.value.complete);
-      if (firstNew !== undefined) {
-        const next: Frames = [...heldRef.current, firstNew, ...rest];
-        heldRef.current = next;
-        setEntries(next);
-      }
+      do {
+        pendingReadRef.current = false;
+        // A sealed run stops when the page answers no cursor. A live run
+        // must keep a resume cursor from the handler so SSE can ask for
+        // the next page.
+        if (cursorRef.current === null) return;
+        const read = await readTranscriptPage(
+          org,
+          ws,
+          runId,
+          "everything",
+          kinds,
+          cursorRef.current,
+        );
+        if (!read.ok) {
+          setPageFailure(read);
+          return;
+        }
+        setPageFailure(null);
+        const [firstNew, ...rest] = read.value.entries;
+        cursorRef.current = read.value.cursor;
+        setCursor(read.value.cursor);
+        setComplete(read.value.complete);
+        if (firstNew !== undefined) {
+          const next: Frames = [...heldRef.current, firstNew, ...rest];
+          heldRef.current = next;
+          setEntries(next);
+        }
+        // Read through a function rather than the ref directly: the ref can
+        // flip true from the early-return branch above while this `await`
+        // is in flight, but TS's flow analysis cannot see that concurrent
+        // write and would otherwise narrow the property to always `false`.
+      } while (readPending());
     } catch {
       setPageFailure({
         ok: false,
@@ -920,8 +990,7 @@ export function TranscriptView({
         )}
         {pageFailure === null ? null : (
           <span data-testid="transcript-page-failed" className="basis-full">
-            {pageFailure.reason === "unavailable" &&
-            pageFailure.code === "invalid_input"
+            {pageFailure.reason === "invalid"
               ? t("badCursor")
               : t("pageFailed")}
           </span>

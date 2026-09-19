@@ -15,8 +15,8 @@
 // disabled for the same reason from the other direction: the session only
 // records what an agent did, and Oxagen was never in the path, so there is
 // nothing at the other end of a command. A viewer `dispatch_command`
-// would refuse — neither an org Owner or Admin nor a workspace Owner or
-// Member — sees them disabled with that reason, not a button that ends in
+// would refuse (neither an org Owner or Admin nor a workspace Owner or
+// Member) sees them disabled with that reason, not a button that ends in
 // `org_role_required`.
 //
 // Re-reading the run refreshes the route the person is on, so the tab, zoom

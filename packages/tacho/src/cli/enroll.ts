@@ -1009,9 +1009,7 @@ export async function enrollLocked(
         "      `cursor-agent` is not on PATH; the Cursor IDE picks the hooks up on its next agent session",
       );
     else
-      deps.out(
-        `      cursor-agent ${cursor.version ?? "?"} at ${cursor.path}`,
-      );
+      deps.out(`      cursor-agent ${cursor.version ?? "?"} at ${cursor.path}`);
   }
   if (harnesses.includes("stella")) {
     const stella = deps.stella();

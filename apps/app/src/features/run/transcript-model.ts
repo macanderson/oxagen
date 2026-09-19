@@ -10,12 +10,23 @@ import { type Money, sumMoney } from "@/data/contracts/money";
 import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
 
 /**
- * The half of the exchange an entry carries. At `everything` an entry is one
- * frame, so exactly one half is recorded: the frame that carried what came
- * back, or the one that carried what went out. Null when the frame recorded
- * neither.
+ * The one half of the exchange an entry carries, or null.
+ *
+ * At `everything` an entry is a single frame, so exactly one half is recorded:
+ * what went out, or what came back. This answers that half.
+ *
+ * An entry carrying BOTH halves answers null rather than picking one. That is
+ * the whole point of the function. The contract folds a step at the `steps`
+ * and `turns` zooms, and a folded tool step carries its input in `request` and
+ * its result in `response`; a positional `response ?? request` would silently
+ * render a tool's input where its result belongs, and nothing about the page
+ * would look wrong. A caller that needs both halves reads them by name, which
+ * is what the frame renderer does. Module-private: its one caller is
+ * `textOf` below, in this file; a turn's prompt and reply are the only
+ * place the app still reads a body positionally instead of by name.
  */
-export function frameBody(entry: TranscriptEntry): TranscriptBody | null {
+function soleBody(entry: TranscriptEntry): TranscriptBody | null {
+  if (entry.request !== null && entry.response !== null) return null;
   return entry.response ?? entry.request;
 }
 
@@ -141,9 +152,9 @@ function textOf(
 ): string | null {
   const ordered = last ? [...frames].reverse() : frames;
   const found = ordered.find(
-    (frame) => frame.type === type && (frameBody(frame)?.text ?? null) !== null,
+    (frame) => frame.type === type && (soleBody(frame)?.text ?? null) !== null,
   );
-  return found === undefined ? null : (frameBody(found)?.text ?? null);
+  return found === undefined ? null : (soleBody(found)?.text ?? null);
 }
 
 /**

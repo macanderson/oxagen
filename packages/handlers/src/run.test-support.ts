@@ -184,6 +184,7 @@ export function tachoSession(
   return {
     scope: SCOPE,
     session: {
+      id: "0192d4a8-7c1e-7000-8000-00000000c0de",
       publicId,
       sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
       agentKey: "acme.core.cc-laptop",

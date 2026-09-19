@@ -53,11 +53,16 @@ import {
 
 const checkpoints = schema.tachoCheckpoints;
 
-/** The signed checkpoints of one wrapped session, in sequence. */
+/**
+ * The signed checkpoints of one wrapped session, in sequence.
+ * `sessionId` is `tacho.sessions.id` (the row UUID), matching how ingest and
+ * `tacho.session.get` write and read the foreign key. Passing the external
+ * `session_uuid` here returns an empty list for every normal wrapped run.
+ */
 export function tachoCheckpointQuery(
   db: Pick<Tx, "select">,
   scope: RunScope,
-  sessionUuid: string,
+  sessionId: string,
 ) {
   return db
     .select({
@@ -76,7 +81,7 @@ export function tachoCheckpointQuery(
       and(
         eq(checkpoints.orgId, scope.orgId),
         eq(checkpoints.workspaceId, scope.workspaceId),
-        eq(checkpoints.sessionId, sessionUuid),
+        eq(checkpoints.sessionId, sessionId),
       ),
     )
     .orderBy(asc(checkpoints.seq));
@@ -95,10 +100,7 @@ export type CheckpointRow = {
 };
 
 export type RunChainGetDeps = RunReadDeps & {
-  checkpoints: (
-    scope: RunScope,
-    sessionUuid: string,
-  ) => Promise<CheckpointRow[]>;
+  checkpoints: (scope: RunScope, sessionId: string) => Promise<CheckpointRow[]>;
   /**
    * Every attempt seal of a ledger run, oldest first — not only the latest,
    * which `readAllFrames` already walks past (finding 8,
@@ -110,9 +112,9 @@ export type RunChainGetDeps = RunReadDeps & {
 
 export const postgresChainCheckpoints = async (
   scope: RunScope,
-  sessionUuid: string,
+  sessionId: string,
 ): Promise<CheckpointRow[]> =>
-  withTenantDb((tx) => tachoCheckpointQuery(tx, scope, sessionUuid));
+  withTenantDb((tx) => tachoCheckpointQuery(tx, scope, sessionId));
 
 export const postgresChainLedgerSeals = async (
   scope: RunScope,
@@ -256,15 +258,17 @@ function sealsOf(
   }
   const { session } = run.row;
   if (session.sealedAt === null) return [];
+  // Ingest stores `seq_count` as `last.seq + 1` (the next free sequence), so
+  // the final recorded sequence is one less. A three-frame session ends at
+  // seq 2 with `seq_count` 3; reporting 3 would name a frame that never ran.
+  const finalRunSeq =
+    session.seqCount > 0 ? String(session.seqCount - 1) : null;
   return [
     {
       sealedAt: session.sealedAt.toISOString(),
       terminalStatus: session.outcome,
       eventCount: session.seqCount,
-      // seqCount is the next expected sequence (last.seq + 1), so the seal's
-      // final frame is seqCount - 1 when any frames were recorded.
-      finalRunSeq:
-        session.seqCount > 0 ? String(session.seqCount - 1) : null,
+      finalRunSeq,
       finalEventDigest: session.finalHash,
       eventStreamDigest: session.finalHash,
       merkleRoot: session.finalHash,
@@ -282,7 +286,7 @@ export function createRunChainGetHandler(
     const read = await readAllFrames(deps, run, CHAIN_FRAME_CAP);
     const rows =
       run.source === "tacho"
-        ? await deps.checkpoints(scope, run.sessionUuid)
+        ? await deps.checkpoints(scope, run.row.session.id)
         : [];
     const ledgerSeals =
       run.source === "ledger" ? await deps.ledgerSeals(scope, run.runId) : [];
