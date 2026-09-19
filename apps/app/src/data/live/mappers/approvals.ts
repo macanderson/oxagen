@@ -41,6 +41,6 @@ export function toResolvedApprovalItems(
     resolvedAt: item.resolvedAt,
     resolution: item.resolution,
     resolvedBy: item.resolvedBy,
-    autoRuleId: item.autoRuleId,
+    autoRuleRef: item.autoRuleId,
   }));
 }

@@ -1178,7 +1178,7 @@ describe("approvals on the run", () => {
             resolvedAt: new Date(NOW - 30_000).toISOString(),
             resolution: "approved",
             resolvedBy: "policy:small-vendor-payments",
-            autoRuleId: "small-vendor-payments",
+            autoRuleRef: "small-vendor-payments",
           },
         ]),
       },

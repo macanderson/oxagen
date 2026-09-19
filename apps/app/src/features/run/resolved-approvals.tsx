@@ -17,13 +17,8 @@ function approverLabel(resolvedBy: string | null): string {
   return resolvedBy;
 }
 
-function ResolvedApprovalRow({
-  item,
-  t,
-}: {
-  item: ResolvedApprovalItem;
-  t: ReturnType<typeof useTranslations<"run.resolvedApprovals">>;
-}) {
+function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
+  const t = useTranslations("run.resolvedApprovals");
   return (
     <li
       data-testid="resolved-approval"
@@ -67,7 +62,7 @@ export function ResolvedApprovalsPanel({
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
           {approvals.value.map((item) => (
-            <ResolvedApprovalRow key={item.id} item={item} t={t} />
+            <ResolvedApprovalRow key={item.id} item={item} />
           ))}
         </ul>
       )}

@@ -137,7 +137,7 @@ describe("approvals.resolved (#3153)", () => {
           resolvedAt: "2026-09-18T10:00:01.000Z",
           resolution: "approved",
           resolvedBy: "policy:small-vendor-payments",
-          autoRuleId: "small-vendor-payments",
+          autoRuleRef: "small-vendor-payments",
         },
       ]),
     );
