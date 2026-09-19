@@ -187,9 +187,20 @@ export const recoveryCodeVault = {
   clear(): void {
     set(EMPTY);
   },
+  /**
+   * Test seam: the module outlives each test's render, as it outlives a page's
+   * transitions, so a case that leaves something at stake would otherwise leak
+   * into the next one.
+   *
+   * A method on this object rather than its own export, because
+   * `knip --production --strict` reads a test-only export as dead code: the
+   * production pass does not look at test files, so nothing appears to call
+   * it. The baseline in `knip-baseline.json` is shrink-only by design, so
+   * listing it there would be the wrong direction. This object is already
+   * reached from production code, so hanging the seam on it adds no surface
+   * knip has to be told to ignore.
+   */
+  resetForTests(): void {
+    set(EMPTY);
+  },
 };
-
-/** Test seam: the module outlives each test's render, as it outlives a page's transitions. */
-export function resetRecoveryCodeVaultForTests(): void {
-  set(EMPTY);
-}

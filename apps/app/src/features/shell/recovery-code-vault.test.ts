@@ -4,11 +4,7 @@
 // module directly and reset it between cases.
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  recoveryCodeVault,
-  resetRecoveryCodeVaultForTests,
-  useRecoveryCodeVault,
-} from "./recovery-code-vault";
+import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
 
 const ME = "11111111-1111-4111-8111-111111111111";
 const SOMEONE_ELSE = "22222222-2222-4222-8222-222222222222";
@@ -19,7 +15,7 @@ const asked = () =>
   !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
 
 beforeEach(() => {
-  resetRecoveryCodeVaultForTests();
+  recoveryCodeVault.resetForTests();
 });
 
 describe("recoveryCodeVault", () => {

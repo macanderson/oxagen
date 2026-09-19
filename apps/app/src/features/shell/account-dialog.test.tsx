@@ -27,7 +27,7 @@ import {
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
-import { resetRecoveryCodeVaultForTests } from "./recovery-code-vault";
+import { recoveryCodeVault } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 import {
@@ -158,7 +158,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   // The vault outlives a render, as it outlives a page's transitions.
-  resetRecoveryCodeVaultForTests();
+  recoveryCodeVault.resetForTests();
   refresh.mockReset();
   updateProfile.mockReset();
   updateProfile.mockResolvedValue({
