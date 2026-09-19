@@ -1,0 +1,77 @@
+<h2 class="ch-title">Knowledge graphs beat prompt engineering</h2>
+<p class="ch-thesis">Knowledge should be connected, not concatenated.</p>
+
+<p class="lede">Your system prompt has grown to four thousand words because every time the agent missed a relationship, someone added a sentence describing it. "<code>RefundProcessor</code> writes <code>ledger_entries</code>, which <code>ReconciliationJob</code> reads nightly, which the finance dashboard queries." In prose, that chain is three sentences the model has to re-derive by attention on every call. In a graph, it is three edges the system traverses before the model wakes up.</p>
+
+<h3>One ontology, many sources</h3>
+<p>The previous eleven parts each built a specialized index. The knowledge graph is where they federate into a single ontology over your engineering reality: <strong>code graphs</strong> (symbols, calls, imports, Part 4), <strong>schema graphs</strong> (tables, lineage, Part 8), <strong>documentation graphs</strong> (architecture decision records, or ADRs, and dossiers linked to the entities they govern, Parts 5 to 6), <strong>test and contract graphs</strong> (behaviors linked to covered symbols, Part 10), and <strong>runtime graphs</strong> (services, traces, and incidents from your tracing and incident systems). Entity relationships cross the boundaries: this function ↔ writes this table ↔ governed by this ADR ↔ covered by these tests ↔ implicated in that incident. No single tool holds those edges today, which is why an incident review opens with an hour of archaeology.</p>
+
+<h3>Why graph retrieval reduces reasoning complexity</h3>
+<p>When an answer requires multi-hop connection, flat retrieval makes the model do the hops. It retrieves chunks, holds them in attention, and infers the links: probabilistic work, paid in tokens, degraded by every distractor (Part 7). Graph retrieval does the hops in the system by deterministic traversal, then hands the model a pre-connected subgraph. You have converted reasoning, which is expensive and variable, into lookup, which is cheap and exact. That is the thesis of this book applied to knowledge.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Structure wins where connection matters</span>
+  <p>Microsoft's <strong>GraphRAG</strong> is the flagship result: an LLM-extracted entity graph, Leiden community detection, and pre-computed community summaries. On global sensemaking questions over corpora of roughly 1M tokens, it beat vector RAG with <strong>win rates of about 70 to 80% on comprehensiveness and diversity</strong>, and it matched full hierarchical source-text summarization while using roughly <strong>2 to 3% of the tokens per query</strong>, because connection-finding moved from query time to index time.<sup class="cite"><a href="#r10">10</a>,<a href="#r11">11</a></sup> Vector search finds things that sound like the question. Graph traversal finds things related to the answer.</p>
+  <p class="src">Edge et al., arXiv:2404.16130 · Microsoft Research, 2024</p>
+</div>
+
+<div class="counter">
+  <span class="tag">Counterweight, graphs are not free</span>
+  <p>Honest engineering requires the caveat. Naive graph retrieval can inflate prompts instead of shrinking them. Comparative studies measured some graph-RAG variants stuffing 40k to 100k tokens per query, orders of magnitude above vector baselines, and found that piling on more retrieved subgraph stopped improving answers while adding noise.<sup class="cite"><a href="#r21">21</a></sup> Indexing also costs real money up front and has to be maintained. The lesson is not that graphs win everywhere. It is that a graph is an index for precise traversal, not a license to dump neighborhoods. Budgets and slicing (Part 7) apply to subgraphs the way they apply to logs. For code you are in the luckiest domain: unlike a prose corpus, this graph does not need LLM extraction, because compilers, parsers, and migrations give you most of the edges deterministically and nearly free.</p>
+</div>
+
+<h3>A small ontology beats a large prompt</h3>
+<p>The practical migration path is short. Define a small ontology. Populate it from the deterministic sources you already built in Parts 4, 5, 8, and 10. Add embedding-based entry points for fuzzy queries, but make edges rather than similarity the backbone of expansion. Retrieval becomes anchor (parsed, Part 3) → traverse (typed edges, bounded hops) → rank (centrality plus task relevance) → slice to budget. Every step is deterministic except the final generation.</p>
+
+<pre><code>entities: Function, Table, Service, ADR, Test, Incident, Domain
+edges:    calls, writes, covered_by, governed_by, caused
+
+anchor("process_refund")                  # parsed from the ticket
+  .out("writes")          hops=1          → ledger_entries
+  .in("reads")            hops=1          → ReconciliationJob
+  .out("governed_by")     hops=1          → ADR-031 (money is integer cents)
+  .out("covered_by")      hops=1          → 3 tests
+  .rank(centrality + task_relevance)
+  .slice(budget=8000)                     # subgraphs get budgets too
+</code></pre>
+
+<p>The difference that buys is worth stating as a comparison, because it is the reason the token bill moves.</p>
+
+<div class="tablewrap"><table class="tbl">
+  <thead>
+    <tr><th>Question: what breaks if I change the refund amount type?</th><th>Flat retrieval</th><th>Graph traversal</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Finding the writer of <code>ledger_entries</code></td><td>Hope a chunk mentions both</td><td>One <code>writes</code> edge</td></tr>
+    <tr><td>Finding the nightly reader</td><td>A second similarity query, unlinked</td><td>One <code>reads</code> edge</td></tr>
+    <tr><td>Finding the rule that governs the column</td><td>The ADR ranks low on lexical overlap</td><td>One <code>governed_by</code> edge</td></tr>
+    <tr><td>Who does the joining</td><td>The model, in attention, per call</td><td>The index, once, at write time</td></tr>
+    <tr><td>Cost of a wrong answer</td><td>A silent miss you find in production</td><td>A missing edge you can go add</td></tr>
+  </tbody>
+</table></div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Write the ontology on one page.</strong> Name seven entity types and five edge types, and reject anything you cannot populate deterministically this quarter. Done looks like a schema file, not a diagram.</li>
+    <li><strong>Load the two cheapest sources.</strong> Emit <code>calls</code> and <code>imports</code> edges from tree-sitter or your compiler's index, and <code>writes</code> edges from your object-relational mapper's (ORM) introspection or from migration history. Done looks like a graph you can query for one real symbol.</li>
+    <li><strong>Link the governing documents.</strong> Add a front-matter field to each ADR listing the entities it governs, and load <code>governed_by</code> edges from it. Done looks like a traversal that returns the integer-cents rule without anyone naming it.</li>
+    <li><strong>Attach your tracing and incident systems.</strong> Map service names from OpenTelemetry resource attributes to graph nodes, and add a <code>caused</code> edge from each incident's postmortem to the symbols it names. Done looks like an incident reachable in one hop from the function that caused it.</li>
+    <li><strong>Put a budget on the traversal.</strong> Cap hops, cap returned nodes, and slice to a token ceiling before the subgraph reaches the model. Done looks like a subgraph whose size you can state in advance.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>edge_coverage</code>: symbols with at least one outbound typed edge, divided by all symbols in the repository. Up is good, and a low number tells you the graph is a demo rather than an index.</li>
+    <li><code>hops_to_answer</code>: the traversal depth at which the node the patch actually needed appeared. Log the anchor, the path, and the edited symbols. Down is good, and a rising number means an edge type is missing.</li>
+    <li><code>subgraph_tokens_per_query</code>: tokens of retrieved subgraph handed to the model per call. Down is good, and the counterweight above is the reason to watch it rather than assume it.</li>
+    <li><code>graph_query_share</code>: graph queries divided by graph queries plus exploratory file reads. Up is good, because it means the agent looks things up instead of foraging.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Concatenation forces the model to rediscover relationships you already know. Store knowledge as a graph and retrieval becomes traversal, which moves connection-finding out of the token bill and into the index.</p>
+</div>

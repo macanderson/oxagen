@@ -101,7 +101,13 @@
     return THEMES.indexOf(v) === -1 ? "system" : v;
   }
 
+  /* The choice this page shows. It is held here as well as in storage, so a
+     choice still holds for this page view when storage refuses the write:
+     the arrow keys step from it and an OS change does not undo it. */
+  var current = readTheme();
+
   function applyTheme(choice) {
+    current = choice;
     var resolved =
       choice === "system" ? (osLight.matches ? "light" : "dark") : choice;
     /* No transition runs during the swap, or every hover colour would fade
@@ -133,7 +139,7 @@
       try {
         localStorage.setItem(THEME_KEY, choice);
       } catch (e) {
-        /* the choice holds for this page view only */
+        /* the choice holds for this page view only, in `current` */
       }
       applyTheme(choice);
     });
@@ -147,14 +153,14 @@
       if (!step) return;
       e.preventDefault();
       var buttons = group.querySelectorAll("[data-theme-choice]");
-      var at = THEMES.indexOf(readTheme());
+      var at = THEMES.indexOf(current);
       var next = buttons[(at + step + buttons.length) % buttons.length];
       next.focus();
       next.click();
     });
   });
   osLight.addEventListener("change", function () {
-    if (readTheme() === "system") applyTheme("system");
+    if (current === "system") applyTheme("system");
   });
   /* Another tab changed the choice. */
   window.addEventListener("storage", function (e) {
@@ -162,7 +168,7 @@
     pageChoice = e.newValue;
     applyTheme(readTheme());
   });
-  applyTheme(readTheme());
+  applyTheme(current);
 
   /* ---------- nav: scrolled state ---------- */
   var nav = document.getElementById("nav");

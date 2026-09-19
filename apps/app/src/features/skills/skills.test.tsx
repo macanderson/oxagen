@@ -87,7 +87,7 @@ const source: DataSource = {
     transcript: vi.fn(),
     chain: vi.fn(),
   },
-  approvals: { pending: vi.fn() },
+  approvals: { pending: vi.fn(), resolved: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -234,7 +234,7 @@ describe("Skills › empty", () => {
       screen.getByText("2 sessions reported no inventory."),
     ).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("0 sessions reported their");
-    expect(screen.getByText("oxagen tacho enroll").tagName).toBe("CODE");
+    expect(screen.getByText("oxagen agent enroll").tagName).toBe("CODE");
   });
 
   it("renders the empty state when sessions reported inventories that named no skill", async () => {

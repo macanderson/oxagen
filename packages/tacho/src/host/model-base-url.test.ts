@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyModelBaseUrls,
   claudeManagedSettingsPath,
+  claudeToolSearchEnabled,
   isModelProxyBaseUrl,
   modelBaseUrlFor,
   readModelBaseUrlState,
@@ -111,12 +112,15 @@ describe("apply then restore", () => {
     expect(claude.key).toBe("env.ANTHROPIC_BASE_URL");
     expect(claude.current).toBe("http://127.0.0.1:4319/anthropic");
     expect(claude.previous).toBeNull();
+    expect(claude.toolSearch).toEqual({ current: "true", enabled: true });
     expect(applied.harnesses[1]!.key).toBe("openai_base_url");
+    expect(applied.harnesses[1]!.toolSearch).toBeUndefined();
 
     const written = JSON.parse(readFileSync(settingsPath(), "utf8"));
     expect(written.env).toEqual({
       CLAUDE_CODE_SYNTAX_HIGHLIGHT: "1",
       ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+      ENABLE_TOOL_SEARCH: "true",
     });
     expect(written.someFutureKey).toEqual([1, 2, 3]);
     // The file keeps the indent it was written with.
@@ -166,7 +170,10 @@ describe("apply then restore", () => {
     const applied = await applyModelBaseUrls(both(), internals());
     expect(applied.harnesses.every((h) => h.changed)).toBe(true);
     expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
-      env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic" },
+      env: {
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+        ENABLE_TOOL_SEARCH: "true",
+      },
     });
     await restoreModelBaseUrls(both(), internals());
     expect(existsSync(settingsPath())).toBe(false);
@@ -328,6 +335,105 @@ describe("restore after somebody else edited the file", () => {
     expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
       env: {},
     });
+  });
+});
+
+// Behind a non-Anthropic base URL Claude Code turns its tool search off and
+// inlines the whole MCP catalog, which on a machine with a few hundred tools
+// overflowed the context before the first prompt and thrashed autocompact.
+describe("ENABLE_TOOL_SEARCH beside the base URL", () => {
+  const claude = () => ({ ...both(), harnesses: ["claude-code" as const] });
+
+  it("reads Claude Code's accepted values", () => {
+    for (const on of ["true", "TRUE", "auto", "auto:30"])
+      expect(claudeToolSearchEnabled(on)).toBe(true);
+    for (const off of ["false", "0", "", "yes", "auto:", null, undefined])
+      expect(claudeToolSearchEnabled(off)).toBe(false);
+  });
+
+  it("puts back the value it displaced, even after another edit", async () => {
+    seed(settingsPath(), '{"env":{"ENABLE_TOOL_SEARCH":"false"}}\n');
+    const applied = await applyModelBaseUrls(claude(), internals());
+    expect(applied.harnesses[0]!.toolSearch).toEqual({
+      current: "true",
+      enabled: true,
+    });
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8")).env).toEqual({
+      ENABLE_TOOL_SEARCH: "true",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+    });
+
+    const edited = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    edited.model = "opus";
+    writeFileSync(settingsPath(), `${JSON.stringify(edited)}\n`);
+    await restoreModelBaseUrls(claude(), internals());
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
+      env: { ENABLE_TOOL_SEARCH: "false" },
+      model: "opus",
+    });
+  });
+
+  it("leaves a value the user already had that enables the search", async () => {
+    seed(settingsPath(), '{"env":{"ENABLE_TOOL_SEARCH":"auto:20"}}\n');
+    const applied = await applyModelBaseUrls(claude(), internals());
+    expect(applied.harnesses[0]!.toolSearch).toEqual({
+      current: "auto:20",
+      enabled: true,
+    });
+    const edited = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    edited.model = "opus";
+    writeFileSync(settingsPath(), `${JSON.stringify(edited)}\n`);
+    await restoreModelBaseUrls(claude(), internals());
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8")).env).toEqual({
+      ENABLE_TOOL_SEARCH: "auto:20",
+    });
+  });
+
+  it("keeps a value the user changed after enrollment", async () => {
+    seed(settingsPath(), SETTINGS);
+    await applyModelBaseUrls(claude(), internals());
+    const edited = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    edited.env.ENABLE_TOOL_SEARCH = "auto";
+    writeFileSync(settingsPath(), `${JSON.stringify(edited)}\n`);
+    await restoreModelBaseUrls(claude(), internals());
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8")).env).toEqual({
+      CLAUDE_CODE_SYNTAX_HIGHLIGHT: "1",
+      ENABLE_TOOL_SEARCH: "auto",
+    });
+  });
+
+  it("repairs a host enrolled before the key existed, and restores it clean", async () => {
+    seed(settingsPath(), SETTINGS);
+    const first = await applyModelBaseUrls(claude(), internals());
+    // An enrollment from the build that wrote the base URL alone: the key is
+    // missing from the file and from the sidecar.
+    const file = JSON.parse(readFileSync(settingsPath(), "utf8"));
+    delete file.env.ENABLE_TOOL_SEARCH;
+    writeFileSync(settingsPath(), `${JSON.stringify(file, null, 4)}\n`);
+    const backup = first.harnesses[0]!.backup;
+    const sidecar = JSON.parse(readFileSync(backup, "utf8"));
+    delete sidecar.previous_tool_search;
+    writeFileSync(backup, `${JSON.stringify(sidecar, null, 2)}\n`);
+    const before = await readModelBaseUrlState(claude(), internals());
+    expect(before.harnesses[0]!.ours).toBe(true);
+    expect(before.harnesses[0]!.toolSearch).toEqual({
+      current: null,
+      enabled: false,
+    });
+
+    const again = await applyModelBaseUrls(claude(), internals());
+    expect(again.harnesses[0]!.changed).toBe(true);
+    expect(JSON.parse(readFileSync(settingsPath(), "utf8")).env).toEqual({
+      CLAUDE_CODE_SYNTAX_HIGHLIGHT: "1",
+      ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+      ENABLE_TOOL_SEARCH: "true",
+    });
+    expect(
+      JSON.parse(readFileSync(backup, "utf8")).previous_tool_search,
+    ).toBeNull();
+
+    await restoreModelBaseUrls(claude(), internals());
+    expect(readFileSync(settingsPath(), "utf8")).toBe(SETTINGS);
   });
 });
 

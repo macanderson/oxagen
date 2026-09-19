@@ -402,6 +402,7 @@ describe("materializeTools", () => {
     await t.execute!({ x: "hello" });
     expect(invoke).toHaveBeenCalledWith("capA", { x: "hello" }, CTX, {
       surface: "agent",
+      runId: null,
     });
   });
 
@@ -599,6 +600,27 @@ describe("materializeTools", () => {
     expect(call?.runId).toBeNull();
   });
 
+  it("threads runIdRef.current into invoke()'s opts.runId for a capability with no approval gate, so an auto-approval receipt (#3153) attaches to the run the assistant opened after materializing tools", async () => {
+    const runIdRef: { current: string | null } = { current: null };
+    const { tools } = await materializeTools(
+      { ...CTX, messageId: "msg_45" },
+      { runIdRef },
+    );
+    // Same ordering as the approval-gated case above: the run opens only
+    // after materializeTools has already returned.
+    runIdRef.current = "arun_live_45";
+    const capATool = tools.capA as unknown as {
+      execute: (i: unknown) => Promise<unknown>;
+    };
+    await capATool.execute({ x: "hello" });
+    expect(invoke).toHaveBeenCalledWith(
+      "capA",
+      { x: "hello" },
+      { ...CTX, messageId: "msg_45" },
+      { surface: "agent", runId: "arun_live_45" },
+    );
+  });
+
   it("denied approval throws and the handler never runs", async () => {
     mocks.createApprovalRequest.mockClear();
     mocks.waitForApproval.mockClear();
@@ -653,7 +675,7 @@ describe("materializeTools", () => {
       "fill_form",
       { formId: "workspace-general", values: { name: "Prod" } },
       CTX,
-      { surface: "agent" },
+      { surface: "agent", runId: null },
     );
     expect(result).toEqual({ filled: true });
   });
@@ -692,7 +714,7 @@ describe("materializeTools", () => {
       "generate_svg",
       { prompt: "a red circle" },
       CTX,
-      { surface: "agent" },
+      { surface: "agent", runId: null },
     );
     expect(result).toEqual({ svg: "<svg/>" });
   });

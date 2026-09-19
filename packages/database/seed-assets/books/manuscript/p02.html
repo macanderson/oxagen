@@ -1,0 +1,66 @@
+<h2 class="ch-title">Stop making agents read your entire logs</h2>
+<p class="ch-thesis">Logs are structured data, and treating them as prompt text costs tokens you do not have to spend.</p>
+
+<p class="lede">Open a run where your agent debugged a failing test and you will find the same four steps every time: <code>cat</code> the log file, <code>grep</code> for "error", <code>tail -n 200</code>, paste the result into context. The most expensive component in the stack is now doing the job of a parser, and doing it probabilistically.</p>
+
+<h3>Signal to noise is a system property</h3>
+<p>A production stack trace from a Python web request can run hundreds of frames, and most of them are framework internals: WSGI plumbing, middleware, object-relational mapper (ORM) dispatch. The frames that matter for the bug are usually the handful that touch <em>your</em> code. An irrelevant frame is not neutral padding. It costs tokens on the way in, and it competes for attention once it is there. Chroma's "Context Rot" study evaluated 18 frontier models and found that performance degrades as input length grows, even on simple tasks, and that it degrades faster when the context holds distractors that are related to the target without being the target.<sup class="cite"><a href="#r7">7</a></sup> A raw log is a distractor-dense document by construction: hundreds of lines that look like the one line you need.</p>
+<p>Retrieval research reports the same shape. Cuconasu et al. ("The Power of Noise," SIGIR 2024) found that adding semantically related but non-answer-bearing documents to a model's context degrades accuracy, and that related noise hurts more than unrelated noise, because the model cannot cheaply dismiss it.<sup class="cite"><a href="#r9">9</a></sup> Framework frames in a stack trace are that kind of high-similarity distractor.</p>
+
+<h3>Execution slicing: preprocess, do not prompt</h3>
+<p>The deterministic alternative treats program output as structured data and slices it before inference:</p>
+<ul class="plain">
+  <li><strong>Stack trace reduction</strong>: parse the trace, keep frames inside your package roots, collapse framework frames to one-line markers, keep the exception type, the message, and the innermost user frame's local variables.</li>
+  <li><strong>Dynamic trace extraction</strong>: run the failing test under a tracer (<code>sys.settrace</code>, <code>coverage.py</code>, eBPF, OpenTelemetry) and extract the execution path that actually ran, with the values that flowed through it.</li>
+  <li><strong>Log windowing</strong>: anchor on the failure timestamp or request id and take a bounded, correlated window instead of the file.</li>
+</ul>
+
+<div class="mcards">
+  <div class="mcard"><h5>Reach for stack trace reduction when</h5><p>The failure raises. You have a traceback, and what you need is the frames in your own packages, the exception type, and the locals at the innermost user frame.</p></div>
+  <div class="mcard"><h5>Reach for dynamic trace extraction when</h5><p>The test fails without raising, or a legal-looking wrong value arrives somewhere downstream. You need the path that ran and the values that moved along it.</p></div>
+  <div class="mcard"><h5>Reach for log windowing when</h5><p>The failure happened in another process or another service. You have a request id or a timestamp, and you need the correlated window around it, bounded in lines.</p></div>
+</div>
+
+<pre><code><span class="c"># Instead of handing the model a shell and hoping:</span>
+<span class="c">#   grep -rn "error" logs/ | tail -500   ← the model pays for every candidate line</span>
+
+result = run_code_with_trace(          <span class="c"># deterministic, runs in milliseconds</span>
+    cmd=<span class="a">"pytest tests/test_billing.py::test_refund -x"</span>,
+    package_roots=[<span class="a">"app/"</span>],           <span class="c"># slice to code you own</span>
+    capture=[<span class="a">"exception"</span>, <span class="a">"locals"</span>, <span class="a">"executed_lines"</span>, <span class="a">"sql"</span>],
+    max_tokens=<span class="k">1200</span>,                   <span class="c"># hard budget, enforced by code</span>
+)
+context = result.to_prompt_block()     <span class="c"># 1.2k tokens of signal</span></code></pre>
+
+<p>The difference is architectural, not cosmetic. <code>grep | cat | tail</code> makes the <em>model</em> the filter. You pay tokens for every candidate line, and the filtering step itself is probabilistic. <code>run_code_with_trace()</code> makes <em>code</em> the filter. Filtering costs no tokens, returns the same slice on the same input, and you can test it like any other function. Bash is a fine escape hatch. It is a poor primary retrieval engine, because each round trip is another model call that carries the whole conversation history with it.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · The interface is the bottleneck</span>
+  <p>SWE-agent (Yang et al., Princeton) showed that agent performance depends heavily on the <strong>agent-computer interface (ACI)</strong>. Replacing raw shell interaction with purpose-built commands that return compact, structured views of files and search results improved resolution rates on SWE-bench.<sup class="cite"><a href="#r14">14</a></sup> The model did not get smarter. The interface got stricter about what reached the context window. Anthropic's guidance on tool design for agents makes the same point: a tool should return a concise, high-signal representation and enforce token-efficient defaults, because an agent inherits every inefficiency of its tools.<sup class="cite"><a href="#r20">20</a></sup></p>
+  <p class="src">Yang et al., "SWE-agent," NeurIPS 2024 · Anthropic engineering, 2025</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Write a stack trace reducer.</strong> Parse the traceback with your language's own grammar, keep frames whose file path sits under a configured package root, and collapse the rest to one line each. The artifact is a function that takes a traceback string and returns a block under 1,500 tokens.</li>
+    <li><strong>Put a token budget on every tool result.</strong> Each tool returns at most N tokens and says how much it dropped and why. Done looks like a truncation counter you can graph, not a silent cut.</li>
+    <li><strong>Trace the failing test instead of reading its output.</strong> Run it under <code>coverage.py</code> or <code>sys.settrace</code>, keep executed lines inside your package roots, and hand the model the path rather than the log.</li>
+    <li><strong>Correlate logs by request id.</strong> Emit a request id on every log line, then serve a bounded window around a failure instead of a file. If the id is missing today, adding it is the whole task.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>context_tokens_per_tool_call</code>: tokens returned by a tool, at p50 and p99. Down is good. The p99 is where an unbounded <code>cat</code> hides.</li>
+    <li><code>frames_kept_ratio</code>: frames sent divided by frames in the raw trace. Down is good, as long as the innermost user frame survives every time.</li>
+    <li><code>tool_calls_per_task</code>: tool calls between the prompt and the first edit. Down is good, because each one carries the full history with it.</li>
+    <li><code>truncation_rate</code>: share of tool results that hit the budget. Watch both directions. Zero means the budget is slack, and a high rate means the slicer is not slicing.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Every line your system filters in code is a line the model does not pay to read and cannot be distracted by. Deterministic preprocessing moves work off the model and onto a CPU you already own.</p>
+</div>

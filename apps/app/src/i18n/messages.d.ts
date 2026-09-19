@@ -1863,6 +1863,13 @@ type Messages = {
         service: string;
       };
     };
+    resolvedApprovals: {
+      title: string;
+      resolution: string;
+      resolvedBy: string;
+      resolvedAt: string;
+      empty: string;
+    };
     tabs: {
       label: string;
       transcript: string;
@@ -3399,7 +3406,6 @@ type Messages = {
   };
   ui: {
     brand: {
-      name: string;
       home: string;
     };
     dialog: {

@@ -39,10 +39,10 @@ export const metadata: Metadata = {
   // /manifest.webmanifest.
   icons: {
     icon: [
-      { url: "/favicon/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon/favicon.ico", sizes: "any" },
+      { url: "/favicon/favicon.svg", type: "image/svg+xml", sizes: "any" },
       { url: "/favicon/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/favicon/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon/favicon.ico", sizes: "16x16 32x32 48x48" },
     ],
     apple: [
       { url: "/pwa/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
