@@ -624,6 +624,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("no_principal"));
     });
 
+    // #3138 (ADR-104): request_mandate and list_mandates now admit the same
+    // roles, so IAM lets a non-accountable reader reach the handler; this
+    // pins what readerFilter's creator-narrowing does with that admission —
+    // a reader who created nothing reads nothing, not the whole ledger.
+    it("list: a reader with no accountable role who created no agent reads nothing", async () => {
+      const bystanderUserId = randomUUID();
+      doubles.roles.set(bystanderUserId, { org: null, workspace: "Member" });
+      const bystander = await inScope(() =>
+        mandateListHandler({ limit: 50 }, ctx(bystanderUserId)),
+      );
+      expect(bystander.items).toEqual([]);
+    });
+
     it("get: the operator of another agent is refused; the office reads the ledger newest first; an unknown id is not found", async () => {
       const m = await grant(billingUserId, body());
       await seedReservation(m.id, "150000000", randomUUID());

@@ -38,8 +38,12 @@ those two, floored at zero, the figure the gate reserves against.
 ## Readers
 
 An org Owner, Admin, Billing or Compliance reads every mandate in the
-workspace; any other signed-in user reads the mandates of agents they
-created.
+workspace. `defaultRoles` otherwise matches `request_mandate` exactly (org
+Member; workspace Owner, Member, ADR-104): anyone who may ask for a mandate
+reads the mandates of agents they created, so the person who requests a
+mandate can read the draft they just made. Anyone else — no accountable
+office role and no org/workspace role `request_mandate` admits either — is
+refused before the handler runs.
 
 ## Errors
 

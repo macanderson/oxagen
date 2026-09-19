@@ -9,8 +9,16 @@ import {
 // list_mandates — the ledger view the accountable office reads (Tools ›
 // mandates) and the mandates one agent holds (Agents › mandates). Each row
 // carries its remaining authority by measure from the ledger (INV-10).
-// Readable by an accountable org role (Owner, Admin, Billing, Compliance);
-// any other member sees only the mandates of agents they created.
+//
+// Readable by an accountable org role (Owner, Admin, Billing, Compliance),
+// who see every mandate in the workspace. `defaultRoles` otherwise matches
+// `request_mandate` exactly (org Member; workspace Owner, Member) — anyone
+// who may ask for a mandate may read the mandates of agents they created, so
+// the requester of a draft can read the draft they just made. ADR-104: the
+// two capabilities disagreed (`request_mandate` admitted a workspace Member
+// this contract refused outright), and `readerFilter`
+// (`packages/handlers/src/_mandate.ts`) already narrows that reader to their
+// own agents — it was dead code until these roles matched it.
 export const mandateList = registerCapability({
   name: "list_mandates",
   domain: "mandate",
@@ -31,8 +39,12 @@ export const mandateList = registerCapability({
       Admin: "allow",
       Billing: "allow",
       Compliance: "allow",
+      Member: "allow",
     },
-    workspace: {},
+    workspace: {
+      Owner: "allow",
+      Member: "allow",
+    },
   },
   input: z
     .object({
