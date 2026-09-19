@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Classic JSX transform looks up `React` as a free variable. Bind it for this
 // file so the assertion can run without the Vite React plugin.
-(globalThis as { React?: typeof React }).React = React;
+Object.assign(globalThis, { React });
 
 const setViewerTimeZone = vi.fn();
 vi.mock("@/ui/formatter", () => ({ setViewerTimeZone }));

@@ -110,7 +110,7 @@ export function startOfNextZonedDay(
   // Step the civil Y-M-D triple, then resolve that next civil day in the zone.
   // Do not add 24h to an instant: DST days are not 24 hours long.
   const next = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
-  const y = next.getUTCFullYear();
+  const y = String(next.getUTCFullYear()).padStart(4, "0");
   const m = String(next.getUTCMonth() + 1).padStart(2, "0");
   const d = String(next.getUTCDate()).padStart(2, "0");
   return startOfZonedDay(`${y}-${m}-${d}`, timeZone);
