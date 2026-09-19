@@ -1079,14 +1079,14 @@ it("presents as a bottom sheet on a phone", async () => {
   }
 });
 
-// 60s, not the 30s default, and not because the check is flaky. The
-// Preferences tab renders one `<option>` per zone `Intl.supportedValuesOf`
-// reports — around 400 nodes — and axe-core walks every one of them under
-// jsdom for each of the WCAG rule sets. On CI that run alone passed 30s and
-// failed the whole `test` job on a timeout, with no violation to show for it
-// (run 35398598488). A budget that the honest work does not fit in reports a
-// slow assertion as an accessibility failure, which is the one thing this
-// check must never do.
+// 60s, not the 30s default. The zone stub above takes the bulk of the cost
+// out, but these are still the four slowest assertions in the app: axe-core
+// runs five WCAG rule sets over a whole dialog under jsdom, four times. They
+// have already expired twice on a loaded runner — at 15s, then at 30s, which
+// failed the entire `test` job with no violation to show for it (run
+// 35398598488). A budget the honest work does not fit in reports a slow
+// assertion as an accessibility failure, which is the one thing this check
+// must never do, so the headroom stays even now the work is smaller.
 it.each(["profile", "preferences", "security", "privacy"] as const)(
   "has no axe violations on the %s tab",
   async (tab) => {
