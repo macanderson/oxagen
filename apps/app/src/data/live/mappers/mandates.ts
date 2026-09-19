@@ -85,6 +85,42 @@ function toAuthority(
   };
 }
 
+/**
+ * The approval rule's thresholds, each in its measure's own form where the
+ * mandate's limits establish what that form is.
+ *
+ * `humanAbove` is a measure-keyed record of integer strings and names neither a
+ * currency nor a unit, so the only evidence for the form is the limit on the
+ * same measure — which is exactly where `authority` got its own. A threshold on a
+ * measure the mandate does not limit therefore has no form, and `value` is null
+ * rather than assumed: the rule is still in force, and the page prints the
+ * recorded digits beside the measure's name. Guessing dollars there would be the
+ * same mistake `isCurrencyCode` is a stand-in for above, one layer further from
+ * the evidence.
+ */
+function toApproval(
+  item: MandateOut,
+): z.input<typeof MandateList>["mandates"][number]["approval"] {
+  const formOf = (measure: string): string | null => {
+    const limit = item.authority.find((entry) => entry.measure === measure);
+    return limit?.currencyOrUnit ?? null;
+  };
+  return {
+    humanAbove: Object.entries(item.approval.humanAbove).map(
+      ([measure, recorded]) => {
+        const unit = formOf(measure);
+        return {
+          measure,
+          value: unit === null ? null : measureValue(recorded, unit),
+          recorded,
+        };
+      },
+    ),
+    alwaysHumanFor: [...item.approval.alwaysHumanFor],
+    approvers: [...item.approval.approvers],
+  };
+}
+
 /** One mandate row, shared by `list_mandates` and `get_mandate`: the same view model. */
 function toMandateRow(
   item: MandateOut,
@@ -98,6 +134,12 @@ function toMandateRow(
     roleAtGrant: item.roleAtGrant,
     consequenceTags: item.consequenceTags,
     tools: item.tools,
+    targets: Object.entries(item.targets).map(([measure, rule]) => ({
+      measure,
+      allow: [...rule.allow],
+      deny: [...rule.deny],
+    })),
+    approval: toApproval(item),
     purpose: item.purpose,
     validFrom: item.validFrom,
     validTo: item.validTo,

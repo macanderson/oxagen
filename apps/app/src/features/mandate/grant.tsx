@@ -18,21 +18,19 @@
 // `approvers` list is not "nobody", it is "the roles accountable for the
 // consequence", and printing it as empty would read as the opposite.
 import { useFormatter, useTranslations } from "next-intl";
+import type { ReactNode } from "react";
 import type { MandateRow } from "@/data/contracts/mandates";
 import { mono, panel } from "@/ui/control-styles";
 import { MandateScope } from "@/ui/mandate-scope";
-import { Measure } from "@/ui/measure";
+import { useMeasureText } from "@/ui/measure";
 
 const term = "text-xs font-medium text-muted-foreground";
 const value = "text-sm text-foreground";
 
-function Row({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+/** What an empty allow or deny list reads as: no pattern, and so no rule of that side. */
+const NONE = "none";
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
       <dt className={term}>{label}</dt>
@@ -50,24 +48,24 @@ function Row({
  */
 function Approval({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("mandate.grant");
-  const { approval, authority } = mandate;
-  const above = Object.entries(approval.humanAbove);
+  const measureText = useMeasureText();
+  const { approval } = mandate;
   return (
     <span className="flex flex-col gap-1">
-      {above.map(([measure, threshold]) => {
-        // The threshold is stored in the measure's own units, so it is printed
-        // through the same component the limits are: a currency reads as money
-        // and a count reads as whole units, and neither is guessed here.
-        const of = authority.find((entry) => entry.measure === measure);
-        const shape = of?.perPeriod ?? of?.perCall ?? null;
-        return (
-          <span key={measure} data-approval="above">
-            {shape === null || shape.kind === "count"
-              ? t("approvalAbove", { value: threshold, measure })
-              : t("approvalAbove", { value: threshold, measure })}
-          </span>
-        );
-      })}
+      {approval.humanAbove.map((threshold) => (
+        // A threshold in a form the mandate's limits establish is printed in
+        // that form; one whose form nothing records is printed as the digits
+        // the record holds, beside its measure. Neither is guessed into money.
+        <span key={threshold.measure} data-approval="above">
+          {t("approvalAbove", {
+            value:
+              threshold.value === null
+                ? threshold.recorded
+                : measureText(threshold.value),
+            measure: threshold.measure,
+          })}
+        </span>
+      ))}
       {approval.alwaysHumanFor.length === 0 ? null : (
         <span data-approval="always">
           {t("approvalAlways", { tags: approval.alwaysHumanFor.join(", ") })}
@@ -85,17 +83,13 @@ function Approval({ mandate }: { mandate: MandateRow }) {
 export function MandateGrant({ mandate }: { mandate: MandateRow }) {
   const t = useTranslations("mandate.grant");
   const format = useFormatter();
-  const targets = Object.entries(mandate.targets);
   return (
     <section
       aria-labelledby="mandate-grant"
       data-testid="mandate-grant"
       className={panel}
     >
-      <h2
-        id="mandate-grant"
-        className="px-4 pb-2 pt-4 text-base font-semibold"
-      >
+      <h2 id="mandate-grant" className="px-4 pb-2 pt-4 text-base font-semibold">
         {t("title")}
       </h2>
       <dl className="pb-2">
@@ -105,9 +99,7 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
         <Row label={t("grantedBy")}>
           {mandate.grantedBy === null ? (
             <span className="flex flex-col gap-0.5">
-              <span className="text-muted-foreground">
-                {t("notGranted")}
-              </span>
+              <span className="text-muted-foreground">{t("notGranted")}</span>
               {mandate.requestedBy === null ? null : (
                 <span
                   data-requested-by={mandate.requestedBy}
@@ -132,25 +124,29 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
           <span className={mono}>{mandate.consequenceTags.join(", ")}</span>
         </Row>
         <Row label={t("counterparties")}>
-          {targets.length === 0 ? (
+          {mandate.targets.length === 0 ? (
             <span className="text-muted-foreground">{t("anyTarget")}</span>
           ) : (
             <span className="flex flex-col gap-1">
-              {targets.map(([measure, rule]) => (
-                <span key={measure} className="flex flex-col">
+              {mandate.targets.map((rule) => (
+                <span
+                  key={rule.measure}
+                  data-target={rule.measure}
+                  className="flex flex-col"
+                >
                   <span className="text-xs text-muted-foreground">
-                    {measure}
+                    {rule.measure}
                   </span>
                   <span>
                     {t("allow")}{" "}
                     <span className={`${mono} break-all`}>
-                      {rule.allow.length === 0 ? "—" : rule.allow.join(", ")}
+                      {rule.allow.length === 0 ? NONE : rule.allow.join(", ")}
                     </span>
                   </span>
                   <span>
                     {t("deny")}{" "}
                     <span className={`${mono} break-all`}>
-                      {rule.deny.length === 0 ? "—" : rule.deny.join(", ")}
+                      {rule.deny.length === 0 ? NONE : rule.deny.join(", ")}
                     </span>
                   </span>
                 </span>
@@ -165,18 +161,14 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
           <Approval mandate={mandate} />
         </Row>
         <Row label={t("valid")}>
-          <span className="flex flex-col gap-0.5">
-            <span>
-              {t("validWindow", {
-                from: format.dateTime(new Date(mandate.validFrom), {
-                  dateStyle: "medium",
-                }),
-                to: format.dateTime(new Date(mandate.validTo), {
-                  dateStyle: "medium",
-                }),
-              })}
-            </span>
-          </span>
+          {t("validWindow", {
+            from: format.dateTime(new Date(mandate.validFrom), {
+              dateStyle: "medium",
+            }),
+            to: format.dateTime(new Date(mandate.validTo), {
+              dateStyle: "medium",
+            }),
+          })}
         </Row>
       </dl>
     </section>
