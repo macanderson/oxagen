@@ -73,6 +73,9 @@ const dbMocks = {
   query: {
     plans: { findFirst: vi.fn() },
     subscriptions: { findFirst: vi.fn() },
+    // readRecordedCustomerId reads the settings column before a subscription;
+    // an empty column keeps the subscription-row fallback these tests drive.
+    orgBillingSettings: { findFirst: vi.fn().mockResolvedValue(undefined) },
   },
   insert: vi.fn(),
   update: vi.fn(() => ({
