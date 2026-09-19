@@ -71,10 +71,10 @@ describe("CreateHost", () => {
     open();
     const dialog = await screen.findByTestId("create-chooser");
     expect(dialog.querySelector('[data-kind="skill"]')).not.toBeNull();
+    expect(dialog.querySelector('[data-kind="record"]')).not.toBeNull();
     // The tool wizard is not offered yet, and neither is a kind with no module.
     expect(dialog.querySelector('[data-kind="tool"]')).toBeNull();
     expect(dialog.querySelector('[data-kind="agent"]')).toBeNull();
-    expect(dialog.querySelector('[data-kind="record"]')).toBeNull();
     expect(
       await screen.findByText(
         t("chooser.note", { repository: "acme/platform" }),

@@ -4,6 +4,8 @@ import { clampStep, railOf, type StepId } from "./wizard";
 
 vi.mock("./actions", () => ({
   proposeSkill: vi.fn(),
+  proposeRecord: vi.fn(),
+  openRecordPr: vi.fn(),
   readMainRepository: vi.fn(),
 }));
 
@@ -48,5 +50,18 @@ describe("the wizard registry", () => {
       const draft = { ...(skill?.init() as object), path };
       expect(skill?.steps(draft).at(-1)).toBe("pullRequest");
     }
+  });
+
+  it("carries the context-record wizard: five steps, ending on a pull request", () => {
+    const record = WIZARDS.record;
+    expect(record?.need).toBe("steering.write");
+    const draft = record?.init();
+    expect(record?.steps(draft)).toEqual([
+      "describe",
+      "kind",
+      "statement",
+      "checks",
+      "pullRequest",
+    ]);
   });
 });

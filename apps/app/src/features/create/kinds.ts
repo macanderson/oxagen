@@ -4,9 +4,11 @@
 // the two lists together, so a kind can never be offered with no wizard
 // behind it.
 import type { CreateKind } from "@/shared/create";
+import { recordWizard } from "./record-wizard";
 import { skillWizard } from "./skill-wizard";
 import { type AnyWizardKind, wizardKind } from "./wizard";
 
 export const WIZARDS: Partial<Record<CreateKind, AnyWizardKind>> = {
   skill: wizardKind(skillWizard),
+  record: wizardKind(recordWizard),
 };

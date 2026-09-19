@@ -39,6 +39,7 @@ describe("buildCommands", () => {
     expect(commands.filter((c) => "create" in c)).toEqual([
       { id: "create", label: "create:any", create: null },
       { id: "create:skill", label: "create:skill", create: "skill" },
+      { id: "create:record", label: "create:record", create: "record" },
     ]);
   });
 

@@ -1223,6 +1223,217 @@ type Messages = {
       };
     };
   };
+  createRecord: {
+    describe: {
+      title: string;
+      subtitle: string;
+      placeholder: string;
+      hint: string;
+      suggestions: {
+        changelog: string;
+        release: string;
+        order: string;
+        flake: string;
+      };
+      noGrant: string;
+      next: string;
+    };
+    kind: {
+      title: string;
+      subtitle: string;
+      cards: string;
+      never: string;
+      reaches: string;
+      next: string;
+      kinds: {
+        rule: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        constraint: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        procedure: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        fact: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        memory: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        preference: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+      };
+    };
+    statement: {
+      title: string;
+      subtitle: string;
+      drafted: {
+        title: string;
+        body: string;
+      };
+      path: string;
+      tokens: string;
+      revert: string;
+      empty: string;
+      tooLong: string;
+      force: {
+        label: string;
+        stable: string;
+        selected: string;
+        preference: string;
+        informs: string;
+      };
+      scope: {
+        label: string;
+        workspace: string;
+        repository: string;
+        workspaceHint: string;
+        repositoryClosed: string;
+      };
+      effect: {
+        label: string;
+        hint: string;
+      };
+      preview: {
+        label: string;
+        badge: string;
+      };
+      bundle: string;
+      next: string;
+    };
+    checks: {
+      title: string;
+      subtitle: string;
+      items: {
+        schema: {
+          name: string;
+          detail: string;
+        };
+        lineage: {
+          name: string;
+          detail: string;
+        };
+        hash: {
+          name: string;
+          detail: string;
+        };
+        secrets: {
+          name: string;
+          detail: string;
+        };
+        conflicts: {
+          name: string;
+          detail: string;
+        };
+        effect: {
+          name: string;
+          constraint: string;
+          none: string;
+        };
+      };
+      fifth: string;
+      next: string;
+    };
+    pr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      fileRecord: string;
+      rationale: string;
+      checks: {
+        schema: string;
+        lineage: string;
+        hash: string;
+        secrets: string;
+        conflicts: string;
+        effect: string;
+        noEffect: string;
+      };
+      names: {
+        schema: string;
+        lineage: string;
+        hash: string;
+        secrets: string;
+        conflicts: string;
+        effect: string;
+      };
+      open: string;
+      opening: string;
+      proposalKept: string;
+      repo: {
+        loading: string;
+        unbound: string;
+        denied: string;
+        unavailable: string;
+      };
+    };
+    opened: {
+      title: string;
+      subtitle: string;
+      link: string;
+      noPr: string;
+      path: string;
+      checks: string;
+      status: {
+        passed: string;
+        failed: string;
+        running: string;
+        pending: string;
+      };
+      names: {
+        schema: string;
+        lineage_uniqueness: string;
+        record_hash: string;
+        secret_pii_scan: string;
+        conflict_against_active: string;
+        constraint_effect: string;
+      };
+      passed: string;
+      failed: string;
+      running: string;
+      onContextPrs: string;
+    };
+    failure: {
+      orgRoleRequired: string;
+      noPrincipal: string;
+      lineagePrOpen: string;
+      governanceUnreadable: string;
+      repositoryMissing: string;
+      githubRefused: string;
+      baseMoved: string;
+      proposalMoved: string;
+      unanswered: string;
+      refused: string;
+      invalid: string;
+      pendingApproval: string;
+    };
+  };
   fleet: {
     stats: {
       label: string;
