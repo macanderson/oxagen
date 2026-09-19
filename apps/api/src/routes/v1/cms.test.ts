@@ -304,7 +304,6 @@ describe("POST /v1/cms/book/redeem", () => {
       editions: [
         { slug: "page-flip-reader", title: "Reader", format: "page-flip" },
       ],
-      leadEmail: "ada@example.com",
     });
     const res = await post("/book/redeem", {
       edition: "page-flip-reader",
