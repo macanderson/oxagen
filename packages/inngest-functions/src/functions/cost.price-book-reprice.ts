@@ -13,7 +13,8 @@ import { logger } from "../logger";
 /**
  * The event every backdated write sends — the hourly `cost.price-book-sync`
  * job, a manual `pnpm billing:price-book-sync --apply`, and this function to
- * itself once per page. It lives in `../events` so a caller outside this
+ * itself once per page. The nightly `cost.daily-rollup` sends it too, which is
+ * this pass's one recurring trigger. It lives in `../events` so a caller outside this
  * package can name it without importing this module's dependencies, and is
  * re-exported here because this is the function that consumes it.
  */
@@ -95,7 +96,8 @@ function readRetries(data: unknown): RetryRun[] {
 /**
  * `cost/price-book.backdated` → re-roll every run whose cost is blank,
  * `estimated`, or missing an unpriced frame, one page per invocation, until
- * the list is empty.
+ * the list is empty. Sent by a sync that backdated rows, and once a night by
+ * `cost.daily-rollup` whether or not a price moved.
  *
  * The sync used to re-roll the first 500 such runs inline and stop. The next
  * hourly sync of an unchanged book writes nothing and is not backdated, so it
@@ -111,10 +113,10 @@ function readRetries(data: unknown): RetryRun[] {
  * A rebuild that throws is retried as a step, with Inngest's backoff, up to
  * `retries` times. A run that still fails is carried in the next event's
  * `retry` list and rebuilt first on the next invocation, because the chain
- * moves its cursor past it and nothing else would come back for it: the
- * trigger fires only when a cold sync writes a row, so an unchanged hourly
- * sync starts no new pass and a moment of frame-store trouble would leave
- * the run unpriced for ever. A run that fails {@link MAX_ATTEMPTS}
+ * moves its cursor past it and nothing else would come back for it within
+ * the night: an unchanged hourly sync starts no new pass, so a moment of
+ * frame-store trouble would otherwise leave the run unpriced until the
+ * nightly sweep asked for the next pass. A run that fails {@link MAX_ATTEMPTS}
  * invocations running is dropped with a warning, so one broken run cannot
  * keep the chain alive by itself.
  *

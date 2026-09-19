@@ -15,8 +15,12 @@
 /**
  * Sent after a write that backdated rows, by the hourly `cost.price-book-sync`
  * job, by `pnpm billing:price-book-sync --apply`, and by
- * `cost.price-book-reprice` to itself once per page. Consumed by
+ * `cost.price-book-reprice` to itself once per page. The nightly
+ * `cost.daily-rollup` sends it as well, with no backdated write behind it, so
+ * a row left incomplete by anything other than a sync is still repaired: a
+ * first rollup holding a pre-sync book can insert its blank row after the pass
+ * a sync started has already read the list. Consumed by
  * `cost.price-book-reprice`, which re-rolls every run whose cost is blank or
- * estimated and which the newly backdated prices can now price.
+ * estimated.
  */
 export const PRICE_BOOK_BACKDATED_EVENT = "cost/price-book.backdated";

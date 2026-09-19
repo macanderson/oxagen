@@ -1081,6 +1081,118 @@ describe("the negotiated write path", () => {
     ).resolves.toMatchObject({ closed: null });
   });
 
+  // `resolvePriceEntry` picks rows with `isSameModelIdentity`, which treats a
+  // point-in-time stamp as the same product. So a live `gpt-4` row and a
+  // second row for `gpt-4-0613` are one model at two contracted rates: the
+  // stamped row answers a frame that reports the stamp (the longer match) and
+  // the family row answers a bare frame. The overlap check compares identities
+  // with the same rule, in both directions.
+  it("refuses a stamped negotiated row beside a live family row, and the reverse (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openai",
+      model: "gpt-4",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    // The stamp under a live family row.
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "gpt-4-0613",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "price_entry_alias_conflict",
+    });
+    // An ISO stamp, and a stamp reached through an alias rather than the model.
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "vendor/gpt-4-2026-08-01",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "unrelated-model",
+        modelAliases: ["gpt-4-latest"],
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    expect(fake.rows).toHaveLength(1);
+  });
+
+  // The other direction: the stamped row is the live one and the bare family
+  // is written after it. Comparing one way only would let this through.
+  it("refuses a family negotiated row under a live stamped one (negative)", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openai",
+      model: "gpt-4-0613",
+      microsPerMillion: 2_400_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "gpt-4",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).rejects.toMatchObject({ reason: "price_entry_alias_conflict" });
+    expect(fake.rows).toHaveLength(1);
+
+    // Ending the stamped rate frees the identity.
+    await closeNegotiatedPriceEntry({
+      ...SET,
+      provider: "openai",
+      model: "gpt-4-0613",
+      at: T2,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "gpt-4",
+        microsPerMillion: 2_000_000n,
+        effectiveFrom: T2,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+  });
+
+  // A numeric release is a different product the vendor prices separately, so
+  // the widened check must not refuse it. `isSameModelIdentity` is the rule in
+  // both places, which is what keeps these two rates apart.
+  it("leaves two numeric releases as separate negotiated rates", async () => {
+    await setNegotiatedPriceEntry({
+      ...SET,
+      provider: "openai",
+      model: "gpt-5",
+      microsPerMillion: 1_250_000n,
+      effectiveFrom: T1,
+    });
+    await expect(
+      setNegotiatedPriceEntry({
+        ...SET,
+        provider: "openai",
+        model: "gpt-5.2",
+        microsPerMillion: 1_750_000n,
+        effectiveFrom: T2,
+      }),
+    ).resolves.toMatchObject({ closed: null });
+    expect(fake.rows).toHaveLength(2);
+  });
+
   // The family is spelled EXACTLY, never matched by the resolver's prefix
   // rule, so two models that merely share a stem stay two rates. Normalising
   // with `startsWith` here would refuse `gpt-4` for an unrelated `gpt-4o`.

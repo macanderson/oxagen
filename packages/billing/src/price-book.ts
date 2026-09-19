@@ -1336,14 +1336,16 @@ async function lockNegotiatedKey(
  * it would leave two rows open for one key, and it would reprice runs that
  * already settled.
  *
- * Identity is the model, its aliases AND the bare family behind a `creator/`
- * prefix, because that is how the resolver reads a row: an organization that
- * has negotiated `foo` and then negotiates `vendor/foo` as a model would hold
- * two live rows for one thing, and a frame would be priced by whichever
- * spelling it happened to report. A write whose identities overlap a live row
- * under a different model is refused until that rate is ended. Two models
- * that merely share a stem stay distinct: the family is spelled exactly, so
- * `openai/gpt-4o` and `gpt-4` are two rates, not one.
+ * Identity is the model, its aliases, the bare family behind a `creator/`
+ * prefix AND a point-in-time stamp, because that is how the resolver reads a
+ * row: an organization that has negotiated `foo` and then negotiates
+ * `vendor/foo` or `foo-0613` as a model would hold two live rows for one
+ * thing, and a frame would be priced by whichever spelling it happened to
+ * report. A write whose identities overlap a live row under a different model
+ * is refused until that rate is ended. Two models that merely share a stem
+ * stay distinct: the family is spelled exactly and the suffix rule is
+ * {@link isSameModelIdentity}, so `openai/gpt-4o` and `gpt-4` are two rates,
+ * and so are `gpt-5` and `gpt-5.2`.
  *
  * `source` is always `negotiated` and `org_id` is always the organization's:
  * `price_entries_org_source_check` is `(source = 'list') = (org_id IS NULL)`,
@@ -1425,19 +1427,40 @@ export async function setNegotiatedPriceEntry(
     // family fallback, so an organization holding both rows prices one model
     // at two contracted rates, chosen by the spelling the frame happened to
     // carry. Comparing the spellings as written let the second row in.
+    //
+    // Two identities are compared with {@link isSameModelIdentity}, the same
+    // test {@link resolvePriceEntry} picks rows with, and in BOTH directions.
+    // Set membership alone compared the identities as strings, so an
+    // organization holding a negotiated `gpt-4` row was still allowed a second
+    // row for `gpt-4-0613`. The resolver treats a point-in-time stamp as the
+    // same product, so it then answers a frame spelled `gpt-4-0613` with the
+    // stamped row (the longer match) and a frame spelled `gpt-4` with the
+    // family row: one model at two contracted rates, picked by the spelling
+    // the harness recorded. Both directions are needed because either row can
+    // be the stamped one — the stamped row may already be live when the bare
+    // family is written.
+    const sameIdentity = (other: string) => {
+      for (const mine of identities)
+        if (
+          isSameModelIdentity(mine, other) ||
+          isSameModelIdentity(other, mine)
+        )
+          return true;
+      return false;
+    };
     const overlapping = everyModel.find(
       (r) =>
         r.model !== args.model &&
         live(r) &&
         [r.model, ...r.modelAliases].some((name) =>
-          identities.has(resolverIdentity(name)),
+          sameIdentity(resolverIdentity(name)),
         ),
     );
     if (overlapping)
       throw new HandlerError({
         code: "conflict",
         reason: "price_entry_alias_conflict",
-        message: `${args.model} ${args.tokenClass} resolves to the same model as the negotiated row for ${overlapping.model} (aliases ${JSON.stringify(overlapping.modelAliases)}, effective from ${overlapping.effectiveFrom.toISOString()}); the resolver treats a model, its aliases and the bare family behind a \`creator/\` prefix as one identity, so end that rate before setting this one`,
+        message: `${args.model} ${args.tokenClass} resolves to the same model as the negotiated row for ${overlapping.model} (aliases ${JSON.stringify(overlapping.modelAliases)}, effective from ${overlapping.effectiveFrom.toISOString()}); the resolver treats a model, its aliases, the bare family behind a \`creator/\` prefix and a point-in-time stamp such as \`-0613\` as one identity, so end that rate before setting this one`,
       });
     const everyProvider = everyModel.filter((r) => r.model === args.model);
 

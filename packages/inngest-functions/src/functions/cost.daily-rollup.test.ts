@@ -22,7 +22,10 @@ vi.mock("../logger", () => ({
 vi.mock("../create-function", () => ({ createFunction: mocks.createFunction }));
 
 type Handler = (ctx: {
-  step: { run: (name: string, fn: () => Promise<unknown>) => Promise<unknown> };
+  step: {
+    run: (name: string, fn: () => Promise<unknown>) => Promise<unknown>;
+    sendEvent: (label: string, event: unknown) => Promise<unknown>;
+  };
 }) => Promise<unknown>;
 let handler: Handler | null = null;
 let trigger: { cron?: string } | null = null;
@@ -36,7 +39,13 @@ mocks.createFunction.mockImplementation(
 
 await import("./cost.daily-rollup");
 
-const step = { run: (_: string, fn: () => Promise<unknown>) => fn() };
+const sent: { label: string; event: unknown }[] = [];
+const step = {
+  run: (_: string, fn: () => Promise<unknown>) => fn(),
+  sendEvent: async (label: string, event: unknown) => {
+    sent.push({ label, event });
+  },
+};
 
 const RUN_YESTERDAY = {
   orgId: "org-1",
@@ -53,6 +62,7 @@ describe("cost.daily-rollup", () => {
     mocks.rebuildRunTotals.mockReset().mockResolvedValue(RUN_YESTERDAY);
     mocks.rebuildDailyTotals.mockReset().mockResolvedValue([]);
     mocks.warn.mockReset();
+    sent.length = 0;
   });
   afterEach(() => vi.useRealTimers());
 
@@ -82,6 +92,22 @@ describe("cost.daily-rollup", () => {
       day: "2026-09-14",
       workspaceDays: 1,
     });
+  });
+
+  // A first rollup that read the price book before a sync committed can insert
+  // its blank row after the repricing pass that sync started has already read
+  // the incomplete list, and that run then holds no row while the pass runs.
+  // `listRunsAwaitingRollup` cannot reach it afterwards, because its
+  // `rolled_up_at` is newer than its seal. This nightly request is the pass's
+  // one recurring trigger, so the blank cost is repaired within a night.
+  it("asks for a repricing pass over the incomplete rows every night", async () => {
+    await handler!({ step });
+    expect(sent).toEqual([
+      {
+        label: "sweep-incomplete-cost",
+        event: { name: "cost/price-book.backdated", data: {} },
+      },
+    ]);
   });
 
   it("refolds the workspace-day of a run that started before yesterday", async () => {
