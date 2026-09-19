@@ -10,14 +10,15 @@ import { PG_DOMAINS } from "./domains";
 
 // The Postgres schema domains declared in schema/_schemas.ts. The manifest must
 // surface every one of these as a domain — this is the coverage contract.
-// (cms / eval / workflow were dropped with the runtime in ADR-043; `content`
-// survives, reduced to content.generated_assets.)
+// (`eval` / `workflow` stayed deleted after ADR-043; `cms` is restored as
+// marketing infrastructure; `content` survives as content.generated_assets.)
 const EXPECTED_PG_SCHEMAS = [
   "agent",
   "ai",
   "auth",
   "billing",
   "chat",
+  "cms",
   "content",
   "cost",
   "environments",
@@ -32,6 +33,7 @@ const EXPECTED_PG_SCHEMAS = [
   "ratelimit",
   "schema_registry",
   "security",
+  "tacho",
   "tools",
   "workspace",
 ] as const;

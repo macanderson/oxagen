@@ -92,4 +92,18 @@ describe("corsMiddleware marketing-origin twinning", () => {
       "http://localhost:8080",
     );
   });
+
+  it("falls back to oxagen.sh in production when MARKETING_URL is unset", async () => {
+    expect(await preflight("https://oxagen.sh")).toBe("https://oxagen.sh");
+    expect(await preflight("https://www.oxagen.sh")).toBe(
+      "https://www.oxagen.sh",
+    );
+  });
+
+  it("falls back to localhost:8080 outside production when MARKETING_URL is unset", async () => {
+    runtime.production = false;
+    expect(await preflight("http://localhost:8080")).toBe(
+      "http://localhost:8080",
+    );
+  });
 });

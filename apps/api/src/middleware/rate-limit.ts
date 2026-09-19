@@ -6,8 +6,14 @@ export interface RateLimitOptions {
   windowMs: number;
   /** Max requests per key within one window. */
   max: number;
-  /** Derives the bucket key from the request. Defaults to the client IP. */
-  keyFn?: (c: Context<AppEnv>) => string;
+  /**
+   * Derives the bucket key from the request. Defaults to the leftmost
+   * `x-forwarded-for` entry (caller-writable). Prefer
+   * `trustedClientIpBucketKey` on public pre-auth mounts. Returning `null`
+   * skips the limit for that request rather than pooling every unattributable
+   * caller into one shared bucket.
+   */
+  keyFn?: (c: Context<AppEnv>) => string | null;
 }
 
 /**
@@ -259,7 +265,14 @@ export function rateLimiter(opts: RateLimitOptions): MiddlewareHandler<AppEnv> {
   const keyFn = opts.keyFn ?? defaultKeyFn;
 
   return async (c, next) => {
-    const { count, resetAt } = counter.hit(keyFn(c));
+    const key = keyFn(c);
+    // Unattributable callers skip rather than share one bucket: pooling them
+    // turns one flood into an outage for every other visitor on the mount.
+    if (key === null) {
+      await next();
+      return;
+    }
+    const { count, resetAt } = counter.hit(key);
 
     if (count > opts.max) {
       const retryAfterSec = Math.max(

@@ -88,7 +88,10 @@ export async function seedPlatform(): Promise<void> {
         });
     }
   });
-  // Gated ebook HTML for the oxagen.sh lead forms. Idempotent upsert on slug.
+  // Book editions back the code-gated /v1/cms/book/redeem path. Without this,
+  // a migrate that only recreates cms.book_editions leaves the table empty and
+  // every redemption fails as unknown_edition until an operator finds the
+  // standalone db:seed-books command.
   await seedBookEditions();
 }
 

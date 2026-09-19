@@ -71,6 +71,10 @@ import type { ShellData } from "./shell-data";
 import { ACCOUNT_TABS, type AccountTab, useShellState } from "./shell-state";
 import type { Theme } from "./theme";
 
+// No `timeZoneInvalid`: on main the Profile tab wrote the zone itself through
+// `updateTimeZone` and had to report a refusal from that second write. Here the
+// zone belongs to Preferences, which reports its own outcome, and Profile calls
+// `updateTimeZone` nowhere — so the member would be a state nothing can reach.
 type Outcome = "saved" | "invalid" | "denied" | "failed";
 
 const tabClass =
