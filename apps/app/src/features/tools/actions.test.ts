@@ -469,7 +469,8 @@ describe("saveApprovalRule", () => {
   /** The nth stored rule body, as a value rather than a possibly-absent index. */
   const body = (n: number) => {
     const found = bodies()[n];
-    if (found === undefined) throw new Error(`the fixture holds no rule ${n}`);
+    if (found === undefined)
+      throw new Error(`the fixture holds no rule ${String(n)}`);
     return found;
   };
 
@@ -611,14 +612,12 @@ describe("saveApprovalRule", () => {
   // The write carries the set it was built from, so a rule another person
   // deleted or switched off between the read and the write is not written back.
   it("says the set changed when the handler finds it moved since the read", async () => {
-    invoke
-      .mockResolvedValueOnce(stored())
-      .mockRejectedValueOnce(
-        new kernel.HandlerError({
-          code: "conflict",
-          reason: "rule_set_changed",
-        }),
-      );
+    invoke.mockResolvedValueOnce(stored()).mockRejectedValueOnce(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "rule_set_changed",
+      }),
+    );
     expect(
       await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({ ok: false, reason: "conflict", code: "rule_set_changed" });
@@ -684,14 +683,12 @@ describe("saveApprovalRule", () => {
   });
 
   it("returns the handler's reason when the save is refused", async () => {
-    invoke
-      .mockResolvedValueOnce(stored())
-      .mockRejectedValueOnce(
-        new kernel.HandlerError({
-          code: "conflict",
-          reason: "no_tool_matches",
-        }),
-      );
+    invoke.mockResolvedValueOnce(stored()).mockRejectedValueOnce(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "no_tool_matches",
+      }),
+    );
     expect(
       await saveApprovalRule("acme", "core-platform", "create", draft, null),
     ).toEqual({ ok: false, reason: "conflict", code: "no_tool_matches" });
