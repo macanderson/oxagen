@@ -302,18 +302,18 @@ describe("mergePublishedPrices", () => {
   });
 
   // The resolver takes the LONGEST name that prefixes a frame's model id, so
-  // an exact-name merge that kept both an override for `claude-sonnet` and
-  // the card's `claude-sonnet-5` would let every `claude-sonnet-5-…` frame
-  // pick the longer list row and bypass the negotiated rate, silently.
+  // an exact-name merge that kept both an override for `claude-sonnet-5` and
+  // the card's `claude-sonnet-5-20260901` would let every stamped frame pick
+  // the longer list row and bypass the negotiated rate, silently.
   it("drops a lower source's model whose name falls inside a name a higher source claimed", () => {
     const family = published({
-      model: "claude-sonnet",
+      model: "claude-sonnet-5",
       inputPer1M: 1,
       outputPer1M: 2,
       source: "operator_override",
     });
     const card = published({
-      model: "claude-sonnet-5",
+      model: "claude-sonnet-5-20260901",
       inputPer1M: 3,
       outputPer1M: 15,
       source: "in_code_card",
@@ -326,7 +326,7 @@ describe("mergePublishedPrices", () => {
     });
     const merged = mergePublishedPrices([[family], [card, other]]);
     expect(merged.prices.map((p) => p.model)).toEqual([
-      "claude-sonnet",
+      "claude-sonnet-5",
       "claude-fable-5",
     ]);
     expect(merged.counts).toMatchObject({
@@ -379,17 +379,17 @@ describe("mergePublishedPrices", () => {
           inputPer1M: 0.15,
           outputPer1M: 0.6,
         }),
-        // `turbo` is a separately priced product, not a release of `gpt-4`,
-        // so the override does not reach it either. Only a version or a date
-        // stamp inherits.
+        // `turbo` is a separately priced product, not a snapshot of `gpt-4`,
+        // so the override does not reach it either. Only a point-in-time stamp
+        // inherits.
         published({
           model: "gpt-4-turbo",
           provider: "openai",
           inputPer1M: 10,
           outputPer1M: 30,
         }),
-        // A date stamp IS a release of the family, so this one is displaced,
-        // which is what the override is for.
+        // A date stamp IS the same product at a moment, so this one is
+        // displaced, which is what the override is for.
         published({
           model: "gpt-4-0613",
           provider: "openai",
@@ -433,6 +433,72 @@ describe("mergePublishedPrices", () => {
     // instead of the `gpt-4o`-shaped override's rate reaching it.
     expect(priced("gpt-4o-mini")).toBe(usdPerMillionToMicros(0.15));
     expect(priced("gpt-4-turbo")).toBe(usdPerMillionToMicros(10));
+  });
+
+  // The fourth round's finding: a numeric release is a separately priced
+  // product, not a snapshot of the one whose name it extends. The card prices
+  // `gpt-5` at $1.25/$10, `gpt-5.2` at $1.75/$14 and `gpt-5.5` at $5/$30, so an
+  // override for `gpt-5` that displaced the other two rows left nothing that
+  // could price them, and every `gpt-5.2` and `gpt-5.5` call then resolved to
+  // the negotiated `gpt-5` rate.
+  it("leaves a lower source's separately priced numeric release beneath an override", () => {
+    const override = published({
+      model: "gpt-5",
+      provider: "openai",
+      inputPer1M: 1,
+      outputPer1M: 8,
+      source: "operator_override",
+    });
+    const merged = mergePublishedPrices([
+      [override],
+      [
+        published({
+          model: "gpt-5.2",
+          provider: "openai",
+          inputPer1M: 1.75,
+          outputPer1M: 14,
+        }),
+        published({
+          model: "gpt-5.5",
+          provider: "openai",
+          inputPer1M: 5,
+          outputPer1M: 30,
+        }),
+        // A stamp of the overridden product still gives way, which is the half
+        // of the rule the override is for.
+        published({
+          model: "gpt-5-2026-08-01",
+          provider: "openai",
+          inputPer1M: 1.25,
+          outputPer1M: 10,
+        }),
+      ],
+    ]);
+    expect(merged.prices.map((p) => p.model)).toEqual([
+      "gpt-5",
+      "gpt-5.2",
+      "gpt-5.5",
+    ]);
+
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((seed, i) => ({
+      ...seed,
+      id: `e-${i}`,
+      orgId: null,
+      source: "list" as const,
+    }));
+    const priced = (modelId: string) =>
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId,
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      })?.microsPerMillion;
+    expect(priced("gpt-5.2")).toBe(usdPerMillionToMicros(1.75));
+    expect(priced("gpt-5.5")).toBe(usdPerMillionToMicros(5));
+    expect(priced("gpt-5-2026-08-01")).toBe(usdPerMillionToMicros(1));
   });
 
   // The displacement half of the same finding: an installation override for
@@ -760,38 +826,64 @@ describe("seedsFromPublishedPrices, provenance", () => {
 });
 
 // The comparison the merge displaces on. Inheritance is restricted to what is
-// actually stated: an explicit alias, or a suffix that names a RELEASE of the
-// same product — a version, a date stamp, a snapshot ordinal, `latest`. A
-// suffix that names a different product (`mini`, `turbo`, `thinking`) is a
-// distinct identity, because punctuation cannot tell the two apart and the
-// safe direction is to leave a model unpriced rather than bill it another
-// product's rate.
+// actually stated: an explicit alias, or a stamp that says WHEN a product was
+// snapshot — an ISO date, the compact form, a four-digit snapshot, `latest`.
+// Every other suffix is a distinct identity, including a release number: the
+// rate card in `pricing.ts` prices `gpt-5` at $1.25/$10, `gpt-5.2` at
+// $1.75/$14 and `gpt-5.5` at $5/$30, and `grok-4` at $3/$15 above both
+// `grok-4.5` ($2/$6) and `grok-4.3` ($1.25/$2.50). Punctuation cannot tell a
+// release from a snapshot, and the safe direction is to leave a model unpriced
+// rather than bill it another product's rate.
 describe("isSameModelIdentity", () => {
-  it("inherits a version, a date stamp or `latest`", () => {
+  it("inherits a date stamp, a snapshot or `latest`", () => {
     expect(isSameModelIdentity("gpt-4", "gpt-4")).toBe(true);
-    expect(isSameModelIdentity("claude-sonnet-5", "claude-sonnet")).toBe(true);
-    expect(isSameModelIdentity("claude-sonnet-5-20260901", "claude-sonnet")).toBe(
-      true,
-    );
     expect(isSameModelIdentity("gpt-4o-2026-08-01", "gpt-4o")).toBe(true);
     expect(isSameModelIdentity("gpt-4-0613", "gpt-4")).toBe(true);
-    expect(isSameModelIdentity("gemini-1.5-pro-002", "gemini-1.5-pro")).toBe(
-      true,
-    );
+    expect(
+      isSameModelIdentity("claude-sonnet-5-20260901", "claude-sonnet-5"),
+    ).toBe(true);
     expect(isSameModelIdentity("claude-sonnet-5-latest", "claude-sonnet-5")).toBe(
       true,
     );
-    expect(isSameModelIdentity("gpt-5.2", "gpt-5")).toBe(true);
+  });
+
+  it("keeps a numeric release as a distinct identity", () => {
+    // The finding this round exists for. The rate card gives each of these its
+    // own row at its own price, so a negotiated `gpt-5` that reached `gpt-5.2`
+    // billed a $1.75/$14 product at $1.25/$10, and `gpt-5.5` ($5/$30) at a
+    // quarter of its rate.
+    expect(isSameModelIdentity("gpt-5.2", "gpt-5")).toBe(false);
+    expect(isSameModelIdentity("gpt-5.5", "gpt-5")).toBe(false);
+    expect(isSameModelIdentity("gpt-5.5-pro", "gpt-5")).toBe(false);
+    // The error runs the other way too: `grok-4` is DEARER than the releases
+    // that follow it, so inheriting would have under-billed rather than over.
+    expect(isSameModelIdentity("grok-4.5", "grok-4")).toBe(false);
+    expect(isSameModelIdentity("grok-4.3", "grok-4")).toBe(false);
+    expect(isSameModelIdentity("glm-5.2", "glm")).toBe(false);
+    // A dotted-numeric stamp of a numeric release is still that release.
+    expect(isSameModelIdentity("gpt-5.2-2026-08-01", "gpt-5")).toBe(false);
+    expect(isSameModelIdentity("gpt-5.2-2026-08-01", "gpt-5.2")).toBe(true);
+    // The card carries `claude-sonnet` and `claude-sonnet-5` as two rows, so
+    // they are two identities whatever their prices happen to be today.
+    expect(isSameModelIdentity("claude-sonnet-5", "claude-sonnet")).toBe(false);
+    expect(
+      isSameModelIdentity("claude-sonnet-5-20260901", "claude-sonnet"),
+    ).toBe(false);
+    // A bare ordinal is not a point in time either.
+    expect(isSameModelIdentity("gemini-1.5-pro-002", "gemini-1.5-pro")).toBe(
+      false,
+    );
+    expect(isSameModelIdentity("claude-opus-4-8", "claude-opus-4")).toBe(false);
   });
 
   it("keeps a hyphenated product as a distinct identity", () => {
-    // The finding this rule exists for: `-` is a separator, so a boundary test
-    // let a negotiated `gpt-4o` price `gpt-4o-mini` at a tenth of the rate.
+    // Round three: `-` is a separator, so a boundary test let a negotiated
+    // `gpt-4o` price `gpt-4o-mini` at a tenth of the rate.
     expect(isSameModelIdentity("gpt-4o-mini", "gpt-4o")).toBe(false);
     expect(isSameModelIdentity("gpt-4o-mini-2026-08-01", "gpt-4o")).toBe(false);
     expect(isSameModelIdentity("gpt-5-nano", "gpt-5")).toBe(false);
     expect(isSameModelIdentity("gemini-1.5-flash", "gemini-1.5")).toBe(false);
-    // `turbo` is a product, not a release.
+    // `turbo` is a product, not a snapshot.
     expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(false);
     // A gateway variant is priced on its own, so it does not inherit either.
     expect(isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5")).toBe(

@@ -162,7 +162,7 @@ describe("resolvePriceEntry", () => {
     ).toBe("list-sonnet");
   });
 
-  it("matches the longest prefix, an alias, and the family behind a gateway prefix", () => {
+  it("matches a stamp, an alias, and the family behind a gateway prefix", () => {
     const book = [list, family];
     const q = (modelId: string) =>
       resolvePriceEntry(book, {
@@ -172,7 +172,10 @@ describe("resolvePriceEntry", () => {
         at,
       })?.id;
     expect(q("claude-sonnet-5-20260901")).toBe("list-sonnet");
-    expect(q("claude-sonnet-4-6")).toBe("list-sonnet-4");
+    expect(q("claude-sonnet-4-20260401")).toBe("list-sonnet-4");
+    // `claude-sonnet-4-6` is its own row in the card at its own price, so it is
+    // its own identity: unpriced here rather than billed at the `-4` rate.
+    expect(q("claude-sonnet-4-6")).toBe(undefined);
     expect(q("anthropic/claude-sonnet-5")).toBe("list-sonnet");
     expect(q("gpt-9")).toBe(undefined);
     const aliased = entry({
@@ -216,8 +219,8 @@ describe("resolvePriceEntry", () => {
     // Nor does the `gpt-4o` list row price the mini: `mini` is a separately
     // priced product, so with no row of its own it is unpriced.
     expect(q("gpt-4o-mini")).toBe(undefined);
-    // The releases of the family it did negotiate still take the rate, which
-    // is what the suffix rule exists for.
+    // The stamped snapshots of the product it did negotiate still take the
+    // rate, which is what the stamp rule exists for.
     expect(q("gpt-4")).toBe("neg-gpt-4");
     expect(q("gpt-4-0613")).toBe("neg-gpt-4");
     // And with no row for the other model at all, it is unpriced rather than
@@ -235,9 +238,9 @@ describe("resolvePriceEntry", () => {
   // The third round on the same comparison. `gpt-4o-mini` is a tenth of
   // `gpt-4o`, and both differ from it by a hyphen and one token — exactly as
   // `gpt-4o-2026-08-01` does, which IS the same product. A boundary test
-  // cannot tell them apart, so inheritance is restricted to a recognized
-  // version suffix: an organization that negotiated `gpt-4o` was being billed
-  // its premium rate for every cheap mini call.
+  // cannot tell them apart, so inheritance is restricted to a point-in-time
+  // stamp: an organization that negotiated `gpt-4o` was being billed its
+  // premium rate for every cheap mini call.
   it("does not let a negotiated model price a different product that shares its name", () => {
     const negotiatedFourO = entry({
       id: "neg-gpt-4o",
@@ -273,6 +276,50 @@ describe("resolvePriceEntry", () => {
         at,
       }),
     ).toBeNull();
+  });
+
+  // The fourth round on the same comparison, and the round that overturned the
+  // rule the third one wrote. A numeric suffix looked like a version, so a
+  // negotiated `gpt-5` priced `gpt-5.2` and `gpt-5.5` too. The card in
+  // `pricing.ts` prices them as three products: `gpt-5` $1.25/$10, `gpt-5.2`
+  // $1.75/$14, `gpt-5.5` $5/$30. A release is a different product, not one
+  // product at a moment, so only a date or snapshot stamp inherits now.
+  it("does not let a negotiated model price a separately priced numeric release", () => {
+    const negotiatedFive = entry({
+      id: "neg-gpt-5",
+      model: "gpt-5",
+      orgId: ORG,
+      source: "negotiated",
+      microsPerMillion: 1_000_000n,
+    });
+    const listTwo = entry({
+      id: "list-gpt-5-2",
+      model: "gpt-5.2",
+      microsPerMillion: 1_750_000n,
+    });
+    const q = (modelId: string) =>
+      resolvePriceEntry([listTwo, negotiatedFive], {
+        orgId: ORG,
+        modelId,
+        tokenClass: "input_uncached",
+        at,
+      })?.id;
+    expect(q("gpt-5.2")).toBe("list-gpt-5-2");
+    expect(q("gpt-5.2-2026-08-01")).toBe("list-gpt-5-2");
+    // The stamped snapshots of `gpt-5` itself still take the negotiated rate.
+    expect(q("gpt-5")).toBe("neg-gpt-5");
+    expect(q("gpt-5-2026-08-01")).toBe("neg-gpt-5");
+    // And with no row for the other release, it reads as unpriced. A null cost
+    // the Pricing tab shows beats the wrong rate billed in silence.
+    const onlyNegotiated = (modelId: string) =>
+      resolvePriceEntry([negotiatedFive], {
+        orgId: ORG,
+        modelId,
+        tokenClass: "input_uncached",
+        at,
+      });
+    expect(onlyNegotiated("gpt-5.2")).toBeNull();
+    expect(onlyNegotiated("gpt-5.5")).toBeNull();
   });
 
   it("selects by the window the frame's instant falls in", () => {
