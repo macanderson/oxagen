@@ -13,7 +13,12 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 const mocks = vi.hoisted(() => ({
   selects: [] as unknown[][],
   wheres: [] as unknown[],
+  // The export_data policy re-evaluation. Defaults to allow so every case
+  // that is not about the mandate reads as it did before.
+  checkIAM: vi.fn(),
 }));
+
+vi.mock("@oxagen/iam", () => ({ checkIAM: mocks.checkIAM }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
@@ -100,6 +105,11 @@ function personalRow(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   mocks.selects.length = 0;
   mocks.wheres.length = 0;
+  mocks.checkIAM.mockReset();
+  mocks.checkIAM.mockResolvedValue({
+    result: { outcome: "allow", trace: [] },
+    principal: null,
+  });
 });
 
 describe("get_export_status", () => {
@@ -232,6 +242,52 @@ describe("reading an organization export", () => {
     expect(boundValues(1)).toEqual(expect.arrayContaining([ORG_ID, USER_ID]));
   });
 
+  // The role is not the whole mandate. `org_users.role` cannot show an
+  // explicit `export_data` deny grant, and this capability is a different one
+  // with `defaultEffect: "allow"`, so the kernel's gate never reads that grant
+  // either. Revoking the export mandate would otherwise stop new exports while
+  // the finished archive stayed downloadable.
+  it("refuses when the export mandate has been revoked (negative)", async () => {
+    orgExport("owner");
+    mocks.checkIAM.mockResolvedValue({
+      result: { outcome: "deny", reason: "org_enforced_deny", trace: [] },
+      principal: null,
+    });
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_mandate_revoked",
+    );
+  });
+
+  // Held for an approver is not held by this person: the archive is not
+  // released while the decision is outstanding.
+  it("refuses while the mandate is pending approval (negative)", async () => {
+    orgExport("owner");
+    mocks.checkIAM.mockResolvedValue({
+      result: { outcome: "pending_approval", trace: [] },
+      principal: null,
+    });
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+  });
+
+  // The question asked is the export's, not this read's: whether the person
+  // may still receive the organization's data at all.
+  it("asks the export_data policy, not its own", async () => {
+    orgExport("owner");
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(mocks.checkIAM).toHaveBeenCalledWith(
+      expect.objectContaining({ capability: "export_data" }),
+    );
+  });
+
   it("hands the key to an owner who still holds the role", async () => {
     orgExport("owner");
     const out = await privacyDataExportStatusHandler(
@@ -267,6 +323,14 @@ describe("reading an organization export", () => {
     queueSelects([personalRow()]);
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
     expect(mocks.wheres).toHaveLength(1);
+  });
+
+  // Nor does it re-evaluate the export mandate: no role ever gated a personal
+  // export, so there is no mandate to have been revoked.
+  it("re-evaluates no policy for a personal export (negative)", async () => {
+    queueSelects([personalRow()]);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(mocks.checkIAM).not.toHaveBeenCalled();
   });
 });
 

@@ -23,6 +23,8 @@ import { HandlerError } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { schema, withSystemDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
+import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
+import { checkIAM } from "@oxagen/iam";
 import { isOrgAdministrator, orgMembershipRole } from "./_org_membership";
 
 /**
@@ -113,6 +115,45 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
         reason: "org_export_requires_admin",
         message:
           "An organization export can only be read by an Owner or Admin of that organization",
+      });
+    }
+
+    // The role is not the whole mandate, so the policy is re-evaluated too.
+    //
+    // `orgMembershipRole` reads `org_users.role` and nothing else. It cannot
+    // see an explicit `export_data` deny grant, and this capability is a
+    // different one with `defaultEffect: "allow"`, so the kernel's own gate
+    // never consults that grant either. An administrator who revokes the
+    // export mandate outright would therefore have stopped new exports while
+    // the completed archive stayed downloadable, which is the same
+    // queue-is-not-a-download gap as the role check above, one layer further
+    // in.
+    //
+    // So the current `export_data` policy is asked directly, for the caller
+    // and the organization that governed the export. The decision is the
+    // export's, not this read's, which is why the capability named here is
+    // `export_data`: the question is whether this person may still receive
+    // the organization's data at all. The check writes its own authorization
+    // decision, so the re-evaluation is on the record rather than implied.
+    //
+    // What this does NOT do, stated rather than implied: `checkIAM`
+    // fast-paths every non-enterprise organization to an unconditional allow
+    // for a non-agent principal, before any policy is read. On those tiers
+    // this call cannot refuse, and the role check above is the only gate
+    // there is. That is a platform-wide property of the ACL tier gate rather
+    // than something this handler can decide.
+    const decision = await checkIAM({
+      capability: privacyDataExport.name,
+      ctx,
+      defaultEffect: privacyDataExport.defaultEffect ?? "deny",
+      rawInputJson: JSON.stringify({ scope: "org", orgId: ctx.orgId }),
+    });
+    if (decision.result.outcome !== "allow") {
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_export_mandate_revoked",
+        message:
+          "The organization export mandate no longer permits this person to receive the archive",
       });
     }
   }
