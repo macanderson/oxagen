@@ -55,7 +55,7 @@
 // an operator requested a mandate, which is the moment the agent still has
 // none. The rows stay in the table, because the request and the history are
 // what the office reads; only the claim about authority is theirs to make.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { OrgRole } from "@/data/contracts/common";
 import {
@@ -70,6 +70,7 @@ import { MandateAuthorityList } from "@/ui/mandate-authority";
 import { MandateScope } from "@/ui/mandate-scope";
 import { ReadFailure } from "@/ui/read-failure";
 import { RequestMandate } from "./mandate-request";
+import { useFormatter } from "@/ui/formatter";
 
 type Place = { org: string; ws: string; agentId: string; agentSlug: string };
 

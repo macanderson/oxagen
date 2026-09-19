@@ -97,7 +97,10 @@ export function onboardingSource(reads: Reads): {
       workspaces: refuse("pretenant.workspaces"),
     },
     mandates: { list: refuse("mandates.list") },
-    shell: { context: refuse("shell.context") },
+    shell: {
+      context: refuse("shell.context"),
+      preferences: refuse("shell.preferences"),
+    },
     runs: {
       list: refuse("runs.list"),
       get: refuse("runs.get"),

@@ -6,7 +6,7 @@
 //
 // Continuing moves the gate's step when this workspace is the gate's, so the
 // record follows the operator rather than a timer.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary, mono, panel } from "@/ui/control-styles";
@@ -15,6 +15,7 @@ import { SafeLink, useNavigate } from "@/ui/navigation";
 import { advanceOnboarding, issueEnrollmentToken } from "../actions";
 import { type Harness, wrapPathOf } from "../agent-form";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
+import { useFormatter } from "@/ui/formatter";
 
 type Token = { token: string; expiresAt: string; enrollCommand: string };
 

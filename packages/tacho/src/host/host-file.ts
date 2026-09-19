@@ -304,6 +304,19 @@ export function readHostFileLenient(path: string): LenientHostRead {
   };
 }
 
+/**
+ * The harnesses host.json enrolls now, read from disk on every call.
+ *
+ * The daemon's in-memory copy is the one it started with, and `reassign`
+ * replaces the enrollment under a daemon that is still up, so a harness the
+ * CLI dropped would otherwise stay "enrolled" until a restart. A missing or
+ * invalid file falls back to the daemon's copy: a hand-edited host.json must
+ * not make the daemon forget which agents it wraps.
+ */
+export function enrolledHarnesses(path: string, fallback: HostFile): string[] {
+  return (readHostFileLenient(path).host ?? fallback).harnesses;
+}
+
 export function writeHostFile(path: string, host: HostFile): void {
   writeSensitiveFileAtomic(path, `${JSON.stringify(host, null, 2)}\n`);
 }

@@ -1,13 +1,24 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 
+/**
+ * The clock a person reads until they pick one: Pacific time, as the IANA zone
+ * so the PST/PDT switch follows the rule and not a fixed offset. The column
+ * default (`auth.user_preferences.timezone`, migration 20260919120000) and
+ * both preference handlers carry the same value; the app falls back to it when
+ * the preference read fails, so a store outage never blanks a date.
+ */
+export const DEFAULT_TIME_ZONE = "America/Los_Angeles";
+
 export const userPreferencesRead = registerCapability({
   name: "get_user_preferences",
   domain: "user",
   description: "Read the calling user's UI and model preferences",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "docs", "mcp", "unit"],
+  // `app`: the organization layout reads it for every page, so each date the
+  // app renders is in the person's own zone (apps/app/src/data/live/shell.ts).
+  layers: ["schema", "api", "docs", "mcp", "unit", "app"],
   scoped: false,
   agent: { requiresApproval: false, riskLevel: "low", category: "user" },
   sensitivity: "low",
@@ -39,6 +50,7 @@ export const userPreferencesRead = registerCapability({
     pendingPromptBehavior: z.enum(["queue", "interrupt"]),
     defaultTextTier: z.enum(["fast", "balanced", "precise"]).nullable(),
     defaultTextModel: z.string().nullable(),
+    /** An IANA zone name; `DEFAULT_TIME_ZONE` until the person sets one. */
     timezone: z.string(),
     language: z.string(),
     /** The Account dialog's theme choice; `system` follows the device. */

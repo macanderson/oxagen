@@ -2,6 +2,7 @@
 // mapped into the shell's view model, with either read's refusal passed
 // through and an unmappable record reported once.
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
+import { userPreferencesRead } from "@oxagen/oxagen/contracts/user.preferences.read";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -110,5 +111,54 @@ describe("shell.context", () => {
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+const preferencesRead = (timezone: string) =>
+  readOk({
+    fontSize: "medium",
+    density: "comfortable",
+    enterToSubmit: false,
+    pendingPromptBehavior: "queue",
+    defaultTextTier: null,
+    defaultTextModel: null,
+    timezone,
+    language: "en",
+    theme: "system",
+  });
+
+describe("shell.preferences", () => {
+  it("reads get_user_preferences through the kernel seam and answers the stored zone", async () => {
+    kernelRead.mockResolvedValue(preferencesRead("Europe/London"));
+    expect(await shell.preferences(ctx)).toEqual(
+      readOk({ timeZone: "Europe/London" }),
+    );
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: userPreferencesRead,
+      input: {},
+      page: "shell",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a failed read through (negative)", async () => {
+    const down = readError("control_plane_unavailable", 503);
+    kernelRead.mockResolvedValue(down);
+    expect(await shell.preferences(ctx)).toEqual(down);
+  });
+
+  // The column is free text. A zone Intl cannot format in would throw inside
+  // every date on the page, so it is reported once and read as the default.
+  it("reads a zone this runtime cannot format in as Pacific, and reports it once (negative)", async () => {
+    kernelRead.mockResolvedValue(preferencesRead("Mars/Olympus_Mons"));
+    expect(await shell.preferences(ctx)).toEqual(
+      readOk({ timeZone: "America/Los_Angeles" }),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: "shell.preferences time_zone_unsupported",
+      }),
+    );
   });
 });

@@ -8,7 +8,7 @@
 // severity and no reference column, because no column behind them exists. A
 // refused read renders the denied state, never an empty record.
 import "server-only";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { AuditEvent, AuditPage, AuditQuery } from "@/data/contracts/audit";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
@@ -22,9 +22,11 @@ import {
   AUDIT_EVENT_TYPES,
   AUDIT_OUTCOMES,
   auditQueryParams,
+  auditWindow,
   hasAuditFilters,
   parseAuditQuery,
 } from "./filters";
+import { useFormatter } from "@/ui/formatter";
 
 /** An actor the record names, as the filter and the table print them. */
 type AuditActor = { id: string; name: string };
@@ -39,8 +41,12 @@ export async function Audit({
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const query = parseAuditQuery(searchParams);
+  const { offset, ...filters } = query;
+  // The day filters become instants in the viewer's zone before the read: the
+  // port takes a window, not a pair of civil days (auditWindow).
+  const range = await auditWindow(ctx, source, filters);
   const [events, members] = await Promise.all([
-    source.audit.events(ctx, query),
+    source.audit.events(ctx, { ...range, offset }),
     source.org.members(ctx),
   ]);
   return (
