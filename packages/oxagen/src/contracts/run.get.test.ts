@@ -54,7 +54,7 @@ describe("get_run contract", () => {
       agentKey: null,
       operatorId: "prn_0123456789abcdefghjkmn",
       operatorKind: "human",
-      operatorName: "Ada Lovelace",
+      operatorName: "Marcus Bell",
       status: "live",
       turns: null,
       steps: 0,
