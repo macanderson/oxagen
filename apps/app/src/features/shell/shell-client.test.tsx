@@ -57,11 +57,14 @@ vi.mock("next/navigation", () => ({
 // The Account dialog's tabs read on open; the shell test only needs them to
 // answer, not what they answer with (account-dialog.test.tsx covers that).
 const liveSignOut = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+const liveRegenerateBackupCodes = vi.hoisted(() =>
+  vi.fn((): Promise<unknown> => Promise.resolve({ ok: false })),
+);
 vi.mock("./session-client", () => ({
   liveSignOut,
   liveListSessions: () => Promise.resolve({ ok: true, sessions: [] }),
   liveRevokeSession: () => Promise.resolve(true),
-  liveRegenerateBackupCodes: () => Promise.resolve({ ok: false }),
+  liveRegenerateBackupCodes,
 }));
 vi.mock("./account-actions", () => ({
   updateProfile: vi.fn(),
@@ -462,6 +465,43 @@ describe("user menu", () => {
     );
     expect(liveSignOut).toHaveBeenCalledTimes(1);
     expect(nav.replace).toHaveBeenCalledWith("/login");
+  });
+
+  // Sign out leaves the shell through a client-side `replace`, which runs no
+  // `beforeunload`. With a recovery-code rotation in flight that would drop
+  // the only copy of the new set, so the menu takes the person back to the
+  // Security tab instead of signing out.
+  it("holds sign out while a recovery-code rotation is in flight", async () => {
+    liveSignOut.mockClear();
+    liveRegenerateBackupCodes.mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+    const user = userEvent.setup();
+    renderShell(shellData());
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("open-security"),
+    );
+    await user.click(await screen.findByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await user.keyboard("{Escape}");
+
+    await user.click(
+      screen.getByRole("button", { name: "User menu for Marcus Bell" }),
+    );
+    await user.click(
+      within(await screen.findByRole("menu")).getByTestId("sign-out"),
+    );
+    expect(liveSignOut).not.toHaveBeenCalled();
+    expect(nav.replace).not.toHaveBeenCalled();
+    const dialog = await screen.findByTestId("account-dialog");
+    expect(within(dialog).getByTestId("account-tab-security")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("switches theme: light, dark, system", async () => {

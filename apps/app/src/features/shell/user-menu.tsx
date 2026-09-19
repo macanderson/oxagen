@@ -31,11 +31,20 @@ const LINKS: readonly { tab: AccountTab; testId: string }[] = [
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
-  const { theme, setTheme, openAccount } = useShellState();
+  const { theme, setTheme, openAccount, exitHeld } = useShellState();
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
 
   async function signOut() {
+    // Signing out leaves the shell, which unmounts the Account dialog and the
+    // only copy of a recovery-code set Better Auth has already swapped in for
+    // the old one. A client-side `replace` runs no `beforeunload`, so the
+    // browser cannot ask. While codes are at stake the menu takes the person
+    // back to them instead; sign out works again once they are saved.
+    if (exitHeld) {
+      openAccount("security");
+      return;
+    }
     try {
       await liveSignOut();
     } finally {

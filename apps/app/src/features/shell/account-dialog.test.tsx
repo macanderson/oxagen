@@ -75,8 +75,11 @@ const { AccountDialog } = await import("./account-dialog");
 const { AvatarDialog } = await import("./avatar-dialog");
 
 /** The dialog renders from shell state, so a test needs the way a person opens it. */
+/** Where a click on one of `OpenIt`'s probe links actually arrived. */
+const linkClicks: string[] = [];
+
 function OpenIt() {
-  const { openAccount, avatarOpen, accountOpen } = useShellState();
+  const { openAccount, avatarOpen, accountOpen, exitHeld } = useShellState();
   return (
     <>
       {(["profile", "preferences", "security", "privacy"] as const).map(
@@ -95,6 +98,22 @@ function OpenIt() {
       <output data-testid="which">
         {avatarOpen ? "avatar" : accountOpen ? "account" : "none"}
       </output>
+      <output data-testid="exit-held">{String(exitHeld)}</output>
+      {/* Probe links. Each records the click and stops jsdom navigating, so a
+          click that arrives here is one the shell let through. */}
+      {["/acme/core-platform/fleet", "/other-org/people"].map((href) => (
+        <a
+          key={href}
+          href={href}
+          data-testid={`probe-${href.split("/")[1] ?? ""}`}
+          onClick={(event) => {
+            linkClicks.push(href);
+            event.preventDefault();
+          }}
+        >
+          {href}
+        </a>
+      ))}
     </>
   );
 }
@@ -883,6 +902,56 @@ describe("Security", () => {
   // response arrives. A reload in that gap loses the only copy of the new set,
   // so the guard has to be up while the rotation is in flight, not only once
   // a set is on screen.
+  // `beforeunload` does not run for a client-side transition. A link into
+  // another organization remounts the shell, which drops the dialog and the
+  // only copy of the new set, so the shell holds that exit itself and brings
+  // the person back to the codes. A link inside the organization keeps the
+  // shell mounted and is let through.
+  it("holds a link out of the organization while codes are at stake", async () => {
+    linkClicks.length = 0;
+    let issue: ((result: unknown) => void) | undefined;
+    liveRegenerateBackupCodes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          issue = resolve;
+        }),
+    );
+    const { user } = await openDialog("security");
+    expect(screen.getByTestId("exit-held")).toHaveTextContent("false");
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(screen.getByTestId("exit-held")).toHaveTextContent("true");
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("which")).toHaveTextContent("none");
+
+    await user.click(screen.getByTestId("probe-other-org"));
+    expect(linkClicks).toEqual([]);
+    expect(screen.getByTestId("which")).toHaveTextContent("account");
+    expect(screen.getByTestId("account-tab-security")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByTestId("probe-acme"));
+    expect(linkClicks).toEqual(["/acme/core-platform/fleet"]);
+
+    // Saved, so nothing is at stake and the exit is open again.
+    issue?.({ ok: true, codes: ["hold-1111", "hold-2222"] });
+    await user.click(screen.getByRole("button", { name: "open security" }));
+    await user.click(await screen.findByTestId("account-codes-saved"));
+    expect(screen.getByTestId("exit-held")).toHaveTextContent("false");
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByTestId("probe-other-org"));
+    expect(linkClicks).toEqual([
+      "/acme/core-platform/fleet",
+      "/other-org/people",
+    ]);
+  });
+
   it("asks before unloading the page while a rotation is in flight", async () => {
     let issue: ((result: unknown) => void) | undefined;
     liveRegenerateBackupCodes.mockImplementation(
