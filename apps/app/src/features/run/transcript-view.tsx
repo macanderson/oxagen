@@ -55,6 +55,7 @@ import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
+import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
@@ -621,6 +622,12 @@ export function TranscriptView({
   /**
    * Read the page past the cursor and append it. Nothing already on screen is
    * replaced, so the scroll position and the playhead survive the read.
+   *
+   * A coalesced stream signal is only "there is more to read", not a page
+   * count. When a page comes back full (entry count equals the request
+   * limit) and still carries a resume cursor, this drains the next page in
+   * the same call so a long live replay does not stall hundreds of entries
+   * behind the head until another frame lands.
    */
   const readPending = () => pendingReadRef.current;
 
@@ -635,9 +642,13 @@ export function TranscriptView({
     }
     readingRef.current = true;
     setReading(true);
+    // True when the last page was full and still has a cursor: keep reading
+    // in this same loadMore rather than waiting for another stream signal.
+    let drainMore = false;
     try {
       do {
         pendingReadRef.current = false;
+        drainMore = false;
         // A sealed run stops when the page answers no cursor. A live run
         // must keep a resume cursor from the handler so SSE can ask for
         // the next page.
@@ -655,20 +666,28 @@ export function TranscriptView({
           return;
         }
         setPageFailure(null);
-        const [firstNew, ...rest] = read.value.entries;
+        const pageEntries = read.value.entries;
         cursorRef.current = read.value.cursor;
         setCursor(read.value.cursor);
         setComplete(read.value.complete);
-        if (firstNew !== undefined) {
-          const next: Frames = [...heldRef.current, firstNew, ...rest];
-          heldRef.current = next;
-          setEntries(next);
+        if (pageEntries.length === 0) {
+          // Nothing new: stop draining. A mid-read signal still schedules
+          // one follow-up via pendingReadRef / the finally block.
+          continue;
         }
+        const next: Frames = [...heldRef.current, ...pageEntries];
+        heldRef.current = next;
+        setEntries(next);
+        // Full page with a resume cursor means more history is waiting.
+        // Drain it now. A short page or a null cursor ends the drain.
+        drainMore =
+          pageEntries.length === TRANSCRIPT_ENTRY_DEFAULT &&
+          cursorRef.current !== null;
         // Read through a function rather than the ref directly: the ref can
         // flip true from the early-return branch above while this `await`
         // is in flight, but TS's flow analysis cannot see that concurrent
         // write and would otherwise narrow the property to always `false`.
-      } while (readPending());
+      } while (readPending() || drainMore);
     } catch {
       setPageFailure({
         ok: false,

@@ -19,6 +19,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
@@ -438,6 +439,130 @@ describe("following a live run", () => {
         for (let i = 0; i < 10; i += 1) await Promise.resolve();
       });
       expect(pending).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("drains every full page from one coalesced signal until a short page, rather than stalling behind the head (negative)", async () => {
+    // A live run that already has more history than one coalesce window can
+    // surface: the stream fires once after COALESCE_MS, loadMore must keep
+    // reading while each page is full and still carries a resume cursor.
+    class FakeEventSource {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSED = 2;
+      readyState = FakeEventSource.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<string>) => void) | null = null;
+      onerror: (() => void) | null = null;
+      close(): void {
+        this.readyState = FakeEventSource.CLOSED;
+      }
+      addEventListener(): void {}
+      removeEventListener(): void {}
+      constructor() {
+        instances.push(this);
+      }
+    }
+    const instances: FakeEventSource[] = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+
+    const fullPage = (cursor: string, seqFrom: number) =>
+      pageOk(
+        runTranscript({
+          zoom: "everything",
+          entries: Array.from({ length: TRANSCRIPT_ENTRY_DEFAULT }, (_, i) =>
+            transcriptEntry({
+              seq: String(seqFrom + i),
+              endSeq: String(seqFrom + i),
+              turn: null,
+              request: null,
+              response: null,
+            }),
+          ),
+          cursor,
+          complete: false,
+        }),
+      );
+    const shortPage = pageOk(
+      runTranscript({
+        zoom: "everything",
+        entries: [
+          transcriptEntry({
+            seq: "450",
+            endSeq: "450",
+            turn: null,
+            request: null,
+            response: null,
+          }),
+          transcriptEntry({
+            seq: "451",
+            endSeq: "451",
+            turn: null,
+            request: null,
+            response: null,
+          }),
+        ],
+        cursor: null,
+        complete: true,
+      }),
+    );
+    readTranscriptPage
+      .mockResolvedValueOnce(fullPage("page2", 100))
+      .mockResolvedValueOnce(fullPage("page3", 300))
+      .mockResolvedValueOnce(shortPage);
+
+    vi.useFakeTimers();
+    try {
+      renderSection({
+        read: readOk(
+          mockupTranscript({ cursor: "page1", complete: false }),
+        ),
+        status: "live",
+      });
+      const [source] = instances;
+      if (source === undefined) throw new Error("no EventSource opened");
+
+      // One coalesced signal: before the drain fix this would read only the
+      // first full page and leave the rest unread until another frame.
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750);
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+
+      expect(readTranscriptPage).toHaveBeenCalledTimes(3);
+      expect(readTranscriptPage).toHaveBeenNthCalledWith(
+        1,
+        "acme",
+        "core-platform",
+        "tse_7k2m9q",
+        "everything",
+        [],
+        "page1",
+      );
+      expect(readTranscriptPage).toHaveBeenNthCalledWith(
+        2,
+        "acme",
+        "core-platform",
+        "tse_7k2m9q",
+        "everything",
+        [],
+        "page2",
+      );
+      expect(readTranscriptPage).toHaveBeenNthCalledWith(
+        3,
+        "acme",
+        "core-platform",
+        "tse_7k2m9q",
+        "everything",
+        [],
+        "page3",
+      );
+      // A fourth call would mean the short page did not stop the drain.
+      expect(readTranscriptPage).toHaveBeenCalledTimes(3);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
