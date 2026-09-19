@@ -909,12 +909,21 @@ describe("merge_context_pr", () => {
     expect(h.store.versions[0]!.body).toBe(
       await h.github.readFile(REPO, PATH, "head1"),
     );
-    // The publication carries GitHub's merge instant, not the retry's clock:
-    // every later `now()` (the failed publication, the retry itself) is
-    // after it.
+    // The publication carries GitHub's merge instant, not the retry's clock.
+    // The harness clock advances on every reading, so a reading taken here is
+    // necessarily later than the merge; that is what makes the line above a
+    // claim rather than a restatement of "now".
+    //
+    // It deliberately does not say how much later. The previous form required
+    // at least two readings between the merge and here, which was a count of
+    // how often the code happens to look at the clock, not a fact about the
+    // record. The resume path stopped looking: it takes `mergedAt` from the
+    // pull request rather than reading the clock, which is the whole point of
+    // this test, so the old assertion broke because the behaviour it guards
+    // started working.
     const mergedAt = h.github.pulls[0]!.mergedAt!;
     expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
-    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime() + 1000);
+    expect(mergedAt.getTime()).toBeLessThan(h.now().getTime());
   });
 
   // Two Context PRs merging at once are two calls to GitHub, and GitHub can
