@@ -879,6 +879,36 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
+  // Better Auth voids the old set the moment the rotation lands, before the
+  // response arrives. A reload in that gap loses the only copy of the new set,
+  // so the guard has to be up while the rotation is in flight, not only once
+  // a set is on screen.
+  it("asks before unloading the page while a rotation is in flight", async () => {
+    let issue: ((result: unknown) => void) | undefined;
+    liveRegenerateBackupCodes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          issue = resolve;
+        }),
+    );
+    const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(screen.queryByTestId("account-codes")).toBeNull();
+    expect(asked()).toBe(true);
+
+    issue?.({ ok: true, codes: ["pend-1111", "pend-2222"] });
+    await screen.findByTestId("account-codes");
+    expect(asked()).toBe(true);
+
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(asked()).toBe(false);
+  });
+
   // The second rotation is never started, so no late first response can exist
   // to be sorted out: "runs one rotation at a time" above is what closes this,
   // and it also closes the tab-switch bypass, which a ticket held inside the

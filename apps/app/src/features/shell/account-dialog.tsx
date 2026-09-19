@@ -111,19 +111,9 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // here. Storing the codes costs the factor itself, to anyone who reaches the
   // row. The cheaper failure is the one to keep.
   //
-  // So the loss is made deliberate instead of silent: while a set is unsaved,
-  // the browser asks before it unloads the page. `preventDefault` is the
-  // specified opt-in; the wording is the browser's and cannot be set.
-  useEffect(() => {
-    if (!heldCodes) return;
-    const ask = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", ask);
-    return () => {
-      window.removeEventListener("beforeunload", ask);
-    };
-  }, [heldCodes]);
+  // So the loss is made deliberate instead of silent: the browser asks before
+  // it unloads the page. The guard itself sits below the rotation state,
+  // because it has to cover the rotation as well as the set it returns.
 
   // The rotation itself is held here too, and for the same reason the codes
   // are: every state the Security tab owns is destroyed by Cancel, by a tab
@@ -156,6 +146,25 @@ export function AccountDialog({ data }: { data: ShellData }) {
       setRotating(false);
     },
   };
+
+  // The unload guard covers two windows, not one. An unsaved set is the obvious
+  // one. The other opens earlier: Better Auth voids the old codes the moment
+  // the rotation lands on the server, before the response reaches this page. A
+  // reload in that gap throws away the only copy of the new set, and nothing
+  // was on screen yet to warn about. So the guard is up from the moment a
+  // rotation begins until the set it returns is saved. `preventDefault` is the
+  // specified opt-in; the wording is the browser's and cannot be set.
+  const guardUnload = rotating || heldCodes !== null;
+  useEffect(() => {
+    if (!guardUnload) return;
+    const ask = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => {
+      window.removeEventListener("beforeunload", ask);
+    };
+  }, [guardUnload]);
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and
