@@ -15,6 +15,10 @@
  *
  * A session whose inventory is null did not report one; it counts toward
  * `notReportedSessions` and never as a session with no skills.
+ *
+ * A row's `harnesses` round-trips exactly what the sessions behind it
+ * reported, including an empty string, and never fails the whole read over
+ * one session's harness label (ADR-104, #3103).
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -25,6 +29,15 @@ export const SKILL_WINDOW_DAYS_MAX = 90;
 export const SKILL_WINDOW_DAYS_DEFAULT = 30;
 /** Skill names per page. */
 export const SKILL_PAGE_SIZE = 100;
+/**
+ * Distinct harnesses returned per skill row. `agent.harness` is
+ * `z.string().max(512)` at the wire (packages/tacho/src/envelope.ts) with no
+ * constraint beyond length, so a wrapper that stamps a unique label per
+ * session (a host name, a run id) could otherwise grow one row's harness list
+ * without bound. `harnessCount` on the row still carries the true distinct
+ * count past this cap (#3103).
+ */
+export const SKILL_HARNESS_CAP = 20;
 /**
  * The longest cursor a read may carry. A cursor base64url-encodes JSON holding
  * the window's two instants and a skill name of up to 512 UTF-16 units; a name
@@ -40,8 +53,15 @@ export const skillInventoryRowSchema = z
     name: z.string().min(1).max(512),
     /** Sessions in the window whose inventory named this skill. */
     sessions: z.number().int().positive(),
-    /** The harnesses of those sessions, sorted, each once. */
-    harnesses: z.array(z.string().min(1)).min(1),
+    /**
+     * Up to `SKILL_HARNESS_CAP` of the distinct harnesses of those sessions,
+     * sorted, each once. A harness label round-trips exactly what a session
+     * reported, including an empty string when one reported none — this never
+     * rejects or invents a value for it (ADR-104, #3103).
+     */
+    harnesses: z.array(z.string().max(512)).min(1).max(SKILL_HARNESS_CAP),
+    /** The true distinct harness count behind this name, past the cap above. */
+    harnessCount: z.number().int().positive(),
     /** The earliest and latest start of those sessions (RFC 3339). */
     firstSeenAt: z.string().datetime(),
     lastSeenAt: z.string().datetime(),
