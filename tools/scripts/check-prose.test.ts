@@ -50,6 +50,39 @@ describe("check-prose", () => {
     }
   });
 
+  it("flags an unqualified key-custody claim", () => {
+    for (const [text, kind] of [
+      [
+        "The agent never sees the key.",
+        "avoid: The agent never sees the key",
+      ],
+      ["The key never moves.", "avoid: The key never moves"],
+      [
+        "There is nothing for the agent to leak.",
+        "avoid: nothing for the agent to leak",
+      ],
+    ] as const) {
+      expect(findHits(text, ".html").map((h) => h.kind)).toContain(kind);
+    }
+  });
+
+  // The mediated-connection wording positioning.md requires must not trip the
+  // scanner that exists to enforce it.
+  it("leaves the mediated-connection custody line alone", () => {
+    expect(
+      findHits(
+        "For a mediated connection, the agent does not receive the credential.",
+        ".html",
+      ),
+    ).toEqual([]);
+    expect(
+      findHits(
+        "The agent never receives a connection credential.",
+        ".html",
+      ),
+    ).toEqual([]);
+  });
+
   // The approved replacement must not trip the scanner, or the fix for one of
   // these findings would fail the gate that exists to enforce it.
   it("leaves the approved headline alone", () => {
