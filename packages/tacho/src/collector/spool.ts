@@ -321,6 +321,11 @@ export class Shipper {
     // case this guards: the body is dropped here rather than sent and refused
     // after it has already left the machine.
     //
+    // This filter answers for the wire. The bytes on disk go below, and only
+    // under a proven mandate. Bodies outside a drain's reach, whose events
+    // already shipped, are swept by `Wal.purgeBodiesOutsideMandate`, which the
+    // daemon calls when a replacement bundle verifies and narrows the clause.
+    //
     // The class comes from the body's own event rather than from the body,
     // because the WAL stores bodies as bytes and does not persist a class.
     // `contentClassOf` is the one table that maps a frame kind to a class, so

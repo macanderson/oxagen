@@ -38,7 +38,7 @@ export function TuiLogin({ className }: { className?: string }) {
           {"✓ "}
         </tspan>
         <tspan fill="#f5f5f5" fontWeight={700}>
-          Logged in as mac@oxagen.ai
+          Logged in as mac@oxagen.sh
         </tspan>
       </text>
       <text x={34} y={154} fontSize={12}>

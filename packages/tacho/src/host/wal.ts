@@ -12,8 +12,16 @@
  * every tick, and a body can be a megabyte; the shipped cursor covers both,
  * since a body only ever ships with its event.
  *
- * NDJSON rather than SQLite keeps the package free of native modules and lets
- * `tacho-hook` append with one syscall while the daemon is down.
+ * NDJSON rather than SQLite keeps the package free of native modules and keeps
+ * a read cheap enough to do on every tick.
+ *
+ * These files have exactly one writer, the daemon: `append` is reached only
+ * from its recording path, and `tacho-hook` running while the daemon is down
+ * writes to the spool directory instead (`hook-client.ts`), which the daemon
+ * drains later. This file used to say the hook appended here, which is why
+ * `dropBodies` and `purgeBodiesOutsideMandate` explain what they rely on: a
+ * read-filter-rewrite is safe only for a single writer, and a second writer
+ * would need a tombstone rather than a rewrite.
  */
 import {
   appendFileSync,
@@ -25,7 +33,12 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { TachoEvent } from "../envelope";
-import type { FrameBody } from "../evidence/frame-body";
+import {
+  contentClassOf,
+  type FrameBody,
+  retentionAllows,
+} from "../evidence/frame-body";
+import type { RetentionMandate } from "../evidence/retention";
 import type { TachoBody } from "../wire";
 import {
   ensureDir,
@@ -219,23 +232,10 @@ export class Wal {
     }
     let dropped = 0;
     for (const [session, idems] of wanted) {
-      const path = this.bodyFileFor(session);
-      if (!existsSync(path)) continue;
-      const kept: string[] = [];
-      let cut = 0;
-      for (const line of readFileSync(path, "utf8").split("\n")) {
-        if (line.trim().length === 0) continue;
-        const stored = JSON.parse(line) as StoredBody;
-        if (idems.has(stored.event_id_idem)) {
-          cut += 1;
-          continue;
-        }
-        kept.push(line);
-      }
-      if (cut === 0) continue;
-      dropped += cut;
-      if (kept.length === 0) unlinkSync(path);
-      else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
+      dropped += this.rewriteBodies(
+        session,
+        (stored) => stored !== undefined && !idems.has(stored.event_id_idem),
+      );
     }
     return dropped;
   }
@@ -287,6 +287,125 @@ export class Wal {
       unshipped,
       ...(oldest !== undefined ? { oldestUnshippedAt: oldest } : {}),
     };
+  }
+
+  /**
+   * Erase every stored body whose class `retention` does not cover, in every
+   * session this host holds, and answer how many were erased.
+   *
+   * Why this exists beside `dropBodies`. `dropBodies` reaches the bodies of
+   * the events in a drain's batch, which is every body the shipper still has
+   * an unshipped event for. Two kinds of body sit outside that reach: one
+   * whose event already shipped, since `markShipped` advanced the cursor past
+   * it, and one in a session the drain is not looking at. `compact` frees
+   * those only once their session is sealed, fully shipped, and older than
+   * the retention window, so a session that never seals kept them for as long
+   * as the host ran, or for ever on a host that never came back. This sweep
+   * walks every session and every stored line, so a narrowing reaches all of
+   * them.
+   *
+   * The write is the one in `rewriteBodies`, which `dropBodies` uses as well:
+   * atomic, and safe because these files have one writer. The module header
+   * establishes that.
+   *
+   * Erasing is not reversible. A workspace that narrows its mandate and then
+   * widens it again does not get these bodies back: the host holds no copy,
+   * and neither does the control plane for anything it had not already
+   * accepted. Widening applies to frames sealed after it, and the sessions
+   * that ran under the narrower mandate keep their digests and carry a
+   * `body_missing` gap for the content. Callers must not offer a mandate they
+   * cannot stand behind.
+   *
+   * The caller decides when to call this, and the condition is not the one
+   * that withholds a body from a shipment. See `purgeBodiesNarrowedOut` in
+   * the daemon, which calls this when a replacement bundle verifies and
+   * narrows the clause.
+   */
+  purgeBodiesOutsideMandate(retention: RetentionMandate): number {
+    let purged = 0;
+    for (const session of this.sessions()) {
+      if (!existsSync(this.bodyFileFor(session))) continue;
+      const kindOf = new Map(
+        this.read(session).map(
+          (event) => [event.event_id_idem, event.kind] as const,
+        ),
+      );
+      purged += this.rewriteBodies(session, (stored) =>
+        this.keeps(stored, kindOf, retention),
+      );
+    }
+    return purged;
+  }
+
+  /**
+   * Whether one stored body survives this mandate. Three answers, each for a
+   * reason:
+   *
+   * - A line that does not parse names no event, so nothing can ever ship it.
+   *   A crash part way through an append leaves exactly this, with content in
+   *   it, and keeping it would keep content under no mandate at all. The
+   *   rewrite reports it as `undefined`.
+   * - A body whose event is not on the session's chain yet is kept. `append`
+   *   writes bodies before events on purpose, so this is the moment between
+   *   those two writes, not an orphan; the next sweep sees the event and
+   *   judges the body against its class.
+   * - Otherwise the class comes from the event's kind and the one retention
+   *   gate answers. A kind the table does not name has no class, so no mandate
+   *   can cover it and the body goes.
+   */
+  private keeps(
+    stored: StoredBody | undefined,
+    kindOf: ReadonlyMap<string, string>,
+    retention: RetentionMandate,
+  ): boolean {
+    if (stored === undefined) return false;
+    const kind = kindOf.get(stored.event_id_idem);
+    if (kind === undefined) return true;
+    const contentClass = contentClassOf(kind);
+    if (contentClass === undefined) return false;
+    return retentionAllows(retention, contentClass);
+  }
+
+  /**
+   * Rewrite one session's body file, keeping the lines `keep` answers true
+   * for, and report how many went. The file is removed when nothing is left,
+   * so a session that loses every body loses the file too.
+   *
+   * This is the one place body bytes are rewritten. `dropBodies` names the
+   * bodies of a batch and `purgeBodiesOutsideMandate` sweeps a whole session,
+   * and both come through here, so there is one mechanism to reason about.
+   * The write is atomic, through a temporary file and a rename, so a crash
+   * part way cannot leave a torn file. It is safe against nothing else: with a
+   * second writer, a line appended between the read and the rename would be
+   * lost, and the module header is where the single writer is established.
+   *
+   * A line that does not parse is handed to `keep` as `undefined`, rather than
+   * throwing. A torn line is what a crash mid-append leaves, and a sweep that
+   * threw on one would stop erasing the content around it.
+   */
+  private rewriteBodies(
+    sessionUuid: string,
+    keep: (stored: StoredBody | undefined) => boolean,
+  ): number {
+    const path = this.bodyFileFor(sessionUuid);
+    if (!existsSync(path)) return 0;
+    const kept: string[] = [];
+    let cut = 0;
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (line.trim().length === 0) continue;
+      let stored: StoredBody | undefined;
+      try {
+        stored = JSON.parse(line) as StoredBody;
+      } catch {
+        stored = undefined;
+      }
+      if (keep(stored)) kept.push(line);
+      else cut += 1;
+    }
+    if (cut === 0) return 0;
+    if (kept.length === 0) unlinkSync(path);
+    else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
+    return cut;
   }
 
   /**
