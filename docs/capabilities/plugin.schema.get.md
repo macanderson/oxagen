@@ -1,4 +1,4 @@
-# plugin.schema.get
+# get_plugin_schema
 
 Fetch the typed config schema for a connector plugin, used to drive dynamic form rendering during install and configure flows.
 

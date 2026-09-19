@@ -1,4 +1,4 @@
-# ontology.neighbors
+# get_ontology_neighbors
 
 The one-hop neighborhood of a node — a focused, cheap traversal primitive (depth 1) for "what is directly connected to X?" without the caller writing Cypher. Org + workspace scoped, read-only. Pairs with `ontology.query` for deeper multi-hop walks.
 

@@ -1,4 +1,4 @@
-# agent.memory.policy.write
+# update_memory_policy
 
 **Domain:** agent
 **Mode:** sync

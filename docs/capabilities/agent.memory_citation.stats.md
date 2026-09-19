@@ -1,4 +1,4 @@
-# agent.memory.citations.stats
+# get_citation_stats
 
 **Domain:** agent
 **Mode:** sync

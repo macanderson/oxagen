@@ -1,4 +1,4 @@
-# agent.memory.remember
+# save_memory
 
 **Domain:** agent
 **Mode:** sync

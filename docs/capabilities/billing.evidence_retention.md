@@ -1,4 +1,4 @@
-# billing.evidence_retention
+# get_evidence_retention
 
 **Domain:** billing
 **Mode:** sync

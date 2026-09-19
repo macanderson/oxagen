@@ -20,17 +20,14 @@ feature.
 
 ## How environment values are loaded
 
-- Deployed environments (Vercel) read their variables from the project's environment
-  settings. Local development reads `.env.local`.
+- The AWS deployment loads runtime configuration from Parameter Store through the deployment tooling. Local development reads `.env.local`.
 - Oxagen normalizes values at load time (for example, it strips surrounding quotes), so
   an over-quoted value such as `"https://example.com"` parses correctly.
-- Security-relevant predicates resolve the same way every time and are **fail-safe**:
-  a value that leaks into a deployed environment cannot relax a control that protects
-  production.
+- Keep local-development flags out of deployed configuration. [Local development](/docs/configuration/local-development) lists the exact signals and their limits.
 
 <Mermaid chart={`
 flowchart LR
-  V[Vercel project settings] --> E[process.env]
+  V[Deployment configuration] --> E[process.env]
   L[.env.local] --> E
   E --> N[normalizeEnv: strip one quote pair from known keys]
   N --> Z{{Zod schema parse}}:::accent

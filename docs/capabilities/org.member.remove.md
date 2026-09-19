@@ -1,4 +1,4 @@
-# org.member.remove
+# remove_org_member
 
 **Domain:** organization
 **Mode:** sync

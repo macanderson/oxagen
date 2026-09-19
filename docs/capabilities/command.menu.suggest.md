@@ -1,4 +1,4 @@
-# command.menu.suggest
+# suggest_commands
 
 **Domain:** command
 **Mode:** sync

@@ -1,4 +1,4 @@
-# secret.key.delete
+# delete_secret_key
 
 **Domain:** secret
 **Mode:** sync
@@ -11,7 +11,7 @@
 
 Soft-delete a vault secret key and hard-remove all of its per-environment value
 overrides. The key's default value and every override are dropped together, so
-any sandbox or agent run that resolved this key will fall through to unset.
+subsequent secret resolution cannot return this key.
 Owner/Admin only.
 
 ## Input
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.key.delete`
+Tool name: `delete_secret_key`
 
 ## Errors
 

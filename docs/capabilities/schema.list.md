@@ -1,4 +1,4 @@
-# schema.list
+# list_schemas
 
 List the workspace's schemas with per-schema enabled state. Lightweight listing without the full label/property tree.
 

@@ -1,4 +1,4 @@
-# tacho.events.ingest
+# ingest_tacho_events
 
 Ingest a batch of hash-chained `tacho/1.0` events from an enrolled host (`docs/specs/tacho/spec.md` section 3.1; column contract in `docs/specs/tacho/data-model.md`). Machine-to-machine only. Tenant scope comes exclusively from the API key; the key must carry the server-owned `tacho_host_v1` scope naming a live host in this tenant, and every event must name that host, or the batch is denied in full.
 

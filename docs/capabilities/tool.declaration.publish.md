@@ -1,4 +1,4 @@
-# tool.declaration.publish
+# publish_tool_declaration
 
 **Domain:** tool
 **Mode:** sync

@@ -1,4 +1,4 @@
-# secret.export
+# export_secrets
 
 **Domain:** secret
 **Mode:** sync
@@ -55,7 +55,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.export`
+Tool name: `export_secrets`
 
 ## Errors
 

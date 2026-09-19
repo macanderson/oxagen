@@ -1,4 +1,4 @@
-# conversation.rename
+# rename_conversation
 
 **Domain:** conversation
 **Mode:** sync

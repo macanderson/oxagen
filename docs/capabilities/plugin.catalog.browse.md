@@ -1,4 +1,4 @@
-# plugin.catalog.browse
+# browse_plugin_catalog
 
 **Domain:** plugin
 **Mode:** sync

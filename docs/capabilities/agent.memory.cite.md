@@ -1,4 +1,4 @@
-# agent.memory.cite
+# cite_memory
 
 **Domain:** agent
 **Mode:** sync

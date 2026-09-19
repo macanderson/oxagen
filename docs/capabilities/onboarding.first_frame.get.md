@@ -1,4 +1,4 @@
-# onboarding.first_frame.get
+# get_first_frame
 
 The register flow's "Wait for the first frame" step (mockup `regRun`; #2967), for one registered agent: whether a host has enrolled for it (`enroll_host`), what that host last reported (heartbeat, hooks), and the first frame `ingest_tacho_events` accepted from it — the moment the agent exists on Fleet, as the run `list_runs` shows.
 

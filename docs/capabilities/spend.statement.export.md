@@ -1,4 +1,4 @@
-# spend.statement.export
+# export_statement
 
 The monthly spend statement for the active workspace as CSV (Mission Control spec §12.9 "Monthly statement", App. E; ADR-060). One line per group at every level (operator, agent, model, tool, task) with the month's runs, calls, cost in micros and, on that same line, the cost in cents rounded half to even once (spec §12.3: rounding to cents happens at the statement line and nowhere earlier). Every line names its basis; proven and accepted spend stay apart.
 

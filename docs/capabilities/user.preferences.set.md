@@ -1,4 +1,4 @@
-# user.preferences.set
+# set_preferences
 
 The Account dialog's Preferences tab (MC spec App. E). A partial write: only the fields sent change, and the answer is the whole set after the write, read back from the row. `get_user_preferences` reads the same set.
 

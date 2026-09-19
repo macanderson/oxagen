@@ -1,4 +1,4 @@
-# org.settings.read
+# get_org_settings
 
 **Domain:** organization
 **Mode:** sync

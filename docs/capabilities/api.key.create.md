@@ -1,4 +1,4 @@
-# api.key.create
+# create_api_key
 
 **Domain:** api_key
 **Mode:** sync

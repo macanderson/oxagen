@@ -1,4 +1,4 @@
-# model.capability.list
+# list_model_capabilities
 
 **Capability name:** `list_model_capabilities`
 **Domain:** model

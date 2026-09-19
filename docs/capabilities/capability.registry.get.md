@@ -1,4 +1,4 @@
-# capability.registry.get
+# get_capability_registry
 
 Read one typed capability contract from the live registry as the full enforced object — the accountability chain made inspectable: identity (default role grants + fallback effect), knowledge scope (tenancy + audit target), permitted action (description, mode, surfaces, input/output field specs derived from the zod schemas at read time), commercial terms (billing gate + entitlement pack), and chaining metadata. Returns `capability: null` for an unknown name.
 

@@ -1,4 +1,4 @@
-# schema.property.upsert
+# upsert_schema_property
 
 Create or update a property on a node label or relationship type in the current draft version. Changes are staged in the draft — publish via `schema.version.create` or `schema.toggle` to make them live.
 

@@ -1,4 +1,4 @@
-# environment.get
+# get_environment
 
 **Domain:** environment
 **Mode:** sync
@@ -42,7 +42,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.get`
+Tool name: `get_environment`
 
 ## Errors
 

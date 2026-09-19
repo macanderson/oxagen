@@ -1,4 +1,4 @@
-# connection.create
+# create_connection
 
 **Domain:** connection
 **Mode:** sync

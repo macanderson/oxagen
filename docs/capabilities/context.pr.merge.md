@@ -1,4 +1,4 @@
-# context.pr.merge
+# merge_context_pr
 
 **Name:** `merge_context_pr`
 **Domain:** context

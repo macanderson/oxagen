@@ -34,7 +34,7 @@ The result is a Vercel AI SDK `tools` map passed to `streamText`. The agent pick
 | `write_memory` | Persist a new memory (kind: `routine-change`, `constraint`, `bug-root-cause`, `convention-deviation`, or `gotcha`) to the workspace knowledge graph, attached to a graph node with a weight bucket (`low`, `high`, or `critical`). |
 | `list_memory_citations` / `get_citation_stats` | Inspect how memories have grounded past answers. |
 
-Memories carry across runs and appear in **Workspace → Knowledge → Memory**. See [Agent memory](/docs/agent/memory) for the full model.
+Memories carry across runs. Inspect them with `oxagen memory`. See [Agent memory](/docs/agent/memory) for the full model.
 
 ### Knowledge graph
 
@@ -63,13 +63,13 @@ These are the *ontology read set*. See `docs/capabilities/_ontology-read-set.md`
 | `get_ci_status` | Read CI and check status for a branch, commit, or PR head. |
 | `get_repo_metrics` | Read repository health metrics. |
 
-Oxagen reads connected repositories. It does not open branches, push commits, or open pull requests on their behalf. ADR-043 removed the mutation half of the repository surface (create, fork, file.put, pr.open, and branch.create) along with the coding runtime that used it.
+These repository-status tools read connected repositories. Separate definition-commit capabilities write agent and control definitions to the workspace repository. Oxagen does not provide a general coding runtime.
 
 ### Billing & budgets
 
 | Tool | Description |
 |---|---|
-| `get_spend_budget` / `update_user_budget` | Read and set a person's spend budget. |
+| `get_spend_budget` / `set_spend_budget` | Read and set organization or workspace spend ceilings. |
 | `get_usage_breakdown` | Read metered usage for the org or workspace. |
 
 ### MCP server management

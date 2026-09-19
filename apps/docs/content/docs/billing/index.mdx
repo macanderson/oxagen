@@ -1,53 +1,34 @@
 ---
-title: Billing & usage
-description: Plans, usage credits, metered consumption, and per-turn budgets.
+title: Billing and usage
+description: "Manage subscription credits, model funding, and spend budgets."
 ---
 
-Oxagen meters every governed action at the `invoke()` boundary, whether an agent, an API call, or an MCP tool made it. The bill reads the same rows as the record, so billing is not a separate estimate. Org admins manage billing under **Organization → Billing**.
+Open **Organization → Billing** to manage subscription and credits. Open a workspace's **Spend** page to inspect recorded usage and cost.
 
-<Mermaid
-  chart="
-flowchart LR
-  A[Agent / API / MCP call] --> B[invoke boundary]:::accent
-  B --> C[(ClickHouse usage event)]
-  B --> D[Credits debited]
-  C --> E[Usage dashboard]
-  D --> F[Stripe]"
-/>
+## Credits and model funding
 
-*Every metered call writes a ClickHouse usage event and debits credits at the same boundary. The usage dashboard and Stripe both read that one ledger.*
+Governed actions and platform-funded model usage debit credits. The credit ledger records balance changes, while ClickHouse records usage analytics. Those are separate stores with separate write paths.
 
-## Subscription
-
-Each organization has a plan, billed monthly or yearly. Plan changes go through Stripe Checkout: Oxagen returns a checkout URL, you complete payment there, and the subscription updates when the webhook confirms it. **Billing → Subscription** shows the current plan and the period bounds.
-
-## Usage credits
-
-Model and capability consumption debits **usage credits**. When the credits included in the plan run out, anyone with billing permission can buy more (minimum $5), also through Stripe Checkout. Oxagen records every debit per governed action, so credits reconcile exactly against the audit trail.
+An organization can supply its own model credential through **Model funding**. Tokens billed by that provider still appear in usage records but do not incur Oxagen's token charge. Governed-action charges still apply. See [Model funding](/docs/governance/byok-and-models).
 
 ## Usage breakdown
 
-**Billing → Usage** totals any time window by:
+Use `get_usage_breakdown` to query usage by model, surface, workspace, capability, or principal. Inspect the attribution and whether a figure was measured, reported, or estimated before comparing runs from different harnesses.
 
-- model
-- surface (agent, API, MCP, CLI)
-- workspace
-- capability
-- acting principal (per-seat and per-agent metering)
+## Spend budgets
 
-It also shows a daily series of tokens and cost. FinOps pipelines can read the same breakdown through the API.
+Read the current organization and workspace ceilings:
 
-## Budgets
+```bash
+oxagen budget show
+```
 
-A budget puts a dollar ceiling on each agent turn, checked while the turn runs:
+Set a period ceiling as an organization Owner, Admin, or Billing manager:
 
-| Mode | Behaviour at the limit |
-|---|---|
-| `grace` | Allow overage up to a configured grace percentage, then stop |
-| `prompt` | Pause the turn and ask you whether to continue |
-| `enforce` | Stop the turn the moment it crosses the limit |
+```bash
+oxagen budget set --scope workspace --period monthly --limit 500
+```
 
-Two layers combine:
+Admission checks deny further governed consumption once the recorded limit is reached. A check before a call or turn is not a guarantee that concurrent work cannot cross the limit. [Spend budgets](/docs/cli/budget) documents the accounting periods and threshold states.
 
-- **Personal budget**: each member's own per-turn limit and mode.
-- **Workspace budget policy**: set by an org or workspace admin, either as a soft `default` (it seeds members who have not set their own) or as a hard `ceiling` (members cannot exceed it, and a member can only make the mode stricter).
+Personal per-turn settings are separate from these period ceilings. Inspect the effective budget and funding source for the path you are using.

@@ -1,4 +1,4 @@
-# environment.list
+# list_environments
 
 **Domain:** environment
 **Mode:** sync
@@ -39,7 +39,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.list`
+Tool name: `list_environments`
 
 ## Errors
 

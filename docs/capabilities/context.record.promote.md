@@ -1,4 +1,4 @@
-# context.record.promote
+# promote_context_record
 
 **Domain:** context
 **Mode:** sync

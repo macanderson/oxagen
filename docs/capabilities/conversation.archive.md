@@ -1,4 +1,4 @@
-# conversation.archive
+# archive_conversation
 
 **Domain:** conversation
 **Mode:** sync
@@ -34,8 +34,8 @@ soft-delete path.
 ## Surfaces
 
 - **API:** `POST /v1/:org/:workspace/conversations/archive`
-- **MCP:** `conversation.archive` tool (non-destructive, idempotent)
-- **Agent:** invoked directly via `invoke("conversation.archive", ...)` — no approval required
+- **MCP:** `archive_conversation` tool (non-destructive, idempotent)
+- **Agent:** invoked directly via `invoke("archive_conversation", ...)` — no approval required
 
 ## Side effects
 

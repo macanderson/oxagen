@@ -1,4 +1,4 @@
-# environment.update
+# update_environment
 
 **Domain:** environment
 **Mode:** sync
@@ -52,7 +52,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `environment.update`
+Tool name: `update_environment`
 
 ## Errors
 

@@ -1,4 +1,4 @@
-# workspace.list
+# list_workspaces
 
 **Domain:** workspace
 **Mode:** sync

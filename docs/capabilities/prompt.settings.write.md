@@ -1,4 +1,4 @@
-# prompt.settings.write
+# update_prompt_settings
 
 **Domain:** workspace
 **Mode:** sync

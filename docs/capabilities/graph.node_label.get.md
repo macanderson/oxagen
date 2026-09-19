@@ -1,4 +1,4 @@
-# graph.node.labels.get
+# get_node_labels
 
 **Domain:** graph
 **Mode:** sync

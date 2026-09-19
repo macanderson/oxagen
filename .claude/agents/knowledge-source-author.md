@@ -98,7 +98,7 @@ This is the chain you must leave intact so a workspace can install the source:
 - Define `connectionConfigSchema` (zod) aligned field-for-field with the YAML `config`.
 - Register it in `packages/ingestion/src/connectors/index.ts`.
 - If a new sync path is needed, wire/extend the Inngest functions in `packages/inngest-functions/src/functions/` (`ingestion.sync-requested.ts`, etc.) — reuse the existing pipeline; do not hand-roll a second pipeline.
-- Add any new Postgres columns/tables via a migration in `packages/database/migrations/` (never in `apps/`); echo the target DB URL before any mutation.
+- Add any new Postgres columns/tables via a migration in `packages/database/atlas/migrations/` (never in `apps/`); confirm the target host and database name without printing credentials before mutation.
 
 ### 4. (Partner only) Host & register
 - Validate the YAML locally (parse + structure check per the guide). Ensure HTTPS, no redirects to untrusted origins, served as `text/yaml`/`application/yaml`/`text/plain`.

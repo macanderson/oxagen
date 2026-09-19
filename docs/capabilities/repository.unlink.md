@@ -1,4 +1,4 @@
-# repository.unlink
+# unlink_repository
 
 Remove a linked repository from the workspace (MC spec §10.1; the §17 M0 acceptance test "a second repo can be linked and unlinked"; ADR-099).
 

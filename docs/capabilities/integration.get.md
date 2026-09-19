@@ -1,4 +1,4 @@
-# integration.get
+# get_integration
 
 Get full details of a single plugin instance including schema and configuration.
 

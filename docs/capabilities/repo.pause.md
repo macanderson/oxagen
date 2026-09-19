@@ -1,4 +1,4 @@
-# repo.pause
+# pause_repo
 
 Pause automatic syncing for a repository connection.
 

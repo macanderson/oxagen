@@ -1,4 +1,4 @@
-# agent.mcp.consent.resolve
+# resolve_mcp_consent
 
 **Domain:** agent
 **Mode:** sync
