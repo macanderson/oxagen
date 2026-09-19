@@ -398,19 +398,27 @@ function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
  * is refused rather than applied. Any other write — including one making an
  * incomplete row MORE complete, which is what the repricer and a recovered
  * catalog are for — is unaffected.
+ *
+ * Built lazily inside {@link upsertRunTotals} rather than at module scope:
+ * a module-scope `sql` fragment referencing `totals.costBasis` evaluates
+ * `totals` the moment this module loads, which throws for any caller that
+ * mocks `@oxagen/database`'s schema without a full `runTotals` table (the
+ * normal case for a handler test that never touches this write path).
  */
-const REGRESSES_TO_INCOMPLETE = sql`(
-  ${totals.costBasis} IS NOT NULL
-  AND ${totals.costBasis} <> 'estimated'
-  AND NOT (${totals.breakdown} -> 'models' @> '[{"hasUnpriced": true}]'::jsonb)
-  AND ${totals.modelCalls} = excluded.model_calls
-  AND ${totals.toolCalls} = excluded.tool_calls
-  AND (
-    excluded.cost_basis IS NULL
-    OR excluded.cost_basis = 'estimated'
-    OR (excluded.breakdown -> 'models') @> '[{"hasUnpriced": true}]'::jsonb
-  )
-)`;
+function regressesToIncomplete() {
+  return sql`(
+    ${totals.costBasis} IS NOT NULL
+    AND ${totals.costBasis} <> 'estimated'
+    AND NOT (${totals.breakdown} -> 'models' @> '[{"hasUnpriced": true}]'::jsonb)
+    AND ${totals.modelCalls} = excluded.model_calls
+    AND ${totals.toolCalls} = excluded.tool_calls
+    AND (
+      excluded.cost_basis IS NULL
+      OR excluded.cost_basis = 'estimated'
+      OR (excluded.breakdown -> 'models') @> '[{"hasUnpriced": true}]'::jsonb
+    )
+  )`;
+}
 
 /** Exported only for the write-guard's own pg-integration test. */
 export async function upsertRunTotals(
@@ -465,7 +473,7 @@ export async function upsertRunTotals(
       .onConflictDoUpdate({
         target: totals.runId,
         set: values,
-        setWhere: sql`NOT ${REGRESSES_TO_INCOMPLETE}`,
+        setWhere: sql`NOT ${regressesToIncomplete()}`,
       }),
   );
 }
