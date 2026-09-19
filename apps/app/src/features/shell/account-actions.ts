@@ -1,7 +1,7 @@
 "use server";
-// The one write behind the Account dialog: a person's own display name and
+// The two writes behind the Account dialog: a person's own display name and
 // avatar (spec App. F, "the account pages collapse into one Account dialog
-// reachable from the user menu").
+// reachable from the user menu"), and the time zone their dates render in.
 //
 // It goes through the kernel seam like every other write in this app, and for
 // a reason worth stating. The deprecated app wrote `auth.users` straight from
@@ -15,6 +15,7 @@
 // The contract carries no user id and neither does this action: the handler
 // acts on the authenticated principal. A profile write that took a target id
 // would be a privilege-escalation surface reachable from a form field.
+import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.set";
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
@@ -53,4 +54,26 @@ export async function updateProfile(
     displayName: draft.displayName,
     avatarUrl: draft.avatarUrl === "" ? null : draft.avatarUrl,
   });
+}
+
+/**
+ * Change the zone every date in the app renders in for the signed-in person.
+ *
+ * `set_preferences` is the one writer of `auth.user_preferences` (ADR-075) and
+ * a partial write: only `timezone` is sent, so theme, locale and the model
+ * defaults keep their stored values. The contract admits an IANA name; a value
+ * outside that shape is answered `invalid` before the kernel runs. Like the
+ * profile write it carries no user id: the handler acts on the principal.
+ */
+export async function updateTimeZone(
+  org: string,
+  timeZone: string,
+): Promise<ActionResult<{ timeZone: string }>> {
+  const ctx = await requireViewer(org);
+  const result = await kernelWrite(ctx, userPreferencesSet, {
+    timezone: timeZone,
+  });
+  return result.ok
+    ? { ok: true, value: { timeZone: result.value.timezone } }
+    : result;
 }

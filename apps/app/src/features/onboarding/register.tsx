@@ -9,7 +9,7 @@
 // call per wait rather than one per tick.
 import "server-only";
 import { notFound } from "next/navigation";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type {
@@ -28,6 +28,7 @@ import { type RegisterStep, registerRail, stepNumber } from "./steps";
 import { FirstFrameStep } from "./ui/first-frame";
 import { RegisterAgentForm } from "./ui/register-form";
 import { WrapAgent } from "./ui/wrap-agent";
+import { useFormatter } from "@/ui/formatter";
 
 /**
  * The server-side wait for one read of `get_first_frame`, inside the budget the

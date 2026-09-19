@@ -57,7 +57,7 @@ vi.mock("@/server/tenancy-lookups", () => ({
 
 const ORG_ID = "7a000000-0000-4000-8000-0000000000a1";
 
-const { updateProfile } = await import("./account-actions");
+const { updateProfile, updateTimeZone } = await import("./account-actions");
 
 beforeEach(() => {
   invoke.mockReset();
@@ -133,5 +133,44 @@ describe("updateProfile", () => {
       "avatarUrl",
       "displayName",
     ]);
+  });
+});
+
+describe("updateTimeZone", () => {
+  it("sends a signed-out visitor to log in, writing nothing (negative)", async () => {
+    getSession.mockResolvedValue(null);
+    await expect(updateTimeZone("acme", "Europe/London")).rejects.toThrow(
+      "NEXT_REDIRECT /login",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("writes only the zone through set_preferences and answers with what the handler stored", async () => {
+    invoke.mockResolvedValue({
+      locale: "en",
+      theme: "system",
+      timezone: "Europe/London",
+      fontSize: "medium",
+      density: "comfortable",
+      enterToSubmit: false,
+      pendingPromptBehavior: "queue",
+      defaultTextTier: null,
+      defaultTextModel: null,
+    });
+    const result = await updateTimeZone("acme", "Europe/London");
+    expect(result).toEqual({ ok: true, value: { timeZone: "Europe/London" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_preferences",
+      { timezone: "Europe/London" },
+      expect.anything(),
+    );
+  });
+
+  // The contract's schema refuses the value before the kernel runs, so a
+  // string that is not a zone name never reaches the handler.
+  it("answers invalid for a value that is not an IANA zone name, without invoking (negative)", async () => {
+    const result = await updateTimeZone("acme", "not a zone");
+    expect(result).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

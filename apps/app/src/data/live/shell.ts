@@ -1,15 +1,34 @@
 // The shell port on the kernel (ARCHITECTURE.md §3.3): the organizations the
-// viewer belongs to (list_orgs) and the current organization's workspaces
-// (list_workspaces), both noBillingGate reads.
+// viewer belongs to (list_orgs), the current organization's workspaces
+// (list_workspaces), and the person's own clock (get_user_preferences).
 import "server-only";
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
+import {
+  DEFAULT_TIME_ZONE,
+  userPreferencesRead,
+} from "@oxagen/oxagen/contracts/user.preferences.read";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { captureError } from "@oxagen/telemetry";
-import { ShellContext } from "@/data/contracts/shell";
+import { ShellContext, ViewerPreferences } from "@/data/contracts/shell";
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import { toOrgChoices, toWorkspaceChoices } from "./mappers/pretenant";
+
+/**
+ * True when `Intl` can format in `name` on this runtime. The column is free
+ * text and the contract admits any zone-shaped string, so a stored value can
+ * still be one this runtime's ICU data has never heard of, and
+ * `Intl.DateTimeFormat` throws a RangeError on it inside every date.
+ */
+function isTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const shell: DataSource["shell"] = {
   async context(ctx) {
@@ -37,5 +56,29 @@ export const shell: DataSource["shell"] = {
       return readError("record_unmappable", 502);
     }
     return readOk(view.data);
+  },
+  async preferences(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: userPreferencesRead,
+      input: {},
+      page: "shell",
+    });
+    if (!read.ok) return read;
+    // The column is free text and the contract's regex admits any zone-shaped
+    // name, so a stored value this runtime cannot format in is reported once
+    // and read as the default: a RangeError from Intl inside every date on the
+    // page is the alternative.
+    const stored = read.value.timezone;
+    let timeZone = stored;
+    if (!isTimeZone(stored)) {
+      captureError({
+        error: new Error(`unsupported time zone ${JSON.stringify(stored)}`),
+        source: "app",
+        orgId: ctx.orgId,
+        context: "shell.preferences time_zone_unsupported",
+      });
+      timeZone = DEFAULT_TIME_ZONE;
+    }
+    return readOk(ViewerPreferences.parse({ timeZone }));
   },
 };

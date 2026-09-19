@@ -9,10 +9,13 @@
 // into. It writes through `update_profile` (features/shell/account-actions.ts),
 // which is why the write is a capability at all.
 //
-// One tab. Preferences, security and privacy were the other three account
-// pages; their reads have no rev1 port and their writes have no contract that
-// declares `app` (ADR-081), so they are absent rather than stubbed — a tab
-// that cannot save is the thing this file exists to stop shipping.
+// One tab. Of the preferences page, the time zone is here, because every date
+// the app renders reads in it (features/shell/viewer-clock.tsx) and a clock
+// nobody can set is a clock that is wrong for most of the world; it writes
+// through `set_preferences`. Security and privacy, and the rest of the
+// preferences, have no rev1 read and no contract that declares `app`
+// (ADR-081), so they are absent rather than stubbed — a control that cannot
+// save is the thing this file exists to stop shipping.
 //
 // It is a `SheetDialog` like every other dialog in the app, so on a phone it
 // rises from the bottom edge with a drag handle, a scrim, safe-area padding
@@ -24,14 +27,15 @@ import { type SyntheticEvent, useId, useState } from "react";
 import { Avatar } from "@/ui/avatar";
 import { inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
+import { timeZoneChoices } from "@/shared/time-zone";
 import { useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { updateProfile } from "./account-actions";
+import { updateProfile, updateTimeZone } from "./account-actions";
 import { initials } from "./format";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 
-type Outcome = "saved" | "invalid" | "denied" | "failed";
+type Outcome = "saved" | "invalid" | "timeZoneInvalid" | "denied" | "failed";
 
 const fieldLabel =
   "mb-1 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground";
@@ -59,8 +63,13 @@ function AccountForm({ data }: { data: ShellData }) {
   const nameId = useId();
   const emailId = useId();
   const avatarId = useId();
+  const timeZoneId = useId();
   const [displayName, setDisplayName] = useState(viewer.name ?? "");
   const [avatarUrl, setAvatarUrl] = useState(viewer.avatarUrl ?? "");
+  const [timeZone, setTimeZone] = useState(viewer.timeZone);
+  // What the server holds, so an unchanged zone is not written on every save.
+  const [storedTimeZone, setStoredTimeZone] = useState(viewer.timeZone);
+  const [zones] = useState(() => timeZoneChoices(viewer.timeZone));
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -86,12 +95,32 @@ function AccountForm({ data }: { data: ShellData }) {
       if (result.ok) {
         setDisplayName(result.value.displayName);
         setAvatarUrl(result.value.avatarUrl ?? "");
+        // Two capabilities, one Save. The zone is written second and only when
+        // it moved, so a name change never touches the preference row and a
+        // refused zone leaves the profile saved, which the line below says.
+        if (timeZone !== storedTimeZone) {
+          const clock = await updateTimeZone(org.slug, timeZone);
+          if (!clock.ok) {
+            setOutcome(
+              clock.reason === "invalid"
+                ? "timeZoneInvalid"
+                : clock.reason === "denied"
+                  ? "denied"
+                  : "failed",
+            );
+            return;
+          }
+          setTimeZone(clock.value.timeZone);
+          setStoredTimeZone(clock.value.timeZone);
+        }
         setOutcome("saved");
         // The shell renders the same person: the top bar's user menu reads
         // `data.viewer`, resolved on the server from the session. Without this
         // the name and avatar in the chrome stay as they were — across
         // client-side navigation too, because the shell lives in the org
-        // layout — until a full reload. A re-render of the server tree at the
+        // layout — until a full reload. The same refresh carries a new zone
+        // into <ViewerClock> and the chrome's <TimeZoneProvider>, so every
+        // date on the page reads in it. A re-render of the server tree at the
         // URL already showing, not a navigation: the dialog stays open.
         navigate.refresh();
       } else if (result.reason === "invalid") setOutcome("invalid");
@@ -157,6 +186,29 @@ function AccountForm({ data }: { data: ShellData }) {
             }}
           />
           <p className={hint}>{t("avatarHint")}</p>
+        </div>
+        <div>
+          <label htmlFor={timeZoneId} className={fieldLabel}>
+            {t("timeZone")}
+          </label>
+          <select
+            id={timeZoneId}
+            data-testid="account-time-zone"
+            className={inputBase}
+            value={timeZone}
+            onChange={(e) => {
+              editDraft(() => {
+                setTimeZone(e.target.value);
+              });
+            }}
+          >
+            {zones.map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </select>
+          <p className={hint}>{t("timeZoneHint")}</p>
         </div>
         <div>
           <label htmlFor={emailId} className={fieldLabel}>
