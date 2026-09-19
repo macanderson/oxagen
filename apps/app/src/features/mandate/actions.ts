@@ -40,6 +40,28 @@ import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
+/**
+ * What the dialog had in the editable fields when it opened, as it rendered
+ * them.
+ *
+ * It travels with the submission, as a hidden input beside each editable field,
+ * so this action can tell a value the operator changed from one they never
+ * touched. Every editable field is prefilled from the mandate the page read, and
+ * a prefill sent back unchanged is not a change: the handler reads every field a
+ * request carries as an explicit edit, so a submission that asserted its
+ * prefills could restore a bound another operator had lowered since the dialog
+ * opened, through the very path the row lock made atomic (ADR-102, amended
+ * 2026-09-19).
+ */
+export type LimitsBaseline = {
+  measure: string;
+  unit: string;
+  period: "daily" | "weekly" | "monthly";
+  perCall: string;
+  perPeriod: string;
+  callsPerDay: string;
+};
+
 /** The fields the change-limits dialog collects. */
 export type LimitsDraft = {
   mandateId: string;
@@ -55,6 +77,8 @@ export type LimitsDraft = {
   callsPerDay: string;
   /** The last day the mandate may be drawn on (`YYYY-MM-DD`); blank keeps the window. */
   validTo: string;
+  /** What the dialog prefilled into the fields above, so an untouched one can be told from an edit. */
+  baseline: LimitsBaseline;
 };
 
 /**
@@ -98,12 +122,25 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
  * a bound widens the agent's authority with nobody asking, which is the failure
  * class ARCHITECTURE.md §9 records on this lane.
  *
+ * **The patch is sparse, and that is what makes the merge atomic in practice.**
+ * The dialog prefills the measure, the unit, the window and both figures from the
+ * mandate the page read, so a submission that changed only the validity date
+ * still holds every one of those values. The handler cannot tell an echo from an
+ * edit: it merges whatever the change carries over the locked row. So the
+ * baseline travels with the draft and a field is carried only when it differs
+ * from it, and a validity-only submission carries no limit change at all. Without
+ * that, a calls-only or date-only submission would restore the count bound
+ * another operator had just lowered, through the atomic path rather than around
+ * it.
+ *
  * The consequence a person has to know about is unchanged: a blank field leaves
  * that measure's bound as it is rather than removing it. Removing a limit
  * entirely means sending a whole `limits` record without it, which is
  * `update_mandate_limits` over the API or MCP; a form whose blank fields could
  * delete bounds would delete them by accident far more often than on purpose.
- * The dialog's copy says so.
+ * The dialog's copy says so. A field the operator cleared is absent from the
+ * patch for the same reason an untouched one is: neither says to change the
+ * stored bound.
  *
  * Lowering a per-period limit under authority the period has already drawn is
  * accepted on purpose: the ledger is a record and an update may not rewrite it.
@@ -122,13 +159,27 @@ export async function changeMandateLimits(
   const callsPerDay = draft.callsPerDay.trim();
   const validTo = draft.validTo.trim();
 
+  /**
+   * The same fields as the dialog prefilled them, trimmed the same way so a
+   * comparison is between two values read alike. Each one arrived from the same
+   * `measureDefaults` result that seeded the visible field beside it, in the same
+   * render of the same form, so a baseline cannot describe a default the operator
+   * never saw.
+   */
+  const was = {
+    measure: draft.baseline.measure.trim(),
+    unit: draft.baseline.unit.trim(),
+    perCall: draft.baseline.perCall.trim(),
+    perPeriod: draft.baseline.perPeriod.trim(),
+    callsPerDay: draft.baseline.callsPerDay.trim(),
+    period: draft.baseline.period,
+  };
+
   // A mandate over the built-in measure alone is a legitimate shape, and the
   // only one available to a tool that carries a consequence and declares no
   // numeric measure: `mandateLimitsSchema` needs one limit and `calls` is one.
   const wantsMeasure =
     measure !== "" || unit !== "" || perCall !== "" || perPeriod !== "";
-  if (!wantsMeasure && callsPerDay === "" && validTo === "")
-    return refuse("perPeriod");
 
   if (callsPerDay !== "" && !MEASURE_VALUE.test(callsPerDay))
     return refuse("callsPerDay");
@@ -157,47 +208,76 @@ export async function changeMandateLimits(
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
 
   /**
-   * What this submission says about each measure it names, and nothing more.
-   *
-   * These are changes, not records. A field the operator left blank is absent
-   * here rather than present and empty, so the handler's merge leaves the stored
-   * value alone — which is what the dialog's copy promises. The contract's
-   * `limitChanges` refuses a change that names no field at all, so an absent
-   * field can only ever mean "leave it".
+   * Whether this submission is editing the bound the dialog prefilled or has
+   * named a different measure. A different name is a different bound, one the
+   * record may not hold at all, so nothing typed against it can be a prefill left
+   * over from another measure and every field of it is carried.
    */
+  const isSameMeasure = measure === was.measure;
+
+  /** A value that differs from the one this field opened with. */
+  const edited = (value: string, prefilled: string) =>
+    !isSameMeasure || value !== prefilled;
+
+  /**
+   * What this submission changed on the named measure, and nothing more.
+   *
+   * A field is carried only when the operator's value differs from the prefill,
+   * because the handler reads every field a change carries as an explicit edit.
+   * A prefill sent back is an assertion that the stored bound should be what this
+   * dialog read some minutes ago, and on a mandate another operator has narrowed
+   * since, that assertion restores a bound nobody entered. The row lock makes the
+   * merge atomic; it cannot tell an edit from an echo.
+   *
+   * An absent field is what the merge reads as "keep what is stored", which is
+   * what an untouched field means and what a cleared one means too: clearing is
+   * not deletion, and a bound is removed by a whole-record `limits` write over
+   * the API or MCP, as the dialog's copy says.
+   */
+  const measureChange = wantsMeasure
+    ? {
+        ...(perCallValue !== null && edited(perCallValue, was.perCall)
+          ? { perCall: perCallValue }
+          : {}),
+        ...(perPeriodValue !== null && edited(perPeriodValue, was.perPeriod)
+          ? { perPeriod: perPeriodValue }
+          : {}),
+        ...(edited(draft.period, was.period) ? { period: draft.period } : {}),
+        ...(edited(unit, was.unit) ? { currencyOrUnit: unit } : {}),
+      }
+    : {};
+
   const limitChanges: MandateLimitChanges = {
-    ...(wantsMeasure
-      ? {
-          [measure]: {
-            ...(perCallValue === null ? {} : { perCall: perCallValue }),
-            ...(perPeriodValue === null ? {} : { perPeriod: perPeriodValue }),
-            // Both are on the form, so both are the operator's.
-            period: draft.period,
-            currencyOrUnit: unit,
-          },
-        }
-      : {}),
-    ...(callsPerDay === ""
+    ...(Object.keys(measureChange).length === 0
+      ? {}
+      : { [measure]: measureChange }),
+    // The calls cap's measure name is fixed, so its own figure is the whole
+    // comparison. No period, deliberately: the form shows the cap as a bare
+    // number and exposes no period control for it, so this submission says
+    // nothing about the window, and the handler's merge keeps the stored one.
+    // Writing `daily` here turned a stored cap of ten calls a week into ten a
+    // day on any submission, including one that only changed a validity date.
+    ...(callsPerDay === "" || callsPerDay === was.callsPerDay
       ? {}
       : {
           [RESERVED_MEASURE]: {
             perPeriod: callsPerDay,
-            // No period, deliberately: the form shows the calls cap as a bare
-            // number and exposes no period control for it, so this submission
-            // says nothing about the window, and the handler's merge keeps the
-            // stored one.
-            // Writing `daily` here turned a stored cap of ten calls a week into
-            // ten a day on any submission, including one that only changed a
-            // validity date.
             currencyOrUnit: RESERVED_MEASURE,
           },
         }),
   };
 
+  // Nothing was changed. `update_mandate_limits` refuses a request that names no
+  // change at all, and a submission holding only its prefills has named none, so
+  // it is refused here, with a field a person can act on, rather than reaching
+  // the kernel as a schema failure that names none.
+  if (Object.keys(limitChanges).length === 0 && validTo === "")
+    return refuse("perPeriod");
+
   const ctx = await requireViewer(org, ws);
 
-  // One call, carrying the changes. The handler merges them over the stored
-  // record under the lock it already takes, at both depths — every measure this
+  // One call, carrying only what changed. The handler merges it over the stored
+  // record under the lock it already takes, at both depths: every measure this
   // submission did not name keeps its bound, and each named measure keeps every
   // field this submission did not carry, its other sublimit and its window
   // included. That is why the window of a calls cap the form cannot express

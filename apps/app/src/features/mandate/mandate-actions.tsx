@@ -33,8 +33,8 @@ function text(form: FormData, name: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function period(form: FormData): (typeof PERIODS)[number] {
-  const raw = text(form, "period");
+function period(form: FormData, name: string): (typeof PERIODS)[number] {
+  const raw = text(form, name);
   return PERIODS.find((p) => p === raw) ?? "monthly";
 }
 
@@ -63,10 +63,19 @@ function Field({
 /**
  * The measure entry the dialog opens with, taken from the mandate's own
  * authority: the first limited measure that is not the built-in `calls`, so an
- * operator changing one figure does not have to retype it. The other measures do
- * not need defaults, because `changeMandateLimits` reads the stored record and
- * lays this edit over it: a field left blank leaves that measure's bound alone
- * rather than deleting it.
+ * operator changing one figure does not have to retype it. The other measures
+ * need no defaults, because the handler keeps every bound a submission does not
+ * name (ADR-102).
+ *
+ * **Every value this returns is rendered twice: into the field the operator
+ * edits, and into a hidden field beside it.** The hidden one is the baseline
+ * `changeMandateLimits` compares against, so a prefill the operator never touched
+ * is left out of the change instead of asserted as an edit over a record another
+ * operator may have narrowed since. Both come from this one call in one render
+ * and both are seeded through `defaultValue`, so the pair is set together or not
+ * at all: the baseline cannot drift from the visible default, and a later render
+ * with a fresher mandate moves neither. Reopening the dialog unmounts the form
+ * and reads both again.
  *
  * A money measure has no default figure here on purpose. `update_mandate_limits`
  * stores what it is given, and whether a figure is micros or whole units is a
@@ -138,9 +147,20 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
         unit: text(form, "unit"),
         perCall: text(form, "perCall"),
         perPeriod: text(form, "perPeriod"),
-        period: period(form),
+        period: period(form, "period"),
         callsPerDay: text(form, "callsPerDay"),
         validTo: text(form, "validTo"),
+        // Read from the form rather than from `defaults` in this closure, so what
+        // the action compares against is the string that seeded the field the
+        // operator saw, not one recomputed from a prop that may have moved on.
+        baseline: {
+          measure: text(form, "baselineMeasure"),
+          unit: text(form, "baselineUnit"),
+          perCall: text(form, "baselinePerCall"),
+          perPeriod: text(form, "baselinePerPeriod"),
+          period: period(form, "baselinePeriod"),
+          callsPerDay: text(form, "baselineCallsPerDay"),
+        },
       });
       if (result.ok) {
         setOpen(false);
@@ -184,6 +204,15 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               defaultValue={defaults.measure}
               className={inputBase}
             />
+            {/* What this field opened with. The action carries a field into the
+                change only when the operator's value differs from it, so a
+                prefill nobody touched cannot restore a bound somebody lowered
+                while this dialog was open (actions.ts, ADR-102). */}
+            <input
+              type="hidden"
+              name="baselineMeasure"
+              defaultValue={defaults.measure}
+            />
           </Field>
           <Field id={id("unit")} label={t("unit")} hint={t("unitHint")}>
             <input
@@ -191,6 +220,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               name="unit"
               defaultValue={defaults.unit}
               className={inputBase}
+            />
+            <input
+              type="hidden"
+              name="baselineUnit"
+              defaultValue={defaults.unit}
             />
           </Field>
           <Field id={id("perCall")} label={t("perCall")}>
@@ -201,6 +235,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               defaultValue={defaults.perCall}
               className={inputBase}
             />
+            <input
+              type="hidden"
+              name="baselinePerCall"
+              defaultValue={defaults.perCall}
+            />
           </Field>
           <Field id={id("perPeriod")} label={t("perPeriod")}>
             <input
@@ -209,6 +248,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               inputMode="numeric"
               defaultValue={defaults.perPeriod}
               className={inputBase}
+            />
+            <input
+              type="hidden"
+              name="baselinePerPeriod"
+              defaultValue={defaults.perPeriod}
             />
           </Field>
           <Field id={id("period")} label={t("period")}>
@@ -224,6 +268,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
                 </option>
               ))}
             </select>
+            <input
+              type="hidden"
+              name="baselinePeriod"
+              defaultValue={defaults.period}
+            />
           </Field>
           <Field
             id={id("callsPerDay")}
@@ -237,6 +286,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               inputMode="numeric"
               defaultValue={defaults.callsPerDay}
               className={inputBase}
+            />
+            <input
+              type="hidden"
+              name="baselineCallsPerDay"
+              defaultValue={defaults.callsPerDay}
             />
           </Field>
           <Field
