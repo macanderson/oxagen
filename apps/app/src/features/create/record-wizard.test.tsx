@@ -220,8 +220,14 @@ describe("the context-record wizard: kind", () => {
       "fact",
       "memory",
       "preference",
-    ])
-      expect(kindCard(kind).textContent).toContain(t(`kind.kinds.${kind}.use`));
+    ]) {
+      expect(kindCard(kind).textContent).toContain(
+        t(`kind.kinds.${kind}.use`),
+      );
+      expect(kindCard(kind).textContent).toContain(
+        t(`kind.kinds.${kind}.never`),
+      );
+    }
     expect(primary().disabled).toBe(true);
     expect(screen.queryByTestId("kind-deliver")).toBeNull();
 
