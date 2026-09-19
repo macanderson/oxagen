@@ -105,6 +105,10 @@ type Messages = {
         register: string;
         command: string;
       };
+      create: {
+        newAgent: string;
+        register: string;
+      };
     };
     detail: {
       header: string;
@@ -1221,6 +1225,156 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
       };
+    };
+  };
+  createAgent: {
+    draftIt: string;
+    writeDefinition: string;
+    pickBelt: string;
+    toPullRequest: string;
+    describe: {
+      title: string;
+      subtitle: string;
+      placeholder: string;
+      hint: string;
+      suggestions: {
+        perfBudget: string;
+        changelog: string;
+        invoices: string;
+        triage: string;
+      };
+      notRegister: string;
+    };
+    identity: {
+      title: string;
+      subtitle: string;
+      slug: string;
+      slugHint: string;
+      slugInvalid: string;
+      harness: string;
+      harnessChoose: string;
+      harnessHint: string;
+      harnesses: {
+        "claude-code": string;
+        codex: string;
+        cursor: string;
+        stella: string;
+        "claude-agent-sdk": string;
+        custom: string;
+      };
+      tier: string;
+      tierHint: string;
+    };
+    definition: {
+      title: string;
+      subtitle: string;
+      drafted: {
+        title: string;
+        body: string;
+      };
+      file: {
+        header: string;
+        placeholder: string;
+        stayInside: string;
+      };
+      noSlug: string;
+      otherSlug: string;
+      tools: string;
+      denied: string;
+      unparsed: string;
+      revert: string;
+      request: string;
+    };
+    toolbelt: {
+      title: string;
+      subtitle: string;
+      label: string;
+      loading: string;
+      empty: string;
+      denied: string;
+      unavailable: string;
+      more: string;
+      version: string;
+      risk: string;
+      unclassified: string;
+      effects: {
+        read: string;
+        write: string;
+        irreversible: string;
+      };
+      financial: string;
+      killed: string;
+      parks: string;
+      nothing: string;
+      noneParks: string;
+      someParks: string;
+      handEdited: string;
+    };
+    pr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      fileDefinition: string;
+      fileGenerated: string;
+      codex: string;
+      checks: {
+        schema: {
+          name: string;
+          detail: string;
+        };
+        key: {
+          name: string;
+          detail: string;
+        };
+        belt: {
+          name: string;
+          detail: string;
+        };
+        authority: {
+          name: string;
+          detail: string;
+        };
+        budget: {
+          name: string;
+          detail: string;
+        };
+        secrets: {
+          name: string;
+          detail: string;
+        };
+      };
+      open: string;
+      opening: string;
+      repo: {
+        loading: string;
+        unbound: string;
+        denied: string;
+        unavailable: string;
+      };
+    };
+    opened: {
+      title: string;
+      subtitle: string;
+      proposed: string;
+      key: string;
+      link: string;
+      digest: string;
+      register: string;
+    };
+    failure: {
+      checkSchema: string;
+      checkKey: string;
+      checkBelt: string;
+      checkAuthority: string;
+      checkBudget: string;
+      checkSecrets: string;
+      orgRoleRequired: string;
+      noRepository: string;
+      githubRefused: string;
+      unanswered: string;
+      refused: string;
+      invalid: string;
+      pendingApproval: string;
     };
   };
   fleet: {
