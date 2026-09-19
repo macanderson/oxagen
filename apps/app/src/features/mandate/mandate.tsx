@@ -154,7 +154,11 @@ function Header({ mandate, at }: { mandate: MandateRow; at: MandateAt }) {
             </span>
           )}
           <SafeLink
-            to={routes.agent(at.org, at.ws, at.agent, { tab: "mandates" })}
+            // The agent comes from the record, which is the only place that
+            // knows it: the route names the mandate alone.
+            to={routes.agent(at.org, at.ws, mandate.agentSlug, {
+              tab: "mandates",
+            })}
             className={linkText}
           >
             {mandate.agentSlug}
@@ -262,14 +266,11 @@ function Loaded({
 export async function Mandate({
   ctx,
   source,
-  agent,
   mandate,
   searchParams,
 }: {
   ctx: WsCtx;
   source: DataSource;
-  /** The agent's slug, as the URL names it. */
-  agent: string;
   /** The mandate's public id, as the URL names it. */
   mandate: string;
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
@@ -279,12 +280,7 @@ export async function Mandate({
   // not be loaded" and tells a reader the store is down when the address is
   // simply wrong.
   if (!MANDATE_ID.test(mandate)) notFound();
-  const at: MandateAt = {
-    org: ctx.orgSlug,
-    ws: ctx.wsSlug,
-    agent,
-    mandate,
-  };
+  const at: MandateAt = { org: ctx.orgSlug, ws: ctx.wsSlug, mandate };
   const view = parseMandateView(searchParams);
   const read = await source.mandates.get(ctx, mandate);
   const readAt = new Date();

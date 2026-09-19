@@ -45,12 +45,15 @@ export type MandateView = {
   offset: number;
 };
 
-/** Where a link on this page points. */
+/**
+ * Where a link on this page points. It names no agent: the route is flat
+ * (`routes.mandate`), and the agent the mandate was granted to comes from the
+ * record rather than from the URL, so there is no second name for it to disagree
+ * with.
+ */
 export type MandateAt = {
   org: string;
   ws: string;
-  /** The agent's slug, as the URL names it. */
-  agent: string;
   /** The mandate's public id. */
   mandate: string;
 };
@@ -94,7 +97,7 @@ export function mandateLink(
   const search = to.search ?? null;
   const state = to.state ?? null;
   const offset = to.offset ?? 0;
-  return routes.mandate(at.org, at.ws, at.agent, at.mandate, {
+  return routes.mandate(at.org, at.ws, at.mandate, {
     search: search === null ? undefined : search,
     state: state === null ? undefined : state,
     offset: offset === 0 ? undefined : String(offset),

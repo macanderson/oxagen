@@ -133,24 +133,28 @@ export const routes = {
   agentSource: (org: string, ws: string, agent: string): SafePath =>
     pathOf(org, ws, "agents", agent, "source"),
   /**
-   * One mandate, under the agent that holds it (#2957; the design's route is
-   * `…/agents/invoice-bot/mandates/<mandate id>`). A mandate is authority
-   * granted to one identity, so it hangs off that identity rather than sitting
-   * in a flat list: the breadcrumb that reaches it names the agent, and the
-   * page the reader came from is the agent's Mandates section.
+   * One mandate (#2957), at the flat route ARCHITECTURE.md §1.2 states:
+   * `/{org}/{ws}/mandates/{mandate}`.
+   *
+   * Flat rather than under the agent, although the mockup's route nests it. A
+   * mandate's public id identifies it inside the workspace on its own, and
+   * `get_mandate` takes that id alone — so an agent segment above it would be a
+   * second name for the same record that nothing checks, and a link carrying the
+   * wrong agent would have opened the right mandate anyway. The agent is reached
+   * from the record instead: the page's header links to the agent the mandate was
+   * granted to.
    *
    * `q` searches the ledger, `state` narrows it to one movement kind and
    * `offset` opens a later page of it. All three are query values, not routes,
-   * for the reason every other filter and page here is (ARCHITECTURE.md §1.2).
+   * for the reason every other filter and page here is.
    */
   mandate: (
     org: string,
     ws: string,
-    agent: string,
     mandate: string,
     q?: { search?: string; state?: string; offset?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "agents", agent, "mandates", mandate), {
+    withQuery(pathOf(org, ws, "mandates", mandate), {
       q: q?.search,
       state: q?.state,
       offset: q?.offset,

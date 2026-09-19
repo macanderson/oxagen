@@ -226,7 +226,6 @@ export function MandatesSection({
                                 to={routes.mandate(
                                   place.org,
                                   place.ws,
-                                  place.agentSlug,
                                   mandate.id,
                                 )}
                                 className={`${mono} ${linkText} break-all`}
