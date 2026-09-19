@@ -81,6 +81,28 @@ describe("form feedback", () => {
     expect(pending).not.toBeDisabled();
   });
 
+  // phone.css keys the 44px target on the attribute, so a submit inside its
+  // own form carries it as much as one in a dialog footer does.
+  it("is a touch target inside its form and outside it", () => {
+    const { rerender } = render(
+      <SubmitButton pending={false} label="Save" pendingLabel="Saving" />,
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute(
+      "data-touch-target",
+    );
+    rerender(
+      <SubmitButton
+        pending={false}
+        form="f1"
+        label="Save"
+        pendingLabel="Saving"
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute(
+      "data-touch-target",
+    );
+  });
+
   it("is gold by default and gives the gold up when drawn as secondary", () => {
     const { rerender } = render(
       <SubmitButton pending={false} label="Link" pendingLabel="Linking" />,

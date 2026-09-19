@@ -79,6 +79,10 @@ export function Repositories({
   });
   const [trees, setTrees] = useState<Trees>({});
   const [selected, setSelected] = useState<string | null>(null);
+  // The binding version `selected` superseded. A production-branch change
+  // writes a new version, and the list names the old one until the re-read
+  // lands; the dialog stays on that row rather than closing in between.
+  const [superseded, setSuperseded] = useState<string | null>(null);
   const [wizard, setWizard] = useState<WizardState>({
     open: false,
     initial: null,
@@ -169,7 +173,11 @@ export function Repositories({
   const repositories = list.kind === "ready" ? list.value.repositories : [];
   const openCount = changes.kind === "ready" ? changes.value.open : 0;
   const selectedRow =
-    repositories.find((row) => row.bindingId === selected) ?? null;
+    selected === null
+      ? null
+      : (repositories.find((row) => row.bindingId === selected) ??
+        repositories.find((row) => row.bindingId === superseded) ??
+        null);
   const loaded = list.kind === "ready" && repositories.length > 0;
 
   // Exactly one gold action per screen: the header's, except on Working
@@ -348,8 +356,10 @@ export function Repositories({
         tree={selectedRow === null ? undefined : trees[selectedRow.bindingId]}
         onClose={() => {
           setSelected(null);
+          setSuperseded(null);
         }}
         onChanged={(bindingId) => {
+          setSuperseded(selected);
           setSelected(bindingId);
           reread();
         }}

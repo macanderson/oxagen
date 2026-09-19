@@ -56,7 +56,9 @@ export function SubmitButton({
       type="submit"
       form={form}
       data-testid={testId}
-      data-touch-target={form ? "" : undefined}
+      // Every submit is a control, so at phone width it is a 44px target
+      // whether it sits in its form or in a dialog footer (phone.css).
+      data-touch-target=""
       aria-disabled={pending || undefined}
       className={`${secondary ? buttonSecondary : buttonPrimary} ${fullWidth ? "w-full" : ""} ${className ?? ""}`}
     >

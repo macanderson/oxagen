@@ -245,7 +245,7 @@ describe("listInstallationRepositories", () => {
       reason: "github_not_connected",
     });
     expect(await listInstallationRepositories("acme", "core-platform")).toEqual(
-      { ok: false, reason: "conflict", code: "conflict" },
+      { ok: false, reason: "conflict", code: "github_not_connected" },
     );
   });
 });
@@ -699,7 +699,12 @@ describe("setProductionBranch", () => {
       setAt: "2026-09-19T10:00:00.000Z",
     });
     expect(
-      await setProductionBranch("acme", "core-platform", "rpb_0a1b2c", "release"),
+      await setProductionBranch(
+        "acme",
+        "core-platform",
+        "rpb_0a1b2c",
+        "release",
+      ),
     ).toEqual({
       ok: true,
       value: {
@@ -780,7 +785,10 @@ describe("openInitPullRequest", () => {
   });
 
   it("carries oxagen_tree_exists across (negative)", async () => {
-    invoke.mockRejectedValue({ code: "conflict", reason: "oxagen_tree_exists" });
+    invoke.mockRejectedValue({
+      code: "conflict",
+      reason: "oxagen_tree_exists",
+    });
     expect(await openInitPullRequest("acme", "core-platform", INPUT)).toEqual({
       ok: false,
       reason: "conflict",
