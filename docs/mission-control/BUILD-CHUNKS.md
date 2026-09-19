@@ -77,7 +77,7 @@ Open PRs that carry work a session would otherwise build:
 Lanes:
 
 - **docs.** Rewrite the inventory against head with a Class column and the owning issue per row. One ADR for the 2026-09-14 scope review and its two reversals. A status note under spec §2.1. The Skills and Mandate rows in `ARCHITECTURE.md` §1.2. Twelve `docs/capabilities` files the contracts claim and do not have.
-- **parity.** `check_ui_parity.mjs --strict` fails on a proof path that does not exist. A real test for `get_contract_rate`. An `app` layer and a binding for `get_steering_freshness`.
+- **parity.** `check_ui_parity.mjs --strict` fails on a proof path that does not exist, with no metadata exception, because `verifications/` is gitignored and `verifiedAt` is self-reported. It also learns an `also` array so one capability can be bound on two pages, which sessions 1, 3, and 5 use. A real test for `get_contract_rate`. An `app` layer and a binding for `get_steering_freshness`.
 - **prs.** PRs #3479 and #3459 to green and mergeable. No merge.
 
 Done when:
@@ -85,7 +85,7 @@ Done when:
 - [ ] `GAP-INVENTORY.md` has no row the review refutes and every row has a class and an owner
 - [ ] The scope-review ADR exists and `ARCHITECTURE.md` §9 links it
 - [ ] Twelve capability docs exist and `check:contracts` passes
-- [ ] `check_ui_parity.mjs --strict` fails on a dangling proof, with a test
+- [ ] `check_ui_parity.mjs --strict` fails on a dangling proof and validates `also` entries, with tests
 - [ ] #3479 and #3459 are green and mergeable, or the blockers are named
 
 ## Session 1: decide and act
@@ -174,7 +174,7 @@ Done when:
 
 Lanes:
 
-- **segments.** Tabs as path segments through one optional catch-all that replaces `steering/page.tsx` (Next.js refuses both at the same level), with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, legacy query redirects, and a page for one published record (#3395).
+- **segments.** Tabs as path segments through one optional catch-all that replaces `steering/page.tsx` (Next.js refuses both at the same level), with `records` as the default, the seven tabs in spec order, NotBacked lines for Ontology and Preview, the old `?tab=` values redirected inside the page (the proxy's legacy table sees only the pathname), and a page for one published record (#3395).
 - **memory.** What agents remembered, with provenance as the record carries it. The memory record holds a free-text `source` and no frame id today, so the lane adds optional provenance fields to the contract where the store can fill them and renders NotRecorded where it cannot. Retire, demote, propose as a record.
 - **policy.** Active mandates, enabled rules, and switches that are on, each linking to its editor, with the gate notice named as Phase 1.
 
