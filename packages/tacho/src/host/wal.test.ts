@@ -232,7 +232,7 @@ describe("Wal", () => {
     expect(wal.bodiesFor(live)).toEqual([]);
   });
 
-  it("sweeps a torn line and a body whose event never reached the chain", () => {
+  it("sweeps a torn line and a body whose event never arrived", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const session = minimalSession();
@@ -251,17 +251,19 @@ describe("Wal", () => {
         content_class: "model_call",
       },
     ]);
-    // `append` writes bodies before events, but it writes both in one
-    // synchronous run, so no sweep in this process can see the moment between
-    // them. A body with no event on the chain is what a crash mid-append
-    // leaves behind, and nothing will ever arrive to ship it.
+    // `append` writes bodies before events, so a crash between the two leaves
+    // a body whose event is not on the chain. That window is real but no sweep
+    // can observe it: `append` is two synchronous writes with no await between
+    // them and the daemon is single threaded. Seen from here it is an orphan,
+    // and no event will ever arrive to judge it against a class. It used to be
+    // kept, which kept prompt bytes nothing could ship, erase or compact.
     appendFileSync(
       bodyPath,
       `${JSON.stringify({
-        event_id_idem: "evt_never_reached_the_chain",
+        event_id_idem: "evt_not_on_this_chain",
         seq: 99,
         content_type: "text/plain; charset=utf-8",
-        bytes_base64: Buffer.from("orphaned prompt").toString("base64"),
+        bytes_base64: Buffer.from("body ahead of its event").toString("base64"),
       })}\n`,
     );
     // A line cut short by a crash names no event, so nothing can ever ship it.
@@ -270,37 +272,32 @@ describe("Wal", () => {
     expect(
       wal.purgeBodiesOutsideMandate({ mode: "digest_only", classes: [] }),
     ).toBe(3);
-    // Every line went, so the file went with them.
+    // All three went — the covered prompt by the mandate, the torn line and the
+    // eventless body as orphans — so the file goes with them.
     expect(existsSync(bodyPath)).toBe(false);
   });
 
-  it("sweeps a body file that has no chain beside it", () => {
-    // The crash-created orphan in its worst shape: the daemon exited between
-    // the body write and the event write of a session's FIRST append, so the
-    // session has a `.bodies.jsonl` and no `.ndjson`. `sessions()` enumerates
-    // `.ndjson` files, so a sweep that started from it walked past this file
-    // and neither a narrowing nor compaction could ever reach the bytes.
+  it("sweeps a body file whose session has no event file at all", () => {
+    // The orphan `sessions()` cannot see. A crash between `append`'s body
+    // write and its first event write leaves `<uuid>.bodies.jsonl` with no
+    // `.ndjson` beside it, and `sessions()` lists `.ndjson` only — so the
+    // sweep and `compact` both walked straight past it and the bytes outlived
+    // every removal path in this class.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
-    const uuid = "sess-orphan-only";
+    const uuid = "11111111-1111-4111-8111-111111111111";
     const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
-    const secret = Buffer.from("the raw prompt nobody can ship").toString(
-      "base64",
-    );
     appendFileSync(
       bodyPath,
       `${JSON.stringify({
-        event_id_idem: "evt_orphan_1",
-        seq: 0,
+        event_id_idem: "evt_orphaned_by_a_crash",
+        seq: 1,
         content_type: "text/plain; charset=utf-8",
-        bytes_base64: secret,
+        bytes_base64: Buffer.from("orphaned prompt").toString("base64"),
       })}\n`,
     );
     expect(wal.sessions()).toEqual([]);
-    expect(readFileSync(bodyPath, "utf8")).toContain(secret);
 
-    // A mandate that still covers model content does not reach it, because no
-    // event names a class for it: an unshippable body is outside every mandate.
     expect(
       wal.purgeBodiesOutsideMandate({
         mode: "content_exact",
@@ -310,27 +307,32 @@ describe("Wal", () => {
     expect(existsSync(bodyPath)).toBe(false);
   });
 
-  it("compacts an orphan body file once it is older than the window", () => {
+  it("compacts an orphaned body file once it is older than the window", () => {
+    // Belt to the sweep's braces: the sweep runs only when a mandate narrows,
+    // so on a host whose mandate never changes an orphan would sit for ever.
+    // `compact` ages it on the body file's own mtime, because there is no seal
+    // and no shipped cursor to measure against — nothing will ever ship an
+    // event that does not exist.
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
-    const uuid = "sess-orphan-compact";
+    const uuid = "22222222-2222-4222-8222-222222222222";
     const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
     appendFileSync(
       bodyPath,
       `${JSON.stringify({
-        event_id_idem: "evt_orphan_2",
-        seq: 0,
+        event_id_idem: "evt_orphaned_by_a_crash",
+        seq: 1,
         content_type: "text/plain; charset=utf-8",
-        bytes_base64: Buffer.from("orphaned bytes").toString("base64"),
+        bytes_base64: Buffer.from("orphaned prompt").toString("base64"),
       })}\n`,
     );
-    // Inside the window it stays: the age check is what keeps this away from a
-    // session the daemon is recording right now.
-    expect(wal.compact(Date.now(), 7 * 24 * 60 * 60_000)).toEqual([]);
+    const week = 7 * 24 * 60 * 60_000;
+    // Inside the window it stays: an orphan is not urgent, only unbounded.
+    expect(wal.compact(Date.now(), week)).toEqual([]);
     expect(existsSync(bodyPath)).toBe(true);
-    expect(
-      wal.compact(Date.now() + 10 * 24 * 60 * 60_000, 7 * 24 * 60 * 60_000),
-    ).toEqual([uuid]);
+    expect(wal.compact(Date.now() + 10 * 24 * 60 * 60_000, week)).toEqual([
+      uuid,
+    ]);
     expect(existsSync(bodyPath)).toBe(false);
   });
 });

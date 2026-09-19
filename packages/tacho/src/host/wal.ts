@@ -142,29 +142,10 @@ export class Wal {
     }
   }
 
-  /** Every session with an event file, which is every session with a chain. */
   sessions(): string[] {
     return readdirSync(this.dir)
       .filter((name) => name.endsWith(".ndjson"))
       .map((name) => name.slice(0, -".ndjson".length))
-      .sort();
-  }
-
-  /**
-   * Every session with a body file, whether or not it has an event file.
-   *
-   * `sessions()` answers a different question and a retention sweep must not
-   * ask it. It enumerates `.ndjson` files, so a session whose only file holds
-   * bodies is invisible to it, and a crash between the two writes of the very
-   * first `append` leaves exactly that: one `.bodies.jsonl` with a prompt in
-   * it and no chain beside it. Sweeping the sessions with chains would walk
-   * past that file for as long as the host ran, and `compact` would too,
-   * because it also starts from `sessions()`.
-   */
-  private bodySessions(): string[] {
-    return readdirSync(this.dir)
-      .filter((name) => name.endsWith(".bodies.jsonl"))
-      .map((name) => name.slice(0, -".bodies.jsonl".length))
       .sort();
   }
 
@@ -259,6 +240,14 @@ export class Wal {
     return dropped;
   }
 
+  /** Sessions that have a body file, whether or not they have an event file. */
+  private sessionsWithBodies(): string[] {
+    const suffix = ".bodies.jsonl";
+    return readdirSync(this.dir)
+      .filter((name) => name.endsWith(suffix))
+      .map((name) => name.slice(0, -suffix.length));
+  }
+
   /** The last sealed event of a session, if any. */
   head(sessionUuid: string): TachoEvent | undefined {
     const events = this.read(sessionUuid);
@@ -320,10 +309,8 @@ export class Wal {
    * those only once their session is sealed, fully shipped, and older than
    * the retention window, so a session that never seals kept them for as long
    * as the host ran, or for ever on a host that never came back. This sweep
-   * walks every body file and every stored line, so a narrowing reaches all of
-   * them. It starts from the body files rather than from the chains, because a
-   * crash can leave a body file with no chain beside it and `sessions()` does
-   * not see one. `bodySessions` says why.
+   * walks every session and every stored line, so a narrowing reaches all of
+   * them.
    *
    * The write is the one in `rewriteBodies`, which `dropBodies` uses as well:
    * atomic, and safe because these files have one writer. The module header
@@ -344,7 +331,17 @@ export class Wal {
    */
   purgeBodiesOutsideMandate(retention: RetentionMandate): number {
     let purged = 0;
-    for (const session of this.bodySessions()) {
+    // Every session that has an event file OR a body file. `sessions()` lists
+    // `.ndjson` only, so a crash between `append`'s body write and its first
+    // event write leaves a `<uuid>.bodies.jsonl` with no `.ndjson` beside it —
+    // invisible to this sweep and to `compact`, which also walks `sessions()`.
+    // Those bytes would outlive every mechanism meant to remove them.
+    const sessions = new Set([
+      ...this.sessions(),
+      ...this.sessionsWithBodies(),
+    ]);
+    for (const session of sessions) {
+      if (!existsSync(this.bodyFileFor(session))) continue;
       const kindOf = new Map(
         this.read(session).map(
           (event) => [event.event_id_idem, event.kind] as const,
@@ -365,17 +362,16 @@ export class Wal {
    *   A crash part way through an append leaves exactly this, with content in
    *   it, and keeping it would keep content under no mandate at all. The
    *   rewrite reports it as `undefined`.
-   * - A body whose event is not on the session's chain is an orphan and goes.
-   *   `append` writes bodies before events, but it writes both in one
-   *   synchronous run: four `appendFileSync` calls with no await between
-   *   them, in a single-threaded process whose only writer is the daemon's
-   *   recording path. A sweep therefore cannot observe the moment between the
-   *   two writes of an append that is still in flight. An unmatched record is
-   *   a record from an append that a crash cut short, and nothing will ever
-   *   arrive to ship it: `bodiesFor` answers only the events it is handed, so
-   *   the bytes would sit under no mandate for as long as the host kept the
-   *   file. This branch used to keep them for the in-flight case that cannot
-   *   happen.
+   * - A body whose event is not on the session's chain goes. `append` writes
+   *   bodies before events on purpose, and that window is real — but it is
+   *   not observable from here. `append` is synchronous end to end, two
+   *   `appendFileSync` calls with no await between them, and the daemon is
+   *   single threaded, so no sweep can run inside it. A body with no event
+   *   at sweep time is therefore a crash orphan: the process died between
+   *   the two writes and no event will ever arrive for it. Keeping it kept
+   *   prompt or tool bytes that no mandate covers and that nothing would
+   *   ever ship, delete or compact, because every one of those paths starts
+   *   from the event.
    * - Otherwise the class comes from the event's kind and the one retention
    *   gate answers. A kind the table does not name has no class, so no mandate
    *   can cover it and the body goes.
@@ -437,27 +433,11 @@ export class Wal {
 
   /**
    * Remove session files that are sealed, fully shipped, and older than
-   * `retainMs`, and body files that have no chain beside them and are that
-   * old. The control plane holds the record; the host keeps a window for
-   * `tacho export` and incident review.
-   *
-   * The second case is the crash-created orphan. A crash between the body
-   * write and the event write of a session's first `append` leaves a
-   * `.bodies.jsonl` alone, and nothing can ever ship what is in it, because
-   * `unshipped` reads the chain and there is no chain. Left alone it would
-   * outlive every window the operator set. `retainMs` still applies, measured
-   * from the file's mtime, so this never races a session the daemon is
-   * recording right now.
+   * `retainMs`. The control plane holds the record; the host keeps a window
+   * for `tacho export` and incident review.
    */
   compact(now: number, retainMs: number): string[] {
     const removed: string[] = [];
-    for (const session of this.bodySessions()) {
-      if (existsSync(this.fileFor(session))) continue;
-      const path = this.bodyFileFor(session);
-      if (now - statSync(path).mtimeMs < retainMs) continue;
-      unlinkSync(path);
-      removed.push(session);
-    }
     for (const session of this.sessions()) {
       const sealedAt = this.cursor.sealed[session];
       if (sealedAt === undefined) continue;
@@ -473,6 +453,19 @@ export class Wal {
         unlinkSync(this.bodyFileFor(session));
       delete this.cursor.shipped[session];
       delete this.cursor.sealed[session];
+      removed.push(session);
+    }
+    // A body file whose session has no event file is a crash orphan: `append`
+    // wrote the bodies and the process died before the first event. The loop
+    // above cannot see it, because `sessions()` lists `.ndjson` only, so
+    // without this the bytes outlive every removal path in this class. Aged on
+    // the body file's own mtime, since there is no seal or shipped cursor to
+    // measure: nothing will ever ship an event that does not exist.
+    for (const session of this.sessionsWithBodies()) {
+      if (existsSync(this.fileFor(session))) continue;
+      const path = this.bodyFileFor(session);
+      if (now - statSync(path).mtimeMs < retainMs) continue;
+      unlinkSync(path);
       removed.push(session);
     }
     if (removed.length > 0) this.persistCursor();

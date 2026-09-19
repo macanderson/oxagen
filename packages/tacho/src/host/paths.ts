@@ -28,13 +28,6 @@ export interface TachoPaths {
   quarantine: string;
   /** Recorder state the daemon persists so a restart continues each chain. */
   daemonState: string;
-  /**
-   * A narrowing the host has accepted and not yet finished erasing from the
-   * WAL. Written before the replacement bundle is cached, removed once the
-   * sweep completes, and retried at startup and on every poll that confirms
-   * the etag. See `purgeBodiesNarrowedOut` in collector/daemon.ts.
-   */
-  pendingBodyPurge: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
   /** The daemon's pid file. */
@@ -93,7 +86,6 @@ export function tachoPaths(
     spool: join(root, "spool"),
     quarantine: join(root, "quarantine"),
     daemonState: join(root, "daemon.json"),
-    pendingBodyPurge: join(root, "pending-body-purge.json"),
     transcriptTailState: join(root, "transcript-tail.json"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),

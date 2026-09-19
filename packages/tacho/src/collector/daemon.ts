@@ -5,7 +5,14 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
-import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
@@ -185,19 +192,6 @@ export interface DaemonHandle {
   drainSpool: () => Promise<number>;
   refreshBundle: () => Promise<boolean>;
   stop: () => Promise<void>;
-}
-
-/**
- * A narrowing the host has accepted and not yet finished erasing from the
- * WAL, as it sits in `paths.pendingBodyPurge`.
- *
- * `retention` is the clause to enforce, carried in the record rather than read
- * back from the host file, so a retry does not depend on the cached bundle
- * still verifying. `classes` is what narrowed, for the log line.
- */
-interface PendingBodyPurge {
-  retention: RetentionMandate;
-  classes: readonly string[];
 }
 
 interface SpoolFile {
@@ -561,12 +555,141 @@ export async function startDaemon(
    * just verified, compares it with the clause that was in force, and runs
    * only for the classes that clause covered and this one does not.
    *
-   * The narrowing is written to disk before it is enforced, and the record
-   * stays until the sweep succeeds. See `recordPendingBodyPurge`.
-   *
    * Erasing does not reverse. A workspace that narrows and then widens again
    * does not get these bodies back; see `Wal.purgeBodiesOutsideMandate`.
    */
+  /**
+   * A purge this host owes but has not completed.
+   *
+   * A marker file rather than a field on the host file: the host file is the
+   * control plane's signed word about this machine, and this is local
+   * bookkeeping about one unfinished write. It is a debt, not a fact about
+   * the mandate.
+   *
+   * The file carries the clause to enforce, so a retry settles the erasure the
+   * control plane ordered rather than whatever clause happens to be in force
+   * when the retry runs. Two reasons. A later bundle can narrow one class and
+   * widen another, and sweeping against that clause would leave the first
+   * class's bytes on disk with nothing left that names them. And a host whose
+   * cached bundle has outlived its signed window cannot prove any clause, so a
+   * retry that needed a proven one would park the debt for the length of a
+   * control-plane outage. The record is itself the proof: nothing writes it
+   * but a bundle that verified.
+   */
+  const bodyPurgeOwedPath = join(paths.wal, "body-purge-owed");
+
+  /**
+   * Write down a narrowing this host owes the WAL.
+   *
+   * A debt already on disk is intersected with the new one rather than
+   * replaced, because the host owes both erasures and `narrowestOf` is the one
+   * clause that settles both.
+   */
+  function markBodyPurgeOwed(
+    retention: RetentionMandate,
+    dropped: readonly string[],
+  ): void {
+    try {
+      ensureDir(paths.wal);
+      const owed = owedBodyPurge();
+      const clause =
+        owed?.retention === undefined
+          ? retention
+          : narrowestOf(owed.retention, retention);
+      writeFileSync(
+        bodyPurgeOwedPath,
+        JSON.stringify({ retention: clause, classes: dropped }),
+        { mode: 0o600 },
+      );
+    } catch {
+      // Best effort. Failing to record the debt must not stop the sweep that
+      // is about to run and would usually clear it anyway.
+    }
+  }
+
+  /**
+   * The debt on disk, if there is one, and the clause it names.
+   *
+   * `retention` is undefined for a marker an older build of this daemon wrote
+   * empty, and for a file this one cannot parse. The retry then falls back to
+   * the clause in force, which is what that build did.
+   */
+  function owedBodyPurge():
+    | { retention: RetentionMandate | undefined; classes: readonly string[] }
+    | undefined {
+    if (!existsSync(bodyPurgeOwedPath)) return undefined;
+    let raw: unknown;
+    try {
+      const text = readFileSync(bodyPurgeOwedPath, "utf8");
+      raw = text.trim().length === 0 ? undefined : JSON.parse(text);
+    } catch {
+      raw = undefined;
+    }
+    const record = raw as
+      | { retention?: { mode?: unknown; classes?: unknown }; classes?: unknown }
+      | undefined;
+    const mode = record?.retention?.mode;
+    const classes = record?.retention?.classes;
+    const named =
+      (mode === "content_exact" || mode === "digest_only") &&
+      Array.isArray(classes)
+        ? ({ mode, classes: classes as readonly string[] } as RetentionMandate)
+        : undefined;
+    return {
+      retention: named,
+      classes: Array.isArray(record?.classes)
+        ? (record.classes as readonly string[])
+        : [],
+    };
+  }
+
+  function clearBodyPurgeOwed(): void {
+    try {
+      if (existsSync(bodyPurgeOwedPath)) unlinkSync(bodyPurgeOwedPath);
+    } catch {
+      // Leaves the marker, so the sweep runs again. Re-sweeping costs a pass
+      // over the body files and erases nothing the mandate still covers.
+    }
+  }
+
+  /**
+   * Retry an owed purge, on every confirmation that the cached mandate is
+   * still current. That is the `not_modified` branch, which is where a
+   * narrowing whose sweep failed comes back through for ever afterwards, and
+   * which the first tick after a restart reaches on its own — so a debt
+   * recorded before a crash is retried without a separate startup path. A
+   * bundle that changes instead goes through `purgeBodiesNarrowedOut`, which
+   * sweeps and clears the debt itself.
+   *
+   * The debt names the clause to sweep against, so this does not ask
+   * `retentionInForce`. That is not a widening of the purge trigger: doubt
+   * still withholds and does not delete, and nothing writes a debt but a
+   * bundle whose signature verified. A debt from an older build names no
+   * clause, and that one falls back to the clause in force and sweeps only
+   * when it is proven.
+   */
+  function retryOwedBodyPurge(): void {
+    const owed = owedBodyPurge();
+    if (owed === undefined) return;
+    let clause = owed.retention;
+    if (clause === undefined) {
+      const inForce = retentionInForce();
+      if (!inForce.proven) return;
+      clause = inForce.mandate;
+    }
+    try {
+      const purged = wal.purgeBodiesOutsideMandate(clause);
+      clearBodyPurgeOwed();
+      log(
+        `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
+      );
+    } catch (error) {
+      log(
+        `an owed body purge failed again; content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   function purgeBodiesNarrowedOut(
     previous: RetentionMandate,
     next: RetentionMandate,
@@ -577,99 +700,27 @@ export async function startDaemon(
         !retentionAllows(next, contentClass),
     );
     if (dropped.length === 0) return;
-    recordPendingBodyPurge(next, dropped);
-  }
-
-  /**
-   * Write down a narrowing the host owes the WAL, before the bundle that
-   * carries it is cached.
-   *
-   * The order matters and it is the whole point of this file. `refreshBundle`
-   * caches the replacement bundle, and from that moment every later poll sends
-   * the new etag and comes back `not_modified`, which carries no clause and so
-   * gives the host nothing to compare. If the sweep had not run by then it
-   * would never run: a transient filesystem error, or an exit between the
-   * cache write and the sweep, left bodies the mandate excludes on disk with
-   * nothing that would look at them again. So the debt is recorded first, and
-   * `drainPendingBodyPurge` retries it at startup and on every confirming
-   * poll until it succeeds.
-   *
-   * A debt already on disk is not replaced, it is intersected with the new
-   * one: the host owes both erasures, and `narrowestOf` is the one clause that
-   * settles both.
-   *
-   * A crash between this write and the bundle cache leaves a debt the host
-   * file knows nothing about. Enforcing it anyway is correct: the bundle that
-   * authorised it had already verified, and the direction of the error is
-   * erasing content the control plane said not to keep.
-   */
-  function recordPendingBodyPurge(
-    next: RetentionMandate,
-    dropped: readonly string[],
-  ): void {
-    const owed = pendingBodyPurge();
-    const retention =
-      owed === undefined ? next : narrowestOf(owed.retention, next);
-    writeSensitiveFileAtomic(
-      paths.pendingBodyPurge,
-      JSON.stringify({ retention, classes: dropped }),
-    );
-  }
-
-  /** The narrowing the host owes the WAL, if a sweep has not settled it. */
-  function pendingBodyPurge(): PendingBodyPurge | undefined {
-    const raw = readJsonFileIfExists(paths.pendingBodyPurge) as
-      | Partial<PendingBodyPurge>
-      | undefined;
-    if (raw === undefined) return undefined;
-    const retention = raw.retention;
-    if (
-      retention === undefined ||
-      typeof retention.mode !== "string" ||
-      !Array.isArray(retention.classes)
-    ) {
-      // A file this daemon cannot read is a file it can never settle, and
-      // leaving it would retry a purge it cannot describe on every poll.
-      log("discarded an unreadable pending body purge record");
-      try {
-        unlinkSync(paths.pendingBodyPurge);
-      } catch {
-        // Already gone, or not ours to remove. Either way there is nothing
-        // more to do here.
-      }
-      return undefined;
-    }
-    return {
-      retention: { mode: retention.mode, classes: retention.classes },
-      classes: Array.isArray(raw.classes) ? raw.classes : [],
-    };
-  }
-
-  /**
-   * Run the narrowing the host owes the WAL, and clear the record once it is
-   * done. A no-op when nothing is owed, which is the ordinary case.
-   *
-   * Called after a replacement bundle is cached, at startup, and on every poll
-   * that confirms the etag in force. The last of those is what closes the
-   * window: a confirming poll is the only thing a host with an unchanged
-   * mandate ever hears, so it has to be a retry point.
-   */
-  function drainPendingBodyPurge(): void {
-    const owed = pendingBodyPurge();
-    if (owed === undefined) return;
-    const classes = owed.classes.join(", ");
+    // Owed before attempted, so the debt survives what the attempt might not.
+    // `applyControlFacts` has already written the new etag, so every later
+    // poll answers `not_modified` and never reaches this function again: a
+    // transient filesystem error here, or the process dying mid-sweep, would
+    // otherwise leave content the mandate excludes on disk for ever, with
+    // nothing left to notice. The marker is cleared only by a sweep that
+    // returned.
+    markBodyPurgeOwed(next, dropped);
     try {
-      const purged = wal.purgeBodiesOutsideMandate(owed.retention);
-      unlinkSync(paths.pendingBodyPurge);
+      const purged = wal.purgeBodiesOutsideMandate(next);
+      clearBodyPurgeOwed();
       log(
-        `mandate narrowed (${classes}): erased ${purged} queued body(ies) from the WAL`,
+        `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
       );
     } catch (error) {
       // Logged and not rethrown, on purpose. Throwing erases nothing, and it
-      // would abort a refresh that has already cached the narrower mandate.
-      // The record stays on disk, so the next confirming poll tries again.
+      // would abort a refresh that has already cached the narrower mandate,
+      // so the host would go on withholding these bodies and stop reporting
+      // why they are still on disk. The line says what is still there.
       log(
-        `failed to erase bodies the narrowed mandate no longer covers (${classes}); content remains in the WAL and the purge will be retried: ${error instanceof Error ? error.message : String(error)}`,
+        `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -691,7 +742,8 @@ export async function startDaemon(
       // serving no bundle, which is the opposite of agreeing with this one.
       if (response.not_modified) {
         mandateConfirmedAt = now();
-        drainPendingBodyPurge();
+        // The branch a narrowing whose sweep failed returns through for ever.
+        retryOwedBodyPurge();
         return false;
       }
       if (response.bundle === null) return false;
@@ -707,15 +759,21 @@ export async function startDaemon(
       }
       // A verified replacement is the control plane's own word on what may be
       // kept, which is the one thing that authorises erasing what is already
-      // on disk. The debt is written down before the etag is cached, because
-      // once it is cached nothing tells this host the clause narrowed.
+      // on disk.
+      //
+      // Ahead of the etag commit, and that order is the point. Once
+      // `applyControlFacts` has written the new etag, every later poll answers
+      // `not_modified` and nothing tells this host the clause narrowed, so a
+      // process that exits in between would leave excluded content on disk
+      // with nothing left to notice. Recording the debt and sweeping first
+      // closes that window: either the bytes are gone, or the debt is on disk
+      // for the next confirming poll and the next start.
       purgeBodiesNarrowedOut(host.bundle.retention, response.bundle.retention);
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
-      drainPendingBodyPurge();
       // The replacement verified, so this response is a confirmation.
       mandateConfirmedAt = now();
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
@@ -1748,10 +1806,10 @@ export async function startDaemon(
   let lastSweep = 0;
   let lastCompact = 0;
 
-  // A narrowing this host accepted and did not finish erasing before it last
-  // exited. Retried here rather than waited for, because the next poll may be
-  // a `not_modified` minutes away and the bytes are on disk now.
-  drainPendingBodyPurge();
+  // A narrowing this host owed when it last exited. Run here rather than left
+  // to the first poll: a poll can be a bundle refresh interval away, or an
+  // outage away, and the content is on disk now.
+  retryOwedBodyPurge();
 
   /**
    * The git reconciliation lane: at most one drain in flight, never awaited by
