@@ -91,7 +91,10 @@ describe("buildTranscript", () => {
         kind: "model_call",
         label: "anthropic/claude-fable-5-1",
         turn: 1,
-        request: transcriptBody({ seq: "1", type: "model.engine_call_started" }),
+        request: transcriptBody({
+          seq: "1",
+          type: "model.engine_call_started",
+        }),
         response: null,
         frames: 1,
       }),
@@ -161,14 +164,23 @@ describe("buildTranscript", () => {
     ]);
     const model = turns[0]?.steps[0];
     const tool = turns[0]?.steps[1];
-    expect(model).toBeDefined();
-    expect(tool).toBeDefined();
-    expect(stepDigest(model as NonNullable<typeof model>)).toMatchObject({
+    // Narrowed by a throw rather than asserted: the app bans type assertions,
+    // and a missing step should fail here, naming what was missing, rather
+    // than inside stepDigest.
+    if (model === undefined || tool === undefined) {
+      throw new Error(
+        "expected the turn to carry a model step and a tool step",
+      );
+    }
+    const modelDigest = stepDigest(model);
+    expect(modelDigest).toMatchObject({
       node: "model",
       name: "claude-fable-5-1",
-      durationMs: expect.any(Number),
     });
-    expect(stepDigest(tool as NonNullable<typeof tool>)).toMatchObject({
+    // typeof rather than expect.any(Number), which is typed `any` and is used
+    // nowhere else in apps/app.
+    expect(typeof modelDigest.durationMs).toBe("number");
+    expect(stepDigest(tool)).toMatchObject({
       node: "tool",
       name: "list_pull_requests",
       status: "completed",
@@ -183,7 +195,10 @@ describe("buildTranscript", () => {
         kind: "model_call",
         label: "anthropic/claude-fable-5-1",
         turn: 1,
-        request: transcriptBody({ seq: "1", type: "model.engine_call_started" }),
+        request: transcriptBody({
+          seq: "1",
+          type: "model.engine_call_started",
+        }),
         response: null,
         frames: 1,
       }),
