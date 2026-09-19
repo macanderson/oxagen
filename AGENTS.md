@@ -8,7 +8,7 @@ Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agen
 
 ```
 DEREGISTERED.md  the register of de-registered (unreachable, undeleted) features
-apps/       customer-facing applications (6: api, app, cli, docs, mcp, web)
+apps/       customer-facing applications (api, app, cli, desktop, docs, mcp, web, plus app_deprecated)
 packages/   shared platform libraries (see each package.json for workspace membership)
 tools/      dev tooling (scripts, env-manager, codemods) — also a pnpm workspace member
 docs/       VISION.md, capability specs, ADRs, SCRs (docs/scr), specs (docs/specs)

@@ -192,14 +192,33 @@ request.**
    `docs/capabilities/*.md` non-recursively, because a git pathspec's `*`
    crosses `/` and pulls in `schemas/README.md` for 29.
 
-   **`docs/` is not the documentation surface. `apps/docs` is.** The first four
-   drafts of this measurement scanned `docs/` alone, which is the internal
-   corpus. The site a customer reads is `apps/docs`, and it carries the word in
-   7 more files across 84 occurrences on 63 matching lines:
-   `content/docs/cli/wrap-an-agent.mdx` (34 lines), `cli/desktop.mdx` (21),
-   `getting-started.mdx` (3), `cli/commands.mdx` (2), `index.mdx`,
-   `architecture.mdx`, and `src/app/(home)/page.tsx`. All 7 carry prose, so the
-   scope is 45 prose files of 126, not 38 of 119. The per-file figures are
+   **The bar is tracked documentation, wherever it lives.** The first four drafts
+   scanned `docs/` alone, the internal corpus. The fifth added `apps/docs`, the
+   site a customer reads. Both were still a directory list, and a directory list
+   is the wrong shape for the same reason the file count was: at the anchor, ten
+   more tracked `.md` files outside both trees carry the word, and several are
+   read by exactly the people §2.1 is about. `packages/tacho/README.md` opens
+   "Tacho is the Oxagen wrapper". `apps/desktop/README.md` says "host under
+   Tacho" and teaches `tacho enroll`. The repo root `README.md`,
+   `apps/app/ARCHITECTURE.md`, `tools/packaging/README.md`,
+   `apps/desktop/src-tauri/entitlements.md`, `AGENTS.md` and `CLAUDE.md` all
+   carry it too. So phase 3 scans tracked documentation repo-wide and applies the
+   same occurrence classification, rather than scanning two directories and
+   calling that the surface.
+
+   **The measurement is anchored, and the tree has already moved.** At
+   `756469151`, `apps/docs` had 7 files. On `main` at `33e140127` it has 5:
+   `#3481` removed `cli/desktop.mdx` and `index.mdx`, and `api/authentication.mdx`
+   carries the word without ever appearing on this record's list. That is four
+   hours of drift on a two-directory count, which is the argument for re-deriving
+   rather than trusting any figure here.
+
+   At the anchor, `apps/docs` carried the word in 7 files, 84 occurrences on 63
+   matching lines: `content/docs/cli/wrap-an-agent.mdx` (34 lines),
+   `cli/desktop.mdx` (21), `getting-started.mdx` (3), `cli/commands.mdx` (2),
+   `index.mdx`, `architecture.mdx`, and `src/app/(home)/page.tsx`. All 7 were
+   prose, putting the anchored scope at 45 prose files of 126 rather than 38 of
+   119, before the ten files above and whatever a repo-wide scan adds. The per-file figures are
    matching lines, from `git grep -ic`; the 84 is occurrences, from
    `git grep -io ... | wc -l`. A record whose whole point is that the occurrence
    is the unit of work should not quote a line count as an occurrence count,
