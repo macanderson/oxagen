@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version-file: .node-version
       - name: Has anything verified main?
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
