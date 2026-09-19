@@ -52,7 +52,7 @@ const CONSEQUENCE_TAGS = [
 ] as const;
 
 /** An agent the picker offers: a retired identity is never one (see `grantableAgents` in tools.tsx). */
-export type GrantableAgent = { id: string; slug: string; name: string };
+type GrantableAgent = { id: string; slug: string; name: string };
 
 /** What the picker has to offer, and whether that is every agent. */
 export type AgentChoices =
@@ -142,7 +142,7 @@ const BLANK: Prefill = {
  * such a draft here would activate a weaker mandate than the one requested:
  * a dropped limit or threshold is authority nobody approved.
  */
-export function notCarried(request: MandateRow): boolean {
+function notCarried(request: MandateRow): boolean {
   const limits = request.authority.filter((entry) => entry.measure !== "calls");
   const calls = request.authority.find((entry) => entry.measure === "calls");
   return (

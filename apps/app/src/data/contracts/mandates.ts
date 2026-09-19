@@ -453,7 +453,7 @@ export const CONSEQUENCE_TAG = /^[a-z][a-z0-9_]{1,63}$/;
 const CONSEQUENCE_TAG_MAX = 64;
 
 /** `mandateSchema.consequenceTags`: `.min(1).max(16)`. */
-export const MAX_CONSEQUENCE_TAGS = 16;
+const MAX_CONSEQUENCE_TAGS = 16;
 
 /**
  * `MEASURE_VALUE`: an integer string of up to thirty digits, no leading zero.

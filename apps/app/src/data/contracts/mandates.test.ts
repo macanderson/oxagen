@@ -14,7 +14,6 @@ import {
   isEffective,
   isUpcoming,
   MANDATE_APPROVER,
-  MAX_CONSEQUENCE_TAGS,
   MEASURE_NAME,
   MEASURE_NAME_MAX,
   MEASURE_VALUE,
@@ -227,6 +226,12 @@ describe("the contract bounds this app mirrors", () => {
    * assertions below read as the rule rather than as the copy of it. */
   const CONSEQUENCE_TAG_MAX = 64;
 
+  /** `mandateSchema.consequenceTags`: `.min(1).max(16)`. Quoted for the same
+   * reason, and it is the app's copy of the rule that has to hold: the derived
+   * `CONSEQUENCE_OTHER_MAX` below is imported, so a change to either ceiling in
+   * the source shows up there as a length this file no longer agrees with. */
+  const MAX_CONSEQUENCE_TAGS = 16;
+
   describe("CONSEQUENCE_TAG mirrors consequenceTagSchema", () => {
     // /^[a-z][a-z0-9_]{1,63}$/ — snake_case, 2 to 64 characters.
     it.each([
@@ -317,16 +322,18 @@ describe("the contract bounds this app mirrors", () => {
       expect(MANDATE_APPROVER.test(entry)).toBe(true);
     });
 
-    it.each([["role:Member"], ["role:Viewer"], ["priya"], ["user:priya"], [""]])(
-      "refuses %s (negative)",
-      (entry) => {
-        expect(MANDATE_APPROVER.test(entry)).toBe(false);
-      },
-    );
+    it.each([
+      ["role:Member"],
+      ["role:Viewer"],
+      ["priya"],
+      ["user:priya"],
+      [""],
+    ])("refuses %s (negative)", (entry) => {
+      expect(MANDATE_APPROVER.test(entry)).toBe(false);
+    });
   });
 
   it("carries the array and length ceilings the mandate shape states", () => {
-    expect(MAX_CONSEQUENCE_TAGS).toBe(16); // consequenceTags.max(16)
     expect(MEASURE_NAME_MAX).toBe(64); // measureNameSchema, 64 characters
     expect(UNIT_MAX).toBe(32); // currencyOrUnit.max(32)
     expect(PURPOSE_MAX).toBe(2000); // purpose.max(2000)

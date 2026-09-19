@@ -32,7 +32,7 @@ const { router, grantMandate } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./grant-actions", () => ({ grantMandate }));
 
-const { GrantMandate, notCarried } = await import("./grant-mandate");
+const { GrantMandate } = await import("./grant-mandate");
 const { useGrantFailure } = await import("./grant-failure");
 
 const at = { org: "acme", ws: "core-platform" };
@@ -406,14 +406,9 @@ describe("GrantMandate on a requested draft", () => {
       expect(
         within(form).queryByRole("button", { name: "Grant this request" }),
       ).toBeNull();
-      expect(notCarried(draft)).toBe(true);
       await expectNoAxe(document.body);
     },
   );
-
-  it("carries a draft with one count limit, a daily calls limit and one of each rule", () => {
-    expect(notCarried(request)).toBe(false);
-  });
 });
 
 describe("useGrantFailure", () => {
