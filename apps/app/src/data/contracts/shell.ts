@@ -21,3 +21,13 @@ export const ShellContext = z.object({
   workspaces: z.array(WorkspaceChoice),
 });
 export type ShellContext = z.infer<typeof ShellContext>;
+
+/**
+ * The person's own clock, read for the shell and for every page under it: the
+ * IANA zone next-intl formats each date in. One field today; the other account
+ * preferences join it here when a surface reads them.
+ */
+export const ViewerPreferences = z.object({
+  timeZone: z.string().min(1),
+});
+export type ViewerPreferences = z.infer<typeof ViewerPreferences>;

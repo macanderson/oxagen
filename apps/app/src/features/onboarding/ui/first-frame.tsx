@@ -7,7 +7,7 @@
 //
 // Beside it, the repository the enrolling host reported: binding it installs
 // the GitHub App and closes the provisional window.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useState } from "react";
 import type {
   DetectedRepository,
@@ -19,6 +19,7 @@ import { FormAlert, SubmitButton } from "@/ui/form-feedback";
 import { useNavigate } from "@/ui/navigation";
 import { bindMainRepository } from "../actions";
 import { UNANSWERED, useOnboardingFailure } from "../failure";
+import { useFormatter } from "@/ui/formatter";
 
 function HostFacts({ host }: { host: NonNullable<FirstFrame["host"]> }) {
   const t = useTranslations("onboarding.register.run.host");

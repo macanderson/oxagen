@@ -330,7 +330,7 @@ export class Shipper {
         // single refused event is quarantined.
         //
         // 413 belongs here and not with the retryable refusals below. The
-        // ingest route caps a request at TACHO_MAX_REQUEST_BYTES, and a
+        // ingest route caps a request at `TACHO_MAX_REQUEST_BYTES`, and a
         // retry can never make a batch smaller, so keeping it means offering
         // the same oversized request on every drain for ever. Because the
         // WAL head never advances past it, every later event on that host
