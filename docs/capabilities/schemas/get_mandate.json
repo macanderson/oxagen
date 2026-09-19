@@ -385,6 +385,20 @@
             "unitOrCurrency": {
               "type": "string"
             },
+            "measureKind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "externalEffectId": {
               "anyOf": [
                 {
@@ -412,6 +426,7 @@
             "measure",
             "value",
             "unitOrCurrency",
+            "measureKind",
             "externalEffectId",
             "periodKey",
             "balanceAfter",

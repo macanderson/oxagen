@@ -433,6 +433,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(settleRow.externalEffectId).toBe("pi_3Q");
       expect(settleRow.value).toBe("250000000");
       expect(rows.filter((r) => r.kind === "release")).toHaveLength(1);
+      // Every row `reserve` and `closeReservations` wrote carries the
+      // mandate's resolved kind for "amount" (ADR-108): the reserve stamps
+      // it from `mandate.limits`, and settle/release carry the reserve row's
+      // own stamp forward rather than re-deriving it, so all four rows agree.
+      expect(rows.every((r) => r.measureKind === "money")).toBe(true);
       const [authority] = await inScope(() =>
         withTenantDb((tx) => readAuthority(tx, mandate, NOW)),
       );

@@ -343,6 +343,13 @@ export const mandateLedgerRowSchema = z
     measure: measureNameSchema,
     value: measureValueSchema,
     unitOrCurrency: z.string(),
+    // ADR-108: the mandate limit's kind at the instant this row was
+    // written, stamped once and never re-derived, so the row still answers
+    // this even after a later whole-record `limits` replacement removes
+    // the measure. Null only for a row written before the column existed;
+    // a reader without it falls back to the mandate's current authority for
+    // the measure, then to `legacyMeasureKindGuess`.
+    measureKind: measureKindSchema.nullable(),
     externalEffectId: z.string().nullable(),
     periodKey: z.string(),
     balanceAfter: measureValueSchema,

@@ -22,7 +22,9 @@ newest first: the mandate page (tiles, the ledger, the grant).
 ## Output
 
 `{ mandate, ledger }`. A ledger row: `id`, `toolCallId`, `kind` (`reserve`
-| `settle` | `release`), `measure`, `value`, `unitOrCurrency`,
+| `settle` | `release`), `measure`, `value`, `unitOrCurrency`, `measureKind`
+(`money` or `count`, ADR-108, stamped on the row when it was written and
+never re-derived; null only on a row written before this field existed),
 `externalEffectId` (settle rows: the payment, migration, message or
 deployment id the tool returned), `periodKey`, `balanceAfter`, `at`.
 

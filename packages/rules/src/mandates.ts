@@ -394,6 +394,11 @@ export async function reserve(
       measure,
       value,
       unitOrCurrency: limit.currencyOrUnit,
+      // The mandate's own resolved kind for this measure (ADR-108), stamped
+      // once here so the row survives a later whole-record `limits`
+      // replacement that removes the measure: the ledger is append-only,
+      // the mandate is not.
+      measureKind: limit.kind,
       periodKey: key,
       balanceAfter,
       // The insert time under the lock, so "last row" is well ordered across
@@ -451,6 +456,10 @@ async function closeReservations(
       measure: r.measure,
       value: r.value,
       unitOrCurrency: r.unitOrCurrency,
+      // Carried from the reservation this closes, not re-derived from the
+      // mandate's current limits: a settle or release closes what a reserve
+      // started, under the kind that reserve was stamped with.
+      measureKind: r.measureKind,
       externalEffectId,
       periodKey: r.periodKey,
       balanceAfter,

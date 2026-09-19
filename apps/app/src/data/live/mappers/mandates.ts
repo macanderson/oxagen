@@ -200,18 +200,17 @@ export function toMandateDetail(
     readBound: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
     mandate: toMandateRow(out.mandate),
     ledger: out.ledger.map((row) => {
-      // A ledger row draws against one of the mandate's own limits, so its
-      // kind is normally the limit's, read from `authority` rather than
-      // `mandate.limits` because `mandateAuthoritySchema.kind` is required.
-      // But the ledger is append-only and a limit is not: a whole-record
-      // `limits` replacement (update_mandate_limits) can remove a measure
-      // that already has ledger movements, and `authority` then has nothing
-      // to look up for those old rows even though they are still valid
-      // history. Falling back to the same guess a pre-ADR-108 row without a
-      // stored kind takes (`legacyMeasureKindGuess`, from the row's own
-      // `unitOrCurrency`) keeps that history readable instead of failing the
-      // whole mandate page over one deleted limit.
+      // The row's own `measureKind` (ADR-108) is the fact: stamped once
+      // when the row was written and never re-derived, it survives a later
+      // whole-record `limits` replacement that removes the measure, where
+      // `authority` has nothing left to look up. A row written before that
+      // column existed falls back to `authority` (the measure's current
+      // limit, if it still has one), then to the same guess a pre-ADR-108
+      // row without a stored kind takes (`legacyMeasureKindGuess`, from the
+      // row's own `unitOrCurrency`), a guess only for a row this old AND
+      // whose measure is gone, never for one ADR-108 already resolved.
       const authorityKind =
+        row.measureKind ??
         out.mandate.authority.find((a) => a.measure === row.measure)?.kind ??
         legacyMeasureKindGuess(row.unitOrCurrency);
       return {

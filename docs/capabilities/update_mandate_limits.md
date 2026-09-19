@@ -64,13 +64,25 @@ window still binds what is already drawn.
 reason: a caller that holds the whole record is stating the whole record, and
 it is the only way to delete a bound.
 
-Every write here, a `limits` replacement or a `limitChanges` merge, whether or
-not the operator touched a particular measure, re-runs
-`assertToolsDeclareMeasures` on the resulting record and persists its stamped
-output, so every measure's `kind` is refreshed against the tool's current
-declaration on every call, not only the measures the operator named (ADR-108).
-Editing any field of an old mandate's limits therefore also fills in `kind`
-for every other measure that mandate limits, if it had none stored.
+Every write here, a `limits` replacement or a `limitChanges` merge, re-runs
+`assertToolsDeclareMeasures` on the resulting record to validate it (unit,
+declared-measure and matched-tool-agreement checks run over the whole merged
+record regardless of which field changed), but only a measure the caller
+actually names in `limits` or `limitChanges` has its `kind` re-derived from
+the tool's current declaration (ADR-108 §4). A measure this call does not
+name keeps its stored `kind` exactly as it was, whether that came from an
+earlier real stamp or `legacyMeasureKindGuess`'s fallback. A request that
+changes only `validTo`, `targets` or `approval` therefore never touches any
+measure's `kind`: it does not clear a `measure_kind_changed` refusal the gate
+has already started giving that mandate, and it cannot silently flip a
+measure between money and a count. A legacy measure (one whose stored `kind`
+was never a real stamp) is the one exception: refreshing it on any write is
+the same attrition ADR-108 §3 already documents, not a change to a fact
+anyone relied on. A `kind` change on a measure the operator does name is
+itself refused (`measure_kind_drawn`) while the ledger still holds a
+reservation or a movement drawn in the current window under the old kind,
+the same as a period rename is refused while a draw would go invisible under
+the new key.
 
 **Send only the fields you changed.** The merge applies every field a change
 carries, because that is the only reading a change has: it cannot tell an edit
@@ -122,6 +134,7 @@ The consequence roles of every tag on the mandate, as `grant_mandate`.
 | `conflict` | `no_tool_matches`, `measure_not_declared`, `measure_unit_mismatch`, `measure_kind_conflict` | Denied by construction, the same checks `grant_mandate` runs, against the merged record, including that matched tools agree on what a limited measure counts (ADR-108). |
 | `conflict` | `limit_incomplete` | A change would leave a bound with no figure or no unit. |
 | `conflict` | `period_drawn` | A measure's period cannot change while that measure still has reserved or settled authority in the current window. Ledger rows keep the old `periodKey`; renaming the window would hide the draw from `readAuthority` and `reserve`. |
+| `conflict` | `measure_kind_drawn` | A measure's `kind` cannot change while that measure still has authority drawn in the current window or an open reservation under it (ADR-108 §4). `readAuthority` sums a period's rows regardless of which kind they were stamped under; letting an old-kind row sum with a new-kind reservation would corrupt the remaining figure. |
 
 ## SPEC references
 

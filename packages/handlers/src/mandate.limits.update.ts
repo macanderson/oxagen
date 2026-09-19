@@ -155,6 +155,48 @@ export async function assertPeriodChangeAllowed(
   }
 }
 
+/**
+ * Refuse changing a measure's kind (ADR-108) while the ledger still holds a
+ * movement recorded under the old one.
+ *
+ * `periodSums` groups reserve/settle rows only by mandate, measure and
+ * period key, with no kind column of its own: a reserved or settled row
+ * predates the change and carries whatever denomination the old kind used
+ * (whole units for a count, micros for money). Letting a kind change land
+ * while such a row is still live would sum it into the same total as a
+ * reservation made under the new kind, corrupting `readAuthority`'s
+ * remaining figure and every admission decision the gate makes against it
+ * from then on. An open reservation matters regardless of which period key
+ * it was filed under, the same as a period rename: a call parked past a
+ * boundary still holds a row `hasOpenReservation` finds.
+ */
+export async function assertKindChangeAllowed(
+  tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
+  mandateId: string,
+  before: MandateLimits,
+  after: MandateLimits,
+  at: Date = new Date(),
+): Promise<void> {
+  for (const [measure, next] of Object.entries(after)) {
+    const prev = before[measure];
+    if (!prev || prev.kind === next.kind) continue;
+    const drawn = await hasDrawnInCurrentPeriod(
+      tx,
+      mandateId,
+      measure,
+      prev.period,
+      at,
+    );
+    const open = await hasOpenReservation(tx, mandateId, measure);
+    if (!drawn && !open) continue;
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_kind_drawn",
+      message: `Measure "${measure}" still has authority drawn as ${prev.kind} under its current window, or an open reservation recorded under it; a kind change would sum those rows into a ${next.kind} total. Wait for the window to close and every reservation to settle or release before changing what the measure counts.`,
+    });
+  }
+}
+
 export const mandateLimitsUpdateHandler: CapabilityHandler<
   typeof mandateLimitsUpdate
 > = async (input, ctx) => {
@@ -244,6 +286,12 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
     // Under the same lock as the write, so a concurrent reserve cannot sneak a
     // draw past the refusal: the row lock serialises both writers.
     await assertPeriodChangeAllowed(tx, locked.id, locked.limits, limits);
+    // Compares the fully resolved kinds (after the preservation loop above),
+    // not the fresh stamp assertToolsDeclareMeasures produced: an untouched
+    // measure's kind never actually changes here, so it must never trip this
+    // refusal, only a measure the operator explicitly touched into a new
+    // kind can.
+    await assertKindChangeAllowed(tx, locked.id, locked.limits, stampedLimits);
     const [updated] = await tx
       .update(schema.mandates)
       .set({

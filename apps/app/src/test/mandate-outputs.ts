@@ -115,6 +115,11 @@ export function ledgerOutput(
     measure: "amount",
     value: "884600000",
     unitOrCurrency: "USD",
+    // Null by default so every existing fixture keeps reading its kind from
+    // `authority` (ADR-108's second-tier fallback), the same as a row
+    // written before this column existed. A test of the column itself
+    // overrides it explicitly.
+    measureKind: null,
     externalEffectId: "pi_3QaL8f2Xk",
     periodKey: "2026-09",
     balanceAfter: "884600000",

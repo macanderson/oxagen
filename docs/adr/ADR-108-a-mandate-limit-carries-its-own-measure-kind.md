@@ -18,7 +18,13 @@
   `assertToolsDeclareMeasures` returning stamped limits
   (`packages/handlers/src/_mandate.ts`); `withResolvedKinds` in
   `parseMandateRow` (`packages/rules/src/mandates.ts`); `measureValue`
-  switching on `kind` (`apps/app/src/data/live/mappers/mandates.ts`)
+  switching on `kind` (`apps/app/src/data/live/mappers/mandates.ts`);
+  `decideMandate`'s `measure_kind_changed` refusal and `MandateRecord.legacyKindMeasures`
+  (`packages/rules/src/mandates.ts`); `update_mandate_limits`'s scoped
+  re-stamping and `assertKindChangeAllowed`'s `measure_kind_drawn` refusal
+  (`packages/handlers/src/mandate.limits.update.ts`); `tools.mandate_ledger.measure_kind`
+  (migration `20260919200000_mandate_ledger_measure_kind.sql`,
+  `packages/database/src/schema/tools.ts`)
 
 ## Context
 
@@ -113,20 +119,31 @@ every future reader can find and remove, rather than reinvented differently
 at each call site the way `isCurrencyCode` was found reinvented nowhere else
 only because nobody else had needed the answer yet.
 
-The fallback resolves in exactly one place: `withResolvedKinds`, called from
-`parseMandateRow` (`packages/rules/src/mandates.ts`), the single function
-every mandate row passes through before its `limits` reach any handler,
-`readAuthority`, or the wire. A row written since this ADR keeps its real
-`kind`; a row written before takes `legacyMeasureKindGuess(currencyOrUnit)`.
-Nothing downstream of `parseMandateRow` (`readAuthority`, `mapMandates`, the
-app's mapper) guesses again; each reads `kind` as a resolved fact. The app's
-mapper, `toMandateDetail` in `apps/app/src/data/live/mappers/mandates.ts`,
-applies the same fallback a second time for the one case `parseMandateRow`
-cannot cover: a ledger row drawing a measure the mandate's *current* `limits`
-no longer lists at all, because `update_mandate_limits`'s whole-record
-replacement removed it while the append-only ledger kept the movement. There,
-`authority.find(...)` returns no matching entry, and `legacyMeasureKindGuess`
-is the same documented, single-function fallback, not a second heuristic.
+The fallback for a *limit* resolves in exactly one place: `withResolvedKinds`,
+called from `parseMandateRow` (`packages/rules/src/mandates.ts`), the single
+function every mandate row passes through before its `limits` reach any
+handler, `readAuthority`, or the wire. A row written since this ADR keeps its
+real `kind`; a row written before takes
+`legacyMeasureKindGuess(currencyOrUnit)`. Nothing downstream of
+`parseMandateRow` (`readAuthority`, `mapMandates`, the app's mapper) guesses
+again for a *limit's* kind; each reads it as a resolved fact.
+
+A *ledger* row needs its own answer, because the ledger is append-only and a
+limit is not: `update_mandate_limits`'s whole-record `limits` replacement can
+remove a measure that already has reserved or settled movements, and once
+it is gone from `limits` there is no current authority row left to read a
+kind from. `tools.mandate_ledger.measure_kind` (migration
+`20260919200000_mandate_ledger_measure_kind.sql`) closes this the same way
+the limit itself is closed: `reserve` stamps it from the mandate's own
+resolved `limits[measure].kind` at write time, and `settle`/`release` carry
+forward whatever the reservation they close was stamped with, never
+re-deriving it. The app's mapper, `toMandateDetail` in
+`apps/app/src/data/live/mappers/mandates.ts`, reads a ledger row's own
+`measureKind` first; only a row written before this column existed falls
+back to the current `authority` entry for that measure, then to
+`legacyMeasureKindGuess`, the same documented fallback, not a second
+heuristic, and now a last resort rather than the only answer a deleted
+measure's history had.
 
 The fallback is removable once every stored limit carries a real `kind`,
 either by a future backfill migration or by attrition as
@@ -183,7 +200,26 @@ rejected: it would refuse `stripe__create_payment@*` from ever picking up a
 routine patch release that does not touch a limited measure's kind, for the
 sake of a case only a kind-changing release creates.
 
-### 5. `isCurrencyCode` stops deciding anything downstream of the write
+### 5. An operator-confirmed kind change is refused while the ledger still holds the old one
+
+The accountable office fixes a `measure_kind_changed` refusal by touching the
+drifted measure through `update_mandate_limits`, which re-derives its `kind`
+from the current declaration (§4). `readAuthority` sums a period's reserved
+and settled rows by mandate, measure and period key alone, with no kind of
+its own to split on, so a reservation or settlement still open or drawn in
+the current window under the old kind would be summed straight into a total
+the new kind's admission decisions read as if every row agreed. A count of
+50 summed with a later reservation of 50000000 money micros is neither
+figure. `assertKindChangeAllowed` (`packages/handlers/src/mandate.limits.update.ts`)
+refuses the kind change (`measure_kind_drawn`) while that measure has drawn
+authority in the current window or an open reservation under any window,
+mirroring `assertPeriodChangeAllowed`'s existing refusal for a period rename
+over the same risk. The operator's own read of the ledger tells them when it
+clears: once the window rolls or every open reservation is settled or
+released, the same `limitChanges` edit that was refused now stamps the new
+kind cleanly, with nothing old left to mis-sum.
+
+### 6. `isCurrencyCode` stops deciding anything downstream of the write
 
 `apps/app/src/data/live/mappers/mandates.ts`'s `measureValue` now takes the
 resolved `kind` as a parameter and switches on it, the same shape as the
@@ -215,6 +251,22 @@ classification) and is unchanged.
   This is a new, stricter refusal on writes that previously succeeded only by
   accident of which matched tool the loop reached last; no existing fixture
   exercised that combination, and it is the shape this ADR exists to close.
+- A ledger row's `measure_kind` is stamped once, by `reserve`, and carried
+  forward unchanged by `settle` and `release` (`closeReservations`). It is the
+  one place a movement's kind survives a later `limits` replacement that
+  deletes the measure from the mandate's current record: `authority` has
+  nothing left to look up at that point, and the row falls back to
+  `legacyMeasureKindGuess` only if it also predates this column. `get_mandate`
+  and the app mapper read the row's own `measureKind` first, ahead of
+  `authority` and the guess, for exactly that reason.
+- An operator-confirmed `kind` change on `update_mandate_limits` is refused
+  (`measure_kind_drawn`) while the ledger still holds a reservation or a
+  settled movement stamped under the old kind in the current period. Without
+  this, `readAuthority`'s period sum would mix an old-kind and a new-kind
+  figure into one number meaning neither, the same corruption
+  `assertPeriodChangeAllowed`'s `period_drawn` refusal exists to prevent for a
+  period rename. The check is scoped to the ledger's current-period rows,
+  not the whole history, matching how `readAuthority` sums for the gate.
 - `legacyMeasureKindGuess` is deliberately not deleted the day a backfill
   might land, because a backfill is optional under this decision, not required
   by it: the fallback stays as documented, correct-by-construction cover for

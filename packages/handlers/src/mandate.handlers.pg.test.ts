@@ -88,7 +88,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   async () => {
     const { schema, withSystemDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
-    const { eq, inArray } = await import("drizzle-orm");
+    const { and, eq, inArray } = await import("drizzle-orm");
     const { SPEC_MANDATE_BODY } = await import(
       "@oxagen/oxagen/mandates/schemas.sample"
     );
@@ -1016,6 +1016,88 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
       expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is refused while the ledger still holds authority drawn under the old kind", async () => {
+      const m = await grant(billingUserId, body());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
+      // Same drift simulation as the validTo-only test above: the stored
+      // limit now disagrees with what a fresh stamp of the active
+      // declaration would produce, which is what touching the measure would
+      // change it back to. The reservation just seeded is a live "amount"
+      // row filed under the "count" kind this update would move away from.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: { ...m.limits.amount, kind: "count" },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("measure_kind_drawn"));
+
+      // Releasing the reservation nets the ledger's "amount" row to zero, so
+      // periodSums and hasOpenReservation both read no live draw under the
+      // old kind, and the same explicit change now succeeds.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: "released",
+          balanceAfter: "2000000000",
+        }),
+      );
+      const freed = await inScope(() =>
+        mandateLimitsUpdateHandler(
+          {
+            mandateId: m.id,
+            limitChanges: { amount: { perCall: "300000000" } },
+          },
+          ctx(billingUserId),
+        ),
+      );
+      expect(freed.limits.amount).toMatchObject({ kind: "money" });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(
+            and(
+              eq(schema.mandateLedger.mandateId, row!.id),
+              eq(schema.mandateLedger.measure, "amount"),
+            ),
+          ),
+      );
       await inScope(() =>
         mandateRevokeHandler(
           { mandateId: m.id, reason: "done" },

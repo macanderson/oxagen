@@ -494,6 +494,34 @@ describe("toMandateDetail", () => {
     });
   });
 
+  it("reads a row's own stamped kind ahead of the measure's current authority (ADR-108)", () => {
+    // The row says "count"; the mandate's live authority for "amount" says
+    // "money" (the fixture default). A row this old-format-honest should
+    // never lose to a limit that has since changed underneath it, which is
+    // exactly the whole-record `limits` replacement this column exists to
+    // survive.
+    const [row] = detail([
+      ledgerOutput({ measureKind: "count", unitOrCurrency: "seats" }),
+    ]).ledger;
+    expect(row).toMatchObject({
+      value: { kind: "count", count: "884600000", unit: "seats" },
+    });
+  });
+
+  it("falls back to the measure's current authority, then the legacy guess, when the row carries no stamped kind (negative)", () => {
+    // No stamped kind and no authority for "amount" left (the whole-record
+    // replacement this column exists to survive): the last resort is the
+    // same currency-code guess a pre-ADR-108 row without a stored kind takes.
+    const [row] = detail(
+      [ledgerOutput({ measureKind: null })],
+      500,
+      mandateOutput({ authority: [] }),
+    ).ledger;
+    expect(row).toMatchObject({
+      value: { kind: "money", money: { currency: "USD" } },
+    });
+  });
+
   // `readBound` is what the read can establish and nothing more. A ledger of
   // exactly the bound is indistinguishable from one of the bound plus a thousand,
   // and `get_mandate` answers no total, no has-more flag and no cursor — so the
