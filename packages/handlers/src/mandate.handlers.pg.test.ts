@@ -26,7 +26,8 @@
  *             records the reason and emits mandate.revoked; a second revoke
  *             → mandate_ended; a draft is declined the same way
  *   retire  — grant and request take the agent row lock retire_agent holds,
- *             so one in flight makes them wait and then refuse
+ *             so one in flight makes them wait and then refuse; a draft a
+ *             concurrent grant rebinds to another agent is not revoked
  *   limits  — validTo before validFrom → validity_inverted; a change over an
  *             undeclared measure is refused; a change records and emits, and
  *             a per_period changed inside the period reports remaining
@@ -1180,6 +1181,87 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.mandates.agentPrincipalId, race!.principalId!)),
       );
       expect(rows).toHaveLength(0);
+    });
+
+    it("retire_agent leaves alone a draft that a concurrent grant rebound to another agent", async () => {
+      // The race the re-read under the row lock closes: retire_agent selects
+      // the retiring agent's live mandates, then locks each one. If a grant
+      // activates one of those drafts for a different agent in between, the
+      // locked row is active but no longer the retiring agent's, and
+      // retirement must not revoke it. This transaction stands in for that
+      // grant between its mandate row lock and its commit.
+      const fromPrincipal = randomUUID();
+      const toPrincipal = randomUUID();
+      const [fromAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "rebound-from-bot",
+            name: "Rebound from bot",
+            agentType: "custom",
+            principalId: fromPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const fromAgentId = fromAgent!.publicId;
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: fromAgentId }),
+          ctx(operatorUserId),
+        ),
+      );
+
+      let retired: Promise<{ revokedMandates: number }> | undefined;
+      let settled = false;
+      await withSystemDb(async (tx) => {
+        await tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, draft.id))
+          .for("update");
+        retired = inScope(() =>
+          agentRetireHandler(
+            { agentId: fromAgentId, reason: "retired during a rebind" },
+            ctx(ownerUserId),
+          ),
+        );
+        retired.then(
+          () => {
+            settled = true;
+          },
+          () => {
+            settled = true;
+          },
+        );
+        await new Promise((r) => setTimeout(r, 300));
+        // retire_agent is parked on the mandate row lock this holds.
+        expect(settled).toBe(false);
+        await tx
+          .update(schema.mandates)
+          .set({
+            agentPrincipalId: toPrincipal,
+            status: "active",
+            grantedBy: billingUserId,
+            roleAtGrant: "Billing",
+          })
+          .where(eq(schema.mandates.publicId, draft.id));
+      });
+
+      const out = await retired!;
+      expect(out.revokedMandates).toBe(0);
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({
+            status: schema.mandates.status,
+            agentPrincipalId: schema.mandates.agentPrincipalId,
+          })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, draft.id)),
+      );
+      expect(row).toEqual({ status: "active", agentPrincipalId: toPrincipal });
     });
 
     it("update_mandate_limits refuses to widen a mandate whose agent retired after it was granted", async () => {

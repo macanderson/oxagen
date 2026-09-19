@@ -139,8 +139,16 @@ export async function revokeAgentMandates(
   const revoked: string[] = [];
   for (const { id } of live) {
     const locked = await lockMandate(tx, id);
-    // Ended by a concurrent writer between the select above and this lock.
-    if (!locked || (locked.status !== "active" && locked.status !== "draft"))
+    // Re-read under the lock: between the select above and this lock a
+    // concurrent writer may have ended the mandate, or `grant_mandate` may
+    // have activated the draft for a different agent. A row that is no
+    // longer live, or no longer bound to the retiring principal, is not this
+    // retirement's to revoke.
+    if (
+      !locked ||
+      locked.agentPrincipalId !== args.principalId ||
+      (locked.status !== "active" && locked.status !== "draft")
+    )
       continue;
     await releaseParked(tx, locked);
     await tx
