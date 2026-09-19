@@ -47,6 +47,15 @@ function WindowLines({ inventory }: { inventory: SkillInventory }) {
   );
 }
 
+/**
+ * The tab's lead (roadmap pages/skills.md): a skill is steering and a file,
+ * and Oxagen resolves one rather than running it.
+ */
+export function SkillsLede() {
+  const t = useTranslations("skills");
+  return <p className="text-sm text-muted-foreground">{t("lede")}</p>;
+}
+
 export function SkillsInventory({
   inventory,
   at,

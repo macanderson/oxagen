@@ -26,7 +26,6 @@ type Messages = {
     agentSource: string;
     mandate: string;
     tools: string;
-    skills: string;
     steering: string;
     spend: string;
     people: string;
@@ -105,6 +104,10 @@ type Messages = {
         body: string;
         register: string;
         command: string;
+      };
+      create: {
+        newAgent: string;
+        register: string;
       };
     };
     detail: {
@@ -1005,6 +1008,584 @@ type Messages = {
       denied: string;
       pendingApproval: string;
       error: string;
+    };
+  };
+  create: {
+    rail: string;
+    railDone: string;
+    steps: {
+      describe: string;
+      source: string;
+      find: string;
+      upload: string;
+      describeIt: string;
+      review: string;
+      recommendation: string;
+      import: string;
+      manifest: string;
+      code: string;
+      identity: string;
+      definition: string;
+      toolbelt: string;
+      kind: string;
+      statement: string;
+      checks: string;
+      pullRequest: string;
+    };
+    describe: {
+      label: string;
+    };
+    back: string;
+    cancel: string;
+    close: string;
+    needs: string;
+    chooser: {
+      title: string;
+      lead: string;
+      note: string;
+      noteUnknown: string;
+    };
+    kinds: {
+      agent: {
+        label: string;
+        body: string;
+        file: string;
+      };
+      tool: {
+        label: string;
+        body: string;
+        file: string;
+      };
+      skill: {
+        label: string;
+        body: string;
+        file: string;
+      };
+      record: {
+        label: string;
+        body: string;
+        file: string;
+      };
+    };
+    pr: {
+      unknownBase: string;
+      from: string;
+      files: string;
+      change: {
+        add: string;
+        modify: string;
+      };
+      checks: string;
+    };
+    skill: {
+      next: string;
+      readFile: string;
+      draftFile: string;
+      toPullRequest: string;
+      source: {
+        title: string;
+        subtitle: string;
+        registry: {
+          title: string;
+          body: string;
+          closed: string;
+        };
+        describe: {
+          title: string;
+          body: string;
+        };
+        upload: {
+          title: string;
+          body: string;
+        };
+        note: string;
+      };
+      describe: {
+        title: string;
+        subtitle: string;
+        placeholder: string;
+        hint: string;
+        suggestions: {
+          releaseNotes: string;
+          rollback: string;
+          migration: string;
+          flakyTest: string;
+        };
+        noAuthority: string;
+      };
+      upload: {
+        title: string;
+        subtitle: string;
+        label: string;
+        types: string;
+        reading: string;
+        nothing: string;
+        file: string;
+        size: string;
+        contents: string;
+        version: string;
+        noVersion: string;
+        digest: string;
+        replaces: string;
+        error: {
+          wrong_type: string;
+          too_large: string;
+          not_a_zip: string;
+          no_skill_md: string;
+          unsupported_method: string;
+          binary_file: string;
+          too_many_files: string;
+        };
+      };
+      draft: {
+        purpose: string;
+        precondition: string;
+        never: string;
+        grantsNothing: string;
+      };
+      review: {
+        title: string;
+        subtitle: string;
+        drafted: {
+          title: string;
+          body: string;
+        };
+        noName: string;
+        noVersion: string;
+        badVersion: string;
+        version: string;
+        noScope: string;
+        tokens: string;
+        revert: string;
+        cost: string;
+      };
+      pr: {
+        title: string;
+        subtitle: string;
+        lead: string;
+        fileSkill: string;
+        fileBundle: string;
+        replaces: string;
+        checks: {
+          frontmatter: {
+            name: string;
+            detail: string;
+          };
+          version: {
+            name: string;
+            detail: string;
+          };
+          digest: {
+            name: string;
+            detail: string;
+          };
+          grants: {
+            name: string;
+            detail: string;
+          };
+          secrets: {
+            name: string;
+            detail: string;
+          };
+          loadCost: {
+            name: string;
+            detail: string;
+          };
+        };
+        open: string;
+        opening: string;
+        repo: {
+          loading: string;
+          unbound: string;
+          denied: string;
+          unavailable: string;
+        };
+      };
+      opened: {
+        title: string;
+        subtitle: string;
+        added: string;
+        replaced: string;
+        link: string;
+        digest: string;
+        tokens: string;
+      };
+      failure: {
+        checkFrontmatter: string;
+        checkVersion: string;
+        checkDigest: string;
+        checkGrants: string;
+        checkSecrets: string;
+        checkLoadCost: string;
+        mergedUnversioned: string;
+        orgRoleRequired: string;
+        noRepository: string;
+        githubRefused: string;
+        unanswered: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+      };
+    };
+  };
+  createAgent: {
+    draftIt: string;
+    writeDefinition: string;
+    pickBelt: string;
+    toPullRequest: string;
+    describe: {
+      title: string;
+      subtitle: string;
+      placeholder: string;
+      hint: string;
+      suggestions: {
+        perfBudget: string;
+        changelog: string;
+        invoices: string;
+        triage: string;
+      };
+      notRegister: string;
+    };
+    identity: {
+      title: string;
+      subtitle: string;
+      slug: string;
+      slugHint: string;
+      slugInvalid: string;
+      harness: string;
+      harnessChoose: string;
+      harnessHint: string;
+      harnesses: {
+        "claude-code": string;
+        codex: string;
+        cursor: string;
+        stella: string;
+        "claude-agent-sdk": string;
+        custom: string;
+      };
+      tier: string;
+      tierHint: string;
+    };
+    definition: {
+      title: string;
+      subtitle: string;
+      drafted: {
+        title: string;
+        body: string;
+      };
+      file: {
+        header: string;
+        placeholder: string;
+        stayInside: string;
+      };
+      noSlug: string;
+      otherSlug: string;
+      tools: string;
+      denied: string;
+      unparsed: string;
+      revert: string;
+      request: string;
+    };
+    toolbelt: {
+      title: string;
+      subtitle: string;
+      label: string;
+      loading: string;
+      empty: string;
+      denied: string;
+      unavailable: string;
+      more: string;
+      risk: string;
+      unclassified: string;
+      effects: {
+        read: string;
+        write: string;
+        irreversible: string;
+      };
+      financial: string;
+      killed: string;
+      parks: string;
+      nothing: string;
+      noneParks: string;
+      someParks: string;
+      handEdited: string;
+    };
+    pr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      fileDefinition: string;
+      fileGenerated: string;
+      codex: string;
+      checks: {
+        schema: {
+          name: string;
+          detail: string;
+        };
+        key: {
+          name: string;
+          detail: string;
+        };
+        belt: {
+          name: string;
+          detail: string;
+        };
+        authority: {
+          name: string;
+          detail: string;
+        };
+        budget: {
+          name: string;
+          detail: string;
+        };
+        secrets: {
+          name: string;
+          detail: string;
+        };
+      };
+      open: string;
+      opening: string;
+      repo: {
+        loading: string;
+        unbound: string;
+        denied: string;
+        unavailable: string;
+      };
+    };
+    opened: {
+      title: string;
+      subtitle: string;
+      proposed: string;
+      key: string;
+      link: string;
+      digest: string;
+      register: string;
+    };
+    failure: {
+      checkSchema: string;
+      checkKey: string;
+      checkBelt: string;
+      checkAuthority: string;
+      checkBudget: string;
+      checkSecrets: string;
+      orgRoleRequired: string;
+      noRepository: string;
+      githubRefused: string;
+      unanswered: string;
+      refused: string;
+      invalid: string;
+      pendingApproval: string;
+    };
+  };
+  createRecord: {
+    describe: {
+      title: string;
+      subtitle: string;
+      placeholder: string;
+      hint: string;
+      suggestions: {
+        changelog: string;
+        release: string;
+        order: string;
+        flake: string;
+      };
+      noGrant: string;
+      next: string;
+    };
+    kind: {
+      title: string;
+      subtitle: string;
+      cards: string;
+      never: string;
+      reaches: string;
+      next: string;
+      kinds: {
+        rule: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        constraint: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        procedure: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        fact: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        memory: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+        preference: {
+          label: string;
+          about: string;
+          use: string;
+          never: string;
+          deliver: string;
+        };
+      };
+    };
+    statement: {
+      title: string;
+      subtitle: string;
+      drafted: {
+        title: string;
+        body: string;
+      };
+      path: string;
+      tokens: string;
+      revert: string;
+      empty: string;
+      tooLong: string;
+      force: {
+        label: string;
+        stable: string;
+        selected: string;
+        preference: string;
+        informs: string;
+      };
+      scope: {
+        label: string;
+        workspace: string;
+        repository: string;
+        workspaceHint: string;
+        repositoryClosed: string;
+      };
+      effect: {
+        label: string;
+        hint: string;
+      };
+      preview: {
+        label: string;
+        badge: string;
+      };
+      bundle: string;
+      next: string;
+    };
+    checks: {
+      title: string;
+      subtitle: string;
+      items: {
+        schema: {
+          name: string;
+          detail: string;
+        };
+        lineage: {
+          name: string;
+          detail: string;
+        };
+        hash: {
+          name: string;
+          detail: string;
+        };
+        secrets: {
+          name: string;
+          detail: string;
+        };
+        conflicts: {
+          name: string;
+          detail: string;
+        };
+        effect: {
+          name: string;
+          constraint: string;
+          none: string;
+        };
+      };
+      fifth: string;
+      next: string;
+    };
+    pr: {
+      title: string;
+      subtitle: string;
+      lead: string;
+      fileRecord: string;
+      rationale: string;
+      checks: {
+        schema: string;
+        lineage: string;
+        hash: string;
+        secrets: string;
+        conflicts: string;
+        effect: string;
+        noEffect: string;
+      };
+      names: {
+        schema: string;
+        lineage: string;
+        hash: string;
+        secrets: string;
+        conflicts: string;
+        effect: string;
+      };
+      open: string;
+      opening: string;
+      proposalKept: string;
+      repo: {
+        loading: string;
+        unbound: string;
+        denied: string;
+        unavailable: string;
+      };
+    };
+    opened: {
+      title: string;
+      subtitle: string;
+      link: string;
+      noPr: string;
+      path: string;
+      checks: string;
+      status: {
+        passed: string;
+        failed: string;
+        running: string;
+        pending: string;
+      };
+      names: {
+        schema: string;
+        lineage_uniqueness: string;
+        record_hash: string;
+        secret_pii_scan: string;
+        conflict_against_active: string;
+        constraint_effect: string;
+      };
+      passed: string;
+      failed: string;
+      running: string;
+      onContextPrs: string;
+    };
+    failure: {
+      orgRoleRequired: string;
+      noPrincipal: string;
+      lineagePrOpen: string;
+      governanceUnreadable: string;
+      repositoryMissing: string;
+      githubRefused: string;
+      baseMoved: string;
+      proposalMoved: string;
+      unanswered: string;
+      refused: string;
+      invalid: string;
+      pendingApproval: string;
     };
   };
   fleet: {
@@ -2247,7 +2828,6 @@ type Messages = {
       fleet: string;
       agents: string;
       tools: string;
-      skills: string;
       steering: string;
       spend: string;
       organization: string;
@@ -2287,6 +2867,13 @@ type Messages = {
       title: string;
       input: string;
       empty: string;
+      create: {
+        any: string;
+        agent: string;
+        tool: string;
+        skill: string;
+        record: string;
+      };
       footer: {
         move: string;
         open: string;
@@ -2480,7 +3067,6 @@ type Messages = {
     };
   };
   skills: {
-    eyebrow: string;
     lede: string;
     loading: string;
     inventory: {
@@ -2907,6 +3493,7 @@ type Messages = {
     tabs: {
       label: string;
       records: string;
+      skills: string;
       proposals: string;
       prs: string;
     };
@@ -3083,6 +3670,10 @@ type Messages = {
         pendingApproval: string;
         unavailable: string;
       };
+    };
+    create: {
+      skill: string;
+      record: string;
     };
   };
   tools: {

@@ -598,12 +598,12 @@
       "verifiedBy": "session-20daa43b-cutover"
     },
     "list_skills": {
-      "route": "/[org]/[ws]/skills",
-      "page": "apps/app/src/app/[org]/[ws]/skills/page.tsx",
-      "entry": "/[org]/[ws]/skills — the rev1 surface that invokes list_skills (data/live/mappers/skills.ts, data/live/skills.ts)",
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Skills: the tab that invokes list_skills (features/skills/skills.tsx, data/live/skills.ts); /[org]/[ws]/skills redirects here",
       "proof": "apps/app/src/features/skills/skills.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-creation-wizards"
     },
     "list_tool_versions": {
       "route": "/[org]/[ws]/tools",
@@ -914,6 +914,30 @@
       "proof": "apps/app/src/features/organization/model-funding-form.test.tsx",
       "verifiedAt": "2026-09-18",
       "verifiedBy": "session-343b879e-byok"
+    },
+    "propose_agent": {
+      "route": "/[org]/[ws]/agents",
+      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
+      "entry": "Agent IAM › New agent, and ⌘K Create › Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-wizard-agent"
+    },
+    "propose_record": {
+      "route": "/[org]/[ws]/steering",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Write a context record (every tab but Skills), and ⌘K Create › Context record: the context-record wizard's pull request step, which proposes the record and opens its Context PR (features/create/record-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/record-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-wizard-record"
+    },
+    "propose_skill": {
+      "route": "/[org]/[ws]/steering?tab=skills",
+      "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
+      "entry": "Steering › Skills › Add a skill, and ⌘K Create › Skill: the skill wizard's pull request step (features/create/skill-wizard.tsx, features/create/actions.ts)",
+      "proof": "apps/app/src/features/create/skill-wizard.test.tsx",
+      "verifiedAt": "2026-09-19",
+      "verifiedBy": "session-creation-wizards"
     }
   }
 }

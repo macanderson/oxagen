@@ -1,0 +1,199 @@
+{
+  "name": "propose_skill",
+  "domain": "skill",
+  "description": "Add or replace a governed skill as a pull request: cut skills/<name> from the main repository's production branch, commit .oxagen/skills/<name>/SKILL.md and any bundle files, and open the pull request. Six checks (frontmatter, version, digest, grants, secret and PII scan, load cost against the search budget) run first, and a failed check writes nothing. The skill exists on merge.",
+  "mode": "sync",
+  "surfaces": [
+    "api"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "governance"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "origin": {
+        "type": "string",
+        "enum": [
+          "describe",
+          "upload"
+        ]
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 48
+      },
+      "body": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 65536
+      },
+      "files": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "x-server-validated": true,
+              "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 65536
+            }
+          },
+          "required": [
+            "path",
+            "content"
+          ],
+          "additionalProperties": false
+        },
+        "default": []
+      },
+      "rationale": {
+        "type": "string",
+        "maxLength": 4000
+      }
+    },
+    "required": [
+      "origin",
+      "name",
+      "body"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "branch": {
+        "type": "string"
+      },
+      "repository": {
+        "type": "string"
+      },
+      "baseRef": {
+        "type": "string"
+      },
+      "version": {
+        "type": "string"
+      },
+      "replaces": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "digest": {
+        "type": "string"
+      },
+      "tokens": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "budget": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "checks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": [
+                "frontmatter",
+                "version",
+                "digest",
+                "grants",
+                "secrets",
+                "load_cost"
+              ]
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "code": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "passed",
+            "code"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "commitSha": {
+        "type": "string",
+        "minLength": 1
+      },
+      "pullRequest": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "name",
+      "path",
+      "branch",
+      "repository",
+      "baseRef",
+      "version",
+      "replaces",
+      "digest",
+      "tokens",
+      "budget",
+      "checks",
+      "commitSha",
+      "pullRequest"
+    ],
+    "additionalProperties": false
+  }
+}

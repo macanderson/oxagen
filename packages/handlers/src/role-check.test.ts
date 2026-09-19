@@ -36,6 +36,8 @@ const ROLE_CHECKED_CONTRACTS = [
   "suspend_agent",
   "retire_agent",
   "commit_agent_definition",
+  "propose_agent",
+  "propose_skill",
   "grant_mandate",
   "request_mandate",
   "revoke_mandate",
