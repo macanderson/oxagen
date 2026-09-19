@@ -29,16 +29,16 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 
 /** The slug rule `register_agent` and `propose_agent` share. */
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-export const SLUG_MAX = 18;
+const SLUG_MAX = 18;
 
 /**
  * The belt a definition falls back to when nothing is picked: two reads of
  * the graph and memory, and nothing that writes.
  */
-export const FALLBACK_BELT = ["search_graph", "recall_memory"] as const;
+const FALLBACK_BELT = ["search_graph", "recall_memory"] as const;
 const DENY = ["github__merge_pull_request@*", "github__delete_*@*"] as const;
 /** Four dollars a run, in micros, until the operator writes their own. */
-export const DEFAULT_RUN_MICROS = 4_000_000;
+const DEFAULT_RUN_MICROS = 4_000_000;
 
 export function isAgentSlug(slug: string): boolean {
   return slug.length <= SLUG_MAX && SLUG.test(slug);
@@ -68,7 +68,7 @@ function basicString(text: string): string {
 }
 
 /** The display name a slug implies: `perf-watch` → `Perf watch`. */
-export function nameFromSlug(slug: string): string {
+function nameFromSlug(slug: string): string {
   const spaced = slug.replace(/-/g, " ");
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
@@ -126,7 +126,7 @@ export function draftAgentDefinition(args: {
 }
 
 /** What the definition step shows above the editor, read out of the file. */
-export type DefinitionReading =
+type DefinitionReading =
   | {
       ok: true;
       slug: string | null;

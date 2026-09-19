@@ -7,9 +7,7 @@ import {
   beltPattern,
   type BeltTool,
   draftAgentDefinition,
-  FALLBACK_BELT,
   isAgentSlug,
-  nameFromSlug,
   normalizeSlug,
   parks,
   readDefinition,
@@ -71,10 +69,6 @@ describe("the slug", () => {
     expect(normalizeSlug("Perf Watch")).toBe("perf-watch");
     expect(normalizeSlug("--perf_")).toBe("perf-");
   });
-
-  it("names the agent from its slug", () => {
-    expect(nameFromSlug("perf-watch")).toBe("Perf watch");
-  });
 });
 
 describe("draftAgentDefinition", () => {
@@ -84,11 +78,11 @@ describe("draftAgentDefinition", () => {
     expect(file).toContain("# Nothing is written to a database.");
     expect(file).toContain('schema = "agent-definition/v0.1"');
     expect(file).toContain('slug = "perf-watch"');
+    // The name the slug implies.
     expect(file).toContain('name = "Perf watch"');
     expect(file).toContain('model_tier = "complex"');
-    expect(file).toContain(
-      `tools = [${FALLBACK_BELT.map((x) => `"${x}"`).join(", ")}]`,
-    );
+    // The fallback belt: two reads, nothing that writes.
+    expect(file).toContain('tools = ["search_graph", "recall_memory"]');
     expect(file).toContain("budget = { per_run_micros = 4000000 }");
     expect(file).toContain("[harness.cursor]");
     const reading = readDefinition(file);
