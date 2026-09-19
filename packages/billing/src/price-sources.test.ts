@@ -781,7 +781,6 @@ describe("isSameModelIdentity", () => {
     expect(isSameModelIdentity("claude-sonnet-5-latest", "claude-sonnet-5")).toBe(
       true,
     );
-    expect(isSameModelIdentity("gpt-5.2", "gpt-5")).toBe(true);
   });
 
   it("keeps a hyphenated product as a distinct identity", () => {
@@ -801,6 +800,11 @@ describe("isSameModelIdentity", () => {
     expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
       false,
     );
+    // The repository's own rate card gives `gpt-5`, `gpt-5.2` and `gpt-5.5`
+    // three different prices, so a dot-decimal suffix on an already-numbered
+    // family name is another release, not a snapshot of this one.
+    expect(isSameModelIdentity("gpt-5.2", "gpt-5")).toBe(false);
+    expect(isSameModelIdentity("gpt-5.5", "gpt-5")).toBe(false);
   });
 
   it("still holds the earlier rounds' cases", () => {

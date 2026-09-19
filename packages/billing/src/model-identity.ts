@@ -74,6 +74,7 @@ function segmentsOf(rest: string): string[] {
  * gpt-4o            ✗ gpt-4o-mini         different products
  * gpt-4             ✗ gpt-4o              not even a segment boundary
  * claude-sonnet-5   ✗ claude-sonnet-50    not even a segment boundary
+ * gpt-5             ✗ gpt-5.2             a separately priced release, not a snapshot
  * ```
  */
 export function isSameModelIdentity(name: string, claimed: string): boolean {
@@ -83,15 +84,25 @@ export function isSameModelIdentity(name: string, claimed: string): boolean {
   if (claimed === "") return false;
   if (!name.startsWith(claimed)) return false;
   const last = claimed.at(-1);
-  const rest =
-    last !== undefined && MODEL_ID_BOUNDARY.has(last)
-      ? // `claimed` already ends at a boundary (`anthropic/`), so the rest of
-        // `name` is the suffix — and it has to be a version like any other.
-        // Ending at a separator does not let a name own every id beneath it.
-        name.slice(claimed.length)
-      : MODEL_ID_BOUNDARY.has(name.charAt(claimed.length))
-        ? name.slice(claimed.length + 1)
-        : null;
+  const claimedEndsAtBoundary = last !== undefined && MODEL_ID_BOUNDARY.has(last);
+  const separator = claimedEndsAtBoundary ? undefined : name.charAt(claimed.length);
+  const rest = claimedEndsAtBoundary
+    ? // `claimed` already ends at a boundary (`anthropic/`), so the rest of
+      // `name` is the suffix — and it has to be a version like any other.
+      // Ending at a separator does not let a name own every id beneath it.
+      name.slice(claimed.length)
+    : separator !== undefined && MODEL_ID_BOUNDARY.has(separator)
+      ? name.slice(claimed.length + 1)
+      : null;
   if (rest === null || rest === "") return false;
+  // A `.` directly after a family name that already ends in a bare version
+  // number (`gpt-5` to `gpt-5.2`) names another release the catalog prices
+  // on its own, not a snapshot of this one: the repository's rate card gives
+  // `gpt-5`, `gpt-5.2` and `gpt-5.5` three different rates. Require an
+  // explicit alias for that shape instead of inheriting it here, while a
+  // hyphenated numeric suffix (`gpt-4-0613`) still inherits as a snapshot.
+  if (!claimedEndsAtBoundary && separator === "." && last !== undefined && /\d/.test(last)) {
+    return false;
+  }
   return segmentsOf(rest).every((segment) => VERSION_SEGMENT.test(segment));
 }
