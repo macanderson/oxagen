@@ -886,7 +886,7 @@ export async function decideMandate(
             kind: "deny",
             reason: "measure_kind_changed",
             mandate,
-            detail: `${tool.slug}@${tool.version} declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate has ledger history from before kind tracking that is still open or drawn this period and whose own kind was never recorded; settle or release it, or update the mandate's limit, before this call can be decided`,
+            detail: `${tool.slug}@${tool.version} declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate has ledger history from before kind tracking that is still open or drawn this period and whose own kind was never recorded; release any open reservation and wait for the current window to close (a settled row cannot be released), or revoke the mandate, before this call can be decided`,
           };
         }
       } else if (

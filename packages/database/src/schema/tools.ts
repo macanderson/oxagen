@@ -117,8 +117,10 @@ export const mandateLedger = toolsSchema.table(
     value: numeric("value").notNull(),
     unitOrCurrency: text("unit_or_currency").notNull(),
     // The mandate limit's kind (ADR-108) at the instant this row was
-    // written: "money" or "count", stamped from `mandateLimitSchema.kind`,
-    // never re-derived. The ledger is append-only and outlives a limit a
+    // written: "money" or "count", stamped from the live tool declaration
+    // the call was decided against, never from `mandateLimitSchema.kind`
+    // (a legacy mandate's stored kind is only a guess) and never
+    // re-derived afterward. The ledger is append-only and outlives a limit a
     // later `update_mandate_limits` whole-record replacement can remove, so
     // this is the one place a deleted measure's historical kind survives.
     // Nullable because a row written before this column existed has no
