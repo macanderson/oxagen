@@ -383,10 +383,13 @@ describe("tachod and the transcript", () => {
     expect(kinds.indexOf("agent_stop")).toBeGreaterThan(lastCall);
     await restarted.tick();
     await restarted.tick();
+    await restarted.tick();
     expect(
       restarted.transcriptTailer.state().cursors[
         `claude-code:claude-code ${SESSION_ID}`
       ]?.drained,
     ).toBe(true);
+    // No tick after the drain appends the transcript to the sealed chain again.
+    expect(restarted.wal.read(uuid).length).toBe(chain.length);
   });
 });

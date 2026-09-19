@@ -33,9 +33,12 @@ const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   attachGithubInstallation,
   bindWorkspaceRepository,
+  linkWorkspaceRepository,
   listGithubInstallations,
   listInstallationRepositories,
+  readWorkspaceRepositories,
   readWorkspaceRepository,
+  unlinkWorkspaceRepository,
 } = await import("./workspace-settings-actions");
 
 const ctx = unsafeMint(WsCtx, {
@@ -105,6 +108,34 @@ const LISTING = {
     },
   ],
   truncated: false,
+};
+
+/** What `list_repositories` answers for a workspace with its main and one linked repository. */
+const REPOSITORIES = {
+  repositories: [
+    {
+      bindingId: "rpb_0a1b2c",
+      role: "main",
+      owner: "acme",
+      name: "platform",
+      fullName: "acme/platform",
+      defaultRef: "main",
+      htmlUrl: "https://github.com/acme/platform",
+      boundAt: "2026-09-16T10:00:00.000Z",
+      connectionLive: true,
+    },
+    {
+      bindingId: "rpb_0d1e2f",
+      role: "linked",
+      owner: "acme",
+      name: "docs-site",
+      fullName: "acme/docs-site",
+      defaultRef: "trunk",
+      htmlUrl: "https://github.com/acme/docs-site",
+      boundAt: "2026-09-17T10:00:00.000Z",
+      connectionLive: false,
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -400,6 +431,201 @@ describe("attachGithubInstallation", () => {
       reason: "invalid",
       code: "invalid_input",
       field: "installationId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("readWorkspaceRepositories", () => {
+  it("answers every repository the workspace binds, with each one's role", async () => {
+    invoke.mockResolvedValue(REPOSITORIES);
+    expect(await readWorkspaceRepositories("acme", "core-platform")).toEqual({
+      ok: true,
+      value: REPOSITORIES,
+    });
+  });
+
+  it("reads list_repositories for the workspace the URL names, with no input", async () => {
+    invoke.mockResolvedValue({ repositories: [] });
+    await readWorkspaceRepositories("acme", "core-platform");
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "list_repositories",
+      {},
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        surface: "app",
+      }),
+    );
+  });
+
+  it("carries a denial across as denied (negative)", async () => {
+    invoke.mockRejectedValue({ code: "authz_denied" });
+    expect(await readWorkspaceRepositories("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "denied",
+      code: "org.admin",
+    });
+  });
+
+  it("refuses a record with a role the contract does not name (negative)", async () => {
+    invoke.mockResolvedValue({
+      repositories: [{ ...REPOSITORIES.repositories[0], role: "fork" }],
+    });
+    expect(await readWorkspaceRepositories("acme", "core-platform")).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "contract_output_mismatch",
+    });
+  });
+});
+
+describe("linkWorkspaceRepository", () => {
+  const LINKED = {
+    bindingId: "rpb_0d1e2f",
+    connectionId: "con_01hq",
+    fullName: "acme/docs-site",
+    defaultRef: "trunk",
+    role: "linked",
+    linkedAt: "2026-09-17T10:00:00.000Z",
+  };
+
+  it("links the named repository and answers what the handler wrote", async () => {
+    invoke.mockResolvedValue(LINKED);
+    expect(
+      await linkWorkspaceRepository("acme", "core-platform", {
+        owner: "acme",
+        name: "docs-site",
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        bindingId: "rpb_0d1e2f",
+        fullName: "acme/docs-site",
+        defaultRef: "trunk",
+        linkedAt: "2026-09-17T10:00:00.000Z",
+      },
+    });
+  });
+
+  it("names only the repository, on GitHub: the installation is the workspace's own", async () => {
+    invoke.mockResolvedValue(LINKED);
+    await linkWorkspaceRepository("acme", "core-platform", {
+      owner: "acme",
+      name: "docs-site",
+    });
+    expect(invoke.mock.calls[0]?.[0]).toBe("link_repository");
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      provider: "github",
+      owner: "acme",
+      name: "docs-site",
+    });
+  });
+
+  // Every refusal the contract documents, carried with its reason intact so
+  // the section prints its own sentence for each.
+  it.each([
+    ["conflict", "github_not_connected"],
+    ["conflict", "main_repo"],
+    ["conflict", "repository_already_linked"],
+    ["conflict", "main_repo_claimed"],
+    ["conflict", "main_repo_unbound"],
+    ["not_found", "repository_not_installed"],
+  ] as const)(
+    "carries a %s: %s from the handler to the caller (negative)",
+    async (code, reason) => {
+      invoke.mockRejectedValue({ code, reason });
+      expect(
+        await linkWorkspaceRepository("acme", "core-platform", {
+          owner: "acme",
+          name: "docs-site",
+        }),
+      ).toEqual({ ok: false, reason: code, code: reason });
+    },
+  );
+
+  it("refuses a repository name GitHub would not accept before the kernel runs (negative)", async () => {
+    expect(
+      await linkWorkspaceRepository("acme", "core-platform", {
+        owner: "acme",
+        name: "not a repo name",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "name",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("unlinkWorkspaceRepository", () => {
+  it("unlinks the binding the list named and answers what left", async () => {
+    invoke.mockResolvedValue({
+      bindingId: "rpb_0d1e2f",
+      fullName: "acme/docs-site",
+      unlinkedAt: "2026-09-18T10:00:00.000Z",
+    });
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "rpb_0d1e2f"),
+    ).toEqual({
+      ok: true,
+      value: {
+        bindingId: "rpb_0d1e2f",
+        fullName: "acme/docs-site",
+        unlinkedAt: "2026-09-18T10:00:00.000Z",
+      },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "unlink_repository",
+      { bindingId: "rpb_0d1e2f" },
+      expect.objectContaining({
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+      }),
+    );
+  });
+
+  // The invariant said back at this seam: the main repository never leaves,
+  // and the refusal arrives as a sentence rather than a write.
+  it("carries the refusal of the main repository across (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "conflict",
+      reason: "main_repo_unlink_refused",
+    });
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "rpb_0a1b2c"),
+    ).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "main_repo_unlink_refused",
+    });
+  });
+
+  it("carries a binding this workspace does not see across as not_found (negative)", async () => {
+    invoke.mockRejectedValue({
+      code: "not_found",
+      reason: "repository_not_linked",
+    });
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "rpb_ffffff"),
+    ).toEqual({
+      ok: false,
+      reason: "not_found",
+      code: "repository_not_linked",
+    });
+  });
+
+  it("refuses an id that is not a binding id before the kernel runs (negative)", async () => {
+    expect(
+      await unlinkWorkspaceRepository("acme", "core-platform", "docs-site"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "bindingId",
     });
     expect(invoke).not.toHaveBeenCalled();
   });

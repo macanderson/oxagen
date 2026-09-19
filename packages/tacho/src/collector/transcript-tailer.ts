@@ -245,7 +245,7 @@ export class TranscriptTailer {
       }
       const cursor = this.cursorFor(session, session.transcriptPath);
       if (session.sealed) {
-        // One unbounded pass after the chain closed, then the cursor goes.
+        // One unbounded pass after the chain closed; nothing reads it after.
         await this.advance(session, cursor, Number.POSITIVE_INFINITY);
         cursor.drained = true;
         this.dirty = true;

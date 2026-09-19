@@ -390,7 +390,9 @@ describe("detector", () => {
         localToken: "t",
       },
     ).settings;
-    expect((await detector.tick()).map((e) => e.kind)).toEqual(["oxagen:hook_health"]);
+    expect((await detector.tick()).map((e) => e.kind)).toEqual([
+      "oxagen:hook_health",
+    ]);
     const unreadable = new Detector({
       registry,
       hostRecorder: () => host.recorder,
@@ -461,6 +463,38 @@ describe("detector", () => {
       verifyChain(host.recorder.sealedEvents, { expectGenesis: true })
         .violations,
     ).toEqual([]);
+  });
+
+  it("records a hook frame before the scan yields, so a call sealed during the scan appends after it", async () => {
+    const paths = scratchPaths();
+    const now = () => Date.parse("2026-09-10T10:00:00.000Z");
+    const { registry, host } = registryWithSession(now);
+    const detector = new Detector({
+      registry,
+      hostRecorder: () => host.recorder,
+      listProcesses: () => [],
+      transcriptRoots: [paths.claudeProjects],
+      readSettings: () => ({ hooks: {} }),
+      enrollmentId: TEST_ENROLLMENT,
+      now,
+    });
+    // Stands in for the WAL: frames in the order they were appended.
+    const appended: TachoEvent[] = [];
+    const record = (events: readonly TachoEvent[]) => appended.push(...events);
+    const pass = detector.tick(record);
+    // The scan has yielded. A model or gateway call lands on the host chain
+    // and is recorded off-queue before the detector's promise settles.
+    record([
+      host.recorder.sealCollectorEvent("oxagen:hook_health", { hook_count: 0 }),
+    ]);
+    const sealed = await pass;
+    expect(sealed.map((e) => e.kind)).toEqual(["oxagen:hooks_removed"]);
+    expect(appended.map((e) => e.kind)).toEqual([
+      "oxagen:hooks_removed",
+      "oxagen:hook_health",
+    ]);
+    const seqs = appended.map((e) => e.seq);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
   });
 });
 
@@ -564,6 +598,82 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(0);
     expect(controls.length).toBeGreaterThan(0);
     expect(logs.some((l) => l.includes("quarantined"))).toBe(true);
+  });
+
+  it("splits a batch the route refuses as too large, and ships an oversized event without its body", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const heavy = events[1] as (typeof events)[number];
+    wal.append(events, [
+      {
+        event_id_idem: heavy.event_id_idem,
+        session_uuid: heavy.session_uuid,
+        seq: heavy.seq,
+        content_type: "text/plain; charset=utf-8",
+        bytes: new TextEncoder().encode("a retained prompt"),
+        content_class: "model_call",
+      },
+    ]);
+    const sent: Array<{ seqs: number[]; bodies: number }> = [];
+    const { s, logs } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies = []) => {
+          sent.push({ seqs: batch.map((e) => e.seq), bodies: bodies.length });
+          // The route refuses any request that carries this body.
+          if (bodies.length > 0) throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    // Nothing is quarantined and nothing is left behind: the queue moves.
+    expect(result.quarantined).toBe(0);
+    expect(result.shipped).toBe(events.length);
+    expect(wal.stats().unshipped).toBe(0);
+    // The last attempt for the heavy event went out alone and bodiless.
+    const last = sent.filter((b) => b.seqs.includes(heavy.seq)).at(-1);
+    expect(last).toEqual({ seqs: [heavy.seq], bodies: 0 });
+    expect(logs.some((l) => l.includes("without its body"))).toBe(true);
+  });
+
+  it("does not ship the right half of a 413 split when the left half fails", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const sent: number[][] = [];
+    // Fail every leaf in the lower half; accept every leaf in the upper half.
+    // Shipping the upper half first would markShipped past the lower seqs and
+    // drop them from the WAL without the control plane ever seeing them.
+    const leftCeiling =
+      events[Math.ceil(events.length / 2) - 1]?.seq ?? Number.POSITIVE_INFINITY;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sent.push(batch.map((e) => e.seq));
+          if (batch.length > 1)
+            throw new ControlError(413, "Payload Too Large");
+          const seq = batch[0]?.seq;
+          if (seq !== undefined && seq <= leftCeiling)
+            throw new ControlError(503, "busy");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.shipped).toBe(0);
+    expect(wal.stats().unshipped).toBe(events.length);
+    // No leaf above the left ceiling was attempted: the split stopped.
+    expect(
+      sent.some((seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling),
+    ).toBe(false);
   });
 
   // ── Orphaned events after a re-enrollment ──────────────────────────────────

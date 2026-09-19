@@ -1533,6 +1533,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "link_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "list_agent_defs",
       "reads": [],
@@ -2008,6 +2019,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "repository",
+      "name": "list_repositories",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -3117,6 +3139,17 @@
       "writes": []
     },
     {
+      "domain": "repository",
+      "name": "unlink_repository",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "secret",
       "name": "unset_secret_value",
       "reads": [],
@@ -3392,7 +3425,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5092d16049cc328646c3c5ecfcc6c2fedb9117fb5f019d05f28b1e2c4d16f066",
+  "contentHash": "a3be8e6104d744822e0a56f73284266afa7d1fbfa29a17c3ade1d1248810210c",
   "domains": [
     {
       "name": "agent",
@@ -7985,6 +8018,30 @@
           "nullable": false,
           "primaryKey": false,
           "type": "jsonb"
+        },
+        {
+          "name": "kind",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "force",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "constraint_effect",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "statement",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",
