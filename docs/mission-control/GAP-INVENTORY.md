@@ -20,7 +20,7 @@ Nine pages: Fleet, Run, Agents, Tools, Steering, Spend, Organization, Billing, A
 
 ---
 
-## 1. Fleet — `/{org}/{ws}`
+## 1. Fleet (`/{org}/{ws}`)
 
 Feature: `apps/app/src/features/fleet/`. Reads: `list_runs`, `list_approvals`, `get_spend` (tiles).
 
@@ -39,7 +39,7 @@ Feature: `apps/app/src/features/fleet/`. Reads: `list_runs`, `list_approvals`, `
 
 ---
 
-## 2. Run — `/{org}/{ws}/runs/[run]`
+## 2. Run (`/{org}/{ws}/runs/[run]`)
 
 Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \| `cost` only (`run.tsx`).
 
@@ -74,7 +74,7 @@ Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \|
 
 ---
 
-## 4. Agents — `/{org}/{ws}/agents`
+## 4. Agents (`/{org}/{ws}/agents`)
 
 Routes: list, `agents/[agent]`, `agents/[agent]/source`, `register/[step]`. Feature: `apps/app/src/features/agents/`.
 
@@ -98,7 +98,7 @@ Detail tabs today: identity \| toolbelt \| enrollment \| incidents \| definition
 
 ---
 
-## 5. Tools — `/{org}/{ws}/tools`
+## 5. Tools (`/{org}/{ws}/tools`)
 
 Feature: `apps/app/src/features/tools/`. Tabs: `registry` \| `connections` \| `switches` \| `mandates` (`view.ts`). Mockup has six; Policy and Auto-approvals are not in `TOOLS_TABS`.
 
@@ -119,7 +119,7 @@ Writes wired today: `import_tools`, `set_tool_classification`, `set_kill_switch`
 
 ---
 
-## 6. Steering — `/{org}/{ws}/steering`
+## 6. Steering (`/{org}/{ws}/steering`)
 
 Feature: `apps/app/src/features/steering/`. Tabs: `records` \| `proposals` \| `prs`.
 
@@ -137,7 +137,7 @@ Feature: `apps/app/src/features/steering/`. Tabs: `records` \| `proposals` \| `p
 
 ---
 
-## 7. Skills — `/{org}/{ws}/skills` (extra vs the nine-page target)
+## 7. Skills (`/{org}/{ws}/skills`) (extra vs the nine-page target)
 
 Feature: `apps/app/src/features/skills/`. Still in `WORKSPACE_NAV`. One inventory section; no catch-all tabs in code.
 
@@ -150,7 +150,7 @@ Feature: `apps/app/src/features/skills/`. Still in `WORKSPACE_NAV`. One inventor
 
 ---
 
-## 8. Spend — `/{org}/{ws}/spend`
+## 8. Spend (`/{org}/{ws}/spend`)
 
 Feature: `apps/app/src/features/spend/`. Tabs: findings \| operator \| agent \| tool \| waste \| budgets.
 
@@ -170,7 +170,7 @@ Closest workspace page to the scaled-back job.
 
 ---
 
-## 9. Organization — `/{org}` (+ `/roles`, `/api-keys`, `/model-funding`)
+## 9. Organization (`/{org}`) (+ `/roles`, `/api-keys`, `/model-funding`)
 
 Feature: `apps/app/src/features/organization/`.
 
@@ -188,7 +188,7 @@ Feature: `apps/app/src/features/organization/`.
 
 ---
 
-## 10. Billing — `/{org}/billing`
+## 10. Billing (`/{org}/billing`)
 
 Feature: `apps/app/src/features/billing/`.
 
@@ -206,7 +206,7 @@ Closest org page to the scaled-back job.
 
 ---
 
-## 11. Audit — `/{org}/audit`
+## 11. Audit (`/{org}/audit`)
 
 Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 
@@ -226,7 +226,7 @@ Feature: `apps/app/src/features/audit/`. Export at `/{org}/audit/export`.
 | Capability | Spec phase | Effect on the UI |
 |---|---|---|
 | Published records reach a wrapped agent | Phase 0+ | Steering pages write ceremony that may not change Claude Code or Codex until delivery holds |
-| `assembleSteering` and Preview | Phases 1–2 | Steering hub incomplete |
+| `assembleSteering` and Preview | Phases 1-2 | Steering hub incomplete |
 | Loopback model proxy and MCP aggregator | Phase 4 | No gateway-tier halt, budget, or injection |
 | Contained tier | Phase 5 | No "enforced" tier |
 | Witness runner and DoD settle | Prove / §8.6 | Fleet and Run lack verdict and certificate |
@@ -287,6 +287,6 @@ Ontology engine, SSO/SCIM, policy simulation, assurance suite, two-person mandat
 | https://github.com/macanderson/roadmap `docs/mission-control-spec.md` | Canonical product spec |
 | https://github.com/macanderson/roadmap `docs/scope-review.md` | What was cut on 2026-09-14 |
 | `docs/specs/mission-control/spec.md` | Oxagen-carried copy (diverged; do not prefer) |
-| `docs/mission-control/PLAN.md`, `TRACEABILITY.md` | Pre–scale-back planning (2026-09-12) |
+| `docs/mission-control/PLAN.md`, `TRACEABILITY.md` | Pre-scale-back planning (2026-09-12) |
 | `apps/app/ARCHITECTURE.md` | Rev1 law for the app; some rows still ahead of the code (Skills, Approvals) |
 | `docs/audits/2026-09-18-steering-graph-gateway-review.md` | Gateway and steering phase status |
