@@ -8,7 +8,7 @@
 // them together and derives the identity's status from them; `list_agents`
 // and `get_agent` read through it so the two never disagree on what
 // "enrolled" means.
-import { operatorUserJoin, schema, type Tx } from "@oxagen/database";
+import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
@@ -68,11 +68,18 @@ function identitySelect(tx: Tx) {
       ),
     )
     // The relations seam, not an inline condition (AGENTS.md: cross-domain
-    // joins live in `src/relations.ts`). It carries `kind = 'human'`, which
-    // this join was missing: a delegated agent principal holds its creator's
-    // `parent_user_id`, so without that filter an agent registered by another
-    // agent reported the first agent's author as its own operator.
-    .leftJoin(schema.users, operatorUserJoin);
+    // joins live in `src/relations.ts`) — and the CREATOR seam, not the
+    // operator one.
+    //
+    // The principal joined above is the agent's own delegated row, which
+    // `create_agent_definition` writes with `kind = 'agent'` and
+    // `parent_user_id` = the creating user. `operatorUserJoin` additionally
+    // requires `kind = 'human'`, which that row never is, so pointing this
+    // join at it reported no operator for every agent in the workspace. The
+    // two joins read the same column and answer different questions; which
+    // one is right depends on the principal the join arrives at, and here it
+    // is the agent's own (discussion_r4051925928).
+    .leftJoin(schema.users, agentCreatorUserJoin);
 }
 
 /** One live agent by public id (`agt_…`), uuid or slug, in the scope's workspace. */

@@ -41,7 +41,7 @@ export {
   hidesWitnessRuns,
   notWitnessRun,
 } from "./proof";
-export { operatorUserJoin } from "./relations";
+export { agentCreatorUserJoin, operatorUserJoin } from "./relations";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,

@@ -418,6 +418,35 @@ export const operatorUserJoin = and(
   eq(principals.kind, "human"),
 );
 
+/**
+ * The person an AGENT's own delegated principal acts for — the user who
+ * registered it, and the ceiling its permissions are capped at.
+ *
+ * The same column as {@link operatorUserJoin} and deliberately not the same
+ * join, because the two arrive at different principal rows and ask different
+ * questions of them.
+ *
+ * `operatorUserJoin` starts from a run's INITIATING principal, which may be
+ * either kind, and wants the person who ran the thing. There `kind = 'human'`
+ * is the whole point: an agent principal's `parent_user_id` names its creator,
+ * and putting that person on every run the agent started is a claim the record
+ * does not make.
+ *
+ * This one starts from `agents.principal_id`, which `create_agent_definition`
+ * provisions with `kind = 'agent'` and `parent_user_id` = the creating user.
+ * For that row the parent user is not a bystander: it IS the answer, both as
+ * the registrar and as the human half of the delegation ceiling (agent
+ * effective permissions = agent ∩ human, `docs/specs/agent-rbac/spec.md` §2.1).
+ * Requiring `kind = 'human'` there matches nothing at all, so every agent
+ * reports no operator.
+ *
+ * No `kind` filter and no flag on the other join. A single seam switched by an
+ * argument would be one condition with two meanings, and the next reader would
+ * have to know which to pass — which is the drift the seam exists to prevent
+ * (discussion_r4051925928).
+ */
+export const agentCreatorUserJoin = eq(users.id, principals.parentUserId);
+
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, {
     fields: [roles.orgId],
