@@ -3,11 +3,12 @@
 // recorded"; nothing prints a zero it was not given (ARCHITECTURE.md INV-09,
 // INV-10). Money goes through <Money>, counts and ratios through
 // src/ui/money-format.ts.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
 import type { DayRange, SpendFigure } from "@/data/contracts/spend";
 import { panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
 import { formatCount, formatRatio } from "@/ui/money-format";

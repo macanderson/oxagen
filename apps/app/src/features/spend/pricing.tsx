@@ -7,7 +7,7 @@
 //
 // The two reads are independent, so one failing does not blank the tab: each
 // half renders its own answer, its own empty state or its own refusal.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type {
   PriceBook,
   PriceEntry,
@@ -16,6 +16,7 @@ import type {
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { Instant } from "./figures";
