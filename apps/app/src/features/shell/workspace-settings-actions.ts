@@ -39,7 +39,7 @@ import type {
 } from "@/data/contracts/repository";
 import type { Read } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type BoundRepository = {
@@ -47,29 +47,6 @@ export type BoundRepository = {
   defaultRef: string;
   boundAt: string;
 };
-
-/**
- * A read, as the dialog consumes it. Every caller here is a client component,
- * and INV-19 has every exported function of a `"use server"` module answer
- * with an `ActionResult`, so the `Read` the seam produces is carried across in
- * the same shape a write's refusal takes: `denied` keeps the permission the
- * page failure names, and an error keeps its code.
- */
-function asActionResult<T>(read: Read<T>): ActionResult<T> {
-  if (read.ok) return read;
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
-    case "pending_approval":
-      return {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: read.accessRequestId,
-      };
-    case "error":
-      return { ok: false, reason: "unavailable", code: read.code };
-  }
-}
 
 /**
  * The workspace's main repository, whether an installation is attached, and
@@ -87,7 +64,7 @@ export async function readWorkspaceRepository(
     input: {},
     page: "workspaceSettings",
   });
-  return asActionResult(read);
+  return readToActionResult(read);
 }
 
 /**
@@ -107,7 +84,7 @@ export async function listInstallationRepositories(
     input: {},
     page: "workspaceSettings",
   });
-  return asActionResult(read);
+  return readToActionResult(read);
 }
 
 /**
@@ -160,7 +137,7 @@ export async function listGithubInstallations(
     input: {},
     page: "workspaceSettings",
   });
-  return asActionResult(read);
+  return readToActionResult(read);
 }
 
 /**
@@ -207,7 +184,7 @@ export async function readWorkspaceRepositories(
     input: {},
     page: "workspaceSettings",
   });
-  return asActionResult(read);
+  return readToActionResult(read);
 }
 
 /**

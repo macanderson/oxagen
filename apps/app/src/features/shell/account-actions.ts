@@ -22,7 +22,7 @@ import { userPreferencesSet } from "@oxagen/oxagen/contracts/user.preferences.se
 import { userProfileUpdate } from "@oxagen/oxagen/contracts/user.profile.update";
 import type { Read } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 export type ProfileDraft = {
@@ -84,22 +84,6 @@ export type PreferencesDraft = {
 };
 
 /** INV-19: a `"use server"` module answers with an ActionResult, so a read's refusal takes a write's shape. */
-function asActionResult<T>(read: Read<T>): ActionResult<T> {
-  if (read.ok) return read;
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
-    case "pending_approval":
-      return {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: read.accessRequestId,
-      };
-    default:
-      return { ok: false, reason: "unavailable", code: read.code };
-  }
-}
-
 export async function readPreferences(
   org: string,
 ): Promise<ActionResult<PreferencesDraft>> {
@@ -109,7 +93,7 @@ export async function readPreferences(
     input: {},
     page: "shell",
   });
-  if (!read.ok) return asActionResult(read);
+  if (!read.ok) return readToActionResult(read);
   const { language, timezone, theme } = read.value;
   return { ok: true, value: { locale: language, timezone, theme } };
 }
@@ -182,7 +166,7 @@ export async function readExportStatus(
     input: { exportId },
     page: "shell",
   });
-  if (!read.ok) return asActionResult(read);
+  if (!read.ok) return readToActionResult(read);
   const { status, ready, storageKey } = read.value;
   return { ok: true, value: { exportId, status, ready, storageKey } };
 }
