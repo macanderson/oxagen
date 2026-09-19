@@ -69,6 +69,57 @@ export const MandateAuthority = z.object({
 });
 export type MandateAuthority = z.infer<typeof MandateAuthority>;
 
+/**
+ * One counterparty rule: which targets a measure of this mandate may and may
+ * not be drawn against. The stored shape is a measure-keyed record; the view
+ * model is a list because a record's key order is not a thing a page may rely
+ * on, and every consumer renders it as rows.
+ */
+export const MandateTargetRule = z.object({
+  measure: z.string().min(1),
+  allow: z.array(z.string().min(1)),
+  deny: z.array(z.string().min(1)),
+});
+export type MandateTargetRule = z.infer<typeof MandateTargetRule>;
+
+/**
+ * One threshold in the mandate's own approval rule: above this figure of this
+ * measure, a person answers the call.
+ *
+ * It carries the figure twice, on purpose. `value` is the figure in the
+ * measure's own form, which is knowable only when the mandate holds a limit on
+ * that measure — the limit is what names the currency or the unit, and
+ * `humanAbove` names neither. `recorded` is the integer string as stored, and it
+ * is what the page prints when `value` is null: a threshold whose units cannot
+ * be established is shown as the digits the record holds and labelled with its
+ * measure, rather than being guessed into dollars or dropped from a rule that is
+ * in force either way.
+ */
+export const MandateApprovalThreshold = z.object({
+  measure: z.string().min(1),
+  value: MeasureValue.nullable(),
+  recorded: z.string().regex(/^\d+$/),
+});
+export type MandateApprovalThreshold = z.infer<
+  typeof MandateApprovalThreshold
+>;
+
+/**
+ * The mandate's own approval rule (`mandateApprovalSchema`): when a person has
+ * to answer a call this mandate would otherwise allow.
+ *
+ * An empty `approvers` list is a rule and not an absence: it leaves the answer
+ * to the org roles accountable for the consequence. A surface that printed it as
+ * an empty list would say the opposite of what it means, so the rule is rendered
+ * as sentences and never as the shape.
+ */
+export const MandateApproval = z.object({
+  humanAbove: z.array(MandateApprovalThreshold),
+  alwaysHumanFor: z.array(z.string().min(1)),
+  approvers: z.array(z.string().min(1)),
+});
+export type MandateApproval = z.infer<typeof MandateApproval>;
+
 export const MandateRow = z.object({
   id: PublicId,
   agentId: PublicId,
@@ -81,6 +132,10 @@ export const MandateRow = z.object({
   consequenceTags: z.array(z.string().min(1)),
   /** The tool patterns it covers, over `slug@version`. */
   tools: z.array(z.string().min(1)),
+  /** Which targets each measure may be drawn against; empty when the grant named no rule. */
+  targets: z.array(MandateTargetRule),
+  /** When a person answers a call this mandate would otherwise allow. */
+  approval: MandateApproval,
   purpose: z.string().min(1),
   validFrom: Instant,
   validTo: Instant,

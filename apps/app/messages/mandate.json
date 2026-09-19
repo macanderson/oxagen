@@ -87,8 +87,7 @@
       "approvalApprovers": "Approvers: {approvers}.",
       "approvalConsequenceRoles": "Approvers are the org roles accountable for the consequence.",
       "valid": "Valid",
-      "validWindow": "{from} through {to}",
-      "revoked": "Revoked {at} by {user}: {reason}"
+      "validWindow": "{from} through {to}"
     },
     "reconciliation": {
       "title": "Reconciliation",

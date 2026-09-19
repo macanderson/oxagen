@@ -128,10 +128,7 @@ export function MandateLedger({
     { label: t("columns.receipt") },
   ];
   return (
-    <section
-      aria-labelledby="mandate-ledger"
-      className={panel}
-    >
+    <section aria-labelledby="mandate-ledger" className={panel}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pb-2 pt-4">
         <h2 id="mandate-ledger" className="text-base font-semibold">
           {t("title")}
@@ -177,7 +174,6 @@ export function MandateLedger({
                 // reaches a view model (`MandateLedgerRow`), so the key is the
                 // row's place in a list the server ordered and rendered in one
                 // pass. Nothing here reorders on the client.
-                // biome-ignore lint/suspicious/noArrayIndexKey: the row has no identifier the view model may carry
                 key={`${row.at}-${row.kind}-${row.measure}-${String(index)}`}
                 data-testid="ledger-movement"
                 data-state={row.kind}
