@@ -153,24 +153,38 @@ request.**
    take, rather than dropping them. `--purge` against an agent handle means
    nothing this CLI does, and an operator who passes it and reads a success
    line has been told a local spool was deleted when nothing went near it.
-3. The docs. One predicate, `grep -ril tacho`, run over every row below, on
-   `01de2ea5f`. Case matters: a case-sensitive scan misses `Tacho` and
-   undercounts three of the excluded files, which is how an earlier draft of
-   this table read 26 and 2. 119 files under `docs/` carry the word, and the
-   count is the wrong unit of work. Four categories are excluded, for reasons
-   decision 1 already gives:
+3. The docs. Measured on `756469151`, the merge base this work was cut from,
+   which is on `main` and therefore still reachable after the squash merge that
+   lands this record (ADR-110). A branch commit is not: citing one would make
+   the measurement unreproducible the moment it merged.
 
-   | Where | Files | Why it is excluded |
+   One predicate, `grep -ril tacho`, for the total and every row. Case matters:
+   a case-sensitive scan misses `Tacho` and undercounts three of the files
+   below, which is how an earlier draft of this table read 26 and 2. Count
+   `docs/capabilities/*.md` non-recursively; a git pathspec's `*` crosses `/`
+   and pulls in `schemas/README.md` for 29.
+
+   119 files under `docs/` carry the word, and the count is the wrong unit of
+   work:
+
+   | Where | Files | What phase 3 does with it |
    | --- | --- | --- |
-   | `docs/capabilities/schemas/` | 16 | Generated from the contracts. The name follows the contract, which keeps it under decision 1. |
-   | `docs/capabilities/*.md` | 28 | Filename and `**Surfaces:**` track the registered name, and `check-capability-docs` enforces the match. |
-   | `docs/adr/` | 33 | A dated record of what was decided. Two carry the word in the filename. Rewriting one is rewriting the record. |
-   | `docs/audits/` | 3 | Dated records, same reason. |
+   | `docs/capabilities/schemas/` | 16 | Nothing. Generated from the contracts, so the name follows the contract, which keeps it under decision 1. |
+   | `docs/capabilities/*.md` | 28 | The prose is rewritten; the filename and the `**Surfaces:**` line are not. 15 of the 28 say `Tacho` in prose a reader reads, and "Enrol a machine as a Tacho host" is the product name on a docs surface whatever the file is called. The other 13 carry only identifiers (`tacho.hosts`, `revoke_tacho_enrollment`, `tacho_host_v1`), which stay. |
+   | `docs/adr/` | 33 | Nothing. A dated record of what was decided. Two carry the word in the filename. Rewriting one is rewriting the record. |
+   | `docs/audits/` | 3 | Nothing. Dated records, same reason. |
+   | `docs/specs/tacho/` | 17 | Rewritten. The canonical description. |
+   | Everything else | 22 | Rewritten. Current-tense product prose, which is where a reader meets the word. |
 
-   That is 80 excluded. The remaining 39 are the 17 files of
-   `docs/specs/tacho/`, which are the canonical description, and 22 others
-   carrying current-tense product prose, which is where a reader meets the
-   word. 16 + 28 + 33 + 3 + 17 + 22 = 119.
+   16 + 28 + 33 + 3 + 17 + 22 = 119. Of those, 54 files carry prose phase 3
+   rewrites (17 + 22 + 15) and 65 are left alone entirely (16 + 33 + 3 + 13).
+
+   `check-capability-docs` is not the reason to exclude a capability document's
+   prose. It compares each document's `**Surfaces:**` line against its
+   contract and says nothing about the sentences around it, and the filename
+   keeps its dotted legacy stem independently of the registered snake_case
+   name. So the filename and that one line are contract-tracked; the prose is
+   prose, and §2.1's bar applies to it.
 
    **The directory keeps its path.** `docs/specs/tacho` is referenced 59 times,
    and most of those are comments in source files across `packages/database`,
