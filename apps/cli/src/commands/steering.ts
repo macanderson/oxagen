@@ -1010,6 +1010,11 @@ export async function steeringGate(
       // left, so a slow platform read shortens the fetch rather than adding
       // eight seconds to it.
       networkBudgetMs: ctx.budget.stage(DEFAULT_NETWORK_BUDGET_MS).remaining(),
+      // And the check's own shared deadline is what is left of the gate's,
+      // not a second budget of its own: the ancestry loop inside it runs one
+      // local git call per commit published at the newest instant, and on a
+      // slow repository those add up past the hook's timeout.
+      hookBudgetMs: ctx.budget.remaining(),
       // The gate's own fetch is what moves the ref the production branch's
       // gates are read from, so it asks for them again once it has fetched.
       reloadPolicy: ctx.reloadPolicy,

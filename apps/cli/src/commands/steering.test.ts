@@ -1116,6 +1116,17 @@ describe("steering gate", () => {
     );
   });
 
+  // The check's ancestry loop runs one local git call per commit published at
+  // the newest instant, so it is bounded by the gate's whole deadline and not
+  // by the network slice inside it.
+  it("hands the check what is left of the gate's own budget", async () => {
+    evaluateGate.mockResolvedValue(decision("allow"));
+    await steeringGate({}, splitWriter().writer, process.cwd());
+    const [[options]] = evaluateGate.mock.calls as [[{ hookBudgetMs: number }]];
+    expect(options.hookBudgetMs).toBeGreaterThan(0);
+    expect(options.hookBudgetMs).toBeLessThanOrEqual(HOOK_PATH_BUDGET_MS);
+  });
+
   it("warns on stderr and still exits 0", async () => {
     evaluateGate.mockResolvedValue(decision("warn"));
     const w = splitWriter();

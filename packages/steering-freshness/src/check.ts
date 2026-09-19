@@ -69,6 +69,7 @@ import {
   writeFetchStamp,
   type CacheIo,
 } from "./cache";
+import { HOOK_TIMEOUT_SECONDS } from "./hooks";
 import { PROJECT_DIR_NAME } from "./settings";
 import type { SteeringPolicy } from "./policy";
 import { lstat } from "node:fs/promises";
@@ -170,6 +171,23 @@ export interface CheckOptions {
    * stamp was written. Each call now gets whatever is left of this.
    */
   networkBudgetMs?: number;
+  /**
+   * One budget for the whole check, counted from the moment it starts.
+   *
+   * `networkBudgetMs` bounds only the calls that reach the network. The
+   * platform-fallback ancestry loop below is local git work, and it runs once
+   * per commit published at the newest instant — so on a repository slow
+   * enough to matter, several of those calls could each spend a full
+   * per-call `timeoutMs` and together outlive the installed hook's own
+   * timeout (`HOOK_TIMEOUT_SECONDS`). Both harnesses read that timeout as a
+   * hook failure and allow the prompt, so the gate was skipped on exactly
+   * the machines slow enough to need it. Each call in that loop now gets
+   * whatever is left of this, and the loop stops once it is gone.
+   *
+   * The gate passes what is left of its own shared deadline; the default is
+   * sized the same way the gate sizes it, the hook's timeout less a reserve.
+   */
+  hookBudgetMs?: number;
   /** Set false in a hook that must never touch the network. */
   allowNetwork?: boolean;
   now?: () => number;
@@ -185,6 +203,51 @@ const DEFAULT_TIMEOUT_MS = 10_000;
  * platform read still fit after the slowest remote gives up.
  */
 export const DEFAULT_NETWORK_BUDGET_MS = 8_000;
+
+/**
+ * What the hook's timeout keeps back for the work that is not this check:
+ * resolving the policy, reading the platform signal, rendering the decision
+ * and writing it out. The gate computes its own budget the same way.
+ */
+const HOOK_BUDGET_RESERVE_MS = 4_000;
+
+/** The whole check's default deadline: the hook's timeout, less the reserve. */
+export const DEFAULT_HOOK_BUDGET_MS =
+  HOOK_TIMEOUT_SECONDS * 1_000 - HOOK_BUDGET_RESERVE_MS;
+
+/**
+ * The smallest slice a local git call may be given.
+ *
+ * Long enough for a call that is about to answer, short enough that the loop
+ * it sits in overruns its deadline by one slice at most: the guard in front
+ * of the loop stops it as soon as the deadline has passed, so only the call
+ * already in flight can run past it.
+ */
+const MIN_LOCAL_SLICE_MS = 250;
+
+/**
+ * `base`, with every call's timeout clamped to what is left of `deadline` at
+ * the moment the call is made, floored at `floorMs`.
+ *
+ * The clamp is on the runner rather than on `timeoutMs` because a context is
+ * handed to functions that make more than one call in sequence, and a timeout
+ * snapshotted at construction gives each of those the whole remainder.
+ */
+function clampedToDeadline(
+  base: GitContext,
+  deadline: number,
+  floorMs: number,
+  now: () => number,
+): GitContext {
+  return {
+    ...base,
+    run: (args, o) =>
+      base.run(args, {
+        ...o,
+        timeoutMs: Math.max(floorMs, Math.min(o.timeoutMs, deadline - now())),
+      }),
+  };
+}
 
 /**
  * The pathspec the whole feature operates over: the `.oxagen/` directory,
@@ -229,6 +292,7 @@ export async function checkSteeringFreshness(
     run,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     networkBudgetMs = DEFAULT_NETWORK_BUDGET_MS,
+    hookBudgetMs = DEFAULT_HOOK_BUDGET_MS,
     allowNetwork = true,
     now = Date.now,
     cacheIo,
@@ -247,17 +311,16 @@ export async function checkSteeringFreshness(
   // remainder — two slow calls spent twice the budget, past the hook's own
   // timeout, and the harness allowed the prompt before the stamp was written.
   const networkDeadline = now() + networkBudgetMs;
-  const networkCtx = (base: GitContext): GitContext => ({
-    ...base,
-    run: (args, o) =>
-      base.run(args, {
-        ...o,
-        timeoutMs: Math.max(
-          1_000,
-          Math.min(o.timeoutMs, networkDeadline - now()),
-        ),
-      }),
-  });
+  const networkCtx = (base: GitContext): GitContext =>
+    clampedToDeadline(base, networkDeadline, 1_000, now);
+  // The deadline the whole check shares, `networkBudgetMs` being a slice
+  // inside it. Only the platform-fallback ancestry loop draws from this
+  // today: it is the one place that runs an unbounded number of local git
+  // calls, one per commit published at the newest instant.
+  const hookDeadline = now() + hookBudgetMs;
+  const hookExpired = (): boolean => now() >= hookDeadline;
+  const hookCtx = (base: GitContext): GitContext =>
+    clampedToDeadline(base, hookDeadline, MIN_LOCAL_SLICE_MS, now);
 
   const base: Omit<FreshnessVerdict, "status"> = {
     remote: policy.remote,
@@ -646,21 +709,30 @@ export async function checkSteeringFreshness(
     // Every commit published at the newest instant has to be in the ref. One
     // that git cannot answer for makes the whole question unanswered, and one
     // that is missing makes the ref too old, whatever the others say.
-    // Each call draws from the same shared network deadline as the earlier
-    // fetch/deepen calls (`networkCtx`), not `repoCtx`'s own fixed timeout.
-    // Otherwise several ancestry checks here could each spend their own full
-    // timeout and outlive the hook's, past what the earlier shared-budget fix
-    // bounded everywhere else. The loop also stops at the first commit found
-    // unreachable: the verdict is already decided, and later commits do not
-    // need to be asked no matter how many are published at that instant.
+    // This loop is the one place the check runs an unbounded number of git
+    // calls: one per commit tied at that instant. On `repoCtx` alone each got
+    // its own full `timeoutMs`, so two slow calls could outlive the installed
+    // hook's timeout, the harness would kill the gate, and the prompt went
+    // ahead with `blockStaleRuns` on. So each call is clamped to what is left
+    // of the check's shared deadline (`hookCtx`), and the loop stops once
+    // that deadline has passed — leaving the verdict unanswered rather than
+    // half-answered, which fails open the same way a git that cannot answer
+    // does. The calls are local, so they draw from the hook deadline and not
+    // from `networkDeadline`: a slow fetch has usually spent that one, and
+    // squeezing a local call that could still answer down to its floor would
+    // report `unknown` where a real verdict was available.
+    //
+    // The loop also stops at the first commit found unreachable. The verdict
+    // is decided at that point — the ref is too old whatever the others say —
+    // so asking about the rest spends budget to learn nothing.
     const commits = publishedCommits(platform);
     let refHasPromotion: boolean | null = commits.length > 0;
     for (const commit of commits) {
-      const reachable = await isAncestor(
-        networkCtx(repoCtx),
-        commit,
-        remoteHead,
-      );
+      if (hookExpired()) {
+        refHasPromotion = null;
+        break;
+      }
+      const reachable = await isAncestor(hookCtx(repoCtx), commit, remoteHead);
       if (reachable === null) {
         refHasPromotion = null;
         break;

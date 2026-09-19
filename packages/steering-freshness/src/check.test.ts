@@ -512,6 +512,123 @@ describe("checkSteeringFreshness, the platform signal", () => {
   });
 });
 
+// The ancestry loop behind the platform fallback runs one local git call per
+// commit tied at the newest instant, so it is the one place in the check whose
+// cost grows with the data. Unbounded, two slow calls outlived the installed
+// hook's 20-second timeout, both harnesses read that as a hook failure, and
+// the prompt went ahead with `blockStaleRuns` on.
+describe("checkSteeringFreshness, the ancestry loop's budget", () => {
+  const TIED = ["c", "d", "e"].map((c) => c.repeat(40));
+  const reachable = (t: Record<string, string | Error>) => ({
+    ...t,
+    ...Object.fromEntries(
+      [PROMOTION, ...TIED].flatMap((c) => [
+        [`cat-file -e ${c}^{commit}`, ""],
+        [`merge-base --is-ancestor ${c} ${REMOTE}`, ""],
+      ]),
+    ),
+  });
+  const platform = {
+    steeringVersion: 44,
+    headCommit: PROMOTION,
+    headCommits: [PROMOTION, ...TIED],
+    aheadOfCheckout: true,
+  };
+
+  it("stops at the first commit the ref cannot reach", async () => {
+    const asked: string[] = [];
+    const t = {
+      ...reachable(table()),
+      [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: new GitCommandError(
+        ["merge-base", "--is-ancestor", PROMOTION, REMOTE],
+        1,
+        "",
+      ),
+    };
+    const base = runner(t);
+    const run: GitRunner = async (args, opts) => {
+      // Only the ancestry loop's calls; `merge-base <head> <remote>` above it
+      // is a different question.
+      if (args[1] === "--is-ancestor") asked.push(args[2] as string);
+      return base(args, opts);
+    };
+    const v = await check(t, { run, platform });
+    expect(v.status).toBe("behind");
+    // The verdict was decided by the first commit. Asking about the rest
+    // spends the hook's budget to learn nothing.
+    expect(asked).toEqual([PROMOTION]);
+  });
+
+  it("clamps each call to what is left of the hook budget and stops when it is gone", async () => {
+    let clock = 1_000_000;
+    const seen: number[] = [];
+    const t = reachable(table());
+    const base = runner(t);
+    const run: GitRunner = async (args, opts) => {
+      if (args[1] === "--is-ancestor") {
+        seen.push(opts.timeoutMs);
+        // A slow repository: each ancestry question takes three seconds.
+        clock += 3_000;
+      }
+      return base(args, opts);
+    };
+    const v = await check(t, {
+      run,
+      platform,
+      now: () => clock,
+      timeoutMs: 10_000,
+      hookBudgetMs: 5_000,
+    });
+    // Two calls fit inside the five seconds; the loop then stops rather than
+    // asking the remaining two on their own full ten-second timeouts.
+    expect(seen).toEqual([5_000, 2_000]);
+    // Cut short, so the question is unanswered. `unknown` never blocks: a
+    // spent budget is a plumbing limit, not evidence of staleness.
+    expect(v.status).toBe("unknown");
+    expect(v.notes.at(-1)).toContain("could not tell whether");
+  });
+
+  // Running out must not turn a decided verdict into an allow. The commit
+  // already found unreachable settles it, whatever budget is left.
+  it("keeps a behind verdict decided before the budget ran out", async () => {
+    let clock = 1_000_000;
+    const t = {
+      ...reachable(table()),
+      [`merge-base --is-ancestor ${PROMOTION} ${REMOTE}`]: new GitCommandError(
+        ["merge-base", "--is-ancestor", PROMOTION, REMOTE],
+        1,
+        "",
+      ),
+    };
+    const base = runner(t);
+    const run: GitRunner = async (args, opts) => {
+      if (args[1] === "--is-ancestor") clock += 9_000;
+      return base(args, opts);
+    };
+    const v = await check(t, {
+      run,
+      platform,
+      now: () => clock,
+      timeoutMs: 10_000,
+      hookBudgetMs: 5_000,
+    });
+    expect(v.status).toBe("behind");
+    expect(v.notes[0]).toContain("steering version 44");
+  });
+
+  it("leaves the local calls outside the loop on their own timeout", async () => {
+    const seen: { cmd: string; timeoutMs: number }[] = [];
+    const t = reachable(table());
+    const base = runner(t);
+    const run: GitRunner = async (args, opts) => {
+      seen.push({ cmd: args.join(" "), timeoutMs: opts.timeoutMs });
+      return base(args, opts);
+    };
+    await check(t, { run, platform, timeoutMs: 10_000, hookBudgetMs: 5_000 });
+    expect(seen.find((c) => c.cmd.startsWith("diff "))?.timeoutMs).toBe(10_000);
+  });
+});
+
 describe("publishedCommits", () => {
   it("is the tied commits when the platform sends them", () => {
     expect(
