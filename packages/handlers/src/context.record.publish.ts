@@ -317,6 +317,15 @@ export const contextRecordPublishHandler: CapabilityHandler<
           "[context.record.publish] Record insert returned no row.",
         );
       }
+      // Codex P1 on #3486 (round 5): same ROW EXCLUSIVE lock as the
+      // existing-record path takes before its probe, and for the same
+      // reason. Without it, migration 20260918160000's ACCESS EXCLUSIVE
+      // ALTER TABLE can commit between a `false` answer and this INSERT,
+      // permanently leaving a fresh version unclassified even though the
+      // columns and their backfill finished before the insert lands.
+      await tx.execute(
+        sql`lock table ${schema.contextRecordVersions} in row exclusive mode`,
+      );
       const versionReady = await hasColumnFresh(
         tx,
         CONTEXT_VERSION_CLASSIFICATION_COLUMN,
