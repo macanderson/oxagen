@@ -70,6 +70,8 @@ const SENT = "The link to the book has been sent to your email.";
 const DEMO_SENT = "Thanks. We got it. We will be in touch shortly.";
 const NOT_FOUND =
   "We could not find that email. Please fill out the form to get the book.";
+const DELIVERY_FAILED =
+  "We saved your details, but could not email the link just now. Please try the resend option in a moment.";
 
 let ipCounter = 0;
 function freshIp(): string {
@@ -121,6 +123,19 @@ describe("POST /v1/cms/leads", () => {
     expect(edition).toBe("page-flip-reader");
     expect(reason).toBe("signup");
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an honest delivery failure instead of claiming success", async () => {
+    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await post("/leads", VALID_LEAD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: false,
+      message: DELIVERY_FAILED,
+    });
+    // The lead and code are already persisted — only the email failed.
+    expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
   });
 
   it("rejects a missing required field with 400 and no side effects", async () => {
@@ -287,6 +302,24 @@ describe("POST /v1/cms/book/resend", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, sent: true, message: SENT });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an honest delivery failure on resend instead of claiming sent", async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: "lead_1",
+      email: "ada@example.com",
+    });
+    mocks.issueCodeForLead.mockResolvedValue(
+      "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+    );
+    mocks.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await post("/book/resend", { email: "ada@example.com" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      message: DELIVERY_FAILED,
+    });
   });
 
   it("tells an unknown email to fill out the form (no email sent)", async () => {

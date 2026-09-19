@@ -55,6 +55,8 @@ const SENT_MESSAGE = "The link to the book has been sent to your email.";
 const DEMO_MESSAGE = "Thanks. We got it. We will be in touch shortly.";
 const NOT_FOUND_MESSAGE =
   "We could not find that email. Please fill out the form to get the book.";
+const DELIVERY_FAILED_MESSAGE =
+  "We saved your details, but could not email the link just now. Please try the resend option in a moment.";
 
 const optionalTrimmed = (max: number) =>
   z
@@ -117,20 +119,28 @@ function clientCtx(c: { req: { header: (n: string) => string | undefined } }) {
   return { ip, userAgent: c.req.header("user-agent") ?? null };
 }
 
-/** Best-effort: send the reader link, log (never throw) on transport failure. */
+/**
+ * Send the reader link and report whether delivery actually happened.
+ *
+ * Never throws — a transport failure must not turn an already-captured lead
+ * or already-minted code into a 500 — but it also must not lie: the caller
+ * gets back whether the email went out, so a route can tell the visitor to
+ * retry instead of claiming "sent" over a delivery that silently failed.
+ */
 async function emailReaderLink(
   to: string,
   edition: EditionSlug,
   readUrl: string,
-): Promise<void> {
+): Promise<boolean> {
   if (!isEmailTransportConfigured()) {
     // In dev the SMTP transport is usually unconfigured — surface the link in
-    // logs so the flow is testable without a mail server.
+    // logs so the flow is testable without a mail server. Not a delivery
+    // failure to report to the visitor: this is the expected local state.
     logger.warn(
       { to, readUrl },
       "[cms] email transport not configured — reader link not emailed (dev)",
     );
-    return;
+    return true;
   }
   try {
     const tpl = bookAccessEmailTemplate({
@@ -145,11 +155,13 @@ async function emailReaderLink(
       text: tpl.text,
       html: tpl.html,
     });
+    return true;
   } catch (err) {
     logger.error(
       { err, to },
       "[cms] failed to send ebook access email — lead captured, delivery failed",
     );
+    return false;
   }
 }
 
@@ -218,7 +230,15 @@ cmsRoute.post("/leads", async (c) => {
         "signup",
         clientCtx(c),
       );
-      await emailReaderLink(data.email, edition, readUrl);
+      const delivered = await emailReaderLink(data.email, edition, readUrl);
+      if (!delivered) {
+        // The lead and code are already persisted — only the email failed —
+        // so this is still a 200, just an honest one that permits a retry.
+        return c.json(
+          { ok: true, delivered: false, message: DELIVERY_FAILED_MESSAGE },
+          200,
+        );
+      }
     }
   } catch (err) {
     logger.error({ err }, "[cms] lead capture failed");
@@ -290,8 +310,15 @@ cmsRoute.post("/book/resend", async (c) => {
       return c.json({ ok: true, sent: false, message: NOT_FOUND_MESSAGE }, 200);
     }
     const readUrl = await issueCodeForLead(lead.id, edition, clientCtx(c));
-    await emailReaderLink(lead.email, edition, readUrl);
-    return c.json({ ok: true, sent: true, message: SENT_MESSAGE }, 200);
+    const delivered = await emailReaderLink(lead.email, edition, readUrl);
+    return c.json(
+      {
+        ok: true,
+        sent: delivered,
+        message: delivered ? SENT_MESSAGE : DELIVERY_FAILED_MESSAGE,
+      },
+      200,
+    );
   } catch (err) {
     logger.error({ err }, "[cms] resend failed");
     return c.json(
