@@ -359,10 +359,25 @@ function fonts() {
   );
 }
 
-/** The palette, verbatim from the kit, for anything that reads it as data. */
+/**
+ * The palette, verbatim from the kit, for anything that reads it as data.
+ *
+ * `house-tailwind.css` is the layer that turns the palette into something an
+ * app can write: the `--color-ox-*` theme entries, the shadcn/Base UI
+ * semantic names, the tracking scale, and the twelve type utilities
+ * (`text-m-*` for a page read once, `text-a-*` for a dashboard read all day).
+ * It went unvendored until 2026-09-19, so the kit's TYPE SCALE did not exist
+ * in this repo at all and every surface sized itself with Tailwind's defaults
+ * and one-off `text-[11px]` literals. It imports `house-tokens.css` from
+ * beside it, which is why `globals.css` imports this file rather than both.
+ */
 function tokens() {
   copy("tokens/house-tokens.css", "packages/ui/src/styles/house-tokens.css");
   copy("tokens/house-tokens.json", "packages/ui/src/styles/house-tokens.json");
+  copy(
+    "tokens/house-tailwind.css",
+    "packages/ui/src/styles/house-tailwind.css",
+  );
 }
 
 /**
