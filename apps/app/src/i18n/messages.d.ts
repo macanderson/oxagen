@@ -2940,6 +2940,7 @@ type Messages = {
       connections: string;
       switches: string;
       mandates: string;
+      autoapprovals: string;
       switchesOn: string;
       switchesOnAtLeast: string;
     };
@@ -3202,6 +3203,15 @@ type Messages = {
         invalid: string;
         pendingApproval: string;
         unavailable: string;
+        consequenceRoleRequired: string;
+        noRoleCoversAllTags: string;
+        ruleIdTaken: string;
+        ruleNotFound: string;
+        noToolMatches: string;
+        ruleNotGated: string;
+        measureNotDeclared: string;
+        measureWrongType: string;
+        tooManyConsequences: string;
       };
     };
     mandates: {
@@ -3235,6 +3245,107 @@ type Messages = {
       partial: string;
       emptyListed: string;
       emptyListedDetail: string;
+    };
+    autoApprovals: {
+      title: string;
+      lead: string;
+      floors: string;
+      counted: string;
+      on: string;
+      off: string;
+      written: string;
+      writtenUnattributed: string;
+      unstamped: string;
+      checkedAgainst: string;
+      empty: {
+        title: string;
+        body: string;
+      };
+      tiles: {
+        label: string;
+        on: {
+          title: string;
+          basis: string;
+        };
+        released: {
+          title: string;
+          basis: string;
+        };
+        held: {
+          title: string;
+          basis: string;
+        };
+      };
+      columns: {
+        rule: string;
+        appliesTo: string;
+        requires: string;
+        released: string;
+        held: string;
+        on: string;
+        actions: string;
+      };
+      requires: {
+        ceiling: string;
+        allow: string;
+        standing: string;
+        hours: string;
+        floorsOnly: string;
+      };
+      days: {
+        "1": string;
+        "2": string;
+        "3": string;
+        "4": string;
+        "5": string;
+        "6": string;
+        "7": string;
+      };
+      editor: {
+        openCreate: string;
+        openEdit: string;
+        titleCreate: string;
+        titleEdit: string;
+        id: string;
+        idHint: string;
+        name: string;
+        tools: string;
+        toolsHint: string;
+        maxMeasures: string;
+        maxMeasuresHint: string;
+        allowTargets: string;
+        allowTargetsHint: string;
+        standingMinutes: string;
+        standingMinutesHint: string;
+        hoursOn: string;
+        hours: string;
+        timezone: string;
+        timezoneHint: string;
+        start: string;
+        end: string;
+        enabled: string;
+        checks: string;
+        confirmCreate: string;
+        confirmEdit: string;
+        pending: string;
+        unreadable: {
+          maxMeasures: string;
+          allowTargets: string;
+        };
+      };
+      toggle: {
+        on: string;
+        off: string;
+      };
+      delete: {
+        open: string;
+        title: string;
+        body: string;
+        keep: string;
+        switchOff: string;
+        confirm: string;
+        pending: string;
+      };
     };
   };
   ui: {

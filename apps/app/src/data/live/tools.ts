@@ -1,9 +1,9 @@
 // The Tools ports on the kernel (ARCHITECTURE.md §3.3; #2958): the workspace
 // registry's tool versions, the credential broker's grants, the kill switches
-// reaching this workspace, and the workspace's auto-approval rules. All four are `noBillingGate` reads whose
-// role gate lives in the handler (INV-29), so a member without it comes back
-// as `denied` and the tab shows the access-denied state rather than an empty
-// table. An answer a view model refuses is reported once as record_unmappable.
+// reaching this workspace, and the workspace's auto-approval rules. All four
+// are `noBillingGate` reads whose role gate lives in the handler (INV-29), so
+// a member without it comes back as `denied` and the tab shows the
+// access-denied state rather than an empty table. An answer a view model refuses is reported once as record_unmappable.
 import "server-only";
 import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";

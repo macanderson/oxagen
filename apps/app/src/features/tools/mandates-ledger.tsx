@@ -14,9 +14,8 @@
 // state nor the table asserts more than the read can support.
 //
 // The registry, connections, kill switches and auto-approval rules are the
-// other tabs of this page and have no backing yet, so they are not drawn
-// (§3.6) and the page has no tab bar until the #2958 lane gives it a second
-// tab.
+// other tabs of this page, drawn by their own files; the tab bar is
+// `tabs.tsx`.
 import { useTranslations } from "next-intl";
 import type { OrgRole } from "@/data/contracts/common";
 import {
