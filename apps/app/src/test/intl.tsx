@@ -11,6 +11,7 @@ import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import en from "../../messages/en.json";
 import fleet from "../../messages/fleet.json";
+import mandate from "../../messages/mandate.json";
 import onboarding from "../../messages/onboarding.json";
 import organization from "../../messages/organization.json";
 import run from "../../messages/run.json";
@@ -28,6 +29,7 @@ export const messages = {
   ...auth,
   ...billing,
   ...fleet,
+  ...mandate,
   ...onboarding,
   ...organization,
   ...run,
