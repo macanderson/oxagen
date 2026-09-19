@@ -384,7 +384,9 @@ describe("tachod and the transcript", () => {
     await restarted.tick();
     await restarted.tick();
     expect(
-      restarted.transcriptTailer.state().cursors[SESSION_ID]?.drained,
+      restarted.transcriptTailer.state().cursors[
+        `claude-code:claude-code ${SESSION_ID}`
+      ]?.drained,
     ).toBe(true);
   });
 });

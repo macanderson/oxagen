@@ -31,6 +31,8 @@ import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
+import type { TachoHarness } from "../wire";
+import { sessionMapKey } from "./registry";
 
 /** The most bytes one tick reads from one transcript. */
 export const DEFAULT_TAIL_BUDGET_BYTES = 4 * 1024 * 1024;
@@ -45,6 +47,10 @@ export const MAX_SUBAGENT_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
 /** What the tailer needs from a registered session. */
 export interface TailedSession {
   harnessSessionId: string;
+  /** Which harness runs the session; keys the cursor with the registry. */
+  harness?: TachoHarness;
+  /** A custom agent's name; keys the cursor with the registry. */
+  customAgent?: string;
   transcriptPath?: string;
   sealed: boolean;
   recorder: Pick<SessionRecorder, "ingestTranscriptLine" | "takeBodies">;
@@ -185,8 +191,18 @@ export class TranscriptTailer {
     this.dirty = false;
   }
 
+  /** The cursor map key: agent identity plus the raw harness session id. */
+  private cursorKey(session: TailedSession): string {
+    return sessionMapKey(session.harnessSessionId, session);
+  }
+
+  /**
+   * The cursor for this session under its agent-qualified key.
+   */
   private cursorFor(session: TailedSession, path: string): Cursor {
-    const existing = this.cursors.get(session.harnessSessionId);
+    const key = this.cursorKey(session);
+    const existing =
+      this.cursors.get(key) ?? this.adoptLegacy(session, key);
     // A drained cursor is final whatever path the session reports now.
     if (existing?.drained) return existing;
     if (existing !== undefined && existing.path === path) return existing;
@@ -197,7 +213,7 @@ export class TranscriptTailer {
       offset: 0,
       subagents: existing?.subagents ?? [],
     };
-    this.cursors.set(session.harnessSessionId, cursor);
+    this.cursors.set(key, cursor);
     this.dirty = true;
     return cursor;
   }
@@ -209,15 +225,16 @@ export class TranscriptTailer {
   async tick(): Promise<void> {
     const live = new Set<string>();
     for (const session of this.options.sessions()) {
-      live.add(session.harnessSessionId);
+      const key = this.cursorKey(session);
+      live.add(key);
       if (session.transcriptPath === undefined) continue;
-      const existing = this.cursors.get(session.harnessSessionId);
+      const existing = this.cursors.get(key) ?? this.adoptLegacy(session, key);
       if (existing?.drained) continue;
       if (session.sealed && existing === undefined) {
         // Sealed with no cursor: a daemon before the tombstone dropped it, or
         // its state file was lost. Either way the chain is closed, and
         // reading from byte 0 would append the transcript after agent_stop.
-        this.cursors.set(session.harnessSessionId, {
+        this.cursors.set(key, {
           path: session.transcriptPath,
           offset: 0,
           subagents: [],
@@ -243,6 +260,28 @@ export class TranscriptTailer {
       }
     }
     this.persist();
+  }
+
+  /**
+   * Move a pre-namespaced cursor onto the default agent's key, or undefined
+   * when there is none to adopt. Only Claude Code (no harness, no custom
+   * agent) takes a legacy raw-id entry, so a custom agent sharing that id
+   * never inherits another agent's tombstone.
+   */
+  private adoptLegacy(
+    session: TailedSession,
+    key: string,
+  ): Cursor | undefined {
+    const legacy = this.cursors.get(session.harnessSessionId);
+    if (
+      legacy === undefined ||
+      key !== sessionMapKey(session.harnessSessionId, {})
+    )
+      return undefined;
+    this.cursors.delete(session.harnessSessionId);
+    this.cursors.set(key, legacy);
+    this.dirty = true;
+    return legacy;
   }
 
   /**
@@ -272,7 +311,9 @@ export class TranscriptTailer {
     if (session === undefined) return undefined;
     const cursor = this.cursorFor(
       session,
-      session.transcriptPath ?? this.cursors.get(harnessSessionId)?.path ?? "",
+      session.transcriptPath ??
+        this.cursors.get(this.cursorKey(session))?.path ??
+        "",
     );
     if (cursor.subagents.includes(subagentId)) return 0;
     const st = await statIfExists(path);

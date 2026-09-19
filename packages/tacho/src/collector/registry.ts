@@ -216,6 +216,26 @@ export interface RegistryOptions {
   now: () => number;
 }
 
+/**
+ * The map key for one harness session under one agent. Two agents can hand
+ * out the same raw `harnessSessionId`; this qualifies it so their records
+ * (and anything keyed the same way, like a transcript cursor) never collide.
+ * The format is `${agent.key} ${harnessSessionId}`, matching `agentOf`.
+ */
+export function sessionMapKey(
+  harnessSessionId: string,
+  facts: Pick<SessionFacts, "harness" | "customAgent"> = {},
+): string {
+  if (facts.customAgent !== undefined) {
+    return `custom:${facts.customAgent} ${harnessSessionId}`;
+  }
+  const named = facts.harness ?? "claude-code";
+  const harness: WrappedHarness = isWrappedHarness(named)
+    ? named
+    : "claude-code";
+  return `${RUNTIME_FOR_HARNESS[harness]}:${harness} ${harnessSessionId}`;
+}
+
 export class SessionRegistry {
   private readonly options: RegistryOptions;
   private readonly sessions = new Map<string, SessionRecord>();
@@ -331,7 +351,7 @@ export class SessionRegistry {
    * the harness gave, and that is what every payload reports.
    */
   private key(harnessSessionId: string, facts: SessionFacts): string {
-    return `${this.agentOf(facts).key} ${harnessSessionId}`;
+    return sessionMapKey(harnessSessionId, facts);
   }
 
   /**
