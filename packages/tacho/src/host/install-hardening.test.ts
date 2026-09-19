@@ -92,6 +92,39 @@ describe("HarnessFiles", () => {
     expect(existsSync(join(dir, ".codex"))).toBe(false);
   });
 
+  it("deletes a file we created that still holds only our own scaffolding", () => {
+    // Cursor's hooks.json is the case this exists for. `mergeCursorHooks`
+    // writes `version` because the schema demands one, and the strip removes
+    // the hooks but cannot drop that key without emptying a file the user may
+    // have brought. The residue is not blank, so it read as a user edit and
+    // `.cursor` survived `--purge`.
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, ".cursor", "hooks.json");
+    files.write(
+      path,
+      '{"version":1,"hooks":{"preToolUse":[{"command":"tacho"}]}}',
+    );
+    files.write(path, '{"version":1}');
+    expect(files.settle()[0]?.result).toBe("deleted");
+    expect(existsSync(join(dir, ".cursor"))).toBe(false);
+  });
+
+  it("keeps a file we created that the user has since edited", () => {
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, ".cursor", "hooks.json");
+    files.write(
+      path,
+      '{"version":1,"hooks":{"preToolUse":[{"command":"tacho"}]}}',
+    );
+    files.write(path, '{"version":1}');
+    // One character of theirs, after our last write, and it is theirs.
+    writeFileSync(path, '{"version":1,"hooks":{"stop":[{"command":"mine"}]}}');
+    expect(files.settle()[0]?.result).toBe("kept-user-edit");
+    expect(existsSync(path)).toBe(true);
+  });
+
   it("keeps a created directory the user has since put something in", () => {
     const dir = scratch();
     const files = new HarnessFiles(join(dir, "tacho"));
