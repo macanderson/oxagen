@@ -215,7 +215,12 @@ export function mockupTranscript(
     costMicros?: string;
     decision?: string;
   };
-  const REQUEST_TYPES = new Set(["model.request", "tool_requested"]);
+  const REQUEST_TYPES = new Set([
+    "model.request",
+    "model.engine_call_started",
+    "tool_requested",
+    "tool.engine_call_started",
+  ]);
   const specs: Spec[] = [
     {
       seq: 0,

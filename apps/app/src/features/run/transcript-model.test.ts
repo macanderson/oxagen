@@ -79,6 +79,128 @@ describe("buildTranscript", () => {
     ]);
     expect(folded[0]?.prompt).toBeNull();
   });
+
+  it("pairs the in-app assistant's engine_call halves into one model step and one tool step", () => {
+    // The Run page reads at `everything`, where each half is its own entry
+    // with kind model_call / tool_call. Without pairing on the engine types,
+    // a normal started/completed exchange draws as two spine steps.
+    const turns = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "model.engine_call_started",
+        kind: "model_call",
+        label: "anthropic/claude-fable-5-1",
+        turn: 1,
+        request: transcriptBody({ seq: "1", type: "model.engine_call_started" }),
+        response: null,
+        frames: 1,
+      }),
+      transcriptEntry({
+        seq: "2",
+        type: "model.engine_call_completed",
+        kind: "model_call",
+        label: "anthropic/claude-fable-5-1",
+        turn: 1,
+        request: null,
+        response: transcriptBody({
+          seq: "2",
+          type: "model.engine_call_completed",
+          text: "I will list the open pull requests first.",
+        }),
+        frames: 1,
+        cost: { micros: "380000", currency: "USD", basis: "gateway_observed" },
+      }),
+      transcriptEntry({
+        seq: "3",
+        type: "tool.engine_call_started",
+        kind: "tool_call",
+        label: "list_pull_requests",
+        turn: 1,
+        request: transcriptBody({ seq: "3", type: "tool.engine_call_started" }),
+        response: null,
+        frames: 1,
+        cost: null,
+      }),
+      transcriptEntry({
+        seq: "4",
+        type: "tool.approval_recorded",
+        kind: "frame",
+        label: "policy allow",
+        turn: 1,
+        request: null,
+        response: null,
+        frames: 1,
+        cost: null,
+        decision: {
+          seq: "4",
+          decision: "allow",
+          type: "tool.approval_recorded",
+          at: "2026-09-15T08:00:08.000Z",
+        },
+      }),
+      transcriptEntry({
+        seq: "5",
+        type: "tool.engine_call_completed",
+        kind: "tool_call",
+        label: "list_pull_requests completed",
+        turn: 1,
+        request: null,
+        response: transcriptBody({
+          seq: "5",
+          type: "tool.engine_call_completed",
+          text: '{"open":34}',
+        }),
+        frames: 1,
+        cost: null,
+      }),
+    ]);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.steps.map((s) => [s.id, s.kind, s.from, s.to])).toEqual([
+      ["s1", "model", 0, 1],
+      ["s3", "tool", 2, 4],
+    ]);
+    const model = turns[0]?.steps[0];
+    const tool = turns[0]?.steps[1];
+    expect(model).toBeDefined();
+    expect(tool).toBeDefined();
+    expect(stepDigest(model as NonNullable<typeof model>)).toMatchObject({
+      node: "model",
+      name: "claude-fable-5-1",
+      durationMs: expect.any(Number),
+    });
+    expect(stepDigest(tool as NonNullable<typeof tool>)).toMatchObject({
+      node: "tool",
+      name: "list_pull_requests",
+      status: "completed",
+    });
+  });
+
+  it("leaves an unmatched engine_call_started as its own step (negative)", () => {
+    const turns = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "model.engine_call_started",
+        kind: "model_call",
+        label: "anthropic/claude-fable-5-1",
+        turn: 1,
+        request: transcriptBody({ seq: "1", type: "model.engine_call_started" }),
+        response: null,
+        frames: 1,
+      }),
+      transcriptEntry({
+        seq: "2",
+        type: "turn_end",
+        kind: "frame",
+        label: "turn_end",
+        turn: 1,
+        frames: 1,
+      }),
+    ]);
+    expect(turns[0]?.steps.map((s) => [s.id, s.kind])).toEqual([
+      ["s1", "model"],
+      ["s2", "event"],
+    ]);
+  });
 });
 
 describe("stepDigest", () => {

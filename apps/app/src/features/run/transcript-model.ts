@@ -76,8 +76,19 @@ export type TranscriptTurn = {
 
 const MODEL_REQUEST = "model.request";
 const MODEL_RESPONSE = "model.response";
+/** The in-app assistant's write-ahead and receipt for a model call. */
+const MODEL_ENGINE_STARTED = "model.engine_call_started";
+const MODEL_ENGINE_COMPLETED = "model.engine_call_completed";
 const TOOL_REQUESTED = "tool_requested";
 const TOOL_CALL = "tool_call";
+/** The in-app assistant's write-ahead and receipt for a tool call. */
+const TOOL_ENGINE_STARTED = "tool.engine_call_started";
+const TOOL_ENGINE_COMPLETED = "tool.engine_call_completed";
+/** The frame that closes a tool step: wrapped `tool_call` or engine receipt. */
+const TOOL_CLOSE: ReadonlySet<string> = new Set([
+  TOOL_CALL,
+  TOOL_ENGINE_COMPLETED,
+]);
 /** Policy frames: the decision about a tool call, which sits between its request and the call. */
 const TOOL_GATE: ReadonlySet<string> = new Set([
   "policy_decision",
@@ -97,20 +108,35 @@ const CONTROL: ReadonlySet<string> = new Set([
   "turn_end",
 ]);
 
-/** Where the step opening at `i` ends (exclusive), and what kind it is. */
+/**
+ * Where the step opening at `i` ends (exclusive), and what kind it is.
+ *
+ * A model or tool exchange is two frames wherever the producer wrote two: the
+ * request and the response. The wrapped session spells those
+ * `model.request`/`model.response` and `tool_requested`/`tool_call`; the
+ * in-app assistant spells them `*.engine_call_started`/`*.engine_call_completed`.
+ * Both halves carry the same step kind at `everything`, so without this pair
+ * each half would draw as its own step.
+ */
 function stepEnd(
   frames: readonly TranscriptEntry[],
   i: number,
   frame: TranscriptEntry,
 ): { end: number; kind: TranscriptStep["kind"] } {
-  if (frame.type === MODEL_REQUEST) {
-    const paired = frames[i + 1]?.type === MODEL_RESPONSE;
+  if (frame.type === MODEL_REQUEST || frame.type === MODEL_ENGINE_STARTED) {
+    const close =
+      frame.type === MODEL_ENGINE_STARTED
+        ? MODEL_ENGINE_COMPLETED
+        : MODEL_RESPONSE;
+    const paired = frames[i + 1]?.type === close;
     return { end: paired ? i + 2 : i + 1, kind: "model" };
   }
-  if (frame.type === TOOL_REQUESTED) {
+  if (frame.type === TOOL_REQUESTED || frame.type === TOOL_ENGINE_STARTED) {
+    const close =
+      frame.type === TOOL_ENGINE_STARTED ? TOOL_ENGINE_COMPLETED : TOOL_CALL;
     let end = i + 1;
     for (let next = frames[end]; next !== undefined; next = frames[end]) {
-      if (next.type === TOOL_CALL) return { end: end + 1, kind: "tool" };
+      if (next.type === close) return { end: end + 1, kind: "tool" };
       if (!TOOL_GATE.has(next.type)) break;
       end += 1;
     }
@@ -241,7 +267,7 @@ export function stepDigest(step: TranscriptStep): StepDigest {
   if (step.kind === "tool") {
     // The call's own frame carries the outcome; the request only names the tool.
     const named =
-      step.frames.find((frame) => frame.type === TOOL_CALL) ?? first;
+      step.frames.find((frame) => TOOL_CLOSE.has(frame.type)) ?? first;
     const gate = step.frames.map(policyOutcome).find((o) => o !== null) ?? null;
     const status = toolStatus(named.label);
     const denied =
