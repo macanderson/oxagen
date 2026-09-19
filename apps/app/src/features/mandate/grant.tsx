@@ -85,11 +85,24 @@ function Approval({ mandate }: { mandate: MandateRow }) {
           {t("approvalAlways", { tags: approval.alwaysHumanFor.join(", ") })}
         </span>
       )}
-      <span data-approval="approvers">
-        {approval.approvers.length === 0
-          ? t("approvalConsequenceRoles")
-          : t("approvalApprovers", { approvers: approval.approvers.join(", ") })}
-      </span>
+      {/* Approvers only mean something once something can park a call. The gate
+          fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
+          `humanAbove` threshold and proceeds when it is empty
+          (`packages/rules/src/mandates.ts`), and the contract defaults both to
+          empty. Naming approvers on such a mandate described a review path that
+          does not exist, on the record an operator reads to know what it does. */}
+      {approval.humanAbove.length === 0 &&
+      approval.alwaysHumanFor.length === 0 ? (
+        <span data-approval="none">{t("approvalNone")}</span>
+      ) : (
+        <span data-approval="approvers">
+          {approval.approvers.length === 0
+            ? t("approvalConsequenceRoles")
+            : t("approvalApprovers", {
+                approvers: approval.approvers.join(", "),
+              })}
+        </span>
+      )}
     </span>
   );
 }

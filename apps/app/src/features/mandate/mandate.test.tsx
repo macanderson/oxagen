@@ -261,6 +261,41 @@ describe("Mandate › loaded", () => {
     expect(document.querySelector('[data-state="read-bound"]')).toBeNull();
   });
 
+  // The gate fills `ruleIds` from a matching `alwaysHumanFor` tag or an exceeded
+  // `humanAbove` threshold and proceeds when it is empty, and the contract
+  // defaults both to empty. Naming approvers on such a mandate described a review
+  // path that does not exist, on the record an operator reads to know what it
+  // does.
+  describe("a mandate with no approval trigger", () => {
+    it("says nothing waits for a person, and names no approvers", async () => {
+      await renderMandate(
+        mandateDetailRead({
+          mandate: mandateRow({
+            approval: {
+              humanAbove: [],
+              alwaysHumanFor: [],
+              approvers: ["Billing"],
+            },
+          }),
+        }),
+      );
+      expect(document.querySelector('[data-approval="none"]')).toHaveTextContent(
+        "no call on this mandate waits for a person",
+      );
+      // Not merely hidden: an approver list beside "nothing waits" would be the
+      // same claim in two minds.
+      expect(document.querySelector('[data-approval="approvers"]')).toBeNull();
+    });
+
+    it("names the approvers once a threshold can park a call", async () => {
+      await renderMandate(mandateDetailRead());
+      expect(document.querySelector('[data-approval="none"]')).toBeNull();
+      expect(
+        document.querySelector('[data-approval="approvers"]'),
+      ).not.toBeNull();
+    });
+  });
+
   // `targetAllowed` (packages/rules/src/mandates/measures.ts) ends on
   // `rule.allow.length === 0`, so an empty allow list permits every target the
   // deny list does not name. The panel used to render that as "allow no pattern",

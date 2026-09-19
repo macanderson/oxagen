@@ -1153,6 +1153,7 @@ type Messages = {
       approval: string;
       approvalAbove: string;
       approvalAlways: string;
+      approvalNone: string;
       approvalApprovers: string;
       approvalConsequenceRoles: string;
       valid: string;

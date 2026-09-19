@@ -89,6 +89,7 @@
       "approval": "Approval",
       "approvalAbove": "A person answers above {value} on {measure}.",
       "approvalAlways": "A person always answers for {tags}.",
+      "approvalNone": "No threshold and no tagged consequence, so no call on this mandate waits for a person. Adding either one names its approvers.",
       "approvalApprovers": "Approvers: {approvers}.",
       "approvalConsequenceRoles": "Approvers are the org roles accountable for the consequence.",
       "valid": "Valid",
