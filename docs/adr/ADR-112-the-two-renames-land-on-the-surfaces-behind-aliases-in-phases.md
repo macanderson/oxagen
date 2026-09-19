@@ -337,6 +337,47 @@ inventory does not.
    `POST /api/v1/{org}/{ws}/tacho/incidents`. Two documents left behind would
    keep directing clients at a path the phase is retiring.
 
+   **Mounting the aliases migrates nobody. The callers move in the same phase.**
+   Our own code holds the old paths in three different ways, and only one of them
+   is a string in a request:
+
+   - **Request paths compiled into clients.** `packages/tacho/src/cli/enroll.ts`
+     posts to `/v1/:org/:ws/tacho/enrollments` and `/v1/tacho/enroll`,
+     `cli/unenroll.ts` to `/v1/:org/:ws/tacho/enrollments/revoke`, and
+     `apps/cli/src/commands/agent.ts` and `tacho.ts` to `tacho/enrollments/revoke`
+     and `tacho/hosts`.
+   - **The endpoint the server hands the host.**
+     `packages/handlers/src/lib/tacho-host-enroll.ts` sets
+     `DEFAULT_ENDPOINT = "https://api.oxagen.sh/v1/tacho"`, and the bundle written
+     at enrollment carries `ingest_endpoint`, `bundle_endpoint` and
+     `commands_endpoint` built from it.
+   - **Endpoint triples already written into host config**, which only change when
+     a host takes a new bundle.
+
+   The second one breaks the clock this phase retires on. A host does not choose
+   its endpoint; the server issues it at enrollment. So if `DEFAULT_ENDPOINT` still
+   names the old path when a host re-enrolls, that host re-enrolls straight back
+   onto the old path, and "the fleet has re-enrolled" stops being evidence that
+   anyone left it. The condition is therefore two-part and in this order: the
+   bundle issues the new endpoints, **and then** hosts have re-enrolled since,
+   observable from what each host reports it is calling. Re-enrollment before the
+   bundle moves proves nothing.
+
+   So phase 4 ships the alias mounts, the client rewrites, the `DEFAULT_ENDPOINT`
+   change, and route tests that assert a client reaches the new path, as one
+   change. Aliases plus updated capability documents, with the callers left alone,
+   is the version that passes review and breaks the fleet on the day the alias
+   closes.
+
+   **One name in that file is not a path and needs its own decision.**
+   `tacho-host-enroll.ts` also sets `AUDIENCE = "tacho-collector"`, the audience
+   claim on the token the host presents. It is the only occurrence in the tree, and
+   it is validated on both sides, so changing it invalidates every live host token
+   at once. It is not in any phase and this record does not move it: if it ever
+   moves, it needs the same two-sided alias as the envelope, with the verifier
+   accepting both audiences before any issuer emits the new one. Treat it as an
+   identifier under decision 1 until someone writes that down.
+
    **The aliases carry the pre-auth ceilings or they are a hole.** This is the
    part of phase 4 that is not a rename. `apps/api/src/app.ts` registers two
    credential-stuffing ceilings, `tacho-preauth-ip` and
@@ -429,7 +470,7 @@ retirement safe:
 
 | The old name | Stops answering when |
 | --- | --- |
-| `tachod`, `tacho-hook`, `/v1/tacho/enroll` and the `/v1/tacho` group | The host records show the fleet has re-enrolled |
+| `tachod`, `tacho-hook`, `/v1/tacho/enroll` and the `/v1/tacho` group | The bundle issues the new endpoints, and the host records then show the fleet re-enrolled since. Re-enrolling before `DEFAULT_ENDPOINT` moves puts a host back on the old path, so that order is the condition. |
 | The seven organization-scoped `/tacho/` paths | An announced API deprecation window closes, independent of the fleet, because a host re-enrolling does not update a caller's script |
 | `tacho/1.0` | Host telemetry shows no enrolled host still sends it, which a sealed WAL entry may make never |
 
