@@ -1,33 +1,28 @@
-import { HandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { ORG_ONLY_WORKSPACE_ID, HandlerError } from "@oxagen/oxagen";
 import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import type { UnpricedModel } from "@oxagen/billing";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const gate = vi.hoisted(() => ({
+  assertOrgRole: vi.fn(),
+  resolveActingUserId: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => gate);
+
 import { createUnpricedModelListHandler } from "./cost.unpriced_model.list";
 import { ctx, SCOPE } from "./spend.test-support";
 
-// The role gate reads iam.principal_role_assignments; matches
-// cost.price_entry.set.test.ts's pattern for the same gate.
-const gate = vi.hoisted(() => ({ refuse: false }));
-vi.mock("@oxagen/iam/org-role", () => ({
-  resolveActingUserId: async (c: {
-    userId: string | null;
-    apiKeyId: string | null;
-  }) => c.userId ?? c.apiKeyId,
-  assertOrgRole: async () => {
-    if (gate.refuse)
-      throw new HandlerError({
-        code: "forbidden",
-        reason: "org_role_required",
-      });
-    return "Member";
-  },
-}));
-afterEach(() => {
-  gate.refuse = false;
-});
-
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 const THIRTY_DAYS_BEFORE_NOW = new Date("2026-08-15T15:00:00.000Z");
+
+beforeEach(() => {
+  gate.assertOrgRole.mockReset();
+  gate.resolveActingUserId.mockReset();
+  gate.resolveActingUserId.mockImplementation(
+    async (c: { userId: string | null }) => c.userId,
+  );
+  gate.assertOrgRole.mockResolvedValue("Member");
+});
 
 function model(over: Partial<UnpricedModel> = {}): UnpricedModel {
   return {
@@ -60,9 +55,11 @@ function harness(models: UnpricedModel[]) {
 }
 
 describe("list_unpriced_models", () => {
-  it("is refused for a role the gate excludes, and reads nothing (#3271 P1)", async () => {
+  it("refuses before any read when the actor lacks an allowed org role", async () => {
+    gate.assertOrgRole.mockRejectedValueOnce(
+      new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+    );
     const h = harness([]);
-    gate.refuse = true;
     await expect(h.handler({}, ctx())).rejects.toMatchObject({
       code: "forbidden",
       reason: "org_role_required",

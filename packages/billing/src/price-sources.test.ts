@@ -401,6 +401,67 @@ describe("mergePublishedPrices", () => {
     ).toBe(usdPerMillionToMicros(1));
   });
 
+  // The reverse of the family-over-stamp case above: the higher source names
+  // the stamped id and the lower source names the bare family. One-way
+  // identity (`isSameModelIdentity(lower, higher)`) returns false because
+  // `gpt-4` does not start with `gpt-4-0613`, so both rows survived and
+  // stamped frames took the override while bare frames kept the card rate.
+  it("drops a lower source's bare family when a higher source claimed its stamped id", () => {
+    const stamped = published({
+      model: "gpt-4-0613",
+      provider: "openai",
+      inputPer1M: 1,
+      outputPer1M: 2,
+      source: "operator_override",
+    });
+    const family = published({
+      model: "gpt-4",
+      provider: "openai",
+      inputPer1M: 30,
+      outputPer1M: 60,
+      source: "in_code_card",
+    });
+    const other = published({
+      model: "gpt-4o",
+      provider: "openai",
+      inputPer1M: 2.5,
+      outputPer1M: 10,
+      source: "in_code_card",
+    });
+    const merged = mergePublishedPrices([[stamped], [family, other]]);
+    expect(merged.prices.map((p) => p.model)).toEqual(["gpt-4-0613", "gpt-4o"]);
+    expect(merged.counts).toMatchObject({
+      operator_override: 1,
+      in_code_card: 1,
+    });
+
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      merged.prices,
+      new Date("2026-09-01T00:00:00.000Z"),
+    ).map((s, i) => ({ ...s, id: `e-${i}`, orgId: null, source: "list" }));
+    // Stamped frames take the override. Bare frames no longer find the card's
+    // family row, so they cannot keep a different rate for the same identity;
+    // the resolver matches a frame against an entry name as
+    // isSameModelIdentity(frame, entry), which a stamped entry does not satisfy
+    // for a bare frame, so the call is unpriced rather than silently mispriced.
+    expect(
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId: "gpt-4-0613",
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      })?.microsPerMillion,
+    ).toBe(usdPerMillionToMicros(1));
+    expect(
+      resolvePriceEntry(book, {
+        orgId: "00000000-0000-4000-8000-000000000001",
+        modelId: "gpt-4",
+        tokenClass: "input_uncached",
+        at: new Date("2026-09-02T00:00:00.000Z"),
+      }),
+    ).toBeNull();
+  });
+
   it("prices dotted gateway Claude releases from the in-code card alone", () => {
     // Catalogs down, cold start: only the card seeds the book. Gateway traffic
     // reports anthropic/claude-haiku-4.5 and anthropic/claude-sonnet-4.6; the
@@ -433,7 +494,10 @@ describe("mergePublishedPrices", () => {
     // identity alone: a bare dotted id without the alias path is covered by
     // the hyphenated row's explicit alias, not by anthropic/claude-haiku-4.
     expect(
-      isSameModelIdentity("anthropic/claude-haiku-4.5", "anthropic/claude-haiku-4"),
+      isSameModelIdentity(
+        "anthropic/claude-haiku-4.5",
+        "anthropic/claude-haiku-4",
+      ),
     ).toBe(false);
   });
 
@@ -930,9 +994,9 @@ describe("isSameModelIdentity", () => {
     expect(
       isSameModelIdentity("claude-sonnet-5-20260901", "claude-sonnet-5"),
     ).toBe(true);
-    expect(isSameModelIdentity("claude-sonnet-5-latest", "claude-sonnet-5")).toBe(
-      true,
-    );
+    expect(
+      isSameModelIdentity("claude-sonnet-5-latest", "claude-sonnet-5"),
+    ).toBe(true);
   });
 
   it("keeps a numeric release as a distinct identity", () => {
@@ -974,9 +1038,9 @@ describe("isSameModelIdentity", () => {
     // `turbo` is a product, not a snapshot.
     expect(isSameModelIdentity("gpt-4-turbo", "gpt-4")).toBe(false);
     // A gateway variant is priced on its own, so it does not inherit either.
-    expect(isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5")).toBe(
-      false,
-    );
+    expect(
+      isSameModelIdentity("claude-sonnet-5:thinking", "claude-sonnet-5"),
+    ).toBe(false);
     // Ending at a separator does not let a name own everything beneath it.
     expect(isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/")).toBe(
       false,
@@ -997,7 +1061,10 @@ describe("isSameModelIdentity", () => {
     // Round one: the gateway form binds as an EXPLICIT alias, which is the
     // other relationship that inherits — see the alias tests above.
     expect(
-      isSameModelIdentity("anthropic/claude-sonnet-5", "anthropic/claude-sonnet-5"),
+      isSameModelIdentity(
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-sonnet-5",
+      ),
     ).toBe(true);
   });
 });
