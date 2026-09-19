@@ -57,6 +57,7 @@ function tachoRow(
     redactions: "",
     toolName: "",
     toolStatus: "",
+    toolUseId: "",
     model: "",
     provider: "",
     policyDecision: "",
@@ -521,6 +522,45 @@ describe("the engine's own call halves", () => {
         }),
       ),
     ];
+    const folded = foldTranscript(frames, "steps");
+    expect(folded).toHaveLength(2);
+    expect(folded[0]?.request?.seq).toBe("1");
+    expect(folded[0]?.response?.seq).toBe("3");
+    expect(folded[1]?.request?.seq).toBe("2");
+    expect(folded[1]?.response?.seq).toBe("4");
+  });
+
+  it("pairs overlapping wrapped tool calls on toolUseId the same way (negative)", () => {
+    // Without callId, adjacency attaches A's result to B and leaves B's
+    // result detached. TachoFrameRow already carries toolUseId.
+    const frames = [
+      tachoFrame(
+        tachoRow(1, "tool_requested", { toolName: "a", toolUseId: "tu_a" }),
+      ),
+      tachoFrame(
+        tachoRow(2, "tool_requested", { toolName: "b", toolUseId: "tu_b" }),
+      ),
+      tachoFrame(
+        tachoRow(3, "tool_call", {
+          toolName: "a",
+          toolUseId: "tu_a",
+          toolStatus: "ok",
+        }),
+      ),
+      tachoFrame(
+        tachoRow(4, "tool_call", {
+          toolName: "b",
+          toolUseId: "tu_b",
+          toolStatus: "ok",
+        }),
+      ),
+    ];
+    expect(frames.map((f) => f.identity.callId)).toEqual([
+      "tu_a",
+      "tu_b",
+      "tu_a",
+      "tu_b",
+    ]);
     const folded = foldTranscript(frames, "steps");
     expect(folded).toHaveLength(2);
     expect(folded[0]?.request?.seq).toBe("1");

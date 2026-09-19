@@ -128,25 +128,57 @@ export interface SequenceGap {
 }
 
 /**
- * The sequences missing between the first and the last frame read. Only the
- * interior is reported: a recording that starts at 7 is not missing 1 to 6,
- * because nothing says the run began at 1.
+ * The sequences missing from a frame walk, against the recorded bounds when
+ * the caller knows them.
  *
- * The ledger refuses a sequence gap at append, so a ledger run answers none;
- * a wrapped session's producer can drop events, and this is where that shows.
+ * Without bounds, only the interior is reported: a recording that starts at 7
+ * is not missing 1 to 6, because nothing says the run began at 1. With bounds
+ * (a wrapped session's `seqCount` proves 0..seqCount-1; a ledger seal names
+ * its final sequence), a walk that lost the first or last frames reports those
+ * gaps too, so the Chain tab cannot claim a denser ladder than the record.
  */
-export function sequenceGaps(frames: readonly RunFrame[]): {
+export function sequenceGaps(
+  frames: readonly RunFrame[],
+  bounds?: { start?: string | null; end?: string | null },
+): {
   gaps: SequenceGap[];
   missing: number;
 } {
   const gaps: SequenceGap[] = [];
   let missing = 0;
+  const add = (from: bigint, to: bigint) => {
+    if (to < from) return;
+    gaps.push({ from: String(from), to: String(to) });
+    missing += Number(to - from + 1n);
+  };
+
+  if (frames.length === 0) {
+    if (
+      bounds?.start != null &&
+      bounds.start !== "" &&
+      bounds?.end != null &&
+      bounds.end !== ""
+    ) {
+      add(BigInt(bounds.start), BigInt(bounds.end));
+    }
+    return { gaps, missing };
+  }
+
+  const first = BigInt((frames[0] as RunFrame).seq);
+  const last = BigInt((frames[frames.length - 1] as RunFrame).seq);
+  if (bounds?.start != null && bounds.start !== "") {
+    const start = BigInt(bounds.start);
+    if (first > start) add(start, first - 1n);
+  }
   for (let i = 1; i < frames.length; i += 1) {
     const prev = BigInt((frames[i - 1] as RunFrame).seq);
     const next = BigInt((frames[i] as RunFrame).seq);
     if (next <= prev + 1n) continue;
-    gaps.push({ from: String(prev + 1n), to: String(next - 1n) });
-    missing += Number(next - prev - 1n);
+    add(prev + 1n, next - 1n);
+  }
+  if (bounds?.end != null && bounds.end !== "") {
+    const end = BigInt(bounds.end);
+    if (last < end) add(last + 1n, end);
   }
   return { gaps, missing };
 }
@@ -229,7 +261,10 @@ function sealsOf(
       sealedAt: session.sealedAt.toISOString(),
       terminalStatus: session.outcome,
       eventCount: session.seqCount,
-      finalRunSeq: session.seqCount > 0 ? String(session.seqCount) : null,
+      // seqCount is the next expected sequence (last.seq + 1), so the seal's
+      // final frame is seqCount - 1 when any frames were recorded.
+      finalRunSeq:
+        session.seqCount > 0 ? String(session.seqCount - 1) : null,
       finalEventDigest: session.finalHash,
       eventStreamDigest: session.finalHash,
       merkleRoot: session.finalHash,
@@ -252,7 +287,16 @@ export function createRunChainGetHandler(
     const ledgerSeals =
       run.source === "ledger" ? await deps.ledgerSeals(scope, run.runId) : [];
 
-    const sequences = sequenceGaps(read.frames);
+    const expectedEnd =
+      run.source === "tacho"
+        ? run.row.session.seqCount > 0
+          ? String(run.row.session.seqCount - 1)
+          : null
+        : (ledgerSeals.at(-1)?.finalRunSeq ?? null);
+    const sequences = sequenceGaps(read.frames, {
+      start: run.source === "tacho" ? "0" : null,
+      end: expectedEnd,
+    });
     const recorded =
       run.source === "ledger"
         ? publishedGaps(run.record.seal?.completenessGaps)
