@@ -1,12 +1,13 @@
-// The person's zone, as a cookie the request config can read.
+// The person's zone, written so the browser keeps it between visits.
 //
-// Server Components format through next-intl's request config, not through the
-// client <TimeZoneProvider>. Cache Components keeps person-specific DB reads
-// out of that config (the static shell prerenders without them), so the zone
-// rides a cookie instead: small, available on the request, and kept in sync
-// when the preference is read into the provider or written by the Account
-// dialog. A missing or unknown value falls back to DEFAULT_TIME_ZONE.
-import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
+// It is written by <TimeZoneProvider> on the client and by the Account dialog's
+// server action, and read by neither: next-intl's request config cannot read a
+// cookie without making every route in the app unprerenderable, so the zone
+// reaches next-intl through the client provider that `[org]/layout.tsx` mounts
+// inside its own <Suspense> (see src/i18n/request.ts for why).
+//
+// `isTimeZone` guards what is stored, because a stored preference can name a
+// zone this runtime's ICU has never heard of.
 
 /** Cookie name. Kept short; only this module should spell it. */
 export const TIME_ZONE_COOKIE = "tz";
@@ -25,21 +26,6 @@ export function isTimeZone(name: string): boolean {
   } catch {
     return false;
   }
-}
-
-/** Resolve a raw cookie value to a zone this runtime can format in. */
-export function resolveTimeZoneCookie(
-  value: string | null | undefined,
-): string {
-  if (value && isTimeZone(value)) return value;
-  return DEFAULT_TIME_ZONE;
-}
-
-/** Read the zone from a `Cookie` header string (client or tests). */
-export function readTimeZoneCookie(cookie: string): string {
-  const match = /(?:^|;\s*)tz=([^;]*)/.exec(cookie);
-  const raw = match?.[1] ? decodeURIComponent(match[1]) : undefined;
-  return resolveTimeZoneCookie(raw);
 }
 
 /** `document.cookie` / Set-Cookie value for the zone. */
