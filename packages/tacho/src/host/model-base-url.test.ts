@@ -170,7 +170,10 @@ describe("apply then restore", () => {
     const applied = await applyModelBaseUrls(both(), internals());
     expect(applied.harnesses.every((h) => h.changed)).toBe(true);
     expect(JSON.parse(readFileSync(settingsPath(), "utf8"))).toEqual({
-      env: { ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic" },
+      env: {
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:4319/anthropic",
+        ENABLE_TOOL_SEARCH: "true",
+      },
     });
     await restoreModelBaseUrls(both(), internals());
     expect(existsSync(settingsPath())).toBe(false);
