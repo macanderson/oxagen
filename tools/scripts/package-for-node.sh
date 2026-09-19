@@ -98,7 +98,7 @@ write_manifest() {
 
   jq -n \
     --argjson port "$port" \
-    --arg image "${WRITE_MANIFEST_IMAGE:-node:22-alpine}" \
+    --arg image "${WRITE_MANIFEST_IMAGE:-node:24.21.0-alpine}" \
     --argjson command "$command_json" \
     --arg memory "$memory" \
     --arg health "$health" \

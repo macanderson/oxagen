@@ -1881,13 +1881,13 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     group: "Operator scripts",
     description:
       "Container image the packaged node bundle's run manifest names. " +
-      "Defaults to node:22-alpine.",
+      "Defaults to node:24.21.0-alpine.",
     secret: false,
     clientExposed: false,
     services: [],
     requiredIn: [],
     valueOrigin: "manual",
-    placeholder: "node:22-alpine",
+    placeholder: "node:24.21.0-alpine",
   },
   NPM_TOKEN: {
     group: "Operator scripts",
