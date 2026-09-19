@@ -3445,7 +3445,7 @@
       "writes": []
     }
   ],
-  "contentHash": "78e70160ac9542a268e998f90634e92f80d1ee3def8cacdc7f926a4236d14c69",
+  "contentHash": "ef812ba6fa02dbc368a49cb52e828aadb56ff33ce09a7d1b55610045c5b5776c",
   "domains": [
     {
       "name": "agent",
@@ -19227,6 +19227,12 @@
           "type": "integer"
         },
         {
+          "name": "observed_status",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "first_seq",
           "nullable": false,
           "primaryKey": false,
@@ -20220,6 +20226,12 @@
         },
         {
           "name": "commits",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "pushes",
           "nullable": false,
           "primaryKey": false,
           "type": "integer"

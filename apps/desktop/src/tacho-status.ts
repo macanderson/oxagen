@@ -53,6 +53,11 @@ export interface TachoStatus {
   enrolled: boolean;
   hooks?: TachoHookPresence;
   codexHooks?: TachoHookPresence;
+  /**
+   * Cursor's hooks, folded from the one entry per file `tacho status` prints
+   * (a moved config directory means Oxagen writes two). Complete only when
+   * every file is complete, so a half-written pair never reads as covered.
+   */
   cursorHooks?: TachoHookPresence;
   stellaHooks?: TachoHookPresence;
   /** Present once the host connects Claude Desktop. */
@@ -69,6 +74,36 @@ export interface TachoStatus {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `tacho status` reports Cursor as a list, one entry per hooks file. The app
+ * shows one row per harness, so the list is folded: complete only when every
+ * file is, and the missing events are the union. A veto hook someone edited
+ * to fail open is counted as missing rather than present, because Cursor
+ * allows the action when a fail-open hook cannot answer.
+ */
+function cursorPresence(value: unknown): TachoHookPresence | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const entries = value
+    .map((entry) => presence(entry))
+    .filter((entry): entry is TachoHookPresence => entry !== undefined);
+  if (entries.length === 0) return undefined;
+  const missing = new Set<string>();
+  for (const entry of entries) for (const event of entry.missing) missing.add(event);
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const failOpen = entry["failOpenEnforcement"];
+    if (Array.isArray(failOpen))
+      for (const event of failOpen)
+        if (typeof event === "string") missing.add(event);
+  }
+  const present = entries[0]?.present.filter((event) => !missing.has(event));
+  return {
+    complete: missing.size === 0,
+    present: present ?? [],
+    missing: [...missing],
+  };
 }
 
 function presence(value: unknown): TachoHookPresence | undefined {
@@ -168,7 +203,7 @@ export function parseTachoStatus(stdout: string): TachoStatus | null {
   if (hooks !== undefined) status.hooks = hooks;
   const codexHooks = presence(parsed["codexHooks"]);
   if (codexHooks !== undefined) status.codexHooks = codexHooks;
-  const cursorHooks = presence(parsed["cursorHooks"]);
+  const cursorHooks = cursorPresence(parsed["cursorHooks"]);
   if (cursorHooks !== undefined) status.cursorHooks = cursorHooks;
   const stellaHooks = presence(parsed["stellaHooks"]);
   if (stellaHooks !== undefined) status.stellaHooks = stellaHooks;

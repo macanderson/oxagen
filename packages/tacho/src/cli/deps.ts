@@ -297,9 +297,23 @@ export interface CliDeps {
   /** Codex CLI's `hooks.json`, undefined when absent. */
   readCodexHooks: () => unknown;
   writeCodexHooks: (document: unknown) => void;
-  /** Cursor's `hooks.json`, undefined when absent. */
-  readCursorHooks: () => unknown;
-  writeCursorHooks: (document: unknown) => void;
+  /**
+   * One of Cursor's `hooks.json` files (`paths.cursorHooks`), undefined when
+   * absent. Keyed by path rather than fixed to one, because a moved config
+   * directory means Oxagen writes two: see `host/cursor-writer.ts`.
+   */
+  readCursorHooks: (path: string) => unknown;
+  /**
+   * `vestigial` says the document holds nothing but the `version` the writer
+   * added itself, so `settle` may take the whole file back. Only the
+   * teardown passes it, and only when the strip left nothing of the user's
+   * (`cursorDocumentIsVestigial`).
+   */
+  writeCursorHooks: (
+    path: string,
+    document: unknown,
+    vestigial?: boolean,
+  ) => void;
   /**
    * Stella's user-scope hooks file: `stella.toml` when it exists, else the
    * legacy `settings.json` when that exists, else a new `stella.toml`.
@@ -342,10 +356,11 @@ export interface CliDeps {
   claude: () => ClaudeFacts;
   codex: () => HarnessFacts;
   /**
-   * Cursor's CLI, `cursor-agent`. Cursor also installs it as `agent`, a name
-   * too generic to probe: another tool's `agent --version` would read as
-   * Cursor. The IDE reads the same hooks file, so a machine with only the IDE
-   * is hooked all the same; this reports the CLI.
+   * Cursor's CLI, `agent`. Cursor also installs it as that generic name;
+   * `cursorFacts` sanity-checks the version string before treating it as
+   * Cursor rather than an unrelated tool. The IDE reads the same hooks file,
+   * so a machine with only the IDE is hooked all the same; this reports the
+   * CLI.
    */
   cursor: () => HarnessFacts;
   stella: () => HarnessFacts;
@@ -506,6 +521,56 @@ export function claudeDesktopFacts(
   return { installed: false };
 }
 
+/**
+ * The names Cursor's CLI answers to, most specific first. Its own docs call
+ * the binary `agent` and the installer also links `cursor-agent`, so both are
+ * probed: a machine carrying only one of the two is a machine Oxagen governs,
+ * and reporting it as having no CLI at all is the one answer that is wrong
+ * either way. `cursor-agent` goes first because it names Cursor
+ * unambiguously, so finding it means no generic name has to be trusted.
+ */
+export const CURSOR_CLI_NAMES = ["cursor-agent", "agent"] as const;
+
+/**
+ * Cursor's CLI, verified 2026-09-18 against
+ * https://cursor.com/docs/cli/installation (fetched that day): the installer
+ * puts the binary in `~/.local/bin` and `--version` reports the version.
+ * Two caveats the caller has to live with.
+ *
+ * `agent` is a generic name. Another program of that name earlier on PATH
+ * would be found instead, so the version string is sanity-checked before this
+ * counts as Cursor: a `--version` that carries no dotted number is treated as
+ * "not Cursor" rather than as Cursor of unknown version.
+ *
+ * No primary source documents where Cursor's GUI installs itself on any
+ * platform. So a person who runs Cursor only as an editor and never installed
+ * the CLI is reported here as not installed, even though the hooks Oxagen
+ * writes to `~/.cursor/hooks.json` would still govern that GUI. Enrollment
+ * says so rather than refusing: unlike Claude Desktop on Linux, where no
+ * build exists and the file would be read by nothing, here the file is read
+ * and only the probe is blind.
+ */
+export function cursorFacts(
+  exec: Exec,
+  platform: NodeJS.Platform = process.platform,
+  env: Record<string, string | undefined> = process.env,
+  home?: string,
+  exists?: (candidate: string) => boolean,
+): HarnessFacts {
+  for (const name of CURSOR_CLI_NAMES) {
+    const facts =
+      exists === undefined
+        ? harnessFacts(exec, name, platform, env, home)
+        : harnessFacts(exec, name, platform, env, home, exists);
+    // `harnessFacts` sets `version` only when `--version` printed a dotted
+    // number, so an unrelated `agent` on PATH answers with no version and is
+    // not reported as an install. Both names go through that check, so
+    // neither can report an install it did not find.
+    if (facts.version !== undefined) return facts;
+  }
+  return {};
+}
+
 export function claudeFacts(
   exec: Exec,
   platform: NodeJS.Platform = process.platform,
@@ -601,11 +666,12 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         paths.codexHooks,
         `${JSON.stringify(document, null, 2)}\n`,
       ),
-    readCursorHooks: () => harnessFiles.readJson(paths.cursorHooks),
-    writeCursorHooks: (document) =>
+    readCursorHooks: (path) => harnessFiles.readJson(path),
+    writeCursorHooks: (path, document, vestigial = false) =>
       harnessFiles.write(
-        paths.cursorHooks,
+        path,
         `${JSON.stringify(document, null, 2)}\n`,
+        vestigial,
       ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) => harnessFiles.write(file.path, file.text ?? ""),
@@ -632,7 +698,7 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
     },
     claude: () => claudeFacts(exec, platform, env, home),
     codex: () => harnessFacts(exec, "codex", platform, env, home),
-    cursor: () => harnessFacts(exec, "cursor-agent", platform, env, home),
+    cursor: () => cursorFacts(exec, platform, env, home),
     stella: () => harnessFacts(exec, "stella", platform, env, home),
     claudeDesktop: () => claudeDesktopFacts(platform, home, env),
     runtime: runtimeCommands(undefined, env, undefined, platform),

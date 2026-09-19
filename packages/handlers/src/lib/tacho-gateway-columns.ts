@@ -37,7 +37,9 @@ import {
   GATEWAY_CHAIN_COLUMN,
   hasColumn,
   HOST_GATEWAY_COLUMN,
+  SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
+  SESSION_PUSHES_COLUMN,
   type ProbeTx,
 } from "@oxagen/database";
 
@@ -59,6 +61,38 @@ export async function sessionGatewayColumnReady(tx: ProbeTx): Promise<boolean> {
 }
 
 /**
+ * Whether `tacho.sessions.pushes` is present.
+ *
+ * The same deploy-before-migrate window this module was written for, on a
+ * column with a wider blast radius. The gateway columns only decide a tier,
+ * so projecting them away degrades one field; `pushes` is written by the
+ * rollup every accepted batch performs, so naming it before the migration
+ * lands raises 42703 and refuses the batch outright. A host would report
+ * healthy and record nothing.
+ */
+export async function sessionPushesColumnReady(tx: ProbeTx): Promise<boolean> {
+  return hasColumn(tx, SESSION_PUSHES_COLUMN, await ambientPlaneKey());
+}
+
+/**
+ * Whether `tacho.session_files.observed_status` is present.
+ *
+ * Probed separately from `pushes` rather than inferred from it, for the
+ * reason the two gateway columns are probed separately: one migration adds
+ * both, and a migration that fails between two `ADD COLUMN IF NOT EXISTS`
+ * statements leaves exactly the half-applied state an inference gets wrong.
+ */
+export async function sessionFileObservedStatusColumnReady(
+  tx: ProbeTx,
+): Promise<boolean> {
+  return hasColumn(
+    tx,
+    SESSION_FILE_OBSERVED_STATUS_COLUMN,
+    await ambientPlaneKey(),
+  );
+}
+
+/**
  * The `columns` fragment for a `tacho.hosts` read: everything, minus the
  * gateway column while the database lacks it.
  *
@@ -77,10 +111,44 @@ export async function hostReadColumns(
 /** The same for a `tacho.sessions` read. */
 export async function sessionReadColumns(
   tx: ProbeTx,
-): Promise<{ gatewayObservedAt: false } | undefined> {
-  return (await sessionGatewayColumnReady(tx))
+): Promise<
+  | { gatewayObservedAt: false; pushes: false }
+  | { gatewayObservedAt: false }
+  | { pushes: false }
+  | undefined
+> {
+  // Both of this table's pending columns, in one projection.
+  //
+  // `pushes` is here because a relational read selects every column the schema
+  // DECLARES, so `tacho.session.list` and `tacho.session.get` named it from the
+  // moment the declaration landed — for a column neither of them returns. The
+  // write gate on the ingest path is not enough on its own: guarding the
+  // statement the migration is about is not the same as guarding every
+  // statement the new declaration reaches (discussion_r4051911079).
+  //
+  // One projection rather than one per column, because Drizzle takes a single
+  // `columns` object and a caller holding two would have to merge them — and
+  // the merge is the part that gets forgotten when a third column arrives.
+  const gateway = await sessionGatewayColumnReady(tx);
+  const pushes = await sessionPushesColumnReady(tx);
+  if (gateway && pushes) return undefined;
+  if (!gateway && !pushes) return { gatewayObservedAt: false, pushes: false };
+  return gateway ? { pushes: false } : { gatewayObservedAt: false };
+}
+
+/**
+ * The `columns` fragment for a `tacho.session_files` read: everything, minus
+ * the observed verdict while the database lacks it.
+ *
+ * `undefined` on the ready path, for the reason {@link hostReadColumns} gives:
+ * Drizzle reads `{}` as "select nothing".
+ */
+export async function sessionFileReadColumns(
+  tx: ProbeTx,
+): Promise<{ observedStatus: false } | undefined> {
+  return (await sessionFileObservedStatusColumnReady(tx))
     ? undefined
-    : { gatewayObservedAt: false };
+    : { observedStatus: false };
 }
 
 /**

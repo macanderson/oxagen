@@ -38,11 +38,15 @@ Each row:
 | `source` | enum | `ledger`, `tacho` — Halt and frames depend on it |
 | `agentKey` | string or null | `org_ns.ws_ns.slug`; null when the ledger row names no agent |
 | `operatorId` | string or null | the initiating principal's public id; null when none was recorded |
+| `operatorKind` | `human` \| `agent` \| `service` or null | what the initiating principal is; null when none was recorded, or when the row's kind is outside the column's CHECK |
+| `operatorName` | string or null | the person's name, from `auth.users.display_name` for the user the principal acts for. Null for every principal that is not a person, and null for a person whose user record carries no name; `operatorKind` separates the two. Never an email address, and never a name derived from one |
 | `status` | enum | `live`, `sealed`, `halted` |
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps` | integer | model calls plus tool calls |
 | `frames` | integer | recorded events (ledger) or hash-chained events (tacho) |
 | `cost` | object or null | `{ micros, currency, basis }` from the run's `cost.run_totals` row (ADR-060); `basis` is `gateway_observed`, `client_attested`, `mixed` or `estimated`; null until the rollup has priced the run's frames after its seal |
+| `model` | `{ id, provider, tier }` or null | the model the run ended on, falling back to the one it started on (`tacho.sessions.model_final`, then `model_initial`). `provider` is the vendor the id names and `tier` the capability class inside that vendor's family (`haiku`, `sonnet`, `opus`; `mini`, `nano`; `flash`, `pro`), not a billing tier and not Oxagen's white-labelled fast/balanced/precise. Either is null when the id names none this platform recognises. Null for every ledger run, which records no model on its row |
+| `machine` | `{ hostname, platform, osVersion, arch, nodeVersion }` or null | the enrolled host the run ran on (`tacho.hosts`). `hostname` and `platform` are required of an enrolment and the rest may be null. Null for a ledger run, which names no host |
 | `taskRef` | string or null | the goal a ledger run was admitted for |
 | `startedAt` | string | RFC 3339 |
 | `sealedAt` | string or null | null while live |
@@ -53,4 +57,4 @@ Each row:
 
 ## Honesty
 
-A null is what a caller renders as "not recorded". Cost comes from the run's `cost.run_totals` row, which the rollup job rebuilds from the run's frames after its seal; a run with no row yet, or a row whose frames priced nothing, answers `cost: null`, never `0`, and nothing here reads ClickHouse or the tacho session's own `total_cost_micros`. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.
+A null is what a caller renders as "not recorded". The operator's name is read through the principal's `parent_user_id` and only where the principal's kind is `human`, because a delegated agent principal carries the `parent_user_id` of whoever created it and naming that person would put a name on a run they did not start. `iam.principals.display_name` is deliberately not the source: provisioning falls that column back to the user's email address, and a run row carries a name or nothing. The provider on `model` is the one `providerFromModelId` gives every metered call, so a run page and the meter never disagree about who served the same call. Cost comes from the run's `cost.run_totals` row, which the rollup job rebuilds from the run's frames after its seal; a run with no row yet, or a row whose frames priced nothing, answers `cost: null`, never `0`, and nothing here reads ClickHouse or the tacho session's own `total_cost_micros`. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.

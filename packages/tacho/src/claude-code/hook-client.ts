@@ -23,7 +23,12 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
-import { cursorAnswer, translateCursorPayload } from "./cursor-adapter";
+import {
+  cursorAnswer,
+  CURSOR_TO_CLAUDE_EVENT,
+  type CursorHookEventName,
+  translateCursorPayload,
+} from "./cursor-adapter";
 import { hookInputSchema } from "./hooks";
 import {
   psStartInstance,
@@ -34,6 +39,49 @@ import {
 } from "./stella-adapter";
 
 /** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
+/**
+ * What Cursor shows when a hook payload cannot be read. It names the cause
+ * and the repair rather than saying only that something was denied, because
+ * the person seeing it did nothing wrong and can act on it.
+ */
+/**
+ * Refuse a Cursor hook whose payload could not be parsed, in the shape the
+ * event it names actually reads.
+ *
+ * `cursorAnswer` does this from a parsed event. Here the parse is what
+ * failed, so the event comes off the raw payload defensively, and a payload
+ * that does not name one is answered in both shapes.
+ */
+function cursorRefusal(raw: unknown, message: string): string {
+  const named =
+    typeof raw === "object" && raw !== null
+      ? (raw as Record<string, unknown>)["hook_event_name"]
+      : undefined;
+  const claudeEvent =
+    typeof named === "string" && named in CURSOR_TO_CLAUDE_EVENT
+      ? CURSOR_TO_CLAUDE_EVENT[named as CursorHookEventName]
+      : undefined;
+  if (claudeEvent !== undefined)
+    return cursorAnswer(
+      {
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason: message,
+        },
+      },
+      claudeEvent,
+    );
+  return `${JSON.stringify({
+    permission: "deny",
+    continue: false,
+    user_message: message,
+    agent_message: message,
+  })}\n`;
+}
+
+const CURSOR_UNREADABLE_PAYLOAD =
+  "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
+
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const index = argv.indexOf("--harness");
   const value = index >= 0 ? argv[index + 1] : undefined;
@@ -407,7 +455,15 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     raw = JSON.parse(deps.stdin);
   } catch {
     return {
-      stdout: "{}\n",
+      // Truncated or malformed JSON is the likeliest way a payload arrives
+      // unreadable, and it is answered the same way a readable payload that
+      // fails the schema is. An earlier pass fixed only the schema branch
+      // and left this one, a dozen lines above it, still answering with
+      // nothing. `cursorRefusal` reads the event name off the payload, and
+      // there is no payload here, so it refuses in both shapes at once.
+      stdout: cursor
+        ? cursorRefusal(undefined, CURSOR_UNREADABLE_PAYLOAD)
+        : "{}\n",
       stderr: "tacho-hook: stdin is not JSON\n",
       exitCode: 0,
       path: "invalid",
@@ -426,11 +482,32 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
     )(harnessPid);
     raw = translateStellaPayload(raw, harnessPid, instance);
   }
+  // Cursor issues both the session id and the tool-use id, so its adapter
+  // only renames; there is no pid to walk to and no digest to derive.
   if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
     return {
-      stdout: "{}\n",
+      // A payload this hook cannot parse is not a reason to let the call
+      // through on Cursor. `{}` reads as no opinion to Claude Code, and
+      // Cursor's `failClosed` does not cover it either, because the hook did
+      // not crash, time out or exit non-zero: it answered, successfully, with
+      // nothing. So a truncated payload or a schema change on Cursor's side
+      // would quietly stop enforcing while every call was recorded as
+      // allowed. The refusal is explicit instead, for the same reason an
+      // unreadable enrollment refuses below.
+      //
+      // The shape has to match the event, which an earlier version of this
+      // got wrong. Cursor reads `permission` at `preToolUse` and `continue`
+      // at `beforeSubmitPrompt`, so one blanket `permission: deny` was
+      // ignored outright at the prompt veto and the malformed prompt went
+      // through. The event name is read off the raw payload rather than the
+      // parsed one, because parsing is what failed, and a payload too broken
+      // to name its own event is answered in both shapes at once: Cursor
+      // reads the member its event defines and ignores the other, and
+      // refusing an event that needed no refusal costs nothing next to
+      // allowing one that did.
+      stdout: cursor ? cursorRefusal(raw, CURSOR_UNREADABLE_PAYLOAD) : "{}\n",
       stderr: `tacho-hook: payload is not a ${stella ? "Stella" : cursor ? "Cursor" : "Claude Code"} hook\n`,
       exitCode: 0,
       path: "invalid",
@@ -438,8 +515,8 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   }
   const input = parsed.data;
   // Stella reads `{"action": ...}` decisions and takes SessionStart stdout
-  // as prompt text; Cursor reads `{"permission": ...}` and friends; every
-  // other harness reads Claude Code's answer as is.
+  // as prompt text; Cursor reads a flat permission object whose shape differs
+  // per event; every other harness reads Claude Code's answer as is.
   const answer = (response: Record<string, unknown>): string =>
     stella
       ? stellaAnswer(response, input.hook_event_name)
@@ -447,32 +524,39 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         ? cursorAnswer(response, input.hook_event_name)
         : `${JSON.stringify(response)}\n`;
   const emptyAnswer = answer({});
-  // An unreadable enrollment is not an unenrolled machine, and for Cursor the
-  // difference decides whether a tool runs unchecked. Cursor treats a
-  // malformed answer as a block, so `cursorAnswer` turns "no opinion" into an
-  // explicit `{"permission":"allow"}` — which is the right reading of silence
-  // from a machine Oxagen does not govern, and the wrong one when the file
-  // that says whether it governs this machine cannot be read. A corrupt or
-  // briefly unreadable `host.json` would run every tool with no policy
-  // evaluated at all. Refuse instead: the harness is asking permission and
-  // this process cannot tell whether permission was granted.
-  //
-  // Only the read error refuses. `host === undefined` below is the honestly
-  // unenrolled machine and still answers empty, so installing the hook
-  // without enrolling does not block the person's own tools.
-  const refusedAnswer = answer({
-    hookSpecificOutput: {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Oxagen cannot read this machine's enrollment, so it cannot say whether this call is permitted.",
-    },
-  });
+  /**
+   * The answer for a machine that has enrollment state this hook cannot
+   * read, which is not the same as a machine with none.
+   *
+   * An unenrolled machine is one Oxagen does not govern, and allowing its
+   * calls is right. A machine whose `host.json` exists but will not parse is
+   * a governed machine whose mandate is unreadable, and the safe answer
+   * there is to refuse rather than to wave the call through.
+   *
+   * It matters more on Cursor than elsewhere. Claude Code reads `{}` as no
+   * opinion and applies its own default, but `cursorAnswer` turns the same
+   * empty response into an explicit `{"permission":"allow"}` at a veto
+   * point. Cursor's `failClosed` does not catch that, because the hook did
+   * not crash, time out or exit non-zero: it succeeded and granted
+   * permission. So a corrupted enrollment file would let every tool call on
+   * that machine proceed with no verified mandate, and the record would say
+   * each one was allowed.
+   */
+  const unreadableAnswer = cursor
+    ? answer({
+        hookSpecificOutput: {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Oxagen cannot read this machine's enrollment, so it cannot say what this agent is permitted to do. Run `tacho status` to repair it.",
+        },
+      })
+    : emptyAnswer;
   let host: HostFile | undefined;
   try {
     host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
   } catch (error) {
     return {
-      stdout: cursor ? refusedAnswer : emptyAnswer,
+      stdout: unreadableAnswer,
       stderr: `tacho-hook: cannot read enrollment: ${error instanceof Error ? error.message : String(error)}\n`,
       exitCode: 0,
       path: "unenrolled",
@@ -513,7 +597,9 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       // A 200 whose body is not a JSON object is a fault, not a decision. It
       // falls through to the local evaluator rather than being read as an
       // empty answer, because a translated harness turns an empty answer into
-      // an explicit allow and a truncated response would permit the call.
+      // an explicit allow and a truncated or blank response would permit the
+      // call. An intentional `"{}"` still parses; only blank or non-object
+      // bodies are rejected.
       const document = tryParseAnswerBody(result.body);
       if (document === undefined)
         throw new Error(

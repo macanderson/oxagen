@@ -28,7 +28,23 @@ import { describe, expect, it } from "vitest";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = join(HERE, "..");
 
-const GUARDED = ["tachoHosts", "tachoSessions"] as const;
+/**
+ * The tables whose reads must name their columns: every Tacho table a migration
+ * has added a column to after the table itself shipped.
+ *
+ * `tachoSessionFiles` joined the list the way `tachoSessions` did — by being
+ * missed. `observed_status` landed in the schema while `tacho.session.get`
+ * still read the table unprojected, so reading any run would have raised 42703
+ * for the whole rollout window, over a column that handler does not return
+ * (discussion_r4051911079). The pattern is now twice confirmed: guarding the
+ * table the migration is about is not the same as guarding every table the new
+ * declaration reaches.
+ */
+const GUARDED = [
+  "tachoHosts",
+  "tachoSessions",
+  "tachoSessionFiles",
+] as const;
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -143,7 +159,9 @@ describe("tacho relational reads", () => {
     });`;
     const scan = (source: string): boolean => {
       const match = source.match(
-        /query\.(tachoHosts|tachoSessions)\.(findFirst|findMany)\(\{/,
+        new RegExp(
+          `query\\.(${GUARDED.join("|")})\\.(findFirst|findMany)\\(\\{`,
+        ),
       );
       if (!match?.index) return false;
       const brace = match.index + match[0].length - 1;

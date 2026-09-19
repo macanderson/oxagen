@@ -34,16 +34,47 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+// The contract names the vendor string `id`; the view names it `slug`, so the
+// two spellings are held apart here rather than shared.
+const wireModel = {
+  id: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+const viewModel = {
+  slug: "claude-opus-5",
+  provider: "anthropic",
+  tier: "frontier",
+};
+
+const machine = {
+  hostname: "tycho",
+  platform: "darwin",
+  osVersion: "25.6.0",
+  arch: "arm64",
+  nodeVersion: "24.4.0",
+};
+
 const run = {
   id: "tse_4f0a",
   source: "tacho",
   agentKey: null,
   operatorId: null,
+  // Nullable but required, all four: `RunRow` names each of them, so a
+  // fixture omitting one maps to `undefined`, `RunPage.safeParse` rejects the
+  // whole page, and a happy-path read asserts a 502 (`record_unmappable`).
+  //
+  // All four are populated rather than null, because a real value also proves
+  // the mapping carries it through rather than merely tolerating the field.
+  operatorKind: "human",
+  operatorName: "Ada Lovelace",
   status: "live",
   turns: null,
   steps: 3,
   frames: 9,
   cost: null,
+  model: wireModel,
+  machine,
   taskRef: null,
   name: null,
   summary: null,
@@ -69,11 +100,15 @@ describe("runs.list", () => {
             source: "tacho",
             agentKey: null,
             operatorId: null,
+            operatorKind: "human",
+            operatorName: "Ada Lovelace",
             status: "live",
             turns: null,
             steps: 3,
             frames: 9,
             cost: null,
+            model: viewModel,
+            machine,
             taskRef: null,
             name: null,
             summary: null,

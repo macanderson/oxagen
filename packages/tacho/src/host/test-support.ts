@@ -89,6 +89,7 @@ export function scratchPaths(platform: NodeJS.Platform = "darwin"): TachoPaths {
       TACHO_HOME: join(root, "home"),
       CLAUDE_CONFIG_DIR: join(root, "claude"),
       CODEX_HOME: join(root, "codex"),
+      CURSOR_CONFIG_DIR: join(root, "cursor"),
       STELLA_HOME: join(root, "stella"),
     },
     root,

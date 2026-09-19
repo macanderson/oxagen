@@ -229,7 +229,7 @@ describe("runs table", () => {
     const cells = within(row ?? runsSection()).getAllByRole("cell");
     expect(cells.map((c) => c.textContent).slice(1)).toEqual([
       "reacme.core.release-botevidence ledger",
-      "usr_marcusbell",
+      "Marcus Bellprn_marcusbell",
       "live",
       "fork",
       "$4.13gateway_observed",
@@ -276,6 +276,8 @@ describe("runs table", () => {
           source: "tacho",
           agentKey: null,
           operatorId: null,
+          operatorKind: null,
+          operatorName: null,
           cost: null,
           taskRef: null,
         }),

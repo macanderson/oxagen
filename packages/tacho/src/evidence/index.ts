@@ -1,6 +1,7 @@
 export * from "./archive-segment";
 export * from "./merkle";
 export * from "./redaction";
+export * from "./retention";
 export * from "./replay-grade";
 export * from "./attestation";
 export * from "./frame-body";

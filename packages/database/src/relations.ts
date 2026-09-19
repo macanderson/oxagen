@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { and, eq, relations } from "drizzle-orm";
 import {
   schemaRegistries,
   schemaVersions,
@@ -378,9 +378,71 @@ export const principalsRelations = relations(principals, ({ one, many }) => ({
     fields: [principals.orgId],
     references: [organizations.id],
   }),
+  /**
+   * The person a human principal acts for.
+   *
+   * Nullable on purpose, and not the same as "who created this principal".
+   * A delegated agent principal legitimately carries the `parent_user_id`
+   * of whoever built it, so a reader that wants the person who ran
+   * something has to require `kind = 'human'` as well. The partial unique
+   * index on (`org_id`, `parent_user_id`) in `schema/iam.ts` carries the
+   * same condition, which is where that rule is enforced rather than
+   * merely described.
+   */
+  parentUser: one(users, {
+    fields: [principals.parentUserId],
+    references: [users.id],
+  }),
   roleAssignments: many(principalRoleAssignments),
   accessRequests: many(accessRequests),
 }));
+
+/**
+ * The person an initiating principal acts for, joined through the principal
+ * rather than looked up per row — a page reads up to a hundred runs, and a
+ * lookup per row would be a hundred round trips for a column Postgres can
+ * carry along the join it is already making.
+ *
+ * `kind = 'human'` is part of the join condition and not an afterthought. A
+ * delegated agent principal carries its creator's `parent_user_id`, so
+ * joining on the column alone would put the person who built the agent on
+ * every run the agent started, which is a name the record does not claim.
+ *
+ * This is a cross-domain join (agent/Tacho schema through IAM into auth), so
+ * it lives here rather than being redefined ad hoc in each handler that
+ * needs it — `list_runs` uses it for both the ledger select and the Tacho
+ * session select.
+ */
+export const operatorUserJoin = and(
+  eq(users.id, principals.parentUserId),
+  eq(principals.kind, "human"),
+);
+
+/**
+ * The person an AGENT acts for: the user who created it.
+ *
+ * The same two columns as `operatorUserJoin` above and the opposite `kind`,
+ * because the two answer different questions and only look alike.
+ *
+ * `operatorUserJoin` asks who started a run. A run started by an agent has an
+ * agent principal whose `parent_user_id` is whoever built that agent, and that
+ * person did not start the run, so the human filter is what keeps their name
+ * off it.
+ *
+ * This asks who an agent belongs to. An agent's own principal is `kind =
+ * 'agent'` by construction (`agent.definition.create` provisions it that way
+ * and its test says so), and its `parent_user_id` is the creating user — which
+ * is exactly the person the contract's `operatorId` names. Reusing the run
+ * join here matched nothing at all, so every agent reported no operator.
+ *
+ * Kept as two named joins rather than one parameterised by `kind`. The
+ * parameter would be the whole distinction, passed at each call site, and a
+ * call site is where this went wrong once already.
+ */
+export const agentCreatorUserJoin = and(
+  eq(users.id, principals.parentUserId),
+  eq(principals.kind, "agent"),
+);
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, {
