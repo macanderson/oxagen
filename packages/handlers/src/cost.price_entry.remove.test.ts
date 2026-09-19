@@ -242,6 +242,37 @@ describe("remove_price_entry", () => {
     const h = harness(null);
     const out = await h.handler(input(), ctx());
     expect(out.closed).toBeNull();
+    expect(h.closeNegotiatedPriceEntry).toHaveBeenCalledTimes(1);
+  });
+
+  // The retry after a lost response: the first call ended the sole negotiated
+  // rate for a model nothing else prices, this one closes nothing, and the
+  // book that comes back has no row for the class. Reporting `true` here told
+  // the CLI the model was list-priced again and let the app navigate away
+  // without the unpriced warning, while every frame stayed unpriced. A no-op
+  // answers the same question a real close does.
+  it("reports the class unpriced when a no-op retry finds nothing pricing it", async () => {
+    const h = harness(null, [], []);
+    const out = await h.handler(input(), ctx());
+    expect(out.closed).toBeNull();
+    expect(out.fallbackPriced).toBe(false);
+    expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
+  });
+
+  // And the other half: a no-op over a class a list row still prices is
+  // list-priced, which is what the retry should say.
+  it("reports the class priced when a no-op retry finds a row covering it", async () => {
+    const listRow: PriceEntry = {
+      ...closedEntry,
+      id: "0192d4a8-7c1e-7a00-8000-0000000000e4",
+      orgId: null,
+      source: "list",
+      effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
+      effectiveTo: null,
+    };
+    const h = harness(null, [], [listRow]);
+    const out = await h.handler(input(), ctx());
+    expect(out.closed).toBeNull();
     expect(out.fallbackPriced).toBe(true);
   });
 
@@ -263,14 +294,14 @@ describe("remove_price_entry", () => {
     expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
   });
 
-  // No row was closed, so nothing about the class's pricing changed — but
-  // the guard still has to read the book first to learn that, since knowing
-  // whether this call has anything live to end is exactly what the guard
-  // reads the book to find out.
-  it("still reads the book to decide there is nothing to guard, even though nothing closes", async () => {
+  // The guard reads the book to learn whether this call has anything live to
+  // end; the no-op path reads it a second time, after the close, because the
+  // reason nothing closed may be that a concurrent call ended the row, and
+  // the guard's copy is the one picture that cannot be trusted then.
+  it("reads the book again after a close that closed nothing", async () => {
     const h = harness(null);
     await h.handler(input(), ctx());
-    expect(h.loadPriceBook).toHaveBeenCalledTimes(1);
+    expect(h.loadPriceBook).toHaveBeenCalledTimes(2);
   });
 
   it("ends the row at the instant asked for, in the region asked for", async () => {

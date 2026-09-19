@@ -45,7 +45,9 @@ export type PriceEntryRemoveDeps = {
    * Read BEFORE the close, so the handler can refuse rather than leave the
    * class unpriced: the two outcomes the dialog and the CLI must not
    * conflate, and the second one is no longer something the caller only
-   * learns about after it already happened.
+   * learns about after it already happened. Read again AFTER a close that
+   * closed nothing, because an idempotent retry still has to say whether the
+   * class is priced.
    */
   loadPriceBook: (args: { orgId: string }) => ReturnType<typeof loadPriceBook>;
 };
@@ -161,12 +163,38 @@ export function createPriceEntryRemoveHandler(
 
     // Nothing was actually closed (already ended, or never negotiated): the
     // guard above ran against a hypothetical close that never happened, so
-    // its answer says nothing about this outcome — the class's pricing did
-    // not change, and it is covered exactly as well as it was before the
-    // call. Otherwise the guard's read stands: list rows do not change out
-    // from under one call, so there is nothing a second query would learn
-    // that the guard did not already establish.
-    const fallbackPriced = closed === null ? true : wouldFallback;
+    // its answer says nothing about this outcome. Neither does `true`, which
+    // is what this used to report. The removal is advertised as idempotent,
+    // so the path that matters is the retry after a lost response: the first
+    // call closed the sole negotiated rate for a custom model nothing else
+    // prices, and the retry closed nothing — reporting `fallbackPriced: true`
+    // then told the CLI to say the model was back on list pricing and let the
+    // app navigate away without the unpriced warning, while every frame from
+    // that instant on stayed unpriced. A no-op has to answer the same
+    // question a real close does: is this class priced now?
+    //
+    // So read the book again and resolve it, at the instant the store used.
+    // The book is re-loaded rather than reusing the guard's copy because the
+    // reason nothing closed may be that another call closed the row between
+    // the two — the guard's copy would then still show it open, which is the
+    // one picture that cannot be trusted here. One extra query, only on the
+    // path that changed nothing.
+    //
+    // Own rows are NOT excluded this time: the guard excluded them to ask
+    // what would remain after a close, and here nothing was closed, so a
+    // negotiated row still in force is a real answer to whether the class is
+    // priced.
+    let fallbackPriced = wouldFallback;
+    if (closed === null) {
+      const postCloseBook = await deps.loadPriceBook({ orgId: ctx.orgId });
+      fallbackPriced =
+        resolvePriceEntry(postCloseBook, {
+          orgId: ctx.orgId,
+          modelId: input.model,
+          tokenClass: input.tokenClass,
+          at,
+        }) !== null;
+    }
 
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
     // Emitted whether or not a row was open: the request to return a model to
