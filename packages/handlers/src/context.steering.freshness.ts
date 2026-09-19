@@ -54,12 +54,14 @@ export function createGetSteeringFreshnessHandler(
   return async (_input, ctx): Promise<ContextSteeringFreshnessOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
-    // Three independent reads. They run together because this sits in front
-    // of a developer's prompt and the latency is the whole budget.
-    const [steeringVersion, publication, binding, settings] = await Promise.all(
-      [
-        deps.store.ledgerLength(scope),
-        deps.store.latestPublication(scope),
+    // Version and publication share one transaction (`versionAndPublication`)
+    // so a promotion landing between two independent reads cannot pair the
+    // new steering version with the old `headCommit`. The other two reads
+    // run alongside it because this sits in front of a developer's prompt
+    // and the latency is the whole budget.
+    const [{ version: steeringVersion, publication }, binding, settings] =
+      await Promise.all([
+        deps.store.versionAndPublication(scope),
         // The same seam Context PRs resolve through, not a binding-only
         // query of its own. A workspace still on the legacy sources wizard
         // has no `repository_binding_heads` row, and the wizard's
@@ -91,8 +93,7 @@ export function createGetSteeringFreshnessHandler(
             .limit(1);
           return rows[0]?.settings ?? null;
         }),
-      ],
-    );
+      ]);
 
     return {
       steeringVersion,

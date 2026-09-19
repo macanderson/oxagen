@@ -291,6 +291,14 @@ export class MemoryStore implements SteeringStore {
       publishedAt: tied[0]!.publishedAt as Date,
     };
   }
+  /** The in-memory store has no concurrency to race, so this is the same two reads. */
+  async versionAndPublication(scope: { workspaceId: string }) {
+    const [version, publication] = await Promise.all([
+      this.ledgerLength(scope),
+      this.latestPublication(scope),
+    ]);
+    return { version, publication };
+  }
   async insertAppend(values: Parameters<SteeringStore["insertAppend"]>[0]) {
     const existing = this.appends.find(
       (a) =>

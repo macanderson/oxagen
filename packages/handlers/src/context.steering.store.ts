@@ -217,6 +217,21 @@ export interface SteeringStore {
     commitShas: string[];
     publishedAt: Date;
   } | null>;
+  /**
+   * `ledgerLength` and `latestPublication` in one transaction, for the
+   * freshness read: a publication committing between two independent reads
+   * could pair the new steering version with the old `headCommit`, and a
+   * checkout stalled at that old commit would then read as current under
+   * the new version. One transaction gives both counts the same snapshot.
+   */
+  versionAndPublication(scope: SteeringScope): Promise<{
+    version: number;
+    publication: {
+      commitSha: string;
+      commitShas: string[];
+      publishedAt: Date;
+    } | null;
+  }>;
 
   /** Idempotent on (workspace, record_hash): `appended` is false on a repeat. */
   insertAppend(
@@ -645,6 +660,64 @@ export const postgresSteeringStore: SteeringStore = {
         ),
     );
     return c?.total ?? 0;
+  },
+
+  async versionAndPublication(scope) {
+    const published = and(
+      eq(schema.contextRecords.orgId, scope.orgId),
+      eq(schema.contextRecords.workspaceId, scope.workspaceId),
+      isNotNull(schema.contextRecords.commitSha),
+      isNotNull(schema.contextRecords.publishedAt),
+      isNull(schema.contextRecords.deletedAt),
+    );
+    const { countRow, rows } = await withTenantDb(async (tx) => {
+      const newestInstant = tx
+        .select({ at: max(schema.contextRecords.publishedAt) })
+        .from(schema.contextRecords)
+        .where(published);
+      const [countRow] = await tx
+        .select({ total: count() })
+        .from(schema.contextPromotions)
+        .where(
+          and(
+            eq(schema.contextPromotions.orgId, scope.orgId),
+            eq(schema.contextPromotions.workspaceId, scope.workspaceId),
+          ),
+        );
+      const rows = await tx
+        .select({
+          commitSha: schema.contextRecords.commitSha,
+          publishedAt: schema.contextRecords.publishedAt,
+        })
+        .from(schema.contextRecords)
+        // Same tie-break as `latestPublication`: every publication at the
+        // newest instant, stable on id so `commitSha` does not flip between
+        // reads.
+        .where(
+          and(
+            published,
+            eq(schema.contextRecords.publishedAt, sql`(${newestInstant})`),
+          ),
+        )
+        .orderBy(desc(schema.contextRecords.id));
+      return { countRow, rows };
+    });
+    const newest = rows[0];
+    const publication =
+      newest?.commitSha && newest.publishedAt
+        ? {
+            commitSha: newest.commitSha,
+            commitShas: [
+              ...new Set(
+                rows.flatMap((row) =>
+                  row.commitSha === null ? [] : [row.commitSha],
+                ),
+              ),
+            ],
+            publishedAt: newest.publishedAt,
+          }
+        : null;
+    return { version: countRow?.total ?? 0, publication };
   },
 
   async insertAppend(values) {

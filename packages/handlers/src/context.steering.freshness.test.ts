@@ -101,11 +101,13 @@ describe("get_steering_freshness handler", () => {
   });
 
   const store = {
-    ledgerLength: vi.fn(async () => 12),
-    latestPublication: vi.fn(async () => ({
-      commitSha: "abc1234",
-      commitShas: ["abc1234", "def5678"],
-      publishedAt: new Date("2026-09-01T10:00:00.000Z"),
+    versionAndPublication: vi.fn(async () => ({
+      version: 12,
+      publication: {
+        commitSha: "abc1234",
+        commitShas: ["abc1234", "def5678"],
+        publishedAt: new Date("2026-09-01T10:00:00.000Z"),
+      },
     })),
   };
 
@@ -162,8 +164,10 @@ describe("get_steering_freshness handler", () => {
     stubReads(null);
     const handler = createGetSteeringFreshnessHandler({
       store: {
-        ledgerLength: vi.fn(async () => 0),
-        latestPublication: vi.fn(async () => null),
+        versionAndPublication: vi.fn(async () => ({
+          version: 0,
+          publication: null,
+        })),
       } as never,
       readConnection: vi.fn(async () => null) as never,
     });
