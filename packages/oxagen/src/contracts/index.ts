@@ -89,6 +89,7 @@ import { spendGet } from "./spend.get";
 import { spendDrill } from "./spend.drill";
 import { spendWasteList } from "./spend.waste";
 import { skillList } from "./skill.list";
+import { skillPropose } from "./skill.propose";
 import { spendStatementExport } from "./spend.statement.export";
 import { costPriceEntryList } from "./cost.price_entry.list";
 import { costUnpricedModelList } from "./cost.unpriced_model.list";
@@ -647,6 +648,7 @@ export {
   spendDrill,
   spendWasteList,
   skillList,
+  skillPropose,
   spendStatementExport,
   costPriceEntryList,
   costUnpricedModelList,
@@ -986,6 +988,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   spendDrill,
   spendWasteList,
   skillList,
+  skillPropose,
   spendStatementExport,
   costPriceEntryList,
   costUnpricedModelList,

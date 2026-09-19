@@ -396,6 +396,7 @@ Capabilities granted to an agent as a set have a page of their own:
 ## Skill (1)
 
 - [skill.list](skill.list.md) — List the skills this workspace's harness sessions reported when they started, over a window of session start times: each name with the sessions that reported it, their harnesses and when it was first and last seen, plus the window's session count and how many sessions reported no inventory
+- [skill.propose](skill.propose.md) — Add or replace a governed skill as a pull request against the main repository; six checks run first and a failed check writes nothing
 
 ## Spend (4)
 

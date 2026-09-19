@@ -291,6 +291,7 @@ import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
 import { spendWasteListRoute } from "./routes/v1/spend.waste";
 import { skillListRoute } from "./routes/v1/skill.list";
+import { skillProposeRoute } from "./routes/v1/skill.propose";
 import { spendStatementExportRoute } from "./routes/v1/spend.statement.export";
 import { findingListRoute } from "./routes/v1/finding.list";
 import { findingEvidenceGetRoute } from "./routes/v1/finding.evidence.get";
@@ -611,6 +612,8 @@ orgScoped.route("/spend/statement/export", spendStatementExportRoute);
 // The skills a workspace's harness sessions reported at start (#3098): a
 // noBillingGate read of tacho.sessions.
 orgScoped.route("/skills", skillListRoute);
+// A skill added or replaced as a pull request against the main repository (ADR-090).
+orgScoped.route("/skills/propose", skillProposeRoute);
 orgScoped.route("/spend/findings", findingListRoute);
 orgScoped.route("/spend/findings/evidence", findingEvidenceGetRoute);
 orgScoped.route("/spend/findings/fix", findingFixRecordRoute);
