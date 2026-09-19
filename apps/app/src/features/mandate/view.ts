@@ -11,10 +11,10 @@
 // the newest `ledgerLimit` movements and answers all three questions from them.
 // Two consequences the page states rather than hides:
 //
-//   - A search finds nothing beyond the movements that were read. On a mandate
-//     drawn on more times than the bound, `MandateDetail.truncatedAt` is set and
-//     the table says so above the rows, so "no match" is never read as "no such
-//     movement".
+//   - A search finds nothing beyond the movements that were read. Whenever the
+//     answer filled its bound, `MandateDetail.readBound` is set and the table
+//     says above the rows what it read and that it cannot tell whether there is
+//     more, so "no match" is never read as "no such movement".
 //   - The tiles are never sums of the filtered rows. Remaining authority is the
 //     ledger's own accounting (INV-10), carried on `MandateRow.authority`, so a
 //     search cannot move a figure in a tile. That is the point of the rule that

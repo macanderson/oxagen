@@ -63,9 +63,10 @@ function Field({
 /**
  * The measure entry the dialog opens with, taken from the mandate's own
  * authority: the first limited measure that is not the built-in `calls`, so an
- * operator changing one figure does not have to retype the rest. The write
- * replaces the whole `limits` record (actions.ts), which is why the defaults
- * matter: a blank form submitted as-is would drop every measure it omitted.
+ * operator changing one figure does not have to retype it. The other measures do
+ * not need defaults, because `changeMandateLimits` reads the stored record and
+ * lays this edit over it: a field left blank leaves that measure's bound alone
+ * rather than deleting it.
  *
  * A money measure has no default figure here on purpose. `update_mandate_limits`
  * stores what it is given, and whether a figure is micros or whole units is a

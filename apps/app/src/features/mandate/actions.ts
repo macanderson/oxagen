@@ -31,12 +31,14 @@
 // currency-denominated unit is refused here, and a money limit is changed over
 // the API or MCP by a caller that holds the declaration. The app reads one back
 // as money either way.
+import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
-import type { ActionResult } from "@/server/kernel";
-import { kernelWrite } from "@/server/kernel";
+import type { Read } from "@/data/read";
+import type { ActionResult, ContractOutput } from "@/server/kernel";
+import { kernelRead, kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /** The fields the change-limits dialog collects. */
@@ -73,14 +75,55 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
 
+/** The stored `limits` record, as `get_mandate` answers it. */
+type StoredLimits = ContractOutput<typeof mandateGet>["mandate"]["limits"];
+
+/**
+ * A read that did not answer, as the write it was part of reports it.
+ *
+ * `kernelRead` collapses a denial to the page's permission and loses the
+ * handler's reason (`toRead`, server/kernel.ts), so the reason is restated here
+ * from the handler rather than dropped: `get_mandate` has exactly one
+ * `forbidden` reason, `org_role_required`, and `loadMandateRow` exactly one
+ * `not_found` reason, `mandate_not_found`. Both are traceable to a single throw
+ * site, which is why they can be named from this side without guessing.
+ */
+function fromRead(
+  read: Exclude<Read<unknown>, { ok: true }>,
+): ActionResult<never> {
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: "org_role_required" };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return read.status === 404
+        ? { ok: false, reason: "not_found", code: "mandate_not_found" }
+        : { ok: false, reason: "unavailable", code: read.code };
+  }
+}
+
 /**
  * Changes an active mandate's limits, and its validity end when one is given.
  *
- * The write replaces the whole `limits` record rather than merging into it,
- * because that is what `update_mandate_limits` does with the field: it sets
- * `limits` to what the input carries, so a partial record silently drops every
- * measure it omits. The dialog therefore collects the mandate's measures as one
- * set, defaulted from what the mandate holds, and this action sends that set.
+ * **It reads the stored limits and lays the edit over them.**
+ * `update_mandate_limits` sets `limits` to what the input carries, so a
+ * submission naming one measure would delete the bounds on every other measure
+ * the mandate holds — and a deleted bound is unbounded authority for that
+ * measure. That is the failure class ARCHITECTURE.md §9 already records twice on
+ * this lane: a form that can store a wider bound than the operator entered. So
+ * the record is read first, the measures this submission edits are merged over
+ * it, and every bound nobody touched goes back exactly as recorded.
+ *
+ * The consequence a person has to know about: a blank field leaves that measure's
+ * bound as it is rather than removing it. Removing a limit entirely means sending
+ * a `limits` record without it, which is `update_mandate_limits` over the API or
+ * MCP; a form whose blank fields could delete bounds would delete them by
+ * accident far more often than on purpose. The dialog's copy says so.
  *
  * Lowering a per-period limit under authority the period has already drawn is
  * accepted on purpose: the ledger is a record and an update may not rewrite it.
@@ -133,7 +176,8 @@ export async function changeMandateLimits(
 
   if (validTo !== "" && !DATE.test(validTo)) return refuse("validTo");
 
-  const limits = {
+  /** The measures this submission edits, and only those. */
+  const edited = {
     ...(wantsMeasure
       ? {
           [measure]: {
@@ -156,6 +200,32 @@ export async function changeMandateLimits(
   };
 
   const ctx = await requireViewer(org, ws);
+
+  // The merge. `update_mandate_limits` SETS `limits` to what it is given, so a
+  // submission carrying only the measure this dialog exposes would delete every
+  // other measure's bound — and deleting a bound widens the agent's authority
+  // for that measure without anyone asking. The stored record is read first and
+  // the edited measures are laid over it, so every bound nobody touched is
+  // resubmitted exactly as recorded.
+  //
+  // It is read from the store rather than carried up from the page. The dialog
+  // holds the mandate's authority and could reconstruct the record from it, but
+  // then the bounds that go back would be the ones a client sent, and the whole
+  // point of this call is that the unchanged ones are the ones the record holds.
+  // `ledgerLimit: 1` because the movements are not wanted; the contract's floor
+  // is 1 and the mandate is the only part of the answer this uses.
+  let stored: StoredLimits = {};
+  if (Object.keys(edited).length > 0) {
+    const current = await kernelRead(ctx, {
+      contract: mandateGet,
+      input: { mandateId: draft.mandateId, ledgerLimit: 1 },
+      page: "mandates",
+    });
+    if (!current.ok) return fromRead(current);
+    stored = current.value.mandate.limits;
+  }
+  const limits: StoredLimits = { ...stored, ...edited };
+
   const result = await kernelWrite(ctx, mandateLimitsUpdate, {
     mandateId: draft.mandateId,
     // Omitted rather than sent empty: the contract refuses a `limits` record

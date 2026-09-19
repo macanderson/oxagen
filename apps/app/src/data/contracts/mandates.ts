@@ -207,19 +207,28 @@ export type MandateLedgerRow = z.infer<typeof MandateLedgerRow>;
 /**
  * One mandate and its ledger: the page's whole record (`get_mandate`).
  *
- * `truncatedAt` is `MandateList`'s field for the same reason. `get_mandate`
- * takes a `ledgerLimit` and no cursor, so a mandate drawn on more times than
- * the read asked for is missing its older movements — and every figure in the
- * tiles would then be a rollup of rows the reader cannot see. The tiles are the
- * ledger's own totals rather than sums of these rows (INV-10), so they stay
- * right; the table says what it is not showing.
+ * **`readBound` is what the read can establish, and its name says so.** It is
+ * the `ledgerLimit` the read asked for, set when the answer filled it and null
+ * when the answer came back short. It is deliberately **not** called
+ * `truncatedAt`, and the copy above the table does not say older movements exist:
+ * `get_mandate` takes a bound and no cursor, so a ledger of exactly the bound is
+ * indistinguishable from one of the bound plus a thousand, and a page that
+ * announced truncation on a ledger of exactly 500 would be making a false
+ * statement about an audit record. What the page can honestly say is what it read
+ * and that it cannot tell whether there is more, which is what the string says.
+ *
+ * Telling full from truncated needs the contract to answer it — a total, a
+ * has-more flag, or a cursor on `get_mandate`. Until one exists this is the
+ * strongest honest claim, and the figures in the tiles are unaffected either way:
+ * remaining authority is the ledger's own accounting (INV-10), never a sum of
+ * these rows.
  */
 export const MandateDetail = z.object({
   mandate: MandateRow,
   /** Newest movement first, as `get_mandate` orders them. */
   ledger: z.array(MandateLedgerRow),
   asOf: Instant,
-  truncatedAt: z.number().int().positive().nullable(),
+  readBound: z.number().int().positive().nullable(),
 });
 export type MandateDetail = z.infer<typeof MandateDetail>;
 

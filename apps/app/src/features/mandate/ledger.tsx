@@ -136,12 +136,12 @@ export function MandateLedger({
         <p className="text-xs text-muted-foreground">{t("basis")}</p>
       </div>
       <p className="px-4 pb-3 text-xs text-muted-foreground">{t("note")}</p>
-      {detail.truncatedAt === null ? null : (
+      {detail.readBound === null ? null : (
         <p
-          data-state="truncated"
+          data-state="read-bound"
           className="max-w-prose px-4 pb-3 text-sm text-foreground"
         >
-          {t("truncated", { shown: String(detail.truncatedAt) })}
+          {t("readBound", { shown: String(detail.readBound) })}
         </p>
       )}
       <Filters at={at} view={view} />

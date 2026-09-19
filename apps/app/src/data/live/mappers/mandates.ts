@@ -179,7 +179,11 @@ export function toMandateDetail(
 ): z.input<typeof MandateDetail> {
   return {
     asOf: asOf.toISOString(),
-    truncatedAt: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
+    // What the read can establish: the bound it asked for, when the answer
+    // filled it. Not "truncated" — a ledger of exactly the bound looks the same
+    // as one of the bound plus a thousand, and `get_mandate` answers no total, no
+    // has-more flag and no cursor to tell them apart (`MandateDetail.readBound`).
+    readBound: out.ledger.length >= ledgerLimit ? ledgerLimit : null,
     mandate: toMandateRow(out.mandate),
     ledger: out.ledger.map((row) => ({
       kind: row.kind,
