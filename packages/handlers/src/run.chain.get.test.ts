@@ -200,12 +200,15 @@ describe("get_run_chain", () => {
       session: { finalHash: wholeSessionHash },
     });
     const out = await chain({ runId: TACHO_ID }, ctx());
+    // Top-level merkleRoot still surfaces the session commitment under
+    // hashRule tacho.sha256_prev_hash_v1; the seal must not also rename that
+    // chain head as a stream digest or Merkle root.
     expect(out.merkleRoot).toBe(wholeSessionHash);
     expect(out.seals).toEqual([
       expect.objectContaining({
         finalEventDigest: wholeSessionHash,
-        eventStreamDigest: wholeSessionHash,
-        merkleRoot: wholeSessionHash,
+        eventStreamDigest: null,
+        merkleRoot: null,
       }),
     ]);
   });

@@ -567,18 +567,23 @@ describe("foldPageStart", () => {
     expect(foldPageStart(folds, "1")).toBe(0);
   });
 
-  it("does not let an earlier fold reclaim a cursor after it grows over a later fold (finding 4052307522)", () => {
+  it("re-emits an earlier fold that grew past an exact cursor owner (Codex P1 on #3352)", () => {
     // Live: start A(1), start B(2). Client pages A then B, leaving cursor 2.
-    // complete A(3) arrives: A expands to 1..3 and contains 2, but the cursor
-    // still names B. Re-emitting A would return cursor 3, then B with cursor 2
-    // again, a duplicate-and-regress cycle.
+    // complete A(3) arrives: A expands to 1..3 while B still ends at 2. The
+    // exact-match branch used to advance past B and return -1, so A's response
+    // never emitted. Re-emit A first; once the client holds A's new endSeq,
+    // the next page advances to B as usual.
     const before = [fold("1", "1"), fold("2", "2")];
     expect(foldPageStart(before, "1")).toBe(1);
     expect(foldPageStart(before, "2")).toBe(-1);
     const afterACompletes = [fold("1", "3"), fold("2", "2")];
-    expect(foldPageStart(afterACompletes, "2")).toBe(-1);
-    // B then completes too: cursor 2 must re-emit B (grown), not A.
+    expect(foldPageStart(afterACompletes, "2")).toBe(0);
+    expect(foldPageStart(afterACompletes, "3")).toBe(1);
+    // After the client pages A's new endSeq, B's completion is the next fold.
+    // A stale cursor of 2 with both complete has no exact owner, so the grown
+    // path re-emits B (last containing range), which is the remaining delta.
     const bothComplete = [fold("1", "3"), fold("2", "4")];
+    expect(foldPageStart(bothComplete, "3")).toBe(1);
     expect(foldPageStart(bothComplete, "2")).toBe(1);
   });
 

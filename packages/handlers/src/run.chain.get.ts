@@ -269,9 +269,14 @@ function sealsOf(
       terminalStatus: session.outcome,
       eventCount: session.seqCount,
       finalRunSeq,
+      // final_hash is a hash-chain head (tacho.sha256_prev_hash_v1), not an
+      // RFC 6962 Merkle root and not an event-stream digest. Advertising it
+      // under those names makes the Chain tab, CLI and API claim commitments
+      // nobody computed (Codex P1 on #3352). Leave them null until Tacho
+      // persists the real values; finalEventDigest carries the chain head.
       finalEventDigest: session.finalHash,
-      eventStreamDigest: session.finalHash,
-      merkleRoot: session.finalHash,
+      eventStreamDigest: null,
+      merkleRoot: null,
       archiveSegmentRef: null,
     },
   ];

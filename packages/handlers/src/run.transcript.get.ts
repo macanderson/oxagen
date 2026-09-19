@@ -96,9 +96,13 @@ export function decodeTranscriptCursor(raw: string): string | null {
  * (the fold the previous page returned). A cursor can sit inside several
  * overlapping folds once an earlier fold grows past a later fold's opening,
  * so ownership must not be inferred from the first containing range
- * (finding 4052307522). When no fold ends at the cursor anymore, re-emit the
- * last fold that still contains it and has grown past it. Otherwise advance
- * to the next fold whose opening is after the cursor.
+ * (finding 4052307522). When an earlier fold has grown past that exact
+ * owner (parallel B finished before A; the client holds B's endSeq while A
+ * then completes), re-emit the earlier grown fold before advancing past the
+ * exact match — otherwise A's response is never emitted (Codex P1 on #3352).
+ * When no fold ends at the cursor anymore, re-emit the last fold that still
+ * contains it and has grown past it. Otherwise advance to the next fold
+ * whose opening is after the cursor.
  */
 export function foldPageStart(
   folds: readonly { opening: { seq: string }; endSeq: string }[],
@@ -108,15 +112,24 @@ export function foldPageStart(
   const cursor = BigInt(after);
   const owned = folds.findIndex((fold) => BigInt(fold.endSeq) === cursor);
   if (owned !== -1) {
+    // An earlier fold that grew past the exact owner still needs a page.
+    // Walked backwards rather than with findLastIndex (ES2023), same as below.
+    for (let i = owned - 1; i >= 0; i -= 1) {
+      const fold = folds[i];
+      if (
+        fold !== undefined &&
+        BigInt(fold.opening.seq) <= cursor &&
+        BigInt(fold.endSeq) > cursor
+      ) {
+        return i;
+      }
+    }
     const next = owned + 1;
     return next < folds.length ? next : -1;
   }
   // No fold ends at the cursor: the fold the previous page returned has
   // grown. Prefer the last containing range so an earlier fold that expanded
   // over a later fold's opening does not reclaim the cursor.
-  // Walked backwards rather than with findLastIndex, which needs the ES2023
-  // lib: this module typechecks again under apps/api, whose lib does not
-  // carry it.
   let grown = -1;
   for (let i = folds.length - 1; i >= 0; i -= 1) {
     const fold = folds[i];
