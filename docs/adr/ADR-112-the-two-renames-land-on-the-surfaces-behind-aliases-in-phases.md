@@ -422,11 +422,24 @@ runs `oxagen tacho enroll` from a runbook written last month gets a deprecation
 line and an enrollment, not a failure.
 
 Phase 1a is the only phase blocked on nothing, which is why it ships first and
-alone. Phases 4 and 5 each ship the new name beside the old and retire the old
-one a release later, so no phase leaves a host, a producer or a row that the
-next phase cannot read. Nothing now depends on the database forgetting the old
-name, because the schema is not renamed; an earlier draft ordered these phases
-around that dependency, and removing the phase removed the constraint.
+alone. Phases 4 and 5 each ship the new name beside the old, and **no phase
+retires an old name on a release count.** Every retirement here waits on evidence
+about who still holds the old name, because that is the only thing that makes the
+retirement safe:
+
+| The old name | Stops answering when |
+| --- | --- |
+| `tachod`, `tacho-hook`, `/v1/tacho/enroll` and the `/v1/tacho` group | The host records show the fleet has re-enrolled |
+| The seven organization-scoped `/tacho/` paths | An announced API deprecation window closes, independent of the fleet, because a host re-enrolling does not update a caller's script |
+| `tacho/1.0` | Host telemetry shows no enrolled host still sends it, which a sealed WAL entry may make never |
+
+So no phase leaves a host, a producer or a caller that the next phase cannot
+read. An earlier draft of this paragraph said phases 4 and 5 retire the old name
+"a release later", which contradicted both of those phases after review corrected
+them, and following the summary instead of the phase would have reintroduced the
+run-loss the envelope fix removed. Nothing depends on the database forgetting the
+old name either: the schema is not renamed, and removing that phase removed the
+constraint this paragraph used to be ordered around.
 
 `pnpm check:prose` scans `apps/web` and `apps/docs`, so the `apps/docs` sweep
 is the one part of phase 3 with a gate behind it. It does not scan `docs/` or
