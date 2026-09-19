@@ -179,6 +179,24 @@ request.**
    `docs/capabilities/*.md` non-recursively, because a git pathspec's `*`
    crosses `/` and pulls in `schemas/README.md` for 29.
 
+   **`docs/` is not the documentation surface. `apps/docs` is.** The first four
+   drafts of this measurement scanned `docs/` alone, which is the internal
+   corpus. The site a customer reads is `apps/docs`, and it carries the word in
+   7 more files across 63 occurrences: `content/docs/cli/wrap-an-agent.mdx`
+   (34), `cli/desktop.mdx` (21), `getting-started.mdx` (3), `cli/commands.mdx`
+   (2), `index.mdx`, `architecture.mdx`, and `src/app/(home)/page.tsx`. All 7
+   carry prose, so the scope is 45 prose files of 126, not 38 of 119.
+
+   Those 7 are the most urgent files in the whole phase, and not because of the
+   noun. `getting-started.mdx` and `wrap-an-agent.mdx` instruct a reader to run
+   `oxagen tacho enroll` and `oxagen tacho status`, which phase 1a and 1b moved
+   to `oxagen agent`. The old spelling still works and prints one deprecation
+   line, by design, so nothing is broken; but the published quickstart now
+   teaches the deprecated form, which is a defect the rename created and this
+   record did not see because it was measuring the wrong tree. Sweep `apps/docs`
+   first. `pnpm check:prose` scans it, unlike `docs/`, so that sweep has a
+   scanner the rest of phase 3 does not.
+
    **The unit of work is the occurrence, not the file.** Three drafts of this
    table classified files by the directory they sit in, and each draft was
    wrong in the same way, because most of these files carry more than one kind
@@ -192,7 +210,8 @@ request.**
    | Prose a reader reads | Rewritten. 38 files: 11 in `docs/specs/tacho/`, 15 capability documents that say `Tacho` in sentences, and 12 elsewhere including `docs/VISION.md`, `README.md` and `ONBOARDING.md` |
    | A code comment | Rewritten; the code around it is identifiers. 3 files, the examples under `design/examples/` |
 
-   38 + 3 + 26 + 39 + 13 = 119. The file counts are a size, not a work list: a
+   38 + 3 + 26 + 39 + 13 = 119 under `docs/`, plus 7 prose files under
+   `apps/docs` for 126 and 45 prose. The file counts are a size, not a work list: a
    capability document has a filename and a `**Surfaces:**` line that stay and
    sentences that change, and `check-capability-docs` compares only that line
    against the contract, so it is not a reason to leave the sentences alone.
@@ -204,9 +223,9 @@ request.**
    move breaks them silently, and a repository path nobody outside the tree
    reads is the internal identifier decision 1 leaves alone.
 
-   **The prose keeps naming what exists.** `tachod`, `tacho-hook`, `tacho/1.0`
-   and the `tacho` Postgres schema are live until phases 4, 5 and 6 rename
-   them. The envelope's live name is `tacho/1.0`, the one literal
+   **The prose keeps naming what exists.** `tachod`, `tacho-hook`, the deployed
+   `/tacho/` paths and `tacho/1.0` are live until phases 4 and 5 rename them,
+   and the `tacho` Postgres schema is live for good. The envelope's live name is `tacho/1.0`, the one literal
    `TACHO_ENVELOPE_VERSION` accepts; `oxagen.frame/1.0` is what phase 5 adds
    beside it. Naming a replacement as though it were current would tell a
    producer to send a version the collector rejects, which is the failure this
@@ -235,20 +254,72 @@ request.**
    which is the failure this whole record is arranged to avoid. Aliasing them
    is blocked on nothing, so the server may accept both before any host ships
    the new binary name; the route filenames stay as they are under decision 1.
+
+   **The replacement paths, named.** This rename removes a word rather than
+   substituting one, so "both spellings" is not derivable and an implementer
+   would have to guess between `/v1/agent`, an unprefixed capability route and
+   something else. The target is `agent`, the word phase 1a already shipped on
+   the commands, and every one of these nine paths is free today:
+
+   | Today | Phase 4 adds |
+   | --- | --- |
+   | `/v1/tacho/enroll` | `/v1/agent/enroll` |
+   | `/v1/tacho` (events, bundle, commands) | `/v1/agent` |
+   | `/tacho/enrollments` | `/agent/enrollments` |
+   | `/tacho/enrollments/revoke` | `/agent/enrollments/revoke` |
+   | `/tacho/enrollment-tokens` | `/agent/enrollment-tokens` |
+   | `/tacho/hosts` | `/agent/hosts` |
+   | `/tacho/sessions` | `/agent/sessions` |
+   | `/tacho/sessions/get` | `/agent/sessions/get` |
+   | `/tacho/incidents` | `/agent/incidents` |
+
+   The organization-scoped group already carries `/agent/tools`,
+   `/agent/memory/*`, `/agent/roles/*` and more, so these join a namespace that
+   exists rather than opening one. Check each target for a collision before
+   mounting it anyway: the `status` and `unenroll` collision that phase 1b hit
+   was the same mistake one layer up.
 5. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
    the collector reading both for one release.
-6. The database: the `tacho` Postgres schema, by Atlas migration, after the
-   runtime no longer writes the old name. It is a schema rename rather than a
-   table rename. `packages/database/src/schema/tacho.ts` declares 10 tables on
-   `tachoSchema`, and the migrations create them as `"tacho"."sessions"`,
-   `"tacho"."hosts"`, `"tacho"."incidents"` and the rest, so the word is in the
-   schema that qualifies all 10. `tacho_sessions_runtime_check` is a constraint
-   name, not a table, and the `tacho_sessions_*` prefixes on constraints and
-   indexes move with it. Earlier drafts of this record and of the corpus README
-   named a `tacho_sessions` table, which does not exist.
-7. `capability` to `agent tool` on the surfaces: UI strings, error messages,
+6. `capability` to `agent tool` on the surfaces: UI strings, error messages,
    CLI output, `docs/capabilities/`, and the two rule files. The registry
    symbol and the contract files keep their names under decision 1.
+
+**The `tacho` Postgres schema does not move, and this record said it would.**
+Drafts through 2026-09-19 carried a sixth phase renaming it by Atlas migration
+"after the runtime stops writing the old name". That instruction cannot be
+carried out, and the schema does not meet this record's own test for a surface.
+
+It cannot be carried out because `packages/database/src/schema/_schemas.ts:36`
+is `pgSchema("tacho")`, a compile-time constant. Every reader and writer emits
+schema-qualified SQL from it, and `ALTER SCHEMA ... RENAME` is atomic and total:
+the old name stops resolving the instant it commits. So the runtime cannot stop
+writing the old name before the migration, and cannot survive the migration
+before the deploy. The expand-and-contract that normally bridges this, leaving a
+compatibility schema of auto-updatable views behind, is ruled out here:
+`packages/handlers/src/tacho.events.ingest.ts` uses `ON CONFLICT` at four sites
+(1394, 1774, 1981, 2153), and its inference specification resolves against a
+table's indexes, not a view's. The bridge would break the hottest write path in
+the feature. `agent`, the obvious target name, is also already a schema, and
+`_schemas.ts` records why these tables were kept out of it: so the
+evidence-adjacent ones can carry append-only grants without a per-table
+convention inside it.
+
+It is not a surface because no customer reaches it. A Postgres schema name is
+not in the product, the CLI output, a URL or the wire; it is reached by the code
+and by an operator writing SQL. That is the identifier decision 1 keeps, by the
+same reasoning this record uses to leave `docs/specs/tacho` where it is. The
+one way it could leak is a constraint violation surfacing `"tacho"."sessions"`
+in an operator-visible error, and the fix for that is to shape the message, not
+to rename ten tables.
+
+So the ledger is: a migration across 10 tables, needing either downtime or a
+dual-write on the ingest path, to remove a word nobody outside the operators
+sees. Dropping the phase is the durable call (SCR-002), not the cheap one, and
+naming why here is what stops it being revived as an obvious tidy-up. What
+stays true from that draft: it would have been a schema rename and not a table
+rename, `tacho_sessions_runtime_check` is a constraint name, and no
+`tacho_sessions` table exists, which earlier drafts of this record and of the
+corpus README both claimed.
 
 ## Consequences
 
@@ -259,14 +330,17 @@ The fleet keeps working through the rename, which is the point. An operator who
 runs `oxagen tacho enroll` from a runbook written last month gets a deprecation
 line and an enrollment, not a failure.
 
-Phase 1a is the only phase that is blocked on nothing, which is why it ships first and alone. Phases 3, 4, and 5 are
-ordered by what writes the name: the runtime stops writing the old value before
-the database forgets how to store it, so no phase leaves a row the next phase
-cannot read.
+Phase 1a is the only phase blocked on nothing, which is why it ships first and
+alone. Phases 4 and 5 each ship the new name beside the old and retire the old
+one a release later, so no phase leaves a host, a producer or a row that the
+next phase cannot read. Nothing now depends on the database forgetting the old
+name, because the schema is not renamed; an earlier draft ordered these phases
+around that dependency, and removing the phase removed the constraint.
 
-`pnpm check:prose` does not scan `apps/app` message catalogues, so it cannot
-hold phase 1 or phase 6. A string that carries a retired word is caught by
-review, not by the gate, until that scanner's scope grows.
+`pnpm check:prose` scans `apps/web` and `apps/docs`, so the `apps/docs` sweep
+is the one part of phase 3 with a gate behind it. It does not scan `docs/` or
+`apps/app`'s message catalogues, so neither the internal corpus nor phase 6's UI
+strings are held by anything but review until that scanner's scope grows.
 
 The two commands that gain an optional argument are governance commands, so
 each needs a test for both forms: with the argument, the server-scoped read it
