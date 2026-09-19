@@ -27,6 +27,7 @@ import {
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { phoneWidth } from "@/test/phone";
+import { resetRecoveryCodeVaultForTests } from "./recovery-code-vault";
 import { shellData } from "./shell.builders";
 import type { ShellData } from "./shell-data";
 import {
@@ -75,11 +76,8 @@ const { AccountDialog } = await import("./account-dialog");
 const { AvatarDialog } = await import("./avatar-dialog");
 
 /** The dialog renders from shell state, so a test needs the way a person opens it. */
-/** Where a click on one of `OpenIt`'s probe links actually arrived. */
-const linkClicks: string[] = [];
-
 function OpenIt() {
-  const { openAccount, avatarOpen, accountOpen, exitHeld } = useShellState();
+  const { openAccount, avatarOpen, accountOpen } = useShellState();
   return (
     <>
       {(["profile", "preferences", "security", "privacy"] as const).map(
@@ -98,36 +96,7 @@ function OpenIt() {
       <output data-testid="which">
         {avatarOpen ? "avatar" : accountOpen ? "account" : "none"}
       </output>
-      <output data-testid="exit-held">{String(exitHeld)}</output>
-      {/* Probe links. Each records the click and stops jsdom navigating, so a
-          click that arrives here is one the shell let through. */}
-      {["/acme/core-platform/fleet", "/other-org/people"].map((href) => (
-        <ProbeLink key={href} href={href} />
-      ))}
     </>
-  );
-}
-
-/**
- * A plain anchor, on purpose. INV-13 asks every link to be a `SafeLink`, and a
- * `SafeLink` is exactly what this must not be: the probe exists to prove the
- * shell's document-level click guard catches an ordinary anchor, which is what
- * a surface outside this lane renders. It records the click and stops jsdom
- * navigating, so a click that arrives here is one the shell let through.
- */
-function ProbeLink({ href }: { href: string }) {
-  return (
-    <a
-      // eslint-disable-next-line no-restricted-syntax -- see above: a checked target would defeat what this probe is for
-      href={href}
-      data-testid={`probe-${href.split("/")[1] ?? ""}`}
-      onClick={(event) => {
-        linkClicks.push(href);
-        event.preventDefault();
-      }}
-    >
-      {href}
-    </a>
   );
 }
 
@@ -188,6 +157,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  // The vault outlives a render, as it outlives a page's transitions.
+  resetRecoveryCodeVaultForTests();
   refresh.mockReset();
   updateProfile.mockReset();
   updateProfile.mockResolvedValue({
@@ -935,13 +906,12 @@ describe("Security", () => {
   // response arrives. A reload in that gap loses the only copy of the new set,
   // so the guard has to be up while the rotation is in flight, not only once
   // a set is on screen.
-  // `beforeunload` does not run for a client-side transition. A link into
-  // another organization remounts the shell, which drops the dialog and the
-  // only copy of the new set, so the shell holds that exit itself and brings
-  // the person back to the codes. A link inside the organization keeps the
-  // shell mounted and is let through.
-  it("holds a link out of the organization while codes are at stake", async () => {
-    linkClicks.length = 0;
+  // Any client-side transition out of the organization, Back and Forward
+  // included, unmounts the shell and this dialog with it, and none of them
+  // runs `beforeunload`. The set is held in a module that outlives the shell,
+  // so a rotation that answers while no shell is mounted is still there, and
+  // the next shell to mount puts it back in front of the person.
+  it("keeps a set across the shell unmounting, and shows it on arrival", async () => {
     let issue: ((result: unknown) => void) | undefined;
     liveRegenerateBackupCodes.mockImplementation(
       () =>
@@ -950,39 +920,47 @@ describe("Security", () => {
         }),
     );
     const { user } = await openDialog("security");
-    expect(screen.getByTestId("exit-held")).toHaveTextContent("false");
-
     await user.click(screen.getByTestId("account-codes-open"));
     await user.type(screen.getByTestId("account-codes-password"), "hunter2");
     await user.click(screen.getByTestId("account-codes-confirm"));
-    expect(screen.getByTestId("exit-held")).toHaveTextContent("true");
 
-    await user.keyboard("{Escape}");
-    expect(screen.getByTestId("which")).toHaveTextContent("none");
+    // Leave: the whole tree goes, as it does on Back into another organization.
+    cleanup();
+    issue?.({ ok: true, codes: ["back-1111", "back-2222"] });
+    await Promise.resolve();
 
-    await user.click(screen.getByTestId("probe-other-org"));
-    expect(linkClicks).toEqual([]);
-    expect(screen.getByTestId("which")).toHaveTextContent("account");
+    // Arrive in a fresh shell. The Security tab opens on its own, with the set.
+    render(
+      <IntlProvider>
+        <ShellStateProvider>
+          <OpenIt />
+          <AccountDialog data={shellData({ viewer: viewerWith() })} />
+        </ShellStateProvider>
+      </IntlProvider>,
+    );
+    const shown = await screen.findByTestId("account-codes");
+    expect(shown).toHaveTextContent("back-1111");
     expect(screen.getByTestId("account-tab-security")).toHaveAttribute(
       "aria-selected",
       "true",
     );
+  });
 
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByTestId("probe-acme"));
-    expect(linkClicks).toEqual(["/acme/core-platform/fleet"]);
+  // The vault is keyed to the person the set was issued to. A different
+  // person in the same page is never shown it.
+  it("never shows a held set to a different person (negative)", async () => {
+    const { user } = await openDialog("security");
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    cleanup();
 
-    // Saved, so nothing is at stake and the exit is open again.
-    issue?.({ ok: true, codes: ["hold-1111", "hold-2222"] });
-    await user.click(screen.getByRole("button", { name: "open security" }));
-    await user.click(await screen.findByTestId("account-codes-saved"));
-    expect(screen.getByTestId("exit-held")).toHaveTextContent("false");
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByTestId("probe-other-org"));
-    expect(linkClicks).toEqual([
-      "/acme/core-platform/fleet",
-      "/other-org/people",
-    ]);
+    await openDialog(
+      "security",
+      viewerWith({ id: "99999999-9999-4999-8999-999999999999" }),
+    );
+    expect(screen.queryByTestId("account-codes")).toBeNull();
   });
 
   it("asks before unloading the page while a rotation is in flight", async () => {

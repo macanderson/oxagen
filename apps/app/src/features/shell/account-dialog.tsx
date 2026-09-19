@@ -21,6 +21,7 @@ import { useTranslations } from "next-intl";
 import {
   type KeyboardEvent,
   type SyntheticEvent,
+  useCallback,
   useEffect,
   useId,
   useRef,
@@ -59,6 +60,7 @@ import {
   listTitle,
 } from "./account-styles";
 import { initials } from "./format";
+import { recoveryCodeVault, useRecoveryCodeVault } from "./recovery-code-vault";
 import {
   liveListSessions,
   liveRegenerateBackupCodes,
@@ -82,144 +84,63 @@ export function AccountDialog({ data }: { data: ShellData }) {
     accountTab,
     setAccountTab,
     openAccount,
-    setExitHeld,
   } = useShellState();
 
-  // Recovery codes are shown exactly once, so they are held here rather than
-  // in the Security tab that renders them.
+  // Recovery codes are shown exactly once, and from the moment a rotation
+  // lands on the server this page holds the only copy that will ever exist.
+  // They are held in `recovery-code-vault.ts`, not here and not in the
+  // Security tab, because both of those are unmounted by routine things: the
+  // tab by a tab switch or a close, and this dialog by any client-side
+  // transition out of the organization, Back and Forward included. The vault
+  // lives as long as the page does, arms the browser's unload prompt while
+  // anything is at stake, and is cleared only when the person says the set is
+  // saved, which is the one signal that the single showing was received.
   //
-  // `AccountPanel` is keyed on the tab and the panel is unmounted when the
-  // dialog closes, so both switching tab and closing the dialog destroy
-  // anything the tab holds. Better Auth rotates the codes server-side the
-  // moment the call lands, which means a person who closed the dialog while
-  // the request was in flight had their old codes voided and the new ones
-  // dropped on the floor with nothing left to read them from. That is a
-  // locked-out account on the next lost authenticator.
-  //
-  // `AccountDialog` itself stays mounted across both, so the codes survive
-  // and are shown again on return. They are cleared only when the person says
-  // they have saved them, which is the one signal that the single showing has
-  // actually been received.
-  const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
-
-  // A reload is the one way out of this dialog the vault above cannot survive,
-  // and the set is already the only one that works: Better Auth voided the old
-  // codes the moment it issued these, and it keeps only hashes of the new ones,
-  // so nothing anywhere can show them a second time.
-  //
-  // The review that found this asked for the pending set to be held in
-  // server-backed state until it is acknowledged. That is the wrong trade, and
-  // deliberately not what this does. It would put a full second factor bypass
-  // in Oxagen's own database in recoverable form, for as long as nobody presses
-  // a button, replicated to whichever data plane the organisation is on
-  // (ADR-042), in its backups, and inside the very export bundle this dialog
-  // queues. Losing an unsaved set costs one more rotation, with the password,
-  // by someone who is signed in and still holds the authenticator that got them
-  // here. Storing the codes costs the factor itself, to anyone who reaches the
-  // row. The cheaper failure is the one to keep.
-  //
-  // So the loss is made deliberate instead of silent: the browser asks before
-  // it unloads the page. The guard itself sits below the rotation state,
-  // because it has to cover the rotation as well as the set it returns.
-
-  // The rotation itself is held here too, and for the same reason the codes
-  // are: every state the Security tab owns is destroyed by Cancel, by a tab
-  // switch and by a close, and a rotation that is in flight must survive all
-  // three. A `pending` flag inside the tab is discarded by any of them, and
-  // the next press starts a second rotation against a server that has already
-  // voided one set. The two calls can then settle in either order, and the
-  // loser's codes land in the vault after the winner's, so the set on screen is
-  // a set the later call already invalidated. Nothing says so at the time;
-  // the person saves it, and finds out when the authenticator is gone and the
-  // recovery codes are the only way in.
-  //
-  // So: one rotation at a time, held here. Two rotations never exist, which is
-  // why no response can ever be a superseded one. That is stronger than sorting
-  // the answers out after the fact, and it leaves no window to get wrong.
-  const rotatingRef = useRef(false);
-  const [rotating, setRotating] = useState(false);
-  // `rotatingRef`, not `rotating`, decides: two presses inside one render pass
-  // both read the same state value, so state alone lets the second through.
-  const rotation: CodeRotation = {
-    pending: rotating,
-    begin: () => {
-      if (rotatingRef.current) return false;
-      rotatingRef.current = true;
-      setRotating(true);
-      return true;
+  // The review that first found the reload case asked for the pending set to
+  // be held in server-backed state until it is acknowledged. That is the
+  // wrong trade, and deliberately not what this does. It would put a full
+  // second factor bypass in Oxagen's own database in recoverable form, for as
+  // long as nobody presses a button, replicated to whichever data plane the
+  // organisation is on (ADR-042), in its backups, and inside the very export
+  // bundle this dialog queues. Losing an unsaved set to a reload costs one more
+  // rotation, with the password, by someone who is signed in and still holds
+  // the authenticator that got them here. Storing the codes costs the factor
+  // itself, to anyone who reaches the row. The cheaper failure is the one to
+  // keep, and the reload is asked about first.
+  const userId = data.viewer.id;
+  const vault = useRecoveryCodeVault(userId);
+  const heldCodes = vault.codes;
+  const setHeldCodes = useCallback(
+    (codes: string[] | null) => {
+      if (codes) recoveryCodeVault.hold(userId, codes);
+      else recoveryCodeVault.clear();
     },
+    [userId],
+  );
+
+  // One rotation at a time, held in the vault for the same reason the codes
+  // are. A `pending` flag inside the tab is discarded by Cancel, a tab switch
+  // or a close, and the next press would start a second rotation against a
+  // server that has already voided one set. The two calls can then settle in
+  // either order, and the loser's codes land after the winner's, so the set on
+  // screen is one the later call already invalidated. Two rotations never
+  // exist, which is why no response can ever be a superseded one.
+  const rotation: CodeRotation = {
+    pending: vault.rotating,
+    begin: () => recoveryCodeVault.begin(userId),
     end: () => {
-      rotatingRef.current = false;
-      setRotating(false);
+      recoveryCodeVault.end();
     },
   };
 
-  // The unload guard covers two windows, not one. An unsaved set is the obvious
-  // one. The other opens earlier: Better Auth voids the old codes the moment
-  // the rotation lands on the server, before the response reaches this page. A
-  // reload in that gap throws away the only copy of the new set, and nothing
-  // was on screen yet to warn about. So the guard is up from the moment a
-  // rotation begins until the set it returns is saved. `preventDefault` is the
-  // specified opt-in; the wording is the browser's and cannot be set.
-  const guardUnload = rotating || heldCodes !== null;
+  // Arriving in a shell with codes already at stake means the person left the
+  // organization they rotated in, by Back or by a link, before saving them.
+  // The set is still in the vault, so it is put back in front of them rather
+  // than left for them to go looking for.
+  const arrivedWithCodesRef = useRef(vault.rotating || vault.codes !== null);
   useEffect(() => {
-    if (!guardUnload) return;
-    const ask = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", ask);
-    return () => {
-      window.removeEventListener("beforeunload", ask);
-    };
-  }, [guardUnload]);
-
-  // `beforeunload` covers a reload, a closed tab and a typed address. It does
-  // not run for a client-side transition, and two of those leave the shell
-  // and so unmount this dialog with the codes in it: signing out, and a link
-  // into another organization (the shell is mounted per organization). So
-  // while codes are at stake the shell holds its own exits too. Sign out reads
-  // `exitHeld`; a link click out of this organization is caught here, before
-  // the router sees it. Either one brings the person back to the codes. A link
-  // inside the organization keeps the shell, and the codes, mounted, so it is
-  // left alone.
-  const orgSlug = data.org.slug;
-  useEffect(() => {
-    setExitHeld(guardUnload);
-    if (!guardUnload) return;
-    const hold = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0) return;
-      // A modified click opens a new tab or window and leaves this page alone.
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-        return;
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const link = target.closest("a[href]");
-      if (!(link instanceof HTMLAnchorElement)) return;
-      if (link.target && link.target !== "_self") return;
-      if (link.hasAttribute("download")) return;
-      // `document.baseURI`, not `window.location`: INV-13 bans reading
-      // `location.*` in this app, and the base URI answers the same question
-      // for an origin comparison. `link.href` is already absolute, so the base
-      // only matters for a malformed one.
-      const here = new URL(document.baseURI);
-      const url = new URL(link.href, here);
-      if (url.origin !== here.origin) return;
-      if (url.pathname.split("/")[1] === orgSlug) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openAccount("security");
-    };
-    document.addEventListener("click", hold, true);
-    return () => {
-      document.removeEventListener("click", hold, true);
-    };
-  }, [guardUnload, orgSlug, openAccount, setExitHeld]);
-  useEffect(
-    () => () => {
-      setExitHeld(false);
-    },
-    [setExitHeld],
-  );
+    if (arrivedWithCodesRef.current) openAccount("security");
+  }, [openAccount]);
 
   // The ARIA tabs pattern, because `role="tab"` is a promise about the
   // keyboard. A screen-reader user told a control is a tab expects Left and

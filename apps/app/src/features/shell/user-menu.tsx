@@ -14,6 +14,7 @@ import { routes } from "@/shared/safe-path";
 import { Avatar } from "@/ui/avatar";
 import { useNavigate } from "@/ui/navigation";
 import { initials } from "./format";
+import { useRecoveryCodeVault } from "./recovery-code-vault";
 import { liveSignOut } from "./session-client";
 import type { ShellData } from "./shell-data";
 import { type AccountTab, useShellState } from "./shell-state";
@@ -32,7 +33,8 @@ const LINKS: readonly { tab: AccountTab; testId: string }[] = [
 export function UserMenu({ data }: { data: ShellData }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
-  const { theme, setTheme, openAccount, exitHeld } = useShellState();
+  const { theme, setTheme, openAccount } = useShellState();
+  const vault = useRecoveryCodeVault(data.viewer.id);
   const { viewer } = data;
   const displayName = viewer.name ?? viewer.email;
 
@@ -40,12 +42,13 @@ export function UserMenu({ data }: { data: ShellData }) {
   const [signingOut, setSigningOut] = useState(false);
 
   async function signOut() {
-    // Signing out leaves the shell, which unmounts the Account dialog and the
-    // only copy of a recovery-code set Better Auth has already swapped in for
-    // the old one. A client-side `replace` runs no `beforeunload`, so the
-    // browser cannot ask. While codes are at stake the menu takes the person
-    // back to them instead; sign out works again once they are saved.
-    if (exitHeld) {
+    // Signing out ends the session the recovery codes were issued to, and a
+    // client-side `replace` runs no `beforeunload`, so the browser cannot ask.
+    // With a rotation on the wire or its set unsaved, that throws away the only
+    // copy of a set Better Auth has already swapped in for the old one. So the
+    // menu takes the person back to the codes instead; sign out works again
+    // once they are saved.
+    if (vault.rotating || vault.codes !== null) {
       openAccount("security");
       return;
     }
