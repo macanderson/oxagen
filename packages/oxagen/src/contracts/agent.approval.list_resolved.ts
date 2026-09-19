@@ -73,7 +73,7 @@ export const agentApprovalListResolved = registerCapability({
     "List the workspace's resolved approvals, most recently resolved first, cursor-paged, optionally narrowed to one run or a resolved-at time range, including the rule that auto-approved a call no person looked at",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -81,8 +81,8 @@ export const agentApprovalListResolved = registerCapability({
   sensitivity: "medium",
   defaultEffect: "deny",
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
-    workspace: {},
+    org: { Owner: "allow", Admin: "allow" },
+    workspace: { Owner: "allow", Member: "allow" },
   },
   input: z
     .object({

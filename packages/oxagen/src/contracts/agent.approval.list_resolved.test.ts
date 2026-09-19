@@ -28,8 +28,8 @@ describe("list_resolved_approvals contract", () => {
     expect(agentApprovalListResolved.noBillingGate).toBe(true);
     expect(agentApprovalListResolved.defaultEffect).toBe("deny");
     expect(agentApprovalListResolved.defaultRoles).toEqual({
-      org: { Owner: "allow", Admin: "allow", Member: "allow" },
-      workspace: {},
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: { Owner: "allow", Member: "allow" },
     });
     expect(agentApprovalListResolved.layers).not.toContain("e2e");
     expect(agentApprovalListResolved.layers).toContain("app");
