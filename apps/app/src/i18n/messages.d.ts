@@ -1963,6 +1963,7 @@ type Messages = {
       principal: string;
       rolesHint: string;
       invalid: string;
+      timeZoneInvalid: string;
       denied: string;
       failed: string;
       preferences: {
