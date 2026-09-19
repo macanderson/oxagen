@@ -46,6 +46,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("measureNotDeclared");
           case "measure_unit_mismatch":
             return t("measureUnitMismatch");
+          case "measure_kind_conflict":
+            return t("measureKindConflict");
           // Not a handler reason: the action refuses before it writes, because a
           // guessed zone moves a validity boundary by up to a day.
           // `time_zone_unavailable` is its retryable twin, under `unavailable`.

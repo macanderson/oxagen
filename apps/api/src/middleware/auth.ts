@@ -28,6 +28,8 @@ export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
         expired: "API key expired",
         purpose_locked:
           "API key is locked to a purpose this surface does not serve",
+        workspace_archived:
+          "This API key's workspace is archived; restore the workspace or use a key in an active one",
       };
       const { kind } = result as ApiKeyResolutionError;
       throw new HTTPException(401, {

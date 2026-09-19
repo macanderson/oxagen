@@ -428,6 +428,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         status: "retired",
         revokedCredentials: 1,
         revokedHosts: 1,
+        revokedMandates: 0,
       });
       expect(eventTypes()).toEqual(["agent.retired", "api_key.revoked"]);
 
@@ -500,6 +501,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         status: "retired",
         revokedCredentials: 0,
         revokedHosts: 0,
+        revokedMandates: 0,
         retiredAt: firstRetire.retiredAt,
       });
       expect(eventTypes()).toEqual([]);

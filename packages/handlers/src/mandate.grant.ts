@@ -23,6 +23,7 @@ import {
   loadConsequenceRoles,
 } from "@oxagen/iam/mandate-role";
 import {
+  assertAgentActive,
   assertToolsDeclareMeasures,
   loadMandateRow,
   mapMandates,
@@ -46,12 +47,17 @@ export const mandateGrantHandler: CapabilityHandler<
   );
 
   const rows = await withTenantDb(async (tx) => {
-    const agent = await resolveAgent(tx, workspaceId, input.agentId);
-    await assertToolsDeclareMeasures(tx, workspaceId, input);
+    const agent = await resolveAgent(tx, workspaceId, input.agentId, {
+      lock: true,
+    });
+    // Covers both a fresh grant and activating an existing draft: the draft
+    // may have been requested before its agent retired (#3124).
+    assertAgentActive(agent);
+    const limits = await assertToolsDeclareMeasures(tx, workspaceId, input);
     const body = {
       agentPrincipalId: agent.principalId,
       consequenceTags: input.consequenceTags,
-      limits: input.limits,
+      limits,
       targets: input.targets,
       tools: input.tools,
       approvalRules: input.approval,
