@@ -5,7 +5,14 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
-import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
 import { execFile, spawnSync } from "node:child_process";
@@ -550,6 +557,65 @@ export async function startDaemon(
    * Erasing does not reverse. A workspace that narrows and then widens again
    * does not get these bodies back; see `Wal.purgeBodiesOutsideMandate`.
    */
+  /**
+   * A purge this host owes but has not completed.
+   *
+   * A marker file rather than a field on the host file: the host file is the
+   * control plane's signed word about this machine, and this is local
+   * bookkeeping about one unfinished write. It is a debt, not a fact about
+   * the mandate.
+   */
+  const bodyPurgeOwedPath = join(paths.wal, "body-purge-owed");
+
+  function markBodyPurgeOwed(): void {
+    try {
+      ensureDir(paths.wal);
+      writeFileSync(bodyPurgeOwedPath, "", { mode: 0o600 });
+    } catch {
+      // Best effort. Failing to record the debt must not stop the sweep that
+      // is about to run and would usually clear it anyway.
+    }
+  }
+
+  function clearBodyPurgeOwed(): void {
+    try {
+      if (existsSync(bodyPurgeOwedPath)) unlinkSync(bodyPurgeOwedPath);
+    } catch {
+      // Leaves the marker, so the sweep runs again. Re-sweeping costs a pass
+      // over the body files and erases nothing the mandate still covers.
+    }
+  }
+
+  /**
+   * Retry an owed purge, on every confirmation that the cached mandate is
+   * still current. That is the `not_modified` branch, which is where a
+   * narrowing whose sweep failed comes back through for ever afterwards, and
+   * which the first tick after a restart reaches on its own — so a debt
+   * recorded before a crash is retried without a separate startup path. A
+   * bundle that changes instead goes through `purgeBodiesNarrowedOut`, which
+   * sweeps and clears the debt itself.
+   *
+   * Only a proven mandate sweeps, for the reason `purgeBodiesNarrowedOut`
+   * gives: doubt withholds and does not delete. An unprovable mandate leaves
+   * the debt standing until one verifies.
+   */
+  function retryOwedBodyPurge(): void {
+    if (!existsSync(bodyPurgeOwedPath)) return;
+    const retention = retentionInForce();
+    if (!retention.proven) return;
+    try {
+      const purged = wal.purgeBodiesOutsideMandate(retention.mandate);
+      clearBodyPurgeOwed();
+      log(
+        `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
+      );
+    } catch (error) {
+      log(
+        `an owed body purge failed again; content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   function purgeBodiesNarrowedOut(
     previous: RetentionMandate,
     next: RetentionMandate,
@@ -560,8 +626,17 @@ export async function startDaemon(
         !retentionAllows(next, contentClass),
     );
     if (dropped.length === 0) return;
+    // Owed before attempted, so the debt survives what the attempt might not.
+    // `applyControlFacts` has already written the new etag, so every later
+    // poll answers `not_modified` and never reaches this function again: a
+    // transient filesystem error here, or the process dying mid-sweep, would
+    // otherwise leave content the mandate excludes on disk for ever, with
+    // nothing left to notice. The marker is cleared only by a sweep that
+    // returned.
+    markBodyPurgeOwed();
     try {
       const purged = wal.purgeBodiesOutsideMandate(next);
+      clearBodyPurgeOwed();
       log(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
       );
@@ -593,6 +668,8 @@ export async function startDaemon(
       // serving no bundle, which is the opposite of agreeing with this one.
       if (response.not_modified) {
         mandateConfirmedAt = now();
+        // The branch a narrowing whose sweep failed returns through for ever.
+        retryOwedBodyPurge();
         return false;
       }
       if (response.bundle === null) return false;

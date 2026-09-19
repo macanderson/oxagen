@@ -240,6 +240,14 @@ export class Wal {
     return dropped;
   }
 
+  /** Sessions that have a body file, whether or not they have an event file. */
+  private sessionsWithBodies(): string[] {
+    const suffix = ".bodies.jsonl";
+    return readdirSync(this.dir)
+      .filter((name) => name.endsWith(suffix))
+      .map((name) => name.slice(0, -suffix.length));
+  }
+
   /** The last sealed event of a session, if any. */
   head(sessionUuid: string): TachoEvent | undefined {
     const events = this.read(sessionUuid);
@@ -323,7 +331,16 @@ export class Wal {
    */
   purgeBodiesOutsideMandate(retention: RetentionMandate): number {
     let purged = 0;
-    for (const session of this.sessions()) {
+    // Every session that has an event file OR a body file. `sessions()` lists
+    // `.ndjson` only, so a crash between `append`'s body write and its first
+    // event write leaves a `<uuid>.bodies.jsonl` with no `.ndjson` beside it —
+    // invisible to this sweep and to `compact`, which also walks `sessions()`.
+    // Those bytes would outlive every mechanism meant to remove them.
+    const sessions = new Set([
+      ...this.sessions(),
+      ...this.sessionsWithBodies(),
+    ]);
+    for (const session of sessions) {
       if (!existsSync(this.bodyFileFor(session))) continue;
       const kindOf = new Map(
         this.read(session).map(
@@ -345,10 +362,16 @@ export class Wal {
    *   A crash part way through an append leaves exactly this, with content in
    *   it, and keeping it would keep content under no mandate at all. The
    *   rewrite reports it as `undefined`.
-   * - A body whose event is not on the session's chain yet is kept. `append`
-   *   writes bodies before events on purpose, so this is the moment between
-   *   those two writes, not an orphan; the next sweep sees the event and
-   *   judges the body against its class.
+   * - A body whose event is not on the session's chain goes. `append` writes
+   *   bodies before events on purpose, and that window is real — but it is
+   *   not observable from here. `append` is synchronous end to end, two
+   *   `appendFileSync` calls with no await between them, and the daemon is
+   *   single threaded, so no sweep can run inside it. A body with no event
+   *   at sweep time is therefore a crash orphan: the process died between
+   *   the two writes and no event will ever arrive for it. Keeping it kept
+   *   prompt or tool bytes that no mandate covers and that nothing would
+   *   ever ship, delete or compact, because every one of those paths starts
+   *   from the event.
    * - Otherwise the class comes from the event's kind and the one retention
    *   gate answers. A kind the table does not name has no class, so no mandate
    *   can cover it and the body goes.
@@ -360,7 +383,7 @@ export class Wal {
   ): boolean {
     if (stored === undefined) return false;
     const kind = kindOf.get(stored.event_id_idem);
-    if (kind === undefined) return true;
+    if (kind === undefined) return false;
     const contentClass = contentClassOf(kind);
     if (contentClass === undefined) return false;
     return retentionAllows(retention, contentClass);
@@ -430,6 +453,19 @@ export class Wal {
         unlinkSync(this.bodyFileFor(session));
       delete this.cursor.shipped[session];
       delete this.cursor.sealed[session];
+      removed.push(session);
+    }
+    // A body file whose session has no event file is a crash orphan: `append`
+    // wrote the bodies and the process died before the first event. The loop
+    // above cannot see it, because `sessions()` lists `.ndjson` only, so
+    // without this the bytes outlive every removal path in this class. Aged on
+    // the body file's own mtime, since there is no seal or shipped cursor to
+    // measure: nothing will ever ship an event that does not exist.
+    for (const session of this.sessionsWithBodies()) {
+      if (existsSync(this.fileFor(session))) continue;
+      const path = this.bodyFileFor(session);
+      if (now - statSync(path).mtimeMs < retainMs) continue;
+      unlinkSync(path);
       removed.push(session);
     }
     if (removed.length > 0) this.persistCursor();

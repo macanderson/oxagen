@@ -232,7 +232,7 @@ describe("Wal", () => {
     expect(wal.bodiesFor(live)).toEqual([]);
   });
 
-  it("sweeps a torn line and keeps a body whose event is not on the chain yet", () => {
+  it("sweeps a torn line and a body whose event never arrived", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const session = minimalSession();
@@ -252,8 +252,11 @@ describe("Wal", () => {
       },
     ]);
     // `append` writes bodies before events, so a crash between the two leaves
-    // a body whose event is not on the chain. That is a microsecond, not an
-    // orphan, and the next sweep judges it once the event lands.
+    // a body whose event is not on the chain. That window is real but no sweep
+    // can observe it: `append` is two synchronous writes with no await between
+    // them and the daemon is single threaded. Seen from here it is an orphan,
+    // and no event will ever arrive to judge it against a class. It used to be
+    // kept, which kept prompt bytes nothing could ship, erase or compact.
     appendFileSync(
       bodyPath,
       `${JSON.stringify({
@@ -268,14 +271,68 @@ describe("Wal", () => {
 
     expect(
       wal.purgeBodiesOutsideMandate({ mode: "digest_only", classes: [] }),
-    ).toBe(2);
-    const after = readFileSync(bodyPath, "utf8");
-    expect(after).not.toContain(
-      Buffer.from("covered prompt").toString("base64"),
+    ).toBe(3);
+    // All three went — the covered prompt by the mandate, the torn line and the
+    // eventless body as orphans — so the file goes with them.
+    expect(existsSync(bodyPath)).toBe(false);
+  });
+
+  it("sweeps a body file whose session has no event file at all", () => {
+    // The orphan `sessions()` cannot see. A crash between `append`'s body
+    // write and its first event write leaves `<uuid>.bodies.jsonl` with no
+    // `.ndjson` beside it, and `sessions()` lists `.ndjson` only — so the
+    // sweep and `compact` both walked straight past it and the bytes outlived
+    // every removal path in this class.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const uuid = "11111111-1111-4111-8111-111111111111";
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: "evt_orphaned_by_a_crash",
+        seq: 1,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("orphaned prompt").toString("base64"),
+      })}\n`,
     );
-    expect(after).not.toContain("evt_torn");
-    expect(after).toContain(
-      Buffer.from("body ahead of its event").toString("base64"),
+    expect(wal.sessions()).toEqual([]);
+
+    expect(
+      wal.purgeBodiesOutsideMandate({
+        mode: "content_exact",
+        classes: ["model_call", "tool_call"],
+      }),
+    ).toBe(1);
+    expect(existsSync(bodyPath)).toBe(false);
+  });
+
+  it("compacts an orphaned body file once it is older than the window", () => {
+    // Belt to the sweep's braces: the sweep runs only when a mandate narrows,
+    // so on a host whose mandate never changes an orphan would sit for ever.
+    // `compact` ages it on the body file's own mtime, because there is no seal
+    // and no shipped cursor to measure against — nothing will ever ship an
+    // event that does not exist.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const uuid = "22222222-2222-4222-8222-222222222222";
+    const bodyPath = join(paths.wal, `${uuid}.bodies.jsonl`);
+    appendFileSync(
+      bodyPath,
+      `${JSON.stringify({
+        event_id_idem: "evt_orphaned_by_a_crash",
+        seq: 1,
+        content_type: "text/plain; charset=utf-8",
+        bytes_base64: Buffer.from("orphaned prompt").toString("base64"),
+      })}\n`,
     );
+    const week = 7 * 24 * 60 * 60_000;
+    // Inside the window it stays: an orphan is not urgent, only unbounded.
+    expect(wal.compact(Date.now(), week)).toEqual([]);
+    expect(existsSync(bodyPath)).toBe(true);
+    expect(wal.compact(Date.now() + 10 * 24 * 60 * 60_000, week)).toEqual([
+      uuid,
+    ]);
+    expect(existsSync(bodyPath)).toBe(false);
   });
 });

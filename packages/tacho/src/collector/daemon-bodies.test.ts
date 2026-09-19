@@ -476,6 +476,84 @@ describe("tachod and frame bodies", () => {
     "base64",
   );
 
+  it("completes a narrowing sweep that failed, on the next confirmation", async () => {
+    // The debt outlives the attempt. `applyControlFacts` writes the new etag
+    // before the sweep runs, so once it is written every later poll answers
+    // `not_modified` and the narrowing is never seen again. A sweep that threw
+    // — a transient filesystem error, or the process dying mid-write — would
+    // otherwise leave the excluded bytes on disk for ever, with nothing left
+    // to notice them.
+    const narrowed: { bundle?: PolicyBundle; delivered?: boolean } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.delivered === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // The sweep fails exactly once, the way a transient EIO would.
+    const real = handle.wal.purgeBodiesOutsideMandate.bind(handle.wal);
+    let failed = false;
+    handle.wal.purgeBodiesOutsideMandate = (retention) => {
+      if (!failed) {
+        failed = true;
+        throw new Error("EIO: simulated");
+      }
+      return real(retention);
+    };
+
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+    narrowed.delivered = true;
+
+    // The mandate took effect and the bytes did not go: this is the state the
+    // finding is about, and it is reached through the logged catch.
+    expect(failed).toBe(true);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(
+      log.some((line) =>
+        line.startsWith("failed to erase bodies the narrowed mandate"),
+      ),
+    ).toBe(true);
+    // The debt is on disk, not only in memory, so a restart still owes it.
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(true);
+
+    // The next poll is a plain confirmation — the branch that used to return
+    // without ever looking again.
+    await handle.refreshBundle();
+
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(false);
+    expect(
+      log.some((line) => line.startsWith("completed an owed body purge")),
+    ).toBe(true);
+  });
+
   it("sweeps bodies the drain can no longer reach when the mandate narrows, on a session that never seals", async () => {
     // The finding, in the case the drain cannot answer. Dropping a body as it
     // is withheld from a batch reaches only a body whose event is still
