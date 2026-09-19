@@ -120,7 +120,7 @@ describe("toRunPage", () => {
       operatorName: null,
       // The session recorded both, so neither is dropped on the way to the view.
       model: {
-        id: "claude-haiku-4-5-20251001",
+        slug: "claude-haiku-4-5-20251001",
         provider: "anthropic",
         tier: "haiku",
       },

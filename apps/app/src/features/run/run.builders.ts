@@ -34,7 +34,7 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     frames: 431,
     cost: { micros: "4131265", currency: "USD", basis: "gateway_observed" },
     model: {
-      id: "claude-sonnet-5",
+      slug: "claude-sonnet-5",
       provider: "anthropic",
       tier: "sonnet",
     },

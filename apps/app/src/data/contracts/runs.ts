@@ -45,7 +45,13 @@ const OperatorKind = z.enum(["human", "agent", "service"]);
  * not hold.
  */
 export const RunModel = z.object({
-  id: z.string().min(1),
+  /**
+   * The vendor's own model id, e.g. `claude-opus-5`. Named `slug` rather than
+   * `id` because INV-11 (ARCHITECTURE.md §4) reads every view-model field
+   * called `id` as a platform public id, and this is a vendor string the
+   * platform neither mints nor resolves.
+   */
+  slug: z.string().min(1),
   provider: z.string().min(1).nullable(),
   tier: z.string().min(1).nullable(),
 });
