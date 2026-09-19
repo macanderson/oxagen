@@ -102,7 +102,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // Selection follows focus (automatic activation), which APG prefers where a
   // panel is cheap to render. These four are: each is a form over data the
   // dialog already holds.
-  const tabRefs = useRef(new Map<AccountTab, HTMLButtonElement | null>());
+  const tabRef = useRef(new Map<AccountTab, HTMLButtonElement | null>());
   const onTabKeyDown = (event: KeyboardEvent, index: number) => {
     const last = ACCOUNT_TABS.length - 1;
     const target =
@@ -122,7 +122,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
     // horizontally scrolling strip also scrolls under the arrow key.
     event.preventDefault();
     setAccountTab(next);
-    tabRefs.current.get(next)?.focus();
+    tabRef.current.get(next)?.focus();
   };
 
   return (
@@ -142,7 +142,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
             <button
               key={tab}
               ref={(node) => {
-                tabRefs.current.set(tab, node);
+                tabRef.current.set(tab, node);
               }}
               type="button"
               role="tab"

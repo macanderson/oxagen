@@ -37,7 +37,6 @@ import type {
   WorkspaceRepositories,
   WorkspaceRepository,
 } from "@/data/contracts/repository";
-import type { Read } from "@/data/read";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
