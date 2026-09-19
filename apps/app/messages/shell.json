@@ -166,7 +166,6 @@
         "exportOrg": "Export the organization",
         "exporting": "Queuing",
         "queued": "Export queued as <code>{id}</code>. This page updates when it is ready.",
-        "preparing": "Preparing your export as <code>{id}</code>.",
         "ready": "Your export is ready.",
         "download": "Download the bundle",
         "expired": "That export could not be prepared. Ask for it again.",
