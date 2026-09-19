@@ -48,6 +48,16 @@ const strings = (value: TomlValue | undefined): string[] =>
 const table = (value: TomlValue | undefined): TomlTable | null =>
   typeof value === "object" && !Array.isArray(value) ? value : null;
 
+/**
+ * Micros as the plain decimal a number input takes (`2.50`), locale-free by
+ * the input's contract: it is a control's value, not money shown to a person,
+ * which <Money> formats (INV-09).
+ */
+function usdInputValue(micros: number): string {
+  const cents = Math.round(micros / 10_000);
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+}
+
 /** The draft's document: what parses, or the empty table with the line that stopped the parse. */
 function readDraft(draft: string): {
   doc: TomlTable;
@@ -386,9 +396,9 @@ export function DefinitionForm({
                   step="0.01"
                   min="0"
                   inputMode="decimal"
-                  key={`budget:${perRunMicros ?? ""}`}
+                  key={`budget:${perRunMicros === null ? "" : String(perRunMicros)}`}
                   defaultValue={
-                    perRunMicros === null ? "" : (perRunMicros / 1e6).toFixed(2)
+                    perRunMicros === null ? "" : usdInputValue(perRunMicros)
                   }
                   className={`${inputBase} ${mono}`}
                   onBlur={(event) => {

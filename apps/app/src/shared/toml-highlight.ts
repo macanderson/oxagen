@@ -101,7 +101,8 @@ function whitespace(s: Scanner): void {
 function lineTail(s: Scanner): void {
   while (!s.done && s.peek() !== "\n") {
     whitespace(s);
-    if (s.done || s.peek() === "\n") break;
+    // peek() is "" at the end, so one test covers the line end and the file end.
+    if (s.peek() === "\n" || s.peek() === "") break;
     if (!s.match(COMMENT, "comment")) s.take("text", 1);
   }
 }
@@ -224,7 +225,7 @@ export function tokenizeToml(source: string): TomlToken[] {
   const s = new Scanner(source);
   while (!s.done) {
     line(s);
-    if (!s.done && s.peek() === "\n") s.take("text", 1);
+    if (s.peek() === "\n") s.take("text", 1);
   }
   return s.result();
 }

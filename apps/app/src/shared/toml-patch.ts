@@ -66,11 +66,11 @@ export function tomlSet(
         break;
       }
     }
-  }
-  if (start < 0) {
-    while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-    lines.push("", `[${section}]`, `${key} = ${literal}`, "");
-    return lines.join("\n");
+    if (start < 0) {
+      while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+      lines.push("", `[${section}]`, `${key} = ${literal}`, "");
+      return lines.join("\n");
+    }
   }
   const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const keyed = new RegExp(`^(\\s*${escaped}\\s*=\\s*)`);

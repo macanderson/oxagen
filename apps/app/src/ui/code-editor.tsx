@@ -8,9 +8,18 @@
 // (`--font-mono`) sets both, with texture healing on, and the ground is the
 // code surface (`--code-bg`): a shade off the panel in either theme.
 import { type ReactNode, useMemo } from "react";
-import { type TomlTokenKind, tokenizeToml } from "@/shared/toml-highlight";
+import {
+  type TomlToken,
+  type TomlTokenKind,
+  tokenizeToml,
+} from "@/shared/toml-highlight";
 
 export type CodeLanguage = "toml";
+
+/** The scanner for each language the product edits; TOML is the one today. */
+const SCANNERS: Record<CodeLanguage, (source: string) => TomlToken[]> = {
+  toml: tokenizeToml,
+};
 
 const TOKEN_CLASS: Record<TomlTokenKind, string | null> = {
   comment: "text-code-comment",
@@ -25,8 +34,7 @@ const TOKEN_CLASS: Record<TomlTokenKind, string | null> = {
 
 /** The source as coloured spans; text outside a token is rendered as is. */
 export function highlight(source: string, language: CodeLanguage): ReactNode[] {
-  // `language` picks the scanner; TOML is the one language the product edits today.
-  const tokens = language === "toml" ? tokenizeToml(source) : [];
+  const tokens = SCANNERS[language](source);
   const painted: ReactNode[] = [];
   // A token's offset in the source is its identity; no two share one.
   let offset = 0;
