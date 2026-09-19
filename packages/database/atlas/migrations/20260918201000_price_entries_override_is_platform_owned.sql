@@ -16,7 +16,19 @@
 --
 -- The check now admits 'override' beside 'list' for a null org. Rows already
 -- written as 'list' from an override are re-stamped by the next sync's upsert,
--- which carries `source = EXCLUDED.source`, so no data repair runs here.
+-- which carries `source = EXCLUDED.source`, so no repair is needed for those.
+--
+-- One repair does run. The OLD check required every non-list source to carry
+-- an organisation, so a database written against it may hold rows with
+-- source 'override' and a non-null org_id, and adding the new constraint over
+-- them would fail and stop the deployment. Under the new scheme an
+-- organisation's own rate is 'negotiated', which is what those rows are, so
+-- they are re-stamped before the constraint goes on. The statement is a
+-- no-op on a database that never held one.
+UPDATE "cost"."price_entries"
+  SET "source" = 'negotiated', "updated_at" = now()
+  WHERE "source" = 'override' AND "org_id" IS NOT NULL;
+
 ALTER TABLE "cost"."price_entries"
   DROP CONSTRAINT IF EXISTS "price_entries_org_source_check";
 ALTER TABLE "cost"."price_entries"
