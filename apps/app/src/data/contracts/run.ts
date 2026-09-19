@@ -182,6 +182,18 @@ export const TranscriptKind = z.enum(TRANSCRIPT_KINDS);
 export type TranscriptKind = z.infer<typeof TranscriptKind>;
 
 /**
+ * How many transcript entries one `get_run_transcript` page carries by
+ * default, mirrored from that contract's `limit` default so the client can
+ * tell a full page from the last one without importing the kernel's contract
+ * module. The mirror is asserted against the contract in `run.test.ts`.
+ *
+ * It is a mirror rather than a re-export because the contract module reaches
+ * `@oxagen/run-evidence` and the Context Graph SDK, which import Node
+ * builtins and cannot be bundled for the browser.
+ */
+export const TRANSCRIPT_ENTRY_DEFAULT = 200;
+
+/**
  * One half of an exchange: the frame that carried it, and what it said.
  * `request` is what went out, `response` is what came back — so one tool step
  * shows the input it was called with and the result it returned, in one entry.

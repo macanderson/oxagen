@@ -41,6 +41,7 @@ import {
 import type { Money as MoneyValue } from "@/data/contracts/money";
 import {
   type RunTranscript,
+  TRANSCRIPT_ENTRY_DEFAULT,
   TRANSCRIPT_ZOOMS,
   type TranscriptBody,
   type TranscriptDecision,
@@ -55,7 +56,6 @@ import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
-import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
@@ -644,7 +644,10 @@ export function TranscriptView({
     setReading(true);
     // True when the last page was full and still has a cursor: keep reading
     // in this same loadMore rather than waiting for another stream signal.
-    let drainMore = false;
+    // Declared without an initializer on purpose: every iteration clears it
+    // first (a stale `true` would spin forever on empty pages), so an
+    // initializer here would be written and never read.
+    let drainMore: boolean;
     try {
       do {
         pendingReadRef.current = false;
