@@ -105,7 +105,7 @@ describe("driftReport", () => {
   }
 
   it("names the stale-field case instead of printing two equal hashes", () => {
-    // The case that blocked the Mission Control cutover: the body was current,
+    // The case that blocked the app cutover (ADR-081): the body was current,
     // the recorded field was not, and the old report printed the recomputed
     // hash twice with nothing to distinguish it from a broken check.
     const { committed, regenerated } = staleFieldOnly();

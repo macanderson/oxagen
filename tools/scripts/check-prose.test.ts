@@ -22,6 +22,16 @@ describe("check-prose", () => {
     expect(findHits("The severy field.", ".mdx")).toEqual([]);
   });
 
+  it("flags the retired product name but not a citation of the document", () => {
+    expect(findHits("We ship Mission Control today.", ".mdx")[0].kind).toBe(
+      "avoid: Mission Control",
+    );
+    expect(findHits("See the Mission Control spec 14.1.", ".mdx")).toEqual([]);
+    expect(findHits("See the Mission Control mockup 2821.", ".mdx")).toEqual(
+      [],
+    );
+  });
+
   it("flags an exclamation point but not a shell negation", () => {
     expect(findHits("Done!", ".mdx")[0].kind).toBe("exclamation");
     expect(findHits("if [ ! -f x ]", ".mdx")).toEqual([]);

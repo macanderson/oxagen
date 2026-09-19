@@ -182,7 +182,7 @@ export function buildProgram(): Command {
   contextCmd
     .command("propose")
     .description(
-      "Record a proposal (the record it should become, why); its Context PR is opened and merged from Mission Control",
+      "Record a proposal (the record it should become, why); its Context PR is opened and merged in Oxagen",
     )
     .requiredOption(
       "--lineage <id>",

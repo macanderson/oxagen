@@ -134,7 +134,7 @@ describe("ShellFrame", () => {
     }
     render(await ShellFrame({ chrome: <PendingChrome />, children: null }));
     expect(screen.getByTestId("shell-loading")).toHaveTextContent(
-      "Loading Mission Control",
+      "Loading Oxagen",
     );
   });
 });

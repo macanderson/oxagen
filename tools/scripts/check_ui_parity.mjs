@@ -50,7 +50,7 @@ const ROOT = resolve(process.cwd());
 const CAP_DIR = join(ROOT, "packages/oxagen/src/contracts");
 const REGISTRY = join(ROOT, APP_DIR, "capability-ui-map.json");
 /**
- * The rebuilt app's own registry. During the Mission Control rebuild the
+ * The rebuilt app's own registry. During the app rebuild the
  * gates still point at the deprecated app (lib/app-dir.mjs), but a capability
  * whose UI now lives in apps/app is bound there, not here — so both are read
  * and a name the new app binds wins. The cutover batch flips APP_DIR and

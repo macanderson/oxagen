@@ -7,7 +7,7 @@ Wrapping an agent puts its runs under a mandate: the access it used, the budget 
 
 What wrapping does today is narrower than a mandate, and this page says so. A wrapped run is on the `harness` tier: its steps are recorded, an operator can pause or stop it, and what the hooks deliver is client-attested and fail-open, because the hook runs in a process you own and can be removed. Nothing at this tier is enforced against the person at the keyboard. Token and cost figures for Claude Code come from Claude Code's own telemetry, so they are self-reported. Codex and Stella export none, so their spend does not appear. A model proxy that meters every harness the same way is in build, and a sandboxed tier for CI and managed machines comes after it.
 
-Three harnesses wrap by installing hooks into files the harness already reads: Claude Code, Codex, and Stella. Any other agent wraps by calling `tacho hook` around its own steps. Both paths produce the same kind of session on the control plane, and both show up the same way in Mission Control and in the app's Wrapped agents panel.
+Three harnesses wrap by installing hooks into files the harness already reads: Claude Code, Codex, and Stella. Any other agent wraps by calling `tacho hook` around its own steps. Both paths produce the same kind of session on the control plane, and both show up the same way in Oxagen and in the Wrapped agents panel.
 
 ## Wrap Claude Code, Codex, or Stella
 
@@ -197,7 +197,7 @@ Three places agree, because they all read the same record:
   | idle | wrapped, no runs yet |
   | not wrapped | the harness or agent name has never called the hook |
 
-- Mission Control: **Open Mission Control** opens this workspace in Oxagen, where the run lands in the workspace's fleet record once the collector ships it.
+- The operator console: **Open Oxagen** opens this workspace in the browser, where the run lands in the workspace's fleet record once the collector ships it.
 
 ## Limits
 

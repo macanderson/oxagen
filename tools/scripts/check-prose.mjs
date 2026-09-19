@@ -114,7 +114,16 @@ export const AVOID = [
   "it's no secret",
   "we believe",
   "we're on a mission",
+  // Retired as Oxagen's product name on 2026-09-19 (ADR-102): GitHub now
+  // ships a control-plane product called Mission Control. Say Oxagen for the
+  // app and the operator console in prose. A citation of a document by its
+  // title ("Mission Control spec", "Mission Control mockup") names a file,
+  // not the product, and is allowed by CITED_AFTER below.
+  "mission control",
 ];
+
+/** The words that turn a retired product name into a document citation. */
+const CITED_AFTER = /^\s+(spec|mockup)\b/i;
 
 const AVOID_RE = new RegExp(
   "(?<![\\w-])(" +
@@ -173,8 +182,13 @@ export function findHits(text, ext) {
       });
     if (/[A-Za-z0-9)]!(?=\s|$|["'])/.test(line))
       hits.push({ line: i + 1, kind: "exclamation", text: line.trim() });
-    for (const m of line.matchAll(AVOID_RE))
+    for (const m of line.matchAll(AVOID_RE)) {
+      const cited =
+        /^mission control$/i.test(m[1]) &&
+        CITED_AFTER.test(line.slice(m.index + m[1].length));
+      if (cited) continue;
       hits.push({ line: i + 1, kind: `avoid: ${m[1]}`, text: line.trim() });
+    }
   });
   return hits;
 }

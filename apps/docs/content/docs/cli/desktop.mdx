@@ -21,7 +21,7 @@ On a machine with no enrollment the app then opens a five-step wizard on a singl
 2. **Select an organization and workspace.** Only the organizations and workspaces you belong to are listed.
 3. **Register the agents on this machine.** The app runs `tacho detect` to find Claude Code, Codex, and Stella (it checks your login shell's `PATH` and the usual install directories, so a Finder launch still finds `~/.local/bin/claude`). Every agent found is ticked; confirm, and it runs `tacho enroll … --harness …`, which writes Oxagen's hooks into each agent's settings.
 4. **Confirmation**, or the error and how to retry.
-5. **Record a first run.** One small prompt per registered agent (`tacho verify --harness <agent>`), confirmed recorded, then **Open Mission Control**, which opens this workspace in Oxagen, to see it.
+5. **Record a first run.** One small prompt per registered agent (`tacho verify --harness <agent>`), confirmed recorded, then **Open Oxagen**, which opens this workspace in the operator console, to see it.
 
 ## Download
 
