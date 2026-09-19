@@ -16,6 +16,11 @@ import {
   mergeCodexHooks,
 } from "../host/codex-writer";
 import { ControlError } from "../host/control-client";
+import {
+  cursorHookPresence,
+  cursorHooksShapeProblem,
+  mergeCursorHooks,
+} from "../host/cursor-writer";
 import { loadOrCreateDeviceKey } from "../host/device-key";
 import { ensureDir } from "../host/fs";
 import { acquireInstallLock } from "../host/install-lock";
@@ -74,9 +79,8 @@ export interface EnrollOptions extends CredentialOptions {
 }
 
 /**
- * Parse a `--harness` flag (`claude-code`, `codex`, `stella`, or a comma
- * list). An
- * unknown name is a one-line error naming the choices, not a ZodError
+ * Parse a `--harness` flag (`claude-code`, `codex`, `cursor`, `stella`, or
+ * a comma list). An unknown name is a one-line error naming the choices, not a ZodError
  * (whose message is the JSON issues array) — both CLIs print it verbatim.
  */
 export function parseHarnesses(value: string | undefined): TachoHarness[] {
@@ -302,6 +306,12 @@ export function harnessFileProblems(
     check(deps.paths.claudeSettings, deps.readSettings, settingsShapeProblem);
   if (harnesses.includes("codex"))
     check(deps.paths.codexHooks, deps.readCodexHooks, hooksShapeProblem);
+  if (harnesses.includes("cursor"))
+    check(
+      deps.paths.cursorHooks,
+      deps.readCursorHooks,
+      cursorHooksShapeProblem,
+    );
   if (harnesses.includes("stella")) {
     try {
       const file = deps.readStellaHooks();
@@ -525,6 +535,7 @@ export async function enrollLocked(
 
     const claude = deps.claude();
     const codex = harnesses.includes("codex") ? deps.codex() : {};
+    const cursor = harnesses.includes("cursor") ? deps.cursor() : {};
     const stella = harnesses.includes("stella") ? deps.stella() : {};
     step(
       3,
@@ -698,6 +709,12 @@ export async function enrollLocked(
             codex_execpath: codex.path ?? null,
           }
         : {}),
+      ...(harnesses.includes("cursor")
+        ? {
+            cursor_version: cursor.version ?? null,
+            cursor_execpath: cursor.path ?? null,
+          }
+        : {}),
       ...(harnesses.includes("stella")
         ? {
             stella_version: stella.version ?? null,
@@ -857,6 +874,18 @@ export async function enrollLocked(
         deps.out("      already present; nothing to change");
       }
     });
+    hook("cursor", () => {
+      deps.out(`      Cursor: ${deps.paths.cursorHooks}`);
+      const merged = mergeCursorHooks(deps.readCursorHooks(), hookConfig);
+      if (merged.changed) {
+        deps.writeCursorHooks(merged.settings);
+        deps.out(
+          `      hooks written for ${cursorHookPresence(merged.settings, host.host_enrollment_id).present.length} events (the Cursor IDE and cursor-agent both read this file; Cursor's model calls are not routed through Oxagen)`,
+        );
+      } else {
+        deps.out("      already present; nothing to change");
+      }
+    });
     hook("stella", () => {
       const file = deps.readStellaHooks();
       deps.out(`      Stella: ${file.path}`);
@@ -970,6 +999,19 @@ export async function enrollLocked(
         "`codex` is not on PATH; hooks will apply once it is installed",
       );
     else deps.out(`      codex ${codex.version ?? "?"} at ${codex.path}`);
+  }
+  if (harnesses.includes("cursor")) {
+    const cursor = deps.cursor();
+    // The IDE reads the same hooks file, so a missing CLI is not a missing
+    // Cursor: say which one was not found.
+    if (cursor.path === undefined)
+      deps.out(
+        "      `cursor-agent` is not on PATH; the Cursor IDE picks the hooks up on its next agent session",
+      );
+    else
+      deps.out(
+        `      cursor-agent ${cursor.version ?? "?"} at ${cursor.path}`,
+      );
   }
   if (harnesses.includes("stella")) {
     const stella = deps.stella();

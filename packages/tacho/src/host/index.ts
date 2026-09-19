@@ -1,6 +1,7 @@
 export * from "./bundle";
 export * from "./codex-writer";
 export * from "./control-client";
+export * from "./cursor-writer";
 export * from "./device-key";
 export * from "./fs";
 export * from "./host-file";

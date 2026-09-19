@@ -20,6 +20,7 @@ import {
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
+import { stripCursorHooks } from "../host/cursor-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
 import {
   type HostFile,
@@ -198,6 +199,7 @@ export function stripEnrollmentHooks(
 ): {
   settingsChanged: boolean;
   codexChanged: boolean;
+  cursorChanged: boolean;
   /** The Stella files Tacho's hooks were removed from. */
   stellaChanged: string[];
   /** Claude Desktop's config, when our MCP server entry was removed from it. */
@@ -244,6 +246,19 @@ export function stripEnrollmentHooks(
     if (codexStripped.changed) {
       deps.writeCodexHooks(codexStripped.settings);
       codexChanged = true;
+    }
+  });
+  let cursorChanged = false;
+  attempt(deps.paths.cursorHooks, () => {
+    const cursorCurrent = deps.readCursorHooks();
+    if (cursorCurrent === undefined) return;
+    const cursorStripped = stripCursorHooks(
+      cursorCurrent,
+      host?.host_enrollment_id,
+    );
+    if (cursorStripped.changed) {
+      deps.writeCursorHooks(cursorStripped.settings);
+      cursorChanged = true;
     }
   });
   const stellaChanged: string[] = [];
@@ -300,6 +315,7 @@ export function stripEnrollmentHooks(
   return {
     settingsChanged,
     codexChanged,
+    cursorChanged,
     stellaChanged,
     claudeDesktopChanged,
     failed,
@@ -390,6 +406,9 @@ async function unenrollLocked(
   }
   if (stripped.codexChanged) {
     deps.out(`      removed from ${deps.paths.codexHooks} too`);
+  }
+  if (stripped.cursorChanged) {
+    deps.out(`      removed from ${deps.paths.cursorHooks} too`);
   }
   for (const path of stripped.stellaChanged) {
     deps.out(`      removed from ${path} too`);

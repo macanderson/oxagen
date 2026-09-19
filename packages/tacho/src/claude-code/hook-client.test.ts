@@ -8,6 +8,7 @@ import {
   testHostFile,
   unsignedBundle,
 } from "../host/test-support";
+import { RESERVED_AGENT_NAMES } from "../wire";
 import {
   agentFromArgv,
   decideLocally,
@@ -130,7 +131,8 @@ describe("runTachoHook", () => {
       "codex",
     );
     expect(harnessFromArgv(["--harness", "claude-code"])).toBe("claude-code");
-    expect(harnessFromArgv(["--harness", "cursor"])).toBe("claude-code");
+    expect(harnessFromArgv(["--harness", "cursor"])).toBe("cursor");
+    expect(harnessFromArgv(["--harness", "windsurf"])).toBe("claude-code");
     expect(harnessFromArgv(["--harness"])).toBe("claude-code");
     expect(harnessFromArgv([])).toBe("claude-code");
   });
@@ -237,6 +239,24 @@ describe("runTachoHook", () => {
       decideLocally(paused, parse("PermissionRequest"), now).response,
     ).toMatchObject({ hookSpecificOutput: { decision: { behavior: "deny" } } });
     expect(decideLocally(active, parse("Stop"), now).response).toEqual({});
+    // Cursor's subagentStart is a permission event: a paused host must deny,
+    // or an empty answer becomes allow and the subagent launches anyway.
+    expect(
+      decideLocally(
+        paused,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).response,
+    ).toMatchObject({
+      hookSpecificOutput: { permissionDecision: "deny" },
+    });
+    expect(
+      decideLocally(
+        active,
+        parse("SubagentStart", { agent_type: "explore" }),
+        now,
+      ).evaluation?.decision,
+    ).toBeDefined();
     const read = decideLocally(
       active,
       parse("PreToolUse", {
@@ -364,14 +384,15 @@ describe("runTachoHook for Stella and custom agents", () => {
     // HOME is not a harness variable; the Stella pid is added for the sweep.
     expect(body.env).toEqual({ TACHO_HARNESS_PID: "4242" });
     expect(seen[0]?.responseTimeoutMs).toBe(10_000);
-    // A body that is not JSON is no decision, never a malformed one (which
-    // Stella treats as a deny).
+    // A body that is not a JSON object is a fault, not a decision, so the
+    // local evaluator answers instead of the daemon.
     const junk = await runTachoHook({
       ...base,
       stdin: STELLA_PRE,
       post: async () => ({ status: 200, body: "oops" }),
     });
-    expect(junk.stdout).toBe("{}\n");
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
     // SessionStart context reaches Stella as prompt text.
     const started = await runTachoHook({
       ...base,
@@ -559,14 +580,21 @@ describe("runTachoHook for Stella and custom agents", () => {
     }
     // Every built-in harness and runtime name is reserved, so a custom
     // agent can never be listed as one of them.
-    for (const reserved of [
+    const reservedNames = [
       "claude-code",
       "codex",
+      "cursor",
       "stella",
+      "claude-desktop",
       "claude-agent-sdk",
       "custom",
       "proxy",
-    ]) {
+    ];
+    // Every harness and runtime is reserved, so the list here is the whole
+    // set: a harness added without updating this test would drift the
+    // diagnostic every caller reads.
+    expect([...RESERVED_AGENT_NAMES]).toEqual(reservedNames);
+    for (const reserved of reservedNames) {
       const refused = await runTachoHook({
         paths,
         env: {},
@@ -582,8 +610,204 @@ describe("runTachoHook for Stella and custom agents", () => {
         exitCode: 0,
       });
       expect(refused.stderr).toBe(
-        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: claude-code, codex, stella, claude-desktop, claude-agent-sdk, custom, proxy)\n`,
+        `tacho-hook: invalid --agent name "${reserved}"; "${reserved}" is a built-in harness or runtime name (reserved: ${reservedNames.join(", ")})\n`,
       );
     }
+  });
+});
+
+describe("runTachoHook for Cursor", () => {
+  const CURSOR_PRE = JSON.stringify({
+    conversation_id: "conv-9",
+    generation_id: "gen-1",
+    hook_event_name: "preToolUse",
+    workspace_roots: ["/repo"],
+    tool_name: "Shell",
+    tool_input: { command: "git push" },
+    tool_use_id: "tu-9",
+  });
+
+  it("translates a Cursor payload for the daemon and the daemon's answer for Cursor", async () => {
+    const paths = enrolledPaths();
+    const seen: Array<Parameters<typeof postUnix>[0]> = [];
+    const denied = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async (options) => {
+        seen.push(options);
+        return {
+          status: 200,
+          body: '{"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"no push"}}',
+        };
+      },
+    });
+    expect(denied).toMatchObject({ path: "daemon", exitCode: 0 });
+    expect(JSON.parse(denied.stdout)).toEqual({
+      permission: "deny",
+      user_message: "no push",
+      agent_message: "no push",
+    });
+    const body = JSON.parse(seen[0]?.body ?? "{}") as {
+      payload: Record<string, unknown>;
+      harness: string;
+    };
+    expect(body.harness).toBe("cursor");
+    expect(body.payload).toMatchObject({
+      session_id: "conv-9",
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_use_id: "tu-9",
+      cwd: "/repo",
+    });
+    expect(seen[0]?.responseTimeoutMs).toBe(10_000);
+    // A body that is not a JSON object is a fault, not an empty decision: it
+    // takes the local evaluator rather than becoming the explicit allow that
+    // an empty answer translates to. Cursor still reads a conforming answer.
+    const junk = await runTachoHook({
+      paths,
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({ status: 200, body: "oops" }),
+    });
+    expect(junk).toMatchObject({ path: "local", exitCode: 0 });
+    expect(junk.stderr).toContain("not a JSON object");
+    expect(
+      (JSON.parse(junk.stdout) as { permission?: string }).permission,
+    ).toMatch(/^(allow|deny)$/);
+  });
+
+  it("refuses a Cursor tool call when the enrollment cannot be read, and allows one on a machine that is simply not enrolled", async () => {
+    // Cursor reads a malformed answer as a block, so "no opinion" is written
+    // as an explicit allow. That is right for a machine Oxagen does not
+    // govern and wrong when the file saying whether it governs this machine
+    // is unreadable: the tool would run with no policy evaluated.
+    const unreadable = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+      readHost: () => {
+        throw new Error("corrupt");
+      },
+    });
+    expect(unreadable).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unreadable.stdout)).toMatchObject({
+      permission: "deny",
+    });
+    expect(unreadable.stderr).toContain("corrupt");
+
+    // A machine that was never enrolled is not a failure to evaluate, so it
+    // still answers allow and does not block the person's own tools.
+    const unenrolled = await runTachoHook({
+      paths: scratchPaths(),
+      env: {},
+      stdin: CURSOR_PRE,
+      harness: "cursor",
+      platform: "linux",
+    });
+    expect(unenrolled).toMatchObject({ path: "unenrolled", exitCode: 0 });
+    expect(JSON.parse(unenrolled.stdout)).toEqual({ permission: "allow" });
+  });
+
+  it("refuses a Cursor subagent start while the host is blocked and allows one otherwise", async () => {
+    const CURSOR_SUBAGENT = JSON.stringify({
+      conversation_id: "conv-9",
+      hook_event_name: "subagentStart",
+      workspace_roots: ["/repo"],
+      subagent_id: "sa-1",
+      subagent_type: "explore",
+    });
+    const pathsWithStatus = (
+      status: "active" | "paused" | "suspended" | "revoked",
+    ) => {
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      writeHostFile(
+        paths.hostFile,
+        testHostFile(signer, signer.sign(unsignedBundle()), {
+          host_status: status,
+        }),
+      );
+      return paths;
+    };
+    // Cursor reads subagentStart as a permission event, and an empty answer
+    // translates to an explicit allow. An operator who paused, suspended or
+    // revoked the host said the agent stops, so the local evaluator decides
+    // rather than falling through to that allow.
+    for (const status of ["paused", "suspended", "revoked"] as const) {
+      const blocked = await runTachoHook({
+        paths: pathsWithStatus(status),
+        env: {},
+        stdin: CURSOR_SUBAGENT,
+        harness: "cursor",
+        platform: "linux",
+        post: async () => {
+          throw new Error("daemon down");
+        },
+      });
+      expect(blocked.path).toBe("local");
+      expect(JSON.parse(blocked.stdout)).toMatchObject({
+        permission: "deny",
+        agent_message: expect.stringContaining(status),
+      });
+    }
+    // An active host still launches subagents, so the refusal is the operator
+    // state and not a blanket block.
+    const allowed = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => {
+        throw new Error("daemon down");
+      },
+    });
+    expect(allowed.path).toBe("local");
+    expect(JSON.parse(allowed.stdout)).toEqual({ permission: "allow" });
+    // The daemon's own deny, which is where a cancelled session lands, reaches
+    // Cursor in the same shape.
+    const fromDaemon = await runTachoHook({
+      paths: pathsWithStatus("active"),
+      env: {},
+      stdin: CURSOR_SUBAGENT,
+      harness: "cursor",
+      platform: "linux",
+      post: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: "SubagentStart",
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "This session was cancelled by its Oxagen operator.",
+          },
+        }),
+      }),
+    });
+    expect(fromDaemon.path).toBe("daemon");
+    expect(JSON.parse(fromDaemon.stdout)).toEqual({
+      permission: "deny",
+      user_message: "This session was cancelled by its Oxagen operator.",
+      agent_message: "This session was cancelled by its Oxagen operator.",
+    });
+  });
+
+  it("says the payload is not a Cursor hook when it is not one", async () => {
+    const result = await runTachoHook({
+      paths: enrolledPaths(),
+      env: {},
+      stdin: JSON.stringify({ hello: "world" }),
+      harness: "cursor",
+      platform: "linux",
+    });
+    expect(result).toMatchObject({ path: "invalid", stdout: "{}\n" });
+    expect(result.stderr).toContain("not a Cursor hook");
   });
 });

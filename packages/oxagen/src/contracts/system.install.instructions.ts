@@ -40,7 +40,7 @@ export const systemInstallInstructions = registerCapability({
     "Return step-by-step MCP/CLI installation instructions for a given AI client " +
     "(claude-code, cursor, claude-desktop, codex, vscode). " +
     "Snippets point at the app and MCP hosts configured in APP_URL / MCP_URL. " +
-    "With an enrollment token, claude-code and codex answer the wrap steps (oxagen agent enroll --token …) instead of the MCP steps. " +
+    "With an enrollment token, claude-code, codex, and cursor answer the wrap steps (oxagen agent enroll --token …) instead of the MCP steps. " +
     "Returns a structured steps list and a render directive for the install-instructions " +
     "chat component.",
   mode: "sync",
@@ -68,9 +68,9 @@ export const systemInstallInstructions = registerCapability({
      */
     workspaceSlug: z.string().optional(),
     /**
-     * A token `create_enrollment_token` issued (#2967). For `claude-code` and
-     * `codex` the steps become the wrap: enrol this machine with the token,
-     * then start a session. Passed through, never stored.
+     * A token `create_enrollment_token` issued (#2967). For `claude-code`,
+     * `codex`, and `cursor` the steps become the wrap: enrol this machine with
+     * the token, then start a session. Passed through, never stored.
      */
     enrollmentToken: enrollmentTokenSchema.optional(),
   }),

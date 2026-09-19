@@ -3,11 +3,17 @@
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
  */
-export type Harness = "claude-code" | "codex" | "stella" | "claude-desktop";
+export type Harness =
+  | "claude-code"
+  | "codex"
+  | "cursor"
+  | "stella"
+  | "claude-desktop";
 
 export const HARNESS_LABEL: Record<Harness, string> = {
   "claude-code": "Claude Code",
   codex: "Codex",
+  cursor: "Cursor",
   stella: "Stella",
   "claude-desktop": "Claude Desktop",
 };
@@ -16,6 +22,7 @@ export const HARNESS_LABEL: Record<Harness, string> = {
 export const HARNESSES: Harness[] = [
   "claude-code",
   "codex",
+  "cursor",
   "stella",
   "claude-desktop",
 ];
@@ -41,6 +48,7 @@ export type Tier = "harness" | "gateway";
 export const HARNESS_TIER: Record<Harness, Tier> = {
   "claude-code": "harness",
   codex: "harness",
+  cursor: "harness",
   stella: "harness",
   "claude-desktop": "gateway",
 };
