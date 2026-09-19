@@ -84,6 +84,37 @@ export function decodeTranscriptCursor(raw: string): string | null {
   return DECIMAL.test(seq) && seq.length <= 19 ? seq : null;
 }
 
+/**
+ * The fold index a page starts at after `after` (the endSeq of the last fold
+ * the previous page returned), or -1 when nothing remains.
+ *
+ * Folds are not stable, non-overlapping sequence ranges. Parallel tool calls
+ * produce `start A, start B, complete A, complete B`, so fold A owns 1..3 and
+ * fold B owns 2..4. Comparing `opening.seq > after` against an endSeq cursor
+ * skips B after a page that returned A (finding 4052061731). Resume in fold
+ * order: find the fold that owned the cursor seq, re-emit it when it has
+ * grown past the cursor (a live request that later gained its response), and
+ * otherwise advance to the next fold.
+ */
+export function foldPageStart(
+  folds: readonly { opening: { seq: string }; endSeq: string }[],
+  after: string | null,
+): number {
+  if (after === null) return folds.length === 0 ? -1 : 0;
+  const cursor = BigInt(after);
+  const owned = folds.findIndex(
+    (fold) =>
+      BigInt(fold.opening.seq) <= cursor && BigInt(fold.endSeq) >= cursor,
+  );
+  if (owned === -1) {
+    return folds.findIndex((fold) => BigInt(fold.opening.seq) > cursor);
+  }
+  // Same fold, not yet grown: advance past it. Grown: re-emit from here.
+  if (BigInt(folds[owned]!.endSeq) > cursor) return owned;
+  const next = owned + 1;
+  return next < folds.length ? next : -1;
+}
+
 // ---- Bodies ---------------------------------------------------------------------------
 
 /** One half of the exchange, with its body text when there is one to show. */
@@ -212,10 +243,7 @@ export function createRunTranscriptGetHandler(
     const resumeCursor = (): string =>
       encodeTranscriptCursor(after ?? startCursorSeq(run));
 
-    const start =
-      after === null
-        ? 0
-        : folds.findIndex((fold) => BigInt(fold.opening.seq) > BigInt(after));
+    const start = foldPageStart(folds, after);
     if (start === -1) {
       return {
         zoom: input.zoom,
