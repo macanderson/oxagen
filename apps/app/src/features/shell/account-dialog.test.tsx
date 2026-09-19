@@ -321,14 +321,26 @@ describe("Profile", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the person, their verified email, their roles and their principal", async () => {
+  it("shows the person, their verified email, their roles and their user id", async () => {
     const { dialog } = await openDialog();
     expect(within(dialog).getByText("Marcus Bell")).toBeTruthy();
     expect(dialog).toHaveTextContent("marcus.bell@acme.example · verified");
     const roles = within(dialog).getByTestId("account-roles");
     expect(roles).toHaveTextContent("acme");
     expect(roles).toHaveTextContent("org.member");
-    expect(roles).toHaveTextContent("usr_01K3F8QB7R · kind human");
+    expect(roles).toHaveTextContent("usr_01K3F8QB7R");
+  });
+
+  // The value is Better Auth's `auth.users.id`. A human IAM principal is its
+  // own `iam.principals` row linked by `parent_user_id`, so calling this one
+  // "principal · kind human" published the wrong identifier for anyone
+  // copying it into IAM or audit work.
+  it("does not call the user id a principal (negative)", async () => {
+    const { dialog } = await openDialog();
+    const roles = within(dialog).getByTestId("account-roles");
+    expect(roles).toHaveTextContent("user ID");
+    expect(roles).not.toHaveTextContent("principal");
+    expect(roles).not.toHaveTextContent("kind human");
   });
 
   it("says when the email is not verified", async () => {
@@ -728,6 +740,12 @@ describe("Security", () => {
     expect(screen.queryByTestId("account-codes")).toBeNull();
     expect(await screen.findByTestId("account-codes-open")).toBeTruthy();
   });
+
+  // The second rotation is never started, so no late first response can exist
+  // to be sorted out: "runs one rotation at a time" above is what closes this,
+  // and it also closes the tab-switch bypass, which a ticket held inside the
+  // tab cannot, since the switch destroys the ticket along with everything else
+  // the tab owns.
 
   it("offers enrolment, not codes, to a person without two-factor", async () => {
     await openDialog("security", viewerWith({ twoFactorEnabled: false }));

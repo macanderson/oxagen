@@ -397,10 +397,15 @@ function ProfileTab({ data }: { data: ShellData }) {
         <dl className={kv} data-testid="account-roles">
           <dt className={kvTerm}>{org.slug}</dt>
           <dd className={kvValue}>{t("orgRole", { role: viewer.orgRole })}</dd>
+          {/* The Better Auth `auth.users.id`, and labelled as such. It read
+              "principal · kind human", which named a different thing: a human
+              IAM principal is its own `iam.principals` row linked by
+              `parent_user_id`, so its id is not this one. Someone copying this
+              value for IAM or audit work copied the wrong identifier under a
+              label that said it was the right one. Showing the real principal
+              id would need a read this shell does not make. */}
           <dt className={kvTerm}>{t("principal")}</dt>
-          <dd className={kvValue}>
-            {viewer.id} · {t("principalKind")}
-          </dd>
+          <dd className={kvValue}>{viewer.id}</dd>
         </dl>
         <p className={`${hint} mt-2.5`}>
           {t.rich("rolesHint", {

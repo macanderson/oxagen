@@ -1957,7 +1957,6 @@ type Messages = {
       editAvatar: string;
       roles: string;
       principal: string;
-      principalKind: string;
       rolesHint: string;
       invalid: string;
       denied: string;
