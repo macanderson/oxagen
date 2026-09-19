@@ -653,7 +653,7 @@ export const KIND_BODIES = {
   "oxagen:hook_health": body({ ...pick(...healthKeys) }),
   "oxagen:mcp_connection": body({
     ...pick(...healthKeys),
-    ...pick("mcp_server_name", "mcp_tool_name"),
+    ...pick("mcp_server_name", "mcp_tool_name", "plugin_name", "plugin_id_hash"),
   }),
   "oxagen:notification": body({
     ...pick(...lifecycleKeys),
