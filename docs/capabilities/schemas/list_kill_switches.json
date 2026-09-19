@@ -143,8 +143,15 @@
                       "const": "operator"
                     },
                     "id": {
-                      "type": "string",
-                      "minLength": 1
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
                     }
                   },
                   "required": [

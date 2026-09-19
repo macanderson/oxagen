@@ -22,6 +22,11 @@ export const killSwitchTargetKindSchema = z.enum([
   "class",
 ]);
 
+/** A user's public id, `usr_` plus the 22-character id `idMixin("usr")` mints. */
+const userPublicIdSchema = z
+  .string()
+  .regex(/^usr_[0-9a-z]{22}$/, "a user public id (usr_…)");
+
 export const killSwitchTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("tool_version"), id: z.string().min(1) }),
   z.object({ kind: z.literal("tool_server"), id: z.string().min(1) }),
@@ -31,7 +36,10 @@ export const killSwitchTargetSchema = z.discriminatedUnion("kind", [
   // surface print) or, kept for backward compatibility, their raw user uuid.
   // The handler resolves either form to the user within the org and refuses
   // an unknown or out-of-org id by name (#3147).
-  z.object({ kind: z.literal("operator"), id: z.string().min(1) }),
+  z.object({
+    kind: z.literal("operator"),
+    id: z.union([z.string().uuid(), userPublicIdSchema]),
+  }),
   z.object({ kind: z.literal("workspace"), id: z.string().uuid() }),
   z.object({ kind: z.literal("org"), id: z.string().uuid() }),
   z.object({ kind: z.literal("class"), id: consequenceTagSchema }),
