@@ -326,6 +326,66 @@ describe("a step carrying both halves", () => {
     expect(result).not.toHaveTextContent('{"branch":"release/3.2"}');
   });
 
+  it("shows both halves at the steps zoom, which is where a folded entry can reach the view", () => {
+    // The Transcript tab reads at `everything` today, so a folded entry does
+    // not reach this renderer through it. The port takes the zoom, though, and
+    // the Cost tab already reads at `turns` and `steps`, so the renderer is
+    // held to the folded shape rather than to the caller that happens to be
+    // wired to it.
+    renderSection({
+      read: readOk(runTranscript({ zoom: "steps", entries: [folded] })),
+      zoom: "steps",
+    });
+    const halves = screen.getAllByTestId("transcript-half");
+    expect(halves.map((half) => half.getAttribute("data-half"))).toEqual([
+      "Called with",
+      "Returned",
+    ]);
+    const frame = screen.getByTestId("transcript-frame");
+    expect(frame).toHaveTextContent('{"branch":"release/3.2"}');
+    expect(frame).toHaveTextContent('{"ok":true,"tag":"v3.2.0"}');
+  });
+
+  it("still draws a one-half entry as one half, named by the half it is", () => {
+    renderSection({
+      read: readOk(
+        runTranscript({
+          entries: [
+            transcriptEntry({
+              request: null,
+              response: transcriptBody({ text: "cutting it now" }),
+            }),
+          ],
+        }),
+      ),
+      zoom: "everything",
+    });
+    const halves = screen.getAllByTestId("transcript-half");
+    expect(halves).toHaveLength(1);
+    expect(halves[0]).toHaveAttribute("data-half", "Returned");
+    expect(halves[0]).toHaveTextContent("cutting it now");
+  });
+
+  it("still draws an outgoing-only entry as Sent, not as Called with (negative)", () => {
+    renderSection({
+      read: readOk(
+        runTranscript({
+          entries: [
+            transcriptEntry({
+              kind: "tool_call",
+              request: transcriptBody({ text: '{"branch":"release/3.2"}' }),
+              response: null,
+            }),
+          ],
+        }),
+      ),
+      zoom: "everything",
+    });
+    const halves = screen.getAllByTestId("transcript-half");
+    expect(halves).toHaveLength(1);
+    expect(halves[0]).toHaveAttribute("data-half", "Sent");
+  });
+
   it("shows the input too, labelled as what the tool was called with", () => {
     renderSection({
       read: readOk(runTranscript({ entries: [folded] })),

@@ -212,9 +212,15 @@ function FrameDetail({
   // A tool was called with its input and returned its result; every other kind
   // sent and received. The words differ because the actions do.
   const sent = frame.kind === "tool_call" ? t("calledWith") : t("request");
-  // The header states the fidelity of the half a reader is here for: the
-  // result when there is one, otherwise the only half recorded.
-  const lead = response ?? request;
+  // The header names one fidelity, and the one a reader is here for is the
+  // result's: a step whose input was kept and whose result was not is a step
+  // with no result to read. Where no result was recorded the outgoing half is
+  // the only half, so it is the one named. This is a summary and never the
+  // only place the fidelity appears — each half below states its own — so it
+  // is a deliberate choice of which to headline, not a pick between two
+  // bodies. The bodies themselves are read by name.
+  const headline = response ?? request;
+  const neither = request === null && response === null;
   return (
     <div
       data-testid="transcript-frame"
@@ -228,7 +234,7 @@ function FrameDetail({
           {t("frameHead", {
             seq: frame.seq,
             time: format.dateTime(new Date(frame.at), { timeStyle: "medium" }),
-            fidelity: t(`fidelity.${lead?.fidelity ?? "digest_only"}`),
+            fidelity: t(`fidelity.${headline?.fidelity ?? "digest_only"}`),
           })}
         </span>
       </div>
@@ -241,7 +247,7 @@ function FrameDetail({
         {frame.decision === null ? null : (
           <Decision decision={frame.decision} />
         )}
-        {lead === null ? (
+        {neither ? (
           <p data-testid="entry-no-halves" className="m-0 text-xs text-muted-foreground">
             {t("noHalves")}
           </p>
@@ -265,7 +271,7 @@ function FrameDetail({
             )}
           </>
         )}
-        {lead?.truncated === true ? null : (
+        {headline?.truncated === true ? null : (
           <SafeLink
             to={routes.run(org, ws, runId, { tab: "frames", body: frame.seq })}
             className={`${linkText} self-start text-[11px]`}
