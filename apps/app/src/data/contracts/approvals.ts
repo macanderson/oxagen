@@ -21,3 +21,27 @@ export const ApprovalItem = z.object({
   expiresAt: z.iso.datetime({ offset: true }),
 });
 export type ApprovalItem = z.infer<typeof ApprovalItem>;
+
+// A resolved approval as the Run page's Approvals tab reads it, from
+// `list_resolved_approvals` (#3153). Carries what `ApprovalItem` carries plus
+// the resolution: when it happened, who or what made it, and, when a
+// decision rule released the call with no person, the rule that did.
+export const ResolvedApprovalItem = z.object({
+  id: PublicId,
+  runId: PublicId.nullable(),
+  tool: z.string().min(1),
+  requester: PublicId.nullable(),
+  createdAt: z.iso.datetime({ offset: true }),
+  expiresAt: z.iso.datetime({ offset: true }),
+  resolvedAt: z.iso.datetime({ offset: true }),
+  resolution: z.enum(["approved", "denied", "expired"]),
+  /** `user:<usr_…>` or `policy:<rule id>`; null only for the unreachable case of neither being set. */
+  resolvedBy: z.string().min(1).nullable(),
+  /**
+   * The auto-approval rule that resolved this call with no person; null when
+   * a person resolved it or no rule covered it. A rule id, not a minted
+   * Oxagen public id (INV-11), so it is carried as `…Ref`.
+   */
+  autoRuleRef: z.string().min(1).nullable(),
+});
+export type ResolvedApprovalItem = z.infer<typeof ResolvedApprovalItem>;

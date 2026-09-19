@@ -319,6 +319,8 @@ export type DecisionRulesKernelGateFn = (args: {
     userId: string | null;
     surface?: string;
     requestId?: string;
+    /** The run an auto-approval receipt attaches to (#3153), or null. */
+    runId?: string | null;
   };
   /** The IAM-resolved acting principal, or null (the non-enterprise fast-path). */
   principal: ResolvedPrincipal | null;
@@ -875,6 +877,16 @@ export interface InvokeOptions {
   surface?: CapabilitySurface;
   /** Internal deterministic lifecycle execution; orthogonal to public surfaces. */
   execution?: LifecycleExecutionContext;
+  /**
+   * The run this call belongs to, read fresh at call time by a caller whose
+   * own run id can change after `ctx` was built — the in-app assistant opens
+   * its run only after materializing tools, so `ctx.agentRun` (Agent RBAC
+   * context, absent for an ordinary human chat turn) is the wrong field to
+   * read for this. Takes priority over `ctx.agentRun?.runId` in the
+   * decision-rules gate, so the run an auto-approval receipt attaches to
+   * (#3153) reflects the run this specific call actually landed in.
+   */
+  runId?: string | null;
 }
 
 /**
@@ -1493,6 +1505,13 @@ async function _invokeCoreInner(
             userId: ctx.userId ?? null,
             surface: opts?.surface,
             requestId: ctx.requestId,
+            // The run an auto-approval receipt attaches to (#3153). opts.runId
+            // is read fresh at call time by a caller whose own run id can
+            // change after `ctx` was built (the in-app assistant opens its
+            // run only after materializing tools) and takes priority;
+            // ctx.agentRun?.runId is the fallback for an Agent RBAC call,
+            // which carries no separate opts.runId of its own.
+            runId: opts?.runId ?? ctx.agentRun?.runId ?? null,
           },
           principal: resolvedPrincipal,
         });

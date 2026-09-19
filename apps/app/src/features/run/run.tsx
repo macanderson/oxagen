@@ -38,6 +38,7 @@ import { ChainSection } from "./chain";
 import { CostSection } from "./cost";
 import { FramesSection } from "./frames";
 import { RunHeader } from "./header";
+import { ResolvedApprovalsPanel } from "./resolved-approvals";
 import { kindsParam, TranscriptSection } from "./transcript";
 
 const TABS = ["transcript", "frames", "cost", "chain", "approvals"] as const;
@@ -226,18 +227,24 @@ export async function Run({
         detail.run.id,
         now,
       );
+      const resolvedApprovals = await source.approvals.resolved(ctx, {
+        runId: detail.run.id,
+      });
       section = (
-        <ApprovalsPanel
-          approvals={approvals}
-          // A mandate bar needs `list_mandates`, which the Fleet page reads for
-          // its own cards. The Run page does not read it, so a card names the
-          // mandate it drew on rather than drawing a bar from nothing.
-          mandates={new Map()}
-          now={at}
-          on="run"
-          org={place.org}
-          ws={place.ws}
-        />
+        <div className="flex flex-col gap-6">
+          <ApprovalsPanel
+            approvals={approvals}
+            // A mandate bar needs `list_mandates`, which the Fleet page reads for
+            // its own cards. The Run page does not read it, so a card names the
+            // mandate it drew on rather than drawing a bar from nothing.
+            mandates={new Map()}
+            now={at}
+            on="run"
+            org={place.org}
+            ws={place.ws}
+          />
+          <ResolvedApprovalsPanel approvals={resolvedApprovals} />
+        </div>
       );
       break;
     }
