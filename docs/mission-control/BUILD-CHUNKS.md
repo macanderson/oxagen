@@ -78,7 +78,7 @@ Lanes:
 
 - **docs.** Rewrite the inventory against head with a Class column and the owning issue per row. One ADR for the 2026-09-14 scope review and its two reversals. A status note under spec §2.1. The Skills and Mandate rows in `ARCHITECTURE.md` §1.2. Twelve `docs/capabilities` files the contracts claim and do not have.
 - **parity.** `check_ui_parity.mjs --strict` fails on a proof path that does not exist, with no metadata exception, because `verifications/` is gitignored and `verifiedAt` is self-reported. It also learns an `also` array so one capability can be bound on two pages, which sessions 1, 3, and 5 use. A real test for `get_contract_rate`. An `app` layer and a binding for `get_steering_freshness`.
-- **prs.** PRs #3479 and #3459 to green and mergeable. No merge.
+- **prs.** PRs #3479 and #3459 to green and mergeable. No merge. A sidecar lane: it works on those PRs' own branches, and the workflow keeps it out of the session's integration.
 
 Done when:
 
@@ -135,7 +135,7 @@ Lanes:
 - **roles.** Assign and revoke on the identity tab.
 - **enrollment.** Revoke a host. Mint an enrollment token and show the command once. A read-only budget panel with its basis, and the NotBacked line for agent-scope budgets.
 - **schemas.** `get_agent_toolbelt` carries each tool's input schema and digest. The toolbelt renders them. Contract change, whole parity chain.
-- **invite.** Send an invitation with a workspace picker, because the contract is workspace-scoped and People is an org page.
+- **invite.** Send an organization invitation. The handler records an org role and no workspace, so there is no workspace picker and the copy claims nothing about workspaces. A repeat for a pending email returns the existing invitation, shown as already invited.
 
 Done when:
 
@@ -143,7 +143,7 @@ Done when:
 - [ ] An enrollment can be revoked and a new one minted from the page
 - [ ] The agent shows the budget it runs under with its basis
 - [ ] The toolbelt shows each tool's input schema and digest
-- [ ] An invitation can be sent from People
+- [ ] An organization invitation can be sent from People
 - [ ] Five bindings with real proofs; the toolbelt contract change is documented
 
 ## Session 4: run evidence
@@ -153,8 +153,8 @@ Done when:
 Lanes:
 
 - **proof.** A Proof tab that renders the recorded proof and one NotBacked line for the Phase 5 items.
-- **export.** `get_run_export` through the whole parity chain, a download route over blob storage, and the export id on Run becomes a download link when ready.
-- **gateway.** Budget refusals, interrupts, and each model call's binding and tier basis on the transcript. The tier's basis beside the tier word. The cache tile and the unmetered caveat on Spend.
+- **export.** `get_run_export` through the whole parity chain, using the stored status vocabulary (queued, building, ready, failed), a download route over blob storage, and the export id on Run becomes a download link when ready.
+- **gateway.** The transcript read gains the gateway fields the proxy records (reason code, interrupted, binding, tier basis), then the transcript renders budget refusals, interrupts, and each model call's binding and tier basis. The tier's basis beside the tier word. The cache tile and the unmetered caveat on Spend.
 
 Done when:
 
@@ -193,7 +193,9 @@ Every `mc-*` workflow has the same four phases and the same preamble, copied int
 1. **Scout.** One read-only agent checks each lane against `origin/main` and returns `still_open`, the file and line facts the builder needs, and the open PRs that overlap. A lane that already shipped is skipped and logged. `dryRun: true` stops here.
 2. **Build.** One agent per lane, in parallel, each in its own worktree on `mc/<session>-<lane>` from `origin/main`, owning only its paths, pushing after every step, opening no PR.
 3. **Integrate.** One agent merges the lane branches into `mc/<session>`, merges `origin/main`, reads the whole diff against this document, runs the generators, updates this document's boxes and `ARCHITECTURE.md` §1.2, opens the PR ready for review with the template filled, and drives CI green for up to four rounds. It does not merge.
-4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, and carries P2 and below into one residue issue.
+4. **Review.** One agent cold-reviews the PR, fixes every P0 and P1 on the branch, carries P2 and below into one residue issue, and replies on and resolves each carried thread per AGENTS.md.
+
+A lane marked `integrate: false` is a sidecar: it works on branches that are not the session's and its result is reported, never merged.
 
 Args: `worktreeRoot` (default `../oxagen-worktrees`), `skipLanes` (lane ids), `dryRun`, `mergeMain`.
 
