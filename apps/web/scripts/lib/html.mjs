@@ -180,6 +180,7 @@ export function layout(o) {
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/oxagen.webmanifest">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 ${o.ldjson ? `<script type="application/ld+json">\n${JSON.stringify(o.ldjson, null, 2).replace(/</g, "\\u003c")}\n</script>` : ""}

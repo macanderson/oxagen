@@ -82,6 +82,16 @@ function measureDefaults(mandate: MandateRow): {
   perCall: string;
   perPeriod: string;
   callsPerDay: string;
+  /**
+   * The window the stored calls cap is counted in, which the form does not let
+   * anyone change. It is carried so the field can be LABELLED with it: the label
+   * read "Calls per day" against a figure that might be per week, and since the
+   * submission now keeps the stored window rather than rewriting it to daily,
+   * typing 20 into a field marked "per day" would write twenty calls a week.
+   * A label that names the window is honest with one string; a second period
+   * control would be a wider change to a form that cannot delete a limit either.
+   */
+  callsPeriod: (typeof PERIODS)[number];
 } {
   /** A count's own digits, or the empty string; a money figure defaults to blank. */
   const countOf = (value: MeasureValue | null | undefined): string =>
@@ -99,6 +109,9 @@ function measureDefaults(mandate: MandateRow): {
     perCall: countOf(counted?.perCall),
     perPeriod: countOf(counted?.perPeriod),
     callsPerDay: countOf(calls?.perPeriod),
+    // `daily` when nothing is stored, which is the window a new cap is written
+    // under, so the label matches what a submission would create.
+    callsPeriod: PERIODS.find((p) => p === calls?.period) ?? "daily",
   };
 }
 
@@ -212,7 +225,12 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
               ))}
             </select>
           </Field>
-          <Field id={id("callsPerDay")} label={t("callsPerDay")}>
+          <Field
+            id={id("callsPerDay")}
+            label={t("callsPer", {
+              period: t(`periodsPer.${defaults.callsPeriod}`),
+            })}
+          >
             <input
               id={id("callsPerDay")}
               name="callsPerDay"

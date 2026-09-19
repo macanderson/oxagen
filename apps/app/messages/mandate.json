@@ -114,11 +114,16 @@
           "weekly": "weekly",
           "monthly": "monthly"
         },
-        "callsPerDay": "Calls per day",
         "validTo": "Valid to",
         "validToHint": "The last day the mandate may be drawn on. Leave it as it is to keep the window.",
         "confirm": "Change the limits",
-        "pending": "Changing the limits"
+        "pending": "Changing the limits",
+        "callsPer": "Calls per {period}",
+        "periodsPer": {
+          "daily": "day",
+          "weekly": "week",
+          "monthly": "month"
+        }
       },
       "revoke": {
         "open": "Revoke",

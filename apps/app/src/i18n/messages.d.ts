@@ -1174,11 +1174,16 @@ type Messages = {
           weekly: string;
           monthly: string;
         };
-        callsPerDay: string;
         validTo: string;
         validToHint: string;
         confirm: string;
         pending: string;
+        callsPer: string;
+        periodsPer: {
+          daily: string;
+          weekly: string;
+          monthly: string;
+        };
       };
       revoke: {
         open: string;
