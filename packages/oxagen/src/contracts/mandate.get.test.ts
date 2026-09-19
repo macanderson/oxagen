@@ -20,7 +20,7 @@ describe("get_mandate contract", () => {
     });
   });
 
-  // #3138 (ADR-104): the mandate a list row links to must be readable by the
+  // #3138 (ADR-107): the mandate a list row links to must be readable by the
   // same caller who could see it in the list, or `readerFilter`'s
   // creator-narrowing (packages/handlers/src/_mandate.ts) — already wired
   // into this handler — stays unreachable for exactly the reader list_mandates

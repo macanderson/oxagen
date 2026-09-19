@@ -14,7 +14,7 @@ import {
 // who see every mandate in the workspace. `defaultRoles` otherwise matches
 // `request_mandate`'s real grants (workspace Owner, Member) — anyone who may
 // ask for a mandate may read the mandates of agents they created, so the
-// requester of a draft can read the draft they just made. ADR-104: the two
+// requester of a draft can read the draft they just made. ADR-107: the two
 // capabilities disagreed (`request_mandate` admitted a workspace Member this
 // contract refused outright), and `readerFilter`
 // (`packages/handlers/src/_mandate.ts`) already narrows that reader to their

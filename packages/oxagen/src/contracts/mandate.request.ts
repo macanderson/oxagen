@@ -26,7 +26,7 @@ export const mandateRequest = registerCapability({
   // such entry, so it seeded nothing) and left out Billing/Compliance, which
   // the handler already admits. An enterprise-org Billing or Compliance
   // user was refused by the kernel before ever reaching that check
-  // (ADR-104, #3138).
+  // (ADR-107, #3138).
   defaultRoles: {
     org: {
       Owner: "allow",

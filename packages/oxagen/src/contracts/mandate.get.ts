@@ -13,7 +13,7 @@ import {
 // in packages/handlers/src/_mandate.ts already narrows this way — the
 // handler was ready before this contract admitted the caller). Without this,
 // the page a list row links to refuses the very reader list_mandates just
-// admitted (ADR-104, #3138).
+// admitted (ADR-107, #3138).
 export const mandateGet = registerCapability({
   name: "get_mandate",
   domain: "mandate",

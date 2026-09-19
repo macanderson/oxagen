@@ -21,7 +21,7 @@ describe("list_mandates contract", () => {
     });
   });
 
-  // #3138 (ADR-104): whoever may draft a mandate must be able to read the
+  // #3138 (ADR-107): whoever may draft a mandate must be able to read the
   // draft they just made, or `readerFilter`'s creator-narrowing branch
   // (`packages/handlers/src/_mandate.ts`) can never run — IAM refuses the
   // call before the handler starts. `list_mandates` admits every role

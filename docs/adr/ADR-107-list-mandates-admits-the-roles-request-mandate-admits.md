@@ -1,4 +1,4 @@
-# ADR-104: `list_mandates` and `get_mandate` admit the roles `request_mandate` admits
+# ADR-107: `list_mandates` and `get_mandate` admit the roles `request_mandate` admits
 
 ## Status
 

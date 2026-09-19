@@ -624,7 +624,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("no_principal"));
     });
 
-    // #3138 (ADR-104): request_mandate and list_mandates now admit the same
+    // #3138 (ADR-107): request_mandate and list_mandates now admit the same
     // roles, so IAM lets a non-accountable reader reach the handler; this
     // pins what readerFilter's creator-narrowing does with that admission —
     // a reader who created nothing reads nothing, not the whole ledger.
