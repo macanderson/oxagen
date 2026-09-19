@@ -257,7 +257,8 @@ export function resolveSteeringPolicy(
     }
   }
 
-  for (const path of refused) if (!excluded.has(path)) out.refusedExcludes.push(path);
+  for (const path of refused)
+    if (!excluded.has(path)) out.refusedExcludes.push(path);
   out.refusedExcludes.sort();
   out.exclude = [...excluded].sort();
   if (emergency.suspended) {

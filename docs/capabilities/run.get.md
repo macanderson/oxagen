@@ -44,3 +44,18 @@ A read that starts at the page cursor or at any frame's own cursor repeats nothi
 ## Poll budget
 
 Every invoke runs the IAM check and the audit and security emissions once, before the handler starts; the wait is inside the handler. With `waitMs: 20000` an idle Run page costs at most three invokes a minute.
+
+## Live: the run frame stream
+
+`GET /v1/:org_slug/:workspace_slug/runs/:run_id/stream` is this capability turned into a live feed (`apps/api/src/routes/v1/run.stream.ts`). It is not a second transport: it is the same SSE shape the in-app agent's stream uses (`POST /chat/stream`), and every iteration of it is one `invoke("get_run")`, so the IAM check, the rules gate and the audit emission happen on each read exactly as they do for a page load. A stream that subscribed underneath the kernel would be a second path to the same frames with none of those gates on it — access revoked mid-stream would keep delivering.
+
+| Line | Payload |
+|---|---|
+| `event: run` | `{ run }` — the header, once, before any frame |
+| `id: <cursor>` + `data:` | one frame, exactly as `get_run` returns it. The `id` is the frame's own cursor |
+| `event: done` | `{ reason, cursor }` — `sealed` when the recording has ended and nothing lies past the last page, `idle` when the stream reached its 300 s ceiling with nothing new. The client reconnects from `cursor` |
+| `event: error` | `{ message, code, cursor }` — a failure after the stream is open. Before it is open, a refusal leaves as a status through the error middleware, not as a 200 whose first line is an error |
+
+**Resuming.** `EventSource` sends the last `id` back as `Last-Event-ID`; a client that is not `EventSource` passes `?after=<cursor>`. A read that starts at either repeats nothing and skips nothing, so a dropped connection costs a round trip and no frames.
+
+**Cost.** Each read long-polls inside the handler for up to 20 s (`waitMs`), so an idle stream costs one invoke per 20 s rather than one per client tick. `noBillingGate: true` keeps every one of them off the meter.

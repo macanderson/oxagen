@@ -125,6 +125,10 @@ export function seal(
     eventCount: 3,
     merkleRoot: `sha256:${"f".repeat(64)}`,
     archiveSegmentRef: "evidence/o/w/segments/a/f.ndjson.zst",
+    enforcementTier: "harness",
+    terminalStatus: "completed",
+    finalEventDigest: `sha256:${"e".repeat(64)}`,
+    eventStreamDigest: `sha256:${"d".repeat(64)}`,
     ...over,
   };
 }
@@ -182,6 +186,7 @@ export function tachoSession(
   return {
     scope: SCOPE,
     session: {
+      id: "0192d4a8-7c1e-7000-8000-00000000c0de",
       publicId,
       sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
       agentKey: "acme.core.cc-laptop",
@@ -197,6 +202,7 @@ export function tachoSession(
       replayGrade: null,
       completenessGaps: [],
       enforcementTier: "observe",
+      finalHash: `sha256:${"a".repeat(64)}`,
       name: null,
       summary: null,
       summaryGeneratedAt: null,

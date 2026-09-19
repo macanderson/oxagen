@@ -473,9 +473,9 @@ describe("classifyProbeFailure", () => {
   });
 
   it("reads anything else as unanswered", () => {
-    expect(classifyProbeFailure(new GitCommandError([], 128, "fatal: oops"))).toBe(
-      "unanswered",
-    );
+    expect(
+      classifyProbeFailure(new GitCommandError([], 128, "fatal: oops")),
+    ).toBe("unanswered");
     expect(classifyProbeFailure(new Error("no idea"))).toBe("unanswered");
   });
 });

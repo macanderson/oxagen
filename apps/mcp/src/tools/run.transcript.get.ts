@@ -9,7 +9,16 @@ export const schema = {
     "The run's public id: arun_… (evidence ledger) or tse_… (wrapped agent session)",
   ),
   zoom: runTranscriptGet.input.shape.zoom.describe(
-    "turns: one entry per turn; steps: one per model call and tool call; everything: one per frame",
+    "turns: one entry per turn; steps: one per model call and tool call, request and result folded together; everything: one per frame",
+  ),
+  kinds: runTranscriptGet.input.shape.kinds.describe(
+    "The chips to narrow to (prompt, responses, tools, policy, recall, usage, errors); empty keeps every frame",
+  ),
+  after: runTranscriptGet.input.shape.after.describe(
+    "An entry cursor from an earlier read; omit to read from the start",
+  ),
+  limit: runTranscriptGet.input.shape.limit.describe(
+    "Entries per page, 1 to 500",
   ),
 };
 

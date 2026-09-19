@@ -201,7 +201,11 @@ export function buildTachoProgram(): Command {
     .description(
       "Run one headless turn (Claude Code by default, --harness codex, cursor or stella) and confirm it was chained",
     )
-    .option("--harness <name>", "claude-code | codex | cursor | stella", "claude-code")
+    .option(
+      "--harness <name>",
+      "claude-code | codex | cursor | stella",
+      "claude-code",
+    )
     .option("--json", "Machine-readable result")
     .action(async (opts: { harness?: string; json?: boolean }) => {
       const [harness] = parseHarnesses(opts.harness);

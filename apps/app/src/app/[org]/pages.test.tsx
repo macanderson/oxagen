@@ -450,12 +450,13 @@ describe("the Run page", () => {
     requireViewer.mockResolvedValue(ctx);
   });
 
-  it("hands the run, the tab, the zoom and the frames cursor the URL names to Run", async () => {
+  it("hands the run, the tab, the zoom, the chips and the frames cursor the URL names to Run", async () => {
     await expectPageTitle(
       await RUN(),
       routeProps(SEGMENTS, {
         tab: "frames",
         zoom: "turns",
+        kinds: "tools,errors",
         frames: "ZjoyMA",
       }),
       title("run"),
@@ -467,6 +468,7 @@ describe("the Run page", () => {
       runId: "arun_1",
       tab: "frames",
       zoom: "turns",
+      kinds: "tools,errors",
       frames: "ZjoyMA",
       body: null,
     });
@@ -478,6 +480,7 @@ describe("the Run page", () => {
     expect(Run.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: null,
       zoom: null,
+      kinds: null,
       frames: null,
       body: null,
     });

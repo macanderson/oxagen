@@ -20,6 +20,8 @@ import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  NOW,
+  runChain,
   runCost,
   runDetail,
   runFrame,
@@ -28,6 +30,7 @@ import {
   mockupTranscript,
   runSource,
   runTranscript,
+  transcriptBody,
   transcriptEntry,
 } from "./run.builders";
 
@@ -63,6 +66,7 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { Run } = await import("./run");
+const { RunLoading } = await import("./loading");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "usr_marcusbell",
@@ -114,6 +118,7 @@ async function renderRun(
   view: {
     tab?: string;
     zoom?: string;
+    kinds?: string;
     frames?: string;
     body?: string;
     viewer?: typeof ctx;
@@ -126,8 +131,10 @@ async function renderRun(
     runId: "tse_7k2m9q",
     tab: view.tab ?? null,
     zoom: view.zoom ?? null,
+    kinds: view.kinds ?? null,
     frames: view.frames ?? null,
     body: view.body ?? null,
+    now: NOW,
   });
   const { container } = render(<IntlProvider>{element}</IntlProvider>);
   return { container, calls };
@@ -384,7 +391,12 @@ describe("tabs", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { zoom: "everything-else" },
     );
-    expect(calls.transcript[0]).toEqual([ctx, "tse_7k2m9q", "everything"]);
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      "everything",
+      { kinds: [] },
+    ]);
     expect(screen.getByRole("button", { name: "Steps" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -396,7 +408,12 @@ describe("tabs", () => {
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { zoom: "turns" },
     );
-    expect(calls.transcript[0]).toEqual([ctx, "tse_7k2m9q", "everything"]);
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      "everything",
+      { kinds: [] },
+    ]);
     expect(screen.getByRole("button", { name: "Turns" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -413,7 +430,8 @@ describe("tabs", () => {
       expect(screen.getByRole("region", { name: "Transcript" })).toBeTruthy();
       expect(calls.approvals).toHaveLength(0);
     }
-    expect(screen.queryByRole("link", { name: "Policy" })).toBeNull();
+    const tabs = screen.getByRole("navigation", { name: "Run sections" });
+    expect(within(tabs).queryByRole("link", { name: "Policy" })).toBeNull();
   });
 });
 
@@ -538,13 +556,34 @@ describe("transcript", () => {
     replaceState.mockRestore();
   });
 
+  it("says which half a frame carried, and the decision a rule made about the call", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { tab: "transcript", zoom: "everything" },
+    );
+    // A tool request is what went out; its call is what came back.
+    const halves = screen
+      .getAllByTestId("transcript-half")
+      .map((half) => half.getAttribute("data-half"));
+    expect(halves).toContain("Sent");
+    expect(halves).toContain("Returned");
+    const decisions = screen.getAllByTestId("entry-decision");
+    expect(decisions[0]).toHaveTextContent("Decision: allow, at frame 6");
+    expect(decisions[1]).toHaveTextContent("Decision: deny, at frame 12");
+  });
+
   it("links a cut body to its frame's whole body on the Frames tab", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
         transcript: ok(
           runTranscript({
-            entries: [transcriptEntry({ seq: "37", truncated: true })],
+            entries: [
+              transcriptEntry({
+                seq: "37",
+                response: transcriptBody({ seq: "37", truncated: true }),
+              }),
+            ],
           }),
         ),
       },
@@ -579,16 +618,17 @@ describe("transcript", () => {
         "running",
       );
       expect(
-        screen.getByText(/re-reads the run every few seconds/),
+        screen.getByText(/follows the run's head and reads what it records/),
       ).toBeTruthy();
-      refresh.mockClear();
-      vi.advanceTimersByTime(5000);
-      expect(refresh).toHaveBeenCalledTimes(1);
+      // Following is the view's own state: scrubbing back lets go of the head,
+      // and "go live" takes it again. The frames themselves arrive over the
+      // stream, which this environment has no EventSource for.
       fireEvent.change(screen.getByRole("slider", { name: "Scrub to frame" }), {
         target: { value: "2" },
       });
-      vi.advanceTimersByTime(10_000);
-      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId("transport-readout")).not.toHaveTextContent(
+        "seq 12",
+      );
       fireEvent.click(screen.getByRole("button", { name: "go live" }));
       expect(screen.getByTestId("transport-readout")).toHaveTextContent(
         "seq 12",
@@ -646,7 +686,25 @@ describe("transcript", () => {
       },
       { tab: "transcript" },
     );
-    expect(screen.getByText(/stops short of the end/)).toBeTruthy();
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "stops short of the end",
+    );
+  });
+
+  it("says the transcript stopped short when entries lie past this read (negative)", async () => {
+    // The ledger read reached the run's end, but the page did not: the cursor
+    // is set, so drawing the page as the whole run would hide what is past it.
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ complete: true, cursor: "dDo0Mg" })),
+      },
+      { tab: "transcript" },
+    );
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      "More lie past this page",
+    );
+    expect(screen.getByTestId("transcript-more")).toBeTruthy();
   });
 
   it("names its own failure when the transcript read is refused (negative)", async () => {
@@ -961,5 +1019,196 @@ describe("failures", () => {
   it("names the permission a denied viewer lacks (negative)", async () => {
     await renderRun({ detail: DENIED });
     expect(screen.getByText(/Your roles do not include run.read/)).toBeTruthy();
+  });
+});
+
+describe("chips", () => {
+  it("reads the transcript through the chips the URL pressed, in the contract's own order", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "transcript", kinds: "errors,tools" },
+    );
+    expect(calls.transcript[0]).toEqual([
+      ctx,
+      "tse_7k2m9q",
+      "everything",
+      { kinds: ["tools", "errors"] },
+    ]);
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(screen.getByTestId("chip-prompt")).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("drops a word the contract does not publish rather than refusing the page (negative)", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      { tab: "transcript", kinds: "thinking,proof,tools" },
+    );
+    expect(calls.transcript[0]?.[3]).toEqual({ kinds: ["tools"] });
+    expect(screen.queryByTestId("chip-thinking")).toBeNull();
+    expect(screen.queryByTestId("chip-proof")).toBeNull();
+  });
+
+  it("carries the zoom and the chips on every chip's own link, so one filter has one URL", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ zoom: "turns" })),
+      },
+      { tab: "transcript", zoom: "turns", kinds: "tools" },
+    );
+    expect(screen.getByTestId("chip-errors")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns&kinds=tools%2Cerrors",
+    );
+    // Pressing a chip that is on takes it off again.
+    expect(screen.getByTestId("chip-tools")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=transcript&zoom=turns",
+    );
+  });
+
+  it("says no entry answers the filter rather than drawing an empty run (negative)", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript({ entries: [], kinds: ["policy"] })),
+      },
+      { tab: "transcript", kinds: "policy" },
+    );
+    expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
+      "Clear the filter",
+    );
+    expect(screen.queryByTestId("run-transport")).toBeNull();
+  });
+});
+
+describe("chain and seal", () => {
+  it("reads get_run_chain only when its tab is open, and states the recorded grade", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        chain: ok(runChain({ recordedGrade: "view" })),
+      },
+      { tab: "chain" },
+    );
+    expect(calls.chain).toHaveLength(1);
+    expect(calls.transcript).toHaveLength(0);
+    expect(calls.cost).toHaveLength(0);
+    expect(screen.getByTestId("chain-ladder")).toBeTruthy();
+  });
+
+  it("names its own failure when the chain read is refused (negative)", async () => {
+    await renderRun({ detail: ok(runDetail()), chain: DOWN }, { tab: "chain" });
+    expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
+  });
+});
+
+describe("approvals on the run", () => {
+  it("reads list_approvals narrowed to this run, and only when its tab is open", async () => {
+    const { calls } = await renderRun(
+      { detail: ok(runDetail()), approvals: ok([]) },
+      { tab: "approvals" },
+    );
+    expect(calls.approvals).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
+    expect(calls.transcript).toHaveLength(0);
+  });
+
+  it("says nothing is parked rather than drawing an empty strip (negative)", async () => {
+    await renderRun(
+      { detail: ok(runDetail()), approvals: ok([]) },
+      { tab: "approvals" },
+    );
+    expect(screen.queryByTestId("approval")).toBeNull();
+  });
+
+  it("draws one card per approval recorded on the run", async () => {
+    await renderRun(
+      {
+        detail: ok(runDetail()),
+        approvals: ok([
+          {
+            id: "apr_1",
+            runId: "tse_7k2m9q",
+            tool: "create_release",
+            agentKey: "acme.core.release-bot",
+            requester: "usr_marcusbell",
+            mandateId: null,
+            createdAt: new Date(NOW - 60_000).toISOString(),
+            expiresAt: new Date(NOW + 3_600_000).toISOString(),
+          },
+        ]),
+      },
+      { tab: "approvals" },
+    );
+    const [card] = screen.getAllByTestId("approval");
+    expect(card).toHaveTextContent("create_release");
+  });
+});
+
+describe("cost", () => {
+  it("reads the rollup and the run's own per-turn ledger, and lays the turns out as bars", async () => {
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        cost: ok(runCost()),
+        transcript: (zoom) =>
+          ok(
+            runTranscript({
+              zoom,
+              entries:
+                zoom === "turns"
+                  ? [
+                      transcriptEntry({
+                        seq: "1",
+                        endSeq: "20",
+                        kind: "turn",
+                        label: "turn 1",
+                      }),
+                    ]
+                  : [transcriptEntry({ seq: "11", endSeq: "14" })],
+            }),
+          ),
+      },
+      { tab: "cost" },
+    );
+    expect(calls.cost).toHaveLength(1);
+    expect(calls.transcript.map((call) => call[2])).toEqual(["turns", "steps"]);
+    expect(screen.getAllByTestId("waterfall-bar")).toHaveLength(1);
+  });
+});
+
+describe("loading", () => {
+  it("replaces the page body with a skeleton shaped like the answer, and never the shell", async () => {
+    const { container } = render(
+      <IntlProvider>
+        <RunLoading />
+      </IntlProvider>,
+    );
+    const loading = screen.getByRole("status");
+    expect(loading).toHaveAttribute("aria-busy", "true");
+    expect(loading).toHaveTextContent("Loading this run");
+    await expectNoAxe(container);
+  });
+
+  it("keeps the page's own main container and header, rather than exporting the skeleton alone", () => {
+    render(
+      <IntlProvider>
+        <RunLoading />
+      </IntlProvider>,
+    );
+    // Next swaps page.tsx's whole return value for this default export while
+    // the route suspends, so the skip-to-content target and the page frame
+    // have to come from here too, or a stranger's tab-order loses its anchor
+    // and the layout jumps once the real page takes the same container.
+    const main = document.getElementById("main");
+    expect(main).not.toBeNull();
+    expect(main?.tagName).toBe("MAIN");
+    expect(main).toContainElement(screen.getByRole("heading", { name: "Run" }));
+    expect(main).toContainElement(screen.getByRole("status"));
   });
 });

@@ -206,6 +206,7 @@ export function billingSource(
       frameBody: refuse,
       cost: refuse,
       transcript: refuse,
+      chain: refuse,
     },
     approvals: { pending: refuse },
     agents: {
