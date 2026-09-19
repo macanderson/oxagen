@@ -1197,6 +1197,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "propose_agent",
+    async () =>
+      (await import("./agent.propose"))
+        .proposeAgentHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "propose_skill",
     async () =>
       (await import("./skill.propose"))

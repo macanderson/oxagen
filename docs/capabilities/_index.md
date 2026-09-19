@@ -22,6 +22,7 @@ Capabilities granted to an agent as a set have a page of their own:
 - [agent.credential.rotate](agent.credential.rotate.md) — Rotate an agent's long-lived credential: retire the current key and mint a replacement, returned once
 - [agent.debug.trace](agent.debug.trace.md) — Diagnose why an agent execution failed as a structured failure frame: failing step, error class, parsed top stack frames, related spans, and deterministically-ranked suspect files (optional LLM diagnosis via summarize)
 - [agent.definition.commit](agent.definition.commit.md) — Commit an agent's definition file (.oxagen/agents/<slug>.toml) to a branch of the workspace repository and open the pull request that publishes it, or add to the branch's open pull request; the default branch is never written
+- [agent.propose](agent.propose.md) — Write a new agent as a pull request against the main repository: its definition and the generated subagent file; six checks run first and nothing writes a row
 - [agent.definition.create](agent.definition.create.md) — Create a new agent definition — inserts the agent identity row (draft, inactive) and an immutable v1 version snapshot with the supplied, schema-validated config
 - [agent.definition.delete](agent.definition.delete.md) — Soft-delete an agent definition and its delegated IAM principal together, in one lifecycle
 - [agent.definition.get](agent.definition.get.md) — Fetch an agent definition with its active (or latest) version config, parsed and validated
