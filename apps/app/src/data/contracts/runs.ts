@@ -45,7 +45,13 @@ const OperatorKind = z.enum(["human", "agent", "service"]);
  * not hold.
  */
 export const RunModel = z.object({
-  id: z.string().min(1),
+  /**
+   * The model id exactly as the store recorded it — a vendor slug such as
+   * `claude-sonnet-5`, not a record this platform issues. It is named `slug`
+   * rather than `id` because INV-11 reserves an `id` field on a view model for
+   * a `PublicId`, and a reader who saw `id` here would reasonably expect one.
+   */
+  slug: z.string().min(1),
   provider: z.string().min(1).nullable(),
   tier: z.string().min(1).nullable(),
 });

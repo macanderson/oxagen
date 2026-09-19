@@ -37,7 +37,16 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
-    model: run.model,
+    // The capability records the vendor slug under `id`; the view model calls
+    // it `slug`, because INV-11 reserves `id` for a PublicId.
+    model:
+      run.model === null
+        ? null
+        : {
+            slug: run.model.id,
+            provider: run.model.provider,
+            tier: run.model.tier,
+          },
     machine: run.machine,
     taskRef: run.taskRef,
     name: run.name,

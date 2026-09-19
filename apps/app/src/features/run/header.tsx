@@ -62,7 +62,7 @@ function ModelFact({ label, model }: { label: string; model: RunModel }) {
   return (
     <Fact
       label={label}
-      value={<span className={`${mono} break-all`}>{model.id}</span>}
+      value={<span className={`${mono} break-all`}>{model.slug}</span>}
       detail={parts.length === 0 ? undefined : parts.join(" · ")}
     />
   );
