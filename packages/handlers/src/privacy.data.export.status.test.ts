@@ -45,6 +45,16 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 // The default is an organisation with nothing configured (no principal, no
 // roles, no grants), which is what every test but the revocation ones wants:
 // the resolver finds nothing explicit and the role check stays the only gate.
+/**
+ * The audit write this guard makes, and whether a failure of it was reported.
+ * A decision made outside the kernel whose row is lost without a word leaves
+ * the governance record saying the question was never asked.
+ */
+const auditEmission = vi.hoisted(() => ({
+  next: () => Promise.resolve(),
+  reported: [] as { capability: string; err: unknown; where?: string }[],
+}));
+
 const authz = vi.hoisted(() => ({
   value: {
     principal: null as unknown,
@@ -61,7 +71,15 @@ const authz = vi.hoisted(() => ({
 }));
 
 vi.mock("@oxagen/iam", () => ({
-  emitAudit: () => Promise.resolve(),
+  emitAudit: () => auditEmission.next(),
+  reportAuditEmissionFailure: (
+    capability: string,
+    _ctx: unknown,
+    err: unknown,
+    where?: string,
+  ) => {
+    auditEmission.reported.push({ capability, err, where });
+  },
   fetchAuthz: (args: {
     capability: string;
     orgId: string;
@@ -183,6 +201,8 @@ function denyExportData(effect: "deny" | "require_approval" = "deny"): void {
 }
 
 beforeEach(() => {
+  auditEmission.next = () => Promise.resolve();
+  auditEmission.reported.length = 0;
   mocks.selects.length = 0;
   mocks.wheres.length = 0;
   authz.calls.length = 0;
@@ -422,6 +442,31 @@ describe("an export_data deny written after the archive was queued", () => {
   function readyOrgExportForAnOwner(): void {
     queueSelects([personalRow({ scope: "org" })], [{ role: "owner" }]);
   }
+
+  // The guard's audit row is the only record that this question was asked
+  // outside the kernel and how it was answered. `checkIAM` escalates a lost
+  // row to ClickHouse `error_events` and the alert webhook; discarding it here
+  // would let an `export_data` decision leave the governance record with
+  // nothing to say it happened.
+  it("reports a failed audit write rather than discarding it", async () => {
+    auditEmission.next = () => Promise.reject(new Error("clickhouse down"));
+    readyOrgExportForAnOwner();
+    const answered = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+
+    // Non-blocking: a decision that was made is not unmade by a failed log
+    // write, so the read still answers.
+    expect(answered.exportId).toBe(EXPORT_ID);
+    await vi.waitFor(() => {
+      expect(auditEmission.reported).toHaveLength(1);
+    });
+    expect(auditEmission.reported[0]?.capability).toBe("export_data");
+    expect(auditEmission.reported[0]?.where).toBe(
+      "handlers:capabilityRevocation",
+    );
+  });
 
   it("refuses the read rather than returning the storage key", async () => {
     readyOrgExportForAnOwner();

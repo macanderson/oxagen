@@ -70,6 +70,41 @@ describe("recoveryCodeVault", () => {
     });
   });
 
+  // The store outlives a sign-out and a sign-in as somebody else in the same
+  // tab, and the second person sees nothing held, because the vault hides one
+  // person's state from another. A rotation from there used to write over the
+  // first person's only plaintext copy of a set the server had already swapped
+  // in. They were signed out, so they could not save it first and cannot get
+  // it back: that is a locked-out account on the next lost authenticator.
+  it("refuses a rotation over another person's unsaved set (negative)", () => {
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(false);
+    expect(recoveryCodeVault.heldByAnother(SOMEONE_ELSE)).toBe(true);
+
+    // And the first person's set is untouched by the attempt.
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    expect(result.current.codes).toEqual(["aaaa-1111"]);
+  });
+
+  // The same for doubt: a rotation whose answer was lost leaves the stored set
+  // unknown, and that state is as much the first person's as a held set is.
+  it("refuses a rotation over another person's unresolved rotation (negative)", () => {
+    recoveryCodeVault.lose(ME);
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(false);
+    expect(recoveryCodeVault.heldByAnother(SOMEONE_ELSE)).toBe(true);
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    expect(result.current.uncertain).toBe(true);
+  });
+
+  // Once the first person has saved their set there is nothing to protect, so
+  // the next person rotates normally. Refusing for ever would be its own bug.
+  it("lets another person rotate once nothing is at stake", () => {
+    recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    recoveryCodeVault.clear();
+    expect(recoveryCodeVault.heldByAnother(SOMEONE_ELSE)).toBe(false);
+    expect(recoveryCodeVault.begin(SOMEONE_ELSE)).toBe(true);
+  });
+
   // A second rotation must not drop a set that is still unsaved before the
   // new one has answered.
   it("keeps an unsaved set while a further rotation is on the wire", () => {

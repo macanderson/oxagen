@@ -55,7 +55,7 @@ import {
 } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import { resolve } from "@oxagen/oxagen/iam";
-import { emitAudit, fetchAuthz } from "@oxagen/iam";
+import { emitAudit, fetchAuthz, reportAuditEmissionFailure } from "@oxagen/iam";
 import { runInTenantScope } from "@oxagen/tenancy";
 
 /** The one field of a contract this guard reads. */
@@ -137,7 +137,21 @@ export async function capabilityRevocation(
     result,
     trace: result.trace,
     rawInputJson: JSON.stringify({ recheck: "capability_revocation" }),
-  }).catch(() => undefined);
+  }).catch((err: unknown) => {
+    // Reported, not swallowed. This guard decides `export_data` and
+    // `erase_data` outside the kernel, so its rows are the only record that
+    // the question was asked and how it was answered. `checkIAM` escalates
+    // the same failure to ClickHouse `error_events` and the alert webhook;
+    // discarding it here would let those decisions leave the governance
+    // record with nothing to say they had. Still non-blocking: a decision
+    // that was made is not unmade by a failed log write.
+    reportAuditEmissionFailure(
+      capability.name,
+      ctx,
+      err,
+      "handlers:capabilityRevocation",
+    );
+  });
 
   return {
     revoked: result.outcome !== "allow",

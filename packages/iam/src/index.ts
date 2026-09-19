@@ -59,6 +59,7 @@ export type {
 export { resourceScopeDigestOf } from "./resource-scope";
 
 export { assertNoActiveKillSwitch } from "./kill-switch-guard";
+export { reportAuditEmissionFailure } from "./check-iam";
 
 export {
   flipKillSwitchOff,
