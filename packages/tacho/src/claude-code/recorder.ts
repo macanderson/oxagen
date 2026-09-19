@@ -15,7 +15,13 @@ import type {
   TachoKind,
   UnsealedTachoEvent,
 } from "../envelope";
-import { withoutAddressMembers } from "../envelope";
+import {
+  agentIdentitySchema,
+  anthropicSchema,
+  contextSchema,
+  hostSchema,
+  withoutAddressMembers,
+} from "../envelope";
 import {
   contentClassOf,
   type DraftContent,
@@ -49,6 +55,20 @@ import { normalizeTranscriptLine, type TranscriptTotals } from "./transcript";
 type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
+
+/**
+ * The next value of every sticky field `absorbStandard` used to write
+ * straight onto the recorder, computed but not yet assigned. Building this
+ * ahead of `seal()` lets a refused row leave `this.anthropic`, `this.context`,
+ * `this.host` and `this.harnessVersion` exactly as they were: the caller
+ * assigns it only once the row the update carries has cleared validation.
+ */
+interface StandardUpdate {
+  anthropic: Anthropic;
+  context: Context;
+  host: Host;
+  harnessVersion: string | undefined;
+}
 
 /** A sighting's attrs (undefined: a repeat not to seal) and its commit. */
 interface LlmCallSightingAttrs {
@@ -521,7 +541,19 @@ export class SessionRecorder {
       raw_source_digest?: `sha256:${string}`;
       turn?: { prompt_id?: string; turn_id?: string };
     },
+    /**
+     * A not-yet-committed `StandardUpdate` to build this one envelope from,
+     * in place of the recorder's own sticky `anthropic`/`context`/`host`/
+     * `harnessVersion`. The caller (`sealOtelDraft`) commits it onto the
+     * recorder only after this call returns, so a throw here never leaves
+     * the sticky fields holding a value the envelope refused.
+     */
+    standard?: StandardUpdate,
   ): TachoEvent {
+    const anthropic = standard?.anthropic ?? this.anthropic;
+    const context = standard?.context ?? this.context;
+    const host = standard?.host ?? this.host;
+    const harnessVersion = standard?.harnessVersion ?? this.harnessVersion;
     const parent = this.options.parent;
     // Redacted and digested here, before the seal, so the digest the chain
     // hash covers is the digest of the bytes that ship. A frame with bytes
@@ -557,7 +589,7 @@ export class SessionRecorder {
       harness_event_sequence: fields.harness_event_sequence,
       agent: compact({
         ...this.options.context.agent,
-        harness_version: this.harnessVersion,
+        harness_version: harnessVersion,
       }),
       subagent: parent
         ? compact({
@@ -575,13 +607,10 @@ export class SessionRecorder {
               turn_id: fields.turn?.turn_id,
             })
           : undefined,
-      context:
-        Object.keys(this.context).length > 0 ? { ...this.context } : undefined,
-      host: Object.keys(this.host).length > 0 ? { ...this.host } : undefined,
+      context: Object.keys(context).length > 0 ? { ...context } : undefined,
+      host: Object.keys(host).length > 0 ? { ...host } : undefined,
       anthropic:
-        Object.keys(this.anthropic).length > 0
-          ? { ...this.anthropic }
-          : undefined,
+        Object.keys(anthropic).length > 0 ? { ...anthropic } : undefined,
       span: fields.span,
       attrs,
       content,
@@ -798,7 +827,17 @@ export class SessionRecorder {
         metric.standard.session_id !== this.harnessSessionId
       )
         continue;
-      this.absorbStandard(metric.standard);
+      // No `seal()` guards a metric, so its standard fields are checked
+      // against the same schemas `seal()` would refuse them against before
+      // they ever reach the sticky state: a metric with an out-of-bounds
+      // field must not poison it either.
+      const standardUpdate = this.computeStandardUpdate(metric.standard);
+      const refusal = this.refusedStandardReason(standardUpdate);
+      if (refusal !== undefined) {
+        this.otelRefusals.push(`metric: ${refusal}`);
+        continue;
+      }
+      this.commitStandardUpdate(standardUpdate);
       this.metrics.push(metric);
     }
     for (const draft of drafts) {
@@ -847,25 +886,82 @@ export class SessionRecorder {
     return this;
   }
 
-  private absorbStandard(standard: OtelDraft["standard"]): void {
-    this.anthropic = compact({
+  /**
+   * The sticky standard state a record's `standard` block would produce,
+   * computed against the recorder's CURRENT `anthropic`/`context`/`host`/
+   * `harnessVersion` without writing to any of them. Pure so a caller can
+   * validate or seal against the result before deciding whether the update
+   * is ever committed.
+   */
+  private computeStandardUpdate(
+    standard: OtelDraft["standard"],
+  ): StandardUpdate {
+    const anthropic = compact({
       ...this.anthropic,
       ...standard.anthropic,
     }) as Anthropic;
-    this.absorbContext(compact({ ...standard.context, model: undefined }));
-    this.absorbHost(
-      compact({
+    const context = compact({
+      ...this.context,
+      ...compact({ ...standard.context, model: undefined }),
+    }) as Context;
+    const host = compact({
+      ...this.host,
+      ...compact({
         os_type: standard.resource.os_type,
         os_version: standard.resource.os_version,
         host_arch: standard.resource.host_arch,
       }),
-    );
+    }) as Host;
+    let harnessVersion = this.harnessVersion;
+    if (harnessVersion === undefined)
+      harnessVersion = harnessVersionFromExecPath(host.claude_execpath);
     if (standard.resource.harness_version !== undefined)
-      this.harnessVersion = standard.resource.harness_version;
+      harnessVersion = standard.resource.harness_version;
+    return { anthropic, context, host, harnessVersion };
+  }
+
+  /** Assign a previously computed `StandardUpdate` onto the recorder's sticky state. */
+  private commitStandardUpdate(update: StandardUpdate): void {
+    this.anthropic = update.anthropic;
+    this.context = update.context;
+    this.host = update.host;
+    this.harnessVersion = update.harnessVersion;
+  }
+
+  /**
+   * Whether the envelope would refuse the given standard fields, as the
+   * message the refusal carries, or undefined when they would seal cleanly.
+   * Used by the metrics branch of `ingestOtlp`, which has no `seal()` call to
+   * guard it, and by `sealOtelDraft`'s deduped-repeat branch, which also
+   * commits with no `seal()` call in the way: both must check a standard
+   * update against the same schemas `seal()` would, before it ever reaches
+   * the recorder's sticky state.
+   */
+  private refusedStandardReason(update: StandardUpdate): string | undefined {
+    const anthropic = anthropicSchema.safeParse(update.anthropic);
+    if (!anthropic.success)
+      return anthropic.error.issues[0]?.message ?? "invalid anthropic fields";
+    const context = contextSchema.safeParse(update.context);
+    if (!context.success)
+      return context.error.issues[0]?.message ?? "invalid context fields";
+    const host = hostSchema.safeParse(update.host);
+    if (!host.success)
+      return host.error.issues[0]?.message ?? "invalid host fields";
+    const harnessVersion = agentIdentitySchema.shape.harness_version.safeParse(
+      update.harnessVersion,
+    );
+    if (!harnessVersion.success)
+      return (
+        harnessVersion.error.issues[0]?.message ?? "invalid harness_version"
+      );
+    return undefined;
   }
 
   private sealOtelDraft(draft: OtelDraft): TachoEvent | undefined {
-    this.absorbStandard(draft.standard);
+    // Computed, not yet assigned: a row the envelope refuses must leave the
+    // recorder's `anthropic`/context/host/harnessVersion exactly as they
+    // were, so the next record does not inherit a value nothing sealed.
+    const standardUpdate = this.computeStandardUpdate(draft.standard);
     // Only the log record takes part: the control plane counts tokens from
     // `otel_log`, never from a span, so a span sealed first must not turn the
     // log record that follows into the duplicate.
@@ -875,28 +971,45 @@ export class SessionRecorder {
         : NO_SIGHTING;
     const duplicate = sighting.attrs;
     if (duplicate === undefined) {
+      // No `seal()` call guards this branch either: a dropped repeat whose
+      // standard fields the envelope would refuse must not commit them, the
+      // same rule `refusedStandardReason` enforces for the metrics branch.
+      const refusal = this.refusedStandardReason(standardUpdate);
+      if (refusal !== undefined) {
+        this.otelRefusals.push(`${draft.kind}: ${refusal}`);
+        return undefined;
+      }
       sighting.commit();
+      this.commitStandardUpdate(standardUpdate);
       return undefined;
     }
-    const event = this.seal(draft.kind, draft.body, {
-      ts: draft.ts,
-      source: draft.source,
-      otel_event_name: draft.otel_event_name,
-      ...(draft.standard.harness_event_sequence !== undefined
-        ? { harness_event_sequence: draft.standard.harness_event_sequence }
-        : {}),
-      attrs: { ...draft.attrs, ...duplicate },
-      ...(draft.span !== undefined ? { span: draft.span } : {}),
-      ...(draft.content_digest !== undefined
-        ? { content_digest: draft.content_digest }
-        : {}),
-      raw_source_digest: draft.raw_source_digest,
-      turn:
-        draft.standard.prompt_id !== undefined
-          ? { prompt_id: draft.standard.prompt_id }
-          : {},
-    });
+    const event = this.seal(
+      draft.kind,
+      draft.body,
+      {
+        ts: draft.ts,
+        source: draft.source,
+        otel_event_name: draft.otel_event_name,
+        ...(draft.standard.harness_event_sequence !== undefined
+          ? { harness_event_sequence: draft.standard.harness_event_sequence }
+          : {}),
+        attrs: { ...draft.attrs, ...duplicate },
+        ...(draft.span !== undefined ? { span: draft.span } : {}),
+        ...(draft.content_digest !== undefined
+          ? { content_digest: draft.content_digest }
+          : {}),
+        raw_source_digest: draft.raw_source_digest,
+        turn:
+          draft.standard.prompt_id !== undefined
+            ? { prompt_id: draft.standard.prompt_id }
+            : {},
+      },
+      standardUpdate,
+    );
+    // Reached only when `seal()` above did not throw: the row is sealed, so
+    // the sticky state its `standard` block computed is safe to commit.
     sighting.commit();
+    this.commitStandardUpdate(standardUpdate);
     return event;
   }
 

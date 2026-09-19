@@ -96,7 +96,7 @@ docker run -d --name oxagen-web-$NAME --restart unless-stopped \
   -p 127.0.0.1:$PORT:3000 \
   -e NODE_ENV=production -e PORT=3000 -e HOSTNAME=0.0.0.0 \
   -v /opt/oxagen/web/$NAME:/app -w /app \
-  node:22-alpine node $SERVER_REL
+  node:24.21.0-alpine node $SERVER_REL
 sleep 6
 docker ps --filter name=oxagen-web-$NAME --format '{{.Names}} {{.Status}}'
 curl -fsS -o /dev/null -w 'local health: %{http_code}\n' http://127.0.0.1:$PORT/ || echo "local health: FAILED"
