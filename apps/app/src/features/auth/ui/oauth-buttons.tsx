@@ -1,10 +1,14 @@
 "use client";
 // Social sign-in through Better Auth. The destination is the sanitised `next`,
-// which Better Auth also checks against its trusted origins.
+// which Better Auth also checks against its trusted origins. Failures that
+// never leave the page (provider unset, network) show as a form alert; failures
+// after the provider round-trip land on /login?error= via errorCallbackURL.
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
+import { FormAlert } from "@/ui/form-feedback";
+import type { AuthOutcomeKey } from "../auth-errors";
 import { liveSignInSocial } from "../auth-client";
 
 type Provider = "google" | "github";
@@ -36,13 +40,19 @@ function ProviderMark({ provider }: { provider: Provider }) {
 }
 
 export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
-  const t = useTranslations("auth.sso");
+  const t = useTranslations("auth");
+  const tSso = useTranslations("auth.sso");
   const [pending, setPending] = useState<Provider | null>(null);
+  const [outcome, setOutcome] = useState<AuthOutcomeKey | null>(null);
 
   async function start(provider: Provider) {
     setPending(provider);
+    setOutcome(null);
     try {
-      await liveSignInSocial({ provider, callbackURL });
+      const result = await liveSignInSocial({ provider, callbackURL });
+      if (!result.ok) setOutcome(result.outcome);
+    } catch {
+      setOutcome("unavailable");
     } finally {
       setPending(null);
     }
@@ -50,6 +60,9 @@ export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
 
   return (
     <div className="flex flex-col gap-2.5">
+      {outcome ? (
+        <FormAlert testId="oauth-outcome">{t(`outcomes.${outcome}`)}</FormAlert>
+      ) : null}
       {(["google", "github"] as const).map((provider) => (
         <button
           key={provider}
@@ -61,7 +74,7 @@ export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
           className={`${buttonSecondary} justify-start`}
         >
           <ProviderMark provider={provider} />
-          <span>{t(provider)}</span>
+          <span>{tSso(provider)}</span>
         </button>
       ))}
       <div
@@ -69,7 +82,7 @@ export function OAuthButtons({ callbackURL }: { callbackURL: SafePath }) {
         aria-hidden
       >
         <span className="h-px flex-1 bg-border" />
-        {t("or")}
+        {tSso("or")}
         <span className="h-px flex-1 bg-border" />
       </div>
     </div>
