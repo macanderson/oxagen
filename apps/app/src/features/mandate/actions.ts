@@ -54,7 +54,7 @@ import { endOfZonedDay, isCalendarDay } from "@/shared/calendar-day";
  * opened, through the very path the row lock made atomic (ADR-102, amended
  * 2026-09-19).
  */
-export type LimitsBaseline = {
+type LimitsBaseline = {
   measure: string;
   unit: string;
   period: "daily" | "weekly" | "monthly";
