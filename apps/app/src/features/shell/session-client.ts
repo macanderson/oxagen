@@ -99,13 +99,58 @@ export async function liveRevokeSession(token: string): Promise<boolean> {
   return !reply.error;
 }
 
+/**
+ * What a rotation says about itself. `invalid` is the server answering that it
+ * refused the password, which it does before it writes anything: nothing
+ * rotated. `failed` is every other ending, and it means the outcome is
+ * unknown, because Better Auth voids the old set the moment the write lands
+ * and keeps only hashes of the new one. A request that left this page without
+ * bringing an answer back may have rotated the codes into a set nobody holds.
+ */
+export type RegenerateResult =
+  | { ok: true; codes: string[] }
+  | { ok: false; reason: "invalid" | "failed" };
+
 /** Issues a fresh set of two-factor recovery codes; the old set is void. Needs the password. */
 export async function liveRegenerateBackupCodes(
   password: string,
-): Promise<{ ok: true; codes: string[] } | { ok: false }> {
-  const reply = await (await client()).twoFactor.generateBackupCodes({
-    password,
-  });
-  if (reply.error) return { ok: false };
-  return { ok: true, codes: reply.data?.backupCodes ?? [] };
+): Promise<RegenerateResult> {
+  try {
+    const reply = await (await client()).twoFactor.generateBackupCodes({
+      password,
+    });
+    if (reply.error) return { ok: false, reason: refusal(reply.error) };
+    const codes = reply.data?.backupCodes;
+    // A success with no set is the worst of both: the server rotated and this
+    // page has nothing to show. It reads as unknown, not as a rotation done.
+    if (!Array.isArray(codes) || codes.length === 0)
+      return { ok: false, reason: "failed" };
+    return { ok: true, codes };
+  } catch {
+    // Nothing came back, so nothing here knows whether the write landed.
+    return { ok: false, reason: "failed" };
+  }
+}
+
+/**
+ * Whether an error answer proves the password was rejected and no rotation
+ * happened.
+ *
+ * Better Auth checks the password and the two-factor row first and answers 4xx
+ * from there, so an answered client error is the one failure that proves the
+ * stored set is untouched. A 5xx does not: the write may have landed and the
+ * response may have died after it. Nor does a transport failure, which
+ * better-fetch reports as status 500 with the status text "Fetch Error" rather
+ * than by throwing when `catchAllError` is on.
+ */
+function refusal(error: unknown): "invalid" | "failed" {
+  // Read off an unknown shape on purpose: Better Auth types this error as a
+  // message alone, and the status it carries at runtime is the only thing that
+  // separates an answer from a request that never got one.
+  if (!isRecord(error)) return "failed";
+  if (error.statusText === "Fetch Error") return "failed";
+  const { status } = error;
+  if (typeof status !== "number" || status < 400 || status >= 500)
+    return "failed";
+  return "invalid";
 }

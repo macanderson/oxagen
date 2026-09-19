@@ -2007,6 +2007,7 @@ type Messages = {
         issuing: string;
         cancel: string;
         codesRefused: string;
+        codesUncertain: string;
         codesIssued: string;
         codesSaved: string;
         codesHeld: string;

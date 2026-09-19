@@ -77,8 +77,13 @@ const tabClass =
 
 export function AccountDialog({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account");
-  const { accountOpen, setAccountOpen, accountTab, setAccountTab, openAccount } =
-    useShellState();
+  const {
+    accountOpen,
+    setAccountOpen,
+    accountTab,
+    setAccountTab,
+    openAccount,
+  } = useShellState();
 
   // Recovery codes are shown exactly once, and from the moment a rotation
   // lands on the server this page holds the only copy that will ever exist.
@@ -121,9 +126,13 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // exist, which is why no response can ever be a superseded one.
   const rotation: CodeRotation = {
     pending: vault.rotating,
+    atRisk: vault.atRisk,
     begin: () => recoveryCodeVault.begin(userId),
     end: () => {
       recoveryCodeVault.end();
+    },
+    markUncertain: () => {
+      recoveryCodeVault.uncertain(userId);
     },
   };
 
@@ -131,7 +140,9 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // organization they rotated in, by Back or by a link, before saving them.
   // The set is still in the vault, so it is put back in front of them rather
   // than left for them to go looking for.
-  const arrivedWithCodes = useRef(vault.rotating || vault.codes !== null);
+  const arrivedWithCodes = useRef(
+    vault.rotating || vault.codes !== null || vault.atRisk,
+  );
   useEffect(() => {
     if (arrivedWithCodes.current) openAccount("security");
   }, [openAccount]);
@@ -240,8 +251,17 @@ export function AccountDialog({ data }: { data: ShellData }) {
  */
 type CodeRotation = {
   pending: boolean;
+  /**
+   * A rotation went out and no answer came back. The old codes may be void and
+   * the new set may be nobody's, and neither of those is known. Held in the
+   * vault, above every state a tab switch or a close throws away, and cleared
+   * only by a rotation that answers with a set.
+   */
+  atRisk: boolean;
   begin: () => boolean;
   end: () => void;
+  /** Record that a rotation left without answering. */
+  markUncertain: () => void;
 };
 
 type CodeVault = {
@@ -909,18 +929,30 @@ function SecurityTab({
         // to the still-mounted dialog is the only thing keeping the codes.
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
-      } else {
-        // A rotation that failed leaves the stored set unknowable from here:
-        // the refusal may have come before the server wrote anything or after.
-        // So nothing is displayed. A set left on screen would be a claim that
-        // it is the set stored, and that is the claim this cannot make.
-        setHeldCodes(null);
+      } else if (result.reason === "invalid") {
+        // The server answered that it refused the password, and it checks the
+        // password before it writes, so nothing rotated. The vault is left
+        // exactly as it was: a set held there is still the set the server
+        // holds, and an earlier rotation nobody heard back from is still
+        // unsettled.
         setCodes({ kind: "asking", password: "", refused: true });
+      } else {
+        // No answer says what the server did. Better Auth voids the old set
+        // the moment the write lands, so the old codes may already be dead and
+        // the new set may exist where nobody can read it. This is the one
+        // ending that must not be reported as a rejected password, because
+        // that reads as "nothing happened" and sends the person away from a
+        // rotation only they can finish. The mark and the unload prompt stay up
+        // until a rotation answers with a set.
+        rotation.markUncertain();
+        setCodes({ kind: "asking", password: "", refused: false });
       }
     } catch {
+      // A throw is never the server refusing a password: it is the request
+      // ending without an answer, which is the unknown case above.
       rotation.end();
-      setHeldCodes(null);
-      setCodes({ kind: "asking", password: "", refused: true });
+      rotation.markUncertain();
+      setCodes({ kind: "asking", password: "", refused: false });
     }
   }
 
@@ -958,6 +990,17 @@ function SecurityTab({
                   ? t("authenticatorOn")
                   : t("authenticatorOff")}
               </p>
+              {/* A rotation that never answered, said plainly: the codes may
+                  be void, the new set may be nobody's, and only another
+                  rotation settles it. Read from the vault, so leaving the tab,
+                  closing the dialog and a second failure all leave it up. */}
+              {rotation.atRisk ? (
+                <div className="mt-2">
+                  <FormAlert testId="account-codes-uncertain">
+                    {t("codesUncertain")}
+                  </FormAlert>
+                </div>
+              ) : null}
               {codes.kind === "asking" ? (
                 <form
                   className="mt-2 flex flex-wrap items-end gap-2"

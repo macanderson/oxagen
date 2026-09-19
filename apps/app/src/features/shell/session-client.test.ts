@@ -11,13 +11,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getSession = vi.fn();
 const listSessions = vi.fn();
 const revokeSession = vi.fn();
+const generateBackupCodes = vi.fn();
 vi.mock("@oxagen/auth/client", () => ({
-  authClient: { getSession, listSessions, revokeSession },
+  authClient: {
+    getSession,
+    listSessions,
+    revokeSession,
+    twoFactor: { generateBackupCodes },
+  },
 }));
 
-const { liveListSessions, liveRevokeSession } = await import(
-  "./session-client"
-);
+const { liveListSessions, liveRegenerateBackupCodes, liveRevokeSession } =
+  await import("./session-client");
 
 const HERE = "tok-here";
 const PHONE = "tok-phone";
@@ -38,6 +43,10 @@ beforeEach(() => {
   listSessions.mockResolvedValue({ data: [row(PHONE), row(HERE)] });
   revokeSession.mockReset();
   revokeSession.mockResolvedValue({});
+  generateBackupCodes.mockReset();
+  generateBackupCodes.mockResolvedValue({
+    data: { backupCodes: ["aaaa-1111", "bbbb-2222"] },
+  });
 });
 
 describe("the current session", () => {
@@ -107,5 +116,76 @@ describe("revoking", () => {
   it("reports failure on an error result (negative)", async () => {
     revokeSession.mockResolvedValue({ error: { message: "nope" } });
     expect(await liveRevokeSession(PHONE)).toBe(false);
+  });
+});
+
+// Better Auth voids the old recovery codes the moment the rotation lands and
+// keeps only hashes of the new ones, so what the caller needs from a failure is
+// whether the server got that far. It checks the password, and the two-factor
+// row, before it writes, and answers 4xx from there. That answer is the only
+// failure that proves nothing rotated. Everything else leaves the outcome
+// unknown, and the caller has to treat the account as at risk.
+describe("rotating the recovery codes", () => {
+  it("returns the set the server issued", async () => {
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: true,
+      codes: ["aaaa-1111", "bbbb-2222"],
+    });
+    expect(generateBackupCodes).toHaveBeenCalledWith({ password: "hunter2" });
+  });
+
+  it("reports a rejected password as the one confirmed refusal", async () => {
+    generateBackupCodes.mockResolvedValue({
+      error: {
+        status: 400,
+        statusText: "Bad Request",
+        code: "INVALID_PASSWORD",
+      },
+    });
+    expect(await liveRegenerateBackupCodes("wrong")).toEqual({
+      ok: false,
+      reason: "invalid",
+    });
+  });
+
+  it("reports a server error as unknown, not as a rejection (negative)", async () => {
+    generateBackupCodes.mockResolvedValue({
+      error: { status: 503, statusText: "Service Unavailable" },
+    });
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+  });
+
+  // better-fetch turns a transport failure into status 500 with this status
+  // text when `catchAllError` is on, so the status alone would read as a server
+  // answer that never existed.
+  it("reports a transport failure as unknown (negative)", async () => {
+    generateBackupCodes.mockResolvedValue({
+      error: { status: 500, statusText: "Fetch Error" },
+    });
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+  });
+
+  it("reports a thrown request as unknown (negative)", async () => {
+    generateBackupCodes.mockRejectedValue(new Error("network"));
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: false,
+      reason: "failed",
+    });
+  });
+
+  // A success with no set means the server rotated and this page has nothing to
+  // show, which is the at-risk case, not a rotation done.
+  it("reports an empty set as unknown (negative)", async () => {
+    generateBackupCodes.mockResolvedValue({ data: { backupCodes: [] } });
+    expect(await liveRegenerateBackupCodes("hunter2")).toEqual({
+      ok: false,
+      reason: "failed",
+    });
   });
 });

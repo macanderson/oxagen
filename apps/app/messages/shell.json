@@ -141,6 +141,7 @@
         "issuing": "Issuing",
         "cancel": "Cancel",
         "codesRefused": "That password was not accepted. Try again.",
+        "codesUncertain": "Oxagen did not get an answer, so the state of your recovery codes is unknown. Your old codes may no longer work, and a new set may exist that nobody has. Issue new codes to settle it. Until one succeeds, this page keeps this notice up and asks before you leave.",
         "codesIssued": "New recovery codes. The old set is void. Keep these somewhere only you can reach; they are not shown again.",
         "codesSaved": "I have saved these",
         "codesHeld": "Your new codes are still here. The Account dialog held them because they are shown only once.",

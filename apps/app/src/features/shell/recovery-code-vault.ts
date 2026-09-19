@@ -35,15 +35,26 @@ type VaultState = {
   rotating: boolean;
   /** The set Better Auth returned, not yet acknowledged as saved. */
   codes: string[] | null;
+  /**
+   * A rotation went out and no answer came back, so nobody knows what the
+   * server holds. The old set may be void and the new set may exist where no
+   * one can read it. Only a rotation that answers with a set settles this.
+   */
+  atRisk: boolean;
 };
 
-const EMPTY: VaultState = { userId: null, rotating: false, codes: null };
+const EMPTY: VaultState = {
+  userId: null,
+  rotating: false,
+  codes: null,
+  atRisk: false,
+};
 
 let state: VaultState = EMPTY;
 const listeners = new Set<() => void>();
 
 function atStake(s: VaultState): boolean {
-  return s.rotating || s.codes !== null;
+  return s.rotating || s.codes !== null || s.atRisk;
 }
 
 // The browser's own "leave site?" prompt, armed while anything is at stake.
@@ -72,9 +83,13 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** What `userId` has at stake: nothing of anyone else's is ever returned. */
-export type HeldCodes = { rotating: boolean; codes: string[] | null };
+export type HeldCodes = {
+  rotating: boolean;
+  codes: string[] | null;
+  atRisk: boolean;
+};
 
-const NOTHING: HeldCodes = { rotating: false, codes: null };
+const NOTHING: HeldCodes = { rotating: false, codes: null, atRisk: false };
 
 function view(s: VaultState, userId: string): HeldCodes {
   if (s.userId !== userId) return NOTHING;
@@ -97,10 +112,14 @@ export const recoveryCodeVault = {
    */
   begin(userId: string): boolean {
     if (state.rotating) return false;
+    const mine = state.userId === userId;
     set({
       userId,
       rotating: true,
-      codes: state.userId === userId ? state.codes : null,
+      codes: mine ? state.codes : null,
+      // Starting a replacement rotation does not settle an earlier one that
+      // never answered. Only its own answer does.
+      atRisk: mine && state.atRisk,
     });
     return true;
   },
@@ -108,14 +127,31 @@ export const recoveryCodeVault = {
   end(): void {
     if (state.rotating) set({ ...state, rotating: false });
   },
-  /** The rotation answered with a set: hold it until it is saved. */
+  /**
+   * The rotation answered with a set: hold it until it is saved. This is the
+   * one thing that settles an earlier rotation nobody heard back from, because
+   * the set in hand is now the set the server holds.
+   */
   hold(userId: string, codes: string[]): void {
-    set({ userId, rotating: false, codes });
+    set({ userId, rotating: false, codes, atRisk: false });
   },
   /**
-   * The rotation failed, or the person saved the set. Either way nothing is
-   * held: a failed rotation leaves the stored set unknowable from here, so no
-   * set may be shown as if it were the one stored.
+   * The rotation went out and nothing came back that says what the server did.
+   * Any set held here may already be void, so it is dropped, and the at-risk
+   * mark stays up until a rotation answers. A tab switch, a closed dialog, a
+   * client-side transition and a second failure all leave it standing, and the
+   * unload prompt stays armed, because the account really is one lost
+   * authenticator from locked out.
+   */
+  uncertain(userId: string): void {
+    set({ userId, rotating: false, codes: null, atRisk: true });
+  },
+  /**
+   * The person saved the set. Nothing is held and nothing is at risk.
+   *
+   * A failed rotation does not come through here. A server that refused before
+   * it wrote leaves the vault as it was, and a rotation that never answered
+   * goes to `uncertain`, which keeps the mark and the unload prompt up.
    */
   clear(): void {
     set(EMPTY);

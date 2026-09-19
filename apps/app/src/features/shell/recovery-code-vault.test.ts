@@ -56,13 +56,18 @@ describe("recoveryCodeVault", () => {
       userId: ME,
       rotating: false,
       codes: ["aaaa-1111", "bbbb-2222"],
+      atRisk: false,
     });
   });
 
   it("never shows it to anyone else (negative)", () => {
     recoveryCodeVault.hold(ME, ["aaaa-1111"]);
     const { result } = renderHook(() => useRecoveryCodeVault(SOMEONE_ELSE));
-    expect(result.current).toEqual({ rotating: false, codes: null });
+    expect(result.current).toEqual({
+      rotating: false,
+      codes: null,
+      atRisk: false,
+    });
   });
 
   // A second rotation must not drop a set that is still unsaved before the
@@ -72,5 +77,57 @@ describe("recoveryCodeVault", () => {
     recoveryCodeVault.begin(ME);
     const { result } = renderHook(() => useRecoveryCodeVault(ME));
     expect(result.current.codes).toEqual(["aaaa-1111"]);
+  });
+
+  // A rotation that never answers leaves the account one lost authenticator
+  // from locked out: Better Auth voids the old set when the write lands, and
+  // the new set exists only in the response nobody received. So the mark is
+  // held at the page's lifetime, and the unload prompt stays armed, until a
+  // rotation answers with a set.
+  it("keeps an unanswered rotation at risk, and keeps asking before unload", () => {
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    act(() => {
+      recoveryCodeVault.begin(ME);
+      recoveryCodeVault.uncertain(ME);
+    });
+    expect(result.current).toEqual({
+      userId: ME,
+      rotating: false,
+      codes: null,
+      atRisk: true,
+    });
+    expect(asked()).toBe(true);
+
+    // A further attempt that also fails to answer leaves it standing.
+    act(() => {
+      recoveryCodeVault.begin(ME);
+    });
+    expect(result.current.atRisk).toBe(true);
+    act(() => {
+      recoveryCodeVault.uncertain(ME);
+    });
+    expect(result.current.atRisk).toBe(true);
+    expect(asked()).toBe(true);
+
+    // A set in hand is the set the server holds, so this is what settles it.
+    act(() => {
+      recoveryCodeVault.hold(ME, ["cccc-3333"]);
+    });
+    expect(result.current.atRisk).toBe(false);
+    act(() => {
+      recoveryCodeVault.clear();
+    });
+    expect(asked()).toBe(false);
+  });
+
+  it("never shows another person's at-risk rotation (negative)", () => {
+    recoveryCodeVault.uncertain(ME);
+    const { result } = renderHook(() => useRecoveryCodeVault(SOMEONE_ELSE));
+    expect(result.current.atRisk).toBe(false);
+    // And a rotation of theirs does not inherit it.
+    act(() => {
+      recoveryCodeVault.begin(SOMEONE_ELSE);
+    });
+    expect(result.current.atRisk).toBe(false);
   });
 });
