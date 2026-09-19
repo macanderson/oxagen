@@ -1,0 +1,58 @@
+<h2 class="ch-title">Better systems, not better models</h2>
+<p class="ch-thesis">You rent the model. You own the system around it, and the way you operate it.</p>
+
+<p class="lede">A new model ships and your team spends a week deciding whether to switch. The benchmark says it is better. Whether it is better for you depends on things the benchmark did not measure: how much context you send, how you verify a patch, what each run costs, and what the agent is allowed to touch. If those are engineered, switching is a configuration change and a week of comparing scorecards. If they are not, switching means re-tuning prompts and hoping.</p>
+
+<h3>Where the advantage moved</h3>
+<p>Capability gaps between frontier models have tended to close within months. Prices per token have fallen, and open-weight models keep climbing the same benchmarks. Whatever you gain from using the strongest model today, a competitor can rent with one configuration change. Model choice is becoming procurement. What compounds is the work in this book:</p>
+<ul class="plain">
+  <li><strong>Retrieval.</strong> Parsed prompts, code graphs, schema indexes, and test contracts (parts 3, 4, 8, and 10). Each point of precision carries over to every model you run later.</li>
+  <li><strong>Orchestration.</strong> A deterministic skeleton with the model inside the nodes (part 9), and budgets and circuit breakers as primitives.</li>
+  <li><strong>Memory.</strong> Tiered, indexed, and paged by policy (parts 5 and 11), so knowledge accumulates across runs.</li>
+  <li><strong>Tooling.</strong> Interfaces that return sliced signal (part 2), assigned per agent (part 18).</li>
+  <li><strong>Measurement.</strong> The part 13 scorecard on every run, with cost attributed to the agent, the run, and the person (part 17).</li>
+  <li><strong>Authority.</strong> An identity per agent, a mandate with four owned clauses, and a rule that answers each request (parts 14 to 16).</li>
+  <li><strong>The record.</strong> One ordered account per run that another person can read (part 19).</li>
+</ul>
+
+<h3>Two halves of one argument</h3>
+<p>Parts 1 to 13 took decisions away from the model because code makes them cheaper and the same way each time: what to retrieve, what to keep, what runs next. Parts 14 to 20 took a second set of decisions away from the model for a different reason. What an agent may do, what it may spend, and whether it is finished are not the agent's decisions to make. They belong to the teams accountable for it. Both halves use one method. Make the decision in the system, before the model is involved, and keep it where a person can read it.</p>
+<p>The asymmetry is what makes this a durable strategy. Model improvements reach everyone at once, your competitors included. System improvements are yours. They encode your repository, your schema lineage, your test contracts, your rules, and your history of runs. They also carry over: when a cheaper or stronger model ships, a system built this way swaps it in and keeps everything else.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · The numbers from this book, side by side</span>
+  <p>A fixed pipeline solved SWE-bench Lite issues at $0.34 each while agent-based systems of the same period spent roughly ten times as much for comparable results.<sup class="cite"><a href="#r1">1</a></sup> On Anthropic's internal evaluations, token usage alone explained about 80% of performance variance.<sup class="cite"><a href="#r3">3</a></sup> Evaluated on cost and accuracy together, simple baselines matched elaborate agent architectures at a fraction of the price.<sup class="cite"><a href="#r2">2</a></sup> Each result points at the system, not at the model inside it.</p>
+  <div class="src">Xia et al., FSE 2025 · Anthropic engineering, 2025 · Kapoor et al., TMLR 2025</div>
+</div>
+
+<h3>A precedent</h3>
+<p>Databases stopped competing on raw storage and started competing on query planners. Networks moved from bandwidth to protocols. Compute moved from clock speed to scheduling. In each case the commodity layer kept improving, and the value moved to the systems that used it most efficiently and could account for what they did. Inference looks to be following the same curve.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · Models still matter</span>
+  <p>None of this says the model is irrelevant. A stronger model raises the ceiling of what any system can do, and some tasks are out of reach below a capability threshold. The claim is narrower. Between two teams with the same model, the published results above favor the one with the better system, and that team can also say what its agents did.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Score yourself.</strong> Take the self-assessment in "How to use this book" again. Compare it with your first pass.</li>
+    <li><strong>Pick one part from each half.</strong> One from parts 2 to 12 that lowers tokens per task, and one from parts 14 to 20 that answers a question someone outside your team has asked.</li>
+    <li><strong>Make the model a configuration value.</strong> If switching models means editing prompts, list the prompts. Each one is a decision that belongs in the system.</li>
+    <li><strong>Book the 30, 60, and 90 day reviews.</strong> The field kit has the plan. Put the three dates on a calendar now.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>model_swap_cost</code>: engineer-days to evaluate and adopt a new model. It falls as decisions move out of prompts.</li>
+    <li><code>cost_per_completed_task</code> and <code>retrieval_precision</code> from part 13, tracked quarter over quarter. These two show whether the system is improving independent of the model.</li>
+    <li><code>time_to_answer_review</code> from part 19. It shows whether you can account for what the system did.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Models are rented. Systems are owned. Build the layer that makes any model cheaper and more precise, and operate it so that you can say who did what, under which rule, at what cost.</p>
+</div>

@@ -1,0 +1,33 @@
+  <div class="eyebrow">A field manual · Second edition</div>
+  <h1>Engineering <span class="det">Deterministic</span> AI Coding Agents</h1>
+  <p class="cover-sub">A language model is a probabilistic engine. Almost everything around it can be decided in code: what it retrieves, what stays in its window, which step runs next, what it may do, what it may spend, and what gets recorded. Parts 1 to 13 build that system, with published evidence in each part. Parts 14 to 20 show how to operate the agents you now run. Every part ends with steps for this week and metrics to track.</p>
+  <div class="byline">
+    <img src="{{AUTHOR_PHOTO}}" alt="Mac Anderson">
+    <div class="who"><b>Mac Anderson</b><span>Founder and CEO, Oxagen Inc. · Los Angeles, CA</span></div>
+  </div>
+  <div class="cover-meta">
+    <div><b>21</b> parts</div>
+    <div><b>27</b> cited sources</div>
+    <div><b>21</b> checklists, and a field kit of templates</div>
+    <div><b>1</b> thesis: decide in the system what the system can decide</div>
+  </div>
+  <div class="legend">
+    <span><span class="sw prob"></span> Probabilistic path: you pay per token, and the result varies</span>
+    <span><span class="sw det"></span> Deterministic path: you pay once in engineering, and the result repeats</span>
+  </div>
+  <svg class="hero-svg" viewBox="0 0 760 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Schematic: noisy probabilistic inputs pass through a deterministic system layer and emerge as a single solid signal into the model">
+    <path d="M10 40 C 90 40, 110 90, 190 90" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <path d="M10 100 C 90 100, 110 100, 190 100" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <path d="M10 160 C 90 160, 110 110, 190 110" stroke="var(--prob)" stroke-width="2" stroke-dasharray="2 6" stroke-linecap="round"/>
+    <text x="10" y="26" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">Raw logs</text>
+    <text x="10" y="88" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">Raw repo</text>
+    <text x="10" y="148" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="var(--faint)" letter-spacing="1">Raw prompt</text>
+    <rect x="192" y="55" width="216" height="90" rx="8" fill="var(--card)" stroke="var(--ink)" stroke-width="1.5"/>
+    <text x="300" y="92" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-weight="600" font-size="14" fill="var(--ink)">Deterministic layer</text>
+    <text x="300" y="112" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="var(--faint)" letter-spacing="1">parse · index · slice · graph · cache</text>
+    <path d="M408 100 H 560" stroke="var(--det)" stroke-width="3" stroke-linecap="round"/>
+    <text x="418" y="88" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="var(--det)" letter-spacing="1">Minimal context</text>
+    <rect x="562" y="62" width="188" height="76" rx="38" fill="var(--det-soft)" stroke="var(--det)" stroke-width="1.5"/>
+    <text x="656" y="96" text-anchor="middle" font-family="Space Grotesk, sans-serif" font-weight="600" font-size="14" fill="var(--det)">LLM</text>
+    <text x="656" y="114" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" fill="var(--faint)" letter-spacing="1">Spend last</text>
+  </svg>

@@ -1,0 +1,77 @@
+<h2 class="ch-title">How to use this book</h2>
+<p class="ch-thesis">Read the two parts that match your problem this week. Come back for the rest.</p>
+
+<p class="lede">You run coding agents, or you are about to, and two questions keep coming up. The first is from your own team: why does this cost so much and behave differently each time? The second is from everyone else: what are these agents allowed to do, what did they spend, and who answers for them? Parts 1 to 13 answer the first question. Parts 14 to 20 answer the second. Part 21 explains why both have the same answer.</p>
+
+<h3>How each part is laid out</h3>
+<ul class="plain">
+  <li><strong>The situation.</strong> Each part opens on a problem you have probably seen.</li>
+  <li><strong>The mechanism.</strong> What to build, in order, with a short sample.</li>
+  <li><strong>Evidence.</strong> A published result, cited. The sources are listed at the back, and the primary papers are better than any summary of them.</li>
+  <li><strong>Counterweight.</strong> Where the argument stops applying. Not every part has one.</li>
+  <li><strong>Do this week.</strong> Three to five steps, cheapest first. Each says what done looks like.</li>
+  <li><strong>Measure it.</strong> The readings that tell you whether the step worked.</li>
+</ul>
+<p>Parts 14 to 20 add a short box, "Where Oxagen fits". Oxagen publishes this book and builds a product for that half of the job. The practice in each part stands without the product, and the box says what the product does and where its boundary is. Parts 1 to 13 mention no product.</p>
+
+<h3>Three reading paths</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>If you are</th><th>Start with</th><th>Then</th></tr></thead>
+  <tbody>
+    <tr><td>An engineer building or tuning an agent</td><td>Parts 1, 2, and 3</td><td>Part 13 to set up measurement, then the rest of 4 to 12 in the build order below</td></tr>
+    <tr><td>A platform lead or operator answering for several agents</td><td>Parts 14, 15, and 16</td><td>Parts 17 and 20, then part 13 for the engineering scorecard</td></tr>
+    <tr><td>A security or finance lead reviewing agent use</td><td>Part 16 (security) or part 17 (finance)</td><td>Parts 15 and 19, which cover the object you review and the record you review it from</td></tr>
+  </tbody>
+</table></div>
+
+<h3>A build order</h3>
+<p>The parts are numbered by topic, not by the order to build them. If you are starting from an agent that works and costs too much, this order pays back fastest, because each step makes the next one measurable.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Step</th><th>Build</th><th>Part</th><th>Why now</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Token and cost logging per step, with run, agent, and person</td><td>13, 17</td><td>Nothing later can be verified without it</td></tr>
+    <tr><td>2</td><td>An inventory of agents, each with an operator</td><td>14</td><td>One afternoon, and every later step needs the names</td></tr>
+    <tr><td>3</td><td>Trace and log slicing</td><td>2</td><td>The largest reduction in context for the least code</td></tr>
+    <tr><td>4</td><td>Prompt parsing and a symbol index</td><td>3, 4</td><td>Replaces the exploratory calls at the start of a run</td></tr>
+    <tr><td>5</td><td>Schema slice and test lookup</td><td>8, 10</td><td>Removes two common causes of wrong patches</td></tr>
+    <tr><td>6</td><td>A mandate for each agent, and rules for the top ten write actions</td><td>15, 16</td><td>By now other teams are asking</td></tr>
+    <tr><td>7</td><td>A workflow skeleton and tiered memory</td><td>9, 11</td><td>Worth doing once runs are long enough to loop</td></tr>
+    <tr><td>8</td><td>Per-agent tool assignment</td><td>18</td><td>Needs the offered-against-called data from step 1</td></tr>
+    <tr><td>9</td><td>Domain dossiers and the knowledge graph</td><td>5, 12</td><td>The largest build. It federates the indexes from steps 4 and 5</td></tr>
+    <tr><td>10</td><td>The run record, chained, and completion checks for bounded tasks</td><td>19, 20</td><td>Turns the rows you already write into something a reviewer can use</td></tr>
+  </tbody>
+</table></div>
+
+<h3>A self-assessment</h3>
+<p>Answer yes or no. Count a yes only if you could show the evidence today. Each no points at a part.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Question</th><th>If no, read</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Can you split one run's tokens into context construction and reasoning?</td><td>1</td></tr>
+    <tr><td>2</td><td>Does code, not the model, reduce a stack trace before it reaches the window?</td><td>2</td></tr>
+    <tr><td>3</td><td>Are file paths and symbols in a prompt resolved against an index before the first model call?</td><td>3, 4</td></tr>
+    <tr><td>4</td><td>Does a new run start from stored knowledge of the repository?</td><td>5</td></tr>
+    <tr><td>5</td><td>Can every standing instruction fail a check in CI?</td><td>6</td></tr>
+    <tr><td>6</td><td>Does every context assembler take a token budget?</td><td>7</td></tr>
+    <tr><td>7</td><td>Does the agent see the live schema, with lineage, before it writes a migration?</td><td>8</td></tr>
+    <tr><td>8</td><td>Is control flow between steps written as code?</td><td>9</td></tr>
+    <tr><td>9</td><td>Can you look up the tests that cover a function?</td><td>10</td></tr>
+    <tr><td>10</td><td>Does old content leave the window by policy?</td><td>11</td></tr>
+    <tr><td>11</td><td>Can you answer a three-hop question about your system with one query?</td><td>12</td></tr>
+    <tr><td>12</td><td>Do you report cost per completed task, including retries?</td><td>13</td></tr>
+    <tr><td>13</td><td>Can you list every agent that can write to a system, with a named operator for each?</td><td>14</td></tr>
+    <tr><td>14</td><td>Is each agent's authority, budget, and equipment written in one reviewed place?</td><td>15</td></tr>
+    <tr><td>15</td><td>For a given write action, can you name the rule that allowed it and its author?</td><td>16</td></tr>
+    <tr><td>16</td><td>Can you attribute last month's spend to the agent, the run, and the person?</td><td>17</td></tr>
+    <tr><td>17</td><td>Do you know how many tools each agent is offered, and how many it calls?</td><td>18</td></tr>
+    <tr><td>18</td><td>Could someone outside your team reconstruct one agent action in 30 minutes?</td><td>19</td></tr>
+    <tr><td>19</td><td>Are completion checks for bounded tasks fixed before the run starts?</td><td>20</td></tr>
+    <tr><td>20</td><td>Does each ongoing agent have a review date on a calendar?</td><td>20</td></tr>
+  </tbody>
+</table></div>
+<p>Score yourself now and write the number down. Part 21 asks you to do it again.</p>
+
+<!-- fm-only -->
+<p><button class="printbtn" type="button" onclick="window.print()">Print this book</button></p>
+<p>The print layout is set for US Letter. In the print dialog, choose Save as PDF to keep a copy. The page-flip reader at <a href="/read?e=page-flip-reader">oxagen.sh/read</a> can also export single parts.</p>
+<!-- /fm-only -->

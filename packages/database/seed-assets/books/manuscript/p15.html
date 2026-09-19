@@ -1,0 +1,86 @@
+<h2 class="ch-title">Write the mandate</h2>
+<p class="ch-thesis">Four decisions govern an agent. Most teams have made all four. Few have them in one place.</p>
+
+<p class="lede">Ask what one of your agents is allowed to do and you will get four answers from four places. Security points at an IAM role. Finance points at a cloud budget alert. Engineering points at a prompt file and a tool list. The record of what happened is in a log platform under a fourth team's account. Each answer is right. None of them is about the agent, so nobody can read the whole picture, and nobody can change one part without asking who owns the others.</p>
+
+<h3>One object per agent</h3>
+<p>Set an agent's authority, budget, tools, and skills in its mandate. A mandate is one object per agent with four clauses. Three of them are written by the people who already own that decision. The platform keeps the fourth.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Clause</th><th>Who sets it</th><th>What it says</th></tr></thead>
+  <tbody>
+    <tr><td>Access</td><td>Security</td><td>The identity the agent acts as, which systems it may request, which data it may read, and which actions it may request</td></tr>
+    <tr><td>Budget and rules</td><td>Finance</td><td>What it may spend, under which commercial terms, and the rules it must obey: approval thresholds, allowed vendors, decision rules</td></tr>
+    <tr><td>Equipment</td><td>Engineering</td><td>The tools and skills it may use, the business context it may read, and the steering it runs under</td></tr>
+    <tr><td>Record</td><td>The platform</td><td>What each run read, what it changed, what it cost, and which rule answered each request</td></tr>
+  </tbody>
+</table></div>
+<p>The three writers can be three teams or one person with three hats. The structure does not assume an org chart. What it assumes is that each clause has one owner who can change it without a meeting, and that a reader can see all four at once.</p>
+
+<h3>Why it is one object and not four</h3>
+<p>Part 6 argued that a rule which cannot fail CI is a hope. The same holds here. Four settings in four systems cannot be checked against each other. A tool in the equipment clause that writes to a system the access clause does not list is a contradiction, and only a single object makes it visible. A budget with no rule for what happens at the limit is incomplete, and only a schema can say so.</p>
+<p>A mandate is typed configuration. It lives in version control, it changes by pull request, and a validator runs on every change.</p>
+<pre><code># mandates/agt_refund_triage.yaml
+agent: agt_refund_triage
+operator: dana.okafor
+
+access:                      # owner: security
+  acts_as: agt_refund_triage
+  may_request:
+    - system: github
+      scope: "repo:acme/billing"
+      actions: [read, open_pull_request]
+    - system: postgres_staging
+      scope: "schema:billing"
+      actions: [read]
+
+budget_and_rules:            # owner: finance
+  monthly_limit_usd: 400
+  at_limit: hold_and_notify_operator
+  rules: [no-push-main, release-branch-needs-owner]
+
+equipment:                   # owner: engineering
+  tools: [run_code_with_trace, schema_slice, tests_covering]
+  skills: [billing-conventions]
+  context_scope: ["domain:billing"]
+
+record:                      # kept by the platform, not writable here
+  retention_days: 400</code></pre>
+<p>The validator checks what a reviewer would otherwise check by eye: every tool's target system appears under <code>may_request</code>, every rule named exists, the operator is a current employee, and the budget has an <code>at_limit</code> action. Those are four deterministic checks, and none of them needs a model.</p>
+
+<h3>Lead with the clause the reader owns</h3>
+<p>A mandate is read by different people for different reasons. The security lead reads access first and wants to know which rule answers a request. The finance lead reads the budget and wants the number attributed. The engineering lead reads equipment, then the record. The operator reads all four, because the operator is the one who gets asked. Write each clause so its owner can review it without reading the other three, and so the operator can read them together.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · Scope is part of the claim</span>
+  <p>A mandate governs the actions that pass through the layer that checks it. An agent with a second path to a system, such as a token in an environment variable, is not governed on that path, whatever the mandate says. State the boundary when you describe the control: "for actions routed through the gateway." If a mode only records calls and does not block them, say recorded, not enforced. An auditor tests the claim as it is written, so write it as it applies.</p>
+</div>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>The mandate is the unit Oxagen manages. Identity, knowledge scope, permitted action, commercial terms, and the audit record are one typed contract. For actions routed through Oxagen, that contract is checked when the agent calls, not reconstructed after an incident. An agent outside that boundary, or a call that does not pass through Oxagen, is not governed by it. Observe mode is recorded, not enforced.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Pick one agent and fill in the template.</strong> The field kit has a blank mandate. Write what is true today, not what should be true. Done is four clauses with an owner's name on each.</li>
+    <li><strong>Find the contradictions.</strong> List every tool the agent can call and the system it touches. Any system missing from the access clause is either an access gap or a tool to remove.</li>
+    <li><strong>Add an <code>at_limit</code> action.</strong> Decide what happens when the budget is spent: hold the agent, notify the operator, or continue and flag. Any of the three beats finding out from the invoice.</li>
+    <li><strong>Put it in version control.</strong> One file per agent, a <code>CODEOWNERS</code> entry per clause, and a schema check in CI.</li>
+    <li><strong>Write down the boundary.</strong> One sentence: which paths to which systems this mandate governs, and which it does not.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>agents_with_mandate</code>: agents with all four clauses filled and owned, over all agents from the part 14 inventory.</li>
+    <li><code>mandate_contradictions</code>: validator failures on the current set of mandates. The target is 0, and a rising number after a tooling change is the early signal.</li>
+    <li><code>ungoverned_paths</code>: known routes from an agent to a system that bypass the checking layer. Count them and list them, even if you cannot close them yet.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Access, budget and rules, equipment, and the record are four clauses of one object. Give each clause an owner, keep them in one validated file per agent, and state which actions the mandate covers.</p>
+</div>

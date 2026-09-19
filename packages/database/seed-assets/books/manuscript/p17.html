@@ -1,0 +1,87 @@
+<h2 class="ch-title">Spend you can attribute</h2>
+<p class="ch-thesis">A total is not an answer. The answer is which agent spent what, and on whose behalf.</p>
+
+<p class="lede">The model invoice arrives and the number is larger than last month. You can see the total by API key and by day. The question from finance is different: which agent spent it, for which person, on which task, under which budget? Can you attribute last month's agent spend to the agent, the run, and the person who started the run? If the honest answer is an estimate built from a spreadsheet, the data to answer it was never recorded.</p>
+
+<h3>Why the invoice cannot answer</h3>
+<p>A provider bills the account that made the call. It has no field for your agent, your run, or your colleague, because you never sent them. Attribution cannot be reconstructed afterward from a total. It is recorded at the call, by the layer the call passes through, or it does not exist.</p>
+<p>Part 13 made cost per completed task a first-class metric, and the Princeton work behind it showed why accuracy reported without cost misleads.<sup class="cite"><a href="#r2">2</a></sup> That chapter measured the architecture. This one measures the organization: the same rows, with four more keys on each.</p>
+
+<h3>The meter is a row</h3>
+<p>Write one row per priced step. A step is one model call or one tool call. Each row carries the keys that every later question groups by.</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Column</th><th>Why it is there</th></tr></thead>
+  <tbody>
+    <tr><td><code>person</code></td><td>Who started the task. The "on whose behalf" column.</td></tr>
+    <tr><td><code>agent</code></td><td>The identity from part 14.</td></tr>
+    <tr><td><code>run</code>, <code>turn</code>, <code>step</code></td><td>Where in the work the cost fell. A run is one agent on one task. A turn is one prompt through to the point the agent stops. A step is one call.</td></tr>
+    <tr><td><code>model</code>, <code>input_tokens</code>, <code>cached_tokens</code>, <code>output_tokens</code></td><td>The quantities the price applies to. Cached reads price differently, so they need their own column.<sup class="cite"><a href="#r16">16</a></sup></td></tr>
+    <tr><td><code>price_version</code></td><td>Which price list was applied. Prices change, and a rate negotiated in March should not reprice February.</td></tr>
+    <tr><td><code>cost_usd</code>, <code>cost_basis</code></td><td>The amount, and whether it was <code>measured</code>, <code>reported</code>, or <code>estimated</code>.</td></tr>
+    <tr><td><code>rule_id</code></td><td>The rule that answered the request behind this step, from part 16.</td></tr>
+  </tbody>
+</table></div>
+<p>The <code>cost_basis</code> column carries more weight than it looks. Measured means your layer saw the tokens and applied the price. Reported means the harness or the provider told you a figure. Estimated means you inferred it. A finance lead can work with all three as long as each one is labelled. A blended number with no label is the one that fails review.</p>
+
+<h3>Budgets belong beside the agent</h3>
+<p>A budget in a cloud console alerts someone after the money is spent, and it alerts on the account, not the agent. A budget in the mandate is checked before the next step and names the agent it stops. Three settings are enough to start:</p>
+<ul class="plain">
+  <li><strong>A monthly limit per agent,</strong> in currency, set by the person who owns the number.</li>
+  <li><strong>A per-run ceiling,</strong> so one run that loops cannot spend the month. Part 9 called this a circuit breaker, and this is where it gets its number.</li>
+  <li><strong>An <code>at_limit</code> action:</strong> hold the agent and notify the operator, route the next step to a person, or continue and flag.</li>
+</ul>
+<p>The finance lead and the operator then read the same rows. One reads them grouped by cost center, the other grouped by run.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Allocation comes before optimization</span>
+  <p>The FinOps Foundation's framework treats allocation as a core capability: assign cost to the teams and workloads that incur it, using consistent metadata, so that owners are accountable for their own usage.<sup class="cite"><a href="#r24">24</a></sup> The order matters. A saving is hard to verify when nobody can say whose spend fell. Anthropic's production report gives agent teams a reason to care about the same order: on their internal evaluations, token usage alone explained about 80% of performance variance.<sup class="cite"><a href="#r3">3</a></sup> Spend is a description of what the architecture did. Attributed spend says which part did it.</p>
+  <div class="src">FinOps Foundation, FinOps Framework · Anthropic engineering, 2025</div>
+</div>
+
+<h3>A worked example</h3>
+<p>One agent, one week, read three ways from the same rows:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Grouped by</th><th>What it shows</th><th>Who acts</th></tr></thead>
+  <tbody>
+    <tr><td><code>agent</code></td><td><code>agt_refund_triage</code> spent $212 of a $400 limit</td><td>The operator: on pace, no change</td></tr>
+    <tr><td><code>run</code></td><td>Two runs cost $61 together. The median run costs $1.90.</td><td>The engineer: both runs looped on a failing migration, so set a per-run ceiling and fix the schema slice from part 8</td></tr>
+    <tr><td><code>person</code></td><td>One person started 70% of the runs</td><td>Finance: charge the payments cost center, not platform</td></tr>
+  </tbody>
+</table></div>
+<p>The figures are illustrative. The point is that three people took three different actions from one table, and none of them needed the invoice.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · What this does not claim</span>
+  <p>Attribution is not savings. Recording who spent what does not lower the bill. It shows where the bill comes from, which is the precondition for any change you can verify afterward. If you later claim a reduction, state the workload, the baseline, the model and price versions, the sample size, the quality measure, and the costs including retries. Without those, the claim you can support is visibility.</p>
+</div>
+
+<div class="fits">
+  <span class="tag">Where Oxagen fits</span>
+  <p>In Oxagen every governed action is priced and attributed to the person, the agent, the run, the turn, and the step. The Spend page and the Run page read the same rows, and measured, reported, and estimated costs are labelled as such. The budget an agent runs under, what it has spent this month, and the rule that stops it sit beside the agent. This covers calls that pass through Oxagen. A harness whose model calls do not pass through the gateway reports its spend, or is not metered, and the page says which.</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Add four keys to your model-call log.</strong> <code>person</code>, <code>agent</code>, <code>run</code>, and <code>step</code>. If you proxy model calls, add them there. If you do not, add them in the wrapper that starts the run.</li>
+    <li><strong>Separate cached input tokens.</strong> Log them in their own column and price them at the cached rate.</li>
+    <li><strong>Version your price list.</strong> A small table keyed by model and effective date. Stamp each row with the version used.</li>
+    <li><strong>Label the cost basis.</strong> Go through each source of cost data and mark it measured, reported, or estimated.</li>
+    <li><strong>Set one per-run ceiling.</strong> Pick the agent with the widest spread between median and maximum run cost. Set the ceiling at ten times the median and route to the operator when a run reaches it.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>attributed_spend_ratio</code>: spend carrying person, agent, and run, over total model spend on the invoice. The gap is what you cannot explain.</li>
+    <li><code>cost_per_run_p50</code> and <code>p99</code>, per agent. A wide spread points at loops, and part 9 and part 11 are where to look.</li>
+    <li><code>unpriced_steps</code>: steps with tokens and no price, usually a new model missing from the price list.</li>
+    <li><code>budget_holds</code>: times an <code>at_limit</code> action fired, per agent, per month.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Record the person, the agent, the run, and the step on every priced call, label how each cost was obtained, and keep the budget beside the agent it limits. Then the question of who spent what has a query for an answer.</p>
+</div>
