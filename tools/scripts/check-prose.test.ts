@@ -30,6 +30,13 @@ describe("check-prose", () => {
     ]);
   });
 
+  it("flags the retired savings-without-measurement line", () => {
+    const html = "<strong>Fewer tokens, same answers.</strong>";
+    expect(findHits(html, ".html").map((h) => h.kind)).toEqual([
+      "avoid: Fewer tokens, same answers",
+    ]);
+  });
+
   it("flags an exclamation point but not a shell negation", () => {
     expect(findHits("Done!", ".mdx")[0].kind).toBe("exclamation");
     expect(findHits("if [ ! -f x ]", ".mdx")).toEqual([]);
