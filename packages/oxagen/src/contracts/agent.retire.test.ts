@@ -28,11 +28,15 @@ describe("retire_agent contract", () => {
       status: "retired",
       revokedCredentials: 1,
       revokedHosts: 2,
+      revokedMandates: 3,
       retiredAt: "2026-09-14T10:00:00.000Z",
     });
     expect(out.status).toBe("retired");
     expect(
       agentRetire.output.safeParse({ ...out, revokedHosts: -1 }).success,
+    ).toBe(false);
+    expect(
+      agentRetire.output.safeParse({ ...out, revokedMandates: -1 }).success,
     ).toBe(false);
   });
 });

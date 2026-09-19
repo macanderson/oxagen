@@ -45,10 +45,12 @@ import {
   loadConsequenceRoles,
 } from "@oxagen/iam/mandate-role";
 import {
+  assertAgentActive,
   assertToolsDeclareMeasures,
   loadMandateRow,
   mapMandates,
   requireWorkspace,
+  resolveAgentByPrincipal,
 } from "./_mandate";
 import { logger } from "./logger";
 
@@ -189,6 +191,15 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: `Mandate ${input.mandateId} ended at ${locked.validTo.toISOString()}; only a mandate still inside its validity window changes`,
       });
     }
+    // The agent behind this mandate may have retired since it was granted;
+    // a retired identity's principal is suspended and can never draw on a
+    // widened limit (ADR-104, #3124).
+    const agent = await resolveAgentByPrincipal(
+      tx,
+      workspaceId,
+      locked.agentPrincipalId,
+    );
+    if (agent) assertAgentActive(agent);
     const limits =
       input.limitChanges === undefined
         ? (input.limits ?? locked.limits)

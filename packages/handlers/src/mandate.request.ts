@@ -13,6 +13,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import {
   ACCOUNTABLE_ORG_ROLES,
+  assertAgentActive,
   assertToolsDeclareMeasures,
   mapMandates,
   requireWorkspace,
@@ -32,6 +33,7 @@ export const mandateRequestHandler: CapabilityHandler<
 
   const [row] = await withTenantDb(async (tx) => {
     const agent = await resolveAgent(tx, workspaceId, input.agentId);
+    assertAgentActive(agent);
     await assertToolsDeclareMeasures(tx, workspaceId, input);
     return tx
       .insert(schema.mandates)

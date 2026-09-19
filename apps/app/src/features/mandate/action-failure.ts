@@ -40,6 +40,8 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("periodDrawn");
           case "no_principal":
             return t("noPrincipal");
+          case "agent_retired":
+            return t("agentRetired");
           // Not a handler reason: the action itself refuses before it writes,
           // because a guessed zone moves a validity boundary by up to a day.
           // `time_zone_unavailable` is its retryable twin, under `unavailable`.

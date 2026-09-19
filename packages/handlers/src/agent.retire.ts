@@ -1,9 +1,13 @@
 // agent.retire.ts — retire an agent identity (MC spec §6.2, App. E; #2956).
 // Role gate: org Owner or Admin (INV-29), for the signed-in user
 // or the creator of the API key (resolveActingUserId). One transaction archives the
-// agent row, suspends the principal, soft-deletes every live credential and
+// agent row, suspends the principal, soft-deletes every live credential,
 // revokes every live host through the writes `revoke_tacho_enrollment`
-// shares (lib/tacho-host-revoke.ts). Nothing is
+// shares (lib/tacho-host-revoke.ts), and revokes every mandate still active
+// or drafted against the agent's principal (ADR-104, #3124) — an active
+// mandate does not survive retirement, so this list of what retirement
+// revokes carries the same member `request_mandate`, `grant_mandate` and
+// `update_mandate_limits` now refuse to widen. Nothing is
 // deleted: runs keep the agent's key and principal. Retiring a retired
 // agent answers the recorded retirement without a write.
 import { schema, withTenantDb } from "@oxagen/database";
@@ -17,6 +21,7 @@ import { AGENT_IDENTITY_ROLES } from "./agent.register";
 import {
   requireAgentIdentity,
   revokeAgentCredentials,
+  revokeAgentMandates,
 } from "./lib/agent-identity";
 import { revokeHostEnrollment } from "./lib/tacho-host-revoke";
 import { logger } from "./logger";
@@ -46,6 +51,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         already: true,
         credentials: 0,
         hosts: 0,
+        mandates: 0,
         retiredAt: agent.updatedAt,
       };
     }
@@ -111,11 +117,26 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
       }
       hosts = live.length;
     }
+
+    let mandates = 0;
+    if (agent.principalId) {
+      const revoked = await revokeAgentMandates(tx, {
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        principalId: agent.principalId,
+        userId,
+        reason,
+        now,
+      });
+      mandates = revoked.length;
+    }
+
     return {
       agent,
       already: false,
       credentials: credentials.length,
       hosts,
+      mandates,
       retiredAt: now,
     };
   });
@@ -145,12 +166,26 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
         requestId: ctx.requestId ?? null,
       });
     }
+    if (result.mandates > 0) {
+      emitSecurityEvent({
+        eventType: "mandate.revoked",
+        actorUserId: userId,
+        orgId: ctx.orgId,
+        workspaceId: ctx.workspaceId,
+        capability: agentRetire.name,
+        outcome: "success",
+        ip: null,
+        userAgent: null,
+        requestId: ctx.requestId ?? null,
+      });
+    }
     logger.info(
       {
         orgId: ctx.orgId,
         agentId: result.agent.publicId,
         credentials: result.credentials,
         hosts: result.hosts,
+        mandates: result.mandates,
       },
       "agent.retire: identity retired",
     );
@@ -161,6 +196,7 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
     status: "retired",
     revokedCredentials: result.credentials,
     revokedHosts: result.hosts,
+    revokedMandates: result.mandates,
     retiredAt: result.retiredAt.toISOString(),
   };
 };

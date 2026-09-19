@@ -18,6 +18,7 @@ import {
   resolveAgentIdentity,
   type AgentIdentityRow,
 } from "@oxagen/agent/handlers/_agent-identity";
+import { lockMandate, releaseParked } from "@oxagen/rules";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { generateApiKey } from "./api-key-authz";
 
@@ -100,6 +101,72 @@ export async function mintAgentCredential(
     .returning({ id: schema.apiKeys.id, publicId: schema.apiKeys.publicId });
   if (!key) throw new Error("api_keys insert returned no row");
   return { id: key.id, publicId: key.publicId, secret: rawKey, expiresAt };
+}
+
+/**
+ * Revoke every active or draft mandate bound to the agent's principal, the
+ * same way `retire_agent` revokes credentials and host enrollments rather
+ * than refusing while one exists (ADR-104, #3124): a retired identity's
+ * principal is suspended, so an authority it still held would read active
+ * and in effect in the ledger but could never be used. Each mandate is
+ * taken under its row lock, parked calls release their reservations the
+ * way `revoke_mandate` does, and open approval requests expire — retiring
+ * an agent ends its in-flight calls the same way revoking one mandate does.
+ * Returns the public ids of the mandates revoked.
+ */
+export async function revokeAgentMandates(
+  tx: Tx,
+  args: {
+    orgId: string;
+    workspaceId: string;
+    principalId: string;
+    userId: string;
+    reason: string;
+    now: Date;
+  },
+): Promise<string[]> {
+  const live = await tx
+    .select({ id: schema.mandates.id })
+    .from(schema.mandates)
+    .where(
+      and(
+        eq(schema.mandates.orgId, args.orgId),
+        eq(schema.mandates.workspaceId, args.workspaceId),
+        eq(schema.mandates.agentPrincipalId, args.principalId),
+        sql`${schema.mandates.status} IN ('active', 'draft')`,
+      ),
+    );
+  const revoked: string[] = [];
+  for (const { id } of live) {
+    const locked = await lockMandate(tx, id);
+    // Ended by a concurrent writer between the select above and this lock.
+    if (!locked || (locked.status !== "active" && locked.status !== "draft"))
+      continue;
+    await releaseParked(tx, locked);
+    await tx
+      .update(schema.approvalRequests)
+      .set({ resolution: "expired", resolvedAt: args.now })
+      .where(
+        and(
+          eq(schema.approvalRequests.mandateId, locked.id),
+          isNull(schema.approvalRequests.resolution),
+        ),
+      );
+    const [row] = await tx
+      .update(schema.mandates)
+      .set({
+        status: "revoked",
+        revokedBy: args.userId,
+        revokedReason: args.reason,
+        revokedAt: args.now,
+        updatedAt: args.now,
+        updatedById: args.userId,
+      })
+      .where(eq(schema.mandates.id, locked.id))
+      .returning({ publicId: schema.mandates.publicId });
+    if (row) revoked.push(row.publicId);
+  }
+  return revoked;
 }
 
 /** Soft-delete every live credential of the agent; returns their public ids. */

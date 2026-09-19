@@ -103,6 +103,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { mandateLimitsUpdateHandler } = await import(
       "./mandate.limits.update"
     );
+    const { agentRetireHandler } = await import("./agent.retire");
 
     const tag = Date.now().toString(36).slice(-6);
     const orgId = randomUUID();
@@ -111,10 +112,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const complianceUserId = randomUUID();
     const operatorUserId = randomUUID();
     const otherOperatorUserId = randomUUID();
+    const ownerUserId = randomUUID();
     const invoiceBotPrincipal = randomUUID();
     const otherBotPrincipal = randomUUID();
+    const retiringBotPrincipal = randomUUID();
     let invoiceBotId = "";
     let otherBotId = "";
+    let retiringBotId = "";
     let billingPublicId = "";
 
     const ctx = (userId: string | null): CapabilityContext => ({
@@ -157,6 +161,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         org: null,
         workspace: "Member",
       });
+      doubles.roles.set(ownerUserId, { org: "Owner", workspace: null });
       await withSystemDb(async (tx) => {
         const [billing] = await tx
           .insert(schema.users)
@@ -200,6 +205,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
           .returning({ publicId: schema.agents.publicId });
         otherBotId = other!.publicId;
+        const [retiring] = await tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "retiring-bot",
+            name: "Retiring bot",
+            agentType: "custom",
+            principalId: retiringBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId });
+        retiringBotId = retiring!.publicId;
         const toolId = randomUUID();
         const versionId = randomUUID();
         await tx.insert(schema.tools).values({
@@ -957,6 +975,180 @@ describe.skipIf(!process.env.DATABASE_URL)(
           ctx(billingUserId),
         ),
       );
+    });
+
+    // ── retirement (ADR-104, #3124) ─────────────────────────────────────────────
+    // A mandate does not survive its agent's retirement: request_mandate,
+    // grant_mandate and update_mandate_limits refuse to create or widen
+    // authority against a retired identity, while list_mandates, get_mandate
+    // and revoke_mandate (proven above against invoiceBotId/otherBotId, which
+    // never retire) stay unchanged. retire_agent revokes what is live the
+    // same way it revokes credentials and host enrollments.
+    const retiredAgent = (e: unknown) =>
+      isHandlerError(e) &&
+      e.code === "conflict" &&
+      e.reason === "agent_retired";
+
+    it("retire_agent revokes every active and draft mandate bound to the agent, and request/grant/limits refuse it afterward", async () => {
+      const active = await grant(billingUserId, {
+        ...body(),
+        agentId: retiringBotId,
+      });
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: retiringBotId }),
+          ctx(operatorUserId),
+        ),
+      );
+      expect(active.status).toBe("active");
+      expect(draft.status).toBe("draft");
+
+      const out = await inScope(() =>
+        agentRetireHandler(
+          { agentId: retiringBotId, reason: "retirement test" },
+          ctx(ownerUserId),
+        ),
+      );
+      expect(out.revokedMandates).toBe(2);
+
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({
+            publicId: schema.mandates.publicId,
+            status: schema.mandates.status,
+            revokedReason: schema.mandates.revokedReason,
+          })
+          .from(schema.mandates)
+          .where(
+            inArray(schema.mandates.publicId, [active.id, draft.id]),
+          ),
+      );
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.status).toBe("revoked");
+        expect(row.revokedReason).toBe("retirement test");
+      }
+
+      // list_mandates and get_mandate keep reading the retired agent's
+      // mandates; revoke_mandate on an already-revoked row is unchanged
+      // (mandate_ended), not a new agent_retired refusal.
+      const listed = await inScope(() =>
+        mandateListHandler(
+          { agentId: retiringBotId, limit: 10 },
+          ctx(billingUserId),
+        ),
+      );
+      expect(listed.items.map((m) => m.id).sort()).toEqual(
+        [active.id, draft.id].sort(),
+      );
+      const got = await inScope(() =>
+        mandateGetHandler({ mandateId: active.id }, ctx(billingUserId)),
+      );
+      expect(got.mandate.id).toBe(active.id);
+      await expect(
+        inScope(() =>
+          mandateRevokeHandler(
+            { mandateId: active.id, reason: "again" },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(conflict("mandate_ended"));
+
+      // Creating or widening authority against the retired identity refuses.
+      await expect(
+        inScope(() =>
+          mandateRequestHandler(
+            mandateGrant.input.parse({ ...body(), agentId: retiringBotId }),
+            ctx(operatorUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(retiredAgent);
+      await expect(
+        grant(billingUserId, { ...body(), agentId: retiringBotId }),
+      ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("grant_mandate refuses to activate a draft whose agent retired after the request was made", async () => {
+      const secondBotPrincipal = randomUUID();
+      const [secondAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "second-retiring-bot",
+            name: "Second retiring bot",
+            agentType: "custom",
+            principalId: secondBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const secondAgentId = secondAgent!.publicId;
+
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({ ...body(), agentId: secondAgentId }),
+          ctx(operatorUserId),
+        ),
+      );
+      await inScope(() =>
+        agentRetireHandler(
+          { agentId: secondAgentId, reason: "retired mid-draft" },
+          ctx(ownerUserId),
+        ),
+      );
+      await expect(
+        grant(billingUserId, {
+          ...body(),
+          agentId: secondAgentId,
+          requestId: draft.id,
+        }),
+      ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("update_mandate_limits refuses to widen a mandate whose agent retired after it was granted", async () => {
+      const thirdBotPrincipal = randomUUID();
+      const [thirdAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "third-retiring-bot",
+            name: "Third retiring bot",
+            agentType: "custom",
+            principalId: thirdBotPrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const thirdAgentId = thirdAgent!.publicId;
+
+      const m = await grant(billingUserId, { ...body(), agentId: thirdAgentId });
+      // Flip the agent's status directly rather than through retire_agent:
+      // that handler already revokes every live mandate as part of
+      // retirement (proven above), so going through it here would only ever
+      // exercise mandate_ended and never reach update_mandate_limits' own
+      // check. This isolates that check for the state it defends —
+      // an active mandate whose agent is archived by any means.
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ status: "archived" })
+          .where(eq(schema.agents.publicId, thirdAgentId)),
+      );
+      await expect(
+        inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perPeriod: "1" } },
+            },
+            ctx(billingUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(retiredAgent);
     });
   },
 );
