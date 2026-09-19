@@ -419,7 +419,7 @@ describe("user menu", () => {
     ).toEqual([
       "Account",
       "Preferences",
-      "Security and sessions",
+      "Security and devices",
       "Privacy and data",
       "Switch theme",
       "Sign out",

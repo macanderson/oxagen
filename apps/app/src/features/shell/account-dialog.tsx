@@ -6,10 +6,11 @@
 //
 // Every control here saves or acts, and none is a stub: Profile writes
 // `update_profile`; Preferences reads `get_user_preferences` and writes
-// `set_preferences`; Security lists and revokes Better Auth sessions and
-// reissues recovery codes; Privacy queues `export_data`. What the product
-// cannot do yet is absent, not drawn: a control that cannot act is the thing
-// this file exists to stop shipping.
+// `set_preferences`, including the time zone every date in the app renders in
+// (features/shell/viewer-clock.tsx); Security lists and revokes Better Auth
+// sessions and reissues recovery codes; Privacy queues `export_data`. What the
+// product cannot do yet is absent, not drawn: a control that cannot act is the
+// thing this file exists to stop shipping.
 //
 // It is a `SheetDialog` like every other dialog in the app, so on a phone it
 // rises from the bottom edge with a drag handle, a scrim, safe-area padding
@@ -26,6 +27,7 @@ import {
   useState,
 } from "react";
 import { routes } from "@/shared/safe-path";
+import { timeZoneChoices } from "@/shared/time-zone";
 import { Avatar } from "@/ui/avatar";
 import { buttonPrimary, inputBase, panel } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -92,6 +94,36 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // they have saved them, which is the one signal that the single showing has
   // actually been received.
   const [heldCodes, setHeldCodes] = useState<string[] | null>(null);
+
+  // A reload is the one way out of this dialog the vault above cannot survive,
+  // and the set is already the only one that works: Better Auth voided the old
+  // codes the moment it issued these, and it keeps only hashes of the new ones,
+  // so nothing anywhere can show them a second time.
+  //
+  // The review that found this asked for the pending set to be held in
+  // server-backed state until it is acknowledged. That is the wrong trade, and
+  // deliberately not what this does. It would put a full second factor bypass
+  // in Oxagen's own database in recoverable form, for as long as nobody presses
+  // a button, replicated to whichever data plane the organisation is on
+  // (ADR-042), in its backups, and inside the very export bundle this dialog
+  // queues. Losing an unsaved set costs one more rotation, with the password,
+  // by someone who is signed in and still holds the authenticator that got them
+  // here. Storing the codes costs the factor itself, to anyone who reaches the
+  // row. The cheaper failure is the one to keep.
+  //
+  // So the loss is made deliberate instead of silent: while a set is unsaved,
+  // the browser asks before it unloads the page. `preventDefault` is the
+  // specified opt-in; the wording is the browser's and cannot be set.
+  useEffect(() => {
+    if (!heldCodes) return;
+    const ask = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", ask);
+    return () => {
+      window.removeEventListener("beforeunload", ask);
+    };
+  }, [heldCodes]);
 
   // The rotation itself is held here too, and for the same reason the codes
   // are: every state the Security tab owns is destroyed by Cancel, by a tab
@@ -275,6 +307,12 @@ function ProfileTab({ data }: { data: ShellData }) {
   const [pending, setPending] = useState(false);
 
   /**
+   * Counts edits, so a save that lands late can tell whether the field it is
+   * about to overwrite is still the field that was sent. See `onSubmit`.
+   */
+  const editsRef = useRef(0);
+
+  /**
    * "Saved." describes the draft that was submitted, so the first edit after a
    * save makes it false: the field in front of the person now holds a change
    * that is not persisted, under a line claiming it is. A refusal is left
@@ -283,12 +321,14 @@ function ProfileTab({ data }: { data: ShellData }) {
    */
   function editDraft(apply: () => void) {
     if (outcome === "saved") setOutcome(null);
+    editsRef.current += 1;
     apply();
   }
 
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
+    const sentAt = editsRef.current;
     setOutcome(null);
     setPending(true);
     try {
@@ -298,8 +338,17 @@ function ProfileTab({ data }: { data: ShellData }) {
       // it is given.
       const result = await updateProfile(org.slug, { displayName });
       if (result.ok) {
-        setDisplayName(result.value.displayName ?? displayName);
-        setOutcome("saved");
+        // Only if the field is still the one that was sent. A save is a round
+        // trip, and typing does not stop while it is in flight: adopting the
+        // server's echo unconditionally deletes every character entered since
+        // the button was pressed, and then says "Saved." about the value it
+        // just put back — the one claim the person has no reason to doubt and
+        // every reason to act on. When the draft has moved on, the newer text
+        // stands, and nothing claims it is saved, which is the truth.
+        if (editsRef.current === sentAt) {
+          setDisplayName(result.value.displayName ?? displayName);
+          setOutcome("saved");
+        }
         // The shell renders the same person: the top bar's user menu reads
         // `data.viewer`, resolved on the server from the session. A re-render
         // of the server tree at the URL already showing, not a navigation:
@@ -447,7 +496,7 @@ const THEMES: readonly Theme[] = ["system", "dark", "light"];
 
 /** The zones the browser knows, plus UTC, with the stored one kept even when it is not among them. */
 function timeZones(current: string): string[] {
-  let zones: string[] = [];
+  let zones: readonly string[] = [];
   try {
     zones = Intl.supportedValuesOf("timeZone");
   } catch {
@@ -455,12 +504,15 @@ function timeZones(current: string): string[] {
   }
   // The engine's list does not contain UTC. Measured on this repo's Node: 418
   // zones, no "UTC" and no "Etc/UTC", because ICU canonicalizes those away.
-  // UTC is this app's default and the zone every seeded account starts on, so
-  // replacing the fallback with the engine's list offered it only to someone
-  // already on it, and anyone who changed to another zone could never get
-  // back. Merged rather than replaced.
+  // UTC is a zone people work in and ask for by name, and the one this app
+  // defaulted to before Pacific, so accounts still hold it. Offering the
+  // engine's list alone would show it to nobody but the people already on it,
+  // and anyone who moved away could never get back. Merged, not replaced.
   const offered = zones.includes("UTC") ? zones : ["UTC", ...zones];
-  return offered.includes(current) ? offered : [current, ...offered];
+  // Keeping the stored zone when the runtime does not name it is the shared
+  // rule, so the select and the chrome's clock resolve a zone the same way
+  // (src/shared/time-zone.ts).
+  return timeZoneChoices(current, offered);
 }
 
 /** The same three figures under the draft's locale and zone, so a change is seen before it is saved. */
@@ -486,6 +538,7 @@ function previewFor(locale: string, timeZone: string) {
 
 function PreferencesTab({ data }: { data: ShellData }) {
   const t = useTranslations("shell.account.preferences");
+  const navigate = useNavigate();
   const { theme, setTheme } = useShellState();
   const localeId = useId();
   const zoneId = useId();
@@ -493,6 +546,8 @@ function PreferencesTab({ data }: { data: ShellData }) {
   const [state, setState] = useState<PrefsState>({ kind: "loading" });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [pending, setPending] = useState(false);
+  /** Edit counter, for the same reason as the Profile tab's: see `onSubmit`. */
+  const editsRef = useRef(0);
 
   useEffect(() => {
     let live = true;
@@ -537,6 +592,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
 
   function edit(patch: Partial<PreferencesDraft>) {
     if (outcome === "saved") setOutcome(null);
+    editsRef.current += 1;
     setState((s) =>
       s.kind === "ready"
         ? { kind: "ready", draft: { ...s.draft, ...patch } }
@@ -547,13 +603,32 @@ function PreferencesTab({ data }: { data: ShellData }) {
   async function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending || state.kind !== "ready") return;
+    const sentAt = editsRef.current;
     setOutcome(null);
     setPending(true);
     try {
       const result = await savePreferences(data.org.slug, state.draft);
       if (result.ok) {
-        setState({ kind: "ready", draft: result.value });
-        setOutcome("saved");
+        // Only if the form is still the one that was sent, and for the same
+        // reason as the Profile tab: a selection made while the save was in
+        // flight is a decision the person has taken, and replacing it with the
+        // older answer under a "Saved." line hides that it was thrown away.
+        // It bites harder here, because the theme selector commits on change:
+        // the page would already be following the newer theme while the form
+        // reverted to the older one and called it saved.
+        if (editsRef.current === sentAt) {
+          setState({ kind: "ready", draft: result.value });
+          setOutcome("saved");
+        }
+        // The zone this row holds is the one every date in the app renders in:
+        // the organization layout reads it server-side and hands it to
+        // <ViewerClock> and the chrome's <TimeZoneProvider>. Without this the
+        // stored zone changes and every date on the page keeps the zone the
+        // request started in until a full reload, across client-side
+        // navigation too, because the shell lives in the layout. Re-rendered
+        // only when the zone actually moved, and at the URL already showing,
+        // so the dialog stays open.
+        if (result.value.timezone !== data.viewer.timeZone) navigate.refresh();
       } else if (result.reason === "invalid") setOutcome("invalid");
       else if (result.reason === "denied") setOutcome("denied");
       else setOutcome("failed");
@@ -637,6 +712,7 @@ function PreferencesTab({ data }: { data: ShellData }) {
               </option>
             ))}
           </select>
+          <p className={hint}>{t("timezoneHint")}</p>
         </div>
         <div>
           <label htmlFor={themeId} className={fieldLabel}>
@@ -780,9 +856,19 @@ function SecurityTab({
   // vault filling is the only thing that can tell this mount the set arrived.
   // Without this the codes would sit in the vault behind a form still saying it
   // is issuing them.
-  useEffect(() => {
+  //
+  // Adjusted during render rather than in an effect, which is React's own
+  // answer for state that has to follow a value from above
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  // An effect would render the stale form first and correct it on a second
+  // pass, and `react-hooks/set-state-in-effect` refuses it for that reason.
+  // React re-runs this component immediately, before anything is committed, so
+  // the form never shows the wrong thing.
+  const [vaulted, setVaulted] = useState(heldCodes);
+  if (heldCodes !== vaulted) {
+    setVaulted(heldCodes);
     if (heldCodes) setCodes({ kind: "issued", codes: heldCodes });
-  }, [heldCodes]);
+  }
 
   useEffect(() => {
     let live = true;

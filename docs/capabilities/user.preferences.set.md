@@ -44,7 +44,7 @@ The whole set after the write, read back from the row.
 |---|---|---|
 | `locale` | string | the stored language; `en` when first written without one |
 | `theme` | enum | `system`, `light`, `dark` |
-| `timezone` | string | the stored zone; `UTC` when first written without one |
+| `timezone` | string | the stored IANA zone; `America/Los_Angeles` when first written without one |
 | `fontSize` | enum | `small`, `medium`, `large`; `medium` on first write |
 | `density` | enum | `compact`, `comfortable`, `spacious`; `comfortable` on first write |
 | `enterToSubmit` | boolean | `false` on first write |

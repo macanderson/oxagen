@@ -6,7 +6,13 @@
 // set_preferences; Security lists sessions, revokes one, and reissues
 // recovery codes; Privacy queues export_data. The onboarding demo tab of the
 // mockup is not here (negative).
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import {
@@ -321,6 +327,38 @@ describe("Profile", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
+  // A save is a round trip and typing does not stop while it is in flight.
+  // Adopting the server's echo unconditionally deleted every character entered
+  // since the button was pressed, and then said "Saved." about the value it had
+  // just put back: the person reads the field, sees the old name under a line
+  // claiming it is stored, and has no reason to look again.
+  it("keeps a name typed while the save is in flight, and claims nothing about it", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    updateProfile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("profile");
+    const name = screen.getByTestId("account-display-name");
+    await user.clear(name);
+    await user.type(name, "Marcus B");
+    await user.click(screen.getByTestId("account-save"));
+
+    await user.type(name, "ell");
+    finish?.({ ok: true, value: { displayName: "Marcus B", avatarUrl: null } });
+    await waitFor(() => {
+      expect(screen.getByTestId("account-save")).not.toBeDisabled();
+    });
+
+    expect(screen.getByTestId("account-display-name")).toHaveValue(
+      "Marcus Bell",
+    );
+    // And no "Saved.", because what is on screen is not what was stored.
+    expect(screen.queryByTestId("account-saved")).toBeNull();
+  });
+
   it("shows the person, their verified email, their roles and their user id", async () => {
     const { dialog } = await openDialog();
     expect(within(dialog).getByText("Marcus Bell")).toBeTruthy();
@@ -451,6 +489,73 @@ describe("Preferences", () => {
       theme: "dark",
     });
     expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+  });
+
+  // The zone the row holds is the one the organization layout reads and hands
+  // to <ViewerClock> and the chrome, so a saved zone the page does not re-read
+  // in leaves every date on the old clock until a full reload.
+  it("re-renders the server tree when the saved zone is not the one the page rendered in", async () => {
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-timezone"),
+      "Europe/London",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(savePreferences).toHaveBeenCalledWith("acme", {
+      locale: "en",
+      timezone: "Europe/London",
+      theme: "system",
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the tree alone when the zone did not move (negative)", async () => {
+    readPreferences.mockResolvedValue({
+      ok: true,
+      value: {
+        locale: "en",
+        timezone: shellData().viewer.timeZone,
+        theme: "system",
+      },
+    });
+    const { user } = await openDialog("preferences");
+    await user.selectOptions(
+      await screen.findByTestId("account-theme"),
+      "light",
+    );
+    await user.click(screen.getByTestId("account-preferences-save"));
+    expect(await screen.findByTestId("account-preferences-saved")).toBeTruthy();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // The same clobber as the Profile tab's, and it bites harder here: the theme
+  // selector commits on change, so the page would already be following the
+  // newer theme while the form reverted to the older one and called it saved.
+  it("keeps a choice made while the save is in flight, and claims nothing about it", async () => {
+    let finish: ((result: unknown) => void) | undefined;
+    savePreferences.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { user } = await openDialog("preferences");
+    const zone = await screen.findByTestId("account-timezone");
+    await user.selectOptions(zone, "America/Los_Angeles");
+    await user.click(screen.getByTestId("account-preferences-save"));
+
+    await user.selectOptions(screen.getByTestId("account-theme"), "dark");
+    finish?.({
+      ok: true,
+      value: { locale: "en", timezone: "America/Los_Angeles", theme: "system" },
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("account-preferences-save")).not.toBeDisabled();
+    });
+
+    expect(screen.getByTestId("account-theme")).toHaveValue("dark");
+    expect(screen.queryByTestId("account-preferences-saved")).toBeNull();
   });
 
   it("lists the zones the engine reports, and keeps a stored zone it does not", async () => {
@@ -743,6 +848,35 @@ describe("Security", () => {
     await user.click(screen.getByTestId("account-tab-security"));
     expect(screen.queryByTestId("account-codes")).toBeNull();
     expect(await screen.findByTestId("account-codes-open")).toBeTruthy();
+  });
+
+  // A reload is the one exit the vault cannot survive: the component is gone,
+  // Better Auth voided the old set when it issued this one, and it keeps only
+  // hashes of the new one, so nothing can show it again. Holding the plaintext
+  // codes server-side until acknowledgement would fix the reload by putting a
+  // second-factor bypass in the database in recoverable form; losing an unsaved
+  // set costs one more rotation by someone who is signed in and still holds the
+  // authenticator. So the loss is made deliberate instead of silent.
+  it("asks before unloading the page while a set is unsaved", async () => {
+    const { user } = await openDialog("security");
+    // `dispatchEvent` answers false when a listener cancelled the event, which
+    // is what the browser reads as "ask before leaving".
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
+    // Nothing outstanding, nothing asked.
+    expect(asked()).toBe(false);
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    expect(asked()).toBe(true);
+
+    // And it stops once the showing has landed, so an acknowledged rotation
+    // does not leave the browser nagging about a page with nothing at stake.
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(asked()).toBe(false);
   });
 
   // The second rotation is never started, so no late first response can exist

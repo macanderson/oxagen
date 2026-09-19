@@ -40,7 +40,10 @@ export const repositoryListHandler: CapabilityHandler<
       )
       .leftJoin(
         schema.sourceConnections,
-        eq(schema.sourceConnections.id, schema.repositoryBindingHeads.connectionId),
+        eq(
+          schema.sourceConnections.id,
+          schema.repositoryBindingHeads.connectionId,
+        ),
       )
       .where(
         and(

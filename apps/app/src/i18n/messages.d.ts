@@ -1969,6 +1969,7 @@ type Messages = {
         localeName: string;
         localeHint: string;
         timezone: string;
+        timezoneHint: string;
         theme: string;
         themes: {
           system: string;

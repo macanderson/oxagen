@@ -13,6 +13,7 @@ const SHELL_VIEWER = {
   orgRole: "member",
   emailVerified: true,
   twoFactorEnabled: true,
+  timeZone: "America/Los_Angeles",
 } as const;
 
 const SHELL_ORG = { slug: "acme", name: "Acme Robotics" } as const;

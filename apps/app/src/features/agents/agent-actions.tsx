@@ -3,7 +3,7 @@
 // credential (the new secret shown once, in the dialog), suspend or resume,
 // and deregister (retire_agent). A refusal is named in the dialog and changes
 // nothing; a completed suspend or deregister reloads the page it leaves.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { ActionResult } from "@/server/kernel";
 import type { SafePath } from "@/shared/safe-path";
@@ -17,6 +17,7 @@ import {
   rotateAgentCredential,
   setAgentSuspended,
 } from "./actions";
+import { useFormatter } from "@/ui/formatter";
 
 type Copy = {
   open: string;

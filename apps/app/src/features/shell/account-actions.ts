@@ -1,7 +1,7 @@
 "use server";
-// The one write behind the Account dialog: a person's own display name and
+// The two writes behind the Account dialog: a person's own display name and
 // avatar (spec App. F, "the account pages collapse into one Account dialog
-// reachable from the user menu").
+// reachable from the user menu"), and the time zone their dates render in.
 //
 // It goes through the kernel seam like every other write in this app, and for
 // a reason worth stating. The deprecated app wrote `auth.users` straight from

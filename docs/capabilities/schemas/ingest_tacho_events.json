@@ -67,7 +67,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -503,7 +505,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -771,7 +775,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -1207,7 +1213,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -1597,7 +1605,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -2155,7 +2165,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -2229,7 +2241,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -2771,7 +2785,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -3401,7 +3417,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -3475,7 +3493,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -4085,7 +4105,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -4695,7 +4717,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -5305,7 +5329,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -5915,7 +5941,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -6601,7 +6629,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -7231,7 +7261,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -7305,7 +7337,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -7935,7 +7969,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -8009,7 +8045,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -8639,7 +8677,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -8713,7 +8753,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -9181,7 +9223,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -9255,7 +9299,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -9885,7 +9931,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -9959,7 +10007,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -10589,7 +10639,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -10663,7 +10715,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -11159,7 +11213,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -11664,7 +11720,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -12583,7 +12641,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -13102,7 +13162,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -13621,7 +13683,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -14057,7 +14121,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -14447,7 +14513,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -15109,7 +15177,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -15700,7 +15770,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -16291,7 +16363,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -16890,7 +16964,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -17326,7 +17402,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -17582,7 +17660,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -18350,7 +18430,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -18786,7 +18868,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -18946,7 +19030,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -19382,7 +19468,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -19542,7 +19630,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -19978,7 +20068,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -20138,7 +20230,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -20574,7 +20668,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -20734,7 +20830,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -21170,7 +21268,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -21330,7 +21430,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -21766,7 +21868,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -21926,7 +22030,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -22362,7 +22468,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -22752,7 +22860,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -23188,7 +23298,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -23348,7 +23460,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -23784,7 +23898,9 @@
                       "maxLength": 512
                     },
                     "rate_limit_reset_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "fast_mode_state": {
                       "type": "string",
@@ -24034,7 +24150,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -24625,7 +24743,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -25216,7 +25336,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -25902,7 +26024,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -26588,7 +26712,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -27203,7 +27329,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -27865,7 +27993,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -28384,7 +28514,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -28852,7 +28984,9 @@
                       "maxLength": 512
                     },
                     "token_expires_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                     },
                     "token_use_limit": {
                       "type": "integer",
@@ -28997,7 +29131,9 @@
                   "maximum": 9007199254740991
                 },
                 "ts": {
-                  "type": "string"
+                  "type": "string",
+                  "x-server-validated": true,
+                  "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
                 },
                 "fidelity": {
                   "type": "string",
@@ -29410,7 +29546,9 @@
               "additionalProperties": false
             }
           ]
-        }
+        },
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
       },
       "bodies": {
         "type": "array",
@@ -29720,6 +29858,8 @@
       "body_rejections",
       "control"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
   }
 }
