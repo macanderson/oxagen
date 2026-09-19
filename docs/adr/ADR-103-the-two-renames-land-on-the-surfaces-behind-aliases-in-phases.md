@@ -9,8 +9,8 @@
   §5.1 (enrollment); `apps/cli/src/program.ts` (the command tree)
 - **Numbering:** 103. ADR-102 is taken twice, by the mandate row lock and by
   the marketing ebook lead gate
-- **Delivered by:** this record, and the phase order it sets. No code changes
-  with it.
+- **Delivered by:** this record and the phase order it sets, plus phase 1a:
+  the hidden `tacho` group in `apps/cli/src/program.ts`
 
 ## Context
 
@@ -96,9 +96,18 @@ fleet has rolled.
 **3. The three colliding CLI names resolve by argument, not by renaming either
 side.** `oxagen agent status` with no argument reports this machine.
 `oxagen agent status <agent>` reports that agent. The same split applies to
-`unenroll`. `oxagen agent enroll` takes `--token` when it has an enrollment
-token and falls back to the logged-in session when it does not, which is the
-only difference between the two enrollment paths today.
+`unenroll`.
+
+`enroll` is the one that does not resolve by presence, which only became clear
+while implementing it. Both commands already take `--token`, and it means two
+different things: `agent enroll --token` wants the single-use enrollment token
+shown once at registration (`oxe_1time_…`, handled by `handleAgentEnroll`),
+while `tacho enroll --token` wants a platform API token and falls back to the
+logged-in session (`handleTachoEnroll`). So the merged command dispatches on the
+token's prefix, not on whether a token was given: `oxe_1time_` goes to the
+enrollment-token path, anything else and no token at all go to the session path.
+An operator pastes whichever token they hold, which is better than asking them
+to know which command matches their credential.
 
 This changes two existing commands: `status <agent>` and `unenroll <agent>`
 take an optional argument where the argument was required. That is additive for
@@ -110,20 +119,26 @@ knows.
 **4. The phases ship in this order, each on its own branch and its own pull
 request.**
 
-1. The CLI surface: `oxagen agent` gains the seven wrapping subcommands,
-   `oxagen tacho` becomes a hidden forwarder, and the three user-visible
-   strings point at the new command. One phase, because a string that names a
-   command the reader cannot run is worse than the old word.
-2. The docs: `docs/specs/tacho/` and the 115 files that reference it.
-3. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
+1. **1a.** `oxagen tacho` leaves `--help` and prints one deprecation line, with
+   all seven subcommands unchanged underneath. Nothing moves, so nothing can
+   break, and the word is out of the product's help.
+2. **1b.** The seven move onto `oxagen agent`, the three collisions resolve as
+   decision 3 says, and only then do the three user-visible strings point at
+   `oxagen agent enroll`. The strings wait for the move because a string naming
+   a command the reader cannot run is worse than the old word, and until the
+   merge lands `oxagen agent enroll` demands a one-time token the reader of an
+   empty state does not have. This phase changes two governance command
+   signatures, so it reviews on its own.
+3. The docs: `docs/specs/tacho/` and the 115 files that reference it.
+4. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
    each shipping the new name alongside the old and migrating on the next
    enroll.
-4. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
+5. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
    the collector reading both for one release.
-5. The database: the `tacho_sessions` table and the
+6. The database: the `tacho_sessions` table and the
    `tacho_sessions_runtime_check` constraint, by Atlas migration, after the
    runtime no longer writes the old name.
-6. `capability` to `agent tool` on the surfaces: UI strings, error messages,
+7. `capability` to `agent tool` on the surfaces: UI strings, error messages,
    CLI output, `docs/capabilities/`, and the two rule files. The registry
    symbol and the contract files keep their names under decision 1.
 
@@ -136,7 +151,7 @@ The fleet keeps working through the rename, which is the point. An operator who
 runs `oxagen tacho enroll` from a runbook written last month gets a deprecation
 line and an enrollment, not a failure.
 
-Phase 1 is the only phase that is blocked on nothing. Phases 3, 4, and 5 are
+Phase 1a is the only phase that is blocked on nothing, which is why it ships first and alone. Phases 3, 4, and 5 are
 ordered by what writes the name: the runtime stops writing the old value before
 the database forgets how to store it, so no phase leaves a row the next phase
 cannot read.
