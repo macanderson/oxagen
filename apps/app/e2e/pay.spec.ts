@@ -10,9 +10,12 @@
 // accepted the session and is showing it. Completing a payment would need a card
 // and would leave a charge behind on every CI run.
 //
-// STRIPE_E2E is "0" on a fork pull request, which has no test key (WL-48). The
-// spec skips rather than fails there, because a missing secret is not a defect
-// in the code under test.
+// STRIPE_E2E is "0" whenever the job has no Stripe test key: always on a
+// fork pull request (WL-48), and, until STRIPE_TEST_SECRET_KEY is confirmed
+// configured as a repository secret, on a same-repo run too (the workflow's
+// "Stripe test key present" step names the reason in its job summary). The
+// spec skips rather than fails, because a missing secret is not a defect in
+// the code under test.
 import { expect, test } from "@playwright/test";
 import billingCatalog from "../messages/billing.json" with { type: "json" };
 import { SEED } from "./support";
@@ -24,7 +27,7 @@ test("the Billing page opens a Stripe Checkout session for a GAU purchase", asyn
 }) => {
   test.skip(
     process.env.STRIPE_E2E !== "1",
-    "no Stripe test key in this job (fork pull request)",
+    "no Stripe test key in this job (fork pull request, or STRIPE_TEST_SECRET_KEY unset)",
   );
 
   await page.goto(`/${SEED.orgSlug}/billing`);
