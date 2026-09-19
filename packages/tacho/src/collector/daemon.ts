@@ -917,8 +917,15 @@ export async function startDaemon(
       found.push({
         session,
         facts,
+        // A read that failed reports no changes rather than an empty list,
+        // so no reconciliation frame is sealed for it. A frame saying the
+        // worktree was clean is a claim, and nobody made the observation
+        // behind it.
         ...(due
-          ? { changes: await readWorkingTreeChanges(execAsync, cwd) }
+          ? await (async () => {
+              const changes = await readWorkingTreeChanges(execAsync, cwd);
+              return changes === undefined ? {} : { changes };
+            })()
           : {}),
       });
     }

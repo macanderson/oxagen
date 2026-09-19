@@ -287,15 +287,13 @@ describe("readWorkingTreeChanges", () => {
       },
       calls,
     );
-    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
     expect(only?.status).toBe("added");
     // The count that used to be recorded as zero, which ingest then kept as
     // the run's observed line count.
     expect(only?.lines_added).toBe(412);
     expect(only?.lines_removed).toBe(0);
-    expect(
-      calls.filter((call) => call.includes("--no-index")),
-    ).toHaveLength(1);
+    expect(calls.filter((call) => call.includes("--no-index"))).toHaveLength(1);
   });
 
   it("leaves an untracked count at zero when the probe cannot answer", async () => {
@@ -305,9 +303,9 @@ describe("readWorkingTreeChanges", () => {
       "rev-parse --show-toplevel": "/repo\n",
       "--no-index": FAIL,
     });
-    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.lines_added).toBe(
-      0,
-    );
+    expect(
+      ((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.lines_added,
+    ).toBe(0);
   });
 
   it("does not probe a tracked path the numstat left out", async () => {
@@ -321,7 +319,7 @@ describe("readWorkingTreeChanges", () => {
       },
       calls,
     );
-    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
     expect(only?.status).toBe("modified");
     // Diffing a tracked file against nothing would count all of it as added.
     expect(calls.some((call) => call.includes("--no-index"))).toBe(false);
@@ -338,7 +336,7 @@ describe("readWorkingTreeChanges", () => {
       },
       calls,
     );
-    const [only] = await readWorkingTreeChanges(exec, "/repo");
+    const [only] = (await readWorkingTreeChanges(exec, "/repo")) ?? [];
     // A directory entry names a subtree, and `--no-index` has no line count
     // to give for one.
     expect(only?.repo_relative_path).toBe("build/");
@@ -364,9 +362,9 @@ describe("readWorkingTreeChanges", () => {
     );
     const changes = await readWorkingTreeChanges(exec, "/repo");
     expect(changes).toHaveLength(count);
-    expect(
-      calls.filter((call) => call.includes("--no-index")),
-    ).toHaveLength(MAX_UNTRACKED_LINE_COUNTS);
+    expect(calls.filter((call) => call.includes("--no-index"))).toHaveLength(
+      MAX_UNTRACKED_LINE_COUNTS,
+    );
     // Path order decides which files are measured, so the same ones are
     // measured on every pass.
     const probed = calls
@@ -401,9 +399,9 @@ describe("readWorkingTreeChanges", () => {
       },
       calls,
     );
-    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.lines_added).toBe(
-      4,
-    );
+    expect(
+      ((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.lines_added,
+    ).toBe(4);
     expect(calls.some((call) => call.includes("HEAD"))).toBe(true);
   });
 
@@ -413,7 +411,7 @@ describe("readWorkingTreeChanges", () => {
       "diff --numstat HEAD": "",
       "rev-parse --show-toplevel": FAIL,
     });
-    expect((await readWorkingTreeChanges(exec, "/repo"))[0]?.path).toBe(
+    expect(((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0]?.path).toBe(
       "src/a.ts",
     );
   });
@@ -424,25 +422,38 @@ describe("readWorkingTreeChanges", () => {
       "diff --numstat HEAD": "-\t-\tlogo.png\n",
       "rev-parse --show-toplevel": "/repo\n",
     });
-    expect((await readWorkingTreeChanges(exec, "/repo"))[0]).toMatchObject({
+    expect(
+      ((await readWorkingTreeChanges(exec, "/repo")) ?? [])[0],
+    ).toMatchObject({
       status: "modified",
       lines_added: 0,
       lines_removed: 0,
     });
   });
 
-  it("returns nothing for a directory that is not a repository", async () => {
-    expect(await readWorkingTreeChanges(fakeGit({}), "/tmp")).toEqual([]);
+  it("says unavailable, not clean, for a directory that is not a repository", async () => {
+    // Undefined and an empty list are different answers. The caller seals a
+    // reconciliation frame from an empty list, and a frame saying the
+    // worktree was clean is a claim nobody observed.
+    expect(await readWorkingTreeChanges(fakeGit({}), "/tmp")).toBeUndefined();
   });
 
-  it("returns nothing when git is not installed", async () => {
+  it("says unavailable when git is not installed", async () => {
     const exec: ExecAsync = () => {
       throw new Error("spawn git ENOENT");
     };
-    expect(await readWorkingTreeChanges(exec, "/repo")).toEqual([]);
+    expect(await readWorkingTreeChanges(exec, "/repo")).toBeUndefined();
   });
 
-  it("returns nothing for a clean tree", async () => {
+  it("says unavailable when the status read itself fails", async () => {
+    const exec: ExecAsync = async (_command, args) =>
+      args.includes("status")
+        ? { status: 1, stdout: "", stderr: "timed out" }
+        : { status: 0, stdout: "", stderr: "" };
+    expect(await readWorkingTreeChanges(exec, "/repo")).toBeUndefined();
+  });
+
+  it("returns an empty list for a clean tree, which is an observation", async () => {
     const exec = fakeGit({ "status --porcelain=v1 -z": "" });
     expect(await readWorkingTreeChanges(exec, "/repo")).toEqual([]);
   });

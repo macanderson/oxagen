@@ -366,14 +366,23 @@ async function untrackedLineCount(
 export async function readWorkingTreeChanges(
   exec: ExecAsync,
   cwd: string,
-): Promise<GitWorkingTreeChange[]> {
+): Promise<GitWorkingTreeChange[] | undefined> {
   const status = await git(exec, cwd, ["status", "--porcelain=v1", "-z"]);
-  if (status === undefined) return [];
+  // Undefined is a read that did not happen: a timeout, a non-zero exit, a
+  // directory that is not a repository. An empty list is a read that did
+  // happen and found nothing. Collapsing the two would seal
+  // `observed_changes: []` with `observed_changes_truncated: false`, which
+  // states that git looked and the worktree was clean. Nothing looked. This
+  // is the same distinction the module header draws for `dirty`, where a
+  // failed `status` leaves the field off rather than asserting cleanliness,
+  // and it matters more here because the caller seals a frame from it.
+  if (status === undefined) return undefined;
   const entries = parsePorcelainZ(status);
   if (entries.length === 0) return [];
   const [numstatOut, root] = await Promise.all([
     git(exec, cwd, ["diff", "--numstat", "HEAD"]).then(
-      async (head) => head ?? (await git(exec, cwd, ["diff", "--numstat"])) ?? "",
+      async (head) =>
+        head ?? (await git(exec, cwd, ["diff", "--numstat"])) ?? "",
     ),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
@@ -406,7 +415,8 @@ export async function readWorkingTreeChanges(
           cwd,
           absolute(repoRelative),
         );
-        if (added !== undefined) counts.set(repoRelative, { added, removed: 0 });
+        if (added !== undefined)
+          counts.set(repoRelative, { added, removed: 0 });
       }),
       UNTRACKED_COUNT_CONCURRENCY,
     );
