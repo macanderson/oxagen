@@ -32,9 +32,24 @@ interface Batch {
 const MCP_RESULT = { content: [{ type: "text", text: "42 nodes" }] };
 const MCP_ARGUMENTS = { q: "MATCH (n) RETURN count(n)", limit: 10 };
 
+/** What the fake control plane answers a bundle poll with. */
+interface BundleAnswer {
+  ok: boolean;
+  status: number;
+  payload: unknown;
+}
+
+/** The default: the etag in force is still the current one. */
+const BUNDLE_UNCHANGED: BundleAnswer = {
+  ok: true,
+  status: 200,
+  payload: { not_modified: true, etag: "etag-3", bundle: null },
+};
+
 /** A control plane that records every batch and refuses the bodies it is told to. */
 function plane(
   refuse: (body: TachoBody) => string | undefined = () => undefined,
+  bundleAnswer: () => BundleAnswer = () => BUNDLE_UNCHANGED,
 ) {
   const batches: Batch[] = [];
   const fetch: FetchLike = async (url, init) => {
@@ -69,11 +84,11 @@ function plane(
       };
     }
     if (url.endsWith("/bundle")) {
+      const answer = bundleAnswer();
       return {
-        ok: true,
-        status: 200,
-        text: async () =>
-          JSON.stringify({ not_modified: true, etag: "etag-3", bundle: null }),
+        ok: answer.ok,
+        status: answer.status,
+        text: async () => JSON.stringify(answer.payload),
       };
     }
     if (url.endsWith("/mcp")) {
@@ -128,7 +143,11 @@ describe("tachod and frame bodies", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(fetch: FetchLike, retention: PolicyBundle["retention"]) {
+  async function boot(
+    fetch: FetchLike,
+    retention: PolicyBundle["retention"],
+    now?: () => number,
+  ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(unsignedBundle({ retention }));
@@ -157,9 +176,10 @@ describe("tachod and frame bodies", () => {
       port: 0,
       transcriptRoots: [paths.root],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
+      ...(now !== undefined ? { now } : {}),
     });
     handles.push(handle);
-    return { handle, host, log };
+    return { handle, host, log, signer };
   }
 
   const session = "sess-bodies-1";
@@ -323,6 +343,81 @@ describe("tachod and frame bodies", () => {
       ),
     ).toBe(true);
     // The events were accepted regardless: nothing is left to ship.
+    expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  it("does not transmit a queued body once the mandate has narrowed", async () => {
+    // The leak: a body reaches the WAL under `content_exact`, the workspace
+    // narrows to `digest_only` while the control plane is out of reach, and
+    // the drain sends what is queued. The control plane refusing it is too
+    // late — the prompt has already left the machine, which is the one thing
+    // the retention boundary exists to prevent.
+    let narrowed: PolicyBundle | undefined;
+    const { fetch, batches } = plane(
+      () => undefined,
+      () =>
+        narrowed === undefined
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.etag,
+                bundle: narrowed,
+              },
+            },
+    );
+    const { handle, host, signer } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runSession(handle.port as number, host.local_token);
+    // Queued, not shipped: the bodies are sitting in the WAL.
+    expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
+    narrowed = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.tick();
+    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    // The events still ship, digests and all: only the bytes stayed home.
+    expect(
+      batches
+        .flatMap((b) => b.events)
+        .some(
+          (e) => e.kind === "turn_start" && e.content?.digest !== undefined,
+        ),
+    ).toBe(true);
+    expect(handle.wal.stats().unshipped).toBe(0);
+  });
+
+  it("withholds a queued body when the mandate can no longer be established", async () => {
+    // Narrowing is not the only way the answer changes. A cached mandate that
+    // has outlived its signed window, with a control plane that cannot
+    // confirm it, is authority for nothing: sending the body then would be
+    // sending it under a mandate nobody can prove, so the bytes stay home
+    // until one can be.
+    const clock = { at: Date.parse("2026-09-15T00:00:00.000Z") };
+    const { fetch, batches } = plane(
+      () => undefined,
+      () => ({ ok: false, status: 503, payload: { error: "unavailable" } }),
+    );
+    const { handle, host } = await boot(
+      fetch,
+      { mode: "content_exact", classes: ["model_call", "tool_call"] },
+      () => clock.at,
+    );
+    await runSession(handle.port as number, host.local_token);
+    expect(handle.wal.stats().unshipped).toBeGreaterThan(0);
+    // Past the signed window, and the poll that would renew it fails.
+    clock.at = Date.parse("2027-10-01T00:00:00.000Z");
+    await handle.tick();
+    expect(batches.flatMap((b) => b.bodies ?? [])).toEqual([]);
+    expect(batches.flatMap((b) => b.events).length).toBeGreaterThan(0);
     expect(handle.wal.stats().unshipped).toBe(0);
   });
 });

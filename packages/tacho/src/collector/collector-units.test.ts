@@ -556,6 +556,12 @@ describe("shipper", () => {
       onControl: (c) => {
         controls.push(c);
       },
+      // These cases are about batching, backoff and quarantine, so the mandate
+      // is the permissive one and never the thing under test.
+      retentionInForce: () => ({
+        mode: "content_exact",
+        classes: ["model_call", "tool_call", "approval_receipt"],
+      }),
       log: (l) => logs.push(l),
       now,
       minBackoffMs: 1_000,
@@ -1039,7 +1045,11 @@ describe("shipper", () => {
     const wal = new Wal(paths.wal);
     const events = minimalSession();
     const prompt = events[1] as TachoEvent;
-    const last = events[events.length - 1] as TachoEvent;
+    // `turn_end`, not the closing `agent_stop`: a body only exists for a kind
+    // the retention table classifies, and the ship-time gate drops one whose
+    // kind names no class. A fixture that hung a body on `agent_stop` was
+    // testing a body the recorder never writes.
+    const last = events[6] as TachoEvent;
     wal.append(events, [bodyFor(prompt, "p"), bodyFor(last, "l")]);
     const bad = events[2]?.seq;
     const sent: Array<{
@@ -1081,10 +1091,13 @@ describe("shipper", () => {
     // would ship in one request the route refuses with 413. Measured on the
     // wire, the third waits for the next batch with its event.
     const full = "x".repeat(TACHO_MAX_BODY_BYTES);
+    // Hung on classified kinds (`turn_start`, `llm_call`, `tool_requested`):
+    // the opening `agent_start` has no retention class, so the ship-time gate
+    // would drop its body and the cut under test would never happen.
     wal.append(events, [
-      bodyFor(events[0] as TachoEvent, full),
       bodyFor(events[1] as TachoEvent, full),
       bodyFor(events[2] as TachoEvent, full),
+      bodyFor(events[3] as TachoEvent, full, "tool_call"),
     ]);
     const sent: Array<{
       events: TachoEvent[];
@@ -1114,9 +1127,9 @@ describe("shipper", () => {
     const result = await s.drain();
     expect(result.shipped).toBe(events.length);
     expect(sent).toHaveLength(2);
-    expect(sent[0]?.events.map((e) => e.seq)).toEqual([0, 1]);
+    expect(sent[0]?.events.map((e) => e.seq)).toEqual([0, 1, 2]);
     expect(sent[0]?.bodies).toHaveLength(2);
-    expect(sent[1]?.events[0]?.seq).toBe(2);
+    expect(sent[1]?.events[0]?.seq).toBe(3);
     expect(sent[1]?.bodies).toHaveLength(1);
     expect(wal.stats().unshipped).toBe(0);
   });
@@ -1292,6 +1305,10 @@ describe("shipper", () => {
       health: () => ({ version: "1" }),
       onControl: () => undefined,
       onBodyRejection: (rejections) => refused.push(...rejections),
+      retentionInForce: () => ({
+        mode: "content_exact",
+        classes: ["model_call"],
+      }),
       log: () => undefined,
       now: () => 0,
     });
