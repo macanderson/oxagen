@@ -21,6 +21,7 @@ import {
   pendingChange,
   primaryAction,
   reassignArgs,
+  sessionLanded,
   toggleHarness,
   unenrollArgs,
 } from "./commands";
@@ -135,6 +136,29 @@ describe("sidecar argv", () => {
       target: false,
       harness: false,
     });
+  });
+
+  it("calls a sign-in done once its session is on disk, not once the process exits", () => {
+    const out = { logged_in: false, org_slug: null, workspace_slug: null };
+    const inAcme = {
+      logged_in: true,
+      org_slug: "acme",
+      workspace_slug: "core",
+    };
+    // A first sign-in: nothing to something.
+    expect(sessionLanded(out, inAcme)).toBe(true);
+    // Still nothing on disk: the login has not finished.
+    expect(sessionLanded(out, out)).toBe(false);
+    // Switching organization: the new pair is the evidence.
+    expect(sessionLanded(inAcme, { ...inAcme, org_slug: "other" })).toBe(true);
+    expect(sessionLanded(inAcme, { ...inAcme, workspace_slug: "edge" })).toBe(
+      true,
+    );
+    // Re-signing in to the same pair writes nothing this can see, so the
+    // process close stays the only finish line for that one.
+    expect(sessionLanded(inAcme, inAcme)).toBe(false);
+    // A sign-out mid-flight is not a landing.
+    expect(sessionLanded(inAcme, out)).toBe(false);
   });
 
   it("reassigns through the oxagen sidecar with --default when the CLI default should follow", () => {

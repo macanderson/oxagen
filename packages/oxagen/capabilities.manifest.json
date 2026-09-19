@@ -3208,7 +3208,7 @@
       "name": "set_data_plane",
       "file": "org.data_plane.set.ts",
       "domain": "org",
-      "mode": "dedicated",
+      "mode": "sync",
       "surfaces": [
         "api",
         "mcp"
@@ -3875,7 +3875,7 @@
       "name": "search_references",
       "file": "reference.search.ts",
       "domain": "reference",
-      "mode": "slug",
+      "mode": "sync",
       "surfaces": [
         "api",
         "mcp",

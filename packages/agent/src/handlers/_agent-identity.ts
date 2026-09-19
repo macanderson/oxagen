@@ -8,7 +8,7 @@
 // them together and derives the identity's status from them; `list_agents`
 // and `get_agent` read through it so the two never disagree on what
 // "enrolled" means.
-import { schema, type Tx } from "@oxagen/database";
+import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
@@ -57,20 +57,27 @@ const identityColumns = {
 } as const;
 
 function identitySelect(tx: Tx) {
-  return tx
-    .select(identityColumns)
-    .from(schema.agents)
-    .leftJoin(
-      schema.principals,
-      and(
-        eq(schema.principals.id, schema.agents.principalId),
-        eq(schema.principals.orgId, schema.agents.orgId),
-      ),
-    )
-    .leftJoin(
-      schema.users,
-      eq(schema.users.id, schema.principals.parentUserId),
-    );
+  return (
+    tx
+      .select(identityColumns)
+      .from(schema.agents)
+      .leftJoin(
+        schema.principals,
+        and(
+          eq(schema.principals.id, schema.agents.principalId),
+          eq(schema.principals.orgId, schema.agents.orgId),
+        ),
+      )
+      // The relations seam, not an inline condition (AGENTS.md: cross-domain
+      // joins live in `src/relations.ts`).
+      //
+      // `agentCreatorUserJoin`, not `operatorUserJoin`. This row's principal is
+      // the agent's own, which is `kind = 'agent'`, and its `parent_user_id` is
+      // the user who created it — the person `operatorId` names here. The run
+      // join carries `kind = 'human'` for a different question, so pointing it
+      // at this one matched nothing and every agent reported no operator.
+      .leftJoin(schema.users, agentCreatorUserJoin)
+  );
 }
 
 /** One live agent by public id (`agt_…`), uuid or slug, in the scope's workspace. */

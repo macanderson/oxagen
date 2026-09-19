@@ -92,6 +92,29 @@ describe("tacho_events DDL", () => {
     ).toBe("String");
   });
 
+  it("carries the observed worktree columns, forward as well as generated", () => {
+    // 0027 is generated, so a new body member rewrites a file that real
+    // clusters applied months ago and will never apply again. The generated
+    // file is what a cluster bootstrapped today gets; 0028 is what every
+    // cluster bootstrapped before the columns existed gets. Both are needed,
+    // which is why this asserts both.
+    const ddl = tachoEventsMigration();
+    expect(ddl).toContain("observed_changes String");
+    expect(ddl).toContain("observed_changes_total Nullable(UInt32)");
+    expect(ddl).toContain("observed_changes_truncated Nullable(Bool)");
+    const forward = readFileSync(
+      join(here, "migrations", "0028_tacho_observed_changes.sql"),
+      "utf8",
+    );
+    for (const column of [
+      "observed_changes",
+      "observed_changes_total",
+      "observed_changes_truncated",
+    ]) {
+      expect(forward).toContain(`ADD COLUMN IF NOT EXISTS ${column} `);
+    }
+  });
+
   it("orders by tenant, session, and seq under ReplacingMergeTree", () => {
     const ddl = tachoEventsMigration();
     expect(ddl).toContain("ENGINE = ReplacingMergeTree(received_at)");

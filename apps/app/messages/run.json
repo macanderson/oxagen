@@ -17,6 +17,17 @@
       "started": "Started",
       "sealed": "Sealed"
     },
+    "facts": {
+      "operator": "Operator",
+      "model": "Model",
+      "machine": "Machine",
+      "noMachineOnLedger": "The evidence ledger records no host for a run.",
+      "operatorKind": {
+        "human": "A person, name not recorded",
+        "agent": "An agent, not a person",
+        "service": "A service, not a person"
+      }
+    },
     "tabs": {
       "label": "Run sections",
       "transcript": "Transcript",

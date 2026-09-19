@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { digestBytes, jcs } from "../digest";
+import { redactionMarker } from "../evidence/redaction";
+import { TACHO_MAX_REDACTIONS } from "../evidence/frame-body";
 import { normalizeHook } from "./hooks";
+import { SessionRecorder } from "./recorder";
+
+/** A recorder on its own chain, for the assertions that need a sealed event. */
+function testRecorder(): SessionRecorder {
+  return new SessionRecorder({
+    context: {
+      agent: {
+        agent_key: "acme.core.cc-laptop",
+        fleet_id: "wrk_test",
+        runtime: "claude-code",
+        harness: "claude-code",
+        wrapper_version: "2.1.1",
+        host_enrollment_id: "he_0000000000000000000000000000",
+      },
+    },
+    harnessSessionId: SESSION,
+    scope: "he_0000000000000000000000000000",
+  });
+}
 
 const dec = new TextDecoder();
 
@@ -166,6 +187,65 @@ describe("hook normalization", () => {
         tool_use_id: "toolu_6",
       })[0]?.body,
     ).toMatchObject({ policy_decision: "deny", tool_decision: "reject" });
+  });
+
+  it("seals a git commit, a git push, and a pull request as their own frames", () => {
+    const push = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "git push --force-with-lease origin HEAD:main" },
+      tool_use_id: "toolu_git_1",
+    });
+    expect(push.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(push[1]?.body).toMatchObject({
+      effect_kind: "git_push",
+      tool_status: "ok",
+      tool_target: "git push --force-with-lease origin HEAD:main",
+    });
+    expect((push[1]?.body as Record<string, unknown>)["effect_id"]).toMatch(
+      /^eff_/,
+    );
+
+    const commit = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: 'git commit -m "wire the git effects"' },
+      tool_use_id: "toolu_git_2",
+    });
+    expect(commit.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(commit[1]?.body).toMatchObject({ effect_kind: "git_commit" });
+
+    const shellPr = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "gh pr create --fill" },
+      tool_use_id: "toolu_git_3",
+    });
+    expect(shellPr.map((d) => d.kind)).toEqual(["tool_call", "command"]);
+    expect(shellPr[1]?.body).toMatchObject({ effect_kind: "pr_open" });
+
+    const mcpPr = hook("PostToolUse", {
+      tool_name: "mcp__github__create_pull_request",
+      tool_input: { title: "x" },
+      tool_use_id: "toolu_git_4",
+    });
+    expect(mcpPr.map((d) => d.kind)).toEqual(["tool_call", "network"]);
+    expect(mcpPr[1]?.body).toMatchObject({
+      effect_kind: "pr_open",
+      mcp_tool_name: "create_pull_request",
+    });
+
+    const failedPush = hook("PostToolUseFailure", {
+      tool_name: "Bash",
+      tool_input: { command: "git push" },
+      tool_use_id: "toolu_git_5",
+      error: "rejected: non-fast-forward",
+    });
+    expect(failedPush.map((d) => d.kind)).toEqual(["tool_call"]);
+
+    const status = hook("PostToolUse", {
+      tool_name: "Bash",
+      tool_input: { command: "git status" },
+      tool_use_id: "toolu_git_6",
+    });
+    expect(status[1]?.body).toMatchObject({ effect_kind: "command" });
   });
 
   it("maps the lifecycle, context, and collaboration events", () => {
@@ -392,5 +472,173 @@ describe("hook normalization", () => {
     expect(() =>
       normalizeHook({ hook_event_name: "Stop" }, {}, { sessionUuid: "x" }),
     ).toThrow();
+  });
+});
+
+describe("content on a prompt frame", () => {
+  const secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD";
+
+  it("hands the recorder the prompt as it arrived, redacted by nobody yet", () => {
+    // The seam: the hook normalizer reports, the recorder redacts. Its
+    // `content_digest` is therefore the digest of the raw text, and only the
+    // digest the recorder chains names the bytes that ship.
+    const draft = hook("UserPromptSubmit", {
+      prompt: `ship it with ${secret}`,
+    })[0];
+
+    expect(dec.decode(draft?.content?.bytes)).toBe(`ship it with ${secret}`);
+    expect(draft?.content_digest).toBe(digestBytes(`ship it with ${secret}`));
+    // The body member keeps digesting the prompt as the harness reported it:
+    // it correlates frames and is never verified against bytes.
+    expect(draft?.body["prompt_digest"]).not.toBe(
+      digestBytes(`ship it with ${redactionMarker("github_token")}`),
+    );
+  });
+
+  it("redacts once the recorder seals it", () => {
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: `ship it with ${secret}`,
+      },
+      ENV,
+    );
+    const shipped = `ship it with ${redactionMarker("github_token")}`;
+    expect(event?.content?.digest).toBe(digestBytes(shipped));
+    expect(event?.content?.redactions.map((r) => r.reason)).toEqual([
+      "github_token",
+    ]);
+    expect(dec.decode(recorder.takeBodies()[0]?.bytes)).toBe(shipped);
+  });
+
+  it("records no redaction for a clean prompt", () => {
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "ship it",
+      },
+      ENV,
+    );
+    expect(event?.content?.digest).toBe(digestBytes("ship it"));
+    expect(event?.content?.redactions).toEqual([]);
+  });
+});
+
+describe("a prompt with more credentials than one event can record", () => {
+  // Redaction removes every match. The record of the matches is what is
+  // bounded: `contentSchema` caps `content.redactions`, and a draft that
+  // handed over all of them would fail to seal, so the daemon answered 500,
+  // the hook fell back to a local decision, and the turn lost the frame it
+  // was supposed to leave behind. `prepareContent` ships no body and no
+  // digest instead, and says why on the event.
+  const many = Array.from(
+    { length: TACHO_MAX_REDACTIONS + 44 },
+    (_, i) => `ghp_${String(i).padStart(36, "a")}`,
+  );
+
+  const sealPrompt = (extra: Record<string, unknown> = {}) => {
+    const recorder = testRecorder();
+    const [event] = recorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: many.join(" "),
+        ...extra,
+      },
+      ENV,
+    );
+    return { event, recorder };
+  };
+
+  it("ships no body, chains no digest, and says why", () => {
+    const { event, recorder } = sealPrompt();
+
+    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
+    expect(event?.content).toBeUndefined();
+    expect(recorder.takeBodies()).toEqual([]);
+    // Not one token reaches the chain.
+    expect(JSON.stringify(event)).not.toContain("ghp_");
+  });
+
+  it("seals, which is the whole point", () => {
+    const { event } = sealPrompt();
+    expect(event?.kind).toBe("turn_start");
+  });
+
+  it("keeps the unpromoted hook fields next to the reason", () => {
+    const { event } = sealPrompt({ some_new_upstream_field: "kept" });
+    expect(event?.attrs["hook.some_new_upstream_field"]).toBe("kept");
+    expect(event?.attrs["body_omitted"]).toBe("too_many_redactions");
+  });
+});
+
+describe("holding bodies beside the chain", () => {
+  const twoPrompts = (recorder: SessionRecorder) => {
+    const go = () =>
+      recorder.ingestHook(
+        {
+          session_id: SESSION,
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        },
+        ENV,
+      );
+    return [...go(), ...go()];
+  };
+
+  it("leaves the chain exactly as it would be with the bodies left alone", () => {
+    // The chain hash covers the digest, never the bytes, so draining the
+    // bodies between two frames must not move a sequence number. A chain that
+    // depended on when the daemon drained would break on a slow disk.
+    const undrained = twoPrompts(testRecorder());
+    const drainedRecorder = testRecorder();
+    const first = drainedRecorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      },
+      ENV,
+    );
+    drainedRecorder.takeBodies();
+    const second = drainedRecorder.ingestHook(
+      {
+        session_id: SESSION,
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      },
+      ENV,
+    );
+
+    expect([...first, ...second].map((e) => `${e.kind}#${e.seq}`)).toEqual(
+      undrained.map((e) => `${e.kind}#${e.seq}`),
+    );
+  });
+
+  it("hands each body to one drain only", () => {
+    const recorder = testRecorder();
+    const events = twoPrompts(recorder);
+    const bodies = recorder.takeBodies();
+
+    expect(bodies.map((b) => b.event_id_idem)).toEqual(
+      events.filter((e) => e.content !== undefined).map((e) => e.event_id_idem),
+    );
+    expect(recorder.takeBodies()).toEqual([]);
   });
 });

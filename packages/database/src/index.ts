@@ -57,6 +57,7 @@ export {
   hidesWitnessRuns,
   notWitnessRun,
 } from "./proof";
+export { agentCreatorUserJoin, operatorUserJoin } from "./relations";
 export {
   deriveNamespace,
   normalizeNamespaceSeed,
@@ -78,5 +79,7 @@ export { CONTEXT_VERSION_CLASSIFICATION_COLUMN } from "./schema/agent";
 export {
   GATEWAY_CHAIN_COLUMN,
   HOST_GATEWAY_COLUMN,
+  SESSION_FILE_OBSERVED_STATUS_COLUMN,
   SESSION_GATEWAY_COLUMN,
+  SESSION_PUSHES_COLUMN,
 } from "./schema/tacho";

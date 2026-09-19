@@ -5,7 +5,7 @@
  * `tacho-hook` run against the socket. Covers acceptance criteria 2, 4, 6,
  * 9, and the restart path.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -97,6 +97,9 @@ function fixtures(): Fixture[] {
 /** A fake control plane: accepts every batch, hands back what the test queues. */
 function fakeControlPlane(bundleEtag: string) {
   const ingested: TachoEvent[] = [];
+  /** Bodies the host shipped next to its events, across every batch. */
+  const ingestedBodies: Array<{ event_id_idem: string; bytes_base64: string }> =
+    [];
   const commandQueue: DeliveredCommand[] = [];
   const acks: unknown[] = [];
   let hostStatus: ControlEnvelope["host_status"] = "active";
@@ -128,6 +131,12 @@ function fakeControlPlane(bundleEtag: string) {
       if (body["daemon"] !== undefined) reported.push(body["daemon"]);
       const events = body["events"] as TachoEvent[];
       ingested.push(...events);
+      ingestedBodies.push(
+        ...((body["bodies"] ?? []) as Array<{
+          event_id_idem: string;
+          bytes_base64: string;
+        }>),
+      );
       return {
         ok: true,
         status: 200,
@@ -181,6 +190,7 @@ function fakeControlPlane(bundleEtag: string) {
   return {
     fetch,
     ingested,
+    ingestedBodies,
     acks,
     calls,
     reported,
@@ -283,6 +293,25 @@ function getHttp(port: number, token: string, path: string) {
     req.on("error", reject);
     req.end();
   });
+}
+
+/**
+ * The prompt text sitting in this host's WAL body files. Under a mandate that
+ * retains nothing, no body is written at all, so an operator who looks at the
+ * directory sees what the control plane sees.
+ */
+function walBodyTexts(walDir: string): string[] {
+  if (!existsSync(walDir)) return [];
+  const out: string[] = [];
+  for (const name of readdirSync(walDir)) {
+    if (!name.endsWith(".bodies.jsonl")) continue;
+    for (const line of readFileSync(join(walDir, name), "utf8").split("\n")) {
+      if (line.trim() === "") continue;
+      const body = JSON.parse(line) as { bytes_base64: string };
+      out.push(Buffer.from(body.bytes_base64, "base64").toString());
+    }
+  }
+  return out;
 }
 
 describe("tachod", () => {
@@ -812,6 +841,253 @@ describe("tachod", () => {
     expect(handle.shipper.lastError).toContain("unreachable");
     plane.setDown(false);
     expect(handle.shipper.ready()).toBe(false);
+  });
+
+  it.each([
+    ["content_exact", ["model_call"], 1],
+    ["content_exact", ["tool_call"], 0],
+    ["content_exact", [], 0],
+    ["digest_only", [], 0],
+  ] as const)(
+    "ships a prompt body under %s retention for classes %j",
+    async (mode, classes, expected) => {
+      // The mandate decides, and it decides on the machine. Under
+      // `digest_only` the bytes never reach the disk, so an operator who
+      // looks at the directory sees what the control plane sees.
+      const plane = fakeControlPlane("etag-3");
+      const paths = scratchPaths();
+      const signer = bundleSigner();
+      const bundle = signer.sign(
+        unsignedBundle({ retention: { mode, classes: [...classes] } }),
+      );
+      writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+      const { handle } = await boot(plane, paths);
+
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: "11111111-1111-4111-8111-11111111aaaa",
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.path).toBe("daemon");
+      // `stop` drains, so whatever the mandate kept has been shipped by now.
+      await handle.stop();
+
+      const prompts = plane.ingestedBodies.filter(
+        (body) =>
+          Buffer.from(body.bytes_base64, "base64").toString() ===
+          "deploy the fix",
+      );
+      expect(prompts).toHaveLength(expected);
+      // Under a mandate that does not retain the class, the bytes never reach
+      // the disk either: the WAL holds no body for the frame.
+      expect(
+        walBodyTexts(paths.wal).filter((t) => t === "deploy the fix"),
+      ).toHaveLength(expected);
+    },
+  );
+
+  it("does not take a freshness window from a future-dated host file", async () => {
+    // `bundle_fetched_at` is unsigned and sits in a file on the operator's
+    // machine, while the signature covers the bundle alone, so nothing reads
+    // it for freshness. Clamping it to startup was not enough: a restart is
+    // free, so dating the field forward and restarting would take a fresh
+    // window every time and keep an expired grant in force for ever. Both
+    // readers fall back to the bundle's signed `issued_at` instead, so the
+    // mandate here has outlived its own signed window and is lapsed however
+    // the file is dated.
+    const plane = fakeControlPlane("etag-fresh");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+    // Start the clock past the bundle's own signed window, which is the
+    // state a restart-loop tries to paper over.
+    const clock = Date.parse(bundle.issued_at) + window + 1;
+    writeHostFile(
+      paths.hostFile,
+      testHostFile(signer, bundle, {
+        // A century out, so no elapsed time could ever overtake it.
+        bundle_fetched_at: "2126-09-10T00:00:00.000Z",
+      }),
+    );
+    const { handle } = await boot(plane, paths, { now: () => clock });
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111cccc",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(walBodyTexts(paths.wal)).toEqual([]);
+  });
+
+  it("does not renew the mandate on a bundle that fails to verify", async () => {
+    // A response carrying a changed bundle is a confirmation only once that
+    // bundle verifies. Renewing first would let a control plane extend the
+    // very mandate its response was sent to replace, and keep extending it
+    // for as long as it kept answering that way.
+    const plane = fakeControlPlane("etag-old");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    const window = Date.parse(bundle.expires_at) - Date.parse(bundle.issued_at);
+    let clock = Date.parse("2026-09-11T00:00:00.000Z");
+    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+    const { handle } = await boot(plane, paths, { now: () => clock });
+
+    // A changed bundle carrying someone else's signature.
+    plane.setBundle({
+      ...signer.sign(unsignedBundle({ version: 99 })),
+      retention: {
+        mode: "content_exact",
+        classes: ["model_call", "tool_call"],
+      },
+    });
+    // Just inside the window, where a renewal would still have something to
+    // extend, then just outside the original one.
+    clock += window - 1;
+    await handle.refreshBundle();
+    clock += 2;
+
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111dddd",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(walBodyTexts(paths.wal)).toEqual([]);
+  });
+
+  it("retains nothing when the cached mandate does not verify", async () => {
+    // `host.json` is a file on the operator's machine. Without checking the
+    // signature, editing `digest_only` to `content_exact` in it would send
+    // prompt bodies until the first refresh replaced the bundle, which is
+    // the one thing signing the mandate is there to prevent.
+    const plane = fakeControlPlane("etag-3");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const signed = signer.sign(
+      unsignedBundle({ retention: { mode: "content_exact", classes: [] } }),
+    );
+    // A bundle that claims the broadest retention, with the signature of one
+    // that claimed none.
+    const tampered = {
+      ...signed,
+      retention: { mode: "content_exact" as const, classes: ["model_call"] },
+    };
+    writeHostFile(paths.hostFile, testHostFile(signer, tampered));
+    const { handle } = await boot(plane, paths);
+
+    const result = await runTachoHook({
+      paths,
+      env: {},
+      stdin: JSON.stringify({
+        session_id: "11111111-1111-4111-8111-11111111bbbb",
+        hook_event_name: "UserPromptSubmit",
+        cwd: "/home/dev/proj",
+        transcript_path: "/t.jsonl",
+        prompt: "deploy the fix",
+      }),
+      connectTimeoutMs: DAEMON_CONNECT_MS,
+    });
+    expect(result.exitCode).toBe(0);
+    await handle.stop();
+
+    expect(plane.ingestedBodies).toEqual([]);
+    expect(walBodyTexts(paths.wal)).toEqual([]);
+  });
+
+  it("writes no body once a signed mandate has lapsed, refreshing before it drains", async () => {
+    // The regression this guards: a correctly signed bundle kept granting
+    // `content_exact` after its window closed, and the tick drained before
+    // it refreshed, so a body could leave the machine under a mandate the
+    // control plane had not confirmed. The tick now refreshes first, and a
+    // lapsed mandate authorises nothing further to be written.
+    //
+    // What this does not cover, because main's design has no place to put
+    // it: a body already in the WAL when the mandate lapses still ships on
+    // the next drain. Bodies live beside their events there and leave with
+    // the session file at compaction, so purging them mid-session would be
+    // a new `Wal` affordance rather than a smaller one.
+    //
+    // The fixture's signed window runs 2026-09-10 to 2027-09-10. The clock
+    // starts on real time because the tick's hourly compaction reads file
+    // mtimes, and a fake clock months ahead would sweep the session first.
+    const plane = fakeControlPlane("etag-3");
+    const paths = scratchPaths();
+    const signer = bundleSigner();
+    const bundle = signer.sign(
+      unsignedBundle({
+        retention: { mode: "content_exact", classes: ["model_call"] },
+      }),
+    );
+    writeHostFile(paths.hostFile, testHostFile(signer, bundle));
+    plane.setDown(true);
+    let clock = Date.now();
+    const { handle } = await boot(plane, paths, { now: () => clock });
+    const prompt = (sessionId: string) =>
+      runTachoHook({
+        paths,
+        env: {},
+        stdin: JSON.stringify({
+          session_id: sessionId,
+          hook_event_name: "UserPromptSubmit",
+          cwd: "/home/dev/proj",
+          transcript_path: "/t.jsonl",
+          prompt: "deploy the fix",
+        }),
+        connectTimeoutMs: DAEMON_CONNECT_MS,
+      });
+
+    expect(
+      (await prompt("11111111-1111-4111-8111-11111111cccc")).exitCode,
+    ).toBe(0);
+    await handle.tick();
+    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+    // Past the signed window, with no confirmation from the control plane
+    // in between: the mandate has lapsed and authorises nothing.
+    clock = Date.parse("2027-10-01T00:00:00.000Z");
+    await prompt("11111111-1111-4111-8111-11111111dddd");
+    await handle.tick();
+    expect(walBodyTexts(paths.wal)).toEqual(["deploy the fix"]);
+
+    await handle.stop();
   });
 
   it("backs off the command poll instead of retrying it every tick", async () => {

@@ -1,6 +1,7 @@
 export * from "./daemon";
 export * from "./detector";
 export * from "./exporters";
+export * from "./git-facts";
 export * from "./hook-handler";
 export * from "./inbox";
 export * from "./model-injection";

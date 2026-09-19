@@ -133,6 +133,12 @@ export function hookUrl(port: number, enrollmentId: string): string {
   return `http://127.0.0.1:${port}/hook/${enrollmentId}`;
 }
 
+/**
+ * Whether one hook entry is Tacho's, by the enrollment id carried in its
+ * command line or URL. Exported because Cursor's `hooks.json` holds a flat
+ * list of entries rather than Claude Code's groups, so its writer
+ * (`cursor-writer.ts`) needs the same test one level down.
+ */
 export function isTachoEntry(
   entry: HookEntry,
   enrollmentId?: string,

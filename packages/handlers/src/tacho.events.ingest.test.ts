@@ -7,7 +7,7 @@ import {
   sealEvent,
   sessionUuid,
 } from "@oxagen/tacho";
-import { schema } from "@oxagen/database";
+import { resetColumnProbesForTests, schema } from "@oxagen/database";
 import { Column, Param, SQL } from "drizzle-orm";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -295,6 +295,8 @@ interface FakeDb {
   sessions: Map<string, Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
   files: Array<Record<string, unknown>>;
+  /** The `SET` clause of each `session_files` upsert, in order. */
+  fileSets: Array<Record<string, unknown>>;
   commands: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
   updates: Array<{ table: string; values: Record<string, unknown> }>;
@@ -335,6 +337,17 @@ interface FakeDb {
     lastSeenAt: Date;
     chainGenesisHash: string | null;
   }>;
+  /**
+   * Columns this fake database does NOT have yet, as
+   * `<schema>.<table>.<column>`.
+   *
+   * Empty by default — the migrated steady state every other case here is
+   * about. A case that fills it models the deploy-before-migrate window (#1275,
+   * and nothing migrates production automatically): the node is live, the
+   * migration is not, and the readiness probe is what stands between a pending
+   * ALTER TABLE and an ingest path that rejects every batch.
+   */
+  pendingColumns: Set<string>;
   /** The workspace's latest retention policy row; none by default. */
   retentionPolicy:
     | { mode: string; retainedContentClasses: string[] }
@@ -373,6 +386,7 @@ function fakeDb(): FakeDb {
     sessions: new Map(),
     models: [],
     files: [],
+    fileSets: [],
     commands: [],
     controlCommands: [
       {
@@ -395,6 +409,7 @@ function fakeDb(): FakeDb {
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
     advanceSeqCountOnRead: undefined,
+    pendingColumns: new Set<string>(),
     gatewayChains: [],
     retentionPolicy: undefined,
   };
@@ -504,16 +519,35 @@ function sessionNamed(db: FakeDb, where: unknown) {
   return undefined;
 }
 
+/**
+ * What `information_schema` says about the column a readiness probe just asked
+ * about.
+ *
+ * The probe is the only statement this fixture's `execute` ever sees, and it
+ * interpolates schema, table and column as plain strings into `sql` rather than
+ * as bound `Param`s — so they are read straight off `queryChunks` and not
+ * through `boundValues`, which only sees params. A statement that is not the
+ * probe (three strings in that order) is answered "present", which keeps every
+ * case that predates `pendingColumns` on the migrated path.
+ */
+function probeAnswer(db: FakeDb, query: unknown): Array<Record<string, number>> {
+  const chunks = (query as { queryChunks?: unknown[] }).queryChunks ?? [];
+  const named = chunks.filter((c): c is string => typeof c === "string");
+  if (named.length !== 3) return [{ "?column?": 1 }];
+  return db.pendingColumns.has(named.join(".")) ? [] : [{ "?column?": 1 }];
+}
+
 function wire(db: FakeDb): void {
   mocks.withTenantDb.mockImplementation(
     async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        // The gateway-column probe asks `information_schema` before the
-        // handler reads or writes a column migration 20260917140000 adds. This
-        // fixture answers "applied", which is the state every case here is
-        // about; the half-applied and not-yet-applied states are covered as
-        // unit cases on `enforcementTierOf` and `hasColumn`.
-        execute: async () => [{ "?column?": 1 }],
+        // The readiness probe asks `information_schema` before the handler
+        // reads or writes any column a pending migration adds. It binds schema,
+        // table and column in that order, so the fixture can answer per column
+        // rather than "everything is applied": one row for present, none for
+        // absent. `db.pendingColumns` is empty by default, so every existing
+        // case still sees the migrated steady state.
+        execute: async (query: unknown) => probeAnswer(db, query),
         query: {
           apiKeys: {
             findFirst: async () => ({
@@ -589,11 +623,20 @@ function wire(db: FakeDb): void {
             where: async () =>
               tableName(table) === "context_promotions"
                 ? [{ ledger: 0, steering: 0 }]
-                : db.gatewayChains.map((row) => ({
-                    chain: row.chainSessionUuid,
-                    at: row.lastSeenAt,
-                    genesisHash: row.chainGenesisHash,
-                  })),
+                : tableName(table) === "session_files"
+                  ? // The rollup reads this session's existing rows to keep
+                    // one file on one row across batches, so the fixture
+                    // holds them rather than answering with another table's
+                    // shape.
+                    db.files.map((row) => ({
+                      path: row["path"],
+                      repoRelativePath: row["repoRelativePath"],
+                    }))
+                  : db.gatewayChains.map((row) => ({
+                      chain: row.chainSessionUuid,
+                      at: row.lastSeenAt,
+                      genesisHash: row.chainGenesisHash,
+                    })),
             leftJoin: () => ({ where: async () => [] }),
           }),
         }),
@@ -655,7 +698,10 @@ function wire(db: FakeDb): void {
                 }
               }
               if (name === "session_models") db.models.push(values);
-              if (name === "session_files") db.files.push(values);
+              if (name === "session_files") {
+                db.files.push(values);
+                if (args?.set !== undefined) db.fileSets.push(args.set);
+              }
             };
             const chain = {
               // Chainable AND awaitable, like drizzle's builder: some call
@@ -749,6 +795,10 @@ function wire(db: FakeDb): void {
 beforeEach(() => {
   vi.clearAllMocks();
   clearSteeringCacheForTests();
+  // The probe cache is per process and keeps a positive answer for the life of
+  // it, so without this a case about a PENDING column would read the previous
+  // case's "applied" and pass whether or not the gate existed.
+  resetColumnProbesForTests();
   mocks.insertTachoEvents.mockResolvedValue(undefined);
   mocks.selectTachoEvents.mockResolvedValue([]);
   mocks.bodyPut.mockImplementation(async (input: { digest: string }) => ({
@@ -836,6 +886,11 @@ describe("ingest_tacho_events", () => {
       path: "/home/dev/proj/a.txt",
       writes: 1,
       bytesWritten: 12,
+      // The extension names the language on its own. The place does not:
+      // this session reports a `cwd` and no worktree, and a path made
+      // relative to a working directory is not repo-relative.
+      language: undefined,
+      repoRelativePath: undefined,
     });
     expect(db.commands[0]).toMatchObject({
       commandHead: "echo hi",
@@ -850,6 +905,437 @@ describe("ingest_tacho_events", () => {
       hooksOk: true,
       spoolDepth: 3,
     });
+  });
+
+  it("places a touched file in its repository and names its language", async () => {
+    const db = fakeDb();
+    wire(db);
+    // The same session, reported from a worktree rather than a bare cwd.
+    const context = {
+      cwd: "/home/dev/proj/packages/tacho",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup", tools_available: ["Write"] },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          tool_target: "/home/dev/proj/packages/tacho/src/envelope.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 40,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_2",
+          effect_kind: "file_write",
+          // Outside the worktree, so it keeps its absolute path and gets no
+          // repo-relative form. It is still a file the run touched.
+          tool_target: "/etc/hosts",
+          effect_id: "eff_2",
+          tool_input_bytes: 8,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+
+    const output = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+    expect(output.accepted).toBe(events.length);
+
+    const inside = db.files.find(
+      (file) =>
+        file["path"] === "/home/dev/proj/packages/tacho/src/envelope.ts",
+    );
+    expect(inside).toMatchObject({
+      repoRelativePath: "packages/tacho/src/envelope.ts",
+      language: "typescript",
+    });
+    const outside = db.files.find((file) => file["path"] === "/etc/hosts");
+    expect(outside).toMatchObject({ repoRelativePath: undefined });
+  });
+
+  /**
+   * A session whose worktree was reconciled `times` over, every frame
+   * reporting the same three paths. The counts are cumulative against HEAD,
+   * so the same numbers repeated are the same state observed again, not more
+   * work done.
+   */
+  function reconciledSession(
+    times: number,
+    editedCounts: { lines_added: number; lines_removed: number } = {
+      lines_added: 12,
+      lines_removed: 3,
+    },
+  ): TachoEvent[] {
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    const observed = [
+      {
+        path: "/home/dev/proj/src/edited.ts",
+        repo_relative_path: "src/edited.ts",
+        status: "modified",
+        ...editedCounts,
+      },
+      {
+        // Untracked, so git reports it in `status` and in no diff at all.
+        path: "/home/dev/proj/src/created.ts",
+        repo_relative_path: "src/created.ts",
+        status: "added",
+        lines_added: 0,
+        lines_removed: 0,
+      },
+      {
+        path: "/home/dev/proj/src/gone.ts",
+        repo_relative_path: "src/gone.ts",
+        status: "deleted",
+        lines_added: 0,
+        lines_removed: 9,
+      },
+    ];
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    const drafts = [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup", tools_available: ["Write"] },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      ...Array.from({ length: times }, () =>
+        unsealed(
+          "oxagen:worktree_reconciled",
+          {
+            observed_changes: observed,
+            observed_changes_total: observed.length,
+            observed_changes_truncated: false,
+          },
+          "collector",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ),
+    ];
+    for (const draft of drafts) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    return events;
+  }
+
+  it("fills the line counts from what git observed, not from a tool", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = reconciledSession(1);
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(output.accepted).toBe(events.length);
+
+    // A path no tool announced still has a row: this is the write the
+    // attested record never sees.
+    const edited = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/edited.ts",
+    );
+    expect(edited).toMatchObject({
+      repoRelativePath: "src/edited.ts",
+      language: "typescript",
+      linesAdded: 12,
+      linesRemoved: 3,
+      observedStatus: "modified",
+      // Nothing announced it, so no tool-call counter moved.
+      writes: 0,
+      edits: 0,
+      deletes: 0,
+    });
+    const created = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/created.ts",
+    );
+    // An untracked file is in no diff, so git offers no line count for it and
+    // none is invented.
+    expect(created).toMatchObject({ observedStatus: "added", linesAdded: 0 });
+    const gone = db.files.find(
+      (file) => file["path"] === "/home/dev/proj/src/gone.ts",
+    );
+    expect(gone).toMatchObject({ observedStatus: "deleted", linesRemoved: 9 });
+    // The three statuses are told apart, which the counters alone cannot do.
+    expect([
+      edited?.["observedStatus"],
+      created?.["observedStatus"],
+      gone?.["observedStatus"],
+    ]).toEqual(["modified", "added", "deleted"]);
+    // digest_before and digest_after stay empty: git hands out blob hashes,
+    // and the column expects the sha256 the rest of the record uses.
+    expect(edited).not.toHaveProperty("digestBefore");
+    expect(edited).not.toHaveProperty("digestAfter");
+  });
+
+  it("assigns the observed line counts rather than accumulating them", async () => {
+    const db = fakeDb();
+    wire(db);
+    // Two frames in one batch, then the whole thing again in a second batch:
+    // four reports of the same twelve lines.
+    await tachoEventsIngestHandler(batch(reconciledSession(2)), CONTEXT);
+    await tachoEventsIngestHandler(batch(reconciledSession(2)), CONTEXT);
+
+    const dialect = new PgDialect();
+    const sets = db.fileSets.filter(
+      (set) => set["observedStatus"] !== undefined,
+    );
+    expect(sets.length).toBeGreaterThan(0);
+    for (const set of sets) {
+      for (const column of ["linesAdded", "linesRemoved"]) {
+        // A plain number, not an expression over the stored one: a second
+        // batch reporting the same measurement must not double it, and the
+        // pair must stay the pair git reported. Taking the larger of each
+        // column on its own was the earlier reading of "do not double", and
+        // it let 12/3 followed by 2/10 settle at 12/10, which no
+        // reconciliation ever saw.
+        expect(typeof set[column], column).toBe("number");
+      }
+      // The counters on the same row DO accumulate, which is the contrast
+      // this assertion exists to hold.
+      expect(dialect.sqlToQuery(set["writes"] as SQL).sql).toContain(" + ");
+      expect(["modified", "added", "deleted"]).toContain(set["observedStatus"]);
+    }
+  });
+
+  it("leaves an observed count alone when a later batch carries no observation", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(reconciledSession(1)), CONTEXT);
+    db.fileSets.length = 0;
+    // A plain tool frame on the same path, with nothing observed.
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("file_io", {
+        tool_name: "Write",
+        tool_use_id: "toolu_9",
+        effect_kind: "file_write",
+        tool_target: "/home/dev/proj/src/edited.ts",
+        effect_id: "eff_9",
+        tool_input_bytes: 10,
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    for (const set of db.fileSets) {
+      expect(set).not.toHaveProperty("linesAdded");
+      expect(set).not.toHaveProperty("linesRemoved");
+      expect(set).not.toHaveProperty("observedStatus");
+    }
+  });
+
+  it("merges the attested and observed forms of one path into one row", async () => {
+    // A tool reports a relative target and git reports the same file
+    // absolutely. Keyed on those raw strings the file became two rows, one
+    // carrying the writes and the other the observed status and line counts,
+    // and the Run page showed it twice with half the truth on each.
+    const db = fakeDb();
+    wire(db);
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", {}, "hook", CLAUDE_CODE, { context }),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          // Relative, as a tool commonly reports it.
+          tool_target: "src/a.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 12,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "oxagen:worktree_reconciled",
+        {
+          observed_changes: [
+            {
+              // Absolute, as git reports it.
+              path: "/home/dev/proj/src/a.ts",
+              repo_relative_path: "src/a.ts",
+              status: "modified",
+              lines_added: 9,
+              lines_removed: 2,
+            },
+          ],
+          observed_changes_total: 1,
+          observed_changes_truncated: false,
+        },
+        "collector",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+
+    const output = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+    expect(output.accepted).toBe(events.length);
+
+    expect(db.files).toHaveLength(1);
+    expect(db.files[0]).toMatchObject({
+      // The absolute path wins, since it is the one a person can act on.
+      path: "/home/dev/proj/src/a.ts",
+      repoRelativePath: "src/a.ts",
+      writes: 1,
+      observedStatus: "modified",
+      linesAdded: 9,
+      linesRemoved: 2,
+    });
+  });
+
+  it("keeps one file on one row when the reconciliation lands in a later batch", async () => {
+    // The within-batch normalization only helps when both frames travel
+    // together, which is what a test constructs and the rarer case in
+    // practice. The reconciliation is asynchronous, so it usually arrives a
+    // batch or more after the tool frame, and the conflict key is
+    // (session_id, path). Without matching the rows already stored, the run
+    // still ends up with two rows for one file.
+    const db = fakeDb();
+    wire(db);
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    const send = async (drafts: UnsealedTachoEvent[], from: ChainCursor) => {
+      let cursor = from;
+      const events: TachoEvent[] = [];
+      for (const draft of drafts) {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        events.push(sealed.event);
+      }
+      const output = await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events,
+          daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+        },
+        CONTEXT,
+      );
+      expect(output.accepted).toBe(events.length);
+      return cursor;
+    };
+
+    // Batch one: the tool announces a relative path.
+    const after = await send(
+      [
+        unsealed("agent_start", {}, "hook", CLAUDE_CODE, { context }),
+        unsealed(
+          "file_io",
+          {
+            tool_name: "Write",
+            tool_use_id: "toolu_1",
+            effect_kind: "file_write",
+            tool_target: "src/a.ts",
+            effect_id: "eff_1",
+            tool_input_bytes: 12,
+          },
+          "hook",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ],
+      GENESIS_CURSOR,
+    );
+    expect(db.files).toHaveLength(1);
+
+    // Batch two: git reports the same file absolutely.
+    await send(
+      [
+        unsealed(
+          "oxagen:worktree_reconciled",
+          {
+            observed_changes: [
+              {
+                path: "/home/dev/proj/src/a.ts",
+                repo_relative_path: "src/a.ts",
+                status: "modified",
+                lines_added: 9,
+                lines_removed: 2,
+              },
+            ],
+            observed_changes_total: 1,
+            observed_changes_truncated: false,
+          },
+          "collector",
+          CLAUDE_CODE,
+          { context },
+        ),
+      ],
+      after,
+    );
+
+    // Two upserts, both naming the path the first row already stored, so the
+    // conflict fires and the run has one file rather than two.
+    expect(db.files).toHaveLength(2);
+    expect(db.files[1]?.["path"]).toBe(db.files[0]?.["path"]);
   });
 
   it("files a Codex session under runtime codex, not custom", async () => {
@@ -1190,6 +1676,9 @@ describe("ingest_tacho_events", () => {
       filesDeleted: 0,
       commandsRun: 0,
       networkCalls: 0,
+      commits: 0,
+      pushes: 0,
+      pullRequests: 0,
     };
     let cursor: ChainCursor = GENESIS_CURSOR;
     const seal = (draft: UnsealedTachoEvent) => {
@@ -1215,6 +1704,15 @@ describe("ingest_tacho_events", () => {
       ),
       seal(unsealed("policy_decision", { policy_decision: "deny" })),
       seal(unsealed("network", { effect_kind: "network" })),
+      // A repository effect is counted off its `effect_kind`, not off the
+      // frame kind: a pull request opened from the shell is a `command`
+      // frame and one opened over MCP is a `network` frame, and both are
+      // the same act.
+      seal(unsealed("command", { effect_kind: "git_commit" })),
+      seal(unsealed("command", { effect_kind: "git_push" })),
+      seal(unsealed("command", { effect_kind: "pr_open" })),
+      seal(unsealed("network", { effect_kind: "pr_open" })),
+      seal(unsealed("command", { effect_kind: "command" })),
       seal(unsealed("subagent_start", {})),
       seal(unsealed("oxagen:notification", {})),
       seal(unsealed("oxagen:elicitation", {})),
@@ -1241,7 +1739,11 @@ describe("ingest_tacho_events", () => {
       filesRead: 1,
       policyDecisions: 1,
       policyDenies: 1,
-      networkCalls: 1,
+      networkCalls: 2,
+      commandsRun: 4,
+      commits: 1,
+      pushes: 1,
+      pullRequests: 2,
       numSubagents: 1,
       numNotifications: 1,
       numElicitations: 1,
@@ -1561,6 +2063,174 @@ function bodyFor(event: TachoEvent, text = TOOL_OUTPUT) {
     bytes_base64: Buffer.from(text).toString("base64"),
   };
 }
+
+/**
+ * The deploy-before-migrate window, for the two columns this branch adds.
+ *
+ * `deploy-node` ships on merge and nothing migrates production automatically —
+ * the manual `db-migrate.yml` is the only path from a committed migration to
+ * prod — so the node runs new code against the old schema for as long as it
+ * takes someone to run the workflow. Every accepted batch reaches the session
+ * counter UPDATE and the file rollup, so an unguarded reference to
+ * `tacho.sessions.pushes` or `tacho.session_files.observed_status` does not
+ * degrade one field: 42703 aborts the transaction and the whole batch is
+ * rejected, for the whole window (discussion_r4051911079).
+ *
+ * The case that matters is therefore this one, not the migrated steady state
+ * the rest of the suite covers: the batch is accepted, and everything the
+ * schema CAN hold is still written.
+ */
+describe("ingestion survives a pending migration", () => {
+  const PENDING = [
+    "tacho.sessions.pushes",
+    "tacho.session_files.observed_status",
+  ];
+
+  function pushingSession(): TachoEvent[] {
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed(
+        "agent_start",
+        { session_start_source: "startup" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          tool_target: "/home/dev/proj/src/edited.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 40,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      // The push is the frame whose counter has nowhere to go yet.
+      unsealed(
+        "command",
+        { effect_kind: "git_push", tool_target: "git push origin main" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "command",
+        { effect_kind: "git_commit", tool_target: "git commit -m x" },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "oxagen:worktree_reconciled",
+        {
+          observed_changes: [
+            {
+              path: "/home/dev/proj/src/edited.ts",
+              repo_relative_path: "src/edited.ts",
+              status: "modified",
+              lines_added: 12,
+              lines_removed: 3,
+            },
+          ],
+          observed_changes_total: 1,
+          observed_changes_truncated: false,
+        },
+        "collector",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    return events;
+  }
+
+  it("accepts the batch and writes every column the schema does have", async () => {
+    const db = fakeDb();
+    for (const column of PENDING) db.pendingColumns.add(column);
+    wire(db);
+    const events = pushingSession();
+
+    const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+    // The whole point: nothing is rejected over a column the deploy is ahead
+    // of.
+    expect(output.accepted).toBe(events.length);
+
+    const sessionUpdate = db.updates.find((u) => u.table === "sessions");
+    expect(sessionUpdate).toBeDefined();
+    // The one counter with nowhere to go is omitted from the SET, not written
+    // as null and not written as an expression over a column that does not
+    // exist.
+    expect(sessionUpdate?.values).not.toHaveProperty("pushes");
+    // Everything beside it still lands. `commits` is the control: it is the
+    // counter next to `pushes` in the same object, on a column the table has
+    // had since it was created, and a gate that took out the whole increment
+    // would drop this too.
+    const dialect = new PgDialect();
+    for (const column of ["commits", "commandsRun", "filesWritten"]) {
+      expect(sessionUpdate?.values, column).toHaveProperty(column);
+      expect(
+        dialect.sqlToQuery(sessionUpdate?.values[column] as SQL).sql,
+      ).toContain(" + ");
+    }
+
+    // The file row is written with its attested counters and its line counts;
+    // only the observed verdict is held back.
+    const file = db.files.find(
+      (row) => row["path"] === "/home/dev/proj/src/edited.ts",
+    );
+    expect(file).toBeDefined();
+    expect(file).not.toHaveProperty("observedStatus");
+    expect(file).toMatchObject({
+      repoRelativePath: "src/edited.ts",
+      linesAdded: 12,
+      linesRemoved: 3,
+      writes: 1,
+    });
+  });
+
+  it("writes both columns again once the migration lands, without a restart", async () => {
+    // The same process, the same probe cache. A negative answer expires
+    // (NEGATIVE_PROBE_TTL_MS), so an instance that started before the
+    // migration picks the columns up rather than waiting to be recycled — the
+    // half of the guard that a "skip it forever" implementation would pass the
+    // first assertion of and fail here.
+    const pending = fakeDb();
+    for (const column of PENDING) pending.pendingColumns.add(column);
+    wire(pending);
+    await tachoEventsIngestHandler(batch(pushingSession()), CONTEXT);
+    expect(
+      pending.updates.find((u) => u.table === "sessions")?.values,
+    ).not.toHaveProperty("pushes");
+
+    resetColumnProbesForTests();
+    const migrated = fakeDb();
+    wire(migrated);
+    await tachoEventsIngestHandler(batch(pushingSession()), CONTEXT);
+    expect(
+      migrated.updates.find((u) => u.table === "sessions")?.values,
+    ).toHaveProperty("pushes");
+    expect(
+      migrated.files.find(
+        (row) => row["path"] === "/home/dev/proj/src/edited.ts",
+      ),
+    ).toMatchObject({ observedStatus: "modified" });
+  });
+});
 
 describe("ingest_tacho_events: bodies and the seal", () => {
   it("writes a verified body before the row, stamps its reference, and seals view on a harness-tier host", async () => {
@@ -2048,6 +2718,78 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       replayGrade: "inspect",
       completenessGaps: ["digest_only", "tool_bodies"],
     });
+  });
+
+  it("names a live run from where it is working, before anything seals it", async () => {
+    // `summarize_run` refuses a run that is still live and refuses a
+    // `digest_only` workspace, so without this the list shows a uuid for
+    // exactly the runs someone is watching.
+    const db = fakeDb();
+    wire(db);
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      {
+        ...unsealed("agent_start", { session_start_source: "startup" }),
+        context: {
+          cwd: "/home/dev/oxagen",
+          git_branch: "agent/pensive-volta",
+        },
+      } as UnsealedTachoEvent,
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+      }),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+
+    expect(db.sessions.get(SESSION)).toMatchObject({
+      title: "oxagen · agent/pensive-volta",
+    });
+  });
+
+  it("refuses a body whose class the workspace did not authorise", async () => {
+    // `content_exact` says exact bytes MAY be kept. The classes say which.
+    // A workspace that authorised the model exchange and nothing else must
+    // not have its tool output stored because the mode alone looked open.
+    const db = fakeDb();
+    db.retentionPolicy = {
+      mode: "content_exact",
+      retainedContentClasses: ["model_call"],
+    };
+    wire(db);
+    const events = sessionWithContent();
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([
+      {
+        event_id_idem: (events[1] as TachoEvent).event_id_idem,
+        reason: "retention_class_excluded",
+      },
+    ]);
+    expect(mocks.bodyPut).not.toHaveBeenCalled();
+  });
+
+  it("keeps a body whose class the workspace did authorise", async () => {
+    const db = fakeDb();
+    db.retentionPolicy = {
+      mode: "content_exact",
+      retainedContentClasses: ["tool_call"],
+    };
+    wire(db);
+    const events = sessionWithContent();
+    const output = await tachoEventsIngestHandler(
+      batch(events, [bodyFor(events[1] as TachoEvent)]),
+      CONTEXT,
+    );
+    expect(output.body_rejections).toEqual([]);
+    expect(mocks.bodyPut).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a body whose bytes do not hash to the chained digest, and one carrying a credential", async () => {

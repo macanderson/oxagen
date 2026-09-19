@@ -82,7 +82,13 @@ export function declaredLayers(source) {
 
 /** The capability name a contract registers. */
 export function declaredName(source) {
-  const match = source.match(/name:\s*["']([^"']+)["']/);
+  // Anchored to the registerCapability(...) call: `name` is its field, and a
+  // whole-file match takes the first `name:` anywhere, a doc comment included.
+  // That misparse broke CI once through check_ui_parity; the same shape would
+  // silently mis-key a de-registration row here.
+  const declStart = source.search(/registerCapability\s*\(/);
+  const decl = declStart === -1 ? source : source.slice(declStart);
+  const match = decl.match(/name:\s*["']([^"']+)["']/);
   return match ? match[1] : null;
 }
 

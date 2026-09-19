@@ -1,38 +1,97 @@
 /**
  * The Cursor hook adapter (verified 2026-09-18 against
- * cursor.com/docs/agent/hooks). Cursor's agent, in the IDE and in the `agent`
- * CLI, reads `hooks.json` and runs each entry as a command with the payload
- * on stdin, like Claude Code. The shapes differ in both directions, and this
- * module is the one place that knows it, so the recorder, the policy
- * evaluator and the daemon keep reading one payload shape.
+ * https://cursor.com/docs/agent/hooks, fetched that day; the page carries no
+ * visible date). Cursor's hook surface differs from Claude Code's in both
+ * directions, and this module is the one place that knows it, so the
+ * recorder, the policy evaluator and the daemon keep reading one payload
+ * shape.
  *
- * In: camelCase event names (`preToolUse`, `beforeSubmitPrompt`, `stop`) in
- * `hook_event_name`; the session is `conversation_id` on every agent event
- * (`sessionStart` and `sessionEnd` also carry a `session_id`, kept as
- * `cursor_session_id`); a tool's result is `tool_output`; the working
- * directory is `cwd` when the event has one and `workspace_roots[0]`
- * otherwise. Cursor names its built-in tools `Shell`, `Read`, `Write`,
- * `Grep`, `Delete`, `Task` and an MCP tool `MCP:<tool>`; the adapter renames
- * them to Claude Code's names so one policy rule (`Bash`, `mcp__server__*`)
- * governs every harness. The original name stays on the event as
- * `cursor_tool_name`.
+ * Nothing here is reused from Claude Code's path, because Cursor matches it
+ * on none of the three things that would have allowed it:
  *
- * Out: Cursor reads a flat document per event. `preToolUse` and
- * `subagentStart` answer `{"permission": "allow" | "deny"}`; Cursor treats an
- * invalid or non-conforming answer to a permission event as a block, so those
- * events always answer one or the other. There is no `ask` on `preToolUse`:
- * a policy that asks for approval is answered `deny` with the reason, which
- * is the fail-closed reading. `beforeSubmitPrompt` answers `{"continue":
- * bool}`. `sessionStart` cannot refuse a session, so a stop there becomes
- * `additional_context` telling the agent why its tool calls will be refused,
- * and `preToolUse` refuses them while the block holds. `stop` takes a
- * `followup_message`, which is where Claude Code's "block the stop, keep
- * going because <reason>" lands.
+ *   - the session is `conversation_id` ("Stable ID of the conversation
+ *     across many turns"), not `session_id`, so `hookInputSchema` rejects a
+ *     Cursor payload outright;
+ *   - the events are camelCase (`preToolUse`), not PascalCase (`PreToolUse`);
+ *   - the answer is a flat permission object, not `hookSpecificOutput`.
+ *
+ * Cursor does support importing third-party hook config. Oxagen does not use
+ * it, for three reasons: `.claude/settings.json` is Claude Code's file, so on
+ * a machine running both, one definition would fire from two harnesses and
+ * attribute Cursor's actions to the Claude Code chain; Cursor's docs specify
+ * response, hook-name and tool-name translation but say nothing about
+ * whether the stdin field names are translated, so the whole thing would
+ * rest on an unverified assumption; and a user can turn third-party import
+ * off, which would stop the mandate being enforced with no signal.
+ *
+ * In: every hook receives `conversation_id`, `generation_id`, `model`,
+ * `model_id`, `model_params`, `hook_event_name`, `cursor_version`,
+ * `workspace_roots`, `user_email` and `transcript_path`; `sessionStart` and
+ * `sessionEnd` also carry `session_id`, documented as the same value as
+ * `conversation_id`; `preToolUse` carries `tool_name`, `tool_input`,
+ * `tool_use_id`, `cwd` and `agent_message`. Cursor issues both the session id
+ * and the tool-use id, so unlike Stella nothing has to be synthesized from a
+ * pid or a digest of the call. `postToolUse` carries `tool_output`;
+ * `subagentStart`/`subagentStop` carry `subagent_id` and `subagent_type`.
+ * Cursor names its built-in tools `Shell`, `Read`, `Write`, `Grep`, `Delete`,
+ * `Task` and an MCP tool `MCP:<tool>`; the adapter renames them to Claude
+ * Code's names (`Bash` for `Shell`, the rest pass through or keep their
+ * name) so one policy rule (`Bash`, `mcp__server__*`) governs every harness.
+ * The original name stays on the event as `cursor_tool_name`.
+ *
+ * Out: `preToolUse` and `subagentStart` answer `{"permission":
+ * "allow"|"deny", "user_message", "agent_message"}`. `beforeSubmitPrompt`
+ * answers `{"continue": true|false, "user_message"}`. `sessionStart`
+ * answers `{"env", "additional_context"}` and cannot veto. `stop` takes a
+ * `followup_message`. Every other event Oxagen registers answers nothing, so
+ * it gets `{}`.
+ *
+ * **`ask` does not survive here, and it is degraded to `deny`, never to
+ * `allow`.** Cursor's docs say `ask` "is accepted by the schema but not
+ * enforced for `preToolUse` today". `beforeShellExecution` and
+ * `beforeMCPExecution` do honour it, but they fire for two tool types that
+ * `preToolUse` already covers, so registering there as well would record two
+ * frames for one shell call and the trace oracles would read the second as a
+ * replay. Oxagen therefore enforces at `preToolUse` (and, for a subagent
+ * launch, `subagentStart`) alone and answers an `ask` with a deny whose
+ * reason says a person has to approve it in Oxagen. Letting an `ask` through
+ * as an allow would be a mandate that does not hold.
+ *
+ * **The tool names are translated, and the original is kept.** Claude Code's
+ * `Bash` is Cursor's `Shell`; the rest of Cursor's built-ins (`Read`,
+ * `Write`, `Grep`, `Task`) share Claude Code's name already. `Delete` and
+ * `Glob` have no counterpart in the other vocabulary and pass through
+ * unchanged. `classifyTool` (`./tools.ts`) reads the translated name, so a
+ * `Shell` command still reaches the git-effect classification that turns
+ * `git push` into `git_push`, and `cursor_tool_name` keeps the name Cursor
+ * actually reported for anyone reading the raw attributes.
+ *
+ * **A signed-in address is dropped, not passed through.** Cursor may send
+ * one as `user_email`; keeping it would land plaintext in every event's
+ * attributes and in `raw_source_digest`, which is the confirmation-oracle
+ * problem the Anthropic email scrub already prevents. `model_params` is
+ * dropped for the same reason it never reaches an attribute from Claude
+ * Code's path: it is a settings bag nothing here reads.
  */
 
-/** Cursor event → the Claude Code event the recorder and daemon read. */
-export const CURSOR_EVENT_NAMES = {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Cursor's hook events, and the Claude Code event each becomes. Only the
+ * events Oxagen registers are here. `beforeShellExecution`,
+ * `beforeMCPExecution`, `beforeReadFile` and `afterFileEdit` are deliberately
+ * absent: each fires for a tool type `preToolUse` and `postToolUse` already
+ * cover, and a second frame for one call is a false repeat, not more record.
+ */
+export const CURSOR_TO_CLAUDE_EVENT = {
   sessionStart: "SessionStart",
+  sessionEnd: "SessionEnd",
   beforeSubmitPrompt: "UserPromptSubmit",
   preToolUse: "PreToolUse",
   postToolUse: "PostToolUse",
@@ -41,10 +100,23 @@ export const CURSOR_EVENT_NAMES = {
   subagentStop: "SubagentStop",
   preCompact: "PreCompact",
   stop: "Stop",
-  sessionEnd: "SessionEnd",
 } as const;
 
-export type CursorHookEventName = keyof typeof CURSOR_EVENT_NAMES;
+export type CursorHookEventName = keyof typeof CURSOR_TO_CLAUDE_EVENT;
+
+export const CURSOR_HOOK_EVENTS = Object.keys(
+  CURSOR_TO_CLAUDE_EVENT,
+) as CursorHookEventName[];
+
+/**
+ * The events at which Cursor lets a hook refuse (see the module comment):
+ * a tool call, a subagent launch, and a prompt.
+ */
+export const CURSOR_ENFORCEMENT_EVENTS: readonly CursorHookEventName[] = [
+  "beforeSubmitPrompt",
+  "preToolUse",
+  "subagentStart",
+];
 
 /** Cursor built-in tool → Claude Code tool, so one rule governs both. */
 const CURSOR_TOOL_NAMES: Record<string, string> = {
@@ -54,32 +126,6 @@ const CURSOR_TOOL_NAMES: Record<string, string> = {
   Grep: "Grep",
   Task: "Task",
 };
-
-/** Members the translation renames; the rest pass through as attributes. */
-const RENAMED_MEMBERS = [
-  "conversation_id",
-  "hook_event_name",
-  "session_id",
-  "tool_name",
-  "tool_output",
-  "tool_input",
-  "workspace_roots",
-  "subagent_id",
-  "subagent_type",
-  "duration",
-] as const;
-
-/**
- * Members dropped rather than passed through. Cursor may send a signed-in
- * address as `user_email`; keeping it would land plaintext in every event's
- * attributes and in `raw_source_digest`, which is the confirmation-oracle
- * problem the Anthropic email scrub already prevents.
- */
-const DROPPED_MEMBERS = ["user_email"] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 /**
  * Cursor's tool name in Claude Code's vocabulary. `MCP:<tool>` becomes
@@ -101,43 +147,66 @@ export function cursorToolName(name: string, mcpServer?: unknown): string {
 /**
  * Cursor's payload in Claude Code's hook shape. Renamed members are replaced
  * by their Claude Code names; every other member passes through so the
- * recorder keeps it as an attribute. A document that is not a Cursor agent
- * payload (no string `conversation_id` or no known event) is returned
+ * recorder keeps it as an attribute. A document that is not a Cursor payload
+ * (no string `hook_event_name`, or no session to file it under) is returned
  * unchanged and fails the hook schema the way any junk does.
+ *
+ * Three members are dropped rather than passed through:
+ *
+ *   - `user_email`, because the address is not Oxagen's to keep (see the
+ *     module comment);
+ *   - `model_params`, a settings bag nothing here reads and which would be
+ *     JSON-stringified into one attribute on every event;
+ *   - `session_id` / `conversation_id` as separate members, since one of
+ *     them becomes `session_id` and repeating the other adds no fact
+ *     (Cursor's own session id survives as `cursor_session_id`).
  */
 export function translateCursorPayload(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
-  const event = raw["hook_event_name"];
-  const conversation = raw["conversation_id"];
-  if (
-    typeof event !== "string" ||
-    typeof conversation !== "string" ||
-    !(event in CURSOR_EVENT_NAMES)
-  )
-    return raw;
-  const rest: Record<string, unknown> = { ...raw };
-  for (const key of RENAMED_MEMBERS) delete rest[key];
-  for (const key of DROPPED_MEMBERS) delete rest[key];
-  const cursorSessionId = raw["session_id"];
-  const toolName = raw["tool_name"];
-  const toolOutput = raw["tool_output"];
-  const toolInput = raw["tool_input"];
-  const workspaceRoots = raw["workspace_roots"];
-  const subagentId = raw["subagent_id"];
-  const subagentType = raw["subagent_type"];
-  const duration = raw["duration"];
+  const event = str(raw["hook_event_name"]);
+  if (event === undefined || !(event in CURSOR_TO_CLAUDE_EVENT)) return raw;
+  const {
+    hook_event_name: _event,
+    conversation_id: conversationId,
+    session_id: cursorSessionId,
+    generation_id: generationId,
+    user_email: _email,
+    model_params: _modelParams,
+    cwd,
+    tool_name: toolName,
+    tool_output: toolOutput,
+    tool_input: toolInput,
+    workspace_roots: workspaceRoots,
+    subagent_id: subagentId,
+    subagent_type: subagentType,
+    duration,
+    ...rest
+  } = raw;
+  // `session_id` is documented as the same value as `conversation_id` and is
+  // present only on sessionStart and sessionEnd, so the conversation id is
+  // what every event is filed under. Cursor's own session id, when it sent
+  // one, survives as an attribute rather than being dropped.
+  const id = str(conversationId) ?? str(cursorSessionId);
+  if (id === undefined) return raw;
+  // Only preToolUse carries a cwd. The first workspace root is the directory
+  // the other events are about, and without it the recorder has no repository
+  // to attribute a session to. Cursor documents multi-root workspaces, so the
+  // whole list stays as an attribute and only the first becomes the cwd.
+  const workspaceRoot = Array.isArray(workspaceRoots)
+    ? str(workspaceRoots[0])
+    : undefined;
+  const derivedCwd = str(cwd) ?? workspaceRoot;
   const out: Record<string, unknown> = {
     ...rest,
-    session_id: conversation,
-    hook_event_name: CURSOR_EVENT_NAMES[event as CursorHookEventName],
-    cursor_event: event,
+    session_id: id,
+    hook_event_name: CURSOR_TO_CLAUDE_EVENT[event as CursorHookEventName],
+    ...(derivedCwd !== undefined ? { cwd: derivedCwd } : {}),
+    // A generation "changes with every user message", which is a turn.
+    ...(str(generationId) !== undefined ? { turn_id: str(generationId) } : {}),
   };
-  if (cursorSessionId !== undefined) out["cursor_session_id"] = cursorSessionId;
   if (workspaceRoots !== undefined) out["workspace_roots"] = workspaceRoots;
-  if (out["cwd"] === undefined && Array.isArray(workspaceRoots)) {
-    const root: unknown = workspaceRoots[0];
-    if (typeof root === "string") out["cwd"] = root;
-  }
+  if (str(cursorSessionId) !== undefined)
+    out["cursor_session_id"] = cursorSessionId;
   if (typeof toolName === "string") {
     out["tool_name"] = cursorToolName(toolName, raw["mcp_server_name"]);
     out["cursor_tool_name"] = toolName;
@@ -163,15 +232,24 @@ function reasonOf(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+const ASK_SUFFIX =
+  "A person has to approve this in Oxagen before it can run; Cursor does not enforce an ask at preToolUse.";
+
 /**
- * Claude Code's answer as Cursor's stdout, with its trailing newline. `event`
- * is the Claude Code event name (the translated one). Precedence runs from
- * most to least restrictive, so a document carrying two answers never fails
- * open: deny > ask (answered deny) > stop > allow.
+ * Claude Code's answer as Cursor's stdout (JSON plus a newline), for the
+ * Claude Code event name the translated payload carries. Precedence runs
+ * from most to least restrictive, so a document carrying two answers never
+ * fails open: deny > ask > stop > allow.
+ *
+ * An allow at a permission event (`PreToolUse`, `SubagentStart`) is written
+ * out as `{"permission": "allow"}` rather than `{}`. Every hook Oxagen
+ * registers there sets `failClosed: true`, and Cursor counts "no output"
+ * among the failures that block, so an empty document is not a thing to rely
+ * on for an allow.
  */
 export function cursorAnswer(
   response: Record<string, unknown>,
-  event: string,
+  claudeEvent: string,
 ): string {
   const specific = isRecord(response["hookSpecificOutput"])
     ? response["hookSpecificOutput"]
@@ -179,59 +257,66 @@ export function cursorAnswer(
   const permission = specific["permissionDecision"];
   const permissionReason = specific["permissionDecisionReason"];
   const stopped = response["continue"] === false;
-  const blocked = response["decision"] === "block";
+  const blocked = stopped || response["decision"] === "block";
   const stopReason = stopped ? response["stopReason"] : response["reason"];
-  const answer = (document: Record<string, unknown>): string =>
+  const emit = (document: Record<string, unknown>): string =>
     `${JSON.stringify(document)}\n`;
-  const refuse = (reason: string): string =>
-    answer({ permission: "deny", user_message: reason, agent_message: reason });
 
-  switch (event) {
+  let refusal: string | undefined;
+  if (permission === "deny")
+    refusal = reasonOf(permissionReason, "Denied by Oxagen policy.");
+  else if (permission === "ask")
+    refusal = `${reasonOf(permissionReason, "Oxagen policy asks for approval.")} ${ASK_SUFFIX}`;
+  else if (blocked)
+    refusal = reasonOf(
+      stopReason,
+      stopped ? "Stopped by Oxagen policy." : "Blocked by Oxagen policy.",
+    );
+
+  switch (claudeEvent) {
     case "PreToolUse":
     case "SubagentStart": {
-      if (permission === "deny")
-        return refuse(reasonOf(permissionReason, "Denied by Oxagen policy."));
-      if (permission === "ask")
-        return refuse(
-          `${reasonOf(permissionReason, "Oxagen policy asks for approval.")} Cursor cannot pause for approval here, so the call is refused.`,
-        );
-      if (stopped || blocked)
-        return refuse(reasonOf(stopReason, "Stopped by Oxagen policy."));
-      return answer({ permission: "allow" });
+      if (refusal !== undefined)
+        return emit({
+          permission: "deny",
+          user_message: refusal,
+          agent_message: refusal,
+        });
+      return emit({ permission: "allow" });
     }
     case "UserPromptSubmit": {
-      if (stopped || blocked)
-        return answer({
-          continue: false,
-          user_message: reasonOf(stopReason, "Blocked by Oxagen policy."),
-        });
-      return answer({ continue: true });
+      if (refusal !== undefined)
+        return emit({ continue: false, user_message: refusal });
+      return emit({ continue: true });
     }
     case "SessionStart": {
-      if (stopped || blocked)
-        return answer({
-          additional_context: `Oxagen: ${reasonOf(stopReason, "This session is stopped by its Oxagen operator.")} Tool calls will be refused.`,
+      // Cursor's sessionStart answer has no veto field, so a suspended host
+      // cannot be stopped here. It is told why in prose, and preToolUse
+      // refuses every call while the block holds.
+      if (refusal !== undefined)
+        return emit({
+          additional_context: `Oxagen: ${refusal} Tool calls will be refused.`,
         });
       const context = specific["additionalContext"];
       return typeof context === "string" && context.length > 0
-        ? answer({ additional_context: context })
-        : answer({});
+        ? emit({ additional_context: context })
+        : emit({});
     }
     case "Stop": {
       // Claude Code's `decision: "block"` on Stop means "keep going, because
       // <reason>"; Cursor's counterpart is a follow-up message.
       if (blocked && typeof response["reason"] === "string")
-        return answer({ followup_message: response["reason"] });
-      return answer({});
+        return emit({ followup_message: response["reason"] });
+      return emit({});
     }
     case "PostToolUse":
     case "PostToolUseFailure": {
       const context = specific["additionalContext"];
       return typeof context === "string" && context.length > 0
-        ? answer({ additional_context: context })
-        : answer({});
+        ? emit({ additional_context: context })
+        : emit({});
     }
     default:
-      return answer({});
+      return emit({});
   }
 }
