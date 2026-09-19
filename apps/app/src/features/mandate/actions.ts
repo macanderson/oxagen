@@ -31,14 +31,13 @@
 // currency-denominated unit is refused here, and a money limit is changed over
 // the API or MCP by a caller that holds the declaration. The app reads one back
 // as money either way.
-import { mandateGet } from "@oxagen/oxagen/contracts/mandate.get";
+import type { z } from "zod";
 import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.update";
 import { mandateRevoke } from "@oxagen/oxagen/contracts/mandate.revoke";
 import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
-import type { Read } from "@/data/read";
-import type { ActionResult, ContractOutput } from "@/server/kernel";
-import { kernelRead, kernelWrite } from "@/server/kernel";
+import type { ActionResult } from "@/server/kernel";
+import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
 /** The fields the change-limits dialog collects. */
@@ -58,6 +57,16 @@ export type LimitsDraft = {
   validTo: string;
 };
 
+/**
+ * The changes this action sends, taken from the contract rather than restated:
+ * measure → the fields to change on that measure's bound, where an absent field
+ * means the stored one is kept. The handler merges it under the row lock
+ * (ADR-102).
+ */
+type MandateLimitChanges = NonNullable<
+  z.input<typeof mandateLimitsUpdate.input>["limitChanges"]
+>;
+
 /** The day a date input gives; the action widens it to the end of that day. */
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -75,58 +84,26 @@ function refuse(field: keyof LimitsDraft): ActionResult<never> {
   return { ok: false, reason: "invalid", code: "invalid_input", field };
 }
 
-/** The stored `limits` record, as `get_mandate` answers it. */
-type StoredLimits = ContractOutput<typeof mandateGet>["mandate"]["limits"];
-
-/** One measure's stored bound inside that record. */
-type StoredMeasure = StoredLimits[string];
-
-/**
- * A read that did not answer, as the write it was part of reports it.
- *
- * `kernelRead` collapses a denial to the page's permission and loses the
- * handler's reason (`toRead`, server/kernel.ts), so the reason is restated here
- * from the handler rather than dropped: `get_mandate` has exactly one
- * `forbidden` reason, `org_role_required`, and `loadMandateRow` exactly one
- * `not_found` reason, `mandate_not_found`. Both are traceable to a single throw
- * site, which is why they can be named from this side without guessing.
- */
-function fromRead(
-  read: Exclude<Read<unknown>, { ok: true }>,
-): ActionResult<never> {
-  switch (read.reason) {
-    case "denied":
-      return { ok: false, reason: "denied", code: "org_role_required" };
-    case "pending_approval":
-      return {
-        ok: false,
-        reason: "pending_approval",
-        accessRequestId: read.accessRequestId,
-      };
-    case "error":
-      return read.status === 404
-        ? { ok: false, reason: "not_found", code: "mandate_not_found" }
-        : { ok: false, reason: "unavailable", code: read.code };
-  }
-}
-
 /**
  * Changes an active mandate's limits, and its validity end when one is given.
  *
- * **It reads the stored limits and lays the edit over them.**
- * `update_mandate_limits` sets `limits` to what the input carries, so a
- * submission naming one measure would delete the bounds on every other measure
- * the mandate holds — and a deleted bound is unbounded authority for that
- * measure. That is the failure class ARCHITECTURE.md §9 already records twice on
- * this lane: a form that can store a wider bound than the operator entered. So
- * the record is read first, the measures this submission edits are merged over
- * it, and every bound nobody touched goes back exactly as recorded.
+ * **It sends what the operator changed, and nothing else — it does not read the
+ * mandate.** `update_mandate_limits` also takes `limitChanges`, a set of changes
+ * keyed by measure, and merges them over the stored record inside the
+ * transaction that locks the row (ADR-102). So this action makes exactly one
+ * kernel call. The merge it used to do here read the record over the network
+ * first, and that read was a snapshot nobody held a lock on: two operators
+ * editing different bounds on one mandate each posted a complete record back,
+ * and the later write restored the bound the earlier one had lowered. Restoring
+ * a bound widens the agent's authority with nobody asking, which is the failure
+ * class ARCHITECTURE.md §9 records on this lane.
  *
- * The consequence a person has to know about: a blank field leaves that measure's
- * bound as it is rather than removing it. Removing a limit entirely means sending
- * a `limits` record without it, which is `update_mandate_limits` over the API or
- * MCP; a form whose blank fields could delete bounds would delete them by
- * accident far more often than on purpose. The dialog's copy says so.
+ * The consequence a person has to know about is unchanged: a blank field leaves
+ * that measure's bound as it is rather than removing it. Removing a limit
+ * entirely means sending a whole `limits` record without it, which is
+ * `update_mandate_limits` over the API or MCP; a form whose blank fields could
+ * delete bounds would delete them by accident far more often than on purpose.
+ * The dialog's copy says so.
  *
  * Lowering a per-period limit under authority the period has already drawn is
  * accepted on purpose: the ledger is a record and an update may not rewrite it.
@@ -182,16 +159,13 @@ export async function changeMandateLimits(
   /**
    * What this submission says about each measure it names, and nothing more.
    *
-   * These are PATCHES, not records. A field the operator left blank is absent
-   * here rather than present and empty, so the merge below leaves the stored
-   * value alone — which is what the dialog's copy promises. Building whole
-   * measure records here is what made the first fix incomplete: the record-level
-   * merge kept sibling measures and the measure's own object still replaced the
-   * stored one, so clearing `perCall` while keeping `perPeriod` deleted the
-   * per-call cap. A deleted sublimit is unbounded authority for that sublimit,
-   * which is the same failure as a deleted measure one level down.
+   * These are changes, not records. A field the operator left blank is absent
+   * here rather than present and empty, so the handler's merge leaves the stored
+   * value alone — which is what the dialog's copy promises. The contract's
+   * `limitChanges` refuses a change that names no field at all, so an absent
+   * field can only ever mean "leave it".
    */
-  const patches: Record<string, Partial<StoredMeasure>> = {
+  const limitChanges: MandateLimitChanges = {
     ...(wantsMeasure
       ? {
           [measure]: {
@@ -210,7 +184,8 @@ export async function changeMandateLimits(
             perPeriod: callsPerDay,
             // No period, deliberately: the form shows the calls cap as a bare
             // number and exposes no period control for it, so this submission
-            // says nothing about the window and the stored one is kept below.
+            // says nothing about the window, and the handler's merge keeps the
+            // stored one.
             // Writing `daily` here turned a stored cap of ten calls a week into
             // ten a day on any submission, including one that only changed a
             // validity date.
@@ -221,52 +196,17 @@ export async function changeMandateLimits(
 
   const ctx = await requireViewer(org, ws);
 
-  // The merge. `update_mandate_limits` SETS `limits` to what it is given, so a
-  // submission carrying only the measure this dialog exposes would delete every
-  // other measure's bound — and deleting a bound widens the agent's authority
-  // for that measure without anyone asking. The stored record is read first and
-  // the submission's patches are laid over it, so every bound nobody touched is
-  // resubmitted exactly as recorded — at both depths, per measure and per
-  // sublimit.
-  //
-  // It is read from the store rather than carried up from the page. The dialog
-  // holds the mandate's authority and could reconstruct the record from it, but
-  // then the bounds that go back would be the ones a client sent, and the whole
-  // point of this call is that the unchanged ones are the ones the record holds.
-  // `ledgerLimit: 1` because the movements are not wanted; the contract's floor
-  // is 1 and the mandate is the only part of the answer this uses.
-  let stored: StoredLimits = {};
-  if (Object.keys(patches).length > 0) {
-    const current = await kernelRead(ctx, {
-      contract: mandateGet,
-      input: { mandateId: draft.mandateId, ledgerLimit: 1 },
-      page: "mandates",
-    });
-    if (!current.ok) return fromRead(current);
-    stored = current.value.mandate.limits;
-  }
-
-  // Two depths, because a bound can be deleted at either. The record keeps every
-  // measure this submission did not name, and each named measure keeps every
-  // field this submission did not carry: its other sublimit, and its window
-  // where the form does not expose one. `period` falls back to `daily` only for
-  // a calls cap that is not on the record yet, which is the one case where
-  // nothing is being widened because nothing was bounded.
-  const limits: StoredLimits = { ...stored };
-  for (const [name, patch] of Object.entries(patches)) {
-    const before = stored[name];
-    limits[name] = {
-      ...before,
-      ...patch,
-      period: patch.period ?? before?.period ?? "daily",
-    } as StoredMeasure;
-  }
-
+  // One call, carrying the changes. The handler merges them over the stored
+  // record under the lock it already takes, at both depths — every measure this
+  // submission did not name keeps its bound, and each named measure keeps every
+  // field this submission did not carry, its other sublimit and its window
+  // included. That is why the window of a calls cap the form cannot express
+  // survives a submission that only changes the figure.
   const result = await kernelWrite(ctx, mandateLimitsUpdate, {
     mandateId: draft.mandateId,
-    // Omitted rather than sent empty: the contract refuses a `limits` record
-    // with no measure in it, and a change to the window alone is a legal change.
-    ...(Object.keys(limits).length === 0 ? {} : { limits }),
+    // Omitted rather than sent empty: the contract refuses a change that names
+    // no measure, and a change to the window alone is a legal change.
+    ...(Object.keys(limitChanges).length === 0 ? {} : { limitChanges }),
     // The last day a mandate may be drawn on runs through the end of that day,
     // so a window ending 2026-12-31 expires as that day ends, not as it begins.
     ...(validTo === "" ? {} : { validTo: `${validTo}T23:59:59.999Z` }),

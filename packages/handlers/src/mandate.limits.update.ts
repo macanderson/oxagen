@@ -5,6 +5,17 @@
 // limit over a measure a matched tool does not declare is refused as
 // grant_mandate refuses it.
 // Roles: the consequence roles of every tag (INV-29).
+//
+// Limits change two ways (ADR-102). `limits` replaces the whole record, which
+// is how a bound is deleted. `limitChanges` names the measures to change and
+// leaves the rest, and the merge happens HERE, inside the transaction that
+// locks the row, over the limits the lock returned. That placement is the
+// point: a caller that reads the mandate, merges, and posts the whole record
+// back holds a snapshot nobody locked, so two operators changing different
+// bounds on one mandate would each write a complete record and the later
+// write would restore the bound the earlier one lowered. Restoring a bound
+// widens an agent's financial authority with nobody asking, which is the one
+// failure a mandate surface must not have.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
@@ -12,6 +23,11 @@ import { mandateLimitsUpdate } from "@oxagen/oxagen/contracts/mandate.limits.upd
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { lockMandate } from "@oxagen/rules";
+import {
+  mandateLimitsSchema,
+  type MandateLimitChanges,
+  type MandateLimits,
+} from "@oxagen/oxagen/mandates/schemas";
 import { eq } from "drizzle-orm";
 import { resolveActingUserId } from "@oxagen/iam/org-role";
 import {
@@ -25,6 +41,58 @@ import {
   requireWorkspace,
 } from "./_mandate";
 import { logger } from "./logger";
+
+/**
+ * The window a bound takes when the measure it names is not on the record
+ * yet. Nothing is widened by it: nothing was bounded before, and the caller
+ * that adds a bound without naming a window has said which figure it is
+ * capping and not over what. Every other case reads the stored window.
+ */
+const NEW_LIMIT_PERIOD = "daily";
+
+/**
+ * Lay a set of changes over the stored limits at two depths.
+ *
+ * A bound can be deleted at either depth and a deleted bound is unbounded
+ * authority, so both depths keep what they are not told to change: every
+ * measure the changes do not name keeps its bound, and within each named
+ * measure every field the changes do not carry keeps its stored value —
+ * the other sublimit, the unit, and `period`, which a caller editing one
+ * figure has said nothing about.
+ *
+ * The merged record is parsed by `mandateLimitsSchema` rather than asserted
+ * into shape, so a change that would leave a bound with no figure or no unit
+ * is refused instead of stored. That is reachable only for a measure the
+ * record does not hold yet: a change to a stored bound inherits both.
+ */
+export function applyLimitChanges(
+  stored: MandateLimits,
+  changes: MandateLimitChanges,
+): MandateLimits {
+  const merged: Record<string, unknown> = { ...stored };
+  for (const [measure, change] of Object.entries(changes)) {
+    const before = stored[measure];
+    // Built field by field rather than spread, because a key carrying an
+    // explicit `undefined` would overwrite a stored value with nothing — the
+    // deletion this input cannot express.
+    const bound: Record<string, unknown> = { ...before };
+    if (change.perCall !== undefined) bound.perCall = change.perCall;
+    if (change.perPeriod !== undefined) bound.perPeriod = change.perPeriod;
+    if (change.currencyOrUnit !== undefined)
+      bound.currencyOrUnit = change.currencyOrUnit;
+    bound.period = change.period ?? before?.period ?? NEW_LIMIT_PERIOD;
+    merged[measure] = bound;
+  }
+  const parsed = mandateLimitsSchema.safeParse(merged);
+  if (!parsed.success) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "limit_incomplete",
+      message: `The changed limits are not a complete record: ${parsed.error.issues[0]?.message ?? "a bound names no figure or no unit"}`,
+    });
+  }
+  return parsed.data;
+}
 
 export const mandateLimitsUpdateHandler: CapabilityHandler<
   typeof mandateLimitsUpdate
@@ -48,7 +116,10 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: `Mandate ${input.mandateId} is ${locked?.status ?? "gone"}; only an active mandate changes`,
       });
     }
-    const limits = input.limits ?? locked.limits;
+    const limits =
+      input.limitChanges === undefined
+        ? (input.limits ?? locked.limits)
+        : applyLimitChanges(locked.limits, input.limitChanges);
     const targets = input.targets ?? locked.targets;
     if (
       input.validTo !== undefined &&
