@@ -305,7 +305,7 @@ describe("runs table", () => {
       "No runs yet in Core platform",
     );
     expect(
-      within(runsSection()).getByText("oxagen tacho enroll"),
+      within(runsSection()).getByText("oxagen agent enroll"),
     ).toBeInTheDocument();
     expect(within(runsSection()).queryByRole("table")).toBeNull();
   });

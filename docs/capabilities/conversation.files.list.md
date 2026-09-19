@@ -1,4 +1,4 @@
-# conversation.files.list
+# list_conversation_files
 
 **Domain:** conversation
 **Mode:** sync
@@ -39,8 +39,8 @@ redeclaring the shape in consuming code.
 ## Surfaces
 
 - **API:** `GET /v1/:org/:workspace/conversations/:conversationId/files?kind=&limit=&cursor=`
-- **MCP:** `conversation.files.list` tool (read-only, idempotent)
-- **Agent:** invoked directly via `invoke("conversation.files.list", ...)` — no approval required
+- **MCP:** `list_conversation_files` tool (read-only, idempotent)
+- **Agent:** invoked directly via `invoke("list_conversation_files", ...)` — no approval required
 - **CLI:** `oxagen conversation files --conversation <id> [--kind <kind>] [--limit <n>] [--cursor <cursor>]`
 
 ## Access control

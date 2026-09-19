@@ -1,4 +1,4 @@
-# agent.role.get (`get_agent_role`)
+# get_agent_role
 
 **Domain:** agent
 **Mode:** sync

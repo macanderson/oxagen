@@ -1,4 +1,4 @@
-# agent.definition.create
+# create_agent_def
 
 **Domain:** agent
 **Mode:** sync
@@ -8,19 +8,20 @@
 
 ## Intent
 
-Create a new agent definition. Inserts the agent identity row as a draft in the `inactive` deployment posture, plus an immutable v1 version snapshot carrying the supplied, schema-validated config — graph access, tools, triggers, and instructions.
+Create a new agent definition. Inserts the agent identity row as a draft in the `inactive` deployment posture, plus an immutable v1 version snapshot carrying the supplied, schema-validated config: graph access, tools, and instructions.
 
 ## Input
 
 | Field | Type | Notes |
 |---|---|---|
-| `slug` | `string` | Lowercase kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`). |
+| `slug` | `string` (max 18) | Lowercase kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`). |
 | `name` | `string` (min 1) | Human-readable name. |
 | `description` | `string?` | Optional description of what the agent does. |
+| `avatarUrl` | `string?` | HTTPS avatar URL or a designed-avatar specification accepted by `avatarUrlSchema`. |
 | `agentType` | `string` | Kind of agent. Default `"custom"`. |
-| `config` | `object` | Versioned body — see below. |
+| `config` | `object` | Versioned body. See below. |
 | `config.graph` | `GraphAccess` | Ontology binding, retrieval strategy, and traversal budget. |
-| `config.agentTools` | `AgentTool[]` | Loaded functions, MCP servers, skills, subagents. Default `[]`. |
+| `config.agentTools` | `AgentTool[]` | Platform functions and MCP servers. Default `[]`. |
 | `config.instructions` | `string?` | Optional system prompt baked into the definition. |
 
 ## Output

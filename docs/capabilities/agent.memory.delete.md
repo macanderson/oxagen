@@ -1,4 +1,4 @@
-# agent.memory.delete
+# delete_memory
 
 **Domain:** agent
 **Mode:** sync

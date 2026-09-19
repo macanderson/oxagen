@@ -1,4 +1,4 @@
-# secret.reveal
+# reveal_secret
 
 **Domain:** secret
 **Mode:** sync
@@ -56,7 +56,7 @@ Content-Type: application/json
 
 ## MCP
 
-Tool name: `secret.reveal`
+Tool name: `reveal_secret`
 
 ## Errors
 

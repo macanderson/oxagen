@@ -1,4 +1,4 @@
-# tacho.host.enroll
+# enroll_host
 
 `enroll_host` (MC spec App. E: "device key, host agent, bundle, hooks"; §14.1 `oxagen agent enroll`; #2967): a machine becomes a registered agent's host by presenting the single-use enrollment token `create_enrollment_token` minted.
 

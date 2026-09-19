@@ -9,11 +9,8 @@
 
 ## Intent
 
-List an agent's environment bindings, with each binding's resolved sandbox
-template name. This is the read path behind the agent's environment/sandbox
-configuration panel and is the introspection counterpart to
-`bind_agent_environment`/`unbind_agent_environment`. Workspace members can
-read.
+List an agent's environment bindings, including each environment's name,
+slug, and primary flag. Workspace members can read these bindings.
 
 ## Input
 
@@ -25,7 +22,7 @@ read.
 
 | Field      | Type                        | Notes                                                                                                                        |
 | ---------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `bindings` | `AgentEnvironmentBinding[]` | Each: `{ id, agentId, environmentId, environmentName, environmentSlug, sandboxTemplateId, sandboxTemplateName, isPrimary }`; a `null` `sandboxTemplateId`/`sandboxTemplateName` means the binding resolves to the environment's default template |
+| `bindings` | `AgentEnvironmentBinding[]` | Each entry contains `{ id, agentId, environmentId, environmentName, environmentSlug, isPrimary }`. |
 
 ## Side effects
 
@@ -48,16 +45,8 @@ Content-Type: application/json
 Tool name: `list_agent_environments`
 
 
-## CLI
-
-```
-oxagen agent env list <agent> [--json]
-```
-
-Lists the agent's environment bindings with each binding's resolved template.
-
 ## Errors
 
-- `validation_error` — missing/empty `agentId`.
-- `unauthorized` — caller is not a member of the active workspace.
-- `not_found` — no agent with that id in the active workspace.
+- `validation_error`: missing/empty `agentId`.
+- `unauthorized`: caller is not a member of the active workspace.
+- `not_found`: no agent with that id in the active workspace.

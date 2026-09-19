@@ -1,4 +1,4 @@
-# context.proposal.list
+# list_proposals
 
 **Name:** `list_proposals`
 **Domain:** context

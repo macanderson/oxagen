@@ -1,4 +1,4 @@
-# agent.credential.rotate
+# rotate_agent_credential
 
 **Capability:** `rotate_agent_credential`
 **Domain:** agent

@@ -1,4 +1,4 @@
-# agent.definition.delete
+# delete_agent_def
 
 **Domain:** agent
 **Mode:** sync

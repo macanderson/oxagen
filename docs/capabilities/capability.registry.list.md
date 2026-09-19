@@ -1,4 +1,4 @@
-# capability.registry.list
+# list_capability_registry
 
 List the platform's typed capability contracts from the live in-process registry — name, domain, surfaces, layers, sensitivity, default IAM grants, entitlement gate, and audit binding for each. Read-only platform metadata (never tenant data); the runtime counterpart of `pnpm check:manifest`. Powers the org Governance hub's "active contracts" tile and the Capability & Contract catalog.
 

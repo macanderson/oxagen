@@ -1,4 +1,4 @@
-# agent.mcp.list
+# list_mcp_servers
 
 **Domain:** agent
 **Mode:** sync

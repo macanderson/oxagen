@@ -1,4 +1,4 @@
-# tool.declaration.list
+# list_tool_declarations
 
 **Domain:** tool
 **Mode:** sync

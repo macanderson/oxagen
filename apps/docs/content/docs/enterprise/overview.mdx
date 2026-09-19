@@ -1,69 +1,24 @@
 ---
-title: Enterprise overview
-description: The org and workspace model, how governance scales across business units, and what the enterprise tier includes.
+title: Organizations and teams
+description: "Separate teams into workspaces and review agent authority, equipment, and spend."
 ---
 
-## The organization and workspace model
+Give each team a workspace for its agents, context, and tools. The organization owns membership and billing. Workspace scope keeps operational records apart.
 
-Oxagen organizes every customer account as an **organization** with one or more **workspaces**.
+## Organize the work
 
-```text title="Example structure"
-Organization (Acme Corp)
-├── Workspace: Marketing
-├── Workspace: Engineering
-├── Workspace: Finance
-└── Workspace: Legal
-```
+Open **Organization** at `/{org}` to manage workspaces and members. New workspaces require a main repository. The first workspace created during signup can bind its repository during onboarding.
 
-This structure matches how most enterprises divide accountability for the agents they run:
+Use **Organization → Roles** to inspect permissions. Owners and Admins can create custom roles and edit or delete custom roles. Built-in roles are read-only. The page shows whether the organization's tier enforces the displayed grants.
 
-- The **organization** is the accountable entity. It owns billing, sets the outer bounds of every rule, manages the member roster, and holds the audit log for the whole company.
-- **Workspaces** are the operating units. Each team, department, or project has its own isolated workspace with its own agents, knowledge, and automation. Teams work on their own without seeing each other's data.
+[RBAC and roles](/docs/governance/rbac) explains the authorization limits. [Tenant isolation](/docs/security/tenant-isolation-rls) describes the data boundary.
 
-The database enforces workspace isolation (see [Tenant isolation and RLS](/docs/security/tenant-isolation-rls)), not application-layer conventions. A bug in an agent in the Marketing workspace cannot read Finance workspace data.
+## Fund and inspect agent work
 
-## Scale tier for enterprise
+Use **Organization → Model funding** to configure who pays for model calls. Use **Billing** for subscription and credits, and a workspace's **Spend** page for recorded cost. [Spend budgets](/docs/cli/budget) documents the organization and workspace ceilings.
 
-Scale tier organizations get:
+## Review evidence
 
-- **Unlimited workspaces**: add departments or projects without restructuring.
-- **25 seats included** (add more at the per-seat rate).
-- **All models**, including Claude Opus 4.8.
-- **Advanced usage analytics**: cost attribution by workspace, agent, and capability domain.
-- **Dedicated Slack support** channel.
-- **99.9% uptime SLA.**
-- **SOC 2 Type II report**, available under NDA.
-- **DPA available** for GDPR, HIPAA, and similar requirements.
+Use **Organization → Audit** for security events. Open a run from Fleet to inspect its recorded work and enforcement tier. Observe-mode activity is recorded, not enforced. A hook-based record is client-attested.
 
-## Identity federation
-
-SAML 2.0 and OIDC single sign-on and SCIM 2.0 directory sync are not available. The SSO and SCIM settings stay hidden under **Organization → Security** until their capability contracts ship, and the security page reports SSO enforcement as not configurable. Members sign in with email and password, Google, or GitHub, and you can require org-wide MFA for privileged roles on the MFA tab.
-
-## Governance at scale
-
-### Central IT sets the outer bounds
-
-Every access decision is made by role: a principal's role grants first, then the system org Owner role, then the capability contract's default effect. The org decides who holds which role, so an org administrator controls access in every workspace, including workspaces created later.
-
-<Mermaid chart={`
-flowchart LR
-  Q["invoke() capability"] --> RG{{"Role grant<br/>for this capability?"}}:::accent
-  RG -->|deny · require approval · allow| DONE["Decision"]
-  RG -->|none| OW{{"System org Owner?"}}
-  OW -->|yes| ALLOW["Allow"]
-  OW -->|no| DEF["Contract defaultEffect"]
-`} />
-
-The IAM resolver also defines two stronger tiers: org-enforced policies that workspaces cannot override, and workspace grants and denies that narrow access inside those bounds. Neither tier is active. Migration 0027 removed their tables, so no live request is decided by them.
-
-### Agents as accountable principals
-
-Every agent configuration is a principal with its own role grants. Each grant names a capability the agent may request and the answer: allow, deny, or require approval. A department grants what its task needs and nothing more. Triggered and scheduled agents run under their own grants. They never inherit the grants of the person who signed in.
-
-### Approval-gated capabilities
-
-When a role grant says a capability requires approval, the request is routed instead of run. The call returns `pending_approval`, and Oxagen records an access request (`arq_…`) that names the principal and the capability, beside the security event. The app has no screen for answering these requests, and there is no time-limited grant flow.
-
-## Contact
-
-For enterprise pricing, SOC 2 reports, DPAs, or reference calls with existing customers, contact hello@oxagen.sh.
+[Security](/docs/security/overview) and the [SOC 2 controls mapping](/docs/security/soc2) describe implementation controls. These pages do not establish an audit attestation, contractual SLA, or data-processing agreement. Contact hello@oxagen.sh for the current commercial terms and available review materials.

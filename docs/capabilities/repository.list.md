@@ -1,4 +1,4 @@
-# repository.list
+# list_repositories
 
 Every repository the workspace binds, its one main repository and each linked one (MC spec §10.1), for the Repositories page, the CLI and MCP.
 

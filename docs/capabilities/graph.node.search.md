@@ -1,4 +1,4 @@
-# graph.node.search
+# search_nodes
 
 Text search over the workspace graph. Matches `displayName` and `description`, with optional label filtering, returning the best-ranked nodes.
 

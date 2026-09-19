@@ -1,4 +1,4 @@
-# tacho.enrollment.revoke
+# revoke_tacho_enrollment
 
 Revoke a Tacho host. The host's API key is soft-deleted, the host row becomes `revoked`, and a `revoke` command is queued so a collector mid-poll learns immediately rather than at its next bundle refresh. Every session on the host is denied at its next prompt or tool boundary while the hooks remain installed; if they do not, the next session on the host is an `unobserved_session` incident. Idempotent.
 

@@ -315,11 +315,7 @@ export function harnessFileProblems(
     const relative = absoluteHookCommandProblem(deps.runtime.hookCommand);
     if (relative !== undefined) problems.push(relative);
     for (const path of deps.paths.cursorHooks)
-      check(
-        path,
-        () => deps.readCursorHooks(path),
-        cursorHooksShapeProblem,
-      );
+      check(path, () => deps.readCursorHooks(path), cursorHooksShapeProblem);
   }
   if (harnesses.includes("stella")) {
     try {
@@ -1026,7 +1022,9 @@ export async function enrollLocked(
         "Cursor's `agent` CLI is not on PATH. The hooks still govern the Cursor editor, which reads the same file; no primary source documents where the GUI installs, so this machine cannot be probed for it",
       );
     else
-      deps.out(`      agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`);
+      deps.out(
+        `      agent ${cursorFacts.version ?? "?"} at ${cursorFacts.path}`,
+      );
   }
   if (harnesses.includes("stella")) {
     const stella = deps.stella();
@@ -1101,6 +1099,10 @@ export async function enrollLocked(
             if (entry.shadowedBy !== undefined)
               warnings.push(
                 `${entry.shadowedBy.file} also sets ${entry.key}, and managed settings win, so ${TACHO_HARNESS_LABELS[entry.harness]} model calls are not routed through Oxagen`,
+              );
+            if (entry.toolSearch !== undefined)
+              deps.out(
+                `      ${TACHO_HARNESS_LABELS[entry.harness]} keeps tool search on behind the proxy (env.ENABLE_TOOL_SEARCH=${JSON.stringify(entry.toolSearch.current)})`,
               );
           }
         } catch (error) {

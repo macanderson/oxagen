@@ -1,4 +1,4 @@
-# repo.pr.diff
+# get_pr_diff
 
 Read the per-file unified-diff patches for a GitHub pull request.
 

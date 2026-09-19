@@ -1,4 +1,4 @@
-# tacho.command.dispatch
+# dispatch_command
 
 Queue a run control (Mission Control spec §7.3, §7.4, §7.6; ADR-056): `pause`, `resume`, `cancel`, `steer` or `message` for one run, for every live run of an agent, or for every live run in the workspace (`@agents`). One `tacho.control_commands` row is written per recipient run, carried by the host its session belongs to; the collector takes it on its next ingest response or command poll (`fetch_commands`) and reports what became of it. The delivery report is `list_commands`.
 

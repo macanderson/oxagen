@@ -9,8 +9,10 @@
   §5.1 (enrollment); `apps/cli/src/program.ts` (the command tree)
 - **Numbering:** 103. ADR-102 is taken twice, by the mandate row lock and by
   the marketing ebook lead gate
-- **Delivered by:** this record and the phase order it sets, plus phase 1a:
-  the hidden `tacho` group in `apps/cli/src/program.ts`
+- **Delivered by:** this record and the phase order it sets; phase 1a, the
+  hidden `tacho` group in `apps/cli/src/program.ts`; and phase 1b, the seven
+  wrapping commands on `oxagen agent` with the three collisions resolved and
+  the three empty-state strings pointed at `oxagen agent enroll`
 
 ## Context
 
@@ -138,6 +140,19 @@ request.**
    merge lands `oxagen agent enroll` demands a one-time token the reader of an
    empty state does not have. This phase changes two governance command
    signatures, so it reviews on its own.
+
+   The move copies rather than forwards. `oxagen tacho` keeps its own seven
+   definitions, in the host-only shape every enrolled machine was enrolled
+   with, and the four names that collide with nothing come from one
+   `addHostWrapCommands` so the two groups cannot drift. Forwarding was the
+   first design and it is wrong: a forwarded `tacho enroll` would be re-parsed
+   by a command with different flags and a prefix rule, which is a behaviour
+   change dressed as compatibility.
+
+   Each merged command refuses the flags belonging to the scope it did not
+   take, rather than dropping them. `--purge` against an agent handle means
+   nothing this CLI does, and an operator who passes it and reads a success
+   line has been told a local spool was deleted when nothing went near it.
 3. The docs: `docs/specs/tacho/` and the 115 files that reference it.
 4. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
    each shipping the new name alongside the old and migrating on the next

@@ -1,4 +1,4 @@
-# schema.relationship.upsert
+# upsert_schema_relationship
 
 Create or update a relationship type on a schema within the current draft version. Changes are staged in the draft — publish via `schema.version.create` or `schema.toggle` to make them live.
 

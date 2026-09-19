@@ -1,4 +1,4 @@
-# agent.retire
+# retire_agent
 
 **Capability:** `retire_agent`
 **Domain:** agent

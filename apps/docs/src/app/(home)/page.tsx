@@ -17,25 +17,25 @@ export const metadata: Metadata = {
 const FOUR_JOBS = [
   {
     title: "Wrap",
-    body: "oxagen tacho enroll installs hooks in Claude Code and Codex on one machine. From then on every run there is recorded as a hash-chained sequence of frames and shipped to your workspace. The agent keeps working the way it works today.",
-    href: "/docs/cli/desktop",
+    body: "Enroll the machine that runs your agent. Harness hooks send recorded steps to your workspace. Hook-based evidence is client-attested, and observe mode records activity without enforcing it.",
+    href: "/docs/cli/wrap-an-agent",
     cta: "Wrap a machine",
   },
   {
     title: "Govern",
-    body: "Every agent holds an identity and a mandate, and nothing else. When a task needs a model call, a tool call, or a memory write, the agent asks through one invoke() boundary, and a rule you wrote answers: allowed, denied, or routed to a person. There is no second path.",
+    body: "Give each agent an identity and a mandate. For actions routed through Oxagen, the control plane checks its authority and records the decision. Credentials for mediated connections stay in Oxagen.",
     href: "/docs/governance/overview",
     cta: "Roles and RBAC",
   },
   {
     title: "Record",
-    body: "Every run leaves one record beside the data it touched: who started it, what the agent read, what it changed, and what it cost. The record lives in two audit stores, and one of them hash-chains every entry to the one before it.",
+    body: "Inspect recorded steps, decisions, and cost on a run. Query security events in Postgres and IAM decisions in ClickHouse. The audit guide explains what each store records and where evidence can be missing.",
     href: "/docs/security/audit-logging",
     cta: "Audit logging",
   },
   {
     title: "Spend",
-    body: "Every model call and tool call routed through Oxagen is priced by token class and attributed to an operator, an agent, a run, a turn, and a step. Hard ceilings per organization and workspace stop a run between steps, never mid-tool.",
+    body: "Review recorded usage by agent, operator, workspace, and run. Set organization and workspace ceilings for governed consumption. Check whether each cost was measured, reported, or estimated.",
     href: "/docs/billing",
     cta: "Billing and budgets",
   },
@@ -70,7 +70,7 @@ const SURFACES = [
   },
   {
     title: "Plugins",
-    body: "Capability packs, the static registry, tiers and entitlement gating, and the workspace marketplace.",
+    body: "Browse the plugin catalog through API or MCP. Inspect installation, credential, entitlement, and role requirements.",
     href: "/docs/plugins/overview",
   },
 ];
@@ -110,16 +110,15 @@ export default function HomePage(): ReactNode {
             </span>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight sm:text-5xl lg:text-6xl">
-              Run your agents <span className="lp-grad-text">as a fleet</span>.
+              Mission Control for{" "}
+              <span className="lp-grad-text">agent operators</span>.
             </h1>
 
             <p className="mt-5 max-w-xl text-pretty text-base text-muted-foreground sm:text-lg">
-              Oxagen governs the agents you run, autonomous and supervised
-              alike. Each agent works under one mandate, set by security,
-              FinOps, and engineering, and checked on the calls routed through
-              Oxagen. Every run is on the record with its cost. These docs cover
-              the CLI, the REST API, the MCP server, and Mission Control, all
-              behind one audited{" "}
+              Set each agent's identity, authority, budget, tools, and skills.
+              Inspect its recorded work in Mission Control. These docs cover the
+              CLI, REST API, and MCP surfaces whose capability calls pass
+              through the{" "}
               <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">
                 invoke()
               </code>{" "}
@@ -164,25 +163,23 @@ export default function HomePage(): ReactNode {
               <span className="lp-grad-text">their work requires</span>.
             </h2>
             <p className="mt-5 max-w-lg text-base text-muted-foreground">
-              Oxagen hands the agent a typed knowledge graph at run time instead
-              of training a model. Stuffing every document into the prompt
-              saturates the window. Oxagen retrieves only the slice the task
-              needs and the agent&apos;s mandate lets it read, so the window
-              stays open and the model stays sharp.
+              Request workspace entities, relationships, and memories through
+              scoped retrieval capabilities. Choose context relevant to the task
+              within the agent&apos;s permitted scope and context budget.
             </p>
             <ul className="mt-7 space-y-3 text-sm">
               {[
                 [
                   "Typed knowledge graph",
-                  "Entities and relationships in Neo4j. Retrieval targets meaning, not a wall of text.",
+                  "Search entities and relationships stored in Neo4j.",
                 ],
                 [
                   "Scoped by the mandate",
-                  "The graph returns only what the agent's mandate lets it read, and the scope is checked on every query.",
+                  "Governed graph reads check the caller's authority and workspace scope.",
                 ],
                 [
-                  "Metered on every call",
-                  "Every retrieval and model call records the context tokens it used, its latency, and the surface it came from.",
+                  "Recorded usage",
+                  "Inspect the usage and timing recorded for the retrieval and model calls your agent makes.",
                 ],
               ].map(([t, d]) => (
                 <li key={t} className="flex gap-3">
@@ -256,11 +253,11 @@ export default function HomePage(): ReactNode {
         <div className="max-w-2xl">
           <span className="ox-eyebrow">Documentation</span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Everything is reachable three ways.
+            Choose an interface.
           </h2>
           <p className="mt-4 text-base text-muted-foreground">
-            One capability model, exposed identically across the REST API, the
-            MCP server, and the in-app agent. Pick a surface and start building.
+            Each capability declares which surfaces expose it. Read its contract
+            and the interface guide before connecting your client.
           </p>
         </div>
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -292,8 +289,8 @@ export default function HomePage(): ReactNode {
           </h2>
           <p className="mt-4 max-w-xl text-base text-muted-foreground">
             Install the CLI and wrap one machine, or read the getting-started
-            guide to stand up an organization and workspace. The first screen
-            shows your own numbers.
+            guide to create an organization and workspace. Run a task in the
+            wrapped harness, then inspect the record that arrived.
           </p>
           <div className="mt-8">
             <CopyCommand command={INSTALL_CMD} />

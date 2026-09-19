@@ -1,4 +1,4 @@
-# user.profile.update
+# update_profile
 
 The Account dialog's identity fields: display name and avatar. The rebuilt app has no write seam onto `auth.users` (its one `withSystemDb` read, `apps/app/src/server/tenancy-lookups.ts`, is column-gated to `id`/`twoFactorEnabled`), where the retired app wrote the row directly from a server action. Every write in the rebuilt app goes through `kernelWrite(contract)`, so the profile write became a real capability.
 

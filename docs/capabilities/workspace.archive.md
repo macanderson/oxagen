@@ -1,4 +1,4 @@
-# workspace.archive
+# archive_workspace
 
 `archive_workspace`: archive a workspace (issue #2964). A workspace with a registered agent is refused: every `agent.agents` row in it that is not deleted, not `archived` and not the seeded `qa-chat` agent counts, and those agents are deregistered or moved first. Archiving records `workspace.workspaces.archived_at` and `archived_by_user_id` together. From then on the workspace leaves `list_workspaces` — the switcher and the CLI picker — unless the caller passes `includeArchived`; its runs, frames and records stay readable and its slug stays taken. A run admitted in an archived workspace is not refused by the kernel.
 
