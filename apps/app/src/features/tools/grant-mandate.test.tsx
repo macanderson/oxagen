@@ -3,7 +3,7 @@
 // for this workspace with the agent picked, returns to the Mandates ledger on
 // success, and names a refusal in the dialog without navigating. Opened on a
 // requested row it fixes the agent, prefills what the draft recorded, sends the
-// draft's id, and says when a money limit could not be carried. Each state gets
+// draft's id, and refuses a draft it cannot carry whole. Each state gets
 // an axe check.
 import {
   cleanup,
@@ -28,7 +28,7 @@ const { router, grantMandate } = vi.hoisted(() => ({
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("./grant-actions", () => ({ grantMandate }));
 
-const { GrantMandate } = await import("./grant-mandate");
+const { GrantMandate, notCarried } = await import("./grant-mandate");
 const { useGrantFailure } = await import("./grant-failure");
 
 const at = { org: "acme", ws: "core-platform" };
@@ -286,7 +286,7 @@ describe("GrantMandate on a requested draft", () => {
     );
     expect(within(form).getByLabelText("Valid from")).toHaveValue("2026-09-01");
     expect(within(form).getByLabelText("Valid to")).toHaveValue("2026-12-31");
-    expect(form).not.toHaveTextContent("names a money limit");
+    expect(form).not.toHaveTextContent("more than this form can carry");
     await expectNoAxe(document.body);
   });
 
@@ -317,15 +317,79 @@ describe("GrantMandate on a requested draft", () => {
     expect(router.replace).toHaveBeenCalledWith(MANDATES);
   });
 
-  // A money figure is micros and this form writes whole units, so carrying one
-  // would grant a millionth of what was asked. The granter is told instead.
-  it("says a money limit was not carried, and leaves the measure blank", async () => {
-    draw({ request: mandateRow({ id: "mnd_7c1d2e", status: "draft" }) });
+  // grant_mandate replaces the draft's body with what the form sends, so a draft
+  // the form cannot hold whole would be activated weaker than it was asked for.
+  // The dialog shows it for review and offers no submit (negative).
+  it.each([
+    [
+      "a money limit",
+      mandateRow({ id: "mnd_7c1d2e", status: "draft" }),
+    ],
+    [
+      "two count limits",
+      mandateRow({
+        ...request,
+        authority: [
+          mandateAuthority({
+            measure: "rows",
+            perCall: null,
+            perPeriod: { kind: "count", count: "1000", unit: "rows" },
+          }),
+          mandateAuthority({
+            measure: "files",
+            perCall: null,
+            perPeriod: { kind: "count", count: "20", unit: "files" },
+          }),
+        ],
+      }),
+    ],
+    [
+      "a calls limit that is not a daily total",
+      mandateRow({
+        ...request,
+        authority: [
+          request.authority[0]!,
+          { ...callsAuthority(), period: "weekly" },
+        ],
+      }),
+    ],
+    [
+      "two thresholds",
+      mandateRow({
+        ...request,
+        approval: {
+          ...request.approval,
+          humanAbove: [
+            { measure: "rows", value: null, recorded: "500" },
+            { measure: "files", value: null, recorded: "5" },
+          ],
+        },
+      }),
+    ],
+    [
+      "two target rules",
+      mandateRow({
+        ...request,
+        targets: [
+          { measure: "recipient", allow: ["vendor:aws"], deny: [] },
+          { measure: "account", allow: ["acct:1"], deny: [] },
+        ],
+      }),
+    ],
+  ])("refuses a draft with %s rather than granting part of it", async (_, draft) => {
+    draw({ request: draft });
     await open("Grant mandate mnd_7c1d2e");
     const form = draftDialog();
-    expect(form).toHaveTextContent("This request names a money limit.");
-    expect(within(form).getByLabelText("Measure")).toHaveValue("");
-    expect(within(form).getByLabelText("Per period")).toHaveValue("");
+    expect(form).toHaveTextContent("more than this form can carry");
+    expect(
+      within(form).queryByRole("button", { name: "Grant this request" }),
+    ).toBeNull();
+    expect(notCarried(draft)).toBe(true);
+    await expectNoAxe(document.body);
+  });
+
+  it("carries a draft with one count limit, a daily calls limit and one of each rule", () => {
+    expect(notCarried(request)).toBe(false);
   });
 });
 

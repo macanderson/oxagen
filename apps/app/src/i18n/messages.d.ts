@@ -3412,7 +3412,7 @@ type Messages = {
       grantRequestLabel: string;
       titleRequest: string;
       bodyRequest: string;
-      moneyNotCarried: string;
+      notCarried: string;
       agentOption: string;
       agentsPartial: string;
       agentsUnavailable: string;

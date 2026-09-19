@@ -333,7 +333,7 @@
       "grantRequestLabel": "Grant mandate {id}",
       "titleRequest": "Grant a requested mandate",
       "bodyRequest": "The request is prefilled. What you submit replaces it and becomes active, and your role is recorded with the grant.",
-      "moneyNotCarried": "This request names a money limit. This form writes whole units and cannot carry it, so it is not prefilled. Grant a money limit over the API or MCP, or grant a limit in another measure here.",
+      "notCarried": "This request holds more than this form can carry: a money limit, a second limit, target rule or threshold, or a calls limit that is not a daily total. Granting it here would drop that part and grant more than was asked, so it cannot be granted here. Grant it over the API or MCP with grant_mandate.",
       "agentOption": "{name} ({slug})",
       "agentsPartial": "The first page of this workspace's agents. An agent not listed here can be granted a mandate over the API or MCP.",
       "agentsUnavailable": "The workspace's agents could not be read, so there is no agent to pick. Reload the page to try again.",

@@ -9,9 +9,10 @@
 // an agent picked from the workspace's agents. A requested row's Grant control
 // opens it on that draft: the agent is fixed, and every field the draft
 // recorded is prefilled so the granter reviews the request rather than retyping
-// it. A money limit is not prefilled. Its figure is micros and this form writes
-// whole units (`mandateLimitsOf`), so a money limit is granted over the API or
-// MCP by a caller that holds the tool's declaration.
+// it. A draft the form cannot hold whole is shown but not granted here
+// (`notCarried`): the handler replaces a draft's body with the granter's, so a
+// money limit, a second limit or rule, or a calls limit the form cannot express
+// would be dropped, and the active mandate would grant more than was asked.
 //
 // The consequences are a set, as on the request: a mandate covers a tool only
 // when it names every tag that tool declares. The counterparty rule and the
@@ -133,11 +134,36 @@ const BLANK: Prefill = {
 };
 
 /**
+ * True when submitting this form would drop part of `request`. The form holds
+ * one count limit, a calls limit per day with no per-call figure, one
+ * counterparty rule and one `humanAbove` threshold. A money figure is micros
+ * and this form writes whole units, so it cannot carry one either. Because
+ * `grant_mandate` replaces the draft's body with what the form sends, granting
+ * such a draft here would activate a weaker mandate than the one requested:
+ * a dropped limit or threshold is authority nobody approved.
+ */
+export function notCarried(request: MandateRow): boolean {
+  const limits = request.authority.filter((entry) => entry.measure !== "calls");
+  const calls = request.authority.find((entry) => entry.measure === "calls");
+  return (
+    limits.length > 1 ||
+    limits.some(
+      (entry) =>
+        entry.perCall?.kind === "money" || entry.perPeriod?.kind === "money",
+    ) ||
+    (calls !== undefined &&
+      (calls.period !== "daily" || calls.perCall !== null)) ||
+    request.targets.length > 1 ||
+    request.approval.humanAbove.length > 1
+  );
+}
+
+/**
  * The fields a requested draft opens with. Only a count limit is carried: a
  * money figure is micros and this form writes whole units, so prefilling one
  * would grant a millionth of what was asked, or, typed back as the dollars it
- * reads as, a figure nobody meant. The first rule of each record is carried,
- * because the form holds one.
+ * reads as, a figure nobody meant. A draft with more than the form holds is
+ * refused by `notCarried` rather than prefilled in part.
  */
 function prefillOf(request: MandateRow, timeZone: string | undefined): Prefill {
   const countOf = (value: MeasureValue | null): string =>
@@ -231,10 +257,12 @@ export function GrantMandate({
   // Ids carry the dialog's own test id: the ledger mounts one dialog per
   // requested row beside the header's, and two labels may not share a target.
   const id = (name: string) => `${testId}-${name}`;
+  /** A draft this form cannot hold whole: shown for review, never granted here. */
+  const refused = request !== null && notCarried(request);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending) return;
+    if (pending || refused) return;
     const form = new FormData(event.currentTarget);
     setPending(true);
     setFailure(null);
@@ -282,13 +310,6 @@ export function GrantMandate({
   // Read when the dialog renders, so reopening it on a fresher ledger reads the
   // draft again; `defaultValue` seeds each field once per mount.
   const prefill = request === null ? BLANK : prefillOf(request, timeZone);
-  /** A requested money limit this form cannot carry, which the granter is told about. */
-  const dropsMoney =
-    request !== null &&
-    request.authority.some(
-      (entry) =>
-        entry.perCall?.kind === "money" || entry.perPeriod?.kind === "money",
-    );
 
   return (
     <>
@@ -321,12 +342,9 @@ export function GrantMandate({
           <p className="text-sm text-muted-foreground">
             {request === null ? t("body") : t("bodyRequest")}
           </p>
-          {dropsMoney ? (
-            <p
-              data-state="money-not-carried"
-              className="text-sm text-foreground"
-            >
-              {t("moneyNotCarried")}
+          {refused ? (
+            <p data-state="not-carried" className="text-sm text-foreground">
+              {t("notCarried")}
             </p>
           ) : null}
           {request !== null ? (
@@ -614,7 +632,7 @@ export function GrantMandate({
           {failure === null ? null : (
             <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
           )}
-          {canPick ? (
+          {canPick && !refused ? (
             <SubmitButton
               pending={pending}
               label={request === null ? t("confirm") : t("confirmRequest")}

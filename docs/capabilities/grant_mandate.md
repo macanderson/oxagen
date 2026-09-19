@@ -47,7 +47,11 @@ whole units, and refuses a unit that is a currency code. Whether a measure is
 money is a property of the tool version's declaration, which no read the app
 makes returns. Grant a money limit over the API or MCP. The dialog holds one
 counterparty rule and one `humanAbove` threshold. Grant more over the API or
-MCP.
+MCP. A requested draft that holds more than the dialog can carry (a money
+limit, a second limit, target rule or threshold, or a calls limit that is not a
+daily total) opens for review with no **Grant** button: the handler replaces
+the draft's body with the granter's, so granting it from the dialog would drop
+the part it cannot hold.
 
 ## Roles
 
