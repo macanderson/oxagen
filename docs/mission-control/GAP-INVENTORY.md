@@ -51,7 +51,8 @@ Feature: `apps/app/src/features/run/`. Tabs in code: `transcript` \| `frames` \|
 | Cost tab and header cost | **Built** | |
 | Header: status, replay grade, sealed | **Built** | `header.tsx` |
 | Pause / resume / steer / cancel | **Partial** | Live tacho only; ledger controls disabled (no revocable run token) |
-| Export / summarize | **Built** | Sealed runs via `export_run`, `summarize_run` |
+| Summarize | **Built** | Sealed runs via `summarize_run` |
+| Export | **Partial** | UI calls `export_run` and shows an export id; the job writes `bundleRef` to `evidence.run_exports`, but nothing in the app or API lets you check status or download the bundle |
 | Policy / approvals on this run | **Missing** | Deferred (#3286) |
 | Proof / witness | **Missing** | #2955 |
 | Chain / seal tab | **Missing** | Replay grade stays in the header |
@@ -163,7 +164,7 @@ Feature: `apps/app/src/features/spend/`. Tabs: findings \| operator \| agent \| 
 | Budgets and set | **Built** | `set_spend_budget` |
 | Export statement | **Built** | CSV via `export_statement` |
 | Cache hit rate | **Partial** | On Fleet tiles, not on Spend |
-| Provider key / task as first-class dims | **Partial** | Provider is a column on model rows |
+| Provider key / task as first-class dims | **Missing** | `SpendGroupKind` is only operator, agent, model, and tool. `SpendRow.provider` is the model vendor, not a provider key, and there is no task grouping |
 | Reconciliation | **Cut** | |
 
 Closest workspace page to the scaled-back job.
@@ -267,12 +268,12 @@ Ontology engine, SSO/SCIM, policy simulation, assurance suite, two-person mandat
 | Page | Fit | One-line reason |
 |---|---|---|
 | Billing | ~95% | Two meters and the purchase path are live |
-| Spend | ~90% | Findings, rollups, waste, budgets, export |
+| Spend | ~85% | Findings, rollups, waste, budgets, export; no provider-key or task dims |
 | Organization | ~80% | Send-invite and model route missing |
 | Agents | ~70% | Detail and register work; grant and mandate detail thin |
 | Fleet | ~55% | Runs and tiles work; approve and DoD missing |
 | Tools | ~50% | Four of six tabs; no policy or auto-approvals |
-| Run | ~45% | Player and cost work; proof, DoD, policy, bisect missing |
+| Run | ~45% | Player and cost work; export has no download; proof, DoD, policy, bisect missing |
 | Audit | ~40% | Events and export only |
 | Steering | ~35% of today / ~15% of Phase 2 hub | Three tabs of seven |
 | Skills | ~15% of ADR-090 | Inventory only; extra nav vs the nine-page target |
