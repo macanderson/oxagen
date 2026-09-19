@@ -642,6 +642,17 @@ export const TACHO_MAX_BODY_BYTES = 600 * 1024;
 export const TACHO_MAX_BATCH_BODY_BYTES = 700 * 1024;
 
 /**
+ * The largest ingest request, in bytes on the wire: the ceiling the API route
+ * enforces and the one the shipper cuts batches against. Bodies travel as
+ * base64 (4/3 of their size), so 4 MiB of body bytes is about 5.3 MiB on the
+ * wire before the events themselves; 8 MiB holds a full body budget and a
+ * full batch of events. Both ends import this constant so they cannot drift:
+ * when the route capped requests at 1 MiB, a single retained body could be
+ * refused with 413 and wedge the queue behind it.
+ */
+export const TACHO_MAX_REQUEST_BYTES = 8 * 1_048_576;
+
+/**
  * A frame body shipped next to its event (Mission Control spec §8.2; tacho
  * spec §2 "Bodies are digested, content is governed"). The host redacts and
  * digests the bytes before it chains `content.digest`; the control plane

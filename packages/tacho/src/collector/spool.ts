@@ -27,6 +27,7 @@ import {
   type DaemonHealth,
   TACHO_MAX_BATCH,
   TACHO_MAX_BATCH_BODY_BYTES,
+  TACHO_MAX_REQUEST_BYTES,
   type TachoBody,
 } from "../wire";
 
@@ -233,21 +234,35 @@ export class Shipper {
   }
 
   /**
-   * Cut the batch where its bodies would cross the byte budget. The first
-   * event always ships, whatever its body weighs: a single body is already
-   * capped at `TACHO_MAX_BODY_BYTES` by the recorder, and a batch that could
-   * never contain its head would wedge the queue.
+   * Cut the batch where it would cross either budget: the body bytes
+   * (`TACHO_MAX_BATCH_BODY_BYTES`, before base64) or the request itself on the
+   * wire (`TACHO_MAX_REQUEST_BYTES`, the route's ceiling, counting each
+   * event's JSON and each body's base64). The first event always ships,
+   * whatever it weighs: a single body is already capped at
+   * `TACHO_MAX_BODY_BYTES` by the recorder, and a batch that could never
+   * contain its head would wedge the queue.
    */
   private fitBodyBudget(
     batch: TachoEvent[],
     bodies: Map<string, TachoBody>,
   ): TachoEvent[] {
-    let total = 0;
+    // The request's own envelope (schema, host id, daemon health) is small;
+    // this leaves room for it.
+    const wireCeiling = TACHO_MAX_REQUEST_BYTES - 64 * 1024;
+    let bodyBytes = 0;
+    let wireBytes = 0;
     for (let index = 0; index < batch.length; index += 1) {
-      const body = bodies.get((batch[index] as TachoEvent).event_id_idem);
-      if (body === undefined) continue;
-      total += base64ByteLength(body.bytes_base64);
-      if (total > TACHO_MAX_BATCH_BODY_BYTES && index > 0)
+      const event = batch[index] as TachoEvent;
+      wireBytes += Buffer.byteLength(JSON.stringify(event));
+      const body = bodies.get(event.event_id_idem);
+      if (body !== undefined) {
+        bodyBytes += base64ByteLength(body.bytes_base64);
+        wireBytes += body.bytes_base64.length + body.content_type.length + 96;
+      }
+      if (
+        index > 0 &&
+        (bodyBytes > TACHO_MAX_BATCH_BODY_BYTES || wireBytes > wireCeiling)
+      )
         return batch.slice(0, index);
     }
     return batch;
@@ -306,6 +321,40 @@ export class Shipper {
         this.fail(error);
         return { shipped: 0, quarantined: 0, reachable: false };
       }
+      if (error instanceof ControlError && error.status === 413) {
+        // Too large for the route. Retrying the same bytes would be refused
+        // for ever and hold every later event behind it, so split the batch;
+        // one event still too large ships without its body, which the
+        // control plane records as a `body_missing` gap.
+        if (batch.length === 1) {
+          const only = batch[0] as TachoEvent;
+          if (!bodies.has(only.event_id_idem)) {
+            this.quarantine(only, error.body.slice(0, 512));
+            this.succeed();
+            return { shipped: 0, quarantined: 1, reachable: true };
+          }
+          this.options.log(
+            `ingest refused ${only.event_id_idem} as too large (413); shipping it without its body`,
+          );
+          const withoutBody = new Map(bodies);
+          withoutBody.delete(only.event_id_idem);
+          return this.shipBatch(batch, withoutBody);
+        }
+        const middle = Math.ceil(batch.length / 2);
+        const leftHalf = batch.slice(0, middle);
+        const left = await this.shipBatch(leftHalf, bodies);
+        // A later half that ships would markShipped past the earlier seqs,
+        // so those events vanish from the WAL without reaching the plane.
+        // Do not send higher sequences until every left event has shipped
+        // or been quarantined.
+        if (left.shipped + left.quarantined < leftHalf.length) return left;
+        const right = await this.shipBatch(batch.slice(middle), bodies);
+        return {
+          shipped: left.shipped + right.shipped,
+          quarantined: left.quarantined + right.quarantined,
+          reachable: left.reachable && right.reachable,
+        };
+      }
       if (
         error instanceof ControlError &&
         (error.status === 400 || error.status === 422 || error.status === 413)
@@ -330,7 +379,9 @@ export class Shipper {
           return { shipped: 0, quarantined: 1, reachable: true };
         }
         const middle = Math.ceil(batch.length / 2);
-        const left = await this.shipBatch(batch.slice(0, middle), bodies);
+        const leftHalf = batch.slice(0, middle);
+        const left = await this.shipBatch(leftHalf, bodies);
+        if (left.shipped + left.quarantined < leftHalf.length) return left;
         const right = await this.shipBatch(batch.slice(middle), bodies);
         return {
           shipped: left.shipped + right.shipped,
