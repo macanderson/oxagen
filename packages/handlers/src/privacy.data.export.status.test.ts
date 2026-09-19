@@ -53,7 +53,12 @@ const authz = vi.hoisted(() => ({
     roleGrants: [] as unknown[],
     policies: [] as unknown[],
   },
-  calls: [] as { capability: string; orgId: string; userId: string | null }[],
+  calls: [] as {
+    capability: string;
+    orgId: string;
+    workspaceId: string | null;
+    userId: string | null;
+  }[],
 }));
 
 vi.mock("@oxagen/iam", () => ({
@@ -61,11 +66,13 @@ vi.mock("@oxagen/iam", () => ({
   fetchAuthz: (args: {
     capability: string;
     orgId: string;
+    workspaceId: string | null;
     userId: string | null;
   }) => {
     authz.calls.push({
       capability: args.capability,
       orgId: args.orgId,
+      workspaceId: args.workspaceId,
       userId: args.userId,
     });
     return Promise.resolve(authz.value);
@@ -125,12 +132,17 @@ function personalRow(overrides: Record<string, unknown> = {}) {
   return {
     id: EXPORT_ID,
     scope: "user",
+    workspaceId: QUEUED_WS,
     status: "ready",
     exportUrl: "privacy-exports/org/exp.zip",
     completedAt: null,
     ...overrides,
   };
 }
+
+/** The workspace an export was queued through, and a sibling in the same org. */
+const QUEUED_WS = "66666666-6666-4666-8666-666666666666";
+const OTHER_WS = "77777777-7777-4777-8777-777777777777";
 
 const PRINCIPAL_ID = "44444444-4444-4444-8444-444444444444";
 const ROLE_ID = "55555555-5555-4555-8555-555555555555";
@@ -417,17 +429,62 @@ describe("an export_data deny written after the archive was queued", () => {
     );
   });
 
-  // The question asked is `export_data`'s, in the organisation that governed
-  // the export, for the person reading it. Asking about `get_export_status`
-  // instead would miss the deny entirely: no rule is keyed to that name.
-  it("asks about export_data in the governed organisation", async () => {
+  // The deny is written in the workspace the export was QUEUED through, and
+  // the download route is mounted under every workspace slug in the
+  // organisation. Asking the resolver about the caller's current workspace
+  // therefore let an owner walk around the deny by requesting the same archive
+  // through a sibling workspace: B's policy answered for an archive A
+  // governed, and the archive is every person's data in the organisation.
+  it("asks the workspace the export was queued in, not the one it is asked from", async () => {
+    readyOrgExportForAnOwner();
+    denyExportData();
+    await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx({ workspaceId: OTHER_WS }),
+    ).catch(() => undefined);
+
+    const asked = authz.calls.filter((c) => c.capability === "export_data");
+    expect(asked).not.toHaveLength(0);
+    for (const call of asked) expect(call.workspaceId).toBe(QUEUED_WS);
+  });
+
+  // A row queued before the column existed carries null. It is asked at
+  // organisation scope rather than at the caller's, which sees organisation
+  // rules and not workspace-keyed ones: less than the full check, and still
+  // better than trusting the scope the requester picked.
+  it("falls back to organisation scope for a row with no recorded workspace", async () => {
+    queueSelects(
+      [personalRow({ scope: "org", workspaceId: null })],
+      [{ role: "owner" }],
+    );
+    denyExportData();
+    await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx({ workspaceId: OTHER_WS }),
+    ).catch(() => undefined);
+
+    const asked = authz.calls.filter((c) => c.capability === "export_data");
+    expect(asked).not.toHaveLength(0);
+    for (const call of asked) expect(call.workspaceId).not.toBe(OTHER_WS);
+  });
+
+  // The question asked is `export_data`'s, in the organisation AND the
+  // workspace that governed the export, for the person reading it. Asking
+  // about `get_export_status` instead would miss the deny entirely: no rule is
+  // keyed to that name.
+  it("asks about export_data in the governed organisation and workspace", async () => {
     readyOrgExportForAnOwner();
     denyExportData();
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
       () => undefined,
     );
     expect(authz.calls).toEqual([
-      { capability: "export_data", orgId: ORG_ID, userId: USER_ID },
+      {
+        capability: "export_data",
+        orgId: ORG_ID,
+        workspaceId: QUEUED_WS,
+        userId: USER_ID,
+      },
     ]);
   });
 

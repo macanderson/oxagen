@@ -39,6 +39,17 @@ export const privacyExportRequests = privacySchema.table(
     userId: uuid("user_id").notNull(),
     /** Org context — always set; for user-scope exports this is their primary org. */
     orgId: uuid("org_id").notNull(),
+    /**
+     * The workspace the request was queued through, so `get_export_status` can
+     * recheck `export_data`'s policy where the authority was granted rather
+     * than where the download asks from. The download route is mounted under
+     * any workspace slug in the organization, so without this a deny written
+     * in the queueing workspace was evaded by asking again through a sibling.
+     *
+     * Nullable: rows queued before this column existed have no answer, and the
+     * handler reads a null as organization scope rather than inventing one.
+     */
+    workspaceId: uuid("workspace_id"),
     scope: privacyRequestScopeEnum("scope").notNull(),
     status: privacyExportStatusEnum("status").notNull().default("queued"),
     /** Signed Vercel Blob URL — set when status transitions to "ready". */
@@ -53,6 +64,9 @@ export const privacyExportRequests = privacySchema.table(
   (t) => ({
     userIdx: index("privacy_export_requests_user_idx").on(t.userId),
     orgIdx: index("privacy_export_requests_org_idx").on(t.orgId),
+    workspaceIdx: index("privacy_export_requests_workspace_idx").on(
+      t.workspaceId,
+    ),
     statusCheck: check(
       "privacy_export_status_chk",
       sql`${t.status} IN ('queued','processing','ready','failed')`,

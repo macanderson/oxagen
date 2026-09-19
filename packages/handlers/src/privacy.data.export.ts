@@ -107,6 +107,12 @@ export const privacyDataExportHandler: CapabilityHandler<
         publicId: generatePublicId("prexp"),
         userId: ctx.userId!,
         orgId,
+        // The workspace whose policy governed this request, kept so the
+        // download can be rechecked against it. Without it the recheck read
+        // the caller's workspace at download time, and the route is mounted
+        // under every workspace slug in the organization, so a deny written
+        // here was evaded by asking again through a sibling workspace.
+        workspaceId: ctx.workspaceId ?? null,
         scope: input.scope,
         status: "queued",
       })

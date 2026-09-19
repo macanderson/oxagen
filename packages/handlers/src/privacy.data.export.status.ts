@@ -20,7 +20,7 @@
 // refusal that distinguished the two would answer whether a stranger's export
 // id is real.
 import type { CapabilityHandler } from "@oxagen/oxagen";
-import { HandlerError } from "@oxagen/oxagen";
+import { HandlerError, ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 import { privacyDataExportStatus } from "@oxagen/oxagen/contracts/privacy.data.export.status";
 import { privacyDataExport } from "@oxagen/oxagen/contracts/privacy.data.export";
 import { schema, withSystemDb } from "@oxagen/database";
@@ -66,6 +66,7 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
         id: schema.privacyExportRequests.id,
         scope: schema.privacyExportRequests.scope,
         status: schema.privacyExportRequests.status,
+        workspaceId: schema.privacyExportRequests.workspaceId,
         exportUrl: schema.privacyExportRequests.exportUrl,
         completedAt: schema.privacyExportRequests.completedAt,
       })
@@ -132,11 +133,29 @@ export const privacyDataExportStatusHandler: CapabilityHandler<
     // governed the export: has an explicit rule revoked it? The role check
     // above remains the authorization; this observes the revocation it cannot
     // see.
-    await assertCapabilityNotRevoked(privacyDataExport, ctx, {
-      reason: "org_export_not_permitted",
-      message:
-        "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
-    });
+    //
+    // Asked against the workspace the export was QUEUED in, not the one the
+    // download arrives on. The route is mounted under every workspace slug in
+    // the organization, so reading `ctx.workspaceId` here let an owner evade a
+    // deny written in the queueing workspace by asking again through a
+    // sibling: B's policy answered for an archive A governed, and the archive
+    // is every person's data in the organization.
+    //
+    // A row queued before `workspace_id` existed carries null, and is asked at
+    // organization scope rather than at the caller's, through the org-only
+    // sentinel (ADR-068) the recheck already reads as "no workspace". That
+    // sees organization rules and not workspace-keyed ones, which is less than
+    // the full check and still strictly better than trusting the scope the
+    // requester chose.
+    await assertCapabilityNotRevoked(
+      privacyDataExport,
+      { ...ctx, workspaceId: row.workspaceId ?? ORG_ONLY_WORKSPACE_ID },
+      {
+        reason: "org_export_not_permitted",
+        message:
+          "An organization export can no longer be read: the export_data policy for this organization no longer permits it",
+      },
+    );
   }
 
   // export_url holds the storage KEY, not a browser URL: the archive is a
