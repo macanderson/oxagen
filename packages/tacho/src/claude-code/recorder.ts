@@ -50,6 +50,15 @@ type Context = NonNullable<TachoEvent["context"]>;
 type Host = NonNullable<TachoEvent["host"]>;
 type Anthropic = NonNullable<TachoEvent["anthropic"]>;
 
+/** A sighting's attrs (undefined: a repeat not to seal) and its commit. */
+interface LlmCallSightingAttrs {
+  attrs: Record<string, string> | undefined;
+  commit: () => void;
+}
+
+/** What a row that is not an `llm_call` takes part in: nothing. */
+const NO_SIGHTING: LlmCallSightingAttrs = { attrs: {}, commit: () => {} };
+
 export interface RecorderOptions {
   context: ClaudeCodeContext;
   /** The harness's own session id (Claude Code's UUID). */
@@ -390,11 +399,12 @@ export class SessionRecorder {
     // A proxy frame is the first sighting of its call by construction (it
     // is sealed as the response ends); noting it is what lets the transcript
     // and OTel sightings that follow be stamped as its duplicates.
-    const duplicate =
+    const sighting =
       kind === "llm_call"
-        ? (this.llmCallDuplicateAttrs(body, fields.source ?? "collector") ?? {})
-        : {};
-    return this.seal(kind, body, {
+        ? this.llmCallSighting(body, fields.source ?? "collector")
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs ?? {};
+    const event = this.seal(kind, body, {
       ts: fields.ts ?? this.now(),
       source: fields.source ?? "collector",
       ...(fields.hook_event_name !== undefined
@@ -405,6 +415,8 @@ export class SessionRecorder {
       ...(fields.content !== undefined ? { content: fields.content } : {}),
       turn: {},
     });
+    sighting.commit();
+    return event;
   }
 
   get hasStarted(): boolean {
@@ -610,17 +622,20 @@ export class SessionRecorder {
   /**
    * The attrs an `llm_call` carries when another source already sealed the
    * same call, or undefined when this sighting is a repeat from the same
-   * source and must not be sealed at all. See `llm-call-dedupe.ts`.
+   * source and must not be sealed at all; and the ledger registration to
+   * commit once the row has sealed. A row the envelope refuses never
+   * commits, so the next sighting of the call is not stamped a duplicate of
+   * a row the chain does not hold. See `llm-call-dedupe.ts`.
    */
-  private llmCallDuplicateAttrs(
+  private llmCallSighting(
     body: Record<string, unknown>,
     source: string,
-  ): Record<string, string> | undefined {
-    const verdict = this.llmCalls.note(body, source);
-    if (verdict.kind === "repeat") return undefined;
+  ): LlmCallSightingAttrs {
+    const { verdict, commit } = this.llmCalls.judge(body, source);
+    if (verdict.kind === "repeat") return { attrs: undefined, commit };
     if (verdict.kind === "duplicate")
-      return { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of };
-    return {};
+      return { attrs: { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }, commit };
+    return { attrs: {}, commit };
   }
 
   /** Ingest one hook payload with the hook process environment. */
@@ -854,12 +869,16 @@ export class SessionRecorder {
     // Only the log record takes part: the control plane counts tokens from
     // `otel_log`, never from a span, so a span sealed first must not turn the
     // log record that follows into the duplicate.
-    const duplicate =
+    const sighting =
       draft.kind === "llm_call" && draft.source === "otel_log"
-        ? this.llmCallDuplicateAttrs(draft.body, draft.source)
-        : {};
-    if (duplicate === undefined) return undefined;
-    return this.seal(draft.kind, draft.body, {
+        ? this.llmCallSighting(draft.body, draft.source)
+        : NO_SIGHTING;
+    const duplicate = sighting.attrs;
+    if (duplicate === undefined) {
+      sighting.commit();
+      return undefined;
+    }
+    const event = this.seal(draft.kind, draft.body, {
       ts: draft.ts,
       source: draft.source,
       otel_event_name: draft.otel_event_name,
@@ -877,6 +896,8 @@ export class SessionRecorder {
           ? { prompt_id: draft.standard.prompt_id }
           : {},
     });
+    sighting.commit();
+    return event;
   }
 
   /** Ingest one transcript line (parent transcript or a subagent's). */
@@ -896,10 +917,11 @@ export class SessionRecorder {
     for (const draft of drafts) {
       this.absorbContext(draft.context);
       let body = draft.body;
-      let duplicate =
+      const sighting =
         draft.kind === "llm_call"
-          ? this.llmCallDuplicateAttrs(draft.body, "transcript")
-          : {};
+          ? this.llmCallSighting(draft.body, "transcript")
+          : NO_SIGHTING;
+      let duplicate = sighting.attrs;
       if (duplicate === undefined) {
         // A later content block of a message the chain already holds: its
         // text still ships as a body, its usage does not count again.
@@ -916,6 +938,7 @@ export class SessionRecorder {
           turn: draft.turn ?? {},
         }),
       );
+      sighting.commit();
     }
     return out;
   }
