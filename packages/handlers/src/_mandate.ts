@@ -307,9 +307,11 @@ export async function readerFilter(
   ctx: CheckedContext,
 ): Promise<string | null> {
   const actingUserId = await resolveActingUserId(ctx);
-  const actingCtx = { ...ctx, userId: actingUserId };
   try {
-    await assertOrgRole(actingCtx, { org: ACCOUNTABLE_ORG_ROLES });
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ACCOUNTABLE_ORG_ROLES },
+    );
     return null;
   } catch (err) {
     if (!(err instanceof HandlerError && err.reason === "org_role_required")) {
@@ -324,10 +326,10 @@ export async function readerFilter(
       // closed the same way `checkIAM`'s own tier gate does): `checkIAM`
       // admitted every signed-in human/service principal regardless of
       // role, so this is the only place a Viewer is actually refused.
-      await assertOrgRole(actingCtx, {
-        org: [],
-        workspace: ["Owner", "Member"],
-      });
+      await assertOrgRole(
+        { ...ctx, userId: actingUserId },
+        { org: [], workspace: ["Owner", "Member"] },
+      );
     }
   }
   // assertOrgRole refused a call with no acting user; on an enterprise org

@@ -812,7 +812,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             orgId,
             workspaceId,
-            slug: `soft-deleted-bot-${randomUUID().slice(0, 8)}`,
+            // Agent slugs are capped at 18 characters for the 32-char
+            // agentKey budget (agent.enforce_agent_slug_length()).
+            slug: `del-bot-${randomUUID().slice(0, 8)}`,
             name: "Soft-deleted bot",
             agentType: "custom",
             principalId: softDeletedAgentPrincipal,
