@@ -134,7 +134,7 @@ lists: concat + dedupe), extended to 4 scopes with governance:
                      "attribution": { "coAuthors": ["Claude <noreply@anthropic.com>"],
                                       "trailers": { "Claude-Session": "{sessionUrl}" }, "signoff": false } },
     "pullRequest": { "template": ".github/pull_request_template.md", "base": "main",
-                     "attribution": { "footer": "🤖 Generated with Oxagen", "assignees": ["mac@oxagen.ai"] } },
+                     "attribution": { "footer": "🤖 Generated with Oxagen", "assignees": ["mac@oxagen.sh"] } },
     "branch":      { "convention": "{type}/{slug}",
                      "prefixes": { "feature": "feat/", "fix": "fix/", "chore": "chore/" }, "protected": ["main"] }
   },

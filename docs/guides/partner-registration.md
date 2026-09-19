@@ -40,7 +40,7 @@ without warning.
 
 ### Step 2: Submit registration request
 
-Send the following to `partners@oxagen.ai` with the subject line
+Send the following to `partners@oxagen.sh` with the subject line
 "Connector Registration: {your plugin ID}":
 
 ```
@@ -104,7 +104,7 @@ When you update your schema (new fields, new record types, version bump):
 1. Publish the new `schema.yaml` to your hosting URL.
 2. If the URL is the same (e.g. always pointing to latest), Oxagen will pick
    up the new version on the next install or on cache refresh (24-hour TTL).
-3. If you use versioned URLs, notify Oxagen at `partners@oxagen.ai` to update
+3. If you use versioned URLs, notify Oxagen at `partners@oxagen.sh` to update
    the registered URL to the new version.
 
 **Breaking changes** (removing fields, changing record type IDs, removing auth
@@ -141,7 +141,7 @@ Before submission, verify:
 If a security issue is discovered in your connector (e.g. a credential leak,
 an over-privileged OAuth scope, or a data exposure):
 
-1. Notify Oxagen immediately at `security@oxagen.ai`.
+1. Notify Oxagen immediately at `security@oxagen.sh`.
 2. Oxagen will denylist your connector within 1 hour of confirmed severity.
 3. Provide a remediated schema URL within 24 hours for P1 incidents.
 4. Oxagen will re-enable the connector after verification of the fix.
@@ -176,7 +176,7 @@ Oxagen. Marketplace-listed connectors receive Partner tier support by default.
 
 | Purpose | Contact |
 |---|---|
-| New partner registration | partners@oxagen.ai |
-| Security vulnerabilities | security@oxagen.ai |
-| Technical integration questions | integrations@oxagen.ai |
-| Marketplace listing issues | support@oxagen.ai |
+| New partner registration | partners@oxagen.sh |
+| Security vulnerabilities | security@oxagen.sh |
+| Technical integration questions | partners@oxagen.sh |
+| Marketplace listing issues | success@oxagen.sh |
