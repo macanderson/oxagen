@@ -23,7 +23,7 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
         <tspan fill={tuiColors.cyan} fontWeight={700}>
           {tuiGlyphs.pointer}{" "}
         </tspan>
-        <tspan fill="#f5f5f5" fontWeight={700}>
+        <tspan fill="#FFFFFF" fontWeight={700}>
           refactor the date helpers into a single module
         </tspan>
       </text>
@@ -32,12 +32,12 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
         <tspan fill={tuiColors.violet} fontWeight={700}>
           {"◆ "}
         </tspan>
-        <tspan fill="#e6e6e6">
+        <tspan fill="#E4E4E7">
           I&apos;ll consolidate date parsing and formatting
         </tspan>
       </text>
       <text x={32} y={88} fontSize={12.5}>
-        <tspan fill="#e6e6e6">
+        <tspan fill="#E4E4E7">
           into src/lib/dates.ts, then update call sites
         </tspan>
         <tspan className="tui-caret" fill={tuiColors.cyan}>
@@ -89,7 +89,7 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
           {"● "}
         </tspan>
         <tspan fill={tuiColors.dim}>[turn] </tspan>
-        <tspan fill="#e6e6e6">
+        <tspan fill="#E4E4E7">
           refactor the date helpers into a single module
         </tspan>
       </text>
@@ -103,7 +103,7 @@ export function TuiInteractiveAnswer({ className }: { className?: string }) {
           {"✓ "}
         </tspan>
         <tspan fill={tuiColors.dim}>[subagent] </tspan>
-        <tspan fill="#e6e6e6">scan call sites of formatDate</tspan>
+        <tspan fill="#E4E4E7">scan call sites of formatDate</tspan>
       </text>
 
       {/* Thinking indicator */}

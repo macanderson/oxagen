@@ -2,6 +2,7 @@ import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.rea
 import { describe, expect, it } from "vitest";
 import {
   endOfZonedDay,
+  isCalendarDay,
   startOfNextZonedDay,
   startOfZonedDay,
   supportsTimeZone,
@@ -132,5 +133,33 @@ describe("supportsTimeZone", () => {
     expect(startOfZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
     expect(startOfNextZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
     expect(endOfZonedDay("2026-09-18", "Mars/Olympus_Mons")).toBeNull();
+  });
+});
+
+// A day's SHAPE is not a day. This guards a mandate's validity end, where the
+// gap was worth three days of authority: `2027-02-31` matches the pattern and
+// `Date.UTC` rolls it to 3 March without complaint, so a caller that sent a date
+// which does not exist got a longer window than any date could have named.
+describe("isCalendarDay", () => {
+  it("takes a day that exists, including a leap day that does", () => {
+    for (const day of ["2027-01-01", "2027-02-28", "2028-02-29", "2027-12-31"])
+      expect(isCalendarDay(day)).toBe(true);
+  });
+
+  it("refuses a day that rolls forward rather than failing (negative)", () => {
+    // Each of these is accepted by a shape check and silently becomes another
+    // date. 2027 is not a leap year, so the 29th is in this set too.
+    for (const day of ["2027-02-29", "2027-02-31", "2027-04-31", "2027-06-31"])
+      expect(isCalendarDay(day)).toBe(false);
+  });
+
+  it("refuses a month or day outside the calendar (negative)", () => {
+    for (const day of ["2026-99-99", "2027-13-01", "2027-00-10", "2027-01-00"])
+      expect(isCalendarDay(day)).toBe(false);
+  });
+
+  it("refuses anything that is not a padded day (negative)", () => {
+    for (const day of ["", "not a day", "2027-1-1", "2027-01", "2027-01-01T00:00:00Z"])
+      expect(isCalendarDay(day)).toBe(false);
   });
 });

@@ -92,6 +92,12 @@ const ALLOWED: Record<
     if (under(target, "ui") || under(target, "shared")) return true;
     if (isVocabulary(target) || target === "data/ports") return true;
     if (target === "server/viewer" || target === "server/session") return true;
+    // `server/viewer-zone` has no row here on purpose. A write that places a
+    // calendar day a person picked needs the zone they picked it in, and
+    // `viewerTimeZone` answers it, but features reach it through the
+    // `@/server/viewer` re-export they already may import (viewer.ts) rather
+    // than through a second named seam. Admitting the module here would permit
+    // the direct import that seam exists to avoid.
     // `kernelWrite`, `kernelRead` and `readToActionResult`, only from a
     // "use server" module; their types from anywhere. The read half is ADR-089.
     //

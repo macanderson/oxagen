@@ -10,7 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     id: "/",
     name: "Oxagen docs",
     short_name: "Oxagen docs",
-    description: "Mission Control for your autonomous agents.",
+    description:
+      "Documentation for Oxagen, Mission Control for agent operators. It governs the agents an enterprise runs, autonomous and supervised alike, and does not run them.",
     lang: "en",
     dir: "ltr",
     start_url: "/",

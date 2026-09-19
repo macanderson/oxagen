@@ -249,13 +249,13 @@ export default function InstallPage(): ReactNode {
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
             <OxagenIcon className="size-12" />
             <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">
-              Never re-explain yourself{" "}
-              <span className="lp-grad-text">to AI ever again</span>.
+              Give agents the business context{" "}
+              <span className="lp-grad-text">their work requires</span>.
             </h2>
             <p className="mt-4 max-w-xl text-base text-muted-foreground">
-              Taught once, known by every agent you run. The CLI reads the same
-              knowledge graph and the same record as the app and the API. Sign
-              in and your workspace graph is on the other end of the prompt.
+              The CLI reads the same knowledge graph and the same record as the
+              app and the API. Sign in and your workspace graph is on the other
+              end of the prompt.
             </p>
           </div>
           <div className="mt-12 grid gap-5 md:grid-cols-3">

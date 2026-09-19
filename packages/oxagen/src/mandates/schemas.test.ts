@@ -4,6 +4,7 @@ import {
   effectiveConsequenceRoles,
   mandateApproverSchema,
   mandateBodySchema,
+  mandateLimitChangesSchema,
   mandateLimitsSchema,
   measureDeclarationSchema,
   measureValueSchema,
@@ -113,6 +114,36 @@ describe("the mandate body", () => {
       }).success,
     ).toBe(false);
     expect(mandateLimitsSchema.safeParse({}).success).toBe(false);
+  });
+  // A change is partial by design (ADR-102), so the one thing it must refuse is
+  // saying nothing: an empty set, or a measure whose change carries no field.
+  // Every field it does carry is held to the same rules a stored bound is.
+  it("takes a partial bound as a change, and refuses one that says nothing", () => {
+    expect(
+      mandateLimitChangesSchema.safeParse({ amount: { perPeriod: "500" } })
+        .success,
+    ).toBe(true);
+    expect(
+      mandateLimitChangesSchema.safeParse({ amount: { period: "weekly" } })
+        .success,
+    ).toBe(true);
+    expect(mandateLimitChangesSchema.safeParse({}).success).toBe(false);
+    expect(
+      mandateLimitChangesSchema.safeParse({ amount: {} }).success,
+    ).toBe(false);
+    expect(
+      mandateLimitChangesSchema.safeParse({ amount: { perPeriod: "5.5" } })
+        .success,
+    ).toBe(false);
+    expect(
+      mandateLimitChangesSchema.safeParse({ amount: { period: "yearly" } })
+        .success,
+    ).toBe(false);
+    expect(
+      mandateLimitChangesSchema.safeParse({
+        amount: { perPeriod: "500", surprise: true },
+      }).success,
+    ).toBe(false);
   });
   it("refuses validTo at or before validFrom, no tag, no tool, and an unknown field", () => {
     expect(

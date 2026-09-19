@@ -252,7 +252,7 @@ export function agentsSource(reads: AgentReads) {
       toolbelt: answer(reads.toolbelt, "toolbelt"),
       incidents: answer(reads.incidents, "incidents"),
     },
-    mandates: { list: answer(reads.mandates, "mandates") },
+    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
     spend: {
       byGroup: refuse,
       fleet: refuse,

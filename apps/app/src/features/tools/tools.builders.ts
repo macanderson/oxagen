@@ -133,7 +133,7 @@ export function toolsSource(reads: ToolsReads) {
       grants: answer(reads.grants, "grants"),
       killSwitches: answer(reads.killSwitches, "killSwitches"),
     },
-    mandates: { list: answer(reads.mandates, "mandates") },
+    mandates: { list: answer(reads.mandates, "mandates"), get: refuse },
   };
   return { source, calls };
 }

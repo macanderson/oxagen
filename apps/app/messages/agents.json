@@ -302,6 +302,8 @@
         "branchIsDefault": "That branch is the repository's default branch. Choose another branch.",
         "definitionSchema": "The file's schema line is missing or names another schema. Nothing was committed.",
         "definitionSlug": "The file's slug does not match this agent's slug. Nothing was committed.",
+        "timeZoneUnavailable": "Your time zone could not be read, and the days you picked mean different instants in each zone. No mandate was requested. Try again.",
+        "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the days you picked cannot be placed in it. No mandate was requested. Pick a time zone again in your account settings.",
         "refused": "The change was refused: {code}. Nothing was changed.",
         "invalid": "The request was refused as invalid. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",

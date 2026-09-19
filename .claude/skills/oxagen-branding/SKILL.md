@@ -24,7 +24,7 @@ Copy changes start in the message registry at `messages/` in `oxagenai/oxagen-br
 
 ## What Oxagen is, in one sentence
 
-Oxagen is Mission Control for an autonomous agent workforce: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
+Oxagen is Mission Control for agent operators: assign identities, set authority, equip agents with tools and skills, and oversee their work through a shared control plane.
 
 Every piece of copy is downstream of that sentence. **Mission Control** is the product and the experience: the place an operator does the job. **Agent control plane** is the technical category: what Oxagen is to the systems it governs. A control plane does not run the workload. It decides what the workload may do, hands it what it needs, and keeps the record. Oxagen does not run agents.
 
@@ -49,7 +49,7 @@ Other layers each cover one part of that job. Identity systems say who the agent
 
 Some work has an endpoint. For those bounded tasks, define completion before the work starts. A passing verdict means the specified checks held, and the team decides whether those checks are enough. Other work continues. Keep its authority, activity, and spend in view as it runs.
 
-The homepage eyebrow is **The control plane for your agent workforce** and the headline is **Mission Control for your autonomous agents.** For the security reader, the access line is **Don't hand your agents the keys.** For the finance reader, it is **See which agent spent what, and on whose behalf.** For knowledge, it is **Give agents the business context their work requires.** The dod lines are held until the dod ships and then apply to bounded tasks only. The full list, the retired lines, and the reasons are in `references/positioning.md`.
+The homepage eyebrow is **The agent control plane** and the headline is **Mission Control for agent operators.** For the security reader, the access line is **Don't hand your agents the keys.** For the finance reader, it is **See which agent spent what, and on whose behalf.** For knowledge, it is **Give agents the business context their work requires.** The dod lines are held until the dod ships and then apply to bounded tasks only. The full list, the retired lines, and the reasons are in `references/positioning.md`.
 
 ## Voice, the short version
 

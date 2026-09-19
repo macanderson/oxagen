@@ -151,6 +151,7 @@ export function fleetSource(reads: FleetReads) {
           ? Promise.reject(new Error("mandates.list was not expected"))
           : Promise.resolve(reads.mandates);
       },
+      get: refuse,
     },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },

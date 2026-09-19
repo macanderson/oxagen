@@ -14,7 +14,7 @@ export const mandateRevoke = registerCapability({
     "Revoke a mandate with a reason. Releases every reservation held by a call that has not dispatched; an already ended mandate is refused.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   agent: { requiresApproval: true, riskLevel: "high", category: "governance" },

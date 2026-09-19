@@ -553,7 +553,7 @@ export function runSource(reads: RunReads) {
       apiKeys: refuse,
       modelCredential: refuse,
     },
-    mandates: { list: refuse },
+    mandates: { list: refuse, get: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
     steering: {
