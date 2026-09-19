@@ -22,6 +22,7 @@ import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
 import { agentDefinitionCommit } from "./agent.definition.commit";
+import { agentPropose } from "./agent.propose";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
@@ -543,6 +544,7 @@ export {
   agentSuspend,
   agentRetire,
   agentDefinitionCommit,
+  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -887,6 +889,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentSuspend,
   agentRetire,
   agentDefinitionCommit,
+  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
