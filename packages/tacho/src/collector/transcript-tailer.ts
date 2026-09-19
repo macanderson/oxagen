@@ -207,8 +207,7 @@ export class TranscriptTailer {
    */
   private cursorFor(session: TailedSession, path: string): Cursor {
     const key = this.cursorKey(session);
-    const existing =
-      this.cursors.get(key) ?? this.adoptLegacy(session, key);
+    const existing = this.cursors.get(key) ?? this.adoptLegacy(session, key);
     // A drained cursor is final whatever path the session reports now.
     if (existing?.drained) return existing;
     if (existing !== undefined && existing.path === path) return existing;
@@ -274,10 +273,7 @@ export class TranscriptTailer {
    * agent) takes a legacy raw-id entry, so a custom agent sharing that id
    * never inherits another agent's tombstone.
    */
-  private adoptLegacy(
-    session: TailedSession,
-    key: string,
-  ): Cursor | undefined {
+  private adoptLegacy(session: TailedSession, key: string): Cursor | undefined {
     const legacy = this.cursors.get(session.harnessSessionId);
     if (
       legacy === undefined ||

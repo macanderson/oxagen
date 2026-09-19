@@ -837,6 +837,14 @@ export interface BillingProvider {
     orgId: string,
   ): Promise<BillingCustomerSearchResult | null>;
 
+  /**
+   * Whether this account still holds the customer. False when the id is
+   * missing or deleted (a stale id from a previous Stripe account after a
+   * key rotation), true when it is live. Transient provider errors throw so
+   * the caller can retry rather than mint a duplicate.
+   */
+  customerExists(customerId: string): Promise<boolean>;
+
   /** Create a new customer. Returns the provider customer id. */
   createCustomer(input: BillingCustomerCreateInput): Promise<string>;
 
