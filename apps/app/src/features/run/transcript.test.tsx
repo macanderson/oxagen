@@ -209,10 +209,8 @@ describe("the filter chips", () => {
   });
 
   it("does not open a stream for an empty sealed filter (negative)", () => {
-    class FakeEventSource {
-      constructor() {
-        throw new Error("EventSource must not open for a sealed empty tab");
-      }
+    function FakeEventSource(): never {
+      throw new Error("EventSource must not open for a sealed empty tab");
     }
     vi.stubGlobal("EventSource", FakeEventSource);
     try {
