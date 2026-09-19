@@ -80,6 +80,8 @@
      ---------- */
   var THEME_KEY = "theme";
   var THEMES = ["system", "light", "dark"];
+  /* The browser chrome around the page: the canvas on paper, and on ink. */
+  var THEME_COLOR = { light: "#FFFFFF", dark: "#09090B" };
   var osLight = window.matchMedia("(prefers-color-scheme: light)");
   var root = document.documentElement;
 
@@ -93,7 +95,13 @@
     return THEMES.indexOf(v) === -1 ? "system" : v;
   }
 
+  /* The choice this page shows. It is held here as well as in storage, so a
+     choice still holds for this page view when storage refuses the write:
+     the arrow keys step from it and an OS change does not undo it. */
+  var current = readTheme();
+
   function applyTheme(choice) {
+    current = choice;
     var resolved =
       choice === "system" ? (osLight.matches ? "light" : "dark") : choice;
     /* No transition runs during the swap, or every hover colour would fade
@@ -102,6 +110,12 @@
     root.setAttribute("data-theme", resolved);
     var meta = document.querySelector('meta[name="color-scheme"]');
     if (meta) meta.content = resolved;
+    /* Each theme-color tag is picked by the OS preference alone, so a pinned
+       theme opposite the OS would leave the chrome in the other colour. Both
+       tags carry the resolved theme's colour instead. */
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      m.content = THEME_COLOR[resolved];
+    });
     void root.offsetWidth;
     root.classList.remove("theme-swap");
     document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
@@ -117,7 +131,7 @@
       try {
         localStorage.setItem(THEME_KEY, choice);
       } catch (e) {
-        /* the choice holds for this page view only */
+        /* the choice holds for this page view only, in `current` */
       }
       applyTheme(choice);
     });
@@ -131,20 +145,20 @@
       if (!step) return;
       e.preventDefault();
       var buttons = group.querySelectorAll("[data-theme-choice]");
-      var at = THEMES.indexOf(readTheme());
+      var at = THEMES.indexOf(current);
       var next = buttons[(at + step + buttons.length) % buttons.length];
       next.focus();
       next.click();
     });
   });
   osLight.addEventListener("change", function () {
-    if (readTheme() === "system") applyTheme("system");
+    if (current === "system") applyTheme("system");
   });
   /* Another tab changed the choice. */
   window.addEventListener("storage", function (e) {
     if (e.key === THEME_KEY) applyTheme(readTheme());
   });
-  applyTheme(readTheme());
+  applyTheme(current);
 
   /* ---------- nav: scrolled state ---------- */
   var nav = document.getElementById("nav");

@@ -116,6 +116,10 @@ export const THEME_HEAD = `<script>
   d.setAttribute("data-theme", t);
   var m = document.querySelector('meta[name="color-scheme"]');
   if (m) m.content = t;
+  /* The chrome follows a pinned theme too, not only the OS. */
+  var tc = document.querySelectorAll('meta[name="theme-color"]');
+  for (var i = 0; i < tc.length; i++)
+    tc[i].content = t === "light" ? "#FFFFFF" : "#09090B";
 })(document.documentElement);
 </script>`;
 

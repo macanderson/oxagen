@@ -167,6 +167,51 @@ describe("chrome", () => {
     );
   });
 
+  // Runs the head script against a stub document: `stored` is what
+  // localStorage holds (or a throw), `osLight` the OS preference.
+  function runHead({ stored, osLight }) {
+    const root = {
+      attrs: {},
+      classList: { add() {} },
+      setAttribute(k, v) {
+        this.attrs[k] = v;
+      },
+    };
+    const scheme = { content: "light dark" };
+    const colors = [{ content: "#FFFFFF" }, { content: "#09090B" }];
+    const document = {
+      documentElement: root,
+      querySelector: () => scheme,
+      querySelectorAll: () => colors,
+    };
+    const localStorage = {
+      getItem() {
+        if (stored instanceof Error) throw stored;
+        return stored;
+      },
+    };
+    const matchMedia = () => ({ matches: osLight });
+    const body = THEME_HEAD.replace(/^<script>|<\/script>$/g, "");
+    new Function("document", "localStorage", "matchMedia", body)(
+      document,
+      localStorage,
+      matchMedia,
+    );
+    return { theme: root.attrs["data-theme"], scheme, colors };
+  }
+
+  it("head script paints the browser chrome in a pinned theme, not the OS's", () => {
+    const pinned = runHead({ stored: "dark", osLight: true });
+    expect(pinned.theme).toBe("dark");
+    expect(pinned.scheme.content).toBe("dark");
+    expect(pinned.colors.map((m) => m.content)).toEqual(["#09090B", "#09090B"]);
+    const system = runHead({ stored: null, osLight: true });
+    expect(system.theme).toBe("light");
+    expect(system.colors.map((m) => m.content)).toEqual(["#FFFFFF", "#FFFFFF"]);
+    const blocked = runHead({ stored: new Error("blocked"), osLight: false });
+    expect(blocked.theme).toBe("dark");
+  });
+
   it("layout emits canonical, OG, feed link, and JSON-LD with escaped </script>", () => {
     const html = layout({
       title: "T",
