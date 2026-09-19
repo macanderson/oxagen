@@ -1,7 +1,6 @@
 {
   "skills": {
-    "eyebrow": "Workspace · {workspace}",
-    "lede": "Oxagen does not run a skill — the harness does. This page lists the skills each wrapped harness session reported when it started.",
+    "lede": "Skills are steering, and they are files. Oxagen does not run a skill: the harness does. This tab lists the skills each wrapped harness session reported when it started.",
     "loading": "Loading skills",
     "inventory": {
       "title": "Skills sessions reported",

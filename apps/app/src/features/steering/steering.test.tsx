@@ -34,6 +34,18 @@ vi.mock("./actions", () => ({
   setSteeringGate: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
+// The Skills tab is the Skills lane's inventory; its states are its own test
+// (features/skills/skills.test.tsx). Here the tab only has to hand it the
+// viewer, the data source and the page the URL names.
+const { Skills } = vi.hoisted(() => ({
+  Skills: vi.fn((props: { cursor: string | null }) => (
+    <p data-testid="skills-tab" data-cursor={props.cursor ?? ""} />
+  )),
+}));
+vi.mock("@/features/skills", () => ({
+  Skills,
+  SkillsLoading: () => null,
+}));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 const { WsCtx } = await import("@/server/viewer");
@@ -102,9 +114,25 @@ describe("tabs", () => {
         ]),
     ).toEqual([
       ["Records", BASE, "page"],
+      ["Skills", `${BASE}?tab=skills`, null],
       ["Proposals", `${BASE}?tab=proposals`, null],
       ["Context PRs", `${BASE}?tab=prs`, null],
     ]);
+  });
+
+  it("opens Skills, hands the inventory the page the URL names, and reads no record or proposal", async () => {
+    const calls = await renderSteering({ tab: "skills", cursor: "c2" });
+    expect(calls.records).toEqual([]);
+    expect(calls.proposals).toEqual([]);
+    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ ctx, cursor: "c2" });
+    expect(screen.getByTestId("skills-tab")).toHaveAttribute(
+      "data-cursor",
+      "c2",
+    );
+    expect(screen.getByRole("link", { name: "Skills" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("falls back to Records for a tab it does not know and reads no Context PR outside its tab (negative)", async () => {

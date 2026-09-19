@@ -23,7 +23,7 @@ export const CREATE_KINDS: readonly CreateKind[] = ["skill"];
 
 export const CREATE_EVENT = "oxagen:create";
 
-export type CreateRequest = { kind: CreateKind | null };
+type CreateRequest = { kind: CreateKind | null };
 
 /** Open the chooser (`null`) or one kind's wizard over the current page. */
 export function openCreate(kind: CreateKind | null = null): void {

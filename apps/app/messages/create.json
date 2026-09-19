@@ -1,0 +1,219 @@
+{
+  "create": {
+    "rail": "Steps",
+    "railDone": "done",
+    "steps": {
+      "describe": "Describe",
+      "source": "Source",
+      "find": "Find it",
+      "upload": "Upload",
+      "describeIt": "Describe it",
+      "review": "Review",
+      "recommendation": "Recommendation",
+      "import": "Import",
+      "manifest": "Manifest",
+      "code": "Code",
+      "identity": "Identity",
+      "definition": "Definition",
+      "toolbelt": "Toolbelt",
+      "kind": "Kind",
+      "statement": "Statement",
+      "checks": "Checks",
+      "pullRequest": "Pull request"
+    },
+    "describe": {
+      "label": "In your own words"
+    },
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "needs": "needs <b>{grant}</b> on {workspace}",
+    "chooser": {
+      "title": "Create",
+      "lead": "One shape for everything you create here: you describe it, Oxagen drafts the file, you read it, and a pull request publishes it.",
+      "note": "None of these writes a row. Each one ends on a pull request against {repository}, and the thing exists when somebody merges it. The merge is also the only place a reviewer can stop it.",
+      "noteUnknown": "None of these writes a row. Each one ends on a pull request against the workspace’s main repository, and the thing exists when somebody merges it. The merge is also the only place a reviewer can stop it."
+    },
+    "kinds": {
+      "agent": {
+        "label": "Agent",
+        "body": "A principal that does work here, with a definition, a toolbelt and a budget.",
+        "file": ".oxagen/agents/*.toml"
+      },
+      "tool": {
+        "label": "Tool",
+        "body": "A capability an agent can be granted. Imported from an MCP server, or built here.",
+        "file": ".oxagen/tools/*.toml"
+      },
+      "skill": {
+        "label": "Skill",
+        "body": "A procedure written down: a file, a version and a digest.",
+        "file": ".oxagen/skills/*/SKILL.md"
+      },
+      "record": {
+        "label": "Context record",
+        "body": "One statement that steers every agent it reaches.",
+        "file": ".oxagen/rules/*.toml"
+      }
+    },
+    "pr": {
+      "unknownBase": "the main repository",
+      "from": "from",
+      "files": "Files in the pull request",
+      "change": {
+        "add": "added",
+        "modify": "changed"
+      },
+      "checks": "What the checks will assert"
+    },
+    "skill": {
+      "next": "Next",
+      "readFile": "Read the file",
+      "draftFile": "Draft the file",
+      "toPullRequest": "Continue to the pull request",
+      "source": {
+        "title": "Add a skill",
+        "subtitle": "A skill is a file with a version and a digest. There are three ways to get one, and all three end in a merge.",
+        "registry": {
+          "title": "Search the registry",
+          "body": "Pin a published version by its digest. It arrives with a publisher, a version, and a proof rate somebody measured.",
+          "closed": "No skill registry is connected to this workspace yet."
+        },
+        "describe": {
+          "title": "Describe it",
+          "body": "Write what the procedure is, in prose. Oxagen drafts the SKILL.md, and you edit it before anybody reads it."
+        },
+        "upload": {
+          "title": "Upload a bundle",
+          "body": "A <code>.skill</code>, a <code>.zip</code> or a <code>SKILL.md</code> built elsewhere. Use it to replace a pinned version with the one in the bundle."
+        },
+        "note": "No step here writes to a database. Whichever way you come in, the last step is a pull request against the workspace’s main repository."
+      },
+      "describe": {
+        "title": "Describe the skill",
+        "subtitle": "Procedure, not policy: what to do, in what order, and the one thing never to do.",
+        "placeholder": "How we cut release notes: group merged PRs by surface, read the changelog once, open a PR, and never publish the release.",
+        "hint": "A skill tells an agent what to do. That is why this ends in a pull request, not a save.",
+        "suggestions": {
+          "releaseNotes": "How we cut release notes",
+          "rollback": "How to roll a bad release back",
+          "migration": "How to run a safe Postgres migration",
+          "flakyTest": "How to triage a flaky test"
+        },
+        "noAuthority": "Do not write authority into it. “You may merge” in a skill grants nothing: the toolbelt decides, and a skill that implies otherwise will be wrong in a run somebody has to read."
+      },
+      "upload": {
+        "title": "Upload a bundle",
+        "subtitle": "The bundle is read and hashed in this tab. Nothing is stored until the pull request merges.",
+        "label": "Bundle",
+        "types": ".skill, .zip or SKILL.md",
+        "reading": "Reading the bundle.",
+        "nothing": "Nothing chosen yet. The bundle is read in this browser tab and sent nowhere until the pull request carries it.",
+        "file": "File",
+        "size": "{name}, {kb} KB",
+        "contents": "Contents",
+        "version": "Version",
+        "noVersion": "no version in the frontmatter",
+        "digest": "Digest",
+        "replaces": "The skill’s name comes from the bundle’s frontmatter. If that skill is already merged, the pull request replaces it, and the version in the bundle must be greater than the merged one. The old version stays readable: every run that loaded it named its digest.",
+        "error": {
+          "wrong_type": "A skill bundle is a .skill, a .zip or a bare SKILL.md.",
+          "too_large": "The bundle is larger than a skill may be: 64 KB a file, 2 MB an archive.",
+          "not_a_zip": "This file is not a zip archive Oxagen can read.",
+          "no_skill_md": "The archive holds no SKILL.md.",
+          "unsupported_method": "The archive uses a compression method other than stored or deflate. Zip it again and retry.",
+          "binary_file": "The bundle holds a binary file. A skill bundle carries text only.",
+          "too_many_files": "The bundle holds more than 16 files beside SKILL.md."
+        }
+      },
+      "draft": {
+        "purpose": "What this procedure is for.",
+        "precondition": "Say what has to be true before the first step. A procedure that assumes a state nobody checked is how an agent does the right thing at the wrong moment.",
+        "never": "Name the one thing never to do here, and why.",
+        "grantsNothing": "This file grants nothing. Every action it names still goes through the toolbelt and the policy that governs it."
+      },
+      "review": {
+        "title": "The file",
+        "subtitle": "This is the whole of it. A skill has no code to run and no credential to hold.",
+        "drafted": {
+          "title": "A SKILL.md, drafted from what you wrote",
+          "body": "Oxagen filled a template in from your description, in this tab. No model wrote it and no run was recorded. Every line below is yours to change before anybody reviews it."
+        },
+        "noName": "no name in the frontmatter",
+        "noVersion": "no version in the frontmatter",
+        "badVersion": "version {version} is not major.minor.patch",
+        "noScope": "no scope in the frontmatter",
+        "tokens": "about {tokens, number} tokens to load",
+        "revert": "Revert",
+        "cost": "Every token in this file is paid for on every turn it is loaded into, by every agent that loads it. The estimate is four characters a token. The model’s tokenizer has the real count."
+      },
+      "pr": {
+        "title": "Open the pull request",
+        "subtitle": "A skill an agent can find is a skill somebody merged.",
+        "lead": "Merging this makes <code>{name}</code> resolvable in {workspace}. The digest is taken at merge.",
+        "fileSkill": "the skill",
+        "fileBundle": "from the bundle",
+        "replaces": "If this skill is already merged, the pull request replaces it, and the checks refuse a version that is not greater than the merged one. Runs in flight keep the version they resolved.",
+        "checks": {
+          "frontmatter": {
+            "name": "Frontmatter",
+            "detail": "name, version and scope are present, and the name matches the directory"
+          },
+          "version": {
+            "name": "Version",
+            "detail": "major.minor.patch, and greater than the version it replaces"
+          },
+          "digest": {
+            "name": "Digest",
+            "detail": "taken again over the canonical bytes at merge; it is what a run records when it loads this"
+          },
+          "grants": {
+            "name": "Grants",
+            "detail": "the file names no authority: a skill cannot raise a tier or add a tool"
+          },
+          "secrets": {
+            "name": "Secret and PII scan",
+            "detail": "the body and every bundle file are scanned, and a literal credential fails the check"
+          },
+          "loadCost": {
+            "name": "Load cost",
+            "detail": "inside the search budget .oxagen/skills.toml names, or 6,000 tokens when it names none"
+          }
+        },
+        "open": "Open the pull request",
+        "opening": "Opening the pull request",
+        "repo": {
+          "loading": "Reading the workspace’s main repository.",
+          "unbound": "This workspace has no main repository yet. Bind one in Workspace settings, then open the pull request.",
+          "denied": "Opening a skill pull request needs Owner or Admin on the organization.",
+          "unavailable": "The main repository could not be read ({code}). Nothing was written. Close the wizard and open it again to retry."
+        }
+      },
+      "opened": {
+        "title": "Pull request opened",
+        "subtitle": "The skill exists when somebody merges it.",
+        "added": "{name} {version} is proposed. It resolves when the pull request merges.",
+        "replaced": "{name} {from} to {version} is proposed. Each agent picks it up at the next run it starts, never in one already in flight.",
+        "link": "{repository}#{number}",
+        "digest": "Digest at open: {digest}",
+        "tokens": "About {tokens, number} tokens to load, inside the {budget, number}-token search budget."
+      },
+      "failure": {
+        "checkFrontmatter": "The frontmatter check failed: name, version and scope must be present, and the name must match the directory. Nothing was written.",
+        "checkVersion": "The version check failed: the version must be major.minor.patch and greater than the merged one. Nothing was written.",
+        "checkDigest": "The digest check failed: the file is not text. Nothing was written.",
+        "checkGrants": "The grants check failed: the frontmatter names authority, such as allowed-tools. Remove it, since the toolbelt decides. Nothing was written.",
+        "checkSecrets": "The secret scan found a credential or personal data. Remove it and try again. Nothing was written.",
+        "checkLoadCost": "The file is over the workspace’s search budget. Cut it and try again. Nothing was written.",
+        "mergedUnversioned": "The merged copy of this skill has no version, so there is nothing to compare against. Fix it on the production branch first.",
+        "orgRoleRequired": "Opening a skill pull request needs Owner or Admin on the organization.",
+        "noRepository": "This workspace has no main repository yet. Bind one in Workspace settings.",
+        "githubRefused": "GitHub refused the write. Check the GitHub App’s access to the repository and try again.",
+        "unanswered": "Oxagen did not answer. Nothing was written. Try again.",
+        "refused": "The pull request was refused ({code}). Nothing was written.",
+        "invalid": "The {field} value is not one propose_skill accepts. Nothing was written.",
+        "pendingApproval": "Opening this pull request waits for approval: access request {request}."
+      }
+    }
+  }
+}

@@ -66,4 +66,4 @@ Org Owner or Admin, checked by the handler (INV-29) for the signed-in user. An A
 |---|---|
 | `forbidden` | No signed-in user (`no_principal`), or the user is not an org Owner or Admin (`org_role_required`). |
 | `not_found` | The workspace binds no main repository (`workspace_repository_missing`). |
-| `conflict` | A check failed (`skill_check_failed`, the message names which), or the merged skill has no version to compare against (`skill_merged_unversioned`), or GitHub refused a write (`github_refused`). |
+| `conflict` | A check failed (`skill_check_<name>`: `skill_check_frontmatter`, `skill_check_version`, `skill_check_digest`, `skill_check_grants`, `skill_check_secrets` or `skill_check_load_cost`), or the merged skill has no version to compare against (`skill_merged_unversioned`), or GitHub refused a write (`github_refused`). |

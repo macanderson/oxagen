@@ -13,7 +13,7 @@
 //      (a replacement must carry a strictly greater version) and the search
 //      budget from `.oxagen/skills.toml` (the default when it names none).
 //   4. The six checks over the bytes the operator saw. Any failure refuses the
-//      call with `skill_check_failed` and the failing check's code, and nothing
+//      call with `skill_check_<name>` naming the failing check, and nothing
 //      reaches GitHub.
 //   5. The branch `skills/<name>` from the production branch, one commit per
 //      file, then the branch's open pull request is reused or a new one opened.
@@ -142,7 +142,9 @@ export function createProposeSkillHandler(
     if (failed) {
       throw new HandlerError({
         code: "conflict",
-        reason: "skill_check_failed",
+        // The reason names the check, so a surface can say which one failed
+        // without parsing the message: skill_check_version, skill_check_grants.
+        reason: `skill_check_${failed.name}`,
         message: `The ${failed.name} check failed (${failed.code ?? "failed"}); nothing was written`,
       });
     }

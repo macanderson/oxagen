@@ -160,6 +160,9 @@ describe("Skills › loaded", () => {
 
     expect(read).toHaveBeenCalledExactlyOnceWith(ctx, { cursor: null });
     expect(state()).toBe("loaded");
+    expect(document.body).toHaveTextContent(
+      "Skills are steering, and they are files. Oxagen does not run a skill: the harness does.",
+    );
     const section = screen.getByRole("region", {
       name: "Skills sessions reported",
     });
@@ -203,7 +206,7 @@ describe("Skills › loaded", () => {
     expect(read).toHaveBeenCalledWith(ctx, { cursor: "c1" });
     expect(screen.getByRole("link", { name: "Next page" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/skills?cursor=c2",
+      "/acme/core-platform/steering?tab=skills&cursor=c2",
     );
   });
 });
@@ -298,7 +301,7 @@ describe("Skills › refusals", () => {
     expect(document.body).toHaveTextContent("session_store_unavailable · 503");
     expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/skills?cursor=c1",
+      "/acme/core-platform/steering?tab=skills&cursor=c1",
     );
   });
 });

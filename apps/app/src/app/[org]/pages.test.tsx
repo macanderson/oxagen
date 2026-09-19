@@ -7,8 +7,8 @@
 // feature (WL-34) and renders the cost rollup's two tiles under its title
 // (#2962); the three Agents routes hand theirs, with the agent, the tab and the
 // cursor the URL names, to the Agents feature (#2956); Spend hands its viewer,
-// the data source and the query to its body (#2962); Skills hands its viewer,
-// the data source and the cursor to its body (#3098); Steering hands its viewer,
+// the data source and the query to its body (#2962); the Skills route moves a
+// member to the Skills tab of Steering with its cursor; Steering hands its viewer,
 // the data source and the query to the Steering feature (#2961); Tools hands
 // theirs, with the tab and the chips the URL names, to the Tools feature
 // (#2958); Billing hands
@@ -109,7 +109,12 @@ vi.mock("@/features/billing", () => ({ Billing, BillingActions }));
 vi.mock("@/features/fleet", () => ({ Fleet }));
 vi.mock("@/features/run", () => ({ Run }));
 vi.mock("@/features/agents", () => ({ Agents, Agent, AgentSource }));
-vi.mock("@/features/steering", () => ({ Steering }));
+vi.mock("@/features/steering", () => ({
+  Steering,
+  SteeringCreate: (props: { searchParams: Record<string, string> }) => (
+    <p data-testid="steering-create" data-tab={props.searchParams.tab} />
+  ),
+}));
 vi.mock("@/features/spend", () => ({ Spend, FleetSpendTiles }));
 // People stays real, so the organization page still renders a roster; the two
 // sections the #2964 lane adds are stubbed to show what each route hands them.
@@ -144,6 +149,14 @@ vi.mock("@/features/organization/api-key-actions", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
+// The Skills route only moves to the Steering tab; the redirect throws, as
+// Next's does, with the target in its message.
+vi.mock("@/shared/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/navigation")>()),
+  permanentRedirectTo: (path: string) => {
+    throw new Error(`REDIRECT ${path}`);
+  },
+}));
 
 beforeEach(() => {
   requireViewer.mockReset();
@@ -165,7 +178,8 @@ const ORG = ["acme"];
 const WS = ["acme", "core-platform"];
 const title = translator("pages");
 
-const SKILLS: Load = () => import("./[ws]/skills/page");
+/** A redirect with no title of its own, so not a `Load`. */
+const SKILLS = () => import("./[ws]/skills/page");
 const TOOLS: Load = () => import("./[ws]/tools/page");
 const STEERING: Load = () => import("./[ws]/steering/page");
 
@@ -293,6 +307,10 @@ describe("the Steering page", () => {
       "data-tab",
       "prs",
     );
+    expect(screen.getByTestId("steering-create")).toHaveAttribute(
+      "data-tab",
+      "prs",
+    );
     expect(screen.queryByTestId("not-recorded")).toBeNull();
   });
 });
@@ -320,36 +338,31 @@ describe("the Spend page", () => {
   });
 });
 
-describe("the Skills page", () => {
-  it("resolves the workspace viewer, names the page once under the workspace eyebrow and hands its body the viewer, the data source and the cursor", async () => {
-    const viewer = { wsSlug: "core-platform", wsName: "Core platform" };
-    requireViewer.mockResolvedValue(viewer);
-    const page = await expectPageTitle(
-      await SKILLS(),
-      routeProps(SEGMENTS, { cursor: "c2" }),
-      title("skills"),
+describe("the Skills route", () => {
+  it("moves a member to the Skills tab of Steering with the inventory page it named", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve(
+        (await SKILLS()).default(routeProps(SEGMENTS, { cursor: "c2" })),
+      ),
+    ).rejects.toThrow(
+      "REDIRECT /acme/core-platform/steering?tab=skills&cursor=c2",
     );
     expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(page).toHaveTextContent("Workspace · Core platform");
-    expect(page).toHaveTextContent(
-      "Oxagen does not run a skill — the harness does.",
-    );
-    expect(Skills.mock.calls[0]?.[0]).toEqual({
-      ctx: viewer,
-      source,
-      cursor: "c2",
-    });
-    expect(screen.getByTestId("skills-body")).toBeInTheDocument();
-    expect(screen.queryByTestId("not-recorded")).toBeNull();
+    expect(Skills).not.toHaveBeenCalled();
   });
 
-  it("hands its body the first page when the URL names no cursor", async () => {
-    await expectPageTitle(
-      await SKILLS(),
-      routeProps(SEGMENTS),
-      title("skills"),
-    );
-    expect(Skills.mock.calls.at(-1)?.[0]).toMatchObject({ cursor: null });
+  it("moves to the first page when the URL names no cursor", async () => {
+    requireViewer.mockResolvedValue({
+      orgSlug: "acme",
+      wsSlug: "core-platform",
+    });
+    await expect(
+      Promise.resolve((await SKILLS()).default(routeProps(SEGMENTS))),
+    ).rejects.toThrow("REDIRECT /acme/core-platform/steering?tab=skills");
   });
 });
 

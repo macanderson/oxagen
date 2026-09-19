@@ -137,7 +137,10 @@ describe("propose_skill", () => {
     });
     await expect(
       handler()(input({ body: skill("2.1.0") }), ctx()),
-    ).rejects.toMatchObject({ code: "conflict", reason: "skill_check_failed" });
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "skill_check_version",
+    });
     expect(github.commits).toEqual([]);
     expect(github.pulls).toEqual([]);
   });
@@ -145,7 +148,7 @@ describe("propose_skill", () => {
   it("refuses a file that grants a tool, and writes nothing (negative)", async () => {
     await expect(
       handler()(input({ body: skill("0.1.0", "allowed-tools: Bash") }), ctx()),
-    ).rejects.toMatchObject({ reason: "skill_check_failed" });
+    ).rejects.toMatchObject({ reason: "skill_check_grants" });
     expect(github.branches).toEqual([]);
     expect(github.commits).toEqual([]);
   });
@@ -163,7 +166,7 @@ describe("propose_skill", () => {
         }),
         ctx(),
       ),
-    ).rejects.toMatchObject({ reason: "skill_check_failed" });
+    ).rejects.toMatchObject({ reason: "skill_check_secrets" });
     expect(github.commits).toEqual([]);
   });
 
@@ -172,7 +175,7 @@ describe("propose_skill", () => {
       "main:.oxagen/skills.toml": "enabled = true\n[search]\nbudget = 20\n",
     });
     await expect(handler()(input(), ctx())).rejects.toMatchObject({
-      reason: "skill_check_failed",
+      reason: "skill_check_load_cost",
     });
   });
 
