@@ -37,6 +37,54 @@ import { emitAudit } from "./emit-audit";
 import { resolveOrgTierDetailed, canAccessACL } from "@oxagen/billing";
 import { captureError } from "@oxagen/telemetry";
 import { logger } from "./logger";
+import { readKeyScope } from "./machine-key-scope";
+import { CLI_SESSION_SCOPE_PURPOSE } from "@oxagen/oxagen/cli-session";
+
+/**
+ * The identity a purpose-scoped API key's call is attributed to in EVIDENCE
+ * (the audit row emitAudit writes) — never the creator it borrowed role
+ * grants from.
+ *
+ * This is deliberately narrower than swapping `CheckIAMResult.principal`
+ * outright. That value also becomes the kernel's `resolvedPrincipal`, which
+ * feeds `runInTenantScope`'s `principalId` GUC — documented
+ * (`packages/tenancy/src/scope.ts`) as a genuine `iam.principals.id`, which
+ * RLS predicates may join against. An API key's own id is not a row in that
+ * table, so returning it as the acting principal there would hand
+ * downstream RLS a foreign key into nothing, not merely a differently-named
+ * identity. Evidence has no such contract to keep: an audit row's
+ * `acting_principal_id` is a label on a ClickHouse event, read by people and
+ * exports, not joined against Postgres by anything in this path. So this
+ * function's output is used for the audit call only, and the `principal`
+ * `resolve()` matched role grants against — and that the kernel threads
+ * onward for tenant scope — is untouched.
+ *
+ * `purpose` is null for a plain org key and for a `cli_session_v1` key — the
+ * one purpose that IS a person's own credential (`resolveApiKey` resolves it
+ * to the user who approved `oxagen login`, and a surface that carries that
+ * answer puts it on `ctx.userId`, which is what `principal` already reflects
+ * in that case). Every other purpose is a machine credential — a Tacho host,
+ * its gateway, a Stella telemetry install — and this function is what keeps
+ * `fetchAuthz` agreeing with `resolveOperatorUserId` (#3151): such a key
+ * never acts for a person, so the record of what it did names the key, not
+ * the human whose role grants decided whether it could.
+ */
+function machineAttributedPrincipal(
+  ctx: CapabilityContext,
+  principal: ResolvedPrincipal | null,
+  purpose: string | null,
+): ResolvedPrincipal | null {
+  if (purpose === null || purpose === CLI_SESSION_SCOPE_PURPOSE) {
+    return principal;
+  }
+  if (!ctx.apiKeyId) return principal;
+  return {
+    id: ctx.apiKeyId,
+    kind: "service",
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId,
+  };
+}
 
 /**
  * An audit-emission failure (durable write exhausted its retries, or a hash
@@ -175,10 +223,25 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
       outcome: "allow",
       trace: { steps: [bypassStep], decidedBy: bypassStep },
     };
+    // A read to identify a purpose-scoped key, since the bypass branch's
+    // "zero DB queries" is otherwise true. This is the tier most orgs run
+    // on (#1384's comment above), and a gateway-forwarded call reaches it,
+    // so this is exactly the path evidence must not attribute to an
+    // enroller it never asked about — see machineAttributedPrincipal.
+    // `readKeyScope` reads the one column `machineKeyDenial` already read
+    // moments earlier for this same key in the caller's adapter
+    // (`bootstrap.ts`); a second small read here, on the org's own plane, is
+    // the cost of correct evidence and is bounded to API-key traffic only.
+    const purpose = ctx.apiKeyId
+      ? await readKeyScope(ctx.orgId, ctx.apiKeyId).then((scope) =>
+          scope.kind === "purpose" ? scope.purpose : null,
+        )
+      : null;
+    const bypassPrincipal = machineAttributedPrincipal(ctx, null, purpose);
     emitAudit({
       capability,
       ctx,
-      principal: null,
+      principal: bypassPrincipal,
       result: bypassResult,
       trace: bypassResult.trace,
       rawInputJson,
@@ -186,6 +249,10 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
     }).catch((err: unknown) =>
       reportAuditEmissionFailure(capability, ctx, err),
     );
+    // The kernel's resolvedPrincipal is unchanged — this tier already
+    // returns null there, and machineAttributedPrincipal's guard against
+    // widening the tenant-scope contract only matters when there is a real
+    // principal to protect from being overwritten with an apiKeyId.
     return { result: bypassResult, principal: null };
   }
 
@@ -229,16 +296,31 @@ export async function checkIAM(args: CheckIAMArgs): Promise<CheckIAMResult> {
 
   // 3. Emit audit — fire-and-forget. Audit failures must be loud but NEVER
   // block the user path (see reportAuditEmissionFailure).
+  //
+  // `resolve()` above already ran against `principal` — the creator a
+  // purpose-scoped key inherits role grants from — and that decision is
+  // unchanged by the line below. What changes is who the OUTCOME is written
+  // down against: a purpose-scoped key's call is attributed to the
+  // credential, never the creator, so the evidence for a gateway-forwarded
+  // call never reads as the enrolling operator's own action (#3151).
+  const auditPrincipal = machineAttributedPrincipal(
+    ctx,
+    principal,
+    authz.apiKeyPurpose,
+  );
   emitAudit({
     capability,
     ctx,
-    principal,
+    principal: auditPrincipal,
     result,
     trace: result.trace,
     rawInputJson,
     target: target ?? null,
   }).catch((err: unknown) => reportAuditEmissionFailure(capability, ctx, err));
 
+  // `principal`, not `auditPrincipal` — the kernel threads this onward as
+  // resolvedPrincipal for tenant scope (see machineAttributedPrincipal's
+  // doc); only the audit row above gets the credential-attributed identity.
   return { result, principal };
 }
 

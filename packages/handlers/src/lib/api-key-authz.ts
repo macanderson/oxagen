@@ -51,6 +51,19 @@ export interface OperatorContext {
  *
  * Callers still run their role gate on the returned user, so a key never
  * outlives its creator's Owner/Admin role.
+ *
+ * `fetchAuthz` (`packages/iam/src/fetch-authz.ts`) answers a different
+ * question and is not in tension with this one, even though it still
+ * resolves a purpose-scoped key's ROLE GRANTS from its creator (#3151). That
+ * is the kernel's generic resolver deciding whose grants a machine key may
+ * lean on when the key's own mandate — enforced separately and first, by
+ * `machineKeyDenial` in `packages/iam/src/machine-key-scope.ts` — already
+ * allows the call. It is not a claim that the key acted for that person, and
+ * `fetchAuthz` no longer attributes evidence that way either: it reports the
+ * key's purpose back to `checkIAM`, which records a purpose-scoped call
+ * against the credential, never the creator. "Acts for a person" here keeps
+ * meaning what this function has always meant it to mean — a request only an
+ * operator, not any credential, may make.
  */
 export async function resolveOperatorUserId(
   ctx: OperatorContext,
