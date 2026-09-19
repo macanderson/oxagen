@@ -21,9 +21,11 @@ import type { TranscriptBody, TranscriptEntry } from "@/data/contracts/run";
  * its result in `response`; a positional `response ?? request` would silently
  * render a tool's input where its result belongs, and nothing about the page
  * would look wrong. A caller that needs both halves reads them by name, which
- * is what the frame renderer does.
+ * is what the frame renderer does. Module-private: its one caller is
+ * `textOf` below, in this file; a turn's prompt and reply are the only
+ * place the app still reads a body positionally instead of by name.
  */
-export function soleBody(entry: TranscriptEntry): TranscriptBody | null {
+function soleBody(entry: TranscriptEntry): TranscriptBody | null {
   if (entry.request !== null && entry.response !== null) return null;
   return entry.response ?? entry.request;
 }

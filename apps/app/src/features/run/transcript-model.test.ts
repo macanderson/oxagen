@@ -7,7 +7,6 @@ import {
 } from "./run.builders";
 import {
   buildTranscript,
-  soleBody,
   idsAt,
   openAtZoom,
   playDelay,
@@ -62,6 +61,23 @@ describe("buildTranscript", () => {
       transcriptEntry({ seq: "2", turn: null }),
     ]);
     expect(flat).toHaveLength(1);
+  });
+
+  it("leaves the prompt null rather than guessing when turn_start carries both halves (negative)", () => {
+    // soleBody (module-private) is what `prompt`/`reply` read a body through:
+    // an entry carrying both halves refuses rather than picking one, so a
+    // turn_start folded with a result still reads as no recorded prompt
+    // instead of silently showing the wrong half.
+    const folded = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "turn_start",
+        turn: 1,
+        request: transcriptBody({ seq: "1", text: "Cut the release." }),
+        response: transcriptBody({ seq: "1", text: "Cutting it now." }),
+      }),
+    ]);
+    expect(folded[0]?.prompt).toBeNull();
   });
 });
 
@@ -146,32 +162,5 @@ describe("the transport", () => {
   it("finds the turn and step holding a position", () => {
     expect(idsAt(turns, 6)).toEqual(["t2", "s5"]);
     expect(idsAt(turns, 99)).toEqual([]);
-  });
-});
-
-describe("soleBody", () => {
-  it("reads the half a frame carried: what came back, or what went out", () => {
-    // A tool request records only the half that went out.
-    expect(soleBody(transcriptEntry({ response: null }))).toBeNull();
-    const request = transcriptEntry({
-      request: transcriptBody({ seq: "5" }),
-      response: null,
-    });
-    expect(soleBody(request)?.seq).toBe("5");
-    expect(soleBody(transcriptEntry())?.text).toBe(
-      "Cutting release/3.2 from main.",
-    );
-  });
-
-  it("refuses an entry carrying both halves rather than picking one (negative)", () => {
-    // A folded step carries its input and its result. Answering either one
-    // here is how a tool's input ends up drawn where its result belongs, and
-    // nothing about the page looks wrong when it happens.
-    const folded = transcriptEntry({
-      kind: "tool_call",
-      request: transcriptBody({ seq: "20", text: '{"branch":"release/3.2"}' }),
-      response: transcriptBody({ seq: "21", text: '{"ok":true}' }),
-    });
-    expect(soleBody(folded)).toBeNull();
   });
 });
