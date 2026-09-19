@@ -144,6 +144,11 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // telemetry — so a value here configures that tool, not an Oxagen service.
   "CLAUDE_CONFIG_DIR",
   "CLAUDE_CODE_ENABLE_TELEMETRY",
+  // Written into Claude Code's settings beside ANTHROPIC_BASE_URL by
+  // `tacho enroll` (packages/tacho/src/host/model-base-url.ts): Claude Code's
+  // own switch that keeps its MCP tool search on behind a proxy. That tool's
+  // contract, not ours.
+  "ENABLE_TOOL_SEARCH",
   // Codex CLI's equivalent of CLAUDE_CONFIG_DIR: where it keeps hooks.json
   // (packages/tacho/src/host/paths.ts). That tool's contract, not ours.
   "CODEX_HOME",
