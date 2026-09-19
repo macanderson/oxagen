@@ -60,13 +60,23 @@ interface AgentRef {
  * active when its agent retires must stay revocable. The retirement refusal
  * therefore belongs to the three capabilities that call `assertAgentActive`
  * after this resolver returns, not here (ADR-104, #3124).
+ *
+ * `lock: true` takes the agent row `FOR SHARE`, which `request_mandate` and
+ * `grant_mandate` must pass. `retire_agent` locks the same row `FOR UPDATE`
+ * before it archives the agent and revokes its mandates, so the two
+ * serialize: a grant that locks first commits its mandate before retirement
+ * scans for live ones, and a grant that waits re-reads the row as archived
+ * and refuses. Without the lock, a grant could read `active`, retirement
+ * could commit around it, and the grant would insert an active mandate
+ * against a retired agent.
  */
 export async function resolveAgent(
   tx: Tx,
   workspaceId: string,
   agentPublicId: string,
+  opts: { lock?: boolean } = {},
 ): Promise<AgentRef> {
-  const [row] = await tx
+  const query = tx
     .select({
       id: schema.agents.id,
       publicId: schema.agents.publicId,
@@ -84,6 +94,7 @@ export async function resolveAgent(
       ),
     )
     .limit(1);
+  const [row] = await (opts.lock ? query.for("share") : query);
   if (!row) {
     throw new HandlerError({
       code: "not_found",
@@ -294,6 +305,12 @@ async function userPublicIds(
  * check `update_mandate_limits` runs (ADR-104, #3124): that capability
  * locates its subject by mandate id, not agent id, so it has no agent row
  * from `resolveAgent` to check `status` on.
+ *
+ * Unlocked on purpose. `update_mandate_limits` already holds the mandate's
+ * row lock, and `retire_agent` takes that same lock before revoking, so a
+ * widen that reads the agent as active commits first and is then revoked by
+ * the retirement waiting behind it. Locking the agent here would take the
+ * two locks in the opposite order to retirement and invite a deadlock.
  */
 export async function resolveAgentByPrincipal(
   tx: Tx,

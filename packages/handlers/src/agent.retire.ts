@@ -43,7 +43,17 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
-    if (agent.status === "archived") {
+    // Lock the agent row before reading its status. `request_mandate` and
+    // `grant_mandate` take the same row `FOR SHARE`, so a grant either
+    // commits before the mandate scan below sees it, or waits and then reads
+    // the agent as archived and refuses (ADR-104, #3124). The re-read also
+    // makes two concurrent retirements answer one write and one `already`.
+    const [locked] = await tx
+      .select({ status: schema.agents.status })
+      .from(schema.agents)
+      .where(eq(schema.agents.id, agent.id))
+      .for("update");
+    if ((locked?.status ?? agent.status) === "archived") {
       // The retirement below is the last identity write an archived agent
       // takes, so its `updated_at` is the instant recorded then.
       return {

@@ -25,6 +25,8 @@
  *   revoke  — releases the parked reservation, expires the parked approval,
  *             records the reason and emits mandate.revoked; a second revoke
  *             → mandate_ended; a draft is declined the same way
+ *   retire  — grant and request take the agent row lock retire_agent holds,
+ *             so one in flight makes them wait and then refuse
  *   limits  — validTo before validFrom → validity_inverted; a change over an
  *             undeclared measure is refused; a change records and emits, and
  *             a per_period changed inside the period reports remaining
@@ -1106,6 +1108,78 @@ describe.skipIf(!process.env.DATABASE_URL)(
           requestId: draft.id,
         }),
       ).rejects.toSatisfy(retiredAgent);
+    });
+
+    it("grant and request wait on a retirement in flight, then refuse the agent it archived", async () => {
+      // The race the row lock closes: without it, a grant reads the agent as
+      // active, retirement commits around it and finishes its mandate scan,
+      // and the grant then inserts an active mandate against a retired agent.
+      // This transaction stands in for retire_agent between its FOR UPDATE
+      // and its commit. If either handler stops locking the agent row, it
+      // finishes while the lock is held and the "still pending" check fails.
+      const racePrincipal = randomUUID();
+      const [raceAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: "racing-retiring-bot",
+            name: "Racing retiring bot",
+            agentType: "custom",
+            principalId: racePrincipal,
+            createdById: operatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const raceAgentId = raceAgent!.publicId;
+
+      let granted: Promise<unknown> = Promise.resolve();
+      let requested: Promise<unknown> = Promise.resolve();
+      let settled = 0;
+      await withSystemDb(async (tx) => {
+        await tx
+          .select({ id: schema.agents.id })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, raceAgentId))
+          .for("update");
+        granted = grant(billingUserId, { ...body(), agentId: raceAgentId });
+        requested = inScope(() =>
+          mandateRequestHandler(
+            mandateGrant.input.parse({ ...body(), agentId: raceAgentId }),
+            ctx(operatorUserId),
+          ),
+        );
+        // Observe both without letting an early rejection go unhandled.
+        for (const p of [granted, requested]) {
+          p.then(
+            () => settled++,
+            () => settled++,
+          );
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        expect(settled).toBe(0);
+        await tx
+          .update(schema.agents)
+          .set({ status: "archived" })
+          .where(eq(schema.agents.publicId, raceAgentId));
+      });
+
+      await expect(granted).rejects.toSatisfy(retiredAgent);
+      await expect(requested).rejects.toSatisfy(retiredAgent);
+      const [race] = await withSystemDb((tx) =>
+        tx
+          .select({ principalId: schema.agents.principalId })
+          .from(schema.agents)
+          .where(eq(schema.agents.publicId, raceAgentId)),
+      );
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.agentPrincipalId, race!.principalId!)),
+      );
+      expect(rows).toHaveLength(0);
     });
 
     it("update_mandate_limits refuses to widen a mandate whose agent retired after it was granted", async () => {

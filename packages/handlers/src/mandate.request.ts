@@ -32,7 +32,9 @@ export const mandateRequestHandler: CapabilityHandler<
   );
 
   const [row] = await withTenantDb(async (tx) => {
-    const agent = await resolveAgent(tx, workspaceId, input.agentId);
+    const agent = await resolveAgent(tx, workspaceId, input.agentId, {
+      lock: true,
+    });
     assertAgentActive(agent);
     await assertToolsDeclareMeasures(tx, workspaceId, input);
     return tx
