@@ -644,16 +644,23 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
   };
 }
 
-/** A new fold opened at `frame`, with its own half already in place. */
+/**
+ * A new fold opened at `frame`. Only a step half may fill a request or
+ * response slot: a turn boundary, a policy decision or an agent start is the
+ * opening of the entry, not what the call was made with or what came back.
+ * Putting those into `response` by default blocked the real result from
+ * absorbing later, and labelled a prompt as something that came back.
+ */
 function open(frame: RunFrame, kind: TranscriptEntryKind): TranscriptFold {
+  const isStep = stepKind(frame) !== null;
   return {
     opening: frame,
     endSeq: frame.seq,
     kind,
     frames: 1,
     costMicros: frame.costMicros,
-    request: frame.phase === "request" ? frame : null,
-    response: frame.phase === "request" ? null : frame,
+    request: isStep && frame.phase === "request" ? frame : null,
+    response: isStep && frame.phase !== "request" ? frame : null,
     decision: decisionOf(frame),
   };
 }
