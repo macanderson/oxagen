@@ -2,7 +2,7 @@
 window.OX_SCRIPT = [
   {
     title: "Title: Oxagen",
-    say: "Thanks for making time. Mission Control for your autonomous agents: see which agent spent what, and on whose behalf. In the next ten minutes I want to show you the layer that gives you that for every agent you run: every agent under a mandate, every call priced and attributed, every run on the record. Then I'll drop out of the slides and show you the actual tool. One promise up front: you won't have to re-document your business or sit through anything painful.",
+    say: "Thanks for making time. Mission Control for agent operators: see which agent spent what, and on whose behalf. In the next ten minutes I want to show you the layer that gives you that for every agent you run: every agent under a mandate, every call priced and attributed, every run on the record. Then I'll drop out of the slides and show you the actual tool. One promise up front: you won't have to re-document your business or sit through anything painful.",
   },
   {
     title: "The two burns",
