@@ -35,7 +35,24 @@ describe("remove_price_entry contract", () => {
     expect(Object.keys(costPriceEntryRemove.output.shape).sort()).toEqual([
       "at",
       "closed",
+      "fallbackPriced",
     ]);
     expect(costPriceEntryRemove.output.shape.closed.isNullable()).toBe(true);
+  });
+
+  it("says whether the class actually falls back to a price", () => {
+    expect(
+      costPriceEntryRemove.output.safeParse({
+        at: "2026-09-19T00:00:00.000Z",
+        closed: null,
+        fallbackPriced: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      costPriceEntryRemove.output.safeParse({
+        at: "2026-09-19T00:00:00.000Z",
+        closed: null,
+      }).success,
+    ).toBe(false);
   });
 });

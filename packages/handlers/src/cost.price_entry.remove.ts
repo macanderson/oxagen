@@ -21,6 +21,8 @@ import {
 } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import {
   closeNegotiatedPriceEntry,
+  loadPriceBook,
+  resolvePriceEntry,
   type NegotiatedPriceClose,
   type PriceTokenClass,
 } from "@oxagen/billing";
@@ -39,6 +41,12 @@ export type PriceEntryRemoveDeps = {
     region?: string | null;
     at?: Date;
   }) => Promise<NegotiatedPriceClose>;
+  /**
+   * Reads the book after the close, so the handler can say whether the class
+   * actually falls back to a list or override price or whether it becomes
+   * unpriced — the two outcomes the dialog and the CLI must not conflate.
+   */
+  loadPriceBook: (args: { orgId: string }) => ReturnType<typeof loadPriceBook>;
 };
 
 export function createPriceEntryRemoveHandler(
@@ -91,6 +99,28 @@ export function createPriceEntryRemoveHandler(
       at: input.at === undefined ? undefined : new Date(input.at),
     });
 
+    // ── Does the class actually fall back, or does it go unpriced? ────────
+    //
+    // The contract, the CLI and the confirmation dialog all promise "falls
+    // back to the list price" — but that is only what happens when a list
+    // or override row still prices this model and class. A model this
+    // organization negotiated alone (a custom deployment, or a class no
+    // catalog publishes) has no such row, and closing its only price leaves
+    // every frame from `at` on unpriced rather than list-priced, silently,
+    // unless the caller is told. Read after the close, on the same book the
+    // rollup resolves against, so a still-open row this call did not touch
+    // (nothing was closed, or another source already covers the class)
+    // reads as covered without a second guess.
+    const fallbackPriced =
+      closed === null
+        ? true
+        : resolvePriceEntry(await deps.loadPriceBook({ orgId: ctx.orgId }), {
+            orgId: ctx.orgId,
+            modelId: input.model,
+            tokenClass: input.tokenClass,
+            at,
+          }) !== null;
+
     // ── Audit (SOC 2 CC6.3) ───────────────────────────────────────────────
     // Emitted whether or not a row was open: the request to return a model to
     // list pricing is the event, and a re-run that finds nothing to close is
@@ -122,18 +152,23 @@ export function createPriceEntryRemoveHandler(
         // removed; named here because the audit trail is the only place they
         // now exist.
         cancelledEntryIds: cancelled.map((entry) => entry.id),
+        fallbackPriced,
         surface: ctx.surface,
       },
-      "cost.price_entry.remove: negotiated price ended",
+      fallbackPriced
+        ? "cost.price_entry.remove: negotiated price ended"
+        : "cost.price_entry.remove: negotiated price ended with no fallback — the class is unpriced until a new rate or catalog entry covers it",
     );
 
     return {
       at: at.toISOString(),
       closed: closed === null ? null : toPriceEntryDto(closed),
+      fallbackPriced,
     };
   };
 }
 
 export const priceEntryRemoveHandler = createPriceEntryRemoveHandler({
   closeNegotiatedPriceEntry,
+  loadPriceBook,
 });

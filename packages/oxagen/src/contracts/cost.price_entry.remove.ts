@@ -1,7 +1,12 @@
 /**
  * `remove_price_entry`: end this organization's negotiated rate for one model
  * and token class (Mission Control spec §12.2; ADR-060 §1). From `at` on, the
- * frame resolves to the provider list price again.
+ * frame resolves to the provider list price again — when one exists.
+ * `fallbackPriced` in the output says whether it does: a model this
+ * organization negotiated alone, with no list or override row of its own, has
+ * nothing to fall back to, and the class goes unpriced rather than
+ * list-priced. The caller must read this before repeating the usual
+ * "falls back to the list price" line.
  *
  * It removes the row from the *active* book, not from the book: the row is
  * closed — `effective_to = at` — and kept, because a cost record priced before
@@ -74,6 +79,14 @@ export const costPriceEntryRemove = registerCapability({
       at: z.string().datetime(),
       /** The row as closed, or null when the organization had already ended it. */
       closed: priceEntrySchema.nullable(),
+      /**
+       * Whether a list, override or other negotiated row still prices this
+       * model and class from `at` on. False means the class has no fallback
+       * and is now unpriced, not list-priced — the caller must say so rather
+       * than repeat the usual "falls back to the list price" line. Always
+       * true when `closed` is null: nothing changed.
+       */
+      fallbackPriced: z.boolean(),
     })
     .strict(),
 });

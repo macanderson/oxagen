@@ -1,6 +1,6 @@
 # cost.price_entry.remove
 
-End this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). From `at` on, every frame that resolves to this model and class is priced at the provider list price again.
+End this organization's **negotiated** rate for one model and token class (Mission Control spec §12.2, App. A.7; ADR-060 §1). From `at` on, every frame that resolves to this model and class is priced at the provider list price again — when one exists. `fallbackPriced` in the output says whether it does: a model this organization negotiated alone, with no list or override row of its own, has nothing to fall back to, and the class goes unpriced rather than list-priced.
 
 It removes the rate from the *active* book, not from the book. The row in effect at `at` is closed — `effective_to = at` — and kept, because a cost record priced before `at` names the entry id it was priced with and must still be able to read it. A row already closed at a later instant (a scheduled correction had been written) is shortened to `at`. Nothing here deletes history.
 
@@ -41,6 +41,7 @@ One token class per call, for the same reason `set_price_entry` takes one: a tok
 |---|---|---|
 | `at` | string | the instant the negotiated rate stopped applying |
 | `closed` | object or null | the row that was in effect at `at`, as closed, in the `cost.price_entry.list` entry shape, or null when nothing was in effect at that instant |
+| `fallbackPriced` | boolean | whether a list, override or other negotiated row still prices this model and class from `at` on. False means the class has no fallback and is now unpriced, not list-priced — callers must say so rather than repeat the usual "falls back to the list price" line. Always true when `closed` is null, since nothing changed. |
 
 Re-ending a class this organization has already ended answers `closed: null` and changes nothing, so a retry is safe. So is a retry after a cancellation: a scheduled row that never began is deleted when it is cancelled, and the retry finds nothing and answers the same null close. A key this organization never negotiated gets that answer too.
 

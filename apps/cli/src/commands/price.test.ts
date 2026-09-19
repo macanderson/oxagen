@@ -23,9 +23,8 @@ const { apiPostOrThrow, MockApiError } = vi.hoisted(() => {
 });
 
 vi.mock("../lib/api.js", async () => {
-  const real = await vi.importActual<typeof import("../lib/api.js")>(
-    "../lib/api.js",
-  );
+  const real =
+    await vi.importActual<typeof import("../lib/api.js")>("../lib/api.js");
   return { ...real, apiPostOrThrow, ApiError: MockApiError };
 });
 
@@ -125,7 +124,10 @@ describe("price set", () => {
   });
 
   it.each([
-    [{ model: "m", tokenClass: "output", usdPerMillion: "1" }, "--provider and --model"],
+    [
+      { model: "m", tokenClass: "output", usdPerMillion: "1" },
+      "--provider and --model",
+    ],
     [{ ...good, tokenClass: "tokens" }, "Invalid --token-class"],
     [{ ...good, usdPerMillion: "2.4000001" }, "Invalid --usd-per-million"],
     [{ ...good, usdPerMillion: "-1" }, "Invalid --usd-per-million"],
@@ -157,6 +159,7 @@ describe("price remove", () => {
     apiPostOrThrow.mockResolvedValue({
       at: "2026-11-01T00:00:00.000Z",
       closed: row({ effectiveTo: "2026-11-01T00:00:00.000Z" }),
+      fallbackPriced: true,
     });
     const c = captureWriter();
     await priceRemove(
@@ -173,8 +176,25 @@ describe("price remove", () => {
     expect(c.output()).toContain("returns to the list price from 2026-11-01");
   });
 
+  // The class had no list or override price to fall back to: the "returns
+  // to the list price" line would have been a false promise.
+  it("warns UNPRICED instead of claiming a list-price fallback that does not exist", async () => {
+    apiPostOrThrow.mockResolvedValue({
+      at: "2026-11-01T00:00:00.000Z",
+      closed: row({ effectiveTo: "2026-11-01T00:00:00.000Z" }),
+      fallbackPriced: false,
+    });
+    const c = captureWriter();
+    await priceRemove(good, c.writer);
+    expect(c.output()).toContain("UNPRICED");
+    expect(c.output()).not.toContain("returns to the list price");
+  });
+
   it("says when there was nothing open to end", async () => {
-    apiPostOrThrow.mockResolvedValue({ at: "2026-11-01T00:00:00.000Z", closed: null });
+    apiPostOrThrow.mockResolvedValue({
+      at: "2026-11-01T00:00:00.000Z",
+      closed: null,
+    });
     const c = captureWriter();
     await priceRemove(good, c.writer);
     expect(c.output()).toContain("nothing to end");

@@ -65,6 +65,10 @@ const closedEntry: PriceEntry = {
 function harness(
   result: PriceEntry | null = closedEntry,
   cancelled: PriceEntry[] = [],
+  // The book read after the close, for the fallback check. Empty by
+  // default: nothing else in the book means the class has no fallback once
+  // the negotiated row is gone.
+  book: PriceEntry[] = [],
 ) {
   const closeNegotiatedPriceEntry = vi.fn(async (args: { at?: Date }) => ({
     // The store answers the instant it used: the caller's, or the write
@@ -73,11 +77,14 @@ function harness(
     closed: result,
     cancelled,
   }));
+  const loadPriceBook = vi.fn(async () => book);
   return {
     handler: createPriceEntryRemoveHandler({
       closeNegotiatedPriceEntry,
+      loadPriceBook,
     }),
     closeNegotiatedPriceEntry,
+    loadPriceBook,
   };
 }
 
@@ -162,6 +169,9 @@ describe("remove_price_entry", () => {
       effectiveTo: NOW.toISOString(),
       source: "negotiated",
     });
+    // No list row and no other source in the (empty) book this harness
+    // reads back: the class goes unpriced, not list-priced.
+    expect(out.fallbackPriced).toBe(false);
     expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
     expect(audit.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -170,6 +180,34 @@ describe("remove_price_entry", () => {
         orgId: SCOPE.orgId,
       }),
     );
+  });
+
+  // The promise the dialog and the CLI make — "falls back to the list
+  // price" — is only true when a list row actually still prices the class.
+  it("reads fallbackPriced true when a list row still prices the class", async () => {
+    const listRow: PriceEntry = {
+      ...closedEntry,
+      id: "0192d4a8-7c1e-7a00-8000-0000000000e3",
+      orgId: null,
+      source: "list",
+      effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
+      effectiveTo: null,
+    };
+    const h = harness(closedEntry, [], [listRow]);
+    const out = await h.handler(input(), ctx());
+    expect(h.loadPriceBook).toHaveBeenCalledWith({ orgId: SCOPE.orgId });
+    expect(out.fallbackPriced).toBe(true);
+    expect(() => costPriceEntryRemove.output.parse(out)).not.toThrow();
+  });
+
+  // No row was closed, so nothing about the class's pricing changed: reading
+  // the book again would only cost a query for an answer that is already
+  // known.
+  it("reads fallbackPriced true without reading the book when nothing was closed", async () => {
+    const h = harness(null);
+    const out = await h.handler(input(), ctx());
+    expect(out.fallbackPriced).toBe(true);
+    expect(h.loadPriceBook).not.toHaveBeenCalled();
   });
 
   it("ends the row at the instant asked for, in the region asked for", async () => {

@@ -149,15 +149,18 @@ export async function setPriceEntryAction(
 }
 
 /**
- * End this organization's negotiated rate for one model and token class, so
- * every frame from now on is priced at the provider's list price again. The
- * row is closed and kept, never deleted: a run priced before this instant
- * still names the entry it was priced with.
+ * End this organization's negotiated rate for one model and token class.
+ * From now on every frame resolves to a list or override price WHEN ONE
+ * EXISTS — `fallbackPriced` in the value says whether it does, because a
+ * model this organization negotiated alone has no such row, and the dialog
+ * must not claim a fallback that is not there. The row is closed and kept,
+ * never deleted: a run priced before this instant still names the entry it
+ * was priced with.
  */
 export async function removePriceEntryAction(
   at: SpendAt,
   values: RemovePriceEntryFormValues,
-): Promise<ActionResult<null>> {
+): Promise<ActionResult<{ fallbackPriced: boolean }>> {
   const ctx = await requireViewer(at.org, at.ws);
   const parsed = RemovePriceEntryForm.safeParse(values);
   if (!parsed.success) {
@@ -170,5 +173,7 @@ export async function removePriceEntryAction(
     };
   }
   const result = await kernelWrite(ctx, costPriceEntryRemove, parsed.data);
-  return result.ok ? { ok: true, value: null } : result;
+  return result.ok
+    ? { ok: true, value: { fallbackPriced: result.value.fallbackPriced } }
+    : result;
 }

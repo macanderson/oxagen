@@ -246,10 +246,11 @@ describe("removePriceEntryAction", () => {
     invoke.mockResolvedValue({
       at: "2026-09-17T12:00:00.000Z",
       closed: { ...entry, effectiveTo: "2026-09-17T12:00:00.000Z" },
+      fallbackPriced: true,
     });
     expect(await removePriceEntryAction(at, key)).toEqual({
       ok: true,
-      value: null,
+      value: { fallbackPriced: true },
     });
     expect(invoke).toHaveBeenCalledWith(
       costPriceEntryRemove.name,
@@ -263,11 +264,29 @@ describe("removePriceEntryAction", () => {
     );
   });
 
-  it("answers a class this organization had already ended without failing, since the retry is a no-op", async () => {
-    invoke.mockResolvedValue({ at: "2026-09-17T12:00:00.000Z", closed: null });
+  // The class this row priced has no list or override fallback: the action
+  // must carry that through rather than defaulting to the usual claim.
+  it("carries fallbackPriced: false through when the class has no fallback price", async () => {
+    invoke.mockResolvedValue({
+      at: "2026-09-17T12:00:00.000Z",
+      closed: { ...entry, effectiveTo: "2026-09-17T12:00:00.000Z" },
+      fallbackPriced: false,
+    });
     expect(await removePriceEntryAction(at, key)).toEqual({
       ok: true,
-      value: null,
+      value: { fallbackPriced: false },
+    });
+  });
+
+  it("answers a class this organization had already ended without failing, since the retry is a no-op", async () => {
+    invoke.mockResolvedValue({
+      at: "2026-09-17T12:00:00.000Z",
+      closed: null,
+      fallbackPriced: true,
+    });
+    expect(await removePriceEntryAction(at, key)).toEqual({
+      ok: true,
+      value: { fallbackPriced: true },
     });
   });
 });

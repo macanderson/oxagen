@@ -78,6 +78,12 @@ interface PriceEntrySetResult {
 interface PriceEntryRemoveResult {
   at: string;
   closed: PriceEntryRow | null;
+  /**
+   * Whether a list, override or other negotiated row still prices this
+   * model and class from `at` on. False means the class has no fallback and
+   * is now unpriced, not list-priced.
+   */
+  fallbackPriced: boolean;
 }
 
 function isTokenClass(v: string): v is TokenClass {
@@ -305,7 +311,9 @@ export async function priceRemove(
     return;
   }
   writer.write(
-    `✓ ${result.closed.model} ${result.closed.tokenClass} returns to the list price from ${result.at}.`,
+    result.fallbackPriced
+      ? `✓ ${result.closed.model} ${result.closed.tokenClass} returns to the list price from ${result.at}.`
+      : `✓ ${result.closed.model} ${result.closed.tokenClass} rate ended from ${result.at}. No list or override price covers this model and class: it is now UNPRICED until one is set.`,
   );
   writer.write("");
   renderEntries([result.closed], writer);

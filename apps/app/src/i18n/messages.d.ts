@@ -2306,6 +2306,9 @@ type Messages = {
         kept: string;
         submit: string;
         pending: string;
+        unpricedTitle: string;
+        unpriced: string;
+        unpricedClose: string;
       };
       failure: {
         orgRoleRequired: string;

@@ -288,7 +288,10 @@ describe("Remove a negotiated rate", () => {
   });
 
   it("ends the rate by its key and returns to the Pricing tab", async () => {
-    removePriceEntryAction.mockResolvedValue({ ok: true, value: null });
+    removePriceEntryAction.mockResolvedValue({
+      ok: true,
+      value: { fallbackPriced: true },
+    });
     await openDialog();
     await userEvent.click(
       screen.getByRole("button", { name: "End this rate, use the list price" }),
@@ -303,6 +306,36 @@ describe("Remove a negotiated rate", () => {
       model: "claude-sonnet-5",
       tokenClass: "output",
       region: "",
+    });
+  });
+
+  // No list or override price covers this model and class: the "falls back
+  // to the list price" promise the confirm step made would be false, so the
+  // dialog must say the class went unpriced instead of navigating away as if
+  // nothing were wrong.
+  it("warns the class is unpriced instead of claiming a fallback that does not exist", async () => {
+    removePriceEntryAction.mockResolvedValue({
+      ok: true,
+      value: { fallbackPriced: false },
+    });
+    await openDialog();
+    await userEvent.click(
+      screen.getByRole("button", { name: "End this rate, use the list price" }),
+    );
+    expect(
+      await screen.findByTestId("spend-remove-rate-unpriced"),
+    ).toHaveTextContent(
+      "calls from now on are UNPRICED, not priced at the list rate",
+    );
+    expect(router.replace).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByTestId("spend-remove-rate-unpriced-close"),
+    );
+    await waitFor(() => {
+      expect(router.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/spend?tab=pricing",
+      );
     });
   });
 

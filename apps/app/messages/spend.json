@@ -288,7 +288,10 @@
         "body": "Ending your negotiated rate for {model}, {class} means every call from now on is priced at the provider’s list price instead. Nothing is deleted.",
         "kept": "The row is closed at this instant and kept, so a run priced before now still names the rate it was priced with. You can negotiate the class again at any time.",
         "submit": "End this rate, use the list price",
-        "pending": "Ending the rate"
+        "pending": "Ending the rate",
+        "unpricedTitle": "Rate ended — now unpriced",
+        "unpriced": "Your negotiated rate for {model}, {class} is ended. No list or override price covers this model and class, so calls from now on are UNPRICED, not priced at the list rate, until you set a new rate or a catalog publishes one.",
+        "unpricedClose": "Close"
       },
       "failure": {
         "orgRoleRequired": "Your organization role cannot change what this organization is billed at. An organization owner, admin or billing member sets a negotiated rate.",
