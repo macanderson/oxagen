@@ -39,6 +39,13 @@ const run = {
   source: "tacho",
   agentKey: null,
   operatorId: null,
+  // Nullable but required: `RunRow` names each of these, so a fixture that
+  // omits one maps to `undefined` and `RunPage.safeParse` rejects the whole
+  // page as `record_unmappable`. A happy-path read then asserts a 502.
+  operatorKind: null,
+  operatorName: null,
+  model: null,
+  machine: null,
   status: "live",
   turns: null,
   steps: 3,
@@ -69,6 +76,10 @@ describe("runs.list", () => {
             source: "tacho",
             agentKey: null,
             operatorId: null,
+            operatorKind: null,
+            operatorName: null,
+            model: null,
+            machine: null,
             status: "live",
             turns: null,
             steps: 3,
