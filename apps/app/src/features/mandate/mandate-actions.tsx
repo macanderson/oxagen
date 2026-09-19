@@ -39,7 +39,6 @@ function period(form: FormData, name: string): (typeof PERIODS)[number] {
   return PERIODS.find((p) => p === raw) ?? "monthly";
 }
 
-
 function Field({
   id,
   label,
@@ -214,7 +213,11 @@ function ChangeLimits({ org, ws, mandate, here }: Place) {
       >
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
-          <Field id={id("measure")} label={t("measure")} hint={t("measureHint")}>
+          <Field
+            id={id("measure")}
+            label={t("measure")}
+            hint={t("measureHint")}
+          >
             <input
               id={id("measure")}
               name="measure"
@@ -451,10 +454,15 @@ function Revoke({ org, ws, mandate, here }: Place) {
  */
 export function MandateActions(place: Place) {
   const { mandate } = place;
+  // A lazy state initializer, not a bare `new Date()` in the render body: the
+  // latter is impure (React may re-render without re-running it, and it can
+  // mismatch between server and client render), where a state initializer is
+  // the one place the purity rule accepts a clock read.
+  const [now] = useState(() => new Date());
   if (mandate.status !== "active" && mandate.status !== "draft") return null;
   return (
     <>
-      {isEffective(mandate, new Date()) ? <ChangeLimits {...place} /> : null}
+      {isEffective(mandate, now) ? <ChangeLimits {...place} /> : null}
       <Revoke {...place} />
     </>
   );
