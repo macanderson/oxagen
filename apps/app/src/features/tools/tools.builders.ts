@@ -80,7 +80,7 @@ export function toolsSource(reads: ToolsReads) {
     };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     billing: {
       plan: refuse,
       usageCredits: refuse,
@@ -121,7 +121,12 @@ export function toolsSource(reads: ToolsReads) {
     },
     skills: { inventory: refuse },
     audit: { events: refuse, exportEvents: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),

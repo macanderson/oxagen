@@ -150,10 +150,17 @@ export function mockupTranscript(
         text: "Cut the 2026.9.2 release candidate.",
       }),
       frame(3, "model.request", "model_call", "anthropic/claude-fable-5-1", 1),
-      frame(4, "model.response", "model_call", "anthropic/claude-fable-5-1", 1, {
-        text: "I will list the open pull requests first.",
-        cost: cost("380000"),
-      }),
+      frame(
+        4,
+        "model.response",
+        "model_call",
+        "anthropic/claude-fable-5-1",
+        1,
+        {
+          text: "I will list the open pull requests first.",
+          cost: cost("380000"),
+        },
+      ),
       frame(5, "tool_requested", "tool_call", "list_pull_requests", 1),
       frame(6, "policy_decision", "frame", "policy allow", 1),
       frame(7, "tool_call", "tool_call", "list_pull_requests ok", 1, {
@@ -273,7 +280,7 @@ export function runSource(reads: RunReads) {
   };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
       get: answer("get", reads.detail),
@@ -310,7 +317,12 @@ export function runSource(reads: RunReads) {
     mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

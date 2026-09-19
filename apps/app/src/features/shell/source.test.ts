@@ -24,9 +24,10 @@ const ctx = unsafeMint(OrgCtx, {
 });
 
 const context = vi.fn();
+const preferences = vi.fn();
 const source = {
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-  shell: { context },
+  shell: { context, preferences },
   billing: {
     plan: vi.fn(),
     usageCredits: vi.fn(),
@@ -68,7 +69,12 @@ const source = {
   mandates: { list: vi.fn() },
   audit: { events: vi.fn(), exportEvents: vi.fn() },
   skills: { inventory: vi.fn() },
-  steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+  steering: {
+    records: vi.fn(),
+    proposals: vi.fn(),
+    contextPr: vi.fn(),
+    freshness: vi.fn(),
+  },
   tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
 };
 const listed = readOk({
@@ -79,6 +85,8 @@ const listed = readOk({
 beforeEach(() => {
   context.mockReset();
   context.mockResolvedValue(listed);
+  preferences.mockReset();
+  preferences.mockResolvedValue(readOk({ timeZone: "Europe/London" }));
   getAuthUser.mockReset();
   getAuthUser.mockResolvedValue({
     id: "usr_marcusbell",
@@ -89,18 +97,27 @@ beforeEach(() => {
 });
 
 describe("shellSource", () => {
-  it("hands the context's organization, the signed-in person and the shell.context read to the shell", async () => {
+  it("hands the context's organization, the signed-in person, their zone and the shell.context read to the shell", async () => {
     expect(await shellSource(ctx, source)).toEqual({
       org: { slug: "acme", name: "Acme Robotics" },
       viewer: {
         name: "Marcus Bell",
         email: "marcus.bell@acme.example",
         avatarUrl: null,
+        timeZone: "Europe/London",
       },
       context: listed,
       fleetWaiting: null,
     });
     expect(context).toHaveBeenCalledWith(ctx);
+    expect(preferences).toHaveBeenCalledWith(ctx);
+  });
+
+  it("renders the chrome in Pacific time when the preference read fails (negative)", async () => {
+    preferences.mockResolvedValue(readError("control_plane_unavailable", 503));
+    expect((await shellSource(ctx, source)).viewer.timeZone).toBe(
+      "America/Los_Angeles",
+    );
   });
 
   it("passes a failed shell.context read through, and the shell still renders (negative)", async () => {
@@ -120,6 +137,7 @@ describe("shellSource", () => {
       name: null,
       email: "marcus.bell@acme.example",
       avatarUrl: null,
+      timeZone: "Europe/London",
     });
   });
 

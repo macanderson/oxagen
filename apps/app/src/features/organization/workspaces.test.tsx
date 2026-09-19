@@ -48,7 +48,7 @@ async function renderWorkspaces(
   const workspaces = vi.fn<Read>().mockResolvedValue(read);
   const source = {
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
-    shell: { context: vi.fn() },
+    shell: { context: vi.fn(), preferences: vi.fn() },
     billing: {
       plan: vi.fn(),
       usageCredits: vi.fn(),
@@ -90,7 +90,12 @@ async function renderWorkspaces(
     mandates: { list: vi.fn() },
     audit: { events: vi.fn(), exportEvents: vi.fn() },
     skills: { inventory: vi.fn() },
-    steering: { records: vi.fn(), proposals: vi.fn(), contextPr: vi.fn() },
+    steering: {
+      records: vi.fn(),
+      proposals: vi.fn(),
+      contextPr: vi.fn(),
+      freshness: vi.fn(),
+    },
     tools: { versions: vi.fn(), grants: vi.fn(), killSwitches: vi.fn() },
   };
   const view = render(
