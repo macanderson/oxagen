@@ -20,7 +20,7 @@ import {
 } from "@oxagen/oxagen";
 import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
 import {
-  measureDeclarationsSchema,
+  measureDeclarationsReadSchema,
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
 import {
@@ -253,7 +253,9 @@ async function declaredTools(
       ),
     );
   return rows.map((r) => {
-    const parsed = measureDeclarationsSchema.safeParse(r.measures);
+    // Read-time schema (ADR-111): accepts a legacy non-ISO unit a version
+    // published before the currency check landed can still carry on disk.
+    const parsed = measureDeclarationsReadSchema.safeParse(r.measures);
     return {
       slug: r.slug,
       version: r.version,

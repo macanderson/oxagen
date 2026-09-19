@@ -1,9 +1,9 @@
-# ADR-111: Workforce management leads, and Mission Control is retired as a product name
+# ADR-112: Workforce management leads, and Mission Control is retired as a product name
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
 - **Owners:** Mac (positioning), platform
-- **Numbering:** 111. ADR-102 to ADR-110 were taken on `main` while this branch was open, two of them twice.
+- **Numbering:** 112. ADR-102 to ADR-112 were taken on `main` while this branch was open, two of them twice.
 - **Supersedes in part:** ADR-067 (the product name only). ADR-067's scope
   rules, its completion rule, its ruling that the agent control plane is the
   technical category, and its ruling that the message registry is the source
