@@ -260,13 +260,12 @@ describe("DefinitionForm", () => {
     expect(box).toBeChecked();
     expect(box).toBeEnabled();
     fireEvent.click(box);
+    // Once removed, adding it back needs the mandate again.
+    expect(box).not.toBeChecked();
+    expect(box).toBeDisabled();
     expect(await committedSource()).toContain(
       'side_effects = ["read", "write"]\n',
     );
-    // Once removed, adding it back needs the mandate again.
-    expect(
-      screen.getByRole("checkbox", { name: /^irreversible/ }),
-    ).toBeDisabled();
   });
 
   it("does not take a [budget] line inside the instructions for a budget table", async () => {

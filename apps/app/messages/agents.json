@@ -272,7 +272,7 @@
           "title": "Instructions",
           "aside": "[instructions] body",
           "label": "Instructions",
-          "hint": "Compiled into the harness file beside this one. The checks scan it for secrets and PII before a merge."
+          "hint": "Compiled into the harness file beside this one. Keep credentials and personal data out of it: nothing checks for them before a commit."
         },
         "harness": {
           "title": "Harness",

@@ -269,6 +269,6 @@ export function tomlSet(
   }
 
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-  lines.push("", `[${section}]`, `${key} = ${literal}`, "");
+  lines.push("", `[${sectionPath.join(".")}]`, `${key} = ${literal}`, "");
   return lines.join("\n");
 }
