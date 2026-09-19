@@ -21,9 +21,30 @@
  * ./price-book.ts; this module is the diff between them, so the tests can
  * exercise it without either store.
  */
-import { loadPriceBook, resolvePriceEntry, type PriceBook } from "./price-book";
+import {
+  indexPriceBookByClass,
+  loadPriceBook,
+  priceBookBoundaries,
+  resolvePriceEntryFromClassBook,
+  type PriceBook,
+} from "./price-book";
 import { readObservedModels } from "@oxagen/telemetry";
 import type { PriceTokenClass } from "@oxagen/database/schema";
+
+/**
+ * One class an observed model actually used, within one price-boundary
+ * bucket: how much of it ran, and the earliest/latest call in that bucket
+ * that used it. Only classes and buckets that saw nonzero usage are ever
+ * present — this is what `readObservedModels` reports, not a fixed list of
+ * classes every model is judged against.
+ */
+export interface ObservedModelClassUsage {
+  tokenClass: PriceTokenClass;
+  calls: number;
+  tokens: number;
+  firstSeen: Date;
+  lastSeen: Date;
+}
 
 /** One model seen in an organization's frames, as the frame stores report it. */
 export interface ObservedModel {
@@ -36,65 +57,83 @@ export interface ObservedModel {
   tokens: number;
   firstSeen: Date;
   lastSeen: Date;
+  /** This model's usage broken out by class and price-boundary bucket. */
+  classes: readonly ObservedModelClassUsage[];
+}
+
+/** One class this organization ran unpriced, and the span it ran unpriced over. */
+export interface MissingClassWindow {
+  tokenClass: PriceTokenClass;
+  /** RFC 3339 equivalents kept as `Date`: the earliest and latest unpriced call. */
+  unpricedFrom: Date;
+  unpricedTo: Date;
 }
 
 /** A model the book cannot fully price, and exactly which classes are missing. */
 export interface UnpricedModel extends ObservedModel {
   /**
-   * The token classes with no price entry. `input_uncached` and `output`
+   * The token classes this model actually used that have no price entry
+   * covering the calls that used them. `input_uncached` and `output`
    * missing means the model is priced at nothing at all; a subset means the
-   * run is recorded `estimated` rather than unpriced.
+   * run is recorded `estimated` rather than unpriced. A class the model
+   * never used is never in this list, even when the book has no row for it
+   * at all — the book cannot be missing a price for tokens nobody sent.
    */
   missingClasses: PriceTokenClass[];
-  /** True when the book prices none of the classes — the run has no cost at all. */
+  /**
+   * The same classes, each with the span of its unpriced calls, so the
+   * Pricing tab can say WHEN a class went unpriced rather than only that it
+   * did — the answer to a rate that was added too late to cover every call.
+   */
+  missingClassWindows: MissingClassWindow[];
+  /** True when every class the model used is missing — the run has no cost at all. */
   fullyUnpriced: boolean;
 }
 
 /**
- * The classes every token-metered model needs a price for. `cache_write_1h`
- * and `reasoning` are not in this set: a provider that has no one-hour cache
- * tier and no separately-metered reasoning tokens is not missing a price, and
- * listing every such model as a problem would bury the models that are.
+ * At most this many unpriced models are reported, fully unpriced first, then
+ * by tokens run. This is the "how many the report shows" cap, applied AFTER
+ * the price comparison below has already decided which models are unpriced —
+ * never before it, and never as a cap on which models are compared in the
+ * first place. Capping the observation itself, by volume, before pricing it
+ * would let a low-volume unpriced model be silently outranked by higher-
+ * volume priced ones and never reach this function's judgment at all, which
+ * is the report claiming nothing is unpriced about an organization that has
+ * exactly one unpriced model nobody happened to run much of.
  */
-const REQUIRED_CLASSES: readonly PriceTokenClass[] = [
-  "input_uncached",
-  "cache_read",
-  "cache_write_5m",
-  "output",
-];
+export const UNPRICED_MODEL_REPORT_LIMIT = 500;
 
 /**
- * The instants at which the book's answer for a model can change between
- * `start` and `end`: the two ends, and every entry boundary strictly inside.
- * Whether a class is priced is constant between consecutive boundaries, so
- * probing these is probing the whole interval.
- */
-function probeInstants(
-  boundaries: readonly number[],
-  start: Date,
-  end: Date,
-): Date[] {
-  const lo = start.getTime();
-  const hi = Math.max(lo, end.getTime());
-  const out = [lo];
-  for (const t of boundaries) if (t > lo && t < hi) out.push(t);
-  if (hi > lo) out.push(hi);
-  return out.map((t) => new Date(t));
-}
-
-/**
- * Which of `observed` the book cannot price, worst first — fully unpriced
- * models before partly-priced ones, then by tokens run, so the model costing
- * the most invisible money is at the top of the list.
+ * Which of `observed` the book cannot price for at least one class it
+ * actually used, worst first — fully unpriced models before partly-priced
+ * ones, then by tokens run, so the model costing the most invisible money is
+ * at the top of the list.
  *
- * A class is missing when any call in the observation went unpriced, or
- * when it is unpriced at `at`. Judging the whole window by one snapshot at
- * `at` (which this once did) hid the case the tab exists for: a customer
- * states the first rate for a model AFTER it has produced unpriced calls,
- * the new row prices it from now on, and the earlier runs stay blank while
- * the tab reports no unpriced model to explain them. So each model is
- * probed at every instant its price could have changed between its first
- * and last call, and at `at`, and a class missing at any of them is named.
+ * A class is checked only when the model's observation says it used it
+ * (nonzero tokens in at least one bucket): a model with prices for input and
+ * output but no cache rate is not reported for the cache classes it never
+ * sent a token in, and `reasoning` is checked on the same footing as every
+ * other class, so a model whose reasoning tokens make its runs `estimated`
+ * is named instead of silently passing because the fixed list this function
+ * used to check never mentioned it.
+ *
+ * Each bucket is probed once, at its own `firstSeen` — every call inside one
+ * price-boundary bucket shares one book answer by construction
+ * ({@link priceBookBoundaries}), so probing anywhere in the bucket probes the
+ * whole bucket, and a bucket where the model made no call is never probed at
+ * all. That is what removes the false positive a fixed-window scan across a
+ * model's whole `firstSeen`..`lastSeen` used to produce: two priced calls
+ * bracketing a lapse the model never actually called during no longer read
+ * as an unpriced gap, because nothing was observed in that lapse's bucket.
+ * The book is judged against the calls that actually happened when they
+ * happened, not against one snapshot at a fixed instant applied to the whole
+ * window — a rate added after a model's unpriced calls ran still names
+ * those calls, and a model whose rate later lapsed with no calls during the
+ * lapse is not falsely flagged for it.
+ *
+ * The book is indexed by class once ({@link indexPriceBookByClass}), so
+ * probing model A's `reasoning` usage never rescans model B's `cache_read`
+ * rows or price history for a model this organization never even ran.
  */
 export function findUnpricedModels(args: {
   observed: readonly ObservedModel[];
@@ -102,47 +141,62 @@ export function findUnpricedModels(args: {
   orgId: string;
   at: Date;
 }): UnpricedModel[] {
-  const boundaries = [
-    ...new Set(
-      args.book.flatMap((e) => [
-        e.effectiveFrom.getTime(),
-        ...(e.effectiveTo === null ? [] : [e.effectiveTo.getTime()]),
-      ]),
-    ),
-  ].sort((a, b) => a - b);
+  const byClass = indexPriceBookByClass(args.book);
   const out: UnpricedModel[] = [];
   for (const model of args.observed) {
-    // Calls after `at` are not in the observation (the store read is bounded
-    // by it), so the window ends at the earlier of the last call and `at`.
-    const end =
-      model.lastSeen.getTime() < args.at.getTime() ? model.lastSeen : args.at;
-    const instants = [
-      ...probeInstants(boundaries, model.firstSeen, end),
-      args.at,
-    ];
-    const missingClasses = REQUIRED_CLASSES.filter((tokenClass) =>
-      instants.some(
-        (at) =>
-          resolvePriceEntry(args.book, {
-            orgId: args.orgId,
-            modelId: model.model,
-            tokenClass,
-            at,
-          }) === null,
-      ),
+    const usedClasses = new Set<PriceTokenClass>();
+    const windowsByClass = new Map<PriceTokenClass, MissingClassWindow>();
+    for (const usage of model.classes) {
+      if (usage.tokens <= 0) continue;
+      usedClasses.add(usage.tokenClass);
+      const classBook = byClass.get(usage.tokenClass) ?? [];
+      const priced =
+        resolvePriceEntryFromClassBook(classBook, {
+          orgId: args.orgId,
+          modelId: model.model,
+          // Every call in this bucket shares one book answer by
+          // construction, so any instant inside it probes the whole bucket.
+          at: usage.firstSeen,
+        }) !== null;
+      if (priced) continue;
+      const existing = windowsByClass.get(usage.tokenClass);
+      if (!existing) {
+        windowsByClass.set(usage.tokenClass, {
+          tokenClass: usage.tokenClass,
+          unpricedFrom: usage.firstSeen,
+          unpricedTo: usage.lastSeen,
+        });
+      } else {
+        if (usage.firstSeen < existing.unpricedFrom)
+          existing.unpricedFrom = usage.firstSeen;
+        if (usage.lastSeen > existing.unpricedTo)
+          existing.unpricedTo = usage.lastSeen;
+      }
+    }
+    if (windowsByClass.size === 0) continue;
+    const missingClassWindows = [...windowsByClass.values()].sort((a, b) =>
+      a.tokenClass.localeCompare(b.tokenClass),
     );
-    if (missingClasses.length === 0) continue;
     out.push({
-      ...model,
-      missingClasses,
-      fullyUnpriced: missingClasses.length === REQUIRED_CLASSES.length,
+      model: model.model,
+      provider: model.provider,
+      calls: model.calls,
+      tokens: model.tokens,
+      firstSeen: model.firstSeen,
+      lastSeen: model.lastSeen,
+      classes: model.classes,
+      missingClasses: missingClassWindows.map((w) => w.tokenClass),
+      missingClassWindows,
+      fullyUnpriced: missingClassWindows.length === usedClasses.size,
     });
   }
-  return out.sort((a, b) => {
-    if (a.fullyUnpriced !== b.fullyUnpriced) return a.fullyUnpriced ? -1 : 1;
-    if (a.tokens !== b.tokens) return b.tokens - a.tokens;
-    return a.model.localeCompare(b.model);
-  });
+  return out
+    .sort((a, b) => {
+      if (a.fullyUnpriced !== b.fullyUnpriced) return a.fullyUnpriced ? -1 : 1;
+      if (a.tokens !== b.tokens) return b.tokens - a.tokens;
+      return a.model.localeCompare(b.model);
+    })
+    .slice(0, UNPRICED_MODEL_REPORT_LIMIT);
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -160,6 +214,10 @@ export function findUnpricedModels(args: {
  * The frame read is a ClickHouse read that throws on a degraded store rather
  * than answering off half the frames — a model missing from the observation
  * would read as a model nobody needs a price for.
+ *
+ * The book is loaded first, not in parallel with the observation: its
+ * boundaries ({@link priceBookBoundaries}) are what the observed-usage read
+ * buckets calls by, so the book must be in hand before that read is made.
  */
 export async function readUnpricedModels(args: {
   orgId: string;
@@ -167,19 +225,19 @@ export async function readUnpricedModels(args: {
   since: Date;
   at: Date;
 }): Promise<UnpricedModel[]> {
-  const [book, observed] = await Promise.all([
-    loadPriceBook({ orgId: args.orgId }),
-    // Bounded above by `at` as well as below by `since`: the book is judged
-    // as of `at`, so a model first run after `at` — and every later call and
-    // token — would otherwise be reported against a snapshot from before it
-    // ran, and read as unpriced when the book of its own time prices it.
-    readObservedModels({
-      orgId: args.orgId,
-      workspaceId: args.workspaceId,
-      since: args.since,
-      until: args.at,
-    }),
-  ]);
+  const book = await loadPriceBook({ orgId: args.orgId });
+  const boundaries = priceBookBoundaries(book).map((t) => new Date(t));
+  // Bounded above by `at` as well as below by `since`: the book is judged
+  // as of `at`, so a model first run after `at` — and every later call and
+  // token — would otherwise be reported against a snapshot from before it
+  // ran, and read as unpriced when the book of its own time prices it.
+  const observed = await readObservedModels({
+    orgId: args.orgId,
+    workspaceId: args.workspaceId,
+    since: args.since,
+    until: args.at,
+    boundaries,
+  });
   return findUnpricedModels({
     observed: observed.map((row) => ({
       model: row.model,
@@ -188,6 +246,13 @@ export async function readUnpricedModels(args: {
       tokens: row.tokens,
       firstSeen: new Date(row.firstSeen),
       lastSeen: new Date(row.lastSeen),
+      classes: row.classes.map((c) => ({
+        tokenClass: c.tokenClass,
+        calls: c.calls,
+        tokens: c.tokens,
+        firstSeen: new Date(c.firstSeen),
+        lastSeen: new Date(c.lastSeen),
+      })),
     })),
     book,
     orgId: args.orgId,

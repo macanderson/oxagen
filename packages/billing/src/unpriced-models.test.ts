@@ -2,8 +2,14 @@
 // and the prices anyone has stated for them. Pure: no price book store, no
 // frame store, so the ordering and the partial-miss rule are exercised
 // directly rather than inferred from a query.
-import { describe, expect, it } from "vitest";
-import { findUnpricedModels, type ObservedModel } from "./unpriced-models";
+import { describe, expect, it, vi } from "vitest";
+import {
+  findUnpricedModels,
+  UNPRICED_MODEL_REPORT_LIMIT,
+  type ObservedModel,
+  type ObservedModelClassUsage,
+} from "./unpriced-models";
+import * as priceBook from "./price-book";
 import type { PriceEntry, PriceTokenClass } from "./price-book";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -46,6 +52,27 @@ function fullyPriced(model: string, over: Partial<PriceEntry> = {}) {
   return REQUIRED.map((tokenClass) => entry({ model, tokenClass, ...over }));
 }
 
+/** One class an observed model used, in one bucket, with real tokens. */
+function usage(
+  over: Partial<ObservedModelClassUsage> = {},
+): ObservedModelClassUsage {
+  return {
+    tokenClass: "input_uncached",
+    calls: 1,
+    tokens: 500,
+    firstSeen: new Date("2026-09-10T00:00:00.000Z"),
+    lastSeen: new Date("2026-09-13T00:00:00.000Z"),
+    ...over,
+  };
+}
+
+/** An observation that used every {@link REQUIRED} class, matching `observed`'s totals. */
+function requiredUsage(
+  over: Partial<Omit<ObservedModelClassUsage, "tokenClass">> = {},
+): ObservedModelClassUsage[] {
+  return REQUIRED.map((tokenClass) => usage({ tokenClass, ...over }));
+}
+
 function observed(over: Partial<ObservedModel> = {}): ObservedModel {
   return {
     model: "some-new-model",
@@ -54,12 +81,13 @@ function observed(over: Partial<ObservedModel> = {}): ObservedModel {
     tokens: 1_000,
     firstSeen: new Date("2026-09-10T00:00:00.000Z"),
     lastSeen: new Date("2026-09-13T00:00:00.000Z"),
+    classes: requiredUsage(),
     ...over,
   };
 }
 
 describe("findUnpricedModels", () => {
-  it("leaves out a model the book prices in every class", () => {
+  it("leaves out a model the book prices in every class it used", () => {
     const out = findUnpricedModels({
       observed: [observed({ model: "claude-sonnet-5" })],
       book: fullyPriced("claude-sonnet-5"),
@@ -69,7 +97,7 @@ describe("findUnpricedModels", () => {
     expect(out).toEqual([]);
   });
 
-  it("names a model nothing prices, with every class missing", () => {
+  it("names a model nothing prices, with every class it used missing", () => {
     const out = findUnpricedModels({
       observed: [observed({ model: "vendor/brand-new" })],
       book: fullyPriced("claude-sonnet-5"),
@@ -77,17 +105,78 @@ describe("findUnpricedModels", () => {
       at: AT,
     });
     expect(out).toHaveLength(1);
+    // Missing classes come back sorted, not in observation order.
+    const sortedRequired = [...REQUIRED].sort((a, b) => a.localeCompare(b));
     expect(out[0]).toMatchObject({
       model: "vendor/brand-new",
       provider: "openai",
       calls: 3,
       tokens: 1_000,
-      missingClasses: REQUIRED,
+      missingClasses: sortedRequired,
       fullyUnpriced: true,
     });
     // The observation is carried through, not re-derived.
     expect(out[0]!.firstSeen).toEqual(new Date("2026-09-10T00:00:00.000Z"));
     expect(out[0]!.lastSeen).toEqual(new Date("2026-09-13T00:00:00.000Z"));
+    // Each missing class carries the span it went unpriced over.
+    expect(out[0]!.missingClassWindows).toEqual(
+      sortedRequired.map((tokenClass) => ({
+        tokenClass,
+        unpricedFrom: new Date("2026-09-10T00:00:00.000Z"),
+        unpricedTo: new Date("2026-09-13T00:00:00.000Z"),
+      })),
+    );
+  });
+
+  it("does not check a class the model never used, even when the book has no row for it", () => {
+    // A card with input/output priced but no cache rows at all — the model
+    // never sent a cached token, so the missing cache rows are not a gap.
+    const book = [
+      entry({ model: "no-caching", tokenClass: "input_uncached" }),
+      entry({ model: "no-caching", tokenClass: "output" }),
+    ];
+    const out = findUnpricedModels({
+      observed: [
+        observed({
+          model: "no-caching",
+          classes: [
+            usage({ tokenClass: "input_uncached", tokens: 800 }),
+            usage({ tokenClass: "output", tokens: 200 }),
+            // Present but zero — a class column with no usage in it, not a
+            // class the model used and the book failed to price.
+            usage({ tokenClass: "cache_read", tokens: 0 }),
+          ],
+        }),
+      ],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("checks reasoning on the same footing as every other class", () => {
+    // A card with every classic class priced but no reasoning rate: the
+    // model's thinking tokens make its runs `estimated`, and the fixed list
+    // this function used to check never mentioned reasoning at all.
+    const book = fullyPriced("thinking-model");
+    const out = findUnpricedModels({
+      observed: [
+        observed({
+          model: "thinking-model",
+          classes: [
+            ...requiredUsage(),
+            usage({ tokenClass: "reasoning", tokens: 4_000 }),
+          ],
+        }),
+      ],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]!.missingClasses).toEqual(["reasoning"]);
+    expect(out[0]!.fullyUnpriced).toBe(false);
   });
 
   it("reports a partly-priced model as not fully unpriced, naming only the gaps", () => {
@@ -155,7 +244,7 @@ describe("findUnpricedModels", () => {
     expect(out[0]!.missingClasses).toEqual(["output"]);
   });
 
-  it("ignores an entry that is not effective at the read instant", () => {
+  it("ignores an entry that is not effective at the calls that used it", () => {
     const book = fullyPriced("retired-price", {
       effectiveTo: new Date("2026-09-05T00:00:00.000Z"),
     });
@@ -169,8 +258,9 @@ describe("findUnpricedModels", () => {
   });
 
   // A customer states the first rate for a model after it has produced
-  // unpriced calls. The new row prices it from now on; the earlier runs stay
-  // blank, and a snapshot at `at` reported nothing left to explain them.
+  // unpriced calls. The new row prices it from now on; the earlier calls
+  // that used it stay blank, and each is checked at the instant it ran, not
+  // at `at`.
   it("names a model whose price began after some of its calls ran", () => {
     const book = fullyPriced("late-priced", {
       effectiveFrom: new Date("2026-09-12T00:00:00.000Z"),
@@ -189,6 +279,10 @@ describe("findUnpricedModels", () => {
         observed({
           model: "late-priced",
           firstSeen: new Date("2026-09-12T00:00:00.000Z"),
+          classes: requiredUsage({
+            firstSeen: new Date("2026-09-12T00:00:00.000Z"),
+            lastSeen: new Date("2026-09-13T00:00:00.000Z"),
+          }),
         }),
       ],
       book,
@@ -198,9 +292,47 @@ describe("findUnpricedModels", () => {
     expect(after).toEqual([]);
   });
 
-  // A price that lapsed in the middle of the window, between two rows, is a
-  // gap no endpoint sees.
-  it("names a model whose price lapsed between two of its calls", () => {
+  // A price that lapsed between two calls, with no call during the lapse, is
+  // a gap this organization never actually ran into — the earlier fixed
+  // window scan across firstSeen..lastSeen used to flag it anyway.
+  it("does not flag a price gap that falls between two calls when nothing ran during it", () => {
+    const book = [
+      ...fullyPriced("bracketed", {
+        effectiveFrom: new Date("2020-01-01T00:00:00.000Z"),
+        effectiveTo: new Date("2026-01-05T00:00:00.000Z"),
+      }),
+      ...fullyPriced("bracketed", {
+        effectiveFrom: new Date("2026-01-06T00:00:00.000Z"),
+      }),
+    ];
+    // Calls on Jan 1 and Jan 10; the price lapsed only on Jan 5, and nothing
+    // called the model that day.
+    const out = findUnpricedModels({
+      observed: [
+        observed({
+          model: "bracketed",
+          firstSeen: new Date("2026-01-01T00:00:00.000Z"),
+          lastSeen: new Date("2026-01-10T00:00:00.000Z"),
+          classes: [
+            ...requiredUsage({
+              firstSeen: new Date("2026-01-01T00:00:00.000Z"),
+              lastSeen: new Date("2026-01-01T00:00:00.000Z"),
+            }),
+            ...requiredUsage({
+              firstSeen: new Date("2026-01-10T00:00:00.000Z"),
+              lastSeen: new Date("2026-01-10T00:00:00.000Z"),
+            }),
+          ],
+        }),
+      ],
+      book,
+      orgId: ORG,
+      at: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(out).toEqual([]);
+  });
+
+  it("names a model whose calls actually fell inside the lapsed window", () => {
     const book = [
       ...fullyPriced("gapped", {
         effectiveTo: new Date("2026-09-11T00:00:00.000Z"),
@@ -210,7 +342,17 @@ describe("findUnpricedModels", () => {
       }),
     ];
     const out = findUnpricedModels({
-      observed: [observed({ model: "gapped" })],
+      // This bucket's calls (firstSeen == lastSeen) landed AT the lapse, not
+      // merely somewhere within the model's wider first/last-call span.
+      observed: [
+        observed({
+          model: "gapped",
+          classes: requiredUsage({
+            firstSeen: new Date("2026-09-11T12:00:00.000Z"),
+            lastSeen: new Date("2026-09-11T12:00:00.000Z"),
+          }),
+        }),
+      ],
       book,
       orgId: ORG,
       at: AT,
@@ -251,5 +393,109 @@ describe("findUnpricedModels", () => {
     expect(
       findUnpricedModels({ observed: [], book: [], orgId: ORG, at: AT }),
     ).toEqual([]);
+  });
+
+  // The report caps how many unpriced models it SHOWS, applied after the
+  // price comparison has already decided which models are unpriced — never
+  // as a pre-filter on which models are compared.
+  it("caps the report after filtering, not before — a low-volume unpriced model below the cutoff is still found", () => {
+    const heavyPriced = Array.from(
+      { length: UNPRICED_MODEL_REPORT_LIMIT },
+      (_, i) =>
+        observed({
+          model: `priced-${i}`,
+          tokens: 1_000_000 - i,
+          classes: requiredUsage(),
+        }),
+    );
+    const rareUnpriced = observed({ model: "rare-unpriced", tokens: 5 });
+    const book = heavyPriced.flatMap((m) => fullyPriced(m.model));
+    const out = findUnpricedModels({
+      observed: [...heavyPriced, rareUnpriced],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out.map((m) => m.model)).toEqual(["rare-unpriced"]);
+  });
+
+  it("never reports more than the cap", () => {
+    const observedModels = Array.from(
+      { length: UNPRICED_MODEL_REPORT_LIMIT + 25 },
+      (_, i) => observed({ model: `unpriced-${i}`, tokens: i }),
+    );
+    const out = findUnpricedModels({
+      observed: observedModels,
+      book: [],
+      orgId: ORG,
+      at: AT,
+    });
+    expect(out).toHaveLength(UNPRICED_MODEL_REPORT_LIMIT);
+  });
+
+  // A book holding boundaries and rows for unrelated models must not widen
+  // the number of price-book probes one observed model's usage takes: the
+  // book is indexed by class once, and each probe is answered from that
+  // model's class's slice rather than a rescan of the whole book.
+  it("does not rescan unrelated classes or models per probe", () => {
+    const resolveSpy = vi.spyOn(priceBook, "resolvePriceEntryFromClassBook");
+    const unrelatedBook = Array.from({ length: 50 }, (_, i) =>
+      entry({
+        model: `unrelated-${i}`,
+        tokenClass: "output",
+        effectiveFrom: new Date(FROM.getTime() + i * 86_400_000),
+      }),
+    );
+    const book = [...fullyPriced("watched"), ...unrelatedBook];
+    resolveSpy.mockClear();
+    findUnpricedModels({
+      observed: [observed({ model: "watched" })],
+      book,
+      orgId: ORG,
+      at: AT,
+    });
+    // One probe per class the observed model actually used (four), never
+    // one per boundary in the unrelated rows.
+    expect(resolveSpy).toHaveBeenCalledTimes(REQUIRED.length);
+    resolveSpy.mockRestore();
+  });
+
+  // Both axes in one fixture: a class the model never used, and a bucket the
+  // model made no call in, are each absent from the observation and neither
+  // costs a probe.
+  it("probes neither a class with no tokens nor a bucket with no calls", () => {
+    const resolveSpy = vi.spyOn(priceBook, "resolvePriceEntryFromClassBook");
+    resolveSpy.mockClear();
+    findUnpricedModels({
+      observed: [
+        observed({
+          model: "sparse",
+          classes: [
+            // input_uncached: two buckets, one with real usage and one with
+            // none — the empty one is simply absent from `classes`, the way
+            // `readObservedModels` reports it (`WHERE tok > 0`).
+            usage({
+              tokenClass: "input_uncached",
+              tokens: 300,
+              firstSeen: new Date("2026-09-10T00:00:00.000Z"),
+              lastSeen: new Date("2026-09-10T00:00:00.000Z"),
+            }),
+            // reasoning: present in the row shape but zero tokens — a class
+            // this model never actually used.
+            usage({ tokenClass: "reasoning", tokens: 0 }),
+          ],
+        }),
+      ],
+      book: fullyPriced("sparse"),
+      orgId: ORG,
+      at: AT,
+    });
+    // Exactly one probe: the single nonzero (class, bucket) pair.
+    expect(resolveSpy).toHaveBeenCalledTimes(1);
+    expect(resolveSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ modelId: "sparse" }),
+    );
+    resolveSpy.mockRestore();
   });
 });

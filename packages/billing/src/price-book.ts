@@ -302,9 +302,27 @@ export function resolvePriceEntry(
     at: Date;
   },
 ): PriceEntry | null {
-  const live = book.filter(
-    (e) => e.tokenClass === args.tokenClass && effectiveAt(e, args.at),
-  );
+  const classBook = book.filter((e) => e.tokenClass === args.tokenClass);
+  return resolvePriceEntryFromClassBook(classBook, args);
+}
+
+/**
+ * {@link resolvePriceEntry}'s matching, over a book already narrowed to one
+ * token class. A caller resolving many (model, at) pairs for the same class —
+ * `findUnpricedModels` probing one observed model's usage buckets — filters
+ * the whole book by class once with {@link indexPriceBookByClass} and calls
+ * this for every probe, instead of rescanning every other class's rows (and
+ * every other model's boundaries) on each one.
+ */
+export function resolvePriceEntryFromClassBook(
+  classBook: PriceBook,
+  args: {
+    orgId: string;
+    modelId: string;
+    at: Date;
+  },
+): PriceEntry | null {
+  const live = classBook.filter((e) => effectiveAt(e, args.at));
   const own = live.filter((e) => e.orgId === args.orgId);
   const list = live.filter((e) => e.orgId === null);
   const slash = args.modelId.indexOf("/");
@@ -318,6 +336,46 @@ export function resolvePriceEntry(
     }
   }
   return null;
+}
+
+/**
+ * `book` grouped by token class, once. {@link resolvePriceEntry} rescans the
+ * whole book to find one class's rows on every call; a caller that probes
+ * many (model, class, instant) triples over the same book — the unpriced-model
+ * read — builds this once and passes each class's slice to
+ * {@link resolvePriceEntryFromClassBook}, so probing model A's `reasoning`
+ * usage never rescans model B's `cache_read` rows or an unrelated model's
+ * price-boundary history.
+ */
+export function indexPriceBookByClass(
+  book: PriceBook,
+): ReadonlyMap<PriceTokenClass, PriceBook> {
+  const out = new Map<PriceTokenClass, PriceEntry[]>();
+  for (const entry of book) {
+    const list = out.get(entry.tokenClass);
+    if (list) list.push(entry);
+    else out.set(entry.tokenClass, [entry]);
+  }
+  return out;
+}
+
+/**
+ * The instants, in ascending order, at which the book's answer for ANY
+ * (model, class) pair could change: the two ends of every entry's effective
+ * window. The book's answer is constant between two consecutive boundaries,
+ * so a caller bucketing observed usage by these boundaries (`readObservedModels`'s
+ * `boundaries` argument) groups every call whose price-book answer could not
+ * have differed, and probing once per bucket is probing the whole bucket.
+ */
+export function priceBookBoundaries(book: PriceBook): number[] {
+  return [
+    ...new Set(
+      book.flatMap((e) => [
+        e.effectiveFrom.getTime(),
+        ...(e.effectiveTo === null ? [] : [e.effectiveTo.getTime()]),
+      ]),
+    ),
+  ].sort((a, b) => a - b);
 }
 
 /**

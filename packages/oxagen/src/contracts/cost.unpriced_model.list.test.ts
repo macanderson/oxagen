@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   costUnpricedModelList,
+  missingClassWindowSchema,
   unpricedModelSchema,
   UNPRICED_MODEL_WINDOW_DAYS,
 } from "./cost.unpriced_model.list";
@@ -13,6 +14,18 @@ const model = {
   firstSeen: "2026-08-20T00:00:00.000Z",
   lastSeen: "2026-09-17T00:00:00.000Z",
   missingClasses: ["input_uncached", "output"],
+  missingClassWindows: [
+    {
+      tokenClass: "input_uncached",
+      unpricedFrom: "2026-08-20T00:00:00.000Z",
+      unpricedTo: "2026-09-17T00:00:00.000Z",
+    },
+    {
+      tokenClass: "output",
+      unpricedFrom: "2026-08-20T00:00:00.000Z",
+      unpricedTo: "2026-09-17T00:00:00.000Z",
+    },
+  ],
   fullyUnpriced: false,
 };
 
@@ -52,5 +65,26 @@ describe("list_unpriced_models contract", () => {
     expect(Object.keys(unpricedModelSchema.shape)).not.toContain(
       "microsPerMillion",
     );
+  });
+
+  it("names the window each missing class went unpriced over", () => {
+    expect(
+      missingClassWindowSchema.parse({
+        tokenClass: "reasoning",
+        unpricedFrom: "2026-09-01T00:00:00.000Z",
+        unpricedTo: "2026-09-05T00:00:00.000Z",
+      }),
+    ).toEqual({
+      tokenClass: "reasoning",
+      unpricedFrom: "2026-09-01T00:00:00.000Z",
+      unpricedTo: "2026-09-05T00:00:00.000Z",
+    });
+    expect(
+      missingClassWindowSchema.safeParse({
+        tokenClass: "not-a-class",
+        unpricedFrom: "2026-09-01T00:00:00.000Z",
+        unpricedTo: "2026-09-05T00:00:00.000Z",
+      }).success,
+    ).toBe(false);
   });
 });

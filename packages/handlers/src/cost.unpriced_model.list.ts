@@ -70,6 +70,11 @@ export function createUnpricedModelListHandler(
         firstSeen: m.firstSeen.toISOString(),
         lastSeen: m.lastSeen.toISOString(),
         missingClasses: [...m.missingClasses],
+        missingClassWindows: m.missingClassWindows.map((w) => ({
+          tokenClass: w.tokenClass,
+          unpricedFrom: w.unpricedFrom.toISOString(),
+          unpricedTo: w.unpricedTo.toISOString(),
+        })),
         fullyUnpriced: m.fullyUnpriced,
       })),
     };
