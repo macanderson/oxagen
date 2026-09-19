@@ -252,6 +252,90 @@ describe("readWorkingTreeChanges", () => {
   const numstat =
     "12\t3\tsrc/a.ts\n0\t9\tgone.ts\n2\t2\trenamed-old.ts => renamed-new.ts\n";
 
+  it("reports work the session committed, with a clean worktree", async () => {
+    // The loss this closes: an agent edits files through a shell command or a
+    // formatter and commits them before the end-of-turn `Stop`. `git status`
+    // is then clean and `HEAD` has moved, so comparing the worktree with
+    // `HEAD` answers "nothing changed" and the run records a commit with none
+    // of its files. Measuring from the commit the session started on asks the
+    // question the record is actually for.
+    const calls: string[][] = [];
+    const exec = fakeGit(
+      {
+        "status --porcelain=v1 -z": "",
+        "diff --name-status -z base-sha": "M\0src/a.ts\0A\0src/b.ts\0",
+        "diff --numstat base-sha": "12\t3\tsrc/a.ts\n40\t0\tsrc/b.ts\n",
+        "rev-parse --show-toplevel": "/repo\n",
+      },
+      calls,
+    );
+    expect(await readWorkingTreeChanges(exec, "/repo/src", "base-sha")).toEqual(
+      [
+        {
+          path: "/repo/src/a.ts",
+          repo_relative_path: "src/a.ts",
+          status: "modified",
+          lines_added: 12,
+          lines_removed: 3,
+        },
+        {
+          path: "/repo/src/b.ts",
+          repo_relative_path: "src/b.ts",
+          status: "added",
+          lines_added: 40,
+          lines_removed: 0,
+        },
+      ],
+    );
+    // Measured from the baseline, never from the moved HEAD.
+    expect(calls.some((c) => c.includes("HEAD"))).toBe(false);
+  });
+
+  it("falls back to HEAD when the baseline is no longer in the graph", async () => {
+    // A rebase, an amend or a reset can take the baseline out of the graph.
+    // Answering from the empty tree instead would report every file in the
+    // repository as added by this run, so the read falls back to the question
+    // it can still answer.
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": " M src/a.ts\0",
+      "diff --name-status -z gone-sha": {
+        status: 128,
+        stdout: "",
+        stderr: "bad object",
+      },
+      "diff --numstat HEAD": "12\t3\tsrc/a.ts\n",
+      "rev-parse --show-toplevel": "/repo\n",
+    });
+    expect(await readWorkingTreeChanges(exec, "/repo/src", "gone-sha")).toEqual(
+      [
+        {
+          path: "/repo/src/a.ts",
+          repo_relative_path: "src/a.ts",
+          status: "modified",
+          lines_added: 12,
+          lines_removed: 3,
+        },
+      ],
+    );
+  });
+
+  it("keeps untracked files, which are in no diff", async () => {
+    // The untracked half still comes from `status`: a file git does not track
+    // appears in no diff against any commit, baseline included.
+    const exec = fakeGit({
+      "status --porcelain=v1 -z": "?? new.txt\0",
+      "diff --name-status -z base-sha": "M\0src/a.ts\0",
+      "diff --numstat base-sha": "12\t3\tsrc/a.ts\n",
+      "rev-parse --show-toplevel": "/repo\n",
+      "hash-object": "",
+    });
+    const changes = await readWorkingTreeChanges(exec, "/repo/src", "base-sha");
+    expect(changes?.map((c) => c.repo_relative_path).sort()).toEqual([
+      "new.txt",
+      "src/a.ts",
+    ]);
+  });
+
   it("reports one entry per changed path, with status and line counts", async () => {
     const exec = fakeGit({
       "status --porcelain=v1 -z": status,

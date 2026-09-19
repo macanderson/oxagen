@@ -1200,6 +1200,11 @@ export async function startDaemon(
       // absent HEAD, so the reconciliation still runs. Its own status read
       // is what tells the two apart: a non-repository answers nothing and
       // seals no frame. There is simply no git context to note for either.
+      // The first read that answers fixes the session's baseline. Later reads
+      // measure from it rather than from a `HEAD` that the session's own
+      // commits keep moving.
+      if (facts !== undefined && session.baselineCommit === undefined)
+        session.baselineCommit = facts.head_sha;
       const at = now();
       const last = lastReconcileAt.get(harnessSessionId);
       const due =
@@ -1217,7 +1222,11 @@ export async function startDaemon(
         // behind it.
         ...(due
           ? await (async () => {
-              const changes = await readWorkingTreeChanges(execAsync, cwd);
+              const changes = await readWorkingTreeChanges(
+                execAsync,
+                cwd,
+                session.baselineCommit,
+              );
               return changes === undefined ? {} : { changes };
             })()
           : {}),

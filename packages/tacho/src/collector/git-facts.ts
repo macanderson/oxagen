@@ -276,6 +276,37 @@ export function parsePorcelainZ(
   return out;
 }
 
+/**
+ * `git diff --name-status -z <ref>` into `{ code, path }`, the same shape
+ * `parsePorcelainZ` answers so the two merge without a second vocabulary.
+ *
+ * NUL-delimited rather than the default, because the default C-quotes any
+ * path that needs it and this reader must key by the same spelling the
+ * porcelain status uses. A rename writes three fields — status, old path,
+ * new path — and the new path is the one the run changed.
+ */
+export function parseNameStatusZ(
+  stdout: string,
+): { code: string; path: string }[] {
+  const fields = stdout.split("\0");
+  const out: { code: string; path: string }[] = [];
+  for (let i = 0; i < fields.length; i += 1) {
+    const code = fields[i];
+    if (code === undefined || code.length === 0) continue;
+    const letter = code[0] ?? "";
+    if (!"AMDRCTU".includes(letter)) continue;
+    // A rename or copy spends its next field on the old path.
+    const pathIndex = letter === "R" || letter === "C" ? i + 2 : i + 1;
+    const path = fields[pathIndex];
+    i = pathIndex;
+    if (path === undefined || path.length === 0) continue;
+    // Two letters, so `statusOf` reads it the way it reads a porcelain code.
+    out.push({ code: `${letter} `, path });
+    if (out.length >= MAX_CHANGED_PATHS) break;
+  }
+  return out;
+}
+
 /** Unquote the C-quoted path form git falls back to for tabs and newlines. */
 function unquote(path: string): string {
   if (!path.startsWith('"') || !path.endsWith('"')) return path;
@@ -413,6 +444,7 @@ async function untrackedLineCount(
 export async function readWorkingTreeChanges(
   exec: ExecAsync,
   cwd: string,
+  baseline?: string,
 ): Promise<GitWorkingTreeChange[] | undefined> {
   const status = await git(exec, cwd, [
     "status",
@@ -435,10 +467,42 @@ export async function readWorkingTreeChanges(
   // failed `status` leaves the field off rather than asserting cleanliness,
   // and it matters more here because the caller seals a frame from it.
   if (status === undefined) return undefined;
-  const entries = parsePorcelainZ(status);
+  const worktree = parsePorcelainZ(status);
+  // Against a baseline, the question is what this session changed, and work it
+  // committed is no longer in `status` at all: the tree is clean and `HEAD` has
+  // moved. Comparing the worktree with the current `HEAD` answers a different
+  // question — what is uncommitted now — and a run that committed its work
+  // recorded none of it. So the tracked half comes from a diff against the
+  // commit the session started on, which covers committed and uncommitted
+  // alike, and only the untracked half still comes from `status`, because an
+  // untracked file is in no diff.
+  const tracked =
+    baseline === undefined
+      ? undefined
+      : await git(exec, cwd, ["diff", "--name-status", "-z", baseline]).then(
+          (out) => (out === undefined ? undefined : parseNameStatusZ(out)),
+        );
+  // A baseline git can no longer resolve — a rebase, an amend, a reset that
+  // moved it out of the graph — answers nothing rather than answering wrongly,
+  // and the read falls back to `HEAD`. Treating the failure as "no common
+  // ancestor" and diffing the empty tree would report every file in the
+  // repository as added by this run.
+  const ref =
+    baseline !== undefined && tracked !== undefined ? baseline : "HEAD";
+  const entries =
+    tracked === undefined
+      ? worktree
+      : [
+          ...tracked,
+          ...worktree.filter(
+            (entry) =>
+              entry.code === "??" &&
+              !tracked.some((t) => t.path === entry.path),
+          ),
+        ];
   if (entries.length === 0) return [];
   const [numstatOut, root] = await Promise.all([
-    git(exec, cwd, ["diff", "--numstat", "HEAD"]).then(async (head) => {
+    git(exec, cwd, ["diff", "--numstat", ref]).then(async (head) => {
       if (head !== undefined) return head;
       // No HEAD means the first commit has not been made. A plain
       // `git diff` then reports only what is unstaged, so a file already

@@ -123,6 +123,22 @@ export interface SessionFacts {
    * `Stop` it did not.
    */
   lastHookEvent?: string;
+  /**
+   * The commit this session was first observed at, and the ref every later
+   * reconciliation measures from.
+   *
+   * Without it a reconciliation compares the worktree with the current
+   * `HEAD`, which answers what is uncommitted now rather than what this
+   * session changed — so an agent that committed its work before the
+   * end-of-turn `Stop` left a clean tree and recorded none of it.
+   *
+   * Set on the first git read for the session, which is the earliest this
+   * daemon knows the repository at all. A session that commits before that
+   * first read measures from after the commit; that is a smaller window than
+   * measuring from `HEAD` every time, and it is the honest limit of a
+   * baseline nobody recorded at the start.
+   */
+  baselineCommit?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
