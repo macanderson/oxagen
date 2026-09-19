@@ -347,10 +347,15 @@ function ProfileTab({ data }: { data: ShellData }) {
         <dl className={kv} data-testid="account-roles">
           <dt className={kvTerm}>{org.slug}</dt>
           <dd className={kvValue}>{t("orgRole", { role: viewer.orgRole })}</dd>
+          {/* The Better Auth `auth.users.id`, and labelled as such. It read
+              "principal · kind human", which named a different thing: a human
+              IAM principal is its own `iam.principals` row linked by
+              `parent_user_id`, so its id is not this one. Someone copying this
+              value for IAM or audit work copied the wrong identifier under a
+              label that said it was the right one. Showing the real principal
+              id would need a read this shell does not make. */}
           <dt className={kvTerm}>{t("principal")}</dt>
-          <dd className={kvValue}>
-            {viewer.id} · {t("principalKind")}
-          </dd>
+          <dd className={kvValue}>{viewer.id}</dd>
         </dl>
         <p className={`${hint} mt-2.5`}>
           {t.rich("rolesHint", {
@@ -752,12 +757,31 @@ function SecurityTab({
     }
   }
 
+  // Which rotation is the live one. `codes.pending` cannot answer this,
+  // because Cancel sets `codes` to `closed` and takes the pending flag with
+  // it while the request carries on: the person can then start a second
+  // rotation, and Better Auth has now rotated twice. Responses can arrive in
+  // either order, so the set that is actually valid is the one the LAST
+  // request produced, not the one that answers last. Without this the first
+  // response could land second and write the vault with codes the second
+  // rotation had already invalidated, leaving a person holding a recovery set
+  // that does not work and no way to know.
+  //
+  // A ref rather than state: it must survive the re-render Cancel causes and
+  // must not cause one itself.
+  const rotation = useRef(0);
+
   async function regenerate(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (codes.kind !== "asking" || codes.pending) return;
+    const mine = ++rotation.current;
     setCodes({ ...codes, pending: true, refused: false });
     try {
       const result = await liveRegenerateBackupCodes(codes.password);
+      // Superseded: a later rotation was started, so this answer is about a
+      // set the server has already replaced. Dropping it is the point; the
+      // live rotation writes its own.
+      if (mine !== rotation.current) return;
       if (result.ok) {
         // The vault first, and deliberately: this component may already be
         // unmounted, in which case its own setState is a no-op and this write
@@ -772,6 +796,7 @@ function SecurityTab({
           refused: true,
         });
     } catch {
+      if (mine !== rotation.current) return;
       setCodes({ kind: "asking", password: "", pending: false, refused: true });
     }
   }

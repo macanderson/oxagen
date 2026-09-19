@@ -321,14 +321,26 @@ describe("Profile", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the person, their verified email, their roles and their principal", async () => {
+  it("shows the person, their verified email, their roles and their user id", async () => {
     const { dialog } = await openDialog();
     expect(within(dialog).getByText("Marcus Bell")).toBeTruthy();
     expect(dialog).toHaveTextContent("marcus.bell@acme.example · verified");
     const roles = within(dialog).getByTestId("account-roles");
     expect(roles).toHaveTextContent("acme");
     expect(roles).toHaveTextContent("org.member");
-    expect(roles).toHaveTextContent("usr_01K3F8QB7R · kind human");
+    expect(roles).toHaveTextContent("usr_01K3F8QB7R");
+  });
+
+  // The value is Better Auth's `auth.users.id`. A human IAM principal is its
+  // own `iam.principals` row linked by `parent_user_id`, so calling this one
+  // "principal · kind human" published the wrong identifier for anyone
+  // copying it into IAM or audit work.
+  it("does not call the user id a principal (negative)", async () => {
+    const { dialog } = await openDialog();
+    const roles = within(dialog).getByTestId("account-roles");
+    expect(roles).toHaveTextContent("user ID");
+    expect(roles).not.toHaveTextContent("principal");
+    expect(roles).not.toHaveTextContent("kind human");
   });
 
   it("says when the email is not verified", async () => {
@@ -653,6 +665,39 @@ describe("Security", () => {
     await user.click(screen.getByTestId("account-tab-security"));
     expect(screen.queryByTestId("account-codes")).toBeNull();
     expect(await screen.findByTestId("account-codes-open")).toBeTruthy();
+  });
+
+  // Cancel drops the pending flag while the request carries on, so a person
+  // can start a second rotation. Better Auth has then rotated twice, and the
+  // valid set is the one the LAST request produced, whichever answers first.
+  // A stale first response overwriting the vault leaves someone holding
+  // recovery codes the server has already invalidated.
+  it("keeps the last rotation's codes when an earlier one answers late (negative)", async () => {
+    const answers: ((result: unknown) => void)[] = [];
+    liveRegenerateBackupCodes.mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)),
+    );
+    const { user } = await openDialog("security");
+
+    async function ask(password: string) {
+      await user.click(screen.getByTestId("account-codes-open"));
+      await user.type(screen.getByTestId("account-codes-password"), password);
+      await user.click(screen.getByTestId("account-codes-confirm"));
+    }
+
+    await ask("first");
+    // Cancel while it is in flight: the request is not aborted, and the
+    // Regenerate button comes back.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await ask("second");
+
+    // The second answers first, then the first arrives late.
+    answers[1]?.({ ok: true, codes: ["second-1", "second-2"] });
+    answers[0]?.({ ok: true, codes: ["first-1", "first-2"] });
+
+    const shown = await screen.findByTestId("account-codes");
+    expect(shown).toHaveTextContent("second-1");
+    expect(shown).not.toHaveTextContent("first-1");
   });
 
   it("offers enrolment, not codes, to a person without two-factor", async () => {
