@@ -56,6 +56,7 @@ describe("get_mandate contract", () => {
       toolCallId: "0195b7c8-1e6e-7c3a-9f0e-0a1b2c3d4e60",
       kind: "settle",
       measure: "amount",
+      measureKind: "money",
       value: "250000000",
       unitOrCurrency: "USD",
       externalEffectId: "pi_3Q",

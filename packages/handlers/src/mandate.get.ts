@@ -79,6 +79,7 @@ export const mandateGetHandler: CapabilityHandler<typeof mandateGet> = async (
         measure: r.measure,
         value: r.value,
         unitOrCurrency: r.unitOrCurrency,
+        measureKind: r.measureKind as "money" | "count" | null,
         externalEffectId: r.externalEffectId,
         periodKey: r.periodKey,
         balanceAfter: r.balanceAfter,

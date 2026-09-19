@@ -5,9 +5,12 @@
 // office reads on Tools, the mandates one agent holds on Agents, and the bar
 // on an approval card — so there is one view model for a mandate row.
 //
-// A measure is money when its limit names an ISO 4217 currency and a count
-// when it names a unit (`calls` is the built-in one), which is why a value is
-// a discriminated union rather than a bare number (INV-09).
+// A measure is money or a count, which is why a value is a discriminated
+// union rather than a bare number (INV-09). Which one is not read from the
+// unit's spelling: `mappers/mandates.ts` switches on the `kind` the contract
+// carries (ADR-108), never on whether `currencyOrUnit` looks like an ISO 4217
+// code: a tool may legitimately declare a count denominated in a currency
+// code, and a guess from the spelling gets that case wrong.
 import { z } from "zod";
 import { type OrgRole, PublicId } from "./common";
 import { Money } from "./money";

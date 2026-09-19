@@ -114,6 +114,13 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 32
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count"
+                  ]
                 }
               },
               "required": [
@@ -254,6 +261,13 @@
                 "currencyOrUnit": {
                   "type": "string"
                 },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count"
+                  ]
+                },
                 "period": {
                   "type": "string",
                   "enum": [
@@ -305,6 +319,7 @@
               "required": [
                 "measure",
                 "currencyOrUnit",
+                "kind",
                 "period",
                 "periodKey",
                 "perCall",
@@ -370,6 +385,20 @@
             "unitOrCurrency": {
               "type": "string"
             },
+            "measureKind": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "externalEffectId": {
               "anyOf": [
                 {
@@ -397,6 +426,7 @@
             "measure",
             "value",
             "unitOrCurrency",
+            "measureKind",
             "externalEffectId",
             "periodKey",
             "balanceAfter",

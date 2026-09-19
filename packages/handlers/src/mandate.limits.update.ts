@@ -32,6 +32,8 @@ import {
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
   hasSettlementOverlappingPeriod,
+  hasUnstampedLedgerHistory,
+  lastLedgerKind,
 } from "@oxagen/rules";
 import {
   mandateLimitsSchema,
@@ -157,6 +159,90 @@ export async function assertPeriodChangeAllowed(
   }
 }
 
+/**
+ * Refuse changing a measure's kind (ADR-108) while the ledger still holds a
+ * movement recorded under the old one.
+ *
+ * `periodSums` groups reserve/settle rows only by mandate, measure and
+ * period key, with no kind column of its own: a reserved or settled row
+ * predates the change and carries whatever denomination the old kind used
+ * (whole units for a count, micros for money). Letting a kind change land
+ * while such a row is still live would sum it into the same total as a
+ * reservation made under the new kind, corrupting `readAuthority`'s
+ * remaining figure and every admission decision the gate makes against it
+ * from then on. An open reservation matters regardless of which period key
+ * it was filed under, the same as a period rename: a call parked past a
+ * boundary still holds a row `hasOpenReservation` finds.
+ *
+ * `legacyKindMeasures` names a measure whose `before[measure].kind` is only
+ * `legacyMeasureKindGuess`'s fallback, not a real stamp: comparing that guess
+ * to `next.kind` would refuse routine attrition the same disagreement a
+ * legacy row's stored kind can legitimately have with no drift underneath
+ * it. But the guess is not the only source of truth available: `reserve`
+ * has stamped every ledger row for a legacy measure from the live tool
+ * declaration since ADR-108's ledger column shipped, whether the mandate's
+ * own stored kind is a real stamp or still a guess, so a legacy measure that
+ * has made a real call already has real ledger history. This falls back to
+ * `lastLedgerKind` for a legacy measure the same way it does for a measure
+ * absent from `before` entirely (a whole-record `limits` replacement can
+ * delete a measure while the ledger still holds rows for it, and a later
+ * call can re-add it with no `before` entry to compare), refusing the
+ * change when that history disagrees. A null `lastLedgerKind` result is not
+ * on its own proof there is nothing to protect: a measure written before
+ * the ledger's own `measure_kind` column existed has real rows with no
+ * stamp, and `hasUnstampedLedgerHistory` catches the case those rows are
+ * still live (open, or drawn this period): only when neither a stamped nor
+ * a live unstamped row exists is the change let through outright.
+ */
+export async function assertKindChangeAllowed(
+  tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
+  mandateId: string,
+  before: MandateLimits,
+  after: MandateLimits,
+  legacyKindMeasures: ReadonlySet<string>,
+  at: Date = new Date(),
+): Promise<void> {
+  for (const [measure, next] of Object.entries(after)) {
+    const prev = before[measure];
+    const period = prev?.period ?? next.period;
+    let priorKind: MandateLimits[string]["kind"] | null;
+    if (prev && !legacyKindMeasures.has(measure)) {
+      if (prev.kind === next.kind) continue;
+      priorKind = prev.kind;
+    } else {
+      // No `before` entry, or a legacy measure whose stored kind is only a
+      // guess: the ledger's own last stamped kind is the fact to check.
+      priorKind = await lastLedgerKind(tx, mandateId, measure);
+      if (priorKind !== null) {
+        if (priorKind === next.kind) continue;
+      } else if (
+        !(await hasUnstampedLedgerHistory(tx, mandateId, measure, period, at))
+      ) {
+        // Genuinely no history yet, stamped or not, to protect.
+        continue;
+      }
+      // A null `priorKind` with live unstamped history falls through to the
+      // drawn/open check below rather than being treated as a fact: it
+      // cannot prove the old rows disagree with `next.kind`, only that they
+      // are still live and unverified, which the same guard already covers.
+    }
+    const drawn = await hasDrawnInCurrentPeriod(
+      tx,
+      mandateId,
+      measure,
+      period,
+      at,
+    );
+    const open = await hasOpenReservation(tx, mandateId, measure);
+    if (!drawn && !open) continue;
+    throw new HandlerError({
+      code: "conflict",
+      reason: "measure_kind_drawn",
+      message: `Measure "${measure}" still has authority drawn as ${priorKind} under its current window, or an open reservation recorded under it; a kind change would sum those rows into a ${next.kind} total. Wait for the window to close and every reservation to settle or release before changing what the measure counts.`,
+    });
+  }
+}
+
 export const mandateLimitsUpdateHandler: CapabilityHandler<
   typeof mandateLimitsUpdate
 > = async (input, ctx) => {
@@ -215,18 +301,62 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: "validTo is after validFrom",
       });
     }
-    await assertToolsDeclareMeasures(tx, workspaceId, {
+    const stampedLimits = await assertToolsDeclareMeasures(tx, workspaceId, {
       tools: locked.tools,
       limits,
       targets,
     });
+    // assertToolsDeclareMeasures re-derives every measure's kind from the
+    // *current* declaration, for every measure in `limits`, whether this
+    // call touched it or not. That is correct for a measure the operator
+    // named (a `limits` replacement or a `limitChanges` entry): they are
+    // looking at the figure, so re-stamping it is the "attrition" ADR-108
+    // documents. It is wrong for a measure this call did not name (an
+    // update that only changes validTo, targets or approval): re-stamping
+    // it would silently flip its enforced denomination the moment a tool
+    // republish changes that measure's kind, with the operator never having
+    // looked at the figure, and would quietly make a mandate the gate had
+    // started refusing under `measure_kind_changed` (ADR-108 §4) start
+    // passing again with no one asking. A measure with no real stamp yet
+    // (`locked.legacyKindMeasures`) is exempt from this preservation: it
+    // has no earlier fact to protect, and refreshing it is the same
+    // attrition either way.
+    const touchedMeasures =
+      input.limits !== undefined
+        ? new Set(Object.keys(input.limits))
+        : input.limitChanges !== undefined
+          ? new Set(Object.keys(input.limitChanges))
+          : new Set<string>();
+    for (const measure of Object.keys(stampedLimits)) {
+      if (touchedMeasures.has(measure)) continue;
+      if (locked.legacyKindMeasures.has(measure)) continue;
+      const previousKind = locked.limits[measure]?.kind;
+      if (previousKind !== undefined) {
+        stampedLimits[measure] = {
+          ...stampedLimits[measure]!,
+          kind: previousKind,
+        };
+      }
+    }
     // Under the same lock as the write, so a concurrent reserve cannot sneak a
     // draw past the refusal: the row lock serialises both writers.
     await assertPeriodChangeAllowed(tx, locked.id, locked.limits, limits);
+    // Compares the fully resolved kinds (after the preservation loop above),
+    // not the fresh stamp assertToolsDeclareMeasures produced: an untouched
+    // measure's kind never actually changes here, so it must never trip this
+    // refusal, only a measure the operator explicitly touched into a new
+    // kind can.
+    await assertKindChangeAllowed(
+      tx,
+      locked.id,
+      locked.limits,
+      stampedLimits,
+      locked.legacyKindMeasures,
+    );
     const [updated] = await tx
       .update(schema.mandates)
       .set({
-        limits,
+        limits: stampedLimits,
         targets,
         approvalRules: input.approval ?? locked.approval,
         validTo:
