@@ -1,0 +1,73 @@
+<h2 class="ch-title">Agents guess at schema they were not shown</h2>
+<p class="ch-thesis">A model adds a duplicate column when the context did not carry the existing one.</p>
+
+<p class="lede">Every team running coding agents against a real product meets the same bug report. The agent added a <code>user_email</code> column to a table that already had <code>email</code>. Or wrote a migration duplicating an index. Or built a query against a column renamed two quarters ago. The postmortem instinct is to call it a hallucination. The mechanism is duller: the model was not shown the schema, so it did what an engineer with no view of the database would do, which is guess.</p>
+
+<h3>Why schema is the worst-served context type</h3>
+<p>Schema knowledge resists text retrieval. The live truth is not in any one file. It is the fold of an ordered migration history: 400 migration files where the current shape of <code>orders</code> is the sum of 23 of them, interleaved with everything else. Grep for the table name and you get all 23 plus every query that touches it, which is a pile of maximum-similarity distractors, the exact noise profile part 7 showed is most damaging. Object-relational mapper (ORM) models drift from the database. Column semantics (<code>amount</code> is integer cents, not a float) live in tribal memory. Telling the agent to read the migrations folder does not fix this, because what it needs is a computed state rather than a document.</p>
+
+<h3>Schema becomes another graph node</h3>
+<p>The deterministic fix treats schema the way part 4 treats code, as structure to be indexed rather than text to be searched.</p>
+<ul class="plain">
+  <li><strong>Schema index</strong>: introspect the live database (or replay migrations) into a canonical, versioned snapshot of tables, columns, types, constraints, indexes, and foreign keys. This is a solved problem, and every ORM ships the machinery.</li>
+  <li><strong>Migration graph</strong>: each column carries its lineage, created in <code>0042</code>, renamed in <code>0187</code>, backfilled in <code>0201</code>. "Why is this nullable?" becomes a graph query with commit-linked answers.</li>
+  <li><strong>Code and schema edges</strong>: static analysis of ORM models and query sites links <code>LedgerEntry</code> to <code>ledger_entries</code> to the 14 call sites that write it. "What breaks if I drop this column?" becomes a traversal rather than a guess.</li>
+  <li><strong>Domain mapping</strong>: tables attach to the part 5 domains, so a billing task retrieves billing tables and only billing tables.</li>
+</ul>
+
+<pre><code>ctx = schema.slice_for(anchors=[<span class="a">"RefundProcessor"</span>])
+<span class="c"># orders(id, user_id→users.id, amount_cents INT NOT NULL, status ENUM,...)</span>
+<span class="c"># refunds(id, order_id→orders.id, amount_cents INT, reason TEXT,...)</span>
+<span class="c"># lineage: refunds.amount_cents renamed from amount in 0187 (PR #3122)</span>
+<span class="c"># invariant: money columns are integer cents (lint: no-float-money)</span>
+<span class="c"># ~600 tokens. Verified against production at SHA 9f31c2.</span></code></pre>
+
+<p>Six hundred tokens of verified schema beat sixty thousand tokens of migration files. Because the slice comes from the live database, the duplicate-column failure also gets a second line of defence. The deterministic layer diffs the proposed migration against the index and rejects collisions before a human reviews them. That is the pattern of this series in miniature. Do not ask the model to remember reality. Show it reality, then check its output against reality.</p>
+
+<h3>The check that catches the duplicate column</h3>
+<pre><code>$ schema-check migrations/0203_add_user_email.py
+<span class="c"># reject: users.user_email collides with users.email (created 0042)</span>
+<span class="c"># lineage: users.email created 0042, indexed 0091, no rename since</span>
+<span class="c"># hint: 3 call sites already read users.email</span>
+<span class="c"># 1 collision, 0 warnings. exit 1</span></code></pre>
+
+<p>Run it in the same CI job that lints migrations. The failure names the column, the migration that created it, and the call sites that depend on it, which is enough for the agent to correct itself on the next turn.</p>
+
+<h3>Introspect the database, or replay the migrations</h3>
+<ul class="plain">
+  <li><strong>Introspect a restored copy</strong> when production is the source of truth and hand-run DDL exists. You get the real shape, including the index somebody added at 2am. The cost is a restore in CI.</li>
+  <li><strong>Replay migrations into a scratch database</strong> when the migration history is authoritative and complete. It is cheaper and reproducible from the repository alone, but drift between the files and production stays invisible.</li>
+</ul>
+<p>Pick one and stamp the snapshot with the SHA it came from. An unstamped snapshot becomes the stale wiki of part 5, with worse consequences.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Grounding beats recall</span>
+  <p>The general principle holds even where the schema-specific study does not exist yet. Retrieval grounding reduces fabrication compared with parametric recall, the precision of what is retrieved dominates its volume (the distractor results in parts 2 and 7<sup class="cite"><a href="#r7">7</a>,<a href="#r9">9</a></sup>), and structured representations of a system outperform prose descriptions of it for machine consumption (parts 4 to 6<sup class="cite"><a href="#r12">12</a>,<a href="#r13">13</a></sup>). Schema is the highest-stakes instance. It is the context type where a fabrication becomes a migration, and a migration becomes an outage.</p>
+  <p class="src">Synthesis. See refs 7, 9, 12, 13</p>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Produce one snapshot.</strong> Run your ORM's introspection (SQLAlchemy reflection, Django <code>inspectdb</code>, Prisma or Drizzle introspect) against a restored copy or a replayed scratch database. The artifact is <code>schema.json</code> with tables, columns, types, constraints, indexes, foreign keys, and the SHA it was built from.</li>
+    <li><strong>Slice it by anchor.</strong> Given a symbol or a path, return the tables that symbol touches plus their direct foreign keys. Done looks like the 600-token slice above for your busiest table.</li>
+    <li><strong>Add the collision check.</strong> Diff any proposed migration against the snapshot and fail on a column whose name, or an obvious variant of it, already exists on that table. Done looks like the check rejecting a migration you write on purpose.</li>
+    <li><strong>Link code to tables.</strong> A static pass over ORM model definitions and raw query sites gives you table to symbol to call site. That index answers the drop-column question without anyone reading 400 files.</li>
+    <li><strong>Refresh the snapshot where migrations run.</strong> Same job, same commit, so the stamp stays honest.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>schema_slice_tokens</code>: tokens of schema context per task. Lower is better, with a few hundred as the working target. Compare it against the token count of the migration files the agent used to read.</li>
+    <li><code>schema_snapshot_age</code>: migrations applied since the snapshot's stamped SHA. Lower is better, and 0 is reachable once step 5 lands.</li>
+    <li><code>collision_rejections</code>: proposed migrations the check rejects per week. Watch the direction. A count that falls while agent volume holds steady means the slice is doing its job upstream.</li>
+    <li><code>unmapped_query_sites</code>: query sites the static pass could not link to a table. Lower is better, and each one is a place where the drop-column answer is still a guess.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Your database's current shape is computable, versionable, and sliceable. If the agent guesses about schema, that is a missing index in your system rather than a failure of the model.</p>
+</div>

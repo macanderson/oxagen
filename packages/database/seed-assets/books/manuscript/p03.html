@@ -1,0 +1,97 @@
+<h2 class="ch-title">Parse the user prompt before the model ever sees it</h2>
+<p class="ch-thesis">Your prompt already carries structured information, so extract it before you pay for inference.</p>
+
+<p class="lede">Someone files a bug against your agent and it reads like this: "The <code>POST /api/v2/refunds</code> endpoint throws <code>DecimalConversionError</code> in <code>billing/processors.py</code> after #4821 merged." That string holds an API route, an exception class, a file path, and an issue reference. Four retrieval keys, sitting in plain sight. Most agent stacks hand the raw string to the model and let it decide what to search for.</p>
+
+<h3>Deterministic extraction is a solved problem</h3>
+<p>Long before you need a language model, thirty lines of parsing gets you:</p>
+<ul class="plain">
+  <li><strong>File paths</strong>: anything matching path grammar, validated against the actual file tree, with near misses fuzzy-matched.</li>
+  <li><strong>Symbols and signatures</strong>: CamelCase and snake_case identifiers, <code>module.func()</code> call syntax, function signatures, validated against your symbol index (part 4).</li>
+  <li><strong>Stack traces</strong>: a pasted traceback has a rigid grammar in every language. Parse it fully rather than summarizing it.</li>
+  <li><strong>Issue and PR references</strong>: <code>#4821</code>, <code>JIRA-123</code>, resolved through an API into titles, diffs, and linked commits.</li>
+  <li><strong>URLs and API endpoints</strong>: a route pattern maps straight onto a router definition in the codebase.</li>
+  <li><strong>Version and config literals</strong>: package names, versions, environment variable names, feature flags.</li>
+</ul>
+<p>Every extracted entity is a <em>verified anchor</em>. It either resolves against your index or it does not. That check is binary, and it is the check a generative approach cannot give you, so an invented file path or a misremembered function name survives into the next call instead of being dropped at the door.</p>
+
+<pre><code><span class="c"># Thirty lines, no model, runs before the first call.</span>
+PATH   = re.compile(<span class="a">r"\b[\w./]+\.(py|ts|go|rs|java)\b"</span>)
+SYMBOL = re.compile(<span class="a">r"\b([A-Z][A-Za-z0-9]+|[a-z_][a-z0-9_]{2,})\(?\)?"</span>)
+ISSUE  = re.compile(<span class="a">r"#(\d+)|\b([A-Z]{2,}\-\d+)\b"</span>)
+
+def anchors(prompt, index):
+    found, dropped = [], <span class="k">0</span>
+    for raw in PATH.findall(prompt) + SYMBOL.findall(prompt):
+        hit = index.resolve(raw)   <span class="c"># None when the tree has no such path or symbol</span>
+        <span class="k">if</span> hit:
+            found.append(hit)
+        <span class="k">else</span>:
+            dropped += <span class="k">1</span>
+    metrics.record(<span class="a">"anchor_resolution_rate"</span>, len(found), dropped)
+    return found</code></pre>
+
+<h3>From entities to a retrieval plan</h3>
+<p>The output of parsing is not decoration. It is an execution plan that runs <em>before inference begins</em>:</p>
+<pre><code>plan = build_retrieval_plan(prompt)
+<span class="c"># {</span>
+<span class="c">#   anchors:   [File("billing/processors.py"), Symbol("DecimalConversionError"),</span>
+<span class="c">#               Route("POST /api/v2/refunds"), Issue(4821)]</span>
+<span class="c">#   expand:    graph_neighbors(anchors, hops=1)      ← Part 4</span>
+<span class="c">#   tests:     tests_covering(anchors)               ← Part 10</span>
+<span class="c">#   schema:    tables_touched(anchors)               ← Part 8</span>
+<span class="c">#   budget:    8_000 tokens, ranked by relevance</span>
+<span class="c"># }</span></code></pre>
+<p>The model's first call now holds the right file, its direct dependencies, the covering tests, and the issue diff, assembled by code, ranked by graph centrality, and cut to budget. Compare that to the common pattern, where the model spends its first five calls, each carrying a growing history, rediscovering what a regex had at millisecond zero.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Structured localization beats free exploration</span>
+  <p>This is the design that let Agentless outperform autonomous agents. Its first phase is <strong>hierarchical localization</strong>, a fixed funnel from repository to files to classes and functions to edit locations, rather than a model wandering with tools. The paper's ablations show that staged narrowing keeps ground-truth edit locations in the candidate set while shrinking the code the model must read, and it is a large part of why the pipeline reached top open-source results at roughly a tenth of the cost of agent baselines.<sup class="cite"><a href="#r1">1</a></sup> Constrained input, focused attention, fewer irrelevant tokens: the localization step is deterministic scaffolding doing the model's foraging for it.</p>
+  <p class="src">Xia et al., "Agentless," FSE 2025</p>
+</div>
+
+<div class="vs">
+  <div class="a">
+    <h4>◌ Prompt as opaque string</h4>
+    <ul>
+      <li>The model infers what to look for, probabilistically, once per run</li>
+      <li>Search terms may be invented, and paths go unverified</li>
+      <li>3 to 8 exploratory tool calls before the real work starts</li>
+      <li>Cost scales with how long the model explores</li>
+    </ul>
+  </div>
+  <div class="b">
+    <h4>● Prompt as structured input</h4>
+    <ul>
+      <li>A parser extracts entities the same way on every run</li>
+      <li>Every anchor is validated against a real index</li>
+      <li>The retrieval plan executes before the first model call</li>
+      <li>Cost scales with the complexity of the task</li>
+    </ul>
+  </div>
+</div>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Write the entity extractor.</strong> Start with four patterns: path grammar, identifiers, issue references, and route patterns. The artifact is a function from prompt string to a list of typed entities, with unit tests over ten real prompts from your own queue.</li>
+    <li><strong>Validate every entity against an index.</strong> Resolve paths against the file tree and symbols against your symbol index. Drop what does not resolve, fuzzy-match near misses, and count both.</li>
+    <li><strong>Emit the retrieval plan as an artifact.</strong> Write the plan to the task record before the first model call, with anchors, expansions, and the token budget. When a run goes wrong, the plan is the first thing you read.</li>
+    <li><strong>Seed the first call from the plan.</strong> Assemble the first message from resolved anchors instead of letting the model open with a search, then compare tool-call counts against the previous week.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>anchor_resolution_rate</code>: entities that resolved against an index divided by entities extracted. Up is good. A drop usually means the index went stale, not that the prompts got worse.</li>
+    <li><code>first_call_hit_rate</code>: share of tasks where the file the final diff edited was already in the first call's context. Up is good, and this is the metric that tells you whether localization works.</li>
+    <li><code>preflight_tool_calls</code>: tool calls between the prompt and the first edit. Down is good.</li>
+    <li><code>unresolved_anchor_count</code>: entities the model was handed that no index could confirm. Down is good, because each one is a chance to act on a path that does not exist.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Treat the prompt as the first document your system parses, not the first thing your model reads. Extraction is cheap, checkable against an index, and identical on every run. Inference is none of those things.</p>
+</div>

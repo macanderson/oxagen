@@ -1,0 +1,72 @@
+<h2 class="ch-title">Context compression is worth more than a bigger model</h2>
+<p class="ch-thesis">Removing irrelevant information beats buying a larger model.</p>
+
+<p class="lede">An agent underperforms on your repository, and the available levers look like this: a bigger model, a longer window, a larger reasoning budget. All three cost money and none of them change what you are sending. The question that predicts success is not how much the model can hold. It is what fraction of what it holds bears on the task, and that is a question you can answer with instrumentation you already own.</p>
+
+<h3>The Shannon view of a context window</h3>
+<p>Shannon's framework<sup class="cite"><a href="#r18">18</a></sup> gives the right vocabulary. The task has an intrinsic information requirement, the minimal set of facts needed to produce the correct patch. Everything else in the window is noise relative to that task, and attention is the finite channel the signal has to pass through. Two consequences follow. First, mutual information matters more than volume: a 4k-token context where every line bears on the task carries more usable information than 100k tokens where the answer is diluted 25 to 1. Second, compression is safe when it is lossless with respect to the task, which is what deterministic slicing (parts 2 to 4) gives you and what generic truncation does not. A stack-trace parser that keeps your frames and drops framework frames is a task-aware compressor with a retention property you can state. <code>head -c</code> has no such property.</p>
+
+<h3>Four results point the same way</h3>
+<div class="stats">
+  <div><div class="v amber">U-curve</div><div class="l">Liu et al.: accuracy collapses for facts mid-context, long-context models included<sup class="cite"><a href="#r6">6</a></sup></div></div>
+  <div><div class="v amber">18 / 18</div><div class="l">Chroma: every frontier model tested degrades as input grows, even on trivial tasks<sup class="cite"><a href="#r7">7</a></sup></div></div>
+  <div><div class="v amber">&minus;dozens of pts</div><div class="l">NoLiMa: when matches are semantic rather than literal, most models fall far below short-context accuracy by 32k<sup class="cite"><a href="#r8">8</a></sup></div></div>
+  <div><div class="v amber">Related &gt; random</div><div class="l">Power of Noise: semantically related distractors hurt accuracy most<sup class="cite"><a href="#r9">9</a></sup></div></div>
+</div>
+<p>Read the four together for coding agents specifically. A repository dump is long, which triggers length degradation. It is full of near-duplicate distractors, which is the most harmful noise type the fourth result identifies. Using it requires semantic rather than lexical matching, the NoLiMa condition where the drop is steepest. A raw-context design sits at the intersection of all three.</p>
+
+<div class="counter">
+  <span class="tag">Counterweight · long-context is improving</span>
+  <p>Be honest about the trend. Newer models post high scores on simple needle-in-a-haystack retrieval at extreme lengths, and vendors are attacking positional bias directly. The gains are strongest on literal retrieval, the easiest case, while semantic reasoning over long, distractor-dense context remains the weak point, which is the regime coding agents live in. And a model that holds its accuracy at length still bills you for every irrelevant token. Compression wins on cost even where it stops winning on accuracy.</p>
+</div>
+
+<h3>Compression as an engineering discipline</h3>
+<ul class="plain">
+  <li><strong>Retrieval precision over recall by default</strong>: start from verified anchors (part 3) and expand along graph edges (part 4) instead of dumping candidates.</li>
+  <li><strong>Representation changes</strong>: signatures instead of bodies (a repo map is roughly a 100 to 1 compressor<sup class="cite"><a href="#r12">12</a></sup>), schemas instead of migrations, sliced traces instead of logs.</li>
+  <li><strong>Budgets enforced in code</strong>: every context assembler takes a token budget and ranks content to fit it, and going over budget fails the build.</li>
+  <li><strong>Context utilization as a metric</strong>: what fraction of the provided tokens does the final patch depend on? In the traces this book draws on it often sits below 10 percent, and it is the clearest single indicator of wasted spend (part 13, and part 17 for attributing that spend to the team that caused it).</li>
+</ul>
+
+<h3>A budget the assembler cannot talk its way out of</h3>
+<pre><code>def assemble(task, budget=8000):
+    blocks = rank(candidates(task))        <span class="c"># anchors first, then graph neighbours</span>
+    kept, used = [], 0
+    for b in blocks:
+        if used + b.tokens &gt; budget:
+            break
+        kept.append(b)
+        used += b.tokens
+    missing = required(task) - {b.id for b in kept}
+    if missing:                            <span class="c"># a required anchor did not fit</span>
+        raise BudgetError(task, missing, used, budget)
+    return kept
+<span class="c"># Over budget is a failure with a name, not a truncation nobody sees.</span></code></pre>
+
+<p>The failure matters more than the cap. When a required anchor does not fit, you want a stack trace naming the task and the anchor, because that is a retrieval bug. Silent truncation turns the same bug into a wrong patch and a confusing review.</p>
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Record what you sent and what got used.</strong> For each run, log the ids and token counts of every block you provided, then log the files the accepted patch touched. One JSON line per run is enough to compute utilization.</li>
+    <li><strong>Replace one file dump with signatures.</strong> Parse with tree-sitter and emit declarations rather than bodies for anything outside the edit site. The artifact is a repo map you can diff against the old prompt, token for token.</li>
+    <li><strong>Give the assembler a budget.</strong> Add the cap and the named failure above. Done looks like a test that asks for an over-budget assembly and asserts <code>BudgetError</code>.</li>
+    <li><strong>Drop near-duplicates before they ship.</strong> Run minhash or simhash over retrieved chunks and collapse anything above your similarity threshold. Related distractors are the ones the fourth result says cost you most.</li>
+    <li><strong>Re-run last week's failures at the new budget.</strong> If accuracy holds with 40 percent fewer tokens, you have found the model upgrade you were about to buy.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>context_utilization</code>: tokens of blocks the accepted patch depended on, divided by tokens provided. Higher is better. Below 10 percent means most of your bill is noise.</li>
+    <li><code>tokens_per_accepted_patch</code>: total input tokens across the run, divided by patches a human accepted. Lower is better, and it is the number to quote when somebody proposes a larger window.</li>
+    <li><code>distractor_rate</code>: share of retrieved chunks the final patch does not reference. Lower is better, and a rising value usually means recall crept back into your retriever.</li>
+    <li><code>budget_overflow_rate</code>: assemblies that raised <code>BudgetError</code>, divided by assemblies. Lower is better, and each one is a retrieval bug with an address.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>A bigger model reads your noise at a higher price. A better system removes the noise. Only one of the two compounds: every point of retrieval precision you engineer carries over to every model you run after this one.</p>
+</div>

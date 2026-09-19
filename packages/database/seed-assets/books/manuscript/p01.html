@@ -1,0 +1,95 @@
+<h2 class="ch-title">AI agents are not expensive. Bad architecture is.</h2>
+<p class="ch-thesis">Most of an agent's token bill comes from the system around the model, not from the model.</p>
+
+<p class="lede">Your agent works, and the invoice is bigger than the team that uses it. The first suspects are the obvious ones: the per-token price, the reasoning overhead, the size of the context window. Then you instrument the agent, log every request, and look at where the tokens went. The model did what it was asked to do. The system asked it to do far too much.</p>
+
+<h3>Measure where tokens actually go</h3>
+<p>Run an agent framework against a real repository and log every request. In the runs this book draws on, the dominant cost is not <em>reasoning about the problem</em>. It is <em>rebuilding context the system already had</em>: re-reading files it read two turns ago, carrying 400 lines of stack trace when 6 frames mattered, pushing the whole conversation history into every tool call, and walking the filesystem with <code>ls</code> and <code>cat</code> because nothing indexed the repository up front.</p>
+<p>The published numbers point the same way. Anthropic's engineering team, describing their production multi-agent research system, reported that agents consume roughly <strong>4× the tokens of a chat interaction</strong>, and multi-agent systems roughly <strong>15×</strong>, and that on their internal evaluations <strong>token usage alone explained about 80% of performance variance</strong>.<sup class="cite"><a href="#r3">3</a></sup> The largest lever they found was not model choice or prompt wording. It was how many tokens the architecture decided to spend.</p>
+
+<div class="evidence">
+  <span class="tag">Evidence · Simplicity wins the leaderboard</span>
+  <p>The clearest data point in this book is <strong>Agentless</strong> (Xia et al., UIUC). Instead of an autonomous agent choosing its own actions with tools, Agentless runs a fixed three-phase pipeline: hierarchical localization, patch generation, validation. On SWE-bench Lite it became the top open-source approach of its time at <strong>27.3% solved for $0.34 per issue</strong> (later 32.0% at $0.70), while contemporary agent-based systems spent roughly 10× more per issue for comparable or worse results.<sup class="cite"><a href="#r1">1</a></sup> The model did not choose the next action. The pipeline chose, and the model filled in the parts that needed judgment.</p>
+  <p class="src">Xia et al., "Agentless: Demystifying LLM-based Software Engineering Agents," FSE 2025</p>
+</div>
+
+<h3>Context construction against reasoning cost</h3>
+<p>Split your agent's token bill into two buckets. <strong>Reasoning tokens</strong> are the model thinking about the actual problem: the diff, the root cause, the design decision. <strong>Context-construction tokens</strong> are everything spent getting the model to the point where reasoning can begin: file dumps, search results, log output, retries after the model lost the thread. In an unindexed architecture the second bucket dominates, often by an order of magnitude. Most of what sits in that second bucket is computable without a model. Parsing, indexing, slicing, and graph traversal are deterministic operations. They run on CPU, return the same answer on the same input, and you can test them like any other code.</p>
+
+<p>You cannot split the bill you do not record, so record it at the call site. The caller knows why it is making the call, and the caller is the only part of the system that does.</p>
+
+<pre><code><span class="c"># One row per model call, written when the call returns.</span>
+log_call(
+    task_id=task.id,
+    purpose=<span class="a">"context"</span>,                  <span class="c"># or "reasoning", set by the caller</span>
+    source=<span class="a">"file_read:billing/processors.py"</span>,
+    input_tokens=usage.input,
+    cached_input_tokens=usage.cache_read,
+    output_tokens=usage.output,
+)
+<span class="c"># context_token_share = input where purpose == "context" / all input</span>
+<span class="c"># Group by source to rank what is filling the window.</span></code></pre>
+
+<div class="evidence">
+  <span class="tag">Evidence · Cost must be a first-class metric</span>
+  <p>Princeton's "AI Agents That Matter" (Kapoor, Stroebl, Siegel, Nadgir, Narayanan) showed that agent research had been ignoring cost, and that when you evaluate on a joint cost and accuracy Pareto frontier, simple baselines such as retrying a model call matched or beat elaborate agent architectures on HumanEval at a fraction of the price. Their conclusion: accuracy alone cannot identify progress, and state of the art (SOTA) agents are frequently more complex and more costly than the task requires.<sup class="cite"><a href="#r2">2</a></sup></p>
+  <p class="src">Kapoor et al., "AI Agents That Matter," TMLR 2025</p>
+</div>
+
+<h3>Thinking harder against needing less thinking</h3>
+<p>The default answer to agent failure is to think harder: a bigger model, a longer reasoning chain, more retries, more sub-agents. Each of those multiplies token spend and adds another probabilistic step, which is another place for variance to enter. The engineering answer runs the other way. Shrink the problem before the model sees it. Every ambiguity you resolve deterministically is reasoning the model no longer has to do, tokens you no longer pay for, and variance you no longer ship. Determinism is not a philosophical preference. It is a cost model.</p>
+<p>Attributing that spend across the teams who run the agents is part 17.</p>
+
+<!-- fm-only -->
+  <div class="calc" id="calc1">
+    <h4>Interactive · Where your token budget goes</h4>
+    <div class="row">
+      <label for="c_ctx">Avg. context per model call (tokens) <output id="o_ctx">40,000</output></label>
+      <input type="range" id="c_ctx" min="5000" max="150000" step="5000" value="40000">
+    </div>
+    <div class="row">
+      <label for="c_calls">Model calls per task <output id="o_calls">25</output></label>
+      <input type="range" id="c_calls" min="3" max="80" step="1" value="25">
+    </div>
+    <div class="row">
+      <label for="c_tasks">Tasks per day <output id="o_tasks">200</output></label>
+      <input type="range" id="c_tasks" min="10" max="2000" step="10" value="200">
+    </div>
+    <div class="row">
+      <label for="c_price">Input price ($ / M tokens) <output id="o_price">3.00</output></label>
+      <input type="range" id="c_price" min="0.5" max="15" step="0.25" value="3">
+    </div>
+    <div class="result">
+      <div class="naive"><div class="v" id="r_naive">&hellip;</div><div class="l">Unindexed baseline · monthly input spend</div></div>
+      <div class="eng"><div class="v" id="r_eng">&hellip;</div><div class="l">Deterministic retrieval · monthly input spend</div></div>
+    </div>
+    <div class="save" id="r_save"></div>
+    <p class="note">This is an illustration, not a measurement. It takes the four figures you set above and applies stated assumptions: deterministic retrieval cuts per-call context to 25% of the baseline, and prompt caching covers about 60% of what remains at a 90% cache-read discount. Input tokens only, 22 working days per month. Your repository, your task mix, and your cache hit rate will move both numbers. Replace the assumptions with figures from your own runs before you quote any of this.</p>
+  </div>
+<!-- /fm-only -->
+
+<div class="todo">
+  <span class="tag">Do this week</span>
+  <ol>
+    <li><strong>Log usage on every model call.</strong> Write one row per call with <code>task_id</code>, <code>purpose</code>, <code>source</code>, input tokens, cached input tokens, and output tokens. The artifact is a table you can group by, not a log line you can read.</li>
+    <li><strong>Tag each call reasoning or context.</strong> Set the tag at the call site, where the caller knows why the call is happening. Done looks like every call carrying a tag and none defaulting to unknown.</li>
+    <li><strong>Rank your context sources.</strong> Group last week's rows by <code>source</code> and sum input tokens. The top three sources are your work queue for parts 2 to 4.</li>
+    <li><strong>Turn on prompt caching for the stable prefix.</strong> Put the system prompt, tool definitions, and repository map ahead of anything that changes per turn, then watch the cache-read share rise.</li>
+    <li><strong>Put a token budget in code.</strong> Give each task a ceiling on input tokens and fail the run when it trips, so a runaway loop ends in a test failure instead of an invoice.</li>
+  </ol>
+</div>
+
+<div class="measure">
+  <span class="tag">Measure it</span>
+  <ul>
+    <li><code>context_token_share</code>: context-construction input tokens divided by all input tokens, per task. Down is good. Above 0.8 means the model is paying to rediscover what your code already knows.</li>
+    <li><code>tokens_per_completed_task</code>: input plus output tokens divided by tasks that passed their check. Down is good, and it is the only token metric that survives a change in task mix.</li>
+    <li><code>cache_read_share</code>: cached input tokens divided by all input tokens. Up is good. A falling share usually means something volatile moved into the prefix.</li>
+    <li><code>cost_per_completed_task</code>: dollars divided by tasks that passed. Down is good, and it is the number to put next to accuracy when you compare two architectures.</li>
+  </ul>
+</div>
+
+<div class="takeaway">
+  <span class="tag">Takeaway</span>
+  <p>Reduce uncertainty before you invoke intelligence. Every token of context your system constructs deterministically is a token the model does not spend rediscovering it probabilistically.</p>
+</div>
