@@ -134,6 +134,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
     uncertain: vault.uncertain,
     begin: () => recoveryCodeVault.begin(userId),
     heldByAnother: () => recoveryCodeVault.heldByAnother(userId),
+    claimAcrossTabs: () => recoveryCodeVault.claimAcrossTabs(),
     end: () => {
       recoveryCodeVault.end();
     },
@@ -270,6 +271,8 @@ type CodeRotation = {
    * codes.
    */
   heldByAnother: () => boolean;
+  /** Claim the rotation across every tab of this browser; false if another holds it. */
+  claimAcrossTabs: () => Promise<boolean>;
   end: () => void;
   /** The server answered and refused: this rotation changed nothing. */
   refuse: () => void;
@@ -805,7 +808,13 @@ type CodesState =
    * unsaved set is still held in this tab. The vault outlives a sign-out and a
    * sign-in as somebody else, and it will not overwrite their only copy.
    */
-  | { kind: "blockedByOther" };
+  | { kind: "blockedByOther" }
+  /**
+   * Refused before it started, because another tab of this browser has a
+   * rotation running or a set unsaved. A second rotation would void that set
+   * while the other tab still shows it as the one to keep.
+   */
+  | { kind: "blockedElsewhere" };
 
 /** "MacBook Pro · Chrome 141" from a user agent, or the raw string when nothing is recognised. */
 function describeAgent(userAgent: string | null, fallback: string): string {
@@ -950,9 +959,19 @@ function SecurityTab({
     }
     const { password } = codes;
     setCodes({ kind: "asking", password, refused: false });
+    // Then across tabs. Awaited before the request leaves, so a refused claim
+    // sends nothing and changes nothing on the server.
+    if (!(await rotation.claimAcrossTabs())) {
+      rotation.end();
+      setCodes({ kind: "blockedElsewhere" });
+      return;
+    }
     try {
       const result = await liveRegenerateBackupCodes(password);
-      rotation.end();
+      // No `rotation.end()` here: each branch below moves the vault straight
+      // from rotating to what the answer means. Ending first would pass through
+      // "nothing at stake" for an instant, which drops the unload prompt and
+      // the cross-tab claim just before the lost-answer branch needs both.
       if (result.ok) {
         // The vault first, and deliberately: this component may already be
         // unmounted, in which case its own setState is a no-op and this write
@@ -972,7 +991,6 @@ function SecurityTab({
         // this is the same lost answer as the catch below and must not be read
         // as a refusal: the rotation may have committed before the failure,
         // leaving the old set void and the new one nowhere.
-        rotation.end();
         rotation.lose();
         setCodes({ kind: "asking", password: "", refused: false });
       }
@@ -984,7 +1002,6 @@ function SecurityTab({
       // the person leave believing nothing changed. So the vault stays at
       // stake, the page stays guarded, and the form says what is known: the
       // codes may have changed, and a set that does arrive is the way out.
-      rotation.end();
       rotation.lose();
       setCodes({ kind: "asking", password: "", refused: false });
     }
@@ -1126,9 +1143,16 @@ function SecurityTab({
                   {t("codesBlockedByOther")}
                 </FormAlert>
               ) : null}
+              {codes.kind === "blockedElsewhere" ? (
+                <FormAlert testId="account-codes-elsewhere">
+                  {t("codesBlockedElsewhere")}
+                </FormAlert>
+              ) : null}
             </div>
             {viewer.twoFactorEnabled ? (
-              codes.kind === "closed" || codes.kind === "blockedByOther" ? (
+              codes.kind === "closed" ||
+              codes.kind === "blockedByOther" ||
+              codes.kind === "blockedElsewhere" ? (
                 <button
                   type="button"
                   data-testid="account-codes-open"

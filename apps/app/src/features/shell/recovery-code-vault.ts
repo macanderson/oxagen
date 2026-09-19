@@ -65,6 +65,22 @@ function ask(event: BeforeUnloadEvent): void {
 }
 let asking = false;
 
+// The cross-tab claim. This store is one per tab, and each tab is its own
+// JavaScript realm, so the in-page gate in `begin()` cannot see a rotation in
+// another tab. Two tabs rotating for one account is the same failure as two
+// rotations in one: the later server commit voids the earlier set while the
+// earlier tab still shows it as the one to save.
+//
+// A Web Lock is shared by every tab of the origin and is dropped by the
+// browser when the tab holding it closes or crashes, so a tab that dies
+// mid-rotation cannot wedge the others. It is held from the start of a
+// rotation until nothing is at stake here: through an unsaved set and through
+// a lost answer, not only while the request is on the wire, because a second
+// tab rotating after the first one's answer arrives voids that answer just
+// the same. The lock carries no codes. Nothing leaves this tab's memory.
+const ROTATION_LOCK = "oxagen.recovery-code-rotation";
+let releaseLock: (() => void) | null = null;
+
 function set(next: VaultState): void {
   state = next;
   const shouldAsk = atStake(next);
@@ -73,92 +89,41 @@ function set(next: VaultState): void {
     else window.removeEventListener("beforeunload", ask);
     asking = shouldAsk;
   }
+  if (!shouldAsk && releaseLock) {
+    releaseLock();
+    releaseLock = null;
+  }
   for (const listener of listeners) listener();
 }
 
 /**
- * What one tab tells the others, and deliberately no more than that.
- *
- * Two tabs of the same account are two JavaScript realms, so each has its own
- * copy of everything above: `begin()` answered true in both, both rotated, and
- * the second commit voided the first tab's set while that tab still showed it
- * under "New recovery codes" with a button that says they are saved. Somebody
- * writes down codes that already do not work.
- *
- * The signal carries a person's id and nothing else. It never carries the
- * codes: putting a second-factor bypass on a channel any script in the origin
- * can open would trade this defect for a worse one, and the same reasoning
- * keeps the set out of `localStorage` above.
- *
- * What this is not: a lock. `BroadcastChannel` delivers asynchronously, so two
- * presses in the same instant can still both start. It narrows the window and,
- * more importantly, makes the loser's set say so instead of lying: a tab told
- * that another has rotated drops its now-void set and shows the same
- * "may already have changed" state a lost answer produces. Real serialization
- * belongs at the server, which is the only place that knows which write won.
+ * Take the cross-tab rotation lock, or keep the one this tab already holds.
+ * False when another tab holds it. A browser without Web Locks gets the
+ * in-page gate alone, which is what every tab had before.
  */
-type VaultSignal = {
-  /**
-   * `rotating` opens the window and `finished` closes it, whatever the answer
-   * was: without the second, a tab whose rotation was refused would leave every
-   * other tab blocked for the life of the page. `rotated` is the narrower
-   * claim that a set was actually issued, which is the only one that voids
-   * what another tab is showing.
-   */
-  kind: "rotating" | "finished" | "rotated";
-  userId: string;
-};
-
-const CHANNEL = "oxagen.recovery-codes";
-
-/** A rotation another tab announced and has not finished. */
-let elsewhere: string | null = null;
-
-function onSignal(signal: VaultSignal): void {
-  if (signal.kind === "rotating") {
-    elsewhere = signal.userId;
-    return;
-  }
-  elsewhere = null;
-  if (signal.kind === "finished") return;
-  if (state.userId !== signal.userId) return;
-  // Another tab completed a rotation for this person. Whatever this tab holds
-  // was issued before that write, so it is void; and this tab cannot know
-  // whether the other one's set was saved, so the honest state is the doubtful
-  // one rather than an empty panel.
-  if (state.codes !== null || state.uncertain) {
-    set({
-      userId: state.userId,
-      rotating: state.rotating,
-      codes: null,
-      uncertain: true,
-    });
-  }
-}
-
-let channel: BroadcastChannel | null = null;
-function bus(): BroadcastChannel | null {
-  if (channel !== null) return channel;
-  if (typeof BroadcastChannel === "undefined") return null;
-  try {
-    channel = new BroadcastChannel(CHANNEL);
-    channel.onmessage = (event: MessageEvent<VaultSignal>) => {
-      onSignal(event.data);
-    };
-    return channel;
-  } catch {
-    // No channel in this environment. The in-page guards still hold; only the
-    // cross-tab half is unavailable, which is where this started.
-    return null;
-  }
-}
-
-function announce(signal: VaultSignal): void {
-  try {
-    bus()?.postMessage(signal);
-  } catch {
-    // A closed or unavailable channel must not fail a rotation.
-  }
+function claimAcrossTabs(): Promise<boolean> {
+  if (releaseLock) return Promise.resolve(true);
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    locks
+      .request(ROTATION_LOCK, { ifAvailable: true }, (lock) => {
+        if (!lock) {
+          resolve(false);
+          return undefined;
+        }
+        // Held until `set()` sees nothing at stake and calls this.
+        return new Promise<void>((release) => {
+          releaseLock = release;
+          resolve(true);
+        });
+      })
+      // A lock manager that fails is treated as one that is absent, so the
+      // in-page gate still stands and the person is not locked out.
+      .catch(() => {
+        resolve(true);
+      });
+  });
 }
 
 function subscribe(listener: () => void): () => void {
@@ -223,11 +188,6 @@ export const recoveryCodeVault = {
     // reads `heldByAnother` and says which of the two happened, rather than
     // leaving a button that does nothing.
     if (!mine && atStake(state)) return false;
-    // Another tab of this account has a rotation out. Its answer will void
-    // whatever this one would get, so starting a second is how both tabs end
-    // up showing a set and only one of them being real.
-    if (elsewhere !== null) return false;
-    announce({ kind: "rotating", userId });
     set({
       userId,
       rotating: true,
@@ -236,10 +196,6 @@ export const recoveryCodeVault = {
     });
     return true;
   },
-  /** Whether another tab's rotation is what `begin` refused on. */
-  rotatingElsewhere(): boolean {
-    return elsewhere !== null;
-  },
   /**
    * Whether the refusal above is what would stop a rotation for this person:
    * somebody else's set is unsaved, or their rotation never resolved.
@@ -247,19 +203,19 @@ export const recoveryCodeVault = {
   heldByAnother(userId: string): boolean {
     return state.userId !== null && state.userId !== userId && atStake(state);
   },
+  /**
+   * The second half of `begin()`: claim the rotation across every tab of this
+   * browser. False when another tab has a rotation running or codes unsaved;
+   * the caller then calls `end()` and says so. Awaited before the request
+   * leaves, so a refused claim sends nothing.
+   */
+  claimAcrossTabs,
   /** The rotation answered: nothing is on the wire any more. */
   end(): void {
-    // Whatever it answered, this tab's rotation is no longer out, so the other
-    // tabs stop refusing on it. Whether a set was issued is `hold`'s to say.
-    if (state.userId !== null)
-      announce({ kind: "finished", userId: state.userId });
     if (state.rotating) set({ ...state, rotating: false });
   },
   /** The rotation answered with a set: hold it until it is saved. */
   hold(userId: string, codes: string[]): void {
-    // The one signal that matters to another tab: a set it is showing was
-    // issued before this write, so it is void now. The codes stay here.
-    announce({ kind: "rotated", userId });
     set({ userId, rotating: false, codes, uncertain: false });
   },
   /**
@@ -302,14 +258,6 @@ export const recoveryCodeVault = {
    * knip has to be told to ignore.
    */
   resetForTests(): void {
-    elsewhere = null;
     set(EMPTY);
-  },
-  /**
-   * Test seam for the cross-tab signal, since a second realm cannot be opened
-   * in a unit test. Delivers what another tab would have posted.
-   */
-  receiveForTests(signal: VaultSignal): void {
-    onSignal(signal);
   },
 };
