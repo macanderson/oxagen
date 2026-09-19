@@ -19,8 +19,11 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
-import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
+import {
+  TRANSCRIPT_ENTRY_DEFAULT,
+  type RunTranscript,
+  type TranscriptKind,
+} from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -517,9 +520,7 @@ describe("following a live run", () => {
     vi.useFakeTimers();
     try {
       renderSection({
-        read: readOk(
-          mockupTranscript({ cursor: "page1", complete: false }),
-        ),
+        read: readOk(mockupTranscript({ cursor: "page1", complete: false })),
         status: "live",
       });
       const [source] = instances;
