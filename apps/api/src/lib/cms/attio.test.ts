@@ -204,9 +204,12 @@ describe("createAttioClient", () => {
   });
 
   it("gives up after maxAttempts with the last error", async () => {
+    // A fresh Response per attempt: a body can be read once.
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(500, { error: "still down" }));
+      .mockImplementation(async () =>
+        jsonResponse(500, { error: "still down" }),
+      );
     const client = makeClient(fetchMock as unknown as typeof fetch, {
       maxAttempts: 2,
     });
@@ -223,7 +226,7 @@ describe("createAttioClient", () => {
   it("does not retry a 4xx other than 429", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(400, { error: "bad phone" }));
+      .mockImplementation(async () => jsonResponse(400, { error: "bad phone" }));
     const client = makeClient(fetchMock as unknown as typeof fetch);
     await expect(
       client.assertPerson({
