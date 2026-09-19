@@ -56,13 +56,18 @@ describe("recoveryCodeVault", () => {
       userId: ME,
       rotating: false,
       codes: ["aaaa-1111", "bbbb-2222"],
+      uncertain: false,
     });
   });
 
   it("never shows it to anyone else (negative)", () => {
     recoveryCodeVault.hold(ME, ["aaaa-1111"]);
     const { result } = renderHook(() => useRecoveryCodeVault(SOMEONE_ELSE));
-    expect(result.current).toEqual({ rotating: false, codes: null });
+    expect(result.current).toEqual({
+      rotating: false,
+      codes: null,
+      uncertain: false,
+    });
   });
 
   // A second rotation must not drop a set that is still unsaved before the
@@ -72,5 +77,38 @@ describe("recoveryCodeVault", () => {
     recoveryCodeVault.begin(ME);
     const { result } = renderHook(() => useRecoveryCodeVault(ME));
     expect(result.current.codes).toEqual(["aaaa-1111"]);
+  });
+
+  // A lost answer may mean the server already rotated: the old set void, the
+  // new one gone. Only a rotation that answers with a set settles it; a
+  // refusal answers only for itself.
+  it("stays at stake after a lost answer until a set arrives", () => {
+    recoveryCodeVault.begin(ME);
+    recoveryCodeVault.end();
+    recoveryCodeVault.lose(ME);
+    expect(asked()).toBe(true);
+
+    recoveryCodeVault.begin(ME);
+    recoveryCodeVault.end();
+    recoveryCodeVault.refuse();
+    expect(asked()).toBe(true);
+    const { result } = renderHook(() => useRecoveryCodeVault(ME));
+    expect(result.current.uncertain).toBe(true);
+
+    act(() => {
+      recoveryCodeVault.hold(ME, ["aaaa-1111"]);
+    });
+    expect(result.current.uncertain).toBe(false);
+    act(() => {
+      recoveryCodeVault.clear();
+    });
+    expect(asked()).toBe(false);
+  });
+
+  it("releases after a plain refusal with nothing else outstanding", () => {
+    recoveryCodeVault.begin(ME);
+    recoveryCodeVault.end();
+    recoveryCodeVault.refuse();
+    expect(asked()).toBe(false);
   });
 });

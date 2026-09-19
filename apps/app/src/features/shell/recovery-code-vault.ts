@@ -35,15 +35,27 @@ type VaultState = {
   rotating: boolean;
   /** The set Better Auth returned, not yet acknowledged as saved. */
   codes: string[] | null;
+  /**
+   * A rotation left and its answer never came back. The server may have
+   * committed it, in which case the old set is void and the new one is gone,
+   * or it may not. Nothing on this page can tell which, so only a rotation
+   * that does answer with a set ends this.
+   */
+  uncertain: boolean;
 };
 
-const EMPTY: VaultState = { userId: null, rotating: false, codes: null };
+const EMPTY: VaultState = {
+  userId: null,
+  rotating: false,
+  codes: null,
+  uncertain: false,
+};
 
 let state: VaultState = EMPTY;
 const listeners = new Set<() => void>();
 
 function atStake(s: VaultState): boolean {
-  return s.rotating || s.codes !== null;
+  return s.rotating || s.codes !== null || s.uncertain;
 }
 
 // The browser's own "leave site?" prompt, armed while anything is at stake.
@@ -72,9 +84,13 @@ function subscribe(listener: () => void): () => void {
 }
 
 /** What `userId` has at stake: nothing of anyone else's is ever returned. */
-export type HeldCodes = { rotating: boolean; codes: string[] | null };
+export type HeldCodes = {
+  rotating: boolean;
+  codes: string[] | null;
+  uncertain: boolean;
+};
 
-const NOTHING: HeldCodes = { rotating: false, codes: null };
+const NOTHING: HeldCodes = { rotating: false, codes: null, uncertain: false };
 
 function view(s: VaultState, userId: string): HeldCodes {
   if (s.userId !== userId) return NOTHING;
@@ -97,10 +113,12 @@ export const recoveryCodeVault = {
    */
   begin(userId: string): boolean {
     if (state.rotating) return false;
+    const mine = state.userId === userId;
     set({
       userId,
       rotating: true,
-      codes: state.userId === userId ? state.codes : null,
+      codes: mine ? state.codes : null,
+      uncertain: mine && state.uncertain,
     });
     return true;
   },
@@ -110,13 +128,25 @@ export const recoveryCodeVault = {
   },
   /** The rotation answered with a set: hold it until it is saved. */
   hold(userId: string, codes: string[]): void {
-    set({ userId, rotating: false, codes });
+    set({ userId, rotating: false, codes, uncertain: false });
   },
   /**
-   * The rotation failed, or the person saved the set. Either way nothing is
-   * held: a failed rotation leaves the stored set unknowable from here, so no
-   * set may be shown as if it were the one stored.
+   * The server answered and refused, a wrong password for one. It answered,
+   * so this rotation changed nothing. Any doubt left by an earlier lost answer
+   * still stands: a refusal now says nothing about that one.
    */
+  refuse(): void {
+    set(state.uncertain ? { ...state, rotating: false, codes: null } : EMPTY);
+  },
+  /**
+   * The call threw: the request may or may not have reached the server, and
+   * the answer is lost either way. The old set may already be void, so the
+   * page stays guarded until a rotation answers with a set.
+   */
+  lose(userId: string): void {
+    set({ userId, rotating: false, codes: null, uncertain: true });
+  },
+  /** The person saved the set: the single showing was received. */
   clear(): void {
     set(EMPTY);
   },

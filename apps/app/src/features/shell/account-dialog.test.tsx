@@ -984,6 +984,46 @@ describe("Security", () => {
     expect(asked()).toBe(false);
   });
 
+  // A thrown call is a lost answer, not a refusal. The server may have
+  // committed the rotation before the connection went, which voids the old set
+  // and leaves the new one nowhere. Saying "password not accepted" would let
+  // the person leave thinking nothing changed, so the page stays guarded, the
+  // form says the codes may have changed, and only a set that does arrive
+  // releases it.
+  it("keeps the page guarded when a rotation's answer is lost", async () => {
+    liveRegenerateBackupCodes.mockRejectedValueOnce(new Error("offline"));
+    const { user } = await openDialog("security");
+    const asked = () =>
+      !window.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+
+    await user.click(screen.getByTestId("account-codes-open"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    expect(await screen.findByTestId("account-codes-uncertain")).toBeTruthy();
+    expect(screen.queryByTestId("account-codes-refused")).toBeNull();
+    expect(asked()).toBe(true);
+
+    // A refusal now does not settle the earlier doubt.
+    liveRegenerateBackupCodes.mockResolvedValueOnce({ ok: false });
+    await user.type(screen.getByTestId("account-codes-password"), "wrong");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes-refused");
+    expect(screen.getByTestId("account-codes-uncertain")).toBeTruthy();
+    expect(asked()).toBe(true);
+
+    // A set that arrives does, once it is saved.
+    liveRegenerateBackupCodes.mockResolvedValueOnce({
+      ok: true,
+      codes: ["safe-1111", "safe-2222"],
+    });
+    await user.clear(screen.getByTestId("account-codes-password"));
+    await user.type(screen.getByTestId("account-codes-password"), "hunter2");
+    await user.click(screen.getByTestId("account-codes-confirm"));
+    await screen.findByTestId("account-codes");
+    await user.click(screen.getByTestId("account-codes-saved"));
+    expect(asked()).toBe(false);
+  });
+
   // The second rotation is never started, so no late first response can exist
   // to be sorted out: "runs one rotation at a time" above is what closes this,
   // and it also closes the tab-switch bypass, which a ticket held inside the

@@ -141,6 +141,7 @@
         "issuing": "Issuing",
         "cancel": "Cancel",
         "codesRefused": "That password was not accepted. Try again.",
+        "codesUncertain": "The last request did not come back, so your recovery codes may already have changed. Issue a new set before you leave this page.",
         "codesIssued": "New recovery codes. The old set is void. Keep these somewhere only you can reach; they are not shown again.",
         "codesSaved": "I have saved these",
         "codesHeld": "Your new codes are still here. The Account dialog held them because they are shown only once.",

@@ -121,9 +121,16 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // exist, which is why no response can ever be a superseded one.
   const rotation: CodeRotation = {
     pending: vault.rotating,
+    uncertain: vault.uncertain,
     begin: () => recoveryCodeVault.begin(userId),
     end: () => {
       recoveryCodeVault.end();
+    },
+    refuse: () => {
+      recoveryCodeVault.refuse();
+    },
+    lose: () => {
+      recoveryCodeVault.lose(userId);
     },
   };
 
@@ -131,7 +138,9 @@ export function AccountDialog({ data }: { data: ShellData }) {
   // organization they rotated in, by Back or by a link, before saving them.
   // The set is still in the vault, so it is put back in front of them rather
   // than left for them to go looking for.
-  const arrivedWithCodes = useRef(vault.rotating || vault.codes !== null);
+  const arrivedWithCodes = useRef(
+    vault.rotating || vault.codes !== null || vault.uncertain,
+  );
   useEffect(() => {
     if (arrivedWithCodes.current) openAccount("security");
   }, [openAccount]);
@@ -240,8 +249,14 @@ export function AccountDialog({ data }: { data: ShellData }) {
  */
 type CodeRotation = {
   pending: boolean;
+  /** An earlier rotation's answer was lost, so the stored set is unknown. */
+  uncertain: boolean;
   begin: () => boolean;
   end: () => void;
+  /** The server answered and refused: this rotation changed nothing. */
+  refuse: () => void;
+  /** The call threw: the old set may be void and the new one is gone. */
+  lose: () => void;
 };
 
 type CodeVault = {
@@ -822,7 +837,7 @@ function SecurityTab({
   const [codes, setCodes] = useState<CodesState>(() =>
     heldCodes
       ? { kind: "issued", codes: heldCodes }
-      : rotation.pending
+      : rotation.pending || rotation.uncertain
         ? { kind: "asking", password: "", refused: false }
         : { kind: "closed" },
   );
@@ -910,17 +925,23 @@ function SecurityTab({
         setHeldCodes(result.codes);
         setCodes({ kind: "issued", codes: result.codes });
       } else {
-        // A rotation that failed leaves the stored set unknowable from here:
-        // the refusal may have come before the server wrote anything or after.
-        // So nothing is displayed. A set left on screen would be a claim that
-        // it is the set stored, and that is the claim this cannot make.
-        setHeldCodes(null);
+        // Better Auth answered and refused, a wrong password for one. It
+        // answered, so this rotation did not happen. Nothing is displayed: a
+        // set left on screen would claim to be the stored set.
+        rotation.refuse();
         setCodes({ kind: "asking", password: "", refused: true });
       }
     } catch {
+      // The call threw, so the answer is lost, and a lost answer is not a
+      // refusal. The server may have committed the rotation before the
+      // connection went, in which case the old set is already void and the
+      // new one exists nowhere. Calling that "password not accepted" would let
+      // the person leave believing nothing changed. So the vault stays at
+      // stake, the page stays guarded, and the form says what is known: the
+      // codes may have changed, and a set that does arrive is the way out.
       rotation.end();
-      setHeldCodes(null);
-      setCodes({ kind: "asking", password: "", refused: true });
+      rotation.lose();
+      setCodes({ kind: "asking", password: "", refused: false });
     }
   }
 
@@ -1007,6 +1028,13 @@ function SecurityTab({
                     <div className="basis-full">
                       <FormAlert testId="account-codes-refused">
                         {t("codesRefused")}
+                      </FormAlert>
+                    </div>
+                  ) : null}
+                  {rotation.uncertain && !rotation.pending ? (
+                    <div className="basis-full">
+                      <FormAlert testId="account-codes-uncertain">
+                        {t("codesUncertain")}
                       </FormAlert>
                     </div>
                   ) : null}
