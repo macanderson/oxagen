@@ -8,6 +8,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/data/contracts/common";
+import type { MandateRow } from "@/data/contracts/mandates";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -258,6 +259,48 @@ describe("Mandate › loaded", () => {
   it("says nothing about the bound when the answer came back short of it", async () => {
     await renderMandate(mandateDetailRead());
     expect(document.querySelector('[data-state="read-bound"]')).toBeNull();
+  });
+
+  // `targetAllowed` (packages/rules/src/mandates/measures.ts) ends on
+  // `rule.allow.length === 0`, so an empty allow list permits every target the
+  // deny list does not name. The panel used to render that as "allow no pattern",
+  // which reads as a mandate that permits nothing where enforcement permits
+  // everything: the one misreading an authority record must not offer, because it
+  // is the reassuring one.
+  describe("a target rule with no allow pattern", () => {
+    const withTargets = (targets: MandateRow["targets"]) =>
+      mandateDetailRead({ mandate: mandateRow({ targets }) });
+
+    it("says any target when nothing is allowed and nothing is denied", async () => {
+      await renderMandate(
+        withTargets([{ measure: "amount", allow: [], deny: [] }]),
+      );
+      const rule = document.querySelector('[data-target="amount"]');
+      expect(rule).toHaveTextContent("allow any target");
+      expect(rule).toHaveTextContent("deny no pattern");
+    });
+
+    it("says anything not denied when only a deny pattern is recorded", async () => {
+      await renderMandate(
+        withTargets([
+          { measure: "amount", allow: [], deny: ["vendor:stripe"] },
+        ]),
+      );
+      const rule = document.querySelector('[data-target="amount"]');
+      expect(rule).toHaveTextContent("allow anything not denied");
+      expect(rule).toHaveTextContent("deny vendor:stripe");
+    });
+
+    it("still lists the patterns when an allow list is recorded", async () => {
+      await renderMandate(
+        withTargets([
+          { measure: "amount", allow: ["vendor:aws"], deny: ["*"] },
+        ]),
+      );
+      const rule = document.querySelector('[data-target="amount"]');
+      expect(rule).toHaveTextContent("allow vendor:aws");
+      expect(rule).not.toHaveTextContent("any target");
+    });
   });
 
   it("offers exactly one gold action, and both writes, on an active mandate", async () => {

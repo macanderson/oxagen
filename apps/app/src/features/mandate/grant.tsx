@@ -154,9 +154,17 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
                   <span>
                     {t("allow")}{" "}
                     <span className={`${mono} break-all`}>
-                      {rule.allow.length === 0
-                        ? t("noPattern")
-                        : rule.allow.join(", ")}
+                      {/* `targetAllowed` ends on `rule.allow.length === 0`, so an
+                          empty allow list permits every target the deny list does
+                          not name. Rendering it as "no pattern" said the mandate
+                          permitted nothing where enforcement permitted
+                          everything, which is the misreading an audit surface
+                          must not offer: it reads as tightly scoped. */}
+                      {rule.allow.length > 0
+                        ? rule.allow.join(", ")
+                        : rule.deny.length === 0
+                          ? t("allowAnyTarget")
+                          : t("anyNotDenied")}
                     </span>
                   </span>
                   <span>
