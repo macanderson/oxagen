@@ -93,9 +93,10 @@ seal derives `body_missing`, so a reader sees a size limit.
 
 Truncating was the alternative and is worse in both directions. The truncated
 bytes digest to a value naming something that never existed, and truncated JSON
-parses in no reader. A batch carries at most `TACHO_MAX_BATCH_BODY_BYTES`
-(4 MiB) so that 200 events cannot ship 200 MiB, and the shipper cuts the batch
-at the event that would cross it rather than separating a body from its event.
+parses in no reader. A batch carries at most `TACHO_MAX_REQUEST_BYTES`
+(4 MiB, measured as JSON on the wire, events and base64 bodies alike) so that
+200 events cannot ship 200 MiB, and the shipper cuts the batch at the event
+that would cross it rather than separating a body from its event.
 
 ### 4. Retention decides whether bytes are kept, and the workspace sets
 retention

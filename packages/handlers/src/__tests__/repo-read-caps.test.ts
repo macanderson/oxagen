@@ -272,6 +272,7 @@ function pr(over: Partial<GitHubPullRequest>): GitHubPullRequest {
     headRef: "feature",
     headSha: "sha1",
     mergeCommitSha: null,
+    mergedAt: null,
     additions: 10,
     deletions: 2,
     changedFiles: 1,

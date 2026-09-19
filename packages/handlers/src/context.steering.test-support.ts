@@ -265,6 +265,40 @@ export class MemoryStore implements SteeringStore {
         scope.workspaceId,
     ).length;
   }
+  /** The newest record in this workspace that a Context PR actually merged. */
+  async latestPublication(scope: { workspaceId: string }) {
+    // Newest publication wins. Publications that share an instant (GitHub
+    // reports `merged_at` to the second) are all returned: the store cannot
+    // say which landed later on the branch, and the real one does not either.
+    const published = this.records.filter(
+      (r) =>
+        r.workspaceId === scope.workspaceId &&
+        r.deletedAt === null &&
+        r.commitSha !== null &&
+        r.publishedAt !== null,
+    );
+    if (published.length === 0) return null;
+    const newestInstant = Math.max(
+      ...published.map((r) => (r.publishedAt as Date).getTime()),
+    );
+    // Last written first, the order `id desc` gives the real store.
+    const tied = published
+      .filter((r) => (r.publishedAt as Date).getTime() === newestInstant)
+      .reverse();
+    return {
+      commitSha: tied[0]!.commitSha as string,
+      commitShas: [...new Set(tied.map((r) => r.commitSha as string))],
+      publishedAt: tied[0]!.publishedAt as Date,
+    };
+  }
+  /** The in-memory store has no concurrency to race, so this is the same two reads. */
+  async versionAndPublication(scope: { workspaceId: string }) {
+    const [version, publication] = await Promise.all([
+      this.ledgerLength(scope),
+      this.latestPublication(scope),
+    ]);
+    return { version, publication };
+  }
   async insertAppend(values: Parameters<SteeringStore["insertAppend"]>[0]) {
     const existing = this.appends.find(
       (a) =>
@@ -457,6 +491,7 @@ export class FakeGitHub implements SteeringGitHub {
     state: "open" | "closed";
     merged: boolean;
     mergeCommitSha: string | null;
+    mergedAt: Date | null;
     /** The head sha at close or merge; the branch may be gone after. */
     headSha: string;
   }[] = [];
@@ -473,6 +508,8 @@ export class FakeGitHub implements SteeringGitHub {
   /** Set to make the merge refused by GitHub (a required review). */
   mergeRefusedWith: string | null = null;
   repository: SteeringRepository | null = REPO;
+  /** What GitHub stamps `merged_at` with; the harness shares its clock. */
+  clock: () => Date = () => new Date();
   private prNumber = 518;
   private commitNo = 0;
 
@@ -574,6 +611,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "open",
       merged: false,
       mergeCommitSha: null,
+      mergedAt: null,
       headSha: this.shaOf(args.head),
     });
     return { number: this.prNumber, htmlUrl: pullUrl(this.prNumber) };
@@ -610,6 +648,7 @@ export class FakeGitHub implements SteeringGitHub {
       headSha: pr.state === "open" ? this.shaOf(pr.head) : pr.headSha,
       merged: pr.merged,
       mergeCommitSha: pr.mergeCommitSha,
+      mergedAt: pr.mergedAt,
     };
   }
   async reportCheckRun(
@@ -656,6 +695,7 @@ export class FakeGitHub implements SteeringGitHub {
       state: "closed",
       merged: true,
       mergeCommitSha: mergeSha,
+      mergedAt: this.clock(),
       headSha: head,
     });
     return { sha: mergeSha };
@@ -686,9 +726,13 @@ export function harness(files: Record<string, string> = {}): Harness {
   roleOf.set(REVIEWER, { org: "Admin", workspace: null });
   const events: SecurityEventInput[] = [];
   let tick = Date.parse("2026-09-15T09:16:40.000Z");
+  const github = new FakeGitHub(files);
+  // One clock for GitHub and the platform, so a test can tell a merge's
+  // time apart from the time of the call that published it.
+  github.clock = () => new Date((tick += 1000));
   return {
     store: new MemoryStore(),
-    github: new FakeGitHub(files),
+    github,
     roles: {
       orgRole: async (_org, userId) => roleOf.get(userId)?.org ?? null,
       workspaceRole: async (_org, _ws, userId) =>

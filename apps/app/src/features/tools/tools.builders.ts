@@ -121,7 +121,12 @@ export function toolsSource(reads: ToolsReads) {
     },
     skills: { inventory: refuse },
     audit: { events: refuse, exportEvents: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: {
       versions: answer(reads.versions, "versions"),
       grants: answer(reads.grants, "grants"),
