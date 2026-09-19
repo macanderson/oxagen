@@ -21,7 +21,7 @@ decision records, `adr-0003` through `adr-0005`.
 
 ## The names that are still moving
 
-Spec §2.1 takes the old word off the surfaces, and ADR-103 lands that in phases
+Spec §2.1 takes the old word off the surfaces, and ADR-111 lands that in phases
 because several of these names are recorded on machines that are already
 enrolled. Until those phases ship, the documents in this directory name what
 exists:
@@ -32,7 +32,7 @@ exists:
 | `tachod`, `tacho-hook` | A user service and a hook binary path, written into harness settings and into managed settings documents that MDM has distributed. | 4, new name alongside the old, migrating on the next enroll |
 | `tacho/1.0` | The envelope version on the wire between hook, collector and server. `TACHO_ENVELOPE_VERSION` in `packages/tacho/src/envelope.ts` accepts this literal and no other, so a producer sends this today. | 5, which adds `oxagen.frame/1.0` alongside it and reads both for one release |
 | `tacho_sessions` | The table, and its `tacho_sessions_runtime_check` constraint. | 6, by Atlas migration, after the runtime stops writing the old name |
-| `@oxagen/tacho`, `ingest_tacho_events` | A package name and a registered capability name. Internal identifiers, and an MCP tool name a customer's agent calls. | Neither. ADR-103 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback. |
+| `@oxagen/tacho`, `ingest_tacho_events` | A package name and a registered capability name. Internal identifiers, and an MCP tool name a customer's agent calls. | Neither. ADR-111 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback. |
 
 ## The Stella-side seam corpus (copied)
 

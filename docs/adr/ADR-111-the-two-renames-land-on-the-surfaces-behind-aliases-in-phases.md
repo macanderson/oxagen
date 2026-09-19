@@ -1,4 +1,4 @@
-# ADR-103: The two §2.1 renames land on the surfaces, behind aliases, in phases
+# ADR-111: The two §2.1 renames land on the surfaces, behind aliases, in phases
 
 - **Status:** Accepted
 - **Date:** 2026-09-19
@@ -7,8 +7,14 @@
   everywhere); ADR-025 (verb-first snake_case capability names, with no alias
   fallback); ADR-101 (four first-class harnesses); `docs/specs/tacho/spec.md`
   §5.1 (enrollment); `apps/cli/src/program.ts` (the command tree)
-- **Numbering:** 103. ADR-102 is taken twice, by the mandate row lock and by
-  the marketing ebook lead gate
+- **Numbering:** 111. This record was written as ADR-103 on 2026-09-19 and
+  renumbered the same day: ADR-103 was already the price book recording its own
+  initialization, added at 07:50 UTC, and this one landed at 18:21. Two records
+  under one number left `packages/database/src/schema/cost.ts` and
+  `apps/cli/src/program.ts` citing "ADR-103" for different documents. The
+  earlier record keeps the number. A commit message or pull request body from
+  before the rename still says ADR-103; this line is the trail. ADR-102 and
+  ADR-109 are each taken twice and are not this record's to renumber.
 - **Delivered by:** this record and the phase order it sets; phase 1a, the
   hidden `tacho` group in `apps/cli/src/program.ts`; and phase 1b, the seven
   wrapping commands on `oxagen agent` with the three collisions resolved and

@@ -47,7 +47,7 @@ describe("printRetiredNotice", () => {
  * `printDeprecatedNotice` is the other half: a command that was renamed and
  * still runs. Both properties below are the ones that drifted once already.
  * The first version of this line said only that removal was coming, while the
- * code comment beside it, ADR-103 decision 2, and the commit message all
+ * code comment beside it, ADR-111 decision 2, and the commit message all
  * claimed it named the replacement.
  */
 describe("printDeprecatedNotice", () => {
