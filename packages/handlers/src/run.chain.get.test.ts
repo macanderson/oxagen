@@ -23,6 +23,8 @@ import {
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+/** Default `tacho.sessions.id` from `tachoSession()` in run.test-support. */
+const SESSION_ROW_ID = "0192d4a8-7c1e-7000-8000-00000000c0de";
 const LEDGER_ID = "arun_0123456789abcdefghjkmn";
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const HEAD = `sha256:${"a".repeat(64)}`;
@@ -47,6 +49,7 @@ function tachoHarness(
   over: {
     checkpoints?: CheckpointRow[];
     session?: Record<string, unknown>;
+    onCheckpoints?: (sessionId: string) => void;
   } = {},
 ) {
   const stores = memoryStores(
@@ -62,7 +65,10 @@ function tachoHarness(
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
-    checkpoints: () => Promise.resolve(over.checkpoints ?? []),
+    checkpoints: (_scope, sessionId) => {
+      over.onCheckpoints?.(sessionId);
+      return Promise.resolve(over.checkpoints ?? []);
+    },
     ledgerSeals: () =>
       Promise.reject(new Error("a wrapped session reads no ledger seals")),
   };
@@ -171,9 +177,13 @@ describe("get_run_chain", () => {
   });
 
   it("answers a wrapped session's hash rule, checkpoints and root, and the grade ladder", async () => {
+    let askedFor: string | null = null;
     const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)], {
       checkpoints: [checkpoint({ seq: 2, eventCount: 3 })],
       session: { replayGrade: "inspect", enforcementTier: "observe" },
+      onCheckpoints: (sessionId) => {
+        askedFor = sessionId;
+      },
     });
     const out = await chain({ runId: TACHO_ID }, ctx());
     expect(runChainGet.output.parse(out)).toEqual(out);
@@ -187,6 +197,13 @@ describe("get_run_chain", () => {
     expect(out.enforcementTier).toBe("observe");
     expect(out.recordedGrade).toBe("inspect");
     expect(out.complete).toBe(true);
+    // Checkpoints are keyed by the session row id, not the external UUID.
+    expect(askedFor).toBe(SESSION_ROW_ID);
+    // `seq_count` is last.seq + 1; the seal's final sequence is the last seq.
+    expect(out.seals[0]).toMatchObject({
+      eventCount: 207,
+      finalRunSeq: "206",
+    });
   });
 
   it("an observe-tier recording stops the ladder at inspect and says which rung refused", async () => {

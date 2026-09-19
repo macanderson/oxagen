@@ -226,14 +226,17 @@ export function createRunTranscriptGetHandler(
       read.frames.map((frame, i) => [frame.seq, ordinals[i] ?? null]),
     );
 
-    // The prefix sum runs over every fold of the run, so an entry's cumulative
-    // cost is what the run had spent by then and not what this page has.
-    const cumulative: (number | null)[] = [];
+    // Cumulative cost is a prefix over every frame of the run (§8.4), before
+    // any chip filter. Building it from the filtered folds understated spend
+    // whenever a costly model call was hidden and a later tool entry showed.
+    const costThrough = new Map<string, number | null>();
     let running: number | null = null;
-    for (const fold of folds) {
+    for (const frame of read.frames) {
       running =
-        fold.costMicros === null ? running : (running ?? 0) + fold.costMicros;
-      cumulative.push(running);
+        frame.costMicros === null
+          ? running
+          : (running ?? 0) + frame.costMicros;
+      costThrough.set(frame.seq, running);
     }
 
     // A sealed run answers no cursor once the page holds every fold left. A
@@ -296,7 +299,7 @@ export function createRunTranscriptGetHandler(
         frames: fold.frames,
         turn: turnOf.get(opening.seq) ?? null,
         cost: cost(fold.costMicros),
-        cumulativeCost: cost(cumulative[start + i] ?? null),
+        cumulativeCost: cost(costThrough.get(fold.endSeq) ?? null),
       };
     });
 

@@ -285,6 +285,8 @@ describe("get_run_transcript", () => {
     );
     expect(out.kinds).toEqual(["tools"]);
     expect(out.entries.map((e) => e.seq)).toEqual(["3"]);
+    // Cumulative cost still counts the hidden model call that came before.
+    expect(out.entries[0]?.cumulativeCost?.micros).toBe("40");
     // An empty selection is not every chip off: it keeps every frame.
     const all = await transcript(
       input({ zoom: "everything", kinds: [] }),
