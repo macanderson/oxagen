@@ -105,11 +105,21 @@ const measureNameSchema = z
 export const CALLS_MEASURE = "calls";
 
 /**
- * The ISO 4217 codes this runtime knows. Independent of apps/app's own
- * `isCurrencyCode` (`data/contracts/money.ts`, same `Intl.supportedValuesOf`
- * source) rather than imported from it: §2 deliberately keeps this module out
- * of the app, so the two stay two call sites of the same platform fact rather
- * than one importing the other.
+ * The ISO 4217 alpha-3 currency codes this runtime knows, as a static,
+ * versioned list — not `Intl.supportedValuesOf("currency")`. Codex review on
+ * #3484 found that source omits valid, still-circulating ISO 4217 units
+ * (`CLF`, `CHE`, `USN`, `XAU`, and others) because it returns the JS engine's
+ * *display-formatting* subset, not the registry: a real declaration naming
+ * one of them would fail this check even though `Money`'s own three-letter
+ * shape (`apps/app/src/data/contracts/money.ts`) accepts it fine. A list this
+ * codebase owns and can extend is the durable fix (SCR-002); it never shrinks
+ * with a Node/browser engine upgrade the way the `Intl` source could.
+ *
+ * Current as of ISO 4217 Amendment 179 (2024). Independent of apps/app's own
+ * `isCurrencyCode` (`data/contracts/money.ts`) rather than imported from it:
+ * §2 deliberately keeps this module out of the app, so the two stay two call
+ * sites of the same platform fact rather than one importing the other — if
+ * this list changes, mirror the change there too.
  *
  * ADR-111: an `amount`-typed measure's unit is checked against this set at
  * declaration time (`measureDeclarationSchema` below), the one write boundary
@@ -122,9 +132,39 @@ export const CALLS_MEASURE = "calls";
  * the app, and `MandateList.safeParse`/`MandateDetail.safeParse` answered
  * `record_unmappable` for every mandate naming that measure (#3448).
  */
-const ISO_4217_CODES: ReadonlySet<string> = new Set(
-  Intl.supportedValuesOf("currency"),
-);
+const ISO_4217_CODES: ReadonlySet<string> = new Set([
+  "AED", "AFN", "ALL", "AMD", "ANG", "AOA", "ARS", "AUD", "AWG", "AZN",
+  "BAM", "BBD", "BDT", "BGN", "BHD", "BIF", "BMD", "BND", "BOB", "BOV",
+  "BRL", "BSD", "BTN", "BWP", "BYN", "BZD",
+  "CAD", "CDF", "CHE", "CHF", "CHW", "CLF", "CLP", "CNY", "COP", "COU",
+  "CRC", "CUC", "CUP", "CVE", "CZK",
+  "DJF", "DKK", "DOP", "DZD",
+  "EGP", "ERN", "ETB", "EUR",
+  "FJD", "FKP",
+  "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD",
+  "HKD", "HNL", "HTG", "HUF",
+  "IDR", "ILS", "INR", "IQD", "IRR", "ISK",
+  "JMD", "JOD", "JPY",
+  "KES", "KGS", "KHR", "KMF", "KPW", "KRW", "KWD", "KYD", "KZT",
+  "LAK", "LBP", "LKR", "LRD", "LSL", "LYD",
+  "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR",
+  "MWK", "MXN", "MXV", "MYR", "MZN",
+  "NAD", "NGN", "NIO", "NOK", "NPR", "NZD",
+  "OMR",
+  "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG",
+  "QAR",
+  "RON", "RSD", "RUB", "RWF",
+  "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SLE", "SOS", "SRD",
+  "SSP", "STN", "SVC", "SYP", "SZL",
+  "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS",
+  "UAH", "UGX", "USD", "USN", "UYI", "UYU", "UYW", "UZS",
+  "VED", "VES", "VND", "VUV",
+  "WST",
+  "XAF", "XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XCD", "XDR", "XOF",
+  "XPD", "XPF", "XPT", "XSU", "XTS", "XUA", "XXX",
+  "YER",
+  "ZAR", "ZMW", "ZWL",
+]);
 
 export function isIso4217Currency(code: string): boolean {
   return ISO_4217_CODES.has(code);

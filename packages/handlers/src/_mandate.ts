@@ -13,6 +13,7 @@ import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classificati
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
+  isIso4217Currency,
   measureDeclarationsReadSchema,
   type MandateLimits,
   type MandateOut,
@@ -246,6 +247,24 @@ export async function assertToolsDeclareMeasures(
             code: "conflict",
             reason: "measure_not_declared",
             message: `${tool.slug}@${tool.version} declares no measure "${name}" for the limit the mandate names`,
+          });
+        }
+        // Codex P1 on #3484: this function's declaration read is
+        // deliberately lax (ADR-111's read schema) so an unrelated legacy
+        // measure on the same tool never blocks a grant naming a different,
+        // validly-denominated one. But a NEW or CHANGED limit is a write —
+        // exactly the boundary ADR-111 gates — so the measure THIS limit
+        // actually denominates is checked here, per-measure, rather than at
+        // the whole-declaration parse: an "amount" measure whose declared
+        // unit predates ADR-111 and isn't ISO 4217 must be refused before a
+        // mandate limit is written against it, or the limit is created and
+        // then fails to map on the app's Money-typed surfaces the same way
+        // #3448 did for a bad declaration.
+        if (d.type === "amount" && !isIso4217Currency(d.unit)) {
+          throw new HandlerError({
+            code: "conflict",
+            reason: "measure_unit_mismatch",
+            message: `${tool.slug}@${tool.version} declares measure "${name}" as an amount in ${d.unit}, which is not an ISO 4217 currency code; republish the tool's declaration with a valid unit before granting a limit against it`,
           });
         }
         // The unit is the third field of the same declaration, and the gate

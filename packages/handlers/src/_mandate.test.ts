@@ -189,4 +189,67 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
         isHandlerError(err) && err.reason === "measure_kind_conflict",
     );
   });
+
+  // Codex P1 on #3484: the whole-tool declaration parse is deliberately lax
+  // (ADR-111's read schema — a legacy measure with a bad unit must not block
+  // a grant naming a DIFFERENT, valid measure on the same tool), but writing
+  // a NEW or CHANGED limit against an amount measure whose own unit predates
+  // ADR-111 is exactly the write boundary the ADR gates, and must still
+  // refuse.
+  it("refuses measure_unit_mismatch when granting a limit against a legacy non-ISO-4217 amount unit", async () => {
+    const legacyUsdc: DeclaredRow = {
+      slug: "onchain__pay",
+      version: 1,
+      measures: {
+        amount: { path: "amount.value", type: "amount", unit: "USDC" },
+      },
+      consequenceTags: ["moves_money"],
+      classification: null,
+    };
+    const limits: MandateLimits = {
+      amount: {
+        perPeriod: "500000000",
+        period: "monthly",
+        currencyOrUnit: "USDC",
+      },
+    };
+    await expect(
+      assertToolsDeclareMeasures(fakeTx([legacyUsdc]), WORKSPACE_ID, {
+        tools: ["onchain__pay@*"],
+        limits,
+        targets: {} as MandateTargets,
+      }),
+    ).rejects.toSatisfy(
+      (err: unknown) =>
+        isHandlerError(err) && err.reason === "measure_unit_mismatch",
+    );
+  });
+
+  it("does not refuse a grant naming a different, validly-denominated measure on a tool that also has a legacy bad measure", async () => {
+    // The lax whole-tool parse must not let one legacy measure's bad unit
+    // block an unrelated valid one on the same tool.
+    const mixedLegacy: DeclaredRow = {
+      slug: "onchain__mixed",
+      version: 1,
+      measures: {
+        legacy_amount: {
+          path: "legacy.value",
+          type: "amount",
+          unit: "USDC",
+        },
+        rows: { path: "rowCount", type: "count", unit: "rows" },
+      },
+      consequenceTags: ["moves_money"],
+      classification: null,
+    };
+    const limits: MandateLimits = {
+      rows: { perPeriod: "1000", period: "daily", currencyOrUnit: "rows" },
+    };
+    const out = await assertToolsDeclareMeasures(
+      fakeTx([mixedLegacy]),
+      WORKSPACE_ID,
+      { tools: ["onchain__mixed@*"], limits, targets: {} as MandateTargets },
+    );
+    expect(out.rows?.kind).toBe("count");
+  });
 });
