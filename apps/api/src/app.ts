@@ -298,6 +298,7 @@ import { runCostGetRoute } from "./routes/v1/run.cost";
 import { runProofGetRoute } from "./routes/v1/run.proof.get";
 import { evidenceDisclosureGrainSetRoute } from "./routes/v1/evidence.disclosure_grain.set";
 import { costPriceEntryListRoute } from "./routes/v1/cost.price_entry.list";
+import { cmsRoute } from "./routes/v1/cms";
 
 export type AppEnv = {
   Variables: {
@@ -343,6 +344,12 @@ app.route("/v1/auth/cli", authCliTokenRoute);
 // limit inside the route are the security boundary. Mounted BEFORE the
 // auth-gated /v1 groups for the same reason as /v1/auth/cli above.
 app.route("/v1/telemetry", telemetryUsageRoute);
+
+// Public marketing lead gate for oxagen.sh (demo form + ebook gate). No
+// session: Zod allowlist + per-IP rate limit inside the route are the
+// boundary. Mounted before the auth-gated /v1 groups so a visitor never
+// gets a 401 Missing credentials.
+app.route("/v1/cms", cmsRoute);
 
 // Shared pre-authentication ceilings for credential stuffing on Stella intake.
 // Register both on the concrete root path before the auth-gated subrouter:

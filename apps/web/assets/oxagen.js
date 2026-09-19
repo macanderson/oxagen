@@ -299,7 +299,7 @@
   }
 
   var FAIL =
-    'Something went wrong. Try again, or email <a href="mailto:success@oxagen.ai">success@oxagen.ai</a>.';
+    'Something went wrong. Try again, or email <a href="mailto:success@oxagen.sh">success@oxagen.sh</a>.';
 
   /* demo / contact forms: the lead lands in cms.leads, no book code minted. */
   function wireForm(form) {

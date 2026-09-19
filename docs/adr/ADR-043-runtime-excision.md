@@ -138,3 +138,16 @@ a filesystem policy (ADR-096), aimed at CI, headless runs,
 cloud runners and managed devices first, and never mandatory on a developer's
 own laptop. ADR-094's loopback proxy is also not a runtime: it forwards a
 request a harness made and assembles nothing.
+
+## Amendment 2026-09-19: marketing `cms.*` is restored
+
+The website lead forms (demo / contact and the field-manual ebook gate) still
+POST to `/v1/cms/leads`. Dropping `cms.*` with the runtime cut left those
+forms posting into auth middleware (401) and the CORS allowlist without a
+fallback for `oxagen.sh`. That was collateral damage, not a product decision
+to retire lead capture.
+
+The `cms` schema, `/v1/cms/*` routes, and `apps/web/read/` reader are restored
+as marketing infrastructure: no tenant scope, bypass-only RLS, no capability
+contract, no MCP/CLI parity. Everything else in this ADR stands — Oxagen still
+runs no agent runtime.

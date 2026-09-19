@@ -31,6 +31,8 @@ export const PG_DOMAINS: readonly string[] = [
   "auth",
   "billing",
   "chat",
+  // Public marketing lead capture + gated ebook (restored after ADR-043).
+  "cms",
   "content",
   // The price book and the spend rollups (ADR-060).
   "cost",
@@ -47,6 +49,8 @@ export const PG_DOMAINS: readonly string[] = [
   "ratelimit",
   "schema_registry",
   "security",
+  // Hosts, sessions, and control state for agents Oxagen does not run.
+  "tacho",
   // Mandates and their ledger (ADR-059).
   "tools",
   "workspace",

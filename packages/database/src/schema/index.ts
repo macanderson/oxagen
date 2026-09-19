@@ -21,6 +21,7 @@ export * from "./run-evidence-foundation";
 export * from "./schema-registry";
 export * from "./environments";
 export * from "./ai";
+export * from "./cms";
 export * from "./ratelimit";
 export * from "./tacho";
 export * from "./cost";
