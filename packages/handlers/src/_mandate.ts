@@ -48,21 +48,43 @@ interface AgentRef {
   slug: string;
   principalId: string;
   createdById: string | null;
+  status: string;
 }
 
-/** The agent an `agt_…` id names in this workspace, with its delegated principal. */
+/** The agent an `agt_…` id names in this workspace, with its delegated principal.
+ *
+ * Deliberately does NOT refuse on `status === "archived"` (retired): this
+ * resolver is shared by the read and revoke paths (`list_mandates`,
+ * `get_mandate`, `revoke_mandate`) as well as the paths that create or widen
+ * authority (`request_mandate`, `grant_mandate`). The mandates a retired
+ * agent held are the record and must stay readable, and a mandate still
+ * active when its agent retires must stay revocable. The retirement refusal
+ * therefore belongs to the three capabilities that call `assertAgentActive`
+ * after this resolver returns, not here (ADR-106, #3124).
+ *
+ * `lock: true` takes the agent row `FOR SHARE`, which `request_mandate` and
+ * `grant_mandate` must pass. `retire_agent` locks the same row `FOR UPDATE`
+ * before it archives the agent and revokes its mandates, so the two
+ * serialize: a grant that locks first commits its mandate before retirement
+ * scans for live ones, and a grant that waits re-reads the row as archived
+ * and refuses. Without the lock, a grant could read `active`, retirement
+ * could commit around it, and the grant would insert an active mandate
+ * against a retired agent.
+ */
 export async function resolveAgent(
   tx: Tx,
   workspaceId: string,
   agentPublicId: string,
+  opts: { lock?: boolean } = {},
 ): Promise<AgentRef> {
-  const [row] = await tx
+  const query = tx
     .select({
       id: schema.agents.id,
       publicId: schema.agents.publicId,
       slug: schema.agents.slug,
       principalId: schema.agents.principalId,
       createdById: schema.agents.createdById,
+      status: schema.agents.status,
     })
     .from(schema.agents)
     .where(
@@ -73,6 +95,7 @@ export async function resolveAgent(
       ),
     )
     .limit(1);
+  const [row] = await (opts.lock ? query.for("share") : query);
   if (!row) {
     throw new HandlerError({
       code: "not_found",
@@ -88,6 +111,28 @@ export async function resolveAgent(
     });
   }
   return { ...row, principalId: row.principalId };
+}
+
+/**
+ * Refuse a capability that would create or widen a mandate's authority
+ * against a retired agent (ADR-106, #3124). A retired identity's principal
+ * is suspended and can never draw on a mandate bound to it, so granting one
+ * new authority — or activating a draft whose agent retired after the
+ * request was made — would write a ledger row that reads active and in
+ * effect but can never be used. `list_mandates`, `get_mandate`, and
+ * `revoke_mandate` do not call this: the record stays readable and a live
+ * mandate stays revocable after its agent retires.
+ */
+export function assertAgentActive(
+  agent: Pick<AgentRef, "slug" | "status">,
+): void {
+  if (agent.status === "archived") {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "agent_retired",
+      message: `Agent "${agent.slug}" is retired; it can never draw on a mandate`,
+    });
+  }
 }
 
 /**
@@ -306,6 +351,36 @@ async function userPublicIds(
     .from(schema.users)
     .where(inArray(schema.users.id, wanted));
   return new Map(rows.map((r) => [r.id, r.publicId]));
+}
+
+/**
+ * The agent bound to a mandate's `agentPrincipalId`, for the retirement
+ * check `update_mandate_limits` runs (ADR-106, #3124): that capability
+ * locates its subject by mandate id, not agent id, so it has no agent row
+ * from `resolveAgent` to check `status` on.
+ *
+ * Unlocked on purpose. `update_mandate_limits` already holds the mandate's
+ * row lock, and `retire_agent` takes that same lock before revoking, so a
+ * widen that reads the agent as active commits first and is then revoked by
+ * the retirement waiting behind it. Locking the agent here would take the
+ * two locks in the opposite order to retirement and invite a deadlock.
+ */
+export async function resolveAgentByPrincipal(
+  tx: Tx,
+  workspaceId: string,
+  principalId: string,
+): Promise<Pick<AgentRef, "slug" | "status"> | null> {
+  const [row] = await tx
+    .select({ slug: schema.agents.slug, status: schema.agents.status })
+    .from(schema.agents)
+    .where(
+      and(
+        eq(schema.agents.workspaceId, workspaceId),
+        eq(schema.agents.principalId, principalId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /** Agents by principal id, for the rows' `agentId` and `agentSlug`. */
