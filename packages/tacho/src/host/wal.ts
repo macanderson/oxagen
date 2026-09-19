@@ -188,6 +188,51 @@ export class Wal {
     return out;
   }
 
+  /**
+   * Delete the stored bytes of these events' bodies, and report how many
+   * lines went.
+   *
+   * A mandate that narrows has to reach what is already on disk, not only
+   * what is about to leave (`docs/specs/gateway/spec.md`). Omitting a body
+   * from the outgoing request protects the network boundary and nothing
+   * else: `markShipped` only advances a cursor, and `compact` removes body
+   * bytes only once a sealed session has aged out, so an unsealed session
+   * would hold the withdrawn prompt or tool content indefinitely.
+   *
+   * The event line is untouched. The chain is the record, and only the
+   * content is withdrawn; a frame whose body is gone still hashes and still
+   * ships.
+   */
+  dropBodies(events: readonly TachoEvent[]): number {
+    const wanted = new Map<string, Set<string>>();
+    for (const event of events) {
+      const idems = wanted.get(event.session_uuid) ?? new Set<string>();
+      idems.add(event.event_id_idem);
+      wanted.set(event.session_uuid, idems);
+    }
+    let dropped = 0;
+    for (const [session, idems] of wanted) {
+      const path = this.bodyFileFor(session);
+      if (!existsSync(path)) continue;
+      const kept: string[] = [];
+      let cut = 0;
+      for (const line of readFileSync(path, "utf8").split("\n")) {
+        if (line.trim().length === 0) continue;
+        const stored = JSON.parse(line) as StoredBody;
+        if (idems.has(stored.event_id_idem)) {
+          cut += 1;
+          continue;
+        }
+        kept.push(line);
+      }
+      if (cut === 0) continue;
+      dropped += cut;
+      if (kept.length === 0) unlinkSync(path);
+      else writeSensitiveFileAtomic(path, `${kept.join("\n")}\n`);
+    }
+    return dropped;
+  }
+
   /** The last sealed event of a session, if any. */
   head(sessionUuid: string): TachoEvent | undefined {
     const events = this.read(sessionUuid);

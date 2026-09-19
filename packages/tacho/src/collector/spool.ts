@@ -294,25 +294,41 @@ export class Shipper {
     // `contentClassOf` is the one table that maps a frame kind to a class, so
     // asking it here cannot disagree with what the append path asked.
     const retention = this.options.retentionInForce();
-    const kindOf = new Map(
-      own.map((event) => [event.event_id_idem, event.kind] as const),
+    const eventOf = new Map(
+      own.map((event) => [event.event_id_idem, event] as const),
     );
+    const allowed: TachoBody[] = [];
+    const withdrawn: TachoEvent[] = [];
+    for (const body of this.options.wal.bodiesFor(own)) {
+      const event = eventOf.get(body.event_id_idem);
+      const contentClass =
+        event === undefined ? undefined : contentClassOf(event.kind);
+      // A body whose event is not in this batch, or whose kind names no
+      // class, is not shipped: an unclassifiable body cannot be shown to
+      // be covered, and the boundary fails closed.
+      if (
+        contentClass !== undefined &&
+        retentionAllows(retention, contentClass)
+      ) {
+        allowed.push(body);
+        continue;
+      }
+      if (event !== undefined) withdrawn.push(event);
+    }
+    // Leaving the body out of the request protects the network boundary and
+    // nothing else: `markShipped` advances a cursor, and `Wal.compact` frees
+    // body bytes only once a sealed session has aged out, so an unsealed
+    // session would keep the withdrawn content on disk indefinitely. The
+    // narrowed mandate reaches the disk here, as the spec requires.
+    if (withdrawn.length > 0) {
+      const dropped = this.options.wal.dropBodies(withdrawn);
+      if (dropped > 0)
+        this.options.log(
+          `retention: dropped ${String(dropped)} body(ies) the mandate no longer covers`,
+        );
+    }
     const bodies = new Map(
-      this.options.wal
-        .bodiesFor(own)
-        .filter((body) => {
-          const kind = kindOf.get(body.event_id_idem);
-          const contentClass =
-            kind === undefined ? undefined : contentClassOf(kind);
-          // A body whose event is not in this batch, or whose kind names no
-          // class, is not shipped: an unclassifiable body cannot be shown to
-          // be covered, and the boundary fails closed.
-          return (
-            contentClass !== undefined &&
-            retentionAllows(retention, contentClass)
-          );
-        })
-        .map((body) => [body.event_id_idem, body] as const),
+      allowed.map((body) => [body.event_id_idem, body] as const),
     );
     const result = await this.shipBatch(
       this.fitRequestBudget(own, bodies),

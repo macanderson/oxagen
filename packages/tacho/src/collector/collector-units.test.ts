@@ -1247,6 +1247,10 @@ describe("shipper", () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
     expect(wal.stats().unshipped).toBe(0);
+    // And the bytes do not stay home: a narrowed mandate reaches the disk.
+    // Omitting the body from the request alone would leave the prompt in the
+    // WAL until the session sealed and aged out.
+    expect(wal.bodiesFor(events)).toEqual([]);
   });
 
   it("still ships a queued body the mandate does cover", async () => {

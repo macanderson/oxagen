@@ -110,4 +110,48 @@ describe("Wal", () => {
     ).toEqual([uuid]);
     expect(existsSync(join(paths.wal, `${uuid}.bodies.jsonl`))).toBe(false);
   });
+
+  it("drops the bytes of named bodies and keeps the events and the rest", () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const session = minimalSession();
+    const uuid = session[0]?.session_uuid as string;
+    const bodyOf = (index: number, text: string): FrameBody => ({
+      event_id_idem: session[index]?.event_id_idem as string,
+      session_uuid: uuid,
+      seq: session[index]?.seq as number,
+      content_type: "text/plain; charset=utf-8",
+      bytes: new TextEncoder().encode(text),
+      content_class: "model_call",
+    });
+    wal.append(session, [bodyOf(1, "first prompt"), bodyOf(2, "second")]);
+
+    expect(wal.dropBodies([session[1] as (typeof session)[number]])).toBe(1);
+    // The event survives: the chain is the record, only the content went.
+    expect(wal.read(uuid)).toHaveLength(session.length);
+    expect(wal.bodiesFor(session).map((b) => b.event_id_idem)).toEqual([
+      session[2]?.event_id_idem,
+    ]);
+    // The bytes are off the disk, not merely unreferenced.
+    expect(
+      readFileSync(join(paths.wal, `${uuid}.bodies.jsonl`), "utf8"),
+    ).not.toContain(Buffer.from("first prompt").toString("base64"));
+
+    // Dropping what is already gone changes nothing (negative).
+    expect(wal.dropBodies([session[1] as (typeof session)[number]])).toBe(0);
+    // A session with no body file answers zero (negative).
+    expect(
+      wal.dropBodies([
+        {
+          ...(session[0] as (typeof session)[number]),
+          session_uuid: "00000000-0000-4000-8000-000000000000",
+        },
+      ]),
+    ).toBe(0);
+
+    // The last body going takes the file with it.
+    expect(wal.dropBodies([session[2] as (typeof session)[number]])).toBe(1);
+    expect(existsSync(join(paths.wal, `${uuid}.bodies.jsonl`))).toBe(false);
+    expect(wal.bodiesFor(session)).toEqual([]);
+  });
 });
