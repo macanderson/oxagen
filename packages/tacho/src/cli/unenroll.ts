@@ -20,7 +20,10 @@ import {
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { stripCodexHooks } from "../host/codex-writer";
-import { stripCursorHooks } from "../host/cursor-writer";
+import {
+  cursorDocumentIsVestigial,
+  stripCursorHooks,
+} from "../host/cursor-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
 import {
   type HostFile,
@@ -243,7 +246,16 @@ export function stripEnrollmentHooks(
       if (current === undefined) return;
       const stripped = stripCursorHooks(current, host?.host_enrollment_id);
       if (stripped.changed) {
-        deps.writeCursorHooks(path, stripped.document);
+        // The strip leaves Cursor's `version` standing, because this document
+        // reads the same whether we created it or the user brought it. Saying
+        // here that nothing but that scaffolding remains is what lets
+        // `settle` take back a file Tacho made, while a hook the user added
+        // while enrolled keeps the file instead.
+        deps.writeCursorHooks(
+          path,
+          stripped.document,
+          cursorDocumentIsVestigial(stripped.document),
+        );
         cursorChanged.push(path);
       }
     });

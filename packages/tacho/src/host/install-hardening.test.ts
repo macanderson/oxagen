@@ -105,9 +105,31 @@ describe("HarnessFiles", () => {
       path,
       '{"version":1,"hooks":{"preToolUse":[{"command":"tacho"}]}}',
     );
-    files.write(path, '{"version":1}');
+    // The teardown says what it is leaving: our `version` and nothing else.
+    files.write(path, '{"version":1}', true);
     expect(files.settle()[0]?.result).toBe("deleted");
     expect(existsSync(join(dir, ".cursor"))).toBe(false);
+  });
+
+  it("keeps a hook the user added to a file we created, through the strip", () => {
+    // The teardown itself writes through `write`, so the stripped document —
+    // the user's own hook included — becomes the bytes Tacho last wrote.
+    // Matching on that alone would read their hook as our leftover and take
+    // the whole file.
+    const dir = scratch();
+    const files = new HarnessFiles(join(dir, "tacho"));
+    const path = join(dir, ".codex", "hooks.json");
+    files.write(path, '{"hooks":{"Stop":[{"command":"tacho"}]}}');
+    // They add one of their own while enrolled.
+    writeFileSync(
+      path,
+      '{"hooks":{"Stop":[{"command":"tacho"},{"command":"mine"}]}}',
+    );
+    // Unenroll strips ours and writes what is left, which is theirs.
+    files.write(path, '{"hooks":{"Stop":[{"command":"mine"}]}}');
+    expect(files.settle()[0]?.result).toBe("kept-user-edit");
+    expect(existsSync(path)).toBe(true);
+    expect(readFileSync(path, "utf8")).toContain("mine");
   });
 
   it("keeps a file we created that the user has since edited", () => {
@@ -118,7 +140,7 @@ describe("HarnessFiles", () => {
       path,
       '{"version":1,"hooks":{"preToolUse":[{"command":"tacho"}]}}',
     );
-    files.write(path, '{"version":1}');
+    files.write(path, '{"version":1}', true);
     // One character of theirs, after our last write, and it is theirs.
     writeFileSync(path, '{"version":1,"hooks":{"stop":[{"command":"mine"}]}}');
     expect(files.settle()[0]?.result).toBe("kept-user-edit");

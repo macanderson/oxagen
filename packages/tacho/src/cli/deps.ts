@@ -303,7 +303,17 @@ export interface CliDeps {
    * directory means Oxagen writes two: see `host/cursor-writer.ts`.
    */
   readCursorHooks: (path: string) => unknown;
-  writeCursorHooks: (path: string, document: unknown) => void;
+  /**
+   * `vestigial` says the document holds nothing but the `version` the writer
+   * added itself, so `settle` may take the whole file back. Only the
+   * teardown passes it, and only when the strip left nothing of the user's
+   * (`cursorDocumentIsVestigial`).
+   */
+  writeCursorHooks: (
+    path: string,
+    document: unknown,
+    vestigial?: boolean,
+  ) => void;
   /**
    * Stella's user-scope hooks file: `stella.toml` when it exists, else the
    * legacy `settings.json` when that exists, else a new `stella.toml`.
@@ -657,8 +667,12 @@ export function defaultCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
         `${JSON.stringify(document, null, 2)}\n`,
       ),
     readCursorHooks: (path) => harnessFiles.readJson(path),
-    writeCursorHooks: (path, document) =>
-      harnessFiles.write(path, `${JSON.stringify(document, null, 2)}\n`),
+    writeCursorHooks: (path, document, vestigial = false) =>
+      harnessFiles.write(
+        path,
+        `${JSON.stringify(document, null, 2)}\n`,
+        vestigial,
+      ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) => harnessFiles.write(file.path, file.text ?? ""),
     readClaudeDesktopConfig: () =>

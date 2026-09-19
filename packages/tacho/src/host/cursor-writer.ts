@@ -306,6 +306,23 @@ export function stripCursorHooks(
   return { document, changed: JSON.stringify(document) !== before };
 }
 
+/**
+ * Whether a stripped `hooks.json` holds nothing but the `version` this
+ * writer had to add itself.
+ *
+ * This is the one fact `HarnessFiles.settle` cannot work out on its own, and
+ * the reason the strip above leaves `version` alone: the document is the
+ * same either way, and only the writer knows that `version` is its own. An
+ * empty document is not vestigial by this test but is already blank, which
+ * `settle` handles without asking.
+ */
+export function cursorDocumentIsVestigial(
+  document: CursorHooksDocument,
+): boolean {
+  const keys = Object.keys(document);
+  return keys.length === 1 && keys[0] === "version";
+}
+
 export interface CursorHookPresence {
   complete: boolean;
   present: CursorHookEventName[];

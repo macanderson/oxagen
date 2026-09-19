@@ -599,6 +599,9 @@ async function routeHook(
           session: record.control,
           latestDenyGeneration: currentView.denyGeneration,
           controlReachable: currentView.controlReachable,
+          ...(currentView.mandateConfirmedAt !== undefined
+            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
+            : {}),
           now: deps.now(),
           context: {
             ...deps.match,
@@ -617,6 +620,9 @@ async function routeHook(
           session: record.control,
           latestDenyGeneration: currentView.denyGeneration,
           controlReachable: currentView.controlReachable,
+          ...(currentView.mandateConfirmedAt !== undefined
+            ? { mandateConfirmedAt: currentView.mandateConfirmedAt }
+            : {}),
           now: deps.now(),
           context: {
             ...deps.match,

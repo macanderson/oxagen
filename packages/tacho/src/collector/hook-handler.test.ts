@@ -417,6 +417,32 @@ describe("handleHookEvent over the recorded session", () => {
     });
   });
 
+  it("allows a subagent start on a bundle the daemon keeps confirming", async () => {
+    // The daemon records a confirmation on every `not_modified`, and the
+    // staleness window is measured from that rather than from `issued_at`.
+    // This path built its two evaluations by hand and left the field out of
+    // both, so past the bundle's signed lifetime every Cursor subagent
+    // launch was denied `bundle_stale` on a host whose policy was being
+    // confirmed the whole time — in enforce mode, on a live machine.
+    const { deps } = harness(
+      {
+        issued_at: "2026-09-08T00:00:00.000Z",
+        expires_at: "2026-09-09T00:00:00.000Z",
+        // Staleness only defers a tool that can change something, and the
+        // default fixture leaves `Task` out of the tool map, where it reads
+        // as read-only.
+        tools: { Task: { risk_grade: "high", read_only: false } },
+      },
+      { mandateConfirmedAt: Date.parse("2026-09-10T09:55:00.000Z") },
+    );
+    const sub = loadFixtures().find(
+      (f) => f.name === "13-SubagentStart.json",
+    ) as Fixture;
+    const outcome = await handleHookEvent(sub.stdin, sub.env, deps);
+    expect(outcome.evaluation?.reason_code).not.toBe("bundle_stale");
+    expect(outcome.evaluation?.decision).not.toBe("deny");
+  });
+
   it("refuses a Cursor subagent start on a paused host", async () => {
     const { deps } = harness({}, { hostStatus: "paused" });
     const sub = loadFixtures().find((f) => f.name === "13-SubagentStart.json");
