@@ -764,6 +764,63 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    // A legacy limit's guess is not a fact to drift-check against, but the
+    // ledger's own history is: once a real call stamps a legacy measure's
+    // ledger row from the live declaration, that row is a fact the same way
+    // a post-ADR-108 mandate's stored kind is, and a later declaration
+    // change must be caught the same way.
+    it("denies a legacy row whose own ledger history disagrees with the current declaration", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`; legacyKindMeasures marks this measure as guessed.
+          },
+        },
+      });
+      // Stands in for an earlier real call this mandate made while the tool
+      // still declared "amount" as a count: the ledger's own stamp, not the
+      // stored limit's guess, is what this call's declaration ("amount",
+      // money) must now agree with.
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: legacy,
+          toolCallId: randomUUID(),
+          kind: "settle",
+          measure: "amount",
+          value: "10",
+          unitOrCurrency: "widgets",
+          measureKind: "count",
+          periodKey: "2026-08",
+          balanceAfter: "0",
+        }),
+      );
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(eq(schema.mandateLedger.mandateId, legacy)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
+      );
+    });
+
     it("parks a call over human_above with the reservation held, then lets the approved retry proceed once and settles it from the output", async () => {
       const agent = randomUUID();
       const id = await insertMandate(agent, {

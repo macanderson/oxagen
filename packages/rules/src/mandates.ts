@@ -784,14 +784,35 @@ export async function decideMandate(
       // its `kind` is `legacyMeasureKindGuess`'s fallback, not a fact this
       // measure was ever actually written under, and the gate has always
       // enforced that row correctly by reading the declaration directly
-      // (never the guess). Comparing a guess against the current declaration
-      // would deny a legacy mandate the fallback happens to guess wrong,
-      // even though nothing about it has drifted, since there is no earlier
-      // fact to drift from.
+      // (never the guess). Comparing the guess itself against the current
+      // declaration would deny a legacy mandate the fallback happens to
+      // guess wrong, even though nothing about it has drifted, since there
+      // is no earlier fact to drift from in `mandate.limits`.
+      //
+      // But `reserve` has stamped every ledger row for this measure from the
+      // live declaration since ADR-108's ledger column shipped, whether the
+      // mandate's own stored `limits[measure].kind` is a real stamp or still
+      // a legacy guess: a legacy mandate's ledger history is real history
+      // the moment it exists. So a legacy measure is not exempt outright;
+      // it is checked against its own ledger's last stamped kind instead of
+      // `mandate.limits`, with no refusal only when that history is empty
+      // (this call would be the measure's first real stamp).
       const storedKind = mandate.limits[measure]?.kind;
-      if (
+      if (mandate.legacyKindMeasures.has(measure)) {
+        const ledgerKind = await lastLedgerKind(tx, mandate.id, measure);
+        if (
+          ledgerKind !== null &&
+          ledgerKind !== measureKindOf(declaration.type)
+        ) {
+          return {
+            kind: "deny",
+            reason: "measure_kind_changed",
+            mandate,
+            detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's ledger last recorded it as ${ledgerKind}; update the mandate's limit before this call can be decided`,
+          };
+        }
+      } else if (
         storedKind !== undefined &&
-        !mandate.legacyKindMeasures.has(measure) &&
         storedKind !== measureKindOf(declaration.type)
       ) {
         return {
