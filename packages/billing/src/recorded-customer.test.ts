@@ -29,10 +29,12 @@ const seams = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
+  // The org-wide seam is the SAME function as the tenant seam (ADR-086).
   return {
     ...real,
     withTenantDb: seams.withTenantDb,
     withSystemDb: seams.withSystemDb,
+    withOrgDb: seams.withTenantDb,
   };
 });
 
