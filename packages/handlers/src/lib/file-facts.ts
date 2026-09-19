@@ -87,20 +87,24 @@ function isWindowsAbsolute(path: string): boolean {
 }
 
 /**
- * The comparable form of an absolute path: forward slashes, and an
- * upper-case drive letter.
+ * The comparable form of a path: forward slashes, and case folded on the
+ * hosts that do not distinguish it.
  *
- * The drive letter is the one case difference two hosts produce for the
- * same file (`c:/repo` and `C:/repo`), so it is folded. The rest of the
- * path is left exactly as it arrived: Windows compares filenames without
- * case but records them with it, and folding the whole path would report
- * `SRC/A.TS` and `src/a.ts` as one file on a case-sensitive host.
+ * A Windows path is folded whole. NTFS compares filenames without case but
+ * records them with it, so one tool reporting `c:/Repo/src/a.ts` and a git
+ * read reporting the root as `C:/repo` are naming the same directory, and
+ * folding only the drive letter left the prefix test failing on everything
+ * below it — the same file landing in two rows, which is what this column
+ * exists to prevent. The recorded spelling is unaffected: the relative part
+ * is sliced out of the original, and folding changes no length.
+ *
+ * A POSIX path is left exactly as it arrived, because there the case is
+ * part of the name: `SRC/A.TS` and `src/a.ts` are two files on ext4, and
+ * folding would report them as one.
  */
 function comparablePath(path: string): string {
   const slashes = toForwardSlashes(path);
-  return /^[A-Za-z]:\//.test(slashes)
-    ? `${slashes[0]?.toUpperCase() ?? ""}${slashes.slice(1)}`
-    : slashes;
+  return isWindowsAbsolute(slashes) ? slashes.toLowerCase() : slashes;
 }
 
 /**
