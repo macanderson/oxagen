@@ -107,6 +107,12 @@ describe("routes", () => {
     expect(routes.signup(fleet)).toBe("/signup?next=%2Facme%2Fcore-platform");
     expect(routes.login(ROOT)).toBe("/login");
     expect(routes.login()).toBe("/login");
+    expect(routes.loginWithOAuthError("please_restart_the_process")).toBe(
+      "/login?error=please_restart_the_process",
+    );
+    expect(routes.loginWithOAuthError("access_denied", pathOf("acme"))).toBe(
+      "/login?next=%2Facme&error=access_denied",
+    );
     expect(routes.twoFactor(routes.people("acme"))).toBe(
       "/two-factor?next=%2Facme",
     );

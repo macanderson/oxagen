@@ -52,9 +52,19 @@ function tachoHarness(
     onCheckpoints?: (sessionId: string) => void;
   } = {},
 ) {
+  // seqCount is the next expected sequence (last.seq + 1). Default it to the
+  // fixture's span so boundary checks do not invent missing tails the test
+  // never asked for; a test that wants a truncated ClickHouse walk overrides.
+  const defaultSeqCount =
+    rows.length === 0 ? 0 : Math.max(...rows.map((row) => row.seq)) + 1;
   const stores = memoryStores(
     [],
-    [tachoSession({ publicId: TACHO_ID, session: over.session })],
+    [
+      tachoSession({
+        publicId: TACHO_ID,
+        session: { seqCount: defaultSeqCount, ...over.session },
+      }),
+    ],
   );
   const deps: RunChainGetDeps = {
     queries: stores.queries,
@@ -116,7 +126,7 @@ function ledgerHarness(
 }
 
 describe("sequenceGaps", () => {
-  it("reports only the interior: a recording that starts at 7 is not missing 1 to 6", () => {
+  it("reports only the interior without bounds: a recording that starts at 7 is not missing 1 to 6", () => {
     const frames = [
       { seq: "7" },
       { seq: "8" },
@@ -134,6 +144,18 @@ describe("sequenceGaps", () => {
       [],
     );
     expect(sequenceGaps([] as never[])).toEqual({ gaps: [], missing: 0 });
+  });
+
+  it("reports missing head and tail against recorded bounds (negative)", () => {
+    // ClickHouse lost seq 0 and seq 4 of a wrapped session with seqCount 5.
+    const frames = [{ seq: "1" }, { seq: "2" }, { seq: "3" }] as never[];
+    expect(sequenceGaps(frames, { start: "0", end: "4" })).toEqual({
+      gaps: [
+        { from: "0", to: "0" },
+        { from: "4", to: "4" },
+      ],
+      missing: 2,
+    });
   });
 });
 
@@ -201,8 +223,8 @@ describe("get_run_chain", () => {
     expect(askedFor).toBe(SESSION_ROW_ID);
     // `seq_count` is last.seq + 1; the seal's final sequence is the last seq.
     expect(out.seals[0]).toMatchObject({
-      eventCount: 207,
-      finalRunSeq: "206",
+      eventCount: 3,
+      finalRunSeq: "2",
     });
   });
 
@@ -232,6 +254,30 @@ describe("get_run_chain", () => {
     expect(out.gaps.recorded).toEqual([]);
     expect(out.ladder[1]).toMatchObject({ met: false });
     expect(out.ladder[1]?.reason).toContain("chain_break");
+  });
+
+  it("reports a missing head or tail against seqCount, not only interior gaps (negative)", async () => {
+    // ClickHouse lost seq 0 and the last frame of a five-frame session.
+    const chain = tachoHarness([tachoRow(1), tachoRow(2), tachoRow(3)], {
+      session: { seqCount: 5, completenessGaps: [] },
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(out.gaps.missingSequences).toEqual([
+      { from: "0", to: "0" },
+      { from: "4", to: "4" },
+    ]);
+    expect(out.gaps.missingFrameCount).toBe(2);
+    expect(out.ladder[1]?.reason).toContain("chain_break");
+  });
+
+  it("a wrapped seal's finalRunSeq is the last frame seq, not seqCount (negative)", async () => {
+    const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)], {
+      session: { seqCount: 3 },
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(out.lastSeq).toBe("2");
+    expect(out.seals[0]?.finalRunSeq).toBe("2");
+    expect(out.seals[0]?.eventCount).toBe(3);
   });
 
   it("drops a gap word outside the closed vocabulary rather than passing it on", async () => {

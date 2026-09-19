@@ -28,7 +28,8 @@
     "studio": "drizzle-kit studio",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:seed-books": "tsx --env-file-if-exists=.env.local src/seed-book-editions.ts"
   },
   "dependencies": {
     "@oxagen/compliance": "workspace:*",
