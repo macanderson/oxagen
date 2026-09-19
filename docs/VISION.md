@@ -1,10 +1,10 @@
-# Oxagen Vision — Mission Control for the agent workforce
+# Oxagen Vision: Mission Control for agent operators
 
-> **Mission: Oxagen is Mission Control for an autonomous agent workforce. Operators
-> give each agent its own identity, set its authority and budget, equip it with tools
-> and skills, and oversee its work through a shared agent control plane. Every agent
-> operates under a mandate set by the teams accountable for it and enforced on the
-> actions routed through Oxagen.**
+> **Mission: Oxagen is Mission Control for agent operators. They give each agent
+> its own identity, set its authority and budget, equip it with tools and skills, and
+> oversee its work through a shared agent control plane. Every agent operates under a
+> mandate set by the teams accountable for it and enforced on the actions routed
+> through Oxagen. The workforce it governs is autonomous and supervised alike.**
 
 We sell to the teams that answer for the agents: the security team that decides
 what an agent may reach, the FinOps team that decides what it may spend and under

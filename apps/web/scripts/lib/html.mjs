@@ -102,7 +102,7 @@ export function siteFooter({ wordmark, pillars }) {
     <div class="foot-grid">
       <div class="foot-brand">
         <a class="brand" href="/" aria-label="Oxagen home">${wordmark}</a>
-        <p>Can you explain your AI bill?<br>Neither can your provider.</p>
+        <p>See which agent spent what,<br>and on whose behalf.</p>
       </div>
       <nav class="foot-col" aria-label="Product">
         <h4>Product</h4>
