@@ -53,8 +53,11 @@ the hook binary's path into the harness settings on the machine it runs on. It
 also prints a managed settings document that MDM pushes to a fleet. So
 `tachod` and `tacho-hook` are not identifiers. They are a service name and a
 binary path recorded on every enrolled machine, and in documents an
-administrator has already distributed. Renaming them without a migration
-un-enrolls those machines. `tacho/1.0` is the envelope version on the wire
+administrator has already distributed. The same is true of the URLs that
+machine calls: `apps/api/src/app.ts` mounts `/v1/tacho/enroll`, the credentialed
+`/v1/tacho` group and seven organization-scoped `/tacho/` paths, and a daemon
+already running holds those paths, not a name we can edit. Renaming any of them
+without a migration un-enrolls those machines. `tacho/1.0` is the envelope version on the wire
 between the hook, the collector, and the server, so its name is a protocol
 term, not a label: `TACHO_ENVELOPE_VERSION` in `packages/tacho/src/envelope.ts`
 accepts that literal and no other, and phase 5 is what adds `oxagen.frame/1.0`
@@ -62,9 +65,13 @@ beside it. This sentence named the replacement as though it were current until
 2026-09-19, and the corpus README inherited the error from here.
 
 On the other side, ADR-025 retired the dotted capability form **with no alias
-fallback**, and MCP tool names are the wire contract that a customer's agent
-calls. A rename that reaches those names breaks callers with no fallback by
-that ADR's own design.
+fallback**, and a registered capability name is the wire contract its callers
+hold: the API request body, and for the one `tacho`-carrying name that is also
+on MCP, `list_tacho_hosts`, the tool a customer's agent calls. A rename that
+reaches those names breaks callers with no fallback by that ADR's own design.
+The route paths above are a separate surface from the names dispatched over
+them, which is why phase 4 aliases the paths while decision 1 leaves the names
+alone.
 
 ### The collision the spec does not resolve
 
@@ -203,14 +210,31 @@ request.**
    `TACHO_ENVELOPE_VERSION` accepts; `oxagen.frame/1.0` is what phase 5 adds
    beside it. Naming a replacement as though it were current would tell a
    producer to send a version the collector rejects, which is the failure this
-   paragraph exists to prevent. `@oxagen/tacho` and `ingest_tacho_events` are
-   not renamed by any phase: decision 1 keeps the package name, and the
-   capability name is an MCP tool a customer's agent calls, whose dotted form
-   ADR-025 retired with no alias fallback.
+   paragraph exists to prevent. `@oxagen/tacho` and the seven registered
+   capability names that carry the word are not renamed by any phase: decision 1
+   keeps the package name, and ADR-025 retired the dotted form of a capability
+   name with no alias fallback, so renaming one breaks every caller at once.
+   Exactly one of the seven reaches a customer's agent as an MCP tool,
+   `list_tacho_hosts`, whose contract is the only one of them declaring
+   `surfaces: ["api", "mcp"]`. `ingest_tacho_events` is not that one: it
+   declares `surfaces: ["api"]`, omits the `mcp` layer, and no tool binds it.
+   An earlier draft of this record and of the corpus README called it an MCP
+   tool a customer's agent calls, which is the deployed API route below.
 
-4. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
-   each shipping the new name alongside the old and migrating on the next
-   enroll.
+4. The names an enrolled host carries, each shipping alongside the old one and
+   migrating on the next enroll: the runtime names `tachod` to `oxagend` and
+   `tacho-hook` to `oxagen-hook`, and the deployed API paths the host calls.
+   `apps/api/src/app.ts` mounts `/v1/tacho/enroll` and the credentialed
+   `/v1/tacho` group that carries event ingest, bundle fetch and command fetch,
+   plus seven organization-scoped paths under `/tacho/` for enrollments,
+   enrollment revocation, enrollment tokens, hosts, sessions and incidents. A
+   URL compiled into a daemon on a machine we do not control is the most
+   customer-facing name in this record, so the routes are mounted under both
+   spellings and the old ones answer until the fleet has re-enrolled. Renaming
+   them without that alias breaks every enrolled host at the moment of deploy,
+   which is the failure this whole record is arranged to avoid. Aliasing them
+   is blocked on nothing, so the server may accept both before any host ships
+   the new binary name; the route filenames stay as they are under decision 1.
 5. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
    the collector reading both for one release.
 6. The database: the `tacho` Postgres schema, by Atlas migration, after the
