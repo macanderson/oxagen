@@ -30,7 +30,7 @@ const CHECKPOINT: ChainCheckpoint = {
   eventCount: 200,
   signedAt: "2026-09-15T08:30:00.000Z",
   deviceKeyFingerprint: "ed25519:2f:91:aa",
-  platformKeyId: "pk_01k4qj9e",
+  platformKey: "pk_01k4qj9e",
   countersignedAt: "2026-09-15T08:30:10.000Z",
   anchorRoot: null,
   anchoredAt: null,
@@ -186,7 +186,7 @@ describe("ChainSection", () => {
       readOk(
         runChain({
           checkpoints: [
-            { ...CHECKPOINT, countersignedAt: null, platformKeyId: null },
+            { ...CHECKPOINT, countersignedAt: null, platformKey: null },
           ],
         }),
       ),

@@ -17,6 +17,7 @@
 // signal is coalesced: the hook calls back once per `COALESCE_MS`, however
 // many frames landed in that window.
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "@/ui/navigation";
 
 /** How long frames are gathered before the player is told to read the tail. */
 const COALESCE_MS = 750;
@@ -131,4 +132,33 @@ export function useRunStream({
   }, [url, enabled]);
 
   return state;
+}
+
+/**
+ * Keep a live run's empty Transcript tab subscribed to the stream. Without
+ * this, an empty filter (or a run with no frames yet) renders a static panel
+ * and never mounts the player that opens EventSource, so later matching
+ * frames never appear. A frame landing re-reads the page so the first
+ * matching entry can mount the full player.
+ */
+export function LiveEmptyFollow({
+  org,
+  ws,
+  runId,
+}: {
+  org: string;
+  ws: string;
+  runId: string;
+}): null {
+  const navigate = useNavigate();
+  useRunStream({
+    url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
+      ws,
+    )}/runs/${encodeURIComponent(runId)}/stream`,
+    enabled: true,
+    onFrames: () => {
+      navigate.refresh();
+    },
+  });
+  return null;
 }

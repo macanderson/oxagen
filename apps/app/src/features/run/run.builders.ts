@@ -66,7 +66,7 @@ export function runChain(overrides: Partial<RunChain> = {}): RunChain {
         eventCount: 200,
         signedAt: at(-1800),
         deviceKeyFingerprint: "ed25519:2f:91:aa",
-        platformKeyId: "pk_01k4qj9e",
+        platformKey: "pk_01k4qj9e",
         countersignedAt: at(-1790),
         anchorRoot: null,
         anchoredAt: null,
@@ -489,7 +489,7 @@ export function runSource(reads: RunReads) {
   };
   const source: DataSource = {
     pretenant: { orgs: refuse, workspaces: refuse },
-    shell: { context: refuse },
+    shell: { context: refuse, preferences: refuse },
     runs: {
       list: refuse,
       get: answer("get", reads.detail),

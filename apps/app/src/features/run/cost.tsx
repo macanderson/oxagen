@@ -12,7 +12,7 @@
 // Above the rollup sits the waterfall (spec §12.9), which is not read from the
 // rollup at all: it is the run's own per-turn ledger, so a turn's cost on this
 // tab is the same figure the Transcript tab prints against that turn.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type {
   RunCost,
   RunCostRollup,
@@ -21,6 +21,7 @@ import type {
 } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";

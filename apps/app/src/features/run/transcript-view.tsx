@@ -29,7 +29,7 @@
 // never replaced, so the scroll position and the playhead stay where they are.
 // A cursor this capability did not write is refused, and the view says so
 // instead of starting the transcript again.
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   useCallback,
@@ -51,12 +51,12 @@ import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
 import type { ActionResult } from "@/server/kernel";
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatClock, formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { readTranscriptPage } from "./actions";
 import { kindsParam } from "./transcript";
-import { useRunStream } from "./use-run-stream";
 import {
   buildTranscript,
   type Frames,
@@ -72,6 +72,7 @@ import {
   type TranscriptStep,
   type TranscriptTurn,
 } from "./transcript-model";
+import { useRunStream } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -79,7 +80,6 @@ type Place = { org: string; ws: string; runId: string };
 type PageFailure = Extract<ActionResult<unknown>, { ok: false }>;
 
 const SPEEDS = [1, 1.5, 2, 4] as const;
-/** How often a followed live run re-reads itself. */
 /** How close to the end the playhead gets before the next page is read ahead of it. */
 const PREFETCH_WITHIN = 5;
 

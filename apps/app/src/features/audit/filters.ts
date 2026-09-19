@@ -9,13 +9,22 @@
 // row can carry. `@oxagen/compliance` is a leaf package with no store and no
 // kernel; §2's layer matrix admits it for this file alone.
 import { EMITTED_SECURITY_EVENT_TYPES } from "@oxagen/compliance";
+import { DEFAULT_TIME_ZONE } from "@oxagen/oxagen/contracts/user.preferences.read";
 import {
   AUDIT_PAGE_SIZE,
   type AuditExportFormat,
   type AuditFilters,
   AuditOutcome,
   type AuditQuery,
+  type AuditWindow,
 } from "@/data/contracts/audit";
+import type { DataSource } from "@/data/ports";
+import type { OrgCtx } from "@/server/viewer";
+import {
+  startOfNextZonedDay,
+  startOfZonedDay,
+  supportsTimeZone,
+} from "@/shared/calendar-day";
 import { firstParam } from "@/shared/safe-path";
 
 /** The event types the filter offers, in the order the platform declares them. */
@@ -114,6 +123,45 @@ export function auditQueryParams(
     to: query.to ?? undefined,
     offset: offset > 0 ? String(offset) : undefined,
     format: over.format,
+  };
+}
+
+/**
+ * The reader's days as the instants the record is queried and exported over.
+ *
+ * The days come off the query string, and a day is a pair of instants only once
+ * a zone is known: Sep 18 in Los Angeles is not Sep 18 in Tokyo. The zone is the
+ * viewer's own preference, so this is the lane's job and not the port's — the
+ * live layer has no viewer to ask (ARCHITECTURE.md §2). Both bounds are resolved
+ * here and handed down as `since` and `until`, so the page and its export query
+ * exactly the same window.
+ *
+ * The preference read is made only when a day is actually set: an unfiltered
+ * record needs no zone, and no page should pay for a read whose answer it would
+ * not use. A refused or failed read falls back to the default zone, as the shell
+ * does for the clock it draws — the record is worth more than the bound is
+ * precise. So is a stored zone this runtime cannot format in: the pages print in
+ * the default zone for that person, and a filter that disagreed with what they
+ * can see would be worse than one that matches it.
+ */
+export async function auditWindow(
+  ctx: OrgCtx,
+  source: Pick<DataSource, "shell">,
+  filters: AuditFilters,
+): Promise<AuditWindow> {
+  const { from, to, ...rest } = filters;
+  if (from === null && to === null) {
+    return { ...rest, since: null, until: null };
+  }
+  const preferences = await source.shell.preferences(ctx);
+  const stored = preferences.ok
+    ? preferences.value.timeZone
+    : DEFAULT_TIME_ZONE;
+  const timeZone = supportsTimeZone(stored) ? stored : DEFAULT_TIME_ZONE;
+  return {
+    ...rest,
+    since: from === null ? null : startOfZonedDay(from, timeZone),
+    until: to === null ? null : startOfNextZonedDay(to, timeZone),
   };
 }
 
