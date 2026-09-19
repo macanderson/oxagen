@@ -12,7 +12,7 @@
 import { createHash } from "node:crypto";
 import { schema, type Tx } from "@oxagen/database";
 import {
-  measureDeclarationsSchema,
+  measureDeclarationsReadSchema,
   type MeasureDeclarations,
 } from "@oxagen/oxagen/mandates/schemas";
 import {
@@ -94,7 +94,12 @@ export async function loadDeclaredTool(
     // under a gate that cannot see a tag the floor will later enforce.
     sideEffect: effectiveSideEffect(row),
     consequenceTags: unionConsequenceTags(row),
-    measures: measureDeclarationsSchema.parse(row.measures),
+    // Read-time schema (ADR-111): a version published before the ISO 4217
+    // check landed can still carry a legacy non-ISO unit on disk, and this
+    // is on the path every mandate-gated call takes — refusing it here
+    // would take a working tool down instead of just failing to map it on
+    // the app's Money-typed surfaces (#3448 P1 follow-up).
+    measures: measureDeclarationsReadSchema.parse(row.measures),
     effectIdPath: row.effectIdPath,
   };
 }

@@ -13,7 +13,7 @@ import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classificati
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
-  measureDeclarationsSchema,
+  measureDeclarationsReadSchema,
   type MandateLimits,
   type MandateOut,
   type MandateTargets,
@@ -235,7 +235,9 @@ export async function assertToolsDeclareMeasures(
       });
     }
     for (const tool of matched) {
-      const measures = measureDeclarationsSchema.safeParse(tool.measures);
+      // Read-time schema (ADR-111): a tool published before the ISO 4217
+      // check landed can still carry a legacy non-ISO unit in this column.
+      const measures = measureDeclarationsReadSchema.safeParse(tool.measures);
       const declaredMeasures = measures.success ? measures.data : {};
       for (const name of limitMeasures) {
         const d = declaredMeasures[name];

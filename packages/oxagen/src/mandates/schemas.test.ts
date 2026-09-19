@@ -7,6 +7,7 @@ import {
   mandateBodySchema,
   mandateLimitChangesSchema,
   mandateLimitsSchema,
+  measureDeclarationReadSchema,
   measureDeclarationSchema,
   measureValueSchema,
   rolesForConsequence,
@@ -115,6 +116,24 @@ describe("measure values", () => {
         unit: "USDC",
       }).success,
     ).toBe(true);
+  });
+
+  // Codex review on #3484: the write-time ISO 4217 check must not also
+  // apply to a READ of an already-persisted declaration — a tool published
+  // before ADR-111 can still carry a legacy `{ type: "amount", unit: "USDC"
+  // }` on disk, and `loadDeclaredTool` parses every enabled tool's
+  // `tool_versions.measures` on every mandate-gated call. Refusing that read
+  // would take the tool down instead of only failing to map it for the
+  // app's Money-typed surfaces.
+  it("the read schema accepts a legacy non-ISO-4217 unit on a stored amount measure", () => {
+    const stored = {
+      path: "amount.value",
+      type: "amount" as const,
+      unit: "USDC",
+      scale: 2,
+    };
+    expect(measureDeclarationSchema.safeParse(stored).success).toBe(false);
+    expect(measureDeclarationReadSchema.safeParse(stored).success).toBe(true);
   });
 
   it.each(["USD", "EUR", "JPY", "GBP"])(

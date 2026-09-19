@@ -134,8 +134,19 @@ export function isIso4217Currency(code: string): boolean {
  * How a tool version exposes one measure (§6.9 part 1, ADR-059 decision 6):
  * a dot path into the call's input, its type, its unit, and for an amount
  * the number of decimal places the tool uses (default 2, so `12.50` in a
- * currency with cents becomes 12500000 micros).
- *
+ * currency with cents becomes 12500000 micros). The shared shape both the
+ * write-time and read-time schemas below validate.
+ */
+const measureDeclarationShape = z
+  .object({
+    path: z.string().min(1).max(256),
+    type: z.enum(["amount", "count", "text"]),
+    unit: z.string().min(1).max(32),
+    scale: z.number().int().min(0).max(6).optional(),
+  })
+  .strict();
+
+/**
  * An `amount`-typed measure's `unit` must be an ISO 4217 currency code
  * (ADR-111): the money it denominates is eventually rendered through
  * `Money`, whose `currency` field is exactly three characters, and a unit
@@ -144,16 +155,20 @@ export function isIso4217Currency(code: string): boolean {
  * `count`-typed measure is unconstrained and may legitimately carry a
  * currency-code unit (`{ type: "count", unit: "USD" }` — a count of dollar
  * bills, not an amount of dollars).
+ *
+ * This is the WRITE boundary only — `publish_tool_declaration` and
+ * `import_tool` (the two contracts that consume `measureDeclarationsSchema`
+ * below). Do not use it to parse a stored `tool_versions.measures` column:
+ * a version published before ADR-111 can still carry a legacy non-ISO unit,
+ * and every mandate-gated call reads that column (`loadDeclaredTool`,
+ * `decideMandate`'s measure lookups) — refusing it there would take a
+ * working tool down until an operator republishes it, exactly the class of
+ * outage this schema exists to prevent. A read of persisted data uses
+ * `measureDeclarationsReadSchema` instead, which accepts the same shape
+ * without the ISO check.
  */
-export const measureDeclarationSchema = z
-  .object({
-    path: z.string().min(1).max(256),
-    type: z.enum(["amount", "count", "text"]),
-    unit: z.string().min(1).max(32),
-    scale: z.number().int().min(0).max(6).optional(),
-  })
-  .strict()
-  .superRefine((declaration, ctx) => {
+export const measureDeclarationSchema = measureDeclarationShape.superRefine(
+  (declaration, ctx) => {
     if (declaration.type === "amount" && !isIso4217Currency(declaration.unit)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -161,7 +176,8 @@ export const measureDeclarationSchema = z
         message: `an "amount" measure's unit must be an ISO 4217 currency code, got ${JSON.stringify(declaration.unit)}`,
       });
     }
-  });
+  },
+);
 export type MeasureDeclaration = z.infer<typeof measureDeclarationSchema>;
 
 export const measureDeclarationsSchema = z.record(
@@ -169,6 +185,22 @@ export const measureDeclarationsSchema = z.record(
   measureDeclarationSchema,
 );
 export type MeasureDeclarations = z.infer<typeof measureDeclarationsSchema>;
+
+/**
+ * The read-time counterpart of `measureDeclarationsSchema` above: same
+ * shape, no ISO 4217 check. Every reader of a persisted
+ * `tool_versions.measures` column (`loadDeclaredTool`, the mandate-grant and
+ * auto-approval-rule measure lookups) must accept a declaration a
+ * pre-ADR-111 tool version already has on disk, or a legacy `{ type:
+ * "amount", unit: "USDC" }` declaration throws on every mandate-gated call
+ * naming that tool instead of just failing to map on the app's Money-typed
+ * surfaces (#3448 P1 follow-up).
+ */
+export const measureDeclarationReadSchema = measureDeclarationShape;
+export const measureDeclarationsReadSchema = z.record(
+  measureNameSchema,
+  measureDeclarationReadSchema,
+);
 
 /**
  * Whether a measure's figures are money or a count (ADR-108). A stored limit
