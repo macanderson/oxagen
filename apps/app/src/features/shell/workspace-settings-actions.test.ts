@@ -239,7 +239,7 @@ describe("listInstallationRepositories", () => {
       reason: "github_not_connected",
     });
     expect(await listInstallationRepositories("acme", "core-platform")).toEqual(
-      { ok: false, reason: "unavailable", code: "conflict" },
+      { ok: false, reason: "conflict", code: "conflict" },
     );
   });
 });
@@ -363,7 +363,7 @@ describe("listGithubInstallations", () => {
     });
     expect(await listGithubInstallations("acme", "core-platform")).toEqual({
       ok: false,
-      reason: "unavailable",
+      reason: "conflict",
       code: "conflict",
     });
   });

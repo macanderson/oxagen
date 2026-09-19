@@ -36,7 +36,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **ontology** (2): get_ontology_neighbors, query_ontology
 - **org** (16): accept_member_invite, add_org_member, change_member_role, create_org, decline_member_invite, delete_model_credential, get_data_plane, get_model_credential, get_org_settings, list_members, list_orgs, remove_org_member, set_data_plane, set_model_credential, update_org_settings, verify_model_credential
 - **plugin** (19): add_plugin_registry, browse_plugin_catalog, get_auth_alerts, get_catalog_plugin, get_plugin_schema, install_plugin, install_plugins_bulk, list_plugin_registries, list_plugin_versions, list_plugins, reauth_plugin_credential, remove_plugin_registry, revoke_plugin_credential, set_auth_alerts, set_plugin_enabled, set_plugin_secret, sync_plugin_catalog, uninstall_plugin, validate_plugin_schema
-- **privacy** (2): erase_data, export_data
+- **privacy** (3): erase_data, export_data, get_export_status
 - **reference** (2): cite_reference, search_references
 - **repo** (9): configure_repo, get_ci_status, get_pr, get_pr_diff, get_repo_metrics, list_branches, pause_repo, resume_repo, sync_repo
 - **repository** (8): attach_github_installation, bind_main_repository, get_main_repository, link_repository, list_github_installations, list_installation_repositories, list_repositories, unlink_repository

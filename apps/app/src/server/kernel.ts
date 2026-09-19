@@ -299,6 +299,58 @@ async function run<O>(
   return { ok: true, value: output.data };
 }
 
+/**
+ * The kinds `toRead` folds into a `ReadError`, keyed by the code it gives each.
+ *
+ * `Read` has four variants and none of them is `not_found`, `conflict` or
+ * `invalid`: a page renders all three the same way, as an error with a status.
+ * So `toRead` puts the kind's own name in `code` and the distinction survives
+ * only there. A converter that read `reason` alone would call a missing row
+ * unavailable, which tells a person to come back for something that was never
+ * there and hides a 404 behind a 503.
+ */
+const READ_REASON_BY_CODE: Record<
+  string,
+  "not_found" | "conflict" | "invalid"
+> = {
+  not_found: "not_found",
+  conflict: "conflict",
+  invalid_input: "invalid",
+};
+
+/**
+ * A read's refusal in a write's shape.
+ *
+ * INV-19 has every exported function of a `"use server"` module answer with an
+ * `ActionResult`, so an action that reads has to carry its `Read` across.
+ * `denied` keeps the permission its page failure names, and an error keeps its
+ * code plus, through the table above, the kind that code encodes.
+ *
+ * It lives here, beside `toRead` which produces the value, because the two are
+ * one encoding read from both ends. It was written out separately in
+ * `account-actions.ts` and `workspace-settings-actions.ts`, and both copies
+ * collapsed every error to `unavailable`.
+ */
+export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
+  if (read.ok) return read;
+  switch (read.reason) {
+    case "denied":
+      return { ok: false, reason: "denied", code: read.permission };
+    case "pending_approval":
+      return {
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: read.accessRequestId,
+      };
+    case "error":
+      return {
+        ok: false,
+        reason: READ_REASON_BY_CODE[read.code] ?? "unavailable",
+        code: read.code,
+      };
+  }
+}
+
 function toRead<O>(outcome: Outcome<O>, page: PageKey): Read<O> {
   if (outcome.ok) return outcome;
   const { failure } = outcome;

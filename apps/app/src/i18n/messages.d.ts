@@ -2060,9 +2060,15 @@ type Messages = {
       userMenu: string;
     };
     userMenu: {
+      profile: string;
+      preferences: string;
+      security: string;
+      privacy: string;
       switchTheme: string;
       themeNow: string;
-      account: string;
+      signOut: string;
+      signingOut: string;
+      signOutFailed: string;
     };
     commands: {
       title: string;
@@ -2092,21 +2098,104 @@ type Messages = {
     };
     account: {
       title: string;
+      tabs: {
+        profile: string;
+        preferences: string;
+        security: string;
+        privacy: string;
+      };
       save: string;
       saving: string;
       saved: string;
       displayName: string;
-      avatar: string;
-      avatarHint: string;
       email: string;
       emailHint: string;
-      timeZone: string;
-      timeZoneHint: string;
-      timeZoneInvalid: string;
+      verified: string;
+      unverified: string;
+      editAvatar: string;
+      roles: string;
+      principal: string;
+      rolesHint: string;
       invalid: string;
       denied: string;
       failed: string;
-      avatarPlaceholder: string;
+      preferences: {
+        loading: string;
+        denied: string;
+        failed: string;
+        locale: string;
+        localeName: string;
+        localeHint: string;
+        timezone: string;
+        timezoneHint: string;
+        theme: string;
+        themes: {
+          system: string;
+          dark: string;
+          light: string;
+        };
+        preview: string;
+        previewDate: string;
+        previewNumber: string;
+        previewMoney: string;
+        save: string;
+        saving: string;
+        saved: string;
+        invalid: string;
+      };
+      security: {
+        signIn: string;
+        email: string;
+        verified: string;
+        unverified: string;
+        twoFactor: string;
+        twoFactorOn: string;
+        twoFactorOff: string;
+        authenticator: string;
+        authenticatorOn: string;
+        authenticatorOff: string;
+        setUp: string;
+        regenerate: string;
+        password: string;
+        issue: string;
+        issuing: string;
+        cancel: string;
+        codesRefused: string;
+        codesUncertain: string;
+        codesIssued: string;
+        codesSaved: string;
+        codesHeld: string;
+        sessions: string;
+        sessionsLoading: string;
+        sessionsFailed: string;
+        thisDevice: string;
+        unknownDevice: string;
+        unknownAddress: string;
+        now: string;
+        revoke: string;
+        revoking: string;
+        revoked: string;
+        sessionsHint: string;
+        codesBlockedByOther: string;
+        codesBlockedElsewhere: string;
+      };
+      privacy: {
+        export: string;
+        exportHint: string;
+        exportMine: string;
+        exportOrg: string;
+        exporting: string;
+        queued: string;
+        ready: string;
+        download: string;
+        expired: string;
+        denied: string;
+        deniedOrg: string;
+        failed: string;
+        erasure: string;
+        erasureHint: string;
+      };
+      orgRole: string;
     };
     assistant: {
       label: string;
@@ -2133,6 +2222,48 @@ type Messages = {
         parked: string;
         unavailable: string;
       };
+    };
+    avatar: {
+      title: string;
+      cancel: string;
+      save: string;
+      saving: string;
+      kind: string;
+      kinds: {
+        icon: string;
+        initials: string;
+        photo: string;
+      };
+      icon: string;
+      iconHint: string;
+      letters: string;
+      lettersHint: string;
+      typeface: string;
+      fonts: {
+        sans: string;
+        serif: string;
+        mono: string;
+      };
+      photo: string;
+      photoHint: string;
+      tone: string;
+      tones: {
+        solid: string;
+        soft: string;
+        line: string;
+      };
+      toneHint: string;
+      describeIcon: string;
+      describeInitials: string;
+      describePhoto: string;
+      describePhotoNone: string;
+      note: string;
+      noPhoto: string;
+      noLetters: string;
+      invalid: string;
+      denied: string;
+      failed: string;
+      photoPlaceholder: string;
     };
   };
   skills: {

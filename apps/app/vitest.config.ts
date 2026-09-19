@@ -19,6 +19,18 @@ export default defineConfig({
   test: {
     clearMocks: true,
     unstubEnvs: true,
+    // Vitest's 5s default is shorter than the work this package's slowest
+    // tests honestly do: a page test dynamically imports and renders an RSC
+    // tree, and a section test drives a dialog through several open-and-close
+    // cycles with an axe pass in `afterEach`. CI spawns one worker per file
+    // across 189 files on a shared runner, so 5s expires under load and the
+    // timed-out test's async continuation then runs inside the next test,
+    // the neighbour fails with a count nobody can explain from its own code
+    // (#3327). 20s is what `@oxagen/plugins`, `@oxagen/stella-engine-client`
+    // and `apps/app_deprecated` already use; `hookTimeout` matches because
+    // `afterEach` runs axe over the whole rendered shell.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     environment: "node",
     setupFiles: ["./src/test/setup.ts"],
     include: [
