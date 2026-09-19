@@ -28,11 +28,12 @@ const RUN = "00000000-0000-4000-8000-0000000000aa";
 
 /**
  * The thinking figure the wrapped read prices a frame with: the transcript
- * row joined back after the duplicate filter dropped it (`t`), and the
- * priced row's own column only when no transcript row joins (`c`).
+ * row joined back after the duplicate filter dropped it, on the request id
+ * (`t`) or the message id (`m`), and the priced row's own column only when no
+ * transcript row joins (`c`).
  */
-const REASONING =
-  "toInt64(if(coalesce(t.thinking, 0) > 0, coalesce(t.thinking, 0), coalesce(c.thinking_tokens, 0)))";
+const TRANSCRIPT = "greatest(coalesce(t.thinking, 0), coalesce(m.thinking, 0))";
+const REASONING = `toInt64(if(${TRANSCRIPT} > 0, ${TRANSCRIPT}, coalesce(c.thinking_tokens, 0)))`;
 
 function answer(rows: unknown[]): void {
   queryMock.mockResolvedValueOnce({ json: async () => rows });
@@ -234,17 +235,21 @@ describe("readModelCallFrames", () => {
     expect(joined).toContain("attrs[{duplicateAttr:String}] != 'transcript'");
     expect(joined).not.toContain("attrs[{duplicateAttr:String}] = ''");
 
-    // Joined on the vendor request id, then the message id: the order
-    // `llmCallKeys` in @oxagen/tacho joins two sightings of one call by.
-    expect(query).toContain("concat('request:', request_id)");
-    expect(query).toContain("concat('message:', message_id)");
-    expect(query).toContain("ON t.call_key = c.call_key");
+    // Joined on the vendor request id and, separately, on the message id:
+    // `llmCallKeys` in @oxagen/tacho matches two sightings on either, so a
+    // proxy row carrying only the message id is stamped against a transcript
+    // row carrying both. One key preferring the request id would give those
+    // two rows different keys and drop the call's thinking figure.
+    expect(query).toContain("request_id AS call_key");
+    expect(query).toContain("ON t.call_key = c.request_id");
+    expect(query).toContain("message_id AS call_key");
+    expect(query).toContain("ON m.call_key = c.message_id");
 
     // One joined row per call at most, and none for a row carrying neither
     // id: a fan-out here would turn one call into several priced frames.
-    expect(joined).toContain("toInt64(max(coalesce(thinking_tokens, 0)))");
-    expect(joined).toContain("GROUP BY call_key");
-    expect(joined).toContain("HAVING call_key != ''");
+    expect(joined.match(/toInt64\(max\(coalesce\(thinking_tokens, 0\)\)\)/g)).toHaveLength(2);
+    expect(joined.match(/GROUP BY call_key/g)).toHaveLength(2);
+    expect(joined.match(/HAVING call_key != ''/g)).toHaveLength(2);
 
     // The transcript's figure wins, and a call no transcript row joins keeps
     // its own, which is how a collector-only call still reports reasoning.

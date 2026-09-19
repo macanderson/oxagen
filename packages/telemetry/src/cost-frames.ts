@@ -42,7 +42,7 @@
  * drops it, and the row left to price carries no `thinking_tokens` at all,
  * because the transcript is the only source that records the column. The
  * read therefore joins that dropped transcript row back on the vendor
- * request id ({@link CALL_JOIN_KEY}) and takes its thinking figure, the same
+ * request id or the message id ({@link TRANSCRIPT_THINKING}) and takes its thinking figure, the same
  * rule `countsLlmCallSplit` in @oxagen/tacho states. Nothing is added by the
  * join: the call is still priced from one row, and the figure only moves
  * tokens out of that row's inclusive `output_tokens` into `reasoning`.
@@ -105,16 +105,23 @@ const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
 const NOT_A_DUPLICATE = "attrs[{duplicateAttr:String}] = ''";
 
 /**
- * A call's join key, strongest id first: the vendor request id, then the
- * message id, the order `llmCallKeys` in @oxagen/tacho joins two sources'
- * sightings of one call by. The ledger's last-resort token tuple is left out
- * on purpose. Two calls in one session can share a tuple (a title prompt
- * asked twice), and the ledger only falls back to it because it sees
- * sightings in order, which a reader of the stored rows does not. A row
- * carrying neither id joins nothing and keeps its own columns.
+ * A transcript row's thinking figure, joined back once per id the host's
+ * ledger matches two sightings on: `t` on the vendor request id, `m` on the
+ * message id (`llmCallKeys` in @oxagen/tacho). They are separate joins, not
+ * one key that prefers the request id, because the ledger matches on EITHER
+ * id: a proxy row that carries only the message id is stamped against a
+ * transcript row that carries both, and a single preferred key would give
+ * those two rows different keys and drop the figure. When both joins match
+ * they found the same call, so `greatest` picks the one figure there is.
+ *
+ * The ledger's last-resort token tuple is left out on purpose. Two calls in
+ * one session can share a tuple (a title prompt asked twice), and the ledger
+ * only falls back to it because it sees sightings in order, which a reader
+ * of the stored rows does not. A row carrying neither id joins nothing and
+ * keeps its own columns.
  */
-const CALL_JOIN_KEY =
-  "if(request_id != '', concat('request:', request_id), if(message_id != '', concat('message:', message_id), ''))";
+const TRANSCRIPT_THINKING =
+  "greatest(coalesce(t.thinking, 0), coalesce(m.thinking, 0))";
 
 /**
  * The rows that carry a call's thinking split, which is `countsLlmCallSplit`
@@ -131,14 +138,13 @@ const TRANSCRIPT_SPLIT_ROW = `source = 'transcript'
 /**
  * The thinking figure a wrapped frame is priced with, and which row supplies
  * it. `c` is the row the call is priced from, the sighting the host left
- * unstamped; `t` is the same call's transcript row, joined back after the
- * duplicate filter dropped it. The transcript wins because it is the only
+ * unstamped; `t` and `m` are the same call's transcript row, joined back
+ * after the duplicate filter dropped it. The transcript wins because it is the only
  * source that records the split. A call that no transcript row joins keeps
  * its own figure, which is how a collector-only call still reports its
  * reasoning.
  */
-const FRAME_REASONING =
-  "toInt64(if(coalesce(t.thinking, 0) > 0, coalesce(t.thinking, 0), coalesce(c.thinking_tokens, 0)))";
+const FRAME_REASONING = `toInt64(if(${TRANSCRIPT_THINKING} > 0, ${TRANSCRIPT_THINKING}, coalesce(c.thinking_tokens, 0)))`;
 
 /**
  * Every model-call frame of one run, oldest first. Throws on a degraded
@@ -215,8 +221,7 @@ export async function readModelCallFrames(args: {
         SELECT
           ts, seq, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, thinking_tokens,
-          cost_usd_micros,
-          ${CALL_JOIN_KEY} AS call_key
+          cost_usd_micros, request_id, message_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
@@ -227,7 +232,7 @@ export async function readModelCallFrames(args: {
       ) AS c
       LEFT JOIN (
         SELECT
-          ${CALL_JOIN_KEY} AS call_key,
+          request_id AS call_key,
           toInt64(max(coalesce(thinking_tokens, 0))) AS thinking
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
@@ -236,7 +241,19 @@ export async function readModelCallFrames(args: {
           AND ${TRANSCRIPT_SPLIT_ROW}
         GROUP BY call_key
         HAVING call_key != ''
-      ) AS t ON t.call_key = c.call_key
+      ) AS t ON t.call_key = c.request_id
+      LEFT JOIN (
+        SELECT
+          message_id AS call_key,
+          toInt64(max(coalesce(thinking_tokens, 0))) AS thinking
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND kind = 'llm_call'
+          AND ${TRANSCRIPT_SPLIT_ROW}
+        GROUP BY call_key
+        HAVING call_key != ''
+      ) AS m ON m.call_key = c.message_id
       ORDER BY c.ts, c.seq
     `,
       query_params: {
