@@ -176,10 +176,11 @@ export const tachoPlatformSchema = z.enum(["darwin", "linux", "win32"]);
  * runs through the same `tacho-hook` with a `--harness codex` tag. Stella's
  * does not: its payload names no session and its answers are
  * `{"action": ...}` decisions, so `--harness stella` routes the hook through
- * `claude-code/stella-adapter.ts` in both directions. Cursor's does not
- * either: its events are camelCase, its session is `conversation_id`, and it
- * answers `{"permission": ...}`, so `--harness cursor` routes through
- * `claude-code/cursor-adapter.ts` the same way.
+ * `claude-code/stella-adapter.ts` in both directions. Cursor's differs on
+ * all three of the things that would have let it share Claude Code's path
+ * (`conversation_id` not `session_id`, `preToolUse` not `PreToolUse`, a flat
+ * permission object not `hookSpecificOutput`), so `--harness cursor` routes
+ * through `claude-code/cursor-adapter.ts` for the same reason.
  */
 export const tachoHarnessSchema = z.enum([
   "claude-code",
@@ -608,7 +609,29 @@ export type DaemonHealth = z.output<typeof daemonHealthSchema>;
 
 export const TACHO_MAX_BATCH = 200;
 
-/** The most bytes one frame body may carry, before base64. */
+/**
+ * Base64 on the wire costs four bytes for every three, rounded up to the
+ * next quad. Every cap below is compared against the request budget through
+ * this, because the budget is spent in encoded bytes and the caps are
+ * written in raw ones.
+ */
+export const base64Size = (bytes: number): number => Math.ceil(bytes / 3) * 4;
+
+/**
+ * The most bytes one frame body may carry, before base64.
+ *
+ * This cap and `TACHO_MAX_REQUEST_BYTES` have to agree, and they did not. An
+ * earlier pass sized these against a route that hardcoded a 1 MiB request
+ * limit, which was true when it was written. The route now imports the host's
+ * own ceiling, so
+ * the hand-written caps silently became a downgrade: every `content_exact`
+ * body over the smaller number was marked too large and its bytes were
+ * never written, which is the content a workspace pays to keep.
+ *
+ * A cap above the budget produces a request nobody can ship, and a cap far
+ * below it discards recordings for nothing. Deriving both from the budget
+ * is the only way neither happens again when one of them moves.
+ */
 export const TACHO_MAX_BODY_BYTES = 1_048_576;
 
 /**

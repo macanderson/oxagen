@@ -106,6 +106,12 @@ export function detect(
     harnesses: [
       wrapped("claude-code", deps.claude(), enrolledList),
       wrapped("codex", deps.codex(), enrolledList),
+      // Cursor's CLI is `agent`, which is a generic name, so `cursorFacts`
+      // only reports an install when `agent --version` answered with a
+      // version. And no primary source says where Cursor's GUI installs, so a
+      // GUI-only machine reads as "not installed" here while
+      // `~/.cursor/hooks.json` would still govern it. Both caveats are in
+      // `cursorFacts`.
       wrapped("cursor", deps.cursor(), enrolledList),
       wrapped("stella", deps.stella(), enrolledList),
       connected(

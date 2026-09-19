@@ -6,11 +6,15 @@ const item = {
   source: "tacho",
   agentKey: "acme.core.cc-laptop",
   operatorId: null,
+  operatorKind: null,
+  operatorName: null,
   status: "sealed",
   turns: 2,
   steps: 7,
   frames: 207,
   cost: null,
+  model: null,
+  machine: null,
   taskRef: null,
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
@@ -22,6 +26,69 @@ const item = {
   name: null,
   summary: null,
 };
+
+describe("list_runs run row: who ran it, on what, with which model", () => {
+  it("carries a named person, a model and a machine", () => {
+    const full = {
+      ...item,
+      operatorId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorName: "Marcus Bell",
+      model: {
+        id: "claude-sonnet-5",
+        provider: "anthropic",
+        tier: "sonnet",
+      },
+      machine: {
+        hostname: "mac-studio.local",
+        platform: "darwin",
+        osVersion: "15.6",
+        arch: "arm64",
+        nodeVersion: "v24.4.0",
+      },
+    };
+    expect(runItemSchema.parse(full)).toEqual(full);
+  });
+
+  it("lets a model name a vendor without naming a class, and a machine omit what enrolment did not record", () => {
+    const partial = {
+      ...item,
+      model: { id: "gpt-5", provider: "openai", tier: null },
+      machine: {
+        hostname: "runner-14",
+        platform: "linux",
+        osVersion: null,
+        arch: null,
+        nodeVersion: null,
+      },
+    };
+    expect(runItemSchema.parse(partial)).toEqual(partial);
+  });
+
+  it("refuses a kind outside the principal CHECK and a machine with no hostname (negative)", () => {
+    expect(
+      runItemSchema.safeParse({ ...item, operatorKind: "robot" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        machine: {
+          platform: "darwin",
+          osVersion: null,
+          arch: null,
+          nodeVersion: null,
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a row that leaves the new fields out entirely (negative)", () => {
+    const { operatorKind: _k, ...withoutKind } = item;
+    expect(runItemSchema.safeParse(withoutKind).success).toBe(false);
+    const { model: _m, ...withoutModel } = item;
+    expect(runItemSchema.safeParse(withoutModel).success).toBe(false);
+  });
+});
 
 describe("list_runs contract", () => {
   it("is a console read: mutates false, noBillingGate true, scoped, default-deny", () => {

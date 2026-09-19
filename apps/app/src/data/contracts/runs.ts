@@ -51,6 +51,43 @@ const CompletenessGap = z.enum([
   "telemetry_gap",
 ]);
 
+/**
+ * What the initiating principal is. It is what tells a reader why a run has no
+ * operator name: an agent or a service has no person to name, while a `human`
+ * with no name is a person whose record does not hold one.
+ */
+const OperatorKind = z.enum(["human", "agent", "service"]);
+
+/**
+ * The model the run was served by. `provider` is the vendor that served the
+ * call and `tier` the capability class it belongs to inside that vendor's
+ * family; either is null when the recorded id names none the platform
+ * recognises, because a wrong vendor or class reads as a fact the record does
+ * not hold.
+ */
+export const RunModel = z.object({
+  /**
+   * The model id exactly as the store recorded it — a vendor slug such as
+   * `claude-sonnet-5`, not a record this platform issues. It is named `slug`
+   * rather than `id` because INV-11 reserves an `id` field on a view model for
+   * a `PublicId`, and a reader who saw `id` here would reasonably expect one.
+   */
+  slug: z.string().min(1),
+  provider: z.string().min(1).nullable(),
+  tier: z.string().min(1).nullable(),
+});
+export type RunModel = z.infer<typeof RunModel>;
+
+/** The machine a wrapped agent ran on. Null for a ledger run, which names no host. */
+export const RunMachine = z.object({
+  hostname: z.string().min(1),
+  platform: z.string().min(1),
+  osVersion: z.string().min(1).nullable(),
+  arch: z.string().min(1).nullable(),
+  nodeVersion: z.string().min(1).nullable(),
+});
+export type RunMachine = z.infer<typeof RunMachine>;
+
 export const RunRow = z.object({
   id: PublicId,
   /** Which store recorded the run: the evidence ledger or a wrapped agent's session. */
@@ -58,6 +95,9 @@ export const RunRow = z.object({
   /** `org_ns.ws_ns.slug` (ADR-024). */
   agentKey: z.string().min(1).nullable(),
   operatorId: PublicId.nullable(),
+  operatorKind: OperatorKind.nullable(),
+  /** The person's name; null for a principal that is not a person, and for a person with no name recorded. */
+  operatorName: z.string().min(1).nullable(),
   status: RunStatus,
   /** Distinct turns; null for a ledger run whose model-call payloads are encrypted. */
   turns: z.number().int().nonnegative().nullable(),
@@ -65,6 +105,8 @@ export const RunRow = z.object({
   steps: z.number().int().nonnegative(),
   frames: z.number().int().nonnegative(),
   cost: Cost.nullable(),
+  model: RunModel.nullable(),
+  machine: RunMachine.nullable(),
   taskRef: z.string().nullable(),
   /** The generated name; null until `summarize_run` wrote one. */
   name: z.string().min(1).nullable(),

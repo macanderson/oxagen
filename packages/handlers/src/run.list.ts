@@ -46,6 +46,7 @@ import {
 import {
   hidesWitnessRuns,
   notWitnessRun,
+  operatorUserJoin,
   schema,
   type Tx,
   withTenantDb,
@@ -60,6 +61,7 @@ import {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
+import { modelFactsOf } from "./lib/model-facts";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
@@ -128,6 +130,7 @@ const runs = schema.agentRuns;
 const events = schema.agentRunEvents;
 const seals = schema.agentRunAttemptSeals;
 const sessions = schema.tachoSessions;
+const hosts = schema.tachoHosts;
 
 /** Millisecond precision, so a cursor built from a JS Date compares exactly. */
 const ms = (column: SQL | typeof sessions.startedAt) =>
@@ -181,6 +184,16 @@ function hideWitnessRuns(
   return notWitnessRun(run);
 }
 
+// `operatorUserJoin` (the principal-to-user cross-domain join, agent/Tacho
+// schema through IAM into auth) lives in @oxagen/database's relations seam,
+// not here, and both selects below import it rather than redefine it.
+//
+// The name comes from `auth.users.display_name`, which Better Auth fills from
+// the name the person gave at sign-up. It is deliberately not
+// `iam.principals.display_name`: provisioning falls that column back to the
+// user's email address, and a run row is a record, not a directory, so it
+// carries a name or nothing.
+
 const ledgerColumns = {
   run: {
     runId: runs.id,
@@ -198,6 +211,8 @@ const ledgerColumns = {
     workspaceNamespace: schema.workspaces.namespace,
     agentSlug: schema.agents.slug,
     operatorPublicId: schema.principals.publicId,
+    operatorKind: schema.principals.kind,
+    operatorUserName: schema.users.displayName,
     goal: sql<string | null>`${runs.spec}->>'goal'`,
   },
 };
@@ -227,7 +242,8 @@ function ledgerRunsSelect(db: QueryDb) {
         eq(schema.principals.id, runs.initiatingPrincipalId),
         eq(schema.principals.orgId, runs.orgId),
       ),
-    );
+    )
+    .leftJoin(schema.users, operatorUserJoin);
 }
 
 /** V2 ledger runs in the workspace, newest first, the in-app agent's excluded. */
@@ -475,11 +491,29 @@ const tachoColumns = {
     // answer for the whole session (`run.chain.get.ts`).
     finalHash: sessions.finalHash,
     name: sessions.name,
+    // The deterministic fallback the ingest derives from the run's first
+    // frames. `name` is written only by `summarize_run`, which refuses a
+    // live run and refuses `digest_only` outright, so without this a run
+    // showed its public id until it sealed and every `digest_only` run
+    // showed one for ever. That is the whole point of deriving a title, and
+    // it was being written to a column nothing read.
+    title: sessions.title,
     summary: sessions.summary,
     summaryGeneratedAt: sessions.summaryGeneratedAt,
     summaryModel: sessions.summaryModel,
+    modelInitial: sessions.modelInitial,
+    modelFinal: sessions.modelFinal,
   },
   operatorPublicId: schema.principals.publicId,
+  operatorKind: schema.principals.kind,
+  operatorUserName: schema.users.displayName,
+  host: {
+    hostname: hosts.hostname,
+    platform: hosts.platform,
+    osVersion: hosts.osVersion,
+    arch: hosts.arch,
+    nodeVersion: hosts.nodeVersion,
+  },
 };
 
 function tachoSessionsSelect(db: QueryDb) {
@@ -492,6 +526,11 @@ function tachoSessionsSelect(db: QueryDb) {
         eq(schema.principals.id, sessions.initiatingPrincipalId),
         eq(schema.principals.orgId, sessions.orgId),
       ),
+    )
+    .leftJoin(schema.users, operatorUserJoin)
+    .leftJoin(
+      hosts,
+      and(eq(hosts.id, sessions.hostId), eq(hosts.orgId, sessions.orgId)),
     );
 }
 
@@ -534,6 +573,11 @@ export function tachoSessionQuery(
 /** The generated summary columns a run row carries (`summarize_run`, G14). */
 type GeneratedSummaryColumns = {
   name: string | null;
+  /**
+   * The deterministic fallback a wrapped session's ingest derives. A ledger
+   * run has no such column, so it is optional here rather than shared.
+   */
+  title?: string | null;
   summary: string | null;
   summaryGeneratedAt: Date | null;
   summaryModel: string | null;
@@ -554,6 +598,10 @@ export type LedgerRunIdentity = {
   agentSlug: string | null;
   /** `iam.principals.public_id` for `agent_runs.initiating_principal_id`. */
   operatorPublicId: string | null;
+  /** `iam.principals.kind`; null when no principal was recorded. */
+  operatorKind: string | null;
+  /** `auth.users.display_name` for a human principal; null for any other. */
+  operatorUserName: string | null;
   /** `agent_runs.spec->>'goal'`: the task a run was admitted for. */
   goal: string | null;
 };
@@ -633,6 +681,9 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   seqCount: number;
   startedAt: Date;
   sealedAt: Date | null;
+  /** The model the session started on and the one it ended on; either may be unrecorded. */
+  modelInitial: string | null;
+  modelFinal: string | null;
   /** Written by the seal at `agent_stop`; null while the session is open. */
   replayGrade: string | null;
   completenessGaps: unknown;
@@ -641,10 +692,28 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   finalHash: string | null;
 };
 
+/**
+ * The host columns the session's join carries. Every one is null when the
+ * session names no host, or names one the workspace cannot read.
+ */
+export type TachoHostColumns = {
+  hostname: string | null;
+  platform: string | null;
+  osVersion: string | null;
+  arch: string | null;
+  nodeVersion: string | null;
+};
+
 export type TachoSessionRow = {
   session: TachoSessionColumns;
   /** `iam.principals.public_id` for `initiating_principal_id`. */
   operatorPublicId: string | null;
+  /** `iam.principals.kind`; null when no principal was recorded. */
+  operatorKind: string | null;
+  /** `auth.users.display_name` for a human principal; null for any other. */
+  operatorUserName: string | null;
+  /** The enrolled host the session ran on, as its left join read it. */
+  host: TachoHostColumns | null;
 };
 
 /**
@@ -758,6 +827,44 @@ function rollupCost(rollup: RunRollup | undefined): RunItem["cost"] {
   };
 }
 
+/** A column an enrolment left empty reads as unrecorded, never as a value. */
+function blankToNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+const PRINCIPAL_KINDS = ["human", "agent", "service"] as const;
+
+/**
+ * The principal's kind as the column's CHECK spells it, or null. A word
+ * outside the CHECK is a broken row, and it reads as "not recorded" rather
+ * than as a kind this reader would draw conclusions from.
+ */
+export function principalKind(kind: string | null): RunItem["operatorKind"] {
+  return PRINCIPAL_KINDS.find((known) => known === kind) ?? null;
+}
+
+/**
+ * The machine as its host row records it, or null. A session with no host, and
+ * a host row whose join found nothing, both answer null; the two facts the
+ * host table requires (`hostname` and `platform`) are what a row is judged
+ * present by, and the optional ones stay null where the enrolment left them.
+ */
+export function toRunMachine(
+  host: TachoHostColumns | null | undefined,
+): RunItem["machine"] {
+  const hostname = host?.hostname?.trim() ?? "";
+  const platform = host?.platform?.trim() ?? "";
+  if (hostname.length === 0 || platform.length === 0) return null;
+  return {
+    hostname,
+    platform,
+    osVersion: blankToNull(host?.osVersion),
+    arch: blankToNull(host?.arch),
+    nodeVersion: blankToNull(host?.nodeVersion),
+  };
+}
+
 export function toLedgerRunItem(
   record: LedgerRunRecord,
   totals: RunRollup | undefined,
@@ -776,6 +883,8 @@ export function toLedgerRunItem(
       identity.agentSlug,
     ),
     operatorId: identity.operatorPublicId,
+    operatorKind: principalKind(identity.operatorKind),
+    operatorName: blankToNull(identity.operatorUserName),
     status,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
     steps: rollup.modelCalls + rollup.toolCalls,
@@ -793,6 +902,11 @@ export function toLedgerRunItem(
     enforcementTier: publishedTier(record.seal?.enforcementTier),
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
+    // The ledger records evidence an external engine submits. It names no
+    // model on the run row and no host at all, so both stay null rather than
+    // being reconstructed from a frame that may not be there.
+    model: null,
+    machine: null,
     name: run.name,
     summary: generatedSummary(run),
   };
@@ -825,6 +939,8 @@ export function toTachoRunItem(
     source: "tacho",
     agentKey: session.agentKey,
     operatorId: row.operatorPublicId,
+    operatorKind: principalKind(row.operatorKind),
+    operatorName: blankToNull(row.operatorUserName),
     status,
     turns: session.numTurns,
     steps: session.numModelCalls + session.numToolCalls,
@@ -838,7 +954,14 @@ export function toTachoRunItem(
     enforcementTier: publishedTier(session.enforcementTier),
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
-    name: session.name,
+    // The model the session ended on is the one that did most of its work, so
+    // it is the one a row reports; a session that never recorded a switch has
+    // only the one it started on.
+    model: modelFactsOf(session.modelFinal ?? session.modelInitial),
+    machine: toRunMachine(row.host),
+    // The model-written name when `summarize_run` has produced one, and the
+    // derived title until then. A run always has something to be called.
+    name: session.name ?? session.title ?? null,
     summary: generatedSummary(session),
   };
 }

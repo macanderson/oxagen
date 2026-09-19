@@ -87,8 +87,13 @@ export interface StatusReport {
   hooks?: ReturnType<typeof tachoHookPresence>;
   /** Present when the host enrolled Codex. */
   codexHooks?: ReturnType<typeof codexHookPresence>;
-  /** Present when the host enrolled Cursor. */
-  cursorHooks?: ReturnType<typeof cursorHookPresence>;
+  /**
+   * Present when the host enrolled Cursor: one entry per hooks file written,
+   * because a moved config directory means there are two.
+   */
+  cursorHooks?: Array<
+    { path: string } & ReturnType<typeof cursorHookPresence>
+  >;
   /** Present when the host enrolled Stella. */
   stellaHooks?: ReturnType<typeof stellaHookPresence>;
   /**
@@ -197,7 +202,13 @@ export async function status(
     ? codexHookPresence(guarded(deps.readCodexHooks), host.host_enrollment_id)
     : undefined;
   const cursorHooks = host.harnesses.includes("cursor")
-    ? cursorHookPresence(guarded(deps.readCursorHooks), host.host_enrollment_id)
+    ? deps.paths.cursorHooks.map((path) => ({
+        path,
+        ...cursorHookPresence(
+          guarded(() => deps.readCursorHooks(path)),
+          host.host_enrollment_id,
+        ),
+      }))
     : undefined;
   const stellaHooks = host.harnesses.includes("stella")
     ? guarded(() =>
@@ -374,12 +385,20 @@ export async function status(
     if (codexHooks.missing.length > 0)
       deps.out(`            missing: ${codexHooks.missing.join(", ")}`);
   }
-  if (cursorHooks !== undefined) {
+  for (const entry of cursorHooks ?? []) {
     deps.out(
-      `Cursor      ${cursorHooks.complete ? "complete" : "INCOMPLETE"}: ${cursorHooks.present.length} present, ${cursorHooks.missing.length} missing`,
+      `Cursor      ${entry.complete ? "complete" : "INCOMPLETE"}: ${entry.present.length} present, ${entry.missing.length} missing (${entry.path})`,
     );
-    if (cursorHooks.missing.length > 0)
-      deps.out(`            missing: ${cursorHooks.missing.join(", ")}`);
+    if (entry.missing.length > 0)
+      deps.out(`            missing: ${entry.missing.join(", ")}`);
+    // A veto hook without failClosed records and then stops denying the
+    // moment the collector cannot answer, because Cursor proceeds by default
+    // when a hook fails. That is a mandate that does not hold, so it is named
+    // rather than counted as installed.
+    if (entry.failOpenEnforcement.length > 0)
+      deps.out(
+        `            fails open at ${entry.failOpenEnforcement.join(", ")}: Cursor allows the action when the hook cannot answer; re-enroll to restore failClosed`,
+      );
   }
   if (stellaHooks !== undefined) {
     deps.out(

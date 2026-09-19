@@ -137,8 +137,29 @@ function pathMatches(
   );
 }
 
+/**
+ * Tool names that are the same tool under two harnesses' spellings. A
+ * mandate is written once and enforced on every harness, so a rule spelled
+ * `Bash(git push*)` has to reach Cursor's `Shell` (verified 2026-09-18
+ * against https://cursor.com/docs/agent/hooks, fetched that day); otherwise
+ * the rule quietly does not apply there and the record says allow.
+ *
+ * Only exact synonyms are listed. Cursor's `Write` covers both of Claude
+ * Code's `Write` and `Edit`, which is not a synonym: aliasing `Edit` to it
+ * would widen every `Edit(...)` allow rule over file creation too. A rule
+ * meant to reach Cursor's edits is written `Write(...)`, and `Glob` has no
+ * Cursor tool at all.
+ */
+const TOOL_SYNONYMS: Record<string, string> = { Bash: "Shell", Shell: "Bash" };
+
+/** True for a shell tool under either spelling. */
+function isShellTool(toolName: string): boolean {
+  return toolName === "Bash" || toolName === "Shell";
+}
+
 function toolNameMatches(ruleTool: string, toolName: string): boolean {
   if (ruleTool === toolName) return true;
+  if (TOOL_SYNONYMS[ruleTool] === toolName) return true;
   if (ruleTool.includes("*")) return globToRegex(ruleTool).test(toolName);
   // `mcp__server` matches every tool of that server.
   return (
@@ -165,7 +186,7 @@ export function ruleMatches(
   const input = toolInput ?? {};
   const text = (key: string): string | undefined =>
     typeof input[key] === "string" ? (input[key] as string) : undefined;
-  if (toolName === "Bash") {
+  if (isShellTool(toolName)) {
     const command = text("command");
     return command !== undefined && commandMatches(rule.spec, command);
   }
@@ -216,6 +237,13 @@ export interface EvaluationInput {
   latestDenyGeneration?: DenyGeneration;
   /** Whether the control plane answered recently; decides how staleness resolves. */
   controlReachable: boolean;
+  /**
+   * When the control plane last confirmed this mandate, as epoch ms. A poll
+   * that answers `not_modified` is a confirmation: it says the etag in force
+   * is still this one. Absent reproduces the old reading, which judged
+   * freshness by `expires_at` alone.
+   */
+  mandateConfirmedAt?: number;
   now: number;
   context?: MatchContext;
 }
@@ -237,13 +265,39 @@ export interface Evaluation {
   bundle_mode: PolicyBundle["mode"];
 }
 
+/**
+ * Whether the cached mandate has gone stale.
+ *
+ * Freshness is how long since the control plane last CONFIRMED this mandate,
+ * not whether `expires_at` has passed. The etag covers policy content only
+ * (`unsignedBundle` in packages/handlers/src/lib/tacho-host.ts), so an
+ * unchanged mandate answers `not_modified` on every poll and the host keeps
+ * the bundle it has. `expires_at` sits inside the signature, so the host
+ * cannot renew it. Judging by `expires_at` therefore declares a perfectly
+ * healthy host stale 24 hours after the last mandate content change, and it
+ * stays stale until someone edits the policy: in enforce mode that denies
+ * every mutating tool call on every host in the fleet.
+ *
+ * The window is the bundle's own signed lifetime, `expires_at - issued_at`,
+ * measured from the last confirmation. With no confirmation recorded it
+ * measures from `issued_at`, which is exactly the old reading.
+ */
 function isStale(
   bundle: PolicyBundle,
   latest: DenyGeneration | undefined,
   now: number,
+  mandateConfirmedAt?: number,
 ): boolean {
+  const issued = Date.parse(bundle.issued_at);
   const expires = Date.parse(bundle.expires_at);
-  if (Number.isFinite(expires) && expires < now) return true;
+  if (Number.isFinite(issued) && Number.isFinite(expires) && expires > issued) {
+    const confirmedAt = mandateConfirmedAt ?? issued;
+    if (now - confirmedAt > expires - issued) return true;
+  } else if (Number.isFinite(expires) && expires < now) {
+    // A bundle whose timestamps do not describe a window at all keeps the
+    // old reading rather than being treated as fresh for ever.
+    return true;
+  }
   if (latest === undefined) return false;
   return (
     latest.org > bundle.deny_generation.org ||
@@ -270,7 +324,11 @@ function firstMatch(
  */
 export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   const { bundle, toolName, toolInput } = input;
-  const declared = bundle.tools[toolName];
+  const declared =
+    bundle.tools[toolName] ??
+    (TOOL_SYNONYMS[toolName] !== undefined
+      ? bundle.tools[TOOL_SYNONYMS[toolName] as string]
+      : undefined);
   const classified = classifyTool(toolName, toolInput);
   const readOnly = declared?.read_only ?? !classified.tool_is_mutating;
   const riskGrade =
@@ -346,7 +404,12 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   }
 
   // 2. Freshness.
-  const stale = isStale(bundle, input.latestDenyGeneration, input.now);
+  const stale = isStale(
+    bundle,
+    input.latestDenyGeneration,
+    input.now,
+    input.mandateConfirmedAt,
+  );
   if (stale && !readOnly) {
     if (!input.controlReachable) {
       return deny(

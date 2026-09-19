@@ -24,6 +24,8 @@ export function toRunRow(
     source: run.source,
     agentKey: run.agentKey,
     operatorId: run.operatorId,
+    operatorKind: run.operatorKind,
+    operatorName: run.operatorName,
     status: run.status,
     turns: run.turns,
     steps: run.steps,
@@ -35,6 +37,17 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
+    // The capability records the vendor slug under `id`; the view model calls
+    // it `slug`, because INV-11 reserves `id` for a PublicId.
+    model:
+      run.model === null
+        ? null
+        : {
+            slug: run.model.id,
+            provider: run.model.provider,
+            tier: run.model.tier,
+          },
+    machine: run.machine,
     taskRef: run.taskRef,
     name: run.name,
     summary:

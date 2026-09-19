@@ -81,6 +81,58 @@ export const runSummarySchema = z
   })
   .strict();
 
+/**
+ * What kind of principal the operator is (`iam.principals.kind`). It is the
+ * field that tells a reader why `operatorName` is null: a run started by an
+ * agent or a service has no person to name, while a `human` with no name is a
+ * person whose name the record does not hold.
+ */
+export const operatorKindSchema = z.enum(["human", "agent", "service"]);
+
+/**
+ * The model the run was served by, as its recorded id and what that id
+ * implies. `provider` is the vendor that served the call; `tier` is the
+ * capability class the vendor names inside its own family (haiku, sonnet,
+ * opus; mini, nano; flash, pro), not a billing tier and not Oxagen's
+ * white-labelled fast/balanced/precise. Either is null when the id names none
+ * that this platform recognises, because a wrong vendor or class on a run
+ * record is worse than an absent one. Neither is ever computed from anything
+ * but the id the record holds.
+ */
+export const runModelSchema = z
+  .object({
+    /** The model id exactly as the store recorded it. */
+    id: z.string(),
+    provider: z.string().nullable(),
+    tier: z.string().nullable(),
+  })
+  .strict();
+
+/**
+ * The machine the run ran on, from the host the wrapped agent enrolled
+ * (`tacho.hosts`). Null for a ledger run, which records evidence an external
+ * engine submits and never names a host.
+ *
+ * The readable host facts live in Postgres under RLS on purpose, and only the
+ * digests reach ClickHouse; a caller that reaches this row has already been
+ * fenced to the host's own organisation and workspace, so the readable form
+ * is what it is shown. Only facts about the machine are carried. The host's
+ * local account name (`os_user`) is not, because the operator is already
+ * named by `operatorName` and a second, weaker identifier for the same person
+ * buys the reader nothing.
+ */
+export const runMachineSchema = z
+  .object({
+    hostname: z.string(),
+    /** The OS family the host enrolled as, e.g. `darwin`, `linux`. */
+    platform: z.string(),
+    osVersion: z.string().nullable(),
+    /** The CPU architecture, e.g. `arm64`. */
+    arch: z.string().nullable(),
+    nodeVersion: z.string().nullable(),
+  })
+  .strict();
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -89,6 +141,15 @@ export const runItemSchema = z
     agentKey: z.string().nullable(),
     /** The initiating principal's public id; null when none was recorded. */
     operatorId: z.string().nullable(),
+    /** What the initiating principal is; null when none was recorded. */
+    operatorKind: operatorKindSchema.nullable(),
+    /**
+     * The person's name, from the user the initiating principal acts for.
+     * Null for every principal that is not a person, and null for a person
+     * whose user record carries no name: `operatorKind` is what separates the
+     * two. Never a name derived from an email address, and never an email.
+     */
+    operatorName: z.string().nullable(),
     status: runStatusSchema,
     /**
      * Distinct turns. Null for a ledger run whose model-call payloads are
@@ -142,6 +203,13 @@ export const runItemSchema = z
      * (`canSummarizeRun`), so the row and the handler cannot drift.
      */
     canSummarize: z.boolean(),
+    /**
+     * The model the run ended on, falling back to the one it started on; null
+     * when the store recorded no model, which is every ledger run.
+     */
+    model: runModelSchema.nullable(),
+    /** The machine the run ran on; null for a ledger run. */
+    machine: runMachineSchema.nullable(),
     /** The generated name; null until `summarize_run` wrote one. */
     name: z.string().nullable(),
     summary: runSummarySchema.nullable(),
@@ -169,7 +237,7 @@ export const runList = registerCapability({
   name: "list_runs",
   domain: "run",
   description:
-    "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
+    "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, the model, the machine, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],

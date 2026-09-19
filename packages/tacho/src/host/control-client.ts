@@ -145,6 +145,7 @@ export interface ControlClient {
   ingest: (
     events: TachoBatch["events"],
     daemon?: DaemonHealth,
+    /** Redacted bodies for events in this batch, at most one per event. */
     bodies?: TachoBatch["bodies"],
   ) => Promise<IngestResponse>;
   bundle: (etag?: string) => Promise<BundleResponse>;

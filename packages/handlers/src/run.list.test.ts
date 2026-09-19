@@ -235,11 +235,20 @@ describe("list_runs", () => {
             workspaceNamespace: null,
             agentSlug: "reviewer",
             operatorPublicId: null,
+            operatorKind: null,
+            operatorUserName: null,
             goal: null,
           },
         }),
       ],
-      [tachoSession({ publicId: "tse_anon", operatorPublicId: null })],
+      [
+        tachoSession({
+          publicId: "tse_anon",
+          operatorPublicId: null,
+          operatorKind: null,
+          operatorUserName: null,
+        }),
+      ],
     );
     const out = await list({ limit: 50 }, ctx());
     const byId = Object.fromEntries(out.runs.map((r) => [r.id, r]));
@@ -857,3 +866,148 @@ describe("the row a caller decides from (#3285)", () => {
     expect(byId.get("tse_live")?.completenessGaps).toEqual([]);
   });
 });
+
+describe("a run row names who ran it, on what, with which model", () => {
+  const db = drizzle.mock({ schema });
+  const page = { cursor: null, limit: 50, withoutWitnessRuns: false };
+
+  it("reads the host and the operator's name in the page's own statement, not per row", () => {
+    const query = tachoPageQuery(db, SCOPE, page).toSQL();
+    // One statement for the whole page. A lookup per row would be a hundred
+    // round trips at the contract's maximum limit.
+    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
+    expect(query.sql).toContain('left join "tacho"."hosts"');
+    expect(query.sql).toContain('left join "auth"."users"');
+  });
+
+  it("joins the ledger page's operator name in its own statement too", () => {
+    const query = ledgerPageQuery(db, SCOPE, page).toSQL();
+    expect(query.sql.match(/\bselect\b/gi)).toHaveLength(1);
+    expect(query.sql).toContain('left join "auth"."users"');
+  });
+
+  it("names the person only through a human principal", () => {
+    // A delegated agent principal carries its creator's parent_user_id, so
+    // the kind is part of the join and not a filter applied afterwards.
+    for (const query of [
+      tachoPageQuery(db, SCOPE, page).toSQL(),
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+    ]) {
+      expect(query.sql).toMatch(
+        /left join "auth"\."users" on \("auth"\."users"\."id" = "iam"\."principals"\."parent_user_id" and "iam"\."principals"\."kind" = \$\d+\)/,
+      );
+      expect(query.params).toContain("human");
+    }
+  });
+
+  it("fills the operator, the model and the machine on a wrapped session", async () => {
+    const { list } = handlerOver([], [tachoSession({ publicId: "tse_full" })]);
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]).toMatchObject({
+      operatorId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorName: "Marcus Bell",
+      model: { id: "claude-sonnet-5", provider: "anthropic", tier: "sonnet" },
+      machine: {
+        hostname: "mac-studio.local",
+        platform: "darwin",
+        osVersion: "15.6",
+        arch: "arm64",
+        nodeVersion: "v24.4.0",
+      },
+    });
+  });
+
+  it("reports the model the session started on when it recorded no final one", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_open",
+          session: { modelFinal: null, outcome: "running", sealedAt: null },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]?.model).toEqual({
+      id: "claude-haiku-4-5-20251001",
+      provider: "anthropic",
+      tier: "haiku",
+    });
+  });
+
+  it("answers a null model when the session recorded neither (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_nomodel",
+          session: { modelInitial: null, modelFinal: null },
+        }),
+      ],
+    );
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.model).toBeNull();
+  });
+
+  it("answers a null machine when the session names no host (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_nohost", host: null })],
+    );
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.machine).toBeNull();
+  });
+
+  it("separates an agent operator from a person with no name recorded", async () => {
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_agentop",
+          operatorKind: "agent",
+          operatorUserName: null,
+        }),
+        tachoSession({
+          publicId: "tse_nameless",
+          operatorUserName: null,
+          session: { startedAt: at("2026-09-11T08:00:00.000Z") },
+        }),
+      ],
+    );
+    const byId = Object.fromEntries(
+      (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+    );
+    expect(byId["tse_agentop"]).toMatchObject({
+      operatorKind: "agent",
+      operatorName: null,
+    });
+    expect(byId["tse_nameless"]).toMatchObject({
+      operatorKind: "human",
+      operatorName: null,
+    });
+  });
+
+  it("reads a kind outside the CHECK as not recorded (negative)", async () => {
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_bad", operatorKind: "robot" })],
+    );
+    expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorKind).toBeNull();
+  });
+
+  it("names no model and no machine on a ledger run", async () => {
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_x", runId: RUN_A })],
+      [],
+    );
+    expect(out(await list({ limit: 50 }, ctx()))).toMatchObject({
+      model: null,
+      machine: null,
+      operatorKind: "human",
+      operatorName: "Marcus Bell",
+    });
+  });
+});
+
+function out(page: { runs: readonly unknown[] }): unknown {
+  return page.runs[0];
+}

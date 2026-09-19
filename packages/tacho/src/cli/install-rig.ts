@@ -152,6 +152,15 @@ export const USER_CLAUDE_SETTINGS = `{
 export const USER_CODEX_HOOKS =
   '{\n\t"hooks": {\n\t\t"Stop": [\n\t\t\t{ "hooks": [{ "type": "command", "command": "say done" }] }\n\t\t]\n\t}\n}';
 
+/**
+ * A Cursor hooks file the user already has, with their own hook and their own
+ * `version`. The seed carried one of these for every harness but Cursor,
+ * which is why nothing here exercised a Cursor file Tacho did not create, and
+ * the one Cursor case the rig did cover was a file Tacho made from nothing.
+ */
+export const USER_CURSOR_HOOKS =
+  '{\n  "version": 1,\n  "hooks": {\n    "afterFileEdit": [{ "command": "~/bin/my-format.sh" }]\n  }\n}\n';
+
 export const USER_CODEX_CONFIG = `# my codex config
 model = "gpt-5.1"
 approval_policy = "on-request"
@@ -213,6 +222,7 @@ export function seedHome(options: SeedOptions = {}): RigHome {
   put(join(home, ".claude", "CLAUDE.md"), "# my rules\n");
   put(join(home, ".codex", "config.toml"), USER_CODEX_CONFIG, 0o600);
   put(join(home, ".codex", "hooks.json"), USER_CODEX_HOOKS);
+  put(join(home, ".cursor", "hooks.json"), USER_CURSOR_HOOKS);
   put(join(home, ".stella", "stella.toml"), USER_STELLA_TOML);
   if (platform === "darwin") {
     put(

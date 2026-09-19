@@ -183,6 +183,7 @@ export const SHIPPED_MIGRATIONS = Object.freeze([
   "0026_cache_write_tokens.sql",
   "0026_stella_operational_events.sql",
   "0027_tacho_events.sql",
+  "0028_tacho_observed_changes.sql",
 ]);
 
 /** packages/telemetry/src/migrate.ts — the file the cutover above is copied from. */

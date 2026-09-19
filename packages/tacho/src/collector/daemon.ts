@@ -5,10 +5,17 @@
  * a side effect is injectable so the whole daemon runs in a test against a
  * fake control plane and a scratch `TACHO_HOME`.
  */
-import { readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, hostname as osHostname } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { type ClaudeCodeContext, digestText } from "../claude-code/context";
 import { normalizeOtlp, type OtlpPayload } from "../claude-code/otel";
 import type { SessionRecorder } from "../claude-code/recorder";
@@ -39,7 +46,13 @@ import {
 import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
-import type { Exec } from "../host/service";
+import type { Exec, ExecAsync, ExecResult } from "../host/service";
+import {
+  HOST_RETENTION_CLASSES,
+  narrowestOf,
+  NO_RETENTION,
+  type RetentionMandate,
+} from "../evidence/retention";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -54,6 +67,13 @@ import {
   TACHO_BUNDLE_FEATURES,
 } from "../wire";
 import { Detector } from "./detector";
+import {
+  type GitFacts,
+  type GitWorkingTreeChange,
+  readGitFacts,
+  readWorkingTreeChanges,
+  worktreeReconciledBody,
+} from "./git-facts";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -74,13 +94,17 @@ import {
   MODEL_PROXY_ROUTES,
   type ModelUpstreams,
 } from "./model-routes";
-import { parseRegistryState, SessionRegistry } from "./registry";
+import {
+  parseRegistryState,
+  type SessionRecord,
+  SessionRegistry,
+} from "./registry";
 import {
   type CollectorApi,
   createCollectorServer,
   type HookEnvelope,
 } from "./server";
-import { Shipper } from "./spool";
+import { type RetentionDecision, Shipper } from "./spool";
 import { TranscriptTailer } from "./transcript-tailer";
 
 export const TACHO_WRAPPER_VERSION = "2.1.1";
@@ -112,6 +136,11 @@ export interface DaemonOptions {
   host?: HostFile;
   fetch?: FetchLike;
   exec?: Exec;
+  /**
+   * The port the git probes use. Defaults to a promisified `exec` when one
+   * is injected, and otherwise to `execFile`.
+   */
+  execAsync?: ExecAsync;
   now?: () => number;
   log?: (line: string) => void;
   timers?: Partial<DaemonTimers>;
@@ -149,8 +178,17 @@ export interface DaemonHandle {
   port: number | undefined;
   /** The model proxy's bound port, or undefined when it is not listening. */
   modelProxyPort: number | undefined;
-  /** Run the periodic work once, in order; tests call this instead of waiting. */
+  /**
+   * Run the periodic work once, in order, and wait for the git reconciliation
+   * it started; tests call this instead of waiting.
+   *
+   * The interval driver does NOT call this — it drives the control path alone,
+   * so a slow worktree cannot delay an operator's command. This seam exists so
+   * that a caller stepping the daemon by hand still sees the reconciliation.
+   */
   tick: () => Promise<void>;
+  /** Wait for the git reconciliation lane to settle, starting one if due. */
+  flushGitReads: () => Promise<void>;
   drainSpool: () => Promise<number>;
   refreshBundle: () => Promise<boolean>;
   stop: () => Promise<void>;
@@ -166,13 +204,70 @@ interface SpoolFile {
   agent?: HookEnvelope["agent"];
 }
 
+/**
+ * The daemon's own `Exec`, with two bounds the default does not have.
+ *
+ * `maxBuffer` is 1 MiB by default, and a `git status` in a worktree holding a
+ * build directory passes that easily. Over the limit spawnSync reports an
+ * error rather than output, so the caller reads it as "not a repository" and
+ * loses the fact for exactly the worktrees it most wanted it for. The git
+ * reader truncates its own stdout at 2 MiB, so the buffer is set above that
+ * and the reader's bound is the one that binds.
+ *
+ * `timeout` bounds how long one command may take. Nothing read here has an
+ * answer worth waiting on: a read that times out returns no status, the
+ * caller records no fact, and the session carries on.
+ */
 function defaultExec(command: string, args: string[]): ReturnType<Exec> {
-  const result = spawnSync(command, args, { encoding: "utf8" });
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+    timeout: 10_000,
+  });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
   };
+}
+
+/**
+ * The daemon's asynchronous `Exec`, carrying the same two bounds.
+ *
+ * The git probes run through this one rather than through `defaultExec`.
+ * `spawnSync` stops this process's event loop until the child exits, and
+ * this process is the one answering hooks: a tick may read up to
+ * `GIT_READS_PER_TICK` worktrees, each of them several git commands with a
+ * ten second ceiling apiece, so one slow repository could keep the listener
+ * from answering any hook at all until the hooks gave up and decided
+ * locally. A hook that decides locally is a mandate that was not enforced,
+ * which is why the probes had to stop blocking.
+ *
+ * `execFile` reports a non-zero exit as an error carrying the child's own
+ * `code`, and a spawn failure as an error with no code at all. Both become a
+ * status here rather than a rejection, because the reader upstream treats
+ * every failure the same way: no facts, no throw.
+ */
+function defaultExecAsync(
+  command: string,
+  args: string[],
+): Promise<ExecResult> {
+  return new Promise((resolve) => {
+    execFile(
+      command,
+      args,
+      { encoding: "utf8", maxBuffer: 4 * 1024 * 1024, timeout: 10_000 },
+      (error, stdout, stderr) => {
+        const code = (error as (Error & { code?: number | string }) | null)
+          ?.code;
+        resolve({
+          status: error === null ? 0 : typeof code === "number" ? code : 1,
+          stdout: stdout ?? "",
+          stderr: stderr ?? "",
+        });
+      },
+    );
+  });
 }
 
 function defaultKill(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean {
@@ -206,6 +301,14 @@ export async function startDaemon(
     });
   const timers: DaemonTimers = { ...DEFAULT_TIMERS, ...options.timers };
   const exec = options.exec ?? defaultExec;
+  // An injected synchronous `exec` still governs the git probes, so a test
+  // that hands the daemon a fake git does not get a real one. Only a daemon
+  // given neither port reaches for a child process.
+  const execAsync: ExecAsync =
+    options.execAsync ??
+    (options.exec !== undefined
+      ? async (command, args) => exec(command, args)
+      : defaultExecAsync);
   const kill = options.kill ?? defaultKill;
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
@@ -247,6 +350,69 @@ export async function startDaemon(
   const hostRecorder = hostRecord.recorder;
 
   let bundleVerified = verifyBundle(host.bundle, host.bundle_public_key_pem).ok;
+  /**
+   * When the control plane last confirmed the cached mandate, as epoch ms.
+   *
+   * A poll that answers `not_modified` is a confirmation: it says the etag in
+   * force is still this one. Freshness has to be measured from here, because
+   * the etag covers policy content only, so an unchanged mandate is never
+   * re-sent and its signed `expires_at` cannot be renewed on the host. See
+   * `isStale` in host/bundle.ts.
+   *
+   * Undefined until the control plane confirms something in this process,
+   * and deliberately not seeded from `bundle_fetched_at`. That field is
+   * unsigned and sits in a file on the operator's machine, while the
+   * signature covers the bundle alone, so any reading of it is a freshness
+   * window the operator wrote for themselves. Clamping it to startup was not
+   * enough: a restart is free, so an operator could date the field forward,
+   * restart, and take a fresh window every time, which keeps a revoked or
+   * expired mandate in force indefinitely. The mandate is what bounds the
+   * operator's own agent, so the operator must not be able to renew it.
+   *
+   * Nothing is lost by leaving it undefined. Both readers fall back to the
+   * bundle's signed `issued_at`, so a mandate still inside its own signed
+   * window reads fresh at startup exactly as before, and one that has
+   * outlived that window reads stale until the control plane says otherwise.
+   * The first poll confirms it, so the gap is one tick, and `issued_at` sits
+   * inside the signature, so editing it fails verification and enforce mode
+   * denies on `bundle_unverified` before freshness is ever consulted.
+   */
+  let mandateConfirmedAt: number | undefined;
+  /**
+   * The retention clause the host may act on: the cached one while its
+   * signature holds, and nothing otherwise.
+   *
+   * `host.json` is a file on the operator's machine. Reading its retention
+   * clause without checking the signature would let an edit from
+   * `digest_only` to `content_exact` send prompt bodies until the first
+   * refresh replaced the bundle, which is the one thing the signature is
+   * there to prevent.
+   */
+  /**
+   * The retention clause in force, with whether it is the workspace's answer
+   * or the absence of one. Both keep nothing that is not covered; only a
+   * proven clause also purges what is already on disk, because a lapsed or
+   * unverifiable bundle is usually a transient condition and a purge is not.
+   */
+  const retentionInForce = (): RetentionDecision =>
+    bundleVerified && !mandateLapsed()
+      ? { mandate: host.bundle.retention, proven: true }
+      : { mandate: NO_RETENTION, proven: false };
+  /**
+   * Whether the cached mandate has outlived its own signed window since the
+   * control plane last confirmed it. The same rule `isStale` applies to tool
+   * decisions: a grant is authority for as long as the mandate is current,
+   * and no longer. A window that cannot be read grants nothing.
+   */
+  function mandateLapsed(): boolean {
+    const issued = Date.parse(host.bundle.issued_at);
+    const expires = Date.parse(host.bundle.expires_at);
+    if (!Number.isFinite(issued) || !Number.isFinite(expires)) return true;
+    if (expires <= issued) return true;
+    // The same fallback `isStale` uses: with no confirmation recorded in this
+    // process, the mandate is measured from the signed moment it was issued.
+    return now() - (mandateConfirmedAt ?? issued) > expires - issued;
+  }
   let lastControlAt: number | undefined;
   let lastOtlpAt: number | undefined;
   let lastIngestAt: number | undefined;
@@ -320,10 +486,17 @@ export async function startDaemon(
     bodies: readonly FrameBody[] = [],
   ): void {
     if (events.length === 0) return;
-    const retention = host.bundle.retention;
+    // Not `host.bundle.retention`: `host.json` is a file on the operator's
+    // machine, and reading its clause unchecked would let an edit from
+    // `digest_only` to `content_exact` write prompt bodies until the next
+    // refresh replaced the bundle. `retentionInForce` keeps nothing unless
+    // the cached mandate verifies and is still current.
+    const retention = retentionInForce();
     wal.append(
       events,
-      bodies.filter((body) => retentionAllows(retention, body.content_class)),
+      bodies.filter((body) =>
+        retentionAllows(retention.mandate, body.content_class),
+      ),
     );
     stateDirty = true;
   }
@@ -358,6 +531,7 @@ export async function startDaemon(
     return {
       bundle: current.bundle,
       verified: bundleVerified,
+      mandateConfirmedAt,
       hostStatus: current.host_status,
       denyGeneration: current.deny_generation,
       controlReachable:
@@ -366,11 +540,233 @@ export async function startDaemon(
     };
   }
 
+  /**
+   * Erase bodies on disk that a replacement mandate no longer covers.
+   *
+   * The trigger is a confirmed narrowing, and that is deliberately not the
+   * condition that withholds a body from a shipment. The shipper asks
+   * `retentionInForce`, which answers `NO_RETENTION` whenever the cached
+   * bundle does not verify or has outlived its signed window, because on any
+   * doubt the right move is to send nothing. Both of those states are often
+   * transient: a bundle that fails verification now can verify on the next
+   * poll, and a lapsed window is confirmed again by one `not_modified`. Doubt
+   * is reason enough to withhold and is not reason to delete, so this reads
+   * only the retention clause of a replacement bundle whose signature has
+   * just verified, compares it with the clause that was in force, and runs
+   * only for the classes that clause covered and this one does not.
+   *
+   * Erasing does not reverse. A workspace that narrows and then widens again
+   * does not get these bodies back; see `Wal.purgeBodiesOutsideMandate`.
+   */
+  /**
+   * A purge this host owes but has not completed.
+   *
+   * A marker file rather than a field on the host file: the host file is the
+   * control plane's signed word about this machine, and this is local
+   * bookkeeping about one unfinished write. It is a debt, not a fact about
+   * the mandate.
+   *
+   * The file carries the clause to enforce, so a retry settles the erasure the
+   * control plane ordered rather than whatever clause happens to be in force
+   * when the retry runs. Two reasons. A later bundle can narrow one class and
+   * widen another, and sweeping against that clause would leave the first
+   * class's bytes on disk with nothing left that names them. And a host whose
+   * cached bundle has outlived its signed window cannot prove any clause, so a
+   * retry that needed a proven one would park the debt for the length of a
+   * control-plane outage. The record is itself the proof: nothing writes it
+   * but a bundle that verified.
+   */
+  const bodyPurgeOwedPath = join(paths.wal, "body-purge-owed");
+
+  /**
+   * Write down a narrowing this host owes the WAL.
+   *
+   * A debt already on disk is intersected with the new one rather than
+   * replaced, because the host owes both erasures and `narrowestOf` is the one
+   * clause that settles both.
+   */
+  function markBodyPurgeOwed(
+    retention: RetentionMandate,
+    dropped: readonly string[],
+  ): boolean {
+    try {
+      ensureDir(paths.wal);
+      const owed = owedBodyPurge();
+      const clause =
+        owed?.retention === undefined
+          ? retention
+          : narrowestOf(owed.retention, retention);
+      writeFileSync(
+        bodyPurgeOwedPath,
+        JSON.stringify({ retention: clause, classes: dropped }),
+        { mode: 0o600 },
+      );
+      return true;
+    } catch (error) {
+      // Answered rather than swallowed. This used to be best effort, on the
+      // reasoning that failing to record the debt must not stop the sweep that
+      // was about to run anyway — true while the sweep ran after the etag was
+      // committed, and false now that it runs before. If this write and the
+      // sweep both fail, which one filesystem fault does, the caller must be
+      // able to refuse the commit; a silent `void` left the narrowing cached
+      // with no debt and no erase, which is the permanent case.
+      log(
+        `failed to record an owed body purge (${dropped.join(", ")}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
+  }
+
+  /**
+   * The debt on disk, if there is one, and the clause it names.
+   *
+   * `retention` is undefined for a marker an older build of this daemon wrote
+   * empty, and for a file this one cannot parse. The retry then falls back to
+   * the clause in force, which is what that build did.
+   */
+  function owedBodyPurge():
+    | { retention: RetentionMandate | undefined; classes: readonly string[] }
+    | undefined {
+    if (!existsSync(bodyPurgeOwedPath)) return undefined;
+    let raw: unknown;
+    try {
+      const text = readFileSync(bodyPurgeOwedPath, "utf8");
+      raw = text.trim().length === 0 ? undefined : JSON.parse(text);
+    } catch {
+      raw = undefined;
+    }
+    const record = raw as
+      | { retention?: { mode?: unknown; classes?: unknown }; classes?: unknown }
+      | undefined;
+    const mode = record?.retention?.mode;
+    const classes = record?.retention?.classes;
+    const named =
+      (mode === "content_exact" || mode === "digest_only") &&
+      Array.isArray(classes)
+        ? ({ mode, classes: classes as readonly string[] } as RetentionMandate)
+        : undefined;
+    return {
+      retention: named,
+      classes: Array.isArray(record?.classes)
+        ? (record.classes as readonly string[])
+        : [],
+    };
+  }
+
+  function clearBodyPurgeOwed(): void {
+    try {
+      if (existsSync(bodyPurgeOwedPath)) unlinkSync(bodyPurgeOwedPath);
+    } catch {
+      // Leaves the marker, so the sweep runs again. Re-sweeping costs a pass
+      // over the body files and erases nothing the mandate still covers.
+    }
+  }
+
+  /**
+   * Retry an owed purge, on every confirmation that the cached mandate is
+   * still current. That is the `not_modified` branch, which is where a
+   * narrowing whose sweep failed comes back through for ever afterwards, and
+   * which the first tick after a restart reaches on its own — so a debt
+   * recorded before a crash is retried without a separate startup path. A
+   * bundle that changes instead goes through `purgeBodiesNarrowedOut`, which
+   * sweeps and clears the debt itself.
+   *
+   * The debt names the clause to sweep against, so this does not ask
+   * `retentionInForce`. That is not a widening of the purge trigger: doubt
+   * still withholds and does not delete, and nothing writes a debt but a
+   * bundle whose signature verified. A debt from an older build names no
+   * clause, and that one falls back to the clause in force and sweeps only
+   * when it is proven.
+   */
+  function retryOwedBodyPurge(): void {
+    const owed = owedBodyPurge();
+    if (owed === undefined) return;
+    let clause = owed.retention;
+    if (clause === undefined) {
+      const inForce = retentionInForce();
+      if (!inForce.proven) return;
+      clause = inForce.mandate;
+    }
+    try {
+      const purged = wal.purgeBodiesOutsideMandate(clause);
+      clearBodyPurgeOwed();
+      log(
+        `completed an owed body purge: erased ${purged} queued body(ies) the mandate does not cover`,
+      );
+    } catch (error) {
+      log(
+        `an owed body purge failed again; content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  function purgeBodiesNarrowedOut(
+    previous: RetentionMandate,
+    next: RetentionMandate,
+  ): boolean {
+    const dropped = HOST_RETENTION_CLASSES.filter(
+      (contentClass) =>
+        retentionAllows(previous, contentClass) &&
+        !retentionAllows(next, contentClass),
+    );
+    if (dropped.length === 0) return true;
+    // Owed before attempted, so the debt survives what the attempt might not.
+    // The debt write must succeed, or the erase must.
+    // This runs before `applyControlFacts` writes the new etag, and that order
+    // is the point: once the etag is written every later poll answers
+    // `not_modified` and nothing tells this host the clause narrowed, so a
+    // process that exits in between would leave excluded content on disk with
+    // nothing left to notice. The marker is cleared only by a sweep that
+    // returned.
+    const recorded = markBodyPurgeOwed(next, dropped);
+    try {
+      const purged = wal.purgeBodiesOutsideMandate(next);
+      clearBodyPurgeOwed();
+      log(
+        `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
+      );
+      return true;
+    } catch (error) {
+      // Logged and not rethrown, on purpose. Throwing would abort the refresh
+      // from inside, losing the distinction the return value carries: whether
+      // the narrowing may be cached at all.
+      log(
+        `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      // The erase failed. If the debt was recorded, a later confirmation or
+      // the next start settles it and the caller may cache the narrowing. If
+      // it was not, nothing on this host remembers the clause narrowed, and
+      // caching the etag would make that permanent and silent. Answering false
+      // leaves the old etag in place, so the next poll fetches the bundle
+      // again and arrives back here — one poll of continued shipping under the
+      // clause the workspace withdrew, against content that can never be
+      // erased. Bounded and self-healing beats permanent.
+      return recorded;
+    }
+  }
+
   async function refreshBundle(): Promise<boolean> {
     try {
       const response = await client.bundle(host.bundle.etag);
       lastControlAt = now();
-      if (response.not_modified || response.bundle === null) return false;
+      // `not_modified` is the confirmation freshness is measured from: it
+      // says the etag in force is still the current one, which is the only
+      // thing an unchanged mandate ever gets to hear.
+      //
+      // Nothing else renews here. A changed bundle renews only once it has
+      // verified, below. Renewing before that check would let a response
+      // carrying an unverifiable bundle extend the mandate it was sent to
+      // replace, and a control plane answering that way repeatedly would
+      // extend it for as long as it kept answering. A `bundle: null`
+      // response is not a confirmation either: it says the control plane is
+      // serving no bundle, which is the opposite of agreeing with this one.
+      if (response.not_modified) {
+        mandateConfirmedAt = now();
+        // The branch a narrowing whose sweep failed returns through for ever.
+        retryOwedBodyPurge();
+        return false;
+      }
+      if (response.bundle === null) return false;
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
@@ -381,11 +777,35 @@ export async function startDaemon(
         );
         return false;
       }
+      // A verified replacement is the control plane's own word on what may be
+      // kept, which is the one thing that authorises erasing what is already
+      // on disk.
+      //
+      // Ahead of the etag commit, and that order is the point. Once
+      // `applyControlFacts` has written the new etag, every later poll answers
+      // `not_modified` and nothing tells this host the clause narrowed, so a
+      // process that exits in between would leave excluded content on disk
+      // with nothing left to notice. Recording the debt and sweeping first
+      // closes that window: either the bytes are gone, or the debt is on disk
+      // for the next confirming poll and the next start.
+      if (
+        !purgeBodiesNarrowedOut(
+          host.bundle.retention,
+          response.bundle.retention,
+        )
+      ) {
+        log(
+          "refusing to cache a narrowed bundle this host can neither enforce on disk nor remember owing; the old etag stands so the next poll retries",
+        );
+        return false;
+      }
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
         bundle_fetched_at: toProtocolTimestamp(now()),
       });
       bundleVerified = true;
+      // The replacement verified, so this response is a confirmation.
+      mandateConfirmedAt = now();
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
       return true;
     } catch (error) {
@@ -402,7 +822,8 @@ export async function startDaemon(
       host_status: control.host_status,
       deny_generation: control.deny_generation,
     });
-    if (control.bundle_etag !== host.bundle.etag) await refreshBundle();
+    if (control.bundle_etag === host.bundle.etag) mandateConfirmedAt = now();
+    else await refreshBundle();
     if (control.commands.length > 0) {
       const result = await applyCommands(control.commands, {
         registry,
@@ -433,6 +854,12 @@ export async function startDaemon(
     // control plane 403s a batch containing any of them, and a 403 is
     // retryable, so without this the queue wedges forever.
     hostEnrollmentId: host.host_enrollment_id,
+    // Asked at ship time, not only at append time. A body appended under
+    // `content_exact` can wait in the WAL through an outage and leave under a
+    // mandate that has since narrowed to `digest_only`; the control plane
+    // refuses it, but by then it has left the machine, which is the one thing
+    // the retention boundary exists to prevent.
+    retentionInForce,
     health,
     onControl: async (control) => {
       lastIngestAt = now();
@@ -627,9 +1054,261 @@ export async function startDaemon(
     },
   });
 
+  /**
+   * Git facts per working directory, with the time they were read.
+   *
+   * The seam is here, in the daemon, rather than in `contextFactsFromEnv` or
+   * in the hook handler. `contextFactsFromEnv` is pure and reads environment
+   * variables only; shelling out from it would put a process spawn inside a
+   * normalizer that the transcript reader and the OTel path also call. The
+   * hook handler runs on the serial queue that every wrapped agent on this
+   * host waits on, and a hook has a decision budget measured in seconds. The
+   * daemon already owns the `Exec` port, already knows each session's cwd,
+   * and already has a place to hold state across frames, so it reads the
+   * facts once per worktree and hands them to the recorder, which merges
+   * them into the context block of every frame it seals afterwards.
+   *
+   * The cache is what keeps this off the per-frame path: a turn fires many
+   * hooks, and the head sha does not move between them. Entries refresh at
+   * turn boundaries and whenever one goes stale, so a commit made mid-session
+   * is picked up without four `git` invocations per tool call.
+   */
+  const gitFactsByCwd = new Map<string, { at: number; facts?: GitFacts }>();
+  const GIT_FACTS_TTL_MS = 30_000;
+
+  async function gitFactsFor(
+    cwd: string,
+    force: boolean,
+  ): Promise<GitFacts | undefined> {
+    const cached = gitFactsByCwd.get(cwd);
+    if (cached !== undefined && !force && now() - cached.at < GIT_FACTS_TTL_MS)
+      return cached.facts;
+    const facts = await readGitFacts(execAsync, cwd);
+    gitFactsByCwd.set(cwd, {
+      at: now(),
+      ...(facts !== undefined ? { facts } : {}),
+    });
+    return facts;
+  }
+
+  /**
+   * The git work one session is waiting for, by harness session id.
+   *
+   * A hook never reads a worktree. It records that one wants reading and
+   * returns; the tick drains this map outside the serial queue. Two reasons.
+   * A hook holds the queue that every wrapped agent on this host waits on,
+   * and a prompt hook has a budget measured in seconds, so four `git`
+   * invocations for one session times every live session was a way to spend
+   * that budget on someone else's repository. And the read this seam now
+   * also does, the worktree reconciliation, is heavier still: a whole-tree
+   * `git status` plus a numstat. Neither belongs on the path a hook answers
+   * on. Only the session the hook names is queued, never every live one.
+   *
+   * `force` skips the facts cache. `reconcile` asks for the observed change
+   * list as well.
+   */
+  const gitPending = new Map<string, { force: boolean; reconcile: boolean }>();
+
+  /** The most sessions one tick reads worktrees for. */
+  const GIT_READS_PER_TICK = 4;
+
+  /**
+   * The least time between two worktree reconciliations of one session.
+   *
+   * The trigger is `Stop`, so the sampling rule is one reconciliation per
+   * turn at most, and no more than one per this interval however short the
+   * turns are. A burst of one-line turns therefore costs one whole-tree
+   * `git status` every fifteen seconds rather than one per turn.
+   */
+  const RECONCILE_MIN_INTERVAL_MS = 15_000;
+  const lastReconcileAt = new Map<string, number>();
+
+  function requestGitRead(
+    harnessSessionId: string,
+    want: { force: boolean; reconcile: boolean },
+  ): void {
+    const pending = gitPending.get(harnessSessionId);
+    gitPending.set(harnessSessionId, {
+      force: want.force || (pending?.force ?? false),
+      reconcile: want.reconcile || (pending?.reconcile ?? false),
+    });
+  }
+
+  /**
+   * The git context of one worktree as a whole block, for `noteContext`.
+   *
+   * Every member is present, holding its value or undefined, because the
+   * recorder merges what it is handed and drops the undefined ones. A
+   * conditional spread would leave the last branch a session reported
+   * standing on every later frame after the checkout went detached, which is
+   * a stale fact stated as a current one. This is only ever called with the
+   * result of a read that SUCCEEDED: a read that failed is not a report of a
+   * detached head or a clean tree, it is no report at all, and it clears
+   * nothing.
+   */
+  function gitContextOf(facts: GitFacts): Record<string, unknown> {
+    return {
+      git_head_sha: facts.head_sha,
+      git_branch: facts.branch,
+      git_dirty: facts.dirty,
+      git_remote_digest: facts.remote_digest,
+    };
+  }
+
+  /**
+   * Do the pending git reads, then apply what they found.
+   *
+   * Called from the tick outside `serial.run`, so the spawns are not holding
+   * the hook queue. Applying the results is in-memory work and goes back on
+   * the queue, because sealing a frame moves a chain a hook may be moving
+   * too.
+   */
+  async function drainGitReads(): Promise<void> {
+    if (gitPending.size === 0) return;
+    const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
+    const found: Array<{
+      session: SessionRecord;
+      /**
+       * The directory these facts were read from.
+       *
+       * The probes are asynchronous now, and a hook can move a session to
+       * another repository while they run. `found` holds the mutable
+       * `SessionRecord`, so without this the apply step would write one
+       * repository's head and branch onto a session already working in
+       * another, and could seal its reconciliation there too. The read is
+       * discarded instead when the session has moved.
+       */
+      cwd: string;
+      // Absent for a repository with no commit yet, which has no HEAD to
+      // describe but does have a worktree to reconcile.
+      facts?: GitFacts;
+      changes?: GitWorkingTreeChange[];
+    }> = [];
+    for (const harnessSessionId of work) {
+      const want = gitPending.get(harnessSessionId);
+      gitPending.delete(harnessSessionId);
+      if (want === undefined) continue;
+      const session = registry.get(harnessSessionId);
+      const cwd = session?.cwd;
+      if (session === undefined || session.sealed || cwd === undefined)
+        continue;
+      const facts = await gitFactsFor(cwd, want.force);
+      // Undefined means `rev-parse HEAD` did not answer, which covers a
+      // directory that is not a repository AND a repository whose first
+      // commit has not been made. The second is a real worktree full of real
+      // creates, and `readWorkingTreeChanges` has its own fallback for an
+      // absent HEAD, so the reconciliation still runs. Its own status read
+      // is what tells the two apart: a non-repository answers nothing and
+      // seals no frame. There is simply no git context to note for either.
+      // The first read that answers in this worktree fixes the session's
+      // baseline. Later reads measure from it rather than from a `HEAD`
+      // that the session's own commits keep moving. `ensure` clears the
+      // baseline when `cwd` changes, so a move to another repository
+      // captures that tree's HEAD instead of diffing against the old one.
+      if (facts !== undefined && session.baselineCommit === undefined)
+        session.baselineCommit = facts.head_sha;
+      const at = now();
+      const last = lastReconcileAt.get(harnessSessionId);
+      const due =
+        want.reconcile &&
+        (last === undefined || at - last >= RECONCILE_MIN_INTERVAL_MS);
+      if (due) lastReconcileAt.set(harnessSessionId, at);
+      if (facts === undefined && !due) continue;
+      found.push({
+        session,
+        cwd,
+        facts,
+        // A read that failed reports no changes rather than an empty list,
+        // so no reconciliation frame is sealed for it. A frame saying the
+        // worktree was clean is a claim, and nobody made the observation
+        // behind it.
+        ...(due
+          ? await (async () => {
+              const changes = await readWorkingTreeChanges(
+                execAsync,
+                cwd,
+                session.baselineCommit,
+              );
+              return changes === undefined ? {} : { changes };
+            })()
+          : {}),
+      });
+    }
+    if (found.length === 0) return;
+    await serial.run(async () => {
+      const events: TachoEvent[] = [];
+      for (const { session, cwd, facts, changes } of found) {
+        if (session.sealed) continue;
+        // The session moved while the probe ran, so this answer describes a
+        // repository it is no longer in. A later turn reads the new one.
+        if (session.cwd !== cwd) continue;
+        if (facts !== undefined)
+          session.recorder.noteContext(gitContextOf(facts));
+        if (changes === undefined) continue;
+        events.push(
+          session.recorder.sealCollectorEvent(
+            "oxagen:worktree_reconciled",
+            worktreeReconciledBody(changes),
+          ),
+        );
+      }
+      record(events);
+    });
+  }
+
+  /** The hook events that open or close a turn, where the worktree may have moved. */
+  const TURN_BOUNDARY_HOOKS = new Set([
+    "SessionStart",
+    "UserPromptSubmit",
+    "Stop",
+    "SubagentStop",
+    "SessionEnd",
+  ]);
+
+  /**
+   * The hook events after which the worktree has settled enough to read it.
+   *
+   * `Stop` is the end of a turn: the agent has finished acting and is
+   * handing back, so what the tree holds now is what the turn left behind.
+   * It is the only trigger.
+   *
+   * `SubagentStop` is not, because a subagent finishes inside its parent's
+   * turn and the parent's own `Stop` observes the same tree once, rather
+   * than once per subagent. `SessionEnd` is not either: it seals the chain
+   * in the same pass that handles it, and a read that lands a tick later
+   * would be sealing a frame onto a chain that has already ended. For Claude
+   * Code the last `Stop` precedes it with nothing in between, so the final
+   * turn is observed anyway. A session killed without a `Stop` leaves its
+   * last turn unobserved, which the record already says with
+   * `unobserved_tail` rather than guessing at it.
+   *
+   * There is no per-tool-call trigger on purpose: `readWorkingTreeChanges`
+   * spawns several git processes, one of them per untracked file, and paying
+   * that on every `Edit` would cost more than the fact is worth.
+   */
+  const RECONCILE_HOOKS = new Set(["Stop"]);
+
   async function handleHookInner(
     envelope: HookEnvelope,
   ): Promise<Record<string, unknown>> {
+    // The hook asks for the read and does not wait for it: the spawns happen
+    // in the tick, off this queue. The facts therefore land on the frames
+    // after this one rather than on this one, which is what the recorder's
+    // context already is, a standing fact carried until something newer
+    // replaces it.
+    const payloadFacts = envelope.payload as {
+      hook_event_name?: string;
+      session_id?: string;
+    };
+    const hookName = payloadFacts.hook_event_name;
+    if (payloadFacts.session_id !== undefined && hookName !== undefined) {
+      requestGitRead(payloadFacts.session_id, {
+        force: TURN_BOUNDARY_HOOKS.has(hookName),
+        reconcile: RECONCILE_HOOKS.has(hookName),
+      });
+    }
+    // After the git read is queued, so the frames the tailer emits are
+    // sealed under the same standing context.
     await tailBeforeHook(envelope.payload); // transcript tailer
     const outcome = await handleHookEvent(
       envelope.payload,
@@ -1168,7 +1847,80 @@ export async function startDaemon(
   let lastSweep = 0;
   let lastCompact = 0;
 
-  async function tick(): Promise<void> {
+  // A narrowing this host owed when it last exited. Run here rather than left
+  // to the first poll: a poll can be a bundle refresh interval away, or an
+  // outage away, and the content is on disk now.
+  retryOwedBodyPurge();
+
+  /**
+   * The git reconciliation lane: at most one drain in flight, never awaited by
+   * the work an operator's command travels through.
+   *
+   * ## Why this is a lane and not a step in the tick
+   *
+   * `drainGitReads` used to be awaited in the middle of `tick`, ahead of
+   * `refreshBundle` (the allow-state fetch) and `sendAcks` (which is also how a
+   * queued control command reaches this host). Moving it after them is half the
+   * answer and not this one: the drain would still be inside the tick, so the
+   * interval driver's `ticking` guard would still drop every tick that
+   * overlapped it and the NEXT poll would be as late as the old one. Its bounds
+   * are generous by
+   * design, because a git read that is slow is a read worth abandoning rather
+   * than waiting on — but the ceilings multiply. One reconciliation is
+   * `readGitFacts` (`rev-parse HEAD`, then three reads at once: 2 x 10 s) plus
+   * `readWorkingTreeChanges` (`status`, then numstat-and-root at once with a
+   * no-HEAD fallback, then `MAX_UNTRACKED_LINE_COUNTS` = 64 untracked probes
+   * through a pool of `UNTRACKED_COUNT_CONCURRENCY` = 4, which is 16 waves):
+   * 10 + 20 + 160 = 190 s, so 210 s in all. `GIT_READS_PER_TICK` = 4 sessions
+   * are drained one after another, and the interval driver's `ticking` guard
+   * drops every tick that would overlap — so on a network-backed worktree the
+   * whole control path stalled for up to **840 s, fourteen minutes**, on top of
+   * the five-minute `bundleRefreshMs` cadence.
+   *
+   * Fourteen minutes is not a slow refresh, it is a kill switch that does not
+   * work. An operator's suspend, revoke or cancel is enforced by the hooks
+   * reading the bundle this loop fetches, so for that whole window the agent
+   * kept acting under the allow state the mandate had already withdrawn, and
+   * the record named the withdrawn state as the live one.
+   *
+   * With the drain in its own lane the control path waits on none of it: the
+   * poll runs every tick — `Math.min(shipMs, 1_000)` = **1 s** — and the bundle
+   * on its own five-minute cadence, whatever git is doing. Reconciliation is
+   * unchanged in every other respect: it is still bounded to four sessions a
+   * tick, still spawns off the serial queue, and still applies its results
+   * back THROUGH that queue, which is what makes detaching it safe — the seal
+   * ordering a hook depends on is enforced there, not by the tick's `await`.
+   *
+   * `tick()` still awaits the lane before it resolves, so a caller driving the
+   * daemon a tick at a time sees the reconciliation it asked for. The interval
+   * driver calls {@link controlTick} instead and releases its guard without
+   * waiting, which is the half that matters: nothing an operator sends queues
+   * behind a git process any more.
+   */
+  let gitLane: Promise<void> | undefined;
+  function startGitReads(): Promise<void> {
+    if (gitLane !== undefined) return gitLane;
+    if (stopped || gitPending.size === 0) return Promise.resolve();
+    const lane = drainGitReads()
+      .catch((error) =>
+        log(
+          `git reads failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      )
+      .finally(() => {
+        if (gitLane === lane) gitLane = undefined;
+      });
+    gitLane = lane;
+    return lane;
+  }
+
+  /**
+   * One pass of everything an operator's command travels through.
+   *
+   * This is what the interval drives, and it is deliberately free of the git
+   * lane: see {@link startGitReads}.
+   */
+  async function controlTick(): Promise<void> {
     if (stopped) return;
     // The detector runs off the serial queue: its scan is asynchronous file
     // I/O over every project directory, and a hook that arrived while it
@@ -1196,18 +1948,47 @@ export async function startDaemon(
       }
       if (stateDirty) persistState();
     });
-    await shipper.drain();
+    // Refresh before draining, so a batch carrying bodies leaves under the
+    // mandate the control plane holds now rather than the one cached before
+    // an outage.
     if (now() - lastRefresh >= timers.bundleRefreshMs) {
       lastRefresh = now();
       await refreshBundle();
       await refreshUpstreams();
     }
+    await shipper.drain();
     await sendAcks();
+    // Started after the poll and awaited by nothing — both halves matter, and
+    // they answer different halves of the same defect.
+    //
+    // AFTER, so the poll in this tick never sits behind a git spawn. NOT
+    // AWAITED, because ordering alone only narrows the window: the drain would
+    // still run inside the tick, the `ticking` guard would still drop every
+    // tick that overlaps it, and the NEXT poll would still be up to fourteen
+    // minutes late. In a lane of its own nothing waits on it in this tick or
+    // any later one. `startGitReads` has the arithmetic.
+    //
+    // Reconciliation frames the lane seals ship on a following tick, which
+    // costs them one interval and nothing else — they are already asynchronous
+    // and already land a batch or more after the tool frames they belong with.
+    void startGitReads();
     if (now() - lastCompact >= 60 * 60_000) {
       lastCompact = now();
       wal.compact(now(), timers.walRetainMs);
       sweepQuarantine(now(), timers.walRetainMs);
     }
+  }
+
+  /**
+   * One pass, plus the git lane it started.
+   *
+   * The seam a caller driving the daemon by hand uses, so that awaiting a tick
+   * means "and the reconciliation it asked for has landed". The interval driver
+   * does NOT use it, for the reason {@link startGitReads} gives.
+   */
+  async function tick(): Promise<void> {
+    await controlTick();
+    await gitLane;
   }
 
   let timer: NodeJS.Timeout | undefined;
@@ -1217,7 +1998,10 @@ export async function startDaemon(
       () => {
         if (ticking) return;
         ticking = true;
-        tick()
+        // `controlTick`, not `tick`: the guard must be released as soon as the
+        // control path is done, or a fourteen-minute git drain would drop every
+        // poll in between and put the stall straight back.
+        controlTick()
           .catch((error) =>
             log(
               `tick failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -1248,12 +2032,24 @@ export async function startDaemon(
         : undefined;
     },
     tick,
+    /**
+     * Wait for the git lane to settle, starting one if work is pending.
+     *
+     * For a caller that wants the reconciliation without a whole tick — and for
+     * the assertion that a slow one does not hold the control path up, which
+     * needs to observe the two independently.
+     */
+    flushGitReads: () => startGitReads(),
     drainSpool: () => serial.run(drainSpool),
     refreshBundle,
     stop: async () => {
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
+      // The lane may be mid-spawn. Its results are applied through `serial`, so
+      // shutting down without waiting would race the finalize below and could
+      // append a reconciliation after the host chain was sealed.
+      await gitLane;
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();

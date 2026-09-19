@@ -388,6 +388,61 @@ export const integrityFacts = z.object({
   checkpoint_device_key_fingerprint: short.optional(),
 });
 
+/**
+ * The most changed paths one worktree reconciliation reports.
+ *
+ * `MAX_CHANGED_PATHS` in the collector's git reader is 2000, which is a
+ * memory bound on parsing, not a wire bound. A frame is shipped in a batch
+ * whose whole request may not exceed 900_000 bytes (`MAX_REQUEST_BYTES` in
+ * collector/spool.ts), and a batch whose first event alone overflows that
+ * ships anyway and is refused with a 413 the shipper cannot bisect. Two
+ * thousand records of roughly 190 bytes would be about 380 KB on the wire,
+ * counted twice in the row because the body also travels as JSON text, so
+ * the list is cut here instead, well clear of the budget. What was cut is
+ * recorded rather than dropped quietly: `observed_changes_truncated` says a
+ * cut happened and `observed_changes_total` says how many git reported.
+ */
+export const MAX_OBSERVED_CHANGES = 256;
+
+/** One path the worktree holds differently from `HEAD`, as git reported it. */
+export const observedChangeSchema = z
+  .object({
+    path: str,
+    repo_relative_path: str,
+    status: z.enum(["added", "modified", "deleted", "renamed"]),
+    lines_added: u32,
+    lines_removed: u32,
+  })
+  .strict();
+
+export type ObservedChange = z.infer<typeof observedChangeSchema>;
+
+/**
+ * What the collector read off the worktree for itself, rather than what a
+ * tool announced (data-model section 2, observed facts).
+ *
+ * Every other file fact in the record is attested: a tool named a path, a
+ * hook repeated it. These are observed, so they cover a write no tool
+ * announced (a `sed -i`, a formatter, a build, a `git checkout .`), they
+ * tell a create from a modify from a delete, and they carry line counts.
+ *
+ * The counts are cumulative against `HEAD`, not deltas since the last
+ * frame, so a consumer assigns them rather than adding them up. The ingest
+ * handler's `rollupFiles` says the same thing where it applies them.
+ */
+export const observationFacts = z.object({
+  observed_changes: z
+    .array(observedChangeSchema)
+    .max(MAX_OBSERVED_CHANGES)
+    .optional(),
+  /**
+   * How many paths git reported, before the list above was cut. Itself a
+   * floor when the reader's own 2000-path bound was reached.
+   */
+  observed_changes_total: u32.optional(),
+  observed_changes_truncated: bool.optional(),
+});
+
 /** Session inventory captured once at genesis (data-model section 3.2). */
 export const inventoryFacts = z.object({
   tools_available: z.array(short).max(2048).optional(),
@@ -481,7 +536,8 @@ const allFacts = toolFacts
   .merge(lifecycleFacts)
   .merge(integrityFacts)
   .merge(inventoryFacts)
-  .merge(totalsFacts);
+  .merge(totalsFacts)
+  .merge(observationFacts);
 
 /** Every body member name; also the body-derived ClickHouse column set. */
 export const BODY_MEMBER_NAMES = Object.keys(allFacts.shape) as Array<
@@ -536,6 +592,9 @@ const inventoryKeys = Object.keys(inventoryFacts.shape) as Array<
 >;
 const totalsKeys = Object.keys(totalsFacts.shape) as Array<
   keyof typeof totalsFacts.shape
+>;
+const observationKeys = Object.keys(observationFacts.shape) as Array<
+  keyof typeof observationFacts.shape
 >;
 
 export const KIND_BODIES = {
@@ -606,6 +665,12 @@ export const KIND_BODIES = {
   "oxagen:worktree": body({ ...pick(...lifecycleKeys) }),
   "oxagen:cwd_change": body({ ...pick(...lifecycleKeys) }),
   "oxagen:file_changed": body({ ...pick(...lifecycleKeys) }),
+  /**
+   * What git says the worktree holds now, sealed where the worktree has
+   * settled. `oxagen:file_changed` is one path a harness announced; this is
+   * every path git reports, whoever wrote it.
+   */
+  "oxagen:worktree_reconciled": body({ ...pick(...observationKeys) }),
   "oxagen:elicitation": body({ ...pick(...lifecycleKeys) }),
   "oxagen:rate_limit": body({
     ...pick(...lifecycleKeys),
@@ -810,6 +875,14 @@ export const spanSchema = z
   })
   .strict();
 
+/**
+ * The most redaction records one frame's content may carry. Redaction still
+ * removes every credential it finds; this bounds what is *recorded about*
+ * them, so a prompt that pastes a thousand tokens cannot make its own event
+ * unsealable. A producer at the cap says so in `oxagen.content_redactions_total`.
+ */
+export const MAX_CONTENT_REDACTIONS = 256;
+
 export const contentSchema = z
   .object({
     digest: digest.optional(),
@@ -824,7 +897,7 @@ export const contentSchema = z
           })
           .strict(),
       )
-      .max(256)
+      .max(MAX_CONTENT_REDACTIONS)
       .default([]),
   })
   .strict();
