@@ -284,6 +284,32 @@ describe("get_run_chain", () => {
     expect(out.ladder[1]?.reason).toContain("chain_break");
   });
 
+  it("does not treat the unread capped tail as a chain break (finding 4052307524)", async () => {
+    // The walk stops at CHAIN_FRAME_CAP while the seal still names a final
+    // sequence past it. Those unread frames are not missing: complete: false
+    // already says they were not read.
+    const { CHAIN_FRAME_CAP } = await import(
+      "@oxagen/oxagen/contracts/run.chain.get"
+    );
+    const rows = Array.from({ length: CHAIN_FRAME_CAP + 1 }, (_, i) =>
+      tachoRow(i),
+    );
+    const chain = tachoHarness(rows, {
+      session: {
+        seqCount: CHAIN_FRAME_CAP + 50,
+        completenessGaps: [],
+      },
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(out.complete).toBe(false);
+    expect(out.frameCount).toBe(CHAIN_FRAME_CAP);
+    expect(out.gaps.missingSequences).toEqual([]);
+    expect(out.gaps.missingFrameCount).toBe(0);
+    expect(out.ladder.some((r) => r.reason?.includes("chain_break"))).toBe(
+      false,
+    );
+  });
+
   it("a wrapped seal's finalRunSeq is the last frame seq, not seqCount (negative)", async () => {
     const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)], {
       session: { seqCount: 3 },

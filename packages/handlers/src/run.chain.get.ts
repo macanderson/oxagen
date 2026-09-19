@@ -297,9 +297,14 @@ export function createRunChainGetHandler(
           ? String(run.row.session.seqCount - 1)
           : null
         : (ledgerSeals.at(-1)?.finalRunSeq ?? null);
+    // The walk stops at CHAIN_FRAME_CAP. Naming the seal's final sequence as
+    // the end bound would classify every unread frame past the cap as missing
+    // and mark a valid long run as chain_break, even though complete: false
+    // already says those frames were not read (finding 4052307524). Apply the
+    // terminal bound only when the walk finished.
     const sequences = sequenceGaps(read.frames, {
       start: run.source === "tacho" ? "0" : null,
-      end: expectedEnd,
+      end: read.complete ? expectedEnd : null,
     });
     const recorded =
       run.source === "ledger"

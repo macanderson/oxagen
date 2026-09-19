@@ -92,9 +92,13 @@ export function decodeTranscriptCursor(raw: string): string | null {
  * produce `start A, start B, complete A, complete B`, so fold A owns 1..3 and
  * fold B owns 2..4. Comparing `opening.seq > after` against an endSeq cursor
  * skips B after a page that returned A (finding 4052061731). Resume in fold
- * order: find the fold that owned the cursor seq, re-emit it when it has
- * grown past the cursor (a live request that later gained its response), and
- * otherwise advance to the next fold.
+ * order: the fold that owned the cursor is the one whose endSeq equals it
+ * (the fold the previous page returned). A cursor can sit inside several
+ * overlapping folds once an earlier fold grows past a later fold's opening,
+ * so ownership must not be inferred from the first containing range
+ * (finding 4052307522). When no fold ends at the cursor anymore, re-emit the
+ * last fold that still contains it and has grown past it. Otherwise advance
+ * to the next fold whose opening is after the cursor.
  */
 export function foldPageStart(
   folds: readonly { opening: { seq: string }; endSeq: string }[],
@@ -102,17 +106,20 @@ export function foldPageStart(
 ): number {
   if (after === null) return folds.length === 0 ? -1 : 0;
   const cursor = BigInt(after);
-  const owned = folds.findIndex(
-    (fold) =>
-      BigInt(fold.opening.seq) <= cursor && BigInt(fold.endSeq) >= cursor,
-  );
-  if (owned === -1) {
-    return folds.findIndex((fold) => BigInt(fold.opening.seq) > cursor);
+  const owned = folds.findIndex((fold) => BigInt(fold.endSeq) === cursor);
+  if (owned !== -1) {
+    const next = owned + 1;
+    return next < folds.length ? next : -1;
   }
-  // Same fold, not yet grown: advance past it. Grown: re-emit from here.
-  if (BigInt(folds[owned]!.endSeq) > cursor) return owned;
-  const next = owned + 1;
-  return next < folds.length ? next : -1;
+  // No fold ends at the cursor: the fold the previous page returned has
+  // grown. Prefer the last containing range so an earlier fold that expanded
+  // over a later fold's opening does not reclaim the cursor.
+  const grown = folds.findLastIndex(
+    (fold) =>
+      BigInt(fold.opening.seq) <= cursor && BigInt(fold.endSeq) > cursor,
+  );
+  if (grown !== -1) return grown;
+  return folds.findIndex((fold) => BigInt(fold.opening.seq) > cursor);
 }
 
 // ---- Bodies ---------------------------------------------------------------------------

@@ -777,11 +777,15 @@ function closesStep(current: TranscriptFold, frame: RunFrame): boolean {
  * immediately before `tool_requested` (`hook-handler.ts`), so a wrapped
  * session's decision names the call it is about to gate, not the call that
  * just finished. Absorbing it on sight put the allow or deny on the previous
- * step and left the step it actually governed with none. Held frames attach
- * to the next step that opens, in the order recorded, so two decisions ahead
- * of one call are both kept and the later one wins, the same as `absorb`'s
- * own overwrite; a run that ends with one or more still pending falls back
- * to the last step rather than dropping them.
+ * step and left the step it actually governed with none. The same hold applies
+ * when filtering removes the preceding model response (`kinds=policy,tools`):
+ * the decision then meets a null current, or a model fold whose response is
+ * gone, and would otherwise open a standalone frame or stick on that model
+ * step (finding 4052307523). Held frames attach to the next step that opens,
+ * in the order recorded, so two decisions ahead of one call are both kept and
+ * the later one wins, the same as `absorb`'s own overwrite; a run that ends
+ * with one or more still pending falls back to the last step rather than
+ * dropping them, or opens a policy entry when no step ever did.
  */
 function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
   const out: TranscriptFold[] = [];
@@ -803,6 +807,16 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
     for (const pending of pendingPolicy) absorbPending(next, pending);
     pendingPolicy.length = 0;
     return next;
+  };
+
+  /** Hold a pre-call policy for the next step rather than absorbing it here. */
+  const holdPolicyForNext = (fold: TranscriptFold | null): boolean => {
+    if (fold === null) return true;
+    if (fold.response !== null) return true;
+    // A model fold whose response was filtered away still looks open
+    // (request set, response null). The decision gates the tool after it.
+    if (fold.kind === "model_call" || fold.kind === "frame") return true;
+    return false;
   };
 
   for (const frame of frames) {
@@ -834,18 +848,28 @@ function foldSteps(frames: readonly RunFrame[]): TranscriptFold[] {
       }
       continue;
     }
+    if (POLICY_TYPES.has(frame.type) && holdPolicyForNext(current)) {
+      pendingPolicy.push(frame);
+      continue;
+    }
     if (current === null) {
       current = openEntry(frame, "frame");
       continue;
     }
-    if (current.response !== null && POLICY_TYPES.has(frame.type)) {
-      pendingPolicy.push(frame);
-      continue;
-    }
     absorb(current, frame);
   }
-  if (pendingPolicy.length > 0 && current !== null) {
-    for (const pending of pendingPolicy) absorbPending(current, pending);
+  if (pendingPolicy.length > 0) {
+    if (current !== null) {
+      for (const pending of pendingPolicy) absorbPending(current, pending);
+    } else {
+      // No step opened after the held decisions: surface them as their own
+      // entries rather than dropping a run that was only policy frames.
+      const held = pendingPolicy.slice();
+      pendingPolicy.length = 0;
+      for (const pending of held) {
+        current = openEntry(pending, "policy");
+      }
+    }
   }
   return out;
 }

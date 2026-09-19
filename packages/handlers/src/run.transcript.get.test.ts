@@ -566,6 +566,21 @@ describe("foldPageStart", () => {
     expect(foldPageStart(folds, "1")).toBe(0);
   });
 
+  it("does not let an earlier fold reclaim a cursor after it grows over a later fold (finding 4052307522)", () => {
+    // Live: start A(1), start B(2). Client pages A then B, leaving cursor 2.
+    // complete A(3) arrives: A expands to 1..3 and contains 2, but the cursor
+    // still names B. Re-emitting A would return cursor 3, then B with cursor 2
+    // again, a duplicate-and-regress cycle.
+    const before = [fold("1", "1"), fold("2", "2")];
+    expect(foldPageStart(before, "1")).toBe(1);
+    expect(foldPageStart(before, "2")).toBe(-1);
+    const afterACompletes = [fold("1", "3"), fold("2", "2")];
+    expect(foldPageStart(afterACompletes, "2")).toBe(-1);
+    // B then completes too: cursor 2 must re-emit B (grown), not A.
+    const bothComplete = [fold("1", "3"), fold("2", "4")];
+    expect(foldPageStart(bothComplete, "2")).toBe(1);
+  });
+
   it("falls through to opening.seq when the cursor sits between folds", () => {
     const folds = [fold("1", "1"), fold("5", "5")];
     expect(foldPageStart(folds, "3")).toBe(1);

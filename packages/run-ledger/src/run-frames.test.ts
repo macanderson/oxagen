@@ -343,6 +343,61 @@ describe("transcript fold", () => {
     expect(folded[0]?.endSeq).toBe("1");
   });
 
+  it("buffers a filtered pre-call policy for the next tool step (finding 4052307523)", () => {
+    // kinds=policy,tools drops the model response that normally closes the
+    // preceding step, so the decision meets a null current (or a model fold
+    // with response null) and must still attach to the tool it gates.
+    const unfiltered = [
+      tachoFrame(tachoRow(0, "llm_call", { model: "m" })),
+      tachoFrame(tachoRow(1, "policy_decision", { policyDecision: "allow" })),
+      tachoFrame(tachoRow(2, "tool_requested", { toolName: "Read" })),
+      tachoFrame(
+        tachoRow(3, "tool_call", { toolName: "Read", toolStatus: "ok" }),
+      ),
+    ];
+    const filtered = filterFramesByKind(unfiltered, ["policy", "tools"]);
+    expect(filtered.map((f) => f.type)).toEqual([
+      "policy_decision",
+      "tool_requested",
+      "tool_call",
+    ]);
+    const folded = foldTranscript(filtered, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["2", "tool_call"],
+    ]);
+    expect(folded[0]?.decision?.decision).toBe("allow");
+    expect(folded[0]?.request?.seq).toBe("2");
+    expect(folded[0]?.response?.seq).toBe("3");
+  });
+
+  it("buffers a pre-call policy when the model response was filtered but the request remains", () => {
+    const frames = [
+      tachoFrame(tachoRow(0, "model.request", { model: "m" })),
+      tachoFrame(tachoRow(1, "model.response", { model: "m" })),
+      tachoFrame(tachoRow(2, "policy_decision", { policyDecision: "deny" })),
+      tachoFrame(tachoRow(3, "tool_requested", { toolName: "Bash" })),
+      tachoFrame(
+        tachoRow(4, "tool_call", { toolName: "Bash", toolStatus: "ok" }),
+      ),
+    ];
+    // Keep prompt so the model request survives, drop responses so the fold
+    // still looks open when the policy arrives.
+    const filtered = filterFramesByKind(frames, ["prompt", "policy", "tools"]);
+    expect(filtered.map((f) => f.type)).toEqual([
+      "model.request",
+      "policy_decision",
+      "tool_requested",
+      "tool_call",
+    ]);
+    const folded = foldTranscript(filtered, "steps");
+    expect(folded.map((f) => [f.opening.seq, f.kind])).toEqual([
+      ["0", "model_call"],
+      ["3", "tool_call"],
+    ]);
+    expect(folded[0]?.decision).toBeNull();
+    expect(folded[1]?.decision?.decision).toBe("deny");
+  });
+
   it("turns opens at turn_start and sums the turn's cost records", () => {
     const folded = foldTranscript(frames, "turns");
     expect(
