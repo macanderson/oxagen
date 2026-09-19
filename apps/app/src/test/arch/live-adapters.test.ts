@@ -176,6 +176,7 @@ describe("live adapters", () => {
   it("a kernelRead that is not the kernel seam's fails", () => {
     expect(probe("local-kernel-read.ts")).toEqual([
       `${RULE} ${PROBES}/local-kernel-read.ts:6 approvals.pending no-kernel-read`,
+      `${RULE} ${PROBES}/local-kernel-read.ts:7 approvals.resolved no-kernel-read`,
     ]);
   });
 

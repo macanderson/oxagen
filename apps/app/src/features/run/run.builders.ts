@@ -13,7 +13,10 @@ import type {
   TranscriptEntry,
   TranscriptZoom,
 } from "@/data/contracts/run";
-import type { ApprovalItem } from "@/data/contracts/approvals";
+import type {
+  ApprovalItem,
+  ResolvedApprovalItem,
+} from "@/data/contracts/approvals";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -476,6 +479,8 @@ type RunReads = {
   chain?: Read<RunChain>;
   /** Only read when the Approvals tab is open; refused when absent. */
   approvals?: Read<ApprovalItem[]>;
+  /** Only read when the Approvals tab is open; refused when absent (#3153). */
+  resolvedApprovals?: Read<ResolvedApprovalItem[]>;
 };
 
 /** A DataSource answering the Run page's reads; `calls` records their arguments. */
@@ -486,6 +491,7 @@ export function runSource(reads: RunReads) {
     cost: unknown[][];
     transcript: unknown[][];
     approvals: unknown[][];
+    resolvedApprovals: unknown[][];
     chain: unknown[][];
   } = {
     get: [],
@@ -493,6 +499,7 @@ export function runSource(reads: RunReads) {
     cost: [],
     transcript: [],
     approvals: [],
+    resolvedApprovals: [],
     chain: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
@@ -527,7 +534,10 @@ export function runSource(reads: RunReads) {
       },
       chain: answer("chain", reads.chain),
     },
-    approvals: { pending: answer("approvals", reads.approvals) },
+    approvals: {
+      pending: answer("approvals", reads.approvals),
+      resolved: answer("resolvedApprovals", reads.resolvedApprovals),
+    },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     billing: {
       plan: refuse,

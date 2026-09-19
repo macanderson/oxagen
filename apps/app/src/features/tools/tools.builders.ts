@@ -157,7 +157,7 @@ export function toolsSource(reads: ToolsReads) {
       transcript: refuse,
       chain: refuse,
     },
-    approvals: { pending: refuse },
+    approvals: { pending: refuse, resolved: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),
