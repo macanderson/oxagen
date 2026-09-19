@@ -18,7 +18,9 @@
 //         those tools carry — and only they are stamped. Re-stamping an
 //         unchanged rule would re-authorise it without anyone choosing to:
 //         a rule held back as `consequences_changed` would start releasing
-//         calls again because a different rule was edited.
+//         calls again because a different rule was edited. A rule the
+//         caller names in `saving` is checked and stamped even when its body
+//         is unchanged: saving a held rule again is how it is re-authorised.
 //      c. The whole clause is replaced. A refusal leaves the stored rules
 //         exactly as they were.
 //   3. The new set is returned with its counters, so the page needs no second
@@ -69,7 +71,9 @@ export const approvalRuleSetHandler: CapabilityHandler<
       });
     }
     const storedById = new Map(stored.map((rule) => [rule.id, rule]));
+    const saving = new Set(input.saving ?? []);
     const unchanged = (rule: (typeof input.rules)[number]) => {
+      if (saving.has(rule.id)) return false;
       const before = storedById.get(rule.id);
       return before !== undefined && ruleBodyKey(before) === ruleBodyKey(rule);
     };

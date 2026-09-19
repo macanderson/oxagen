@@ -3,8 +3,9 @@
 // caller sends the whole set and it replaces the stored clause atomically, so
 // two rules can never disagree about which one a call matched first. A rule
 // sent back exactly as stored keeps its stamp; only new and changed rules are
-// re-checked and re-stamped. `replaces` makes the write conditional on the set
-// the caller read, for a caller editing one rule of it.
+// re-checked and re-stamped, plus any rule `saving` names. `replaces` makes the
+// write conditional on the set the caller read, for a caller editing one rule
+// of it.
 //
 // `agent.requiresApproval: true`: an agent that asks to widen the conditions
 // under which its own calls skip a person waits for one. `noBillingGate: true`:
@@ -65,6 +66,11 @@ export const approvalRuleSet = registerCapability({
       // rule cannot write back a rule another person deleted or switched off
       // in between. Omit it to replace the set whatever it holds now.
       replaces: z.array(approvalRuleBodySchema).max(256).optional(),
+      // The ids of the rules this write saves on purpose. A rule sent back
+      // unchanged keeps its stamp, so re-authorising one held back as
+      // `consequences_changed` needs a way to say "check and stamp this one
+      // anyway": naming it here re-runs its guards and re-stamps it.
+      saving: z.array(z.string().min(1).max(128)).max(256).optional(),
     })
     .strict(),
   output: z

@@ -494,6 +494,8 @@ describe("saveApprovalRule", () => {
             businessHours: null,
           },
         ],
+        replaces: bodies(),
+        saving: ["night-deploys"],
       },
       expect.objectContaining(TENANT),
     );
@@ -528,6 +530,8 @@ describe("saveApprovalRule", () => {
             businessHours: null,
           },
         ],
+        replaces: bodies(),
+        saving: ["repeat-deploys"],
       },
       expect.objectContaining(TENANT),
     );
@@ -587,6 +591,19 @@ describe("saveApprovalRule", () => {
       code: "tool_registry_unavailable",
     });
     expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  // The write carries the set it was built from, so a rule another person
+  // deleted or switched off between the read and the write is not written back.
+  it("says the set changed when the handler finds it moved since the read", async () => {
+    invoke
+      .mockResolvedValueOnce(stored())
+      .mockRejectedValueOnce(
+        new kernel.HandlerError({ code: "conflict", reason: "rule_set_changed" }),
+      );
+    expect(
+      await saveApprovalRule("acme", "core-platform", "create", draft),
+    ).toEqual({ ok: false, reason: "conflict", code: "rule_set_changed" });
   });
 
   it("returns the handler's reason when the save is refused", async () => {

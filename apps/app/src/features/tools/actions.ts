@@ -323,6 +323,9 @@ export async function saveApprovalRule(
   const result = await kernelWrite(ctx, approvalRuleSet, {
     rules,
     replaces: stored.map(bodyOf),
+    // The rule being saved is re-checked and re-stamped even if unchanged, so
+    // saving a rule held back as `consequences_changed` re-authorises it.
+    saving: [body.id],
   });
   return result.ok ? { ok: true, value: { ruleId: body.id } } : result;
 }
