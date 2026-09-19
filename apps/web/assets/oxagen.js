@@ -82,13 +82,21 @@
   var THEMES = ["system", "light", "dark"];
   var osLight = window.matchMedia("(prefers-color-scheme: light)");
   var root = document.documentElement;
+  /* The latest choice this page knows of: a click here, or another tab's
+     change. It outranks storage, so a write the browser refused cannot hand
+     back an older value than the control shows. */
+  var pageChoice = null;
+  /* The browser bar's colour for each theme: the ground on paper and on ink,
+     the same values as the theme-color meta tags in the head. */
+  var BAR = { light: "#FFFFFF", dark: "#09090B" };
 
   function readTheme() {
+    if (THEMES.indexOf(pageChoice) !== -1) return pageChoice;
     var v = null;
     try {
       v = localStorage.getItem(THEME_KEY);
     } catch (e) {
-      /* storage blocked: the page follows the OS */
+      /* storage blocked: the page follows the OS until a click */
     }
     return THEMES.indexOf(v) === -1 ? "system" : v;
   }
@@ -102,6 +110,15 @@
     root.setAttribute("data-theme", resolved);
     var meta = document.querySelector('meta[name="color-scheme"]');
     if (meta) meta.content = resolved;
+    /* Each theme-color tag answers one OS preference. A pinned theme sets
+       both to its own colour, so the bar matches the page whichever the OS
+       prefers; System puts each back to its own. */
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach(function (m) {
+        var own = /light/.test(m.media) ? BAR.light : BAR.dark;
+        m.content = choice === "system" ? own : BAR[resolved];
+      });
     void root.offsetWidth;
     root.classList.remove("theme-swap");
     document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
@@ -114,6 +131,7 @@
   document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
     b.addEventListener("click", function () {
       var choice = b.getAttribute("data-theme-choice");
+      pageChoice = choice;
       try {
         localStorage.setItem(THEME_KEY, choice);
       } catch (e) {
@@ -142,7 +160,9 @@
   });
   /* Another tab changed the choice. */
   window.addEventListener("storage", function (e) {
-    if (e.key === THEME_KEY) applyTheme(readTheme());
+    if (e.key !== THEME_KEY) return;
+    pageChoice = e.newValue;
+    applyTheme(readTheme());
   });
   applyTheme(readTheme());
 

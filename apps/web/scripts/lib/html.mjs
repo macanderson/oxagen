@@ -116,6 +116,11 @@ export const THEME_HEAD = `<script>
   d.setAttribute("data-theme", t);
   var m = document.querySelector('meta[name="color-scheme"]');
   if (m) m.content = t;
+  if (c === t) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (x) {
+      x.content = t === "light" ? "#FFFFFF" : "#09090B";
+    });
+  }
 })(document.documentElement);
 </script>`;
 
