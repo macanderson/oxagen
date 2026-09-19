@@ -179,11 +179,20 @@ declares before reading a value for that measure, and refuses the call
 against a kind that no longer holds. This is the same disagreement §2
 already refuses at write time between two matched tools, closed at the
 other moment it can happen: between the write and the call. The comparison
-skips a measure in `legacyKindMeasures`: a legacy row's `kind` is a guess,
-not a fact the gate ever enforced against, so comparing it to today's
-declaration would deny a mandate the gate has always read correctly (the
-gate takes the declaration directly, never the stored guess) over a
-disagreement that was never real.
+does not read `mandate.limits[measure].kind` for a measure in
+`legacyKindMeasures`: a legacy row's stored `kind` is a guess, not a fact
+the gate ever enforced against, so comparing it to today's declaration
+would deny a mandate the gate has always read correctly (the gate takes the
+declaration directly, never the stored guess) over a disagreement that was
+never real. It checks the ledger's own last stamped kind instead
+(`lastLedgerKind`): a legacy measure that has made a real call since this
+column shipped has real, stamped history the same as any other measure, and
+that history is enforced. Only a legacy measure with no stamped history is
+exempt outright, and even then not unconditionally: `hasUnstampedLedgerHistory`
+still refuses the call if pre-stamp rows for that measure are open or drawn
+this period, since their own kind was never recorded and letting a new
+reservation land beside them could sum two unverified kinds into the same
+total.
 
 This is a refusal, not a repair: nothing revalidates or restamps the
 mandate's limit automatically. The accountable office sees the refusal
@@ -274,11 +283,16 @@ classification) and is unchanged.
   `assertPeriodChangeAllowed`'s `period_drawn` refusal exists to prevent for a
   period rename. The check is scoped to the ledger's current-period rows,
   not the whole history, matching how `readAuthority` sums for the gate.
-  It skips a measure in `legacyKindMeasures`: that measure's "old" kind was
-  never a persisted fact, and every ledger row against it was already
-  written against the raw value the tool call actually returned, not the
-  guess, so refreshing it carries no corruption risk and does not deserve
-  the same wait-for-the-window friction a real kind change does.
+  For a measure in `legacyKindMeasures`, the stored "old" kind is only a
+  guess and not the fact to check: the ledger's own last stamped kind is,
+  read via `lastLedgerKind` the same way §4's drift check reads it. A legacy
+  measure with real stamped history is held to that history exactly like
+  any other measure. Only a legacy measure with no stamped history at all
+  skips the wait-for-the-window friction outright, and even then
+  `hasUnstampedLedgerHistory` still refuses the change if pre-stamp rows for
+  that measure are open or drawn this period, since letting the new kind
+  land beside an unverified older one would corrupt the same period sum this
+  check exists to protect.
 - `legacyMeasureKindGuess` is deliberately not deleted the day a backfill
   might land, because a backfill is optional under this decision, not required
   by it: the fallback stays as documented, correct-by-construction cover for

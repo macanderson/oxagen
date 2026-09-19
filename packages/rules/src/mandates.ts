@@ -342,6 +342,48 @@ export async function lastLedgerKind(
   return (row?.measureKind as MeasureKind | null | undefined) ?? null;
 }
 
+/**
+ * Whether this measure has a ledger row written before the `measure_kind`
+ * column existed (`measure_kind is null`) that is still live: an open
+ * reservation, or a draw within the period key `period`/`at` names.
+ *
+ * `lastLedgerKind` returning null is ambiguous on its own: it cannot tell
+ * a measure with no ledger rows at all from one whose only rows predate the
+ * stamp. The first is safe to treat as a fresh start; the second still
+ * carries authority recorded under a kind nothing durable remembers, and a
+ * caller that let a new reservation or a kind change land anyway could sum
+ * it into `periodSums` against that unverified older row, exactly the
+ * money/count mixing ADR-108 exists to close. Both `decideMandate` and
+ * `assertKindChangeAllowed` check this before trusting a null
+ * `lastLedgerKind` result.
+ */
+export async function hasUnstampedLedgerHistory(
+  tx: Tx,
+  mandateId: string,
+  measure: string,
+  period: MandatePeriod,
+  at: Date = new Date(),
+): Promise<boolean> {
+  const key = periodKey(period, at);
+  const [row] = await tx
+    .select({
+      openReserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
+      drawnInPeriod: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} and ${l.kind} in ('reserve', 'settle') then ${l.value} else 0 end), 0)::text`,
+    })
+    .from(l)
+    .where(
+      and(
+        eq(l.mandateId, mandateId),
+        eq(l.measure, measure),
+        isNull(l.measureKind),
+      ),
+    );
+  return (
+    BigInt(row?.openReserved ?? "0") > 0n ||
+    BigInt(row?.drawnInPeriod ?? "0") > 0n
+  );
+}
+
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */
 export async function readAuthority(
   tx: Tx,
@@ -811,18 +853,33 @@ export async function decideMandate(
       // it is checked against its own ledger's last stamped kind instead of
       // `mandate.limits`, with no refusal only when that history is empty
       // (this call would be the measure's first real stamp).
-      const storedKind = mandate.limits[measure]?.kind;
-      if (mandate.legacyKindMeasures.has(measure)) {
+      const limit = mandate.limits[measure];
+      const storedKind = limit?.kind;
+      if (mandate.legacyKindMeasures.has(measure) && limit !== undefined) {
         const ledgerKind = await lastLedgerKind(tx, mandate.id, measure);
-        if (
-          ledgerKind !== null &&
-          ledgerKind !== measureKindOf(declaration.type)
+        if (ledgerKind !== null) {
+          if (ledgerKind !== measureKindOf(declaration.type)) {
+            return {
+              kind: "deny",
+              reason: "measure_kind_changed",
+              mandate,
+              detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's ledger last recorded it as ${ledgerKind}; update the mandate's limit before this call can be decided`,
+            };
+          }
+        } else if (
+          await hasUnstampedLedgerHistory(
+            tx,
+            mandate.id,
+            measure,
+            limit.period,
+            at,
+          )
         ) {
           return {
             kind: "deny",
             reason: "measure_kind_changed",
             mandate,
-            detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's ledger last recorded it as ${ledgerKind}; update the mandate's limit before this call can be decided`,
+            detail: `${tool.slug}@${tool.version} declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate has ledger history from before kind tracking that is still open or drawn this period and whose own kind was never recorded; settle or release it, or update the mandate's limit, before this call can be decided`,
           };
         }
       } else if (

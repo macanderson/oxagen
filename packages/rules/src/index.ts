@@ -65,6 +65,7 @@ export {
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
   hasSettlementOverlappingPeriod,
+  hasUnstampedLedgerHistory,
   lastLedgerKind,
   lockMandate,
   parseMandateRow,

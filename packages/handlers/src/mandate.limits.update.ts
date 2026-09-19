@@ -32,6 +32,7 @@ import {
   hasDrawnInCurrentPeriod,
   hasOpenReservation,
   hasSettlementOverlappingPeriod,
+  hasUnstampedLedgerHistory,
   lastLedgerKind,
 } from "@oxagen/rules";
 import {
@@ -186,8 +187,12 @@ export async function assertPeriodChangeAllowed(
  * absent from `before` entirely (a whole-record `limits` replacement can
  * delete a measure while the ledger still holds rows for it, and a later
  * call can re-add it with no `before` entry to compare), refusing the
- * change when that history disagrees, and skipping only when there truly is
- * none yet to protect.
+ * change when that history disagrees. A null `lastLedgerKind` result is not
+ * on its own proof there is nothing to protect: a measure written before
+ * the ledger's own `measure_kind` column existed has real rows with no
+ * stamp, and `hasUnstampedLedgerHistory` catches the case those rows are
+ * still live (open, or drawn this period): only when neither a stamped nor
+ * a live unstamped row exists is the change let through outright.
  */
 export async function assertKindChangeAllowed(
   tx: Parameters<typeof hasDrawnInCurrentPeriod>[0],
@@ -208,7 +213,18 @@ export async function assertKindChangeAllowed(
       // No `before` entry, or a legacy measure whose stored kind is only a
       // guess: the ledger's own last stamped kind is the fact to check.
       priorKind = await lastLedgerKind(tx, mandateId, measure);
-      if (priorKind === null || priorKind === next.kind) continue;
+      if (priorKind !== null) {
+        if (priorKind === next.kind) continue;
+      } else if (
+        !(await hasUnstampedLedgerHistory(tx, mandateId, measure, period, at))
+      ) {
+        // Genuinely no history yet, stamped or not, to protect.
+        continue;
+      }
+      // A null `priorKind` with live unstamped history falls through to the
+      // drawn/open check below rather than being treated as a fact: it
+      // cannot prove the old rows disagree with `next.kind`, only that they
+      // are still live and unverified, which the same guard already covers.
     }
     const drawn = await hasDrawnInCurrentPeriod(
       tx,

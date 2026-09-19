@@ -821,6 +821,60 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
+    // A legacy measure can have real ledger movements from before the
+    // `measure_kind` column existed: `lastLedgerKind` returns null for
+    // those, the same as a measure with no history at all, but an open
+    // reservation among them is still live authority nothing has verified
+    // the kind of. Letting this call proceed would stamp a new "money" row
+    // into the same period sum as that unverified older row.
+    it("denies a legacy row whose unstamped ledger history is still open this period", async () => {
+      const agent = randomUUID();
+      const legacy = await insertMandate(agent, {
+        limits: {
+          amount: {
+            perCall: "250000000",
+            perPeriod: "2000000000",
+            period: "monthly",
+            currencyOrUnit: "widgets",
+            // No `kind`; legacyKindMeasures marks this measure as guessed.
+          },
+        },
+      });
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: legacy,
+          toolCallId: randomUUID(),
+          kind: "reserve",
+          measure: "amount",
+          value: "10",
+          unitOrCurrency: "widgets",
+          measureKind: null,
+          periodKey: "2026-09",
+          balanceAfter: "10",
+        }),
+      );
+      const out = await decide(
+        checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
+      );
+      expect(out).toMatchObject({
+        kind: "deny",
+        reason: "measure_kind_changed",
+      });
+      await withSystemDb((tx) =>
+        tx
+          .delete(schema.mandateLedger)
+          .where(eq(schema.mandateLedger.mandateId, legacy)),
+      );
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({ status: "revoked" })
+          .where(eq(schema.mandates.id, legacy)),
+      );
+    });
+
     it("parks a call over human_above with the reservation held, then lets the approved retry proceed once and settles it from the output", async () => {
       const agent = randomUUID();
       const id = await insertMandate(agent, {
