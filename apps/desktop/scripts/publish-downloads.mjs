@@ -11,7 +11,12 @@
  * version), hashes them, writes SHA256SUMS.txt to
  * s3://<bucket>/desktop/<version>/ as a conditional write that reserves the
  * version, uploads the installers there with the right content types, then
- * writes the listing page at the bucket root and invalidates it on CloudFront.
+ * writes the listing page at the bucket root, copies the page's webfonts
+ * beside it, and invalidates both on CloudFront.
+ *
+ * `.github/workflows/desktop.yml` runs this with --dir after every tagged
+ * build, so a `desktop-v*` tag is enough to update https://downloads.oxagen.sh/;
+ * the invocations above are for a build made some other way.
  *
  * Versioned URLs are served immutable, so a version that is already published
  * is refused, and a version two invocations race for is won by one of them:
@@ -43,6 +48,7 @@ import { fileURLToPath } from "node:url";
 import {
   classifyInstaller,
   decidePublication,
+  FONT_FILES,
   renderIndexHtml,
   reportPublicationDecision,
   reservationArgs,
@@ -349,6 +355,19 @@ upload(
   "text/html; charset=utf-8",
   "public, max-age=300",
 );
+// The three faces the page loads from `/fonts/` on this host: the kit's files
+// as vendored into apps/web/fonts by tools/scripts/sync-brand-assets.mjs. They
+// change only when the kit does, so a week in caches is safe and the path is
+// invalidated below when they are re-uploaded.
+const fontsDir = resolve(here, "..", "..", "web", "fonts");
+for (const file of FONT_FILES) {
+  upload(
+    join(fontsDir, file),
+    `s3://${bucket}/fonts/${file}`,
+    "font/woff2",
+    "public, max-age=604800",
+  );
+}
 
 // 5. Invalidate the page when the distribution exists.
 if (!dryRun) {
@@ -373,6 +392,7 @@ if (!dryRun) {
       "--paths",
       "/",
       "/index.html",
+      "/fonts/*",
       // Only an --allow-overwrite republish can have a stale edge copy of the
       // versioned prefix, and only the edge is reachable — anything further
       // downstream was promised a year. Invalidating a prefix that was never
