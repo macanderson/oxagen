@@ -31,7 +31,7 @@ Every figure is counted from a store that exists or is `null` with the reason on
 | `items[].slug` | `string` | The definition file name and the last segment of the agent key. |
 | `items[].name` | `string` | |
 | `items[].agentKey` | `string \| null` | `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. |
-| `items[].harness` | `"stella" \| "claude-code" \| "claude-agent-sdk" \| "custom"` | |
+| `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
 | `items[].status` | `"unenrolled" \| "enrolled" \| "suspended" \| "retired"` | Derived as above. |

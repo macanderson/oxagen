@@ -23,6 +23,7 @@ const ENROLLED = {
     missing: ["Stop"],
   },
   codexHooks: { complete: true, present: ["PreToolUse"], missing: [] },
+  cursorHooks: { complete: false, present: ["stop"], missing: ["preToolUse"] },
   stellaHooks: { complete: false, present: [], missing: ["PreToolUse"] },
   wal: {
     sessions: 2,
@@ -41,6 +42,11 @@ describe("parseTachoStatus", () => {
         missing: ["Stop"],
       },
       codexHooks: { complete: true, present: ["PreToolUse"], missing: [] },
+      cursorHooks: {
+        complete: false,
+        present: ["stop"],
+        missing: ["preToolUse"],
+      },
       stellaHooks: { complete: false, present: [], missing: ["PreToolUse"] },
       service: { kind: "launchd", installed: true, running: true },
       wal: { sessions: 2, unshipped: 7 },

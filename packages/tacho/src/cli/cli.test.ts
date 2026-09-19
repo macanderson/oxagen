@@ -35,6 +35,7 @@ import { minimalSession } from "../test-helpers";
 import { TACHO_TIER_SUMMARY } from "../wire";
 import type { EnrollmentResponse } from "../wire";
 import { CODEX_HOOK_EVENTS, codexHookPresence } from "../host/codex-writer";
+import { CURSOR_HOOK_EVENTS, cursorHookPresence } from "../host/cursor-writer";
 import {
   readStellaHooksFile,
   renderStellaTomlBlock,
@@ -266,11 +267,21 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
         paths.codexHooks,
         JSON.stringify(document, null, 2),
       ),
+    readCursorHooks: () => readJsonFileIfExists(paths.cursorHooks),
+    writeCursorHooks: (document) =>
+      writeSensitiveFileAtomic(
+        paths.cursorHooks,
+        JSON.stringify(document, null, 2),
+      ),
     readStellaHooks: (format) => readStellaHooksFile(paths, format),
     writeStellaHooks: (file) =>
       writeSensitiveFileAtomic(file.path, file.text ?? ""),
     claude: () => ({ path: "/usr/local/bin/claude", version: "2.1.263" }),
     codex: () => ({ path: "/usr/local/bin/codex", version: "0.104.0" }),
+    cursor: () => ({
+      path: "/usr/local/bin/cursor-agent",
+      version: "2026.09.16",
+    }),
     stella: () => ({ path: "/usr/local/bin/stella", version: "0.9.423" }),
     claudeDesktop: () => ({
       installed: true,
@@ -1392,8 +1403,9 @@ describe("harnesses and reassign", () => {
     // One line naming the choices, not a ZodError's JSON issues array: both
     // CLIs print the message verbatim.
     expect(parseHarnesses("stella,codex")).toEqual(["stella", "codex"]);
-    expect(() => parseHarnesses("cursor")).toThrow(
-      'unknown harness "cursor"; expected one of claude-code, codex, stella',
+    expect(parseHarnesses("cursor,codex")).toEqual(["cursor", "codex"]);
+    expect(() => parseHarnesses("vscode")).toThrow(
+      'unknown harness "vscode"; expected one of claude-code, codex, cursor, stella, claude-desktop',
     );
     expect(() => parseHarnesses("claude_code")).toThrow(
       /unknown harness "claude_code"/,
@@ -1493,6 +1505,63 @@ describe("harnesses and reassign", () => {
     ).toEqual(["mine.sh"]);
     expect(Object.keys(stripped.hooks)).toEqual(["PreToolUse"]);
     expect(d.lines.join("\n")).toContain("removed from");
+  });
+
+  it("enrolls Cursor next to Claude Code, and unenroll strips it back to the user's own hooks", async () => {
+    const d = deps();
+    d.writeCursorHooks({
+      version: 1,
+      hooks: { preToolUse: [{ command: "./mine.sh" }] },
+    });
+    const result = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+        harnesses: ["claude-code", "cursor"],
+      },
+      d,
+    );
+    expect(result.ok).toBe(true);
+    expect(d.requests[0]?.body).toMatchObject({
+      harnesses: ["claude-code", "cursor"],
+    });
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      harnesses: ["claude-code", "cursor"],
+      cursor_version: "2026.09.16",
+      cursor_execpath: "/usr/local/bin/cursor-agent",
+    });
+    const cursor = d.readCursorHooks() as {
+      version: number;
+      hooks: Record<string, Array<{ command: string }>>;
+    };
+    expect(cursor.version).toBe(1);
+    expect(cursor.hooks["preToolUse"]?.map((e) => e.command)).toEqual([
+      "./mine.sh",
+      `node /opt/tacho/tacho-hook.mjs --enrollment ${TEST_ENROLLMENT} --harness cursor`,
+    ]);
+    expect(Object.keys(cursor.hooks).sort()).toEqual(
+      [...CURSOR_HOOK_EVENTS].sort(),
+    );
+    expect(cursorHookPresence(cursor, TEST_ENROLLMENT).complete).toBe(true);
+
+    const report = await status({ json: true }, d);
+    expect(report.cursorHooks?.complete).toBe(true);
+    expect(report.host?.cursor_version).toBe("2026.09.16");
+    expect(d.lines.join("\n")).toContain("Cursor");
+
+    const found = detect({ json: true }, d);
+    expect(found.harnesses.find((h) => h.harness === "cursor")).toMatchObject({
+      installed: true,
+      enrolled: true,
+    });
+
+    await unenroll({ token: "tok" }, d);
+    expect(d.readCursorHooks()).toEqual({
+      version: 1,
+      hooks: { preToolUse: [{ command: "./mine.sh" }] },
+    });
   });
 
   it("adds a harness to an enrolled host through a revoke and a fresh enrollment, so the control plane's record follows", async () => {
@@ -2115,12 +2184,14 @@ describe("export and verify", () => {
     ).toEqual([
       ["claude-code", true, false],
       ["codex", true, false],
+      ["cursor", true, false],
       ["stella", true, false],
       // The connected tier (ADR-078): a GUI app, detected on disk rather
       // than on PATH, and reported with its tier so no surface has to guess.
       ["claude-desktop", true, false],
     ]);
     expect(fresh.harnesses.map((h) => h.tier)).toEqual([
+      "harness",
       "harness",
       "harness",
       "harness",
@@ -2149,6 +2220,14 @@ describe("export and verify", () => {
       harnesses: [
         { harness: "claude-code", installed: true, enrolled: true },
         { harness: "codex", installed: false, enrolled: false },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: true,
+          path: "/usr/local/bin/cursor-agent",
+          version: "2026.09.16",
+          enrolled: false,
+        },
         {
           harness: "stella",
           label: "Stella",
@@ -2478,7 +2557,11 @@ describe("stella", () => {
     expect(d.lines.join("\n")).toContain(
       "Stella      complete: 8 present, 0 missing",
     );
-    expect(detect({ json: true }, d).harnesses[2]).toEqual({
+    // By name, not by index: the roster follows the harness enum, so a
+    // fifth harness must not silently move this assertion onto another row.
+    expect(
+      detect({ json: true }, d).harnesses.find((h) => h.harness === "stella"),
+    ).toEqual({
       harness: "stella",
       label: "Stella",
       installed: true,

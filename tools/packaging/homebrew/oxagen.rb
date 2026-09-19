@@ -16,7 +16,7 @@ cask "oxagen" do
 
   url "https://github.com/macanderson/oxagen/releases/download/desktop-v#{version}/Oxagen_#{version}_#{arch}.dmg"
   name "Oxagen"
-  desc "Put this machine's Claude Code and Codex sessions under Oxagen control"
+  desc "Put this machine's coding agent sessions under Oxagen control"
   homepage "https://oxagen.sh/"
 
   livecheck do
@@ -35,9 +35,9 @@ cask "oxagen" do
   binary "#{appdir}/Oxagen.app/Contents/MacOS/oxagen"
 
   # The uninstall order the app enforces: stop the collector, unenroll (strips
-  # the hooks in both harnesses, removes the service, revokes on the control
-  # plane, deletes the host credentials), then remove the app. must_succeed is
-  # off because an unenrolled machine has nothing to unenroll.
+  # the hooks in every wrapped harness, removes the service, revokes on the
+  # control plane, deletes the host credentials), then remove the app.
+  # must_succeed is off because an unenrolled machine has nothing to unenroll.
   uninstall launchctl: "sh.oxagen.tachod",
             script:    {
               executable:   "#{appdir}/Oxagen.app/Contents/MacOS/tacho",

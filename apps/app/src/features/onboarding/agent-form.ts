@@ -12,9 +12,16 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export const HARNESSES = agentHarnessSchema.options;
 export type Harness = (typeof HARNESSES)[number];
 
+/** The harnesses whose hooks Tacho writes on an enrolled host. */
+const HOST_WRAPPED: ReadonlySet<Harness> = new Set([
+  "claude-code",
+  "codex",
+  "cursor",
+]);
+
 /** Hook-based harnesses enrol a host; the rest are wrapped in the agent's own process. */
 export function wrapPathOf(harness: Harness): "host" | "sdk" {
-  return harness === "claude-code" ? "host" : "sdk";
+  return HOST_WRAPPED.has(harness) ? "host" : "sdk";
 }
 
 const AGENT_FORM_ERROR_KEYS = [

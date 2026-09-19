@@ -210,7 +210,7 @@ pub fn auto_link_cli_enabled_with(config: &Map<String, Value>, developer_harness
 /// `packages/tacho/src/wire.ts`); a connected app is deliberately not on this
 /// list, because someone who has only Claude Desktop is exactly the person
 /// this default exists for.
-const DEVELOPER_BINARIES: [&str; 3] = ["claude", "codex", "stella"];
+const DEVELOPER_BINARIES: [&str; 4] = ["claude", "codex", "cursor-agent", "stella"];
 
 /// Pure: does any of the well-known install directories hold a coding agent?
 /// Takes the directory list and an existence probe so a test is not answered
@@ -1994,6 +1994,9 @@ mod tests {
         // Stella from cargo, in a directory that is not first in the list.
         let stella = PathBuf::from("/nope").join(exe("stella"));
         assert!(developer_harness_in(&dirs, &|p: &Path| p == stella));
+        // Cursor's CLI ships as `cursor-agent`, not `cursor`.
+        let cursor = PathBuf::from("/nope").join(exe("cursor-agent"));
+        assert!(developer_harness_in(&dirs, &|p: &Path| p == cursor));
         // A connected app is not a coding agent: someone who has only Claude
         // Desktop is exactly who the off-by-default is for.
         let desktop = PathBuf::from("/opt/homebrew/bin").join(exe("claude-desktop"));

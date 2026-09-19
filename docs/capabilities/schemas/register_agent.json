@@ -42,6 +42,8 @@
         "enum": [
           "stella",
           "claude-code",
+          "codex",
+          "cursor",
           "claude-agent-sdk",
           "custom"
         ]

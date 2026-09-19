@@ -133,7 +133,10 @@ export function hookUrl(port: number, enrollmentId: string): string {
   return `http://127.0.0.1:${port}/hook/${enrollmentId}`;
 }
 
-function isTachoEntry(entry: HookEntry, enrollmentId?: string): boolean {
+export function isTachoEntry(
+  entry: HookEntry,
+  enrollmentId?: string,
+): boolean {
   const idPattern = enrollmentId ?? "tch_[a-z0-9]{22}";
   if (entry.type === "command" && typeof entry.command === "string") {
     return new RegExp(`--enrollment ${idPattern}(\\s|$)`).test(entry.command);
