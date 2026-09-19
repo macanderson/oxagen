@@ -13,3 +13,108 @@
  * build time (assistant-markdown.tsx). */
 @source "../../../../node_modules/streamdown/dist/*.js";
 @source "../../../../node_modules/@streamdown/code/dist/*.js";
+
+/* Mockup names map to the house palette; muted text and muted fills stay separate. */
+@theme inline {
+  --color-muted: var(--muted-surface);
+  --color-banner: var(--banner-bg);
+  --color-app-canvas: var(--background);
+}
+
+@layer base {
+  :root {
+    --ink: var(--background);
+    --void: var(--ox-paper-void);
+    --panel: var(--card);
+    --hl: var(--accent);
+    --rule: var(--input);
+    --fg: var(--foreground);
+    --body: var(--ox-text-ink-body);
+    --dim: var(--ox-dim-ink);
+    --gold: var(--ox-gold);
+    --gold-bright: var(--ox-gold-bright);
+    --gold-deep: var(--ox-gold-deep);
+    --accent-text: var(--ember-ink);
+    --on-gold: var(--ox-ink);
+    --st-allowed: var(--success);
+    --st-approval: var(--info);
+    --st-denied: var(--warning);
+    --st-proven: var(--proven);
+    --st-failed: var(--error);
+    --st-critical: var(--critical);
+    --st-observe: var(--muted-foreground);
+    --sk-on: var(--st-allowed);
+    --sk-off: var(--dim);
+    --sk-held: var(--st-denied);
+    --sk-res: var(--fk-ctx);
+    --k-rule: #9d8be3;
+    --fk-model: #3987e5;
+    --fk-tool: #d95926;
+    --fk-gov: #199e70;
+    --fk-ctx: #9085e9;
+    --fk-op: #d55181;
+    --k-constraint: #d677b5;
+    --k-procedure: #a6b95e;
+    --k-fact: #5cb5d6;
+    --k-memory: #94a3c2;
+    --k-preference: #d08fa0;
+    --tx-surface: var(--void);
+    --side-w: 236px;
+    --sidebar-width: var(--side-w);
+    --mono: var(--ox-font-mono);
+    --font: var(--ox-font);
+    --muted-surface: var(--_stone-100);
+    --banner-bg: var(--card);
+  }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .dark {
+    --void: var(--ox-void);
+    --body: var(--ox-text-body);
+    --muted: var(--ox-muted);
+    --dim: var(--ox-dim);
+    --muted-surface: var(--ox-hl);
+    --banner-bg: var(--ox-hl);
+    --button-primary-bg: var(--gold);
+    --button-primary-fg: var(--on-gold);
+    --button-primary-hover-bg: var(--gold-bright);
+    --button-primary-active-bg: var(--gold-deep);
+    --button-disabled-bg: var(--hl);
+    --input-disabled-bg: var(--hl);
+    --app-panel-bg: var(--panel);
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Match explicit dark mode before the theme script runs. */
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light):not(.dark) {
+      --void: var(--ox-void);
+      --body: var(--ox-text-body);
+      --muted: var(--ox-muted);
+      --dim: var(--ox-dim);
+      --muted-surface: var(--ox-hl);
+      --banner-bg: var(--ox-hl);
+      --button-primary-bg: var(--gold);
+      --button-primary-fg: var(--on-gold);
+      --button-primary-hover-bg: var(--gold-bright);
+      --button-primary-active-bg: var(--gold-deep);
+      --button-disabled-bg: var(--hl);
+      --input-disabled-bg: var(--hl);
+      --app-panel-bg: var(--panel);
+      --shadow:
+        0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 44px rgba(0, 0, 0, 0.5);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+  }
+}
