@@ -40,7 +40,7 @@ import { readModelBaseUrlState } from "../host/model-base-url";
 import type { TachoPaths } from "../host/paths";
 import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
-import { NO_RETENTION, type RetentionMandate } from "../evidence/retention";
+import { NO_RETENTION } from "../evidence/retention";
 import { Wal } from "../host/wal";
 import { ulid } from "../ids";
 import { toProtocolTimestamp } from "../timestamp";
@@ -92,7 +92,7 @@ import {
   createCollectorServer,
   type HookEnvelope,
 } from "./server";
-import { Shipper } from "./spool";
+import { type RetentionDecision, Shipper } from "./spool";
 import { TranscriptTailer } from "./transcript-tailer";
 
 export const TACHO_WRAPPER_VERSION = "2.1.1";
@@ -376,8 +376,16 @@ export async function startDaemon(
    * refresh replaced the bundle, which is the one thing the signature is
    * there to prevent.
    */
-  const retentionInForce = (): RetentionMandate =>
-    bundleVerified && !mandateLapsed() ? host.bundle.retention : NO_RETENTION;
+  /**
+   * The retention clause in force, with whether it is the workspace's answer
+   * or the absence of one. Both keep nothing that is not covered; only a
+   * proven clause also purges what is already on disk, because a lapsed or
+   * unverifiable bundle is usually a transient condition and a purge is not.
+   */
+  const retentionInForce = (): RetentionDecision =>
+    bundleVerified && !mandateLapsed()
+      ? { mandate: host.bundle.retention, proven: true }
+      : { mandate: NO_RETENTION, proven: false };
   /**
    * Whether the cached mandate has outlived its own signed window since the
    * control plane last confirmed it. The same rule `isStale` applies to tool
@@ -474,7 +482,9 @@ export async function startDaemon(
     const retention = retentionInForce();
     wal.append(
       events,
-      bodies.filter((body) => retentionAllows(retention, body.content_class)),
+      bodies.filter((body) =>
+        retentionAllows(retention.mandate, body.content_class),
+      ),
     );
     stateDirty = true;
   }

@@ -33,6 +33,33 @@ import {
   type TachoBody,
 } from "../wire";
 
+/**
+ * The retention clause in force, and whether it is the workspace's own answer.
+ *
+ * The two halves are one value because they are one decision and a caller
+ * that could answer them separately could answer them inconsistently. That is
+ * the shape of an earlier defect on this path, where four sites built the same
+ * request by hand and one field reached three of them.
+ */
+export interface RetentionDecision {
+  /** The classes whose content may leave this host right now. */
+  mandate: RetentionMandate;
+  /**
+   * Whether `mandate` is what the workspace decided, rather than the absence
+   * of an answer. False when the cached bundle does not verify or has outlived
+   * its signed window: `mandate` is then `NO_RETENTION` because nothing can be
+   * shown to be covered, which is not the same as the workspace having
+   * narrowed it.
+   *
+   * Both withhold. Only a proven narrowing also purges, because a purge is
+   * irreversible and an unprovable mandate is usually transient — a control
+   * plane outage lapses every cached bundle at once, and destroying the queued
+   * evidence of every session on that signal would make an outage into
+   * permanent data loss committed by the component whose job is the record.
+   */
+  proven: boolean;
+}
+
 export interface ShipperOptions {
   wal: Wal;
   client: ControlClient;
@@ -56,13 +83,18 @@ export interface ShipperOptions {
    * clause is asked again here, against the mandate the last refresh
    * established, and a body it no longer covers is never transmitted.
    *
+   * A body the clause no longer covers is also purged from the WAL when the
+   * clause is `proven`, because withholding alone leaves the bytes on disk
+   * until the session seals and ages out.
+   *
    * Required, and deliberately. An optional clause that a caller may omit is
    * the same bypass in a new shape: the filter would read `undefined` and
    * transmit every queued body, and a shipper built without it would look
    * correct at the call site. A caller with no trustworthy mandate to offer
-   * passes `NO_RETENTION`, which keeps nothing, rather than passing nothing.
+   * passes `NO_RETENTION` with `proven: false`, which keeps nothing and
+   * destroys nothing, rather than passing nothing.
    */
-  retentionInForce: () => RetentionMandate;
+  retentionInForce: () => RetentionDecision;
   log: (line: string) => void;
   now: () => number;
   minBackoffMs?: number;
@@ -297,6 +329,7 @@ export class Shipper {
     const kindOf = new Map(
       own.map((event) => [event.event_id_idem, event.kind] as const),
     );
+    const withheld = new Set<string>();
     const bodies = new Map(
       this.options.wal
         .bodiesFor(own)
@@ -307,13 +340,26 @@ export class Shipper {
           // A body whose event is not in this batch, or whose kind names no
           // class, is not shipped: an unclassifiable body cannot be shown to
           // be covered, and the boundary fails closed.
-          return (
+          const allowed =
             contentClass !== undefined &&
-            retentionAllows(retention, contentClass)
-          );
+            retentionAllows(retention.mandate, contentClass);
+          if (!allowed) withheld.add(body.event_id_idem);
+          return allowed;
         })
         .map((body) => [body.event_id_idem, body] as const),
     );
+    // The on-disk half of the same narrowing. Only a proven mandate purges:
+    // an unprovable one withholds and keeps, because it is usually transient
+    // and a purge is not.
+    if (retention.proven && withheld.size > 0) {
+      const dropped = this.options.wal.dropBodies(withheld);
+      if (dropped > 0)
+        this.options.log(
+          `retention narrowed: dropped ${dropped} withheld ${
+            dropped === 1 ? "body" : "bodies"
+          } from the WAL`,
+        );
+    }
     const result = await this.shipBatch(
       this.fitRequestBudget(own, bodies),
       bodies,

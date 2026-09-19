@@ -145,7 +145,12 @@ The first two are closed on the hook path:
   when both halves of it allow, and ships them in `bodies[]`. The shipper
   drops a body once its batch is acknowledged, whether the control plane
   stored or refused it, and a mandate that narrows drops what is already on
-  disk rather than racing the drain.
+  disk rather than racing the drain. A mandate that cannot be proven — an
+  unverifiable bundle, or one past its signed window — withholds the body but
+  keeps it, because that condition is usually transient and a purge is not: a
+  control plane outage lapses every cached bundle at once, and purging on that
+  signal would turn an outage into permanent loss of the evidence this host
+  exists to keep.
 
 What remains under G3:
 

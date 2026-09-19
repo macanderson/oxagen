@@ -3,7 +3,13 @@
  * inbox, the detector, the exporters, the shipper's failure handling, the
  * registry's sweep and persistence, and the listener's request handling.
  */
-import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
@@ -559,8 +565,11 @@ describe("shipper", () => {
       // These cases are about batching, backoff and quarantine, so the mandate
       // is the permissive one and never the thing under test.
       retentionInForce: () => ({
-        mode: "content_exact",
-        classes: ["model_call", "tool_call", "approval_receipt"],
+        mandate: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call", "approval_receipt"],
+        },
+        proven: true,
       }),
       log: (l) => logs.push(l),
       now,
@@ -1237,8 +1246,11 @@ describe("shipper", () => {
       quarantineDir: paths.quarantine,
       health: () => ({ version: "1" }),
       onControl: () => undefined,
-      // Narrowed since the append.
-      retentionInForce: () => ({ mode: "digest_only", classes: [] }),
+      // Narrowed since the append, and proven, so this also purges.
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: true,
+      }),
       log: () => undefined,
       now: () => 0,
     });
@@ -1247,6 +1259,94 @@ describe("shipper", () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
     expect(wal.stats().unshipped).toBe(0);
+  });
+
+  /** What `<session>.bodies.jsonl` holds for a session, or "" when gone. */
+  function bodyFileText(walDir: string, sessionUuid: string): string {
+    const path = join(walDir, `${sessionUuid}.bodies.jsonl`);
+    return existsSync(path) ? readFileSync(path, "utf8") : "";
+  }
+
+  it("purges a withheld body from the WAL when the narrowing is proven", async () => {
+    // Withholding protects the network boundary and nothing else. The bytes
+    // sit in `<session>.bodies.jsonl` until the session seals, ships and ages
+    // out, so an unsealed session would keep prompt content the workspace has
+    // already withdrawn authority for, readable by anything running as this
+    // user. `docs/specs/gateway/spec.md` requires the narrowing to drop what
+    // is already on disk.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the secret prompt")]);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (batch: TachoEvent[]) => okResponse(batch),
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: true,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // Not merely unshipped: gone from disk, bytes and all.
+    expect(wal.bodiesFor([prompt])).toEqual([]);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).not.toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
+  });
+
+  it("keeps a withheld body when the mandate cannot be proven", async () => {
+    // The other half, and the reason the two are distinguished. A control
+    // plane outage lapses every cached bundle at once. If withholding alone
+    // purged, an outage would destroy the queued evidence of every session on
+    // the host — permanent loss, committed by the component whose job is the
+    // record, on a condition that usually clears at the next poll.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "the secret prompt")]);
+    const sent: Array<readonly TachoBody[] | undefined> = [];
+    const s = new Shipper({
+      wal,
+      client: {
+        ingest: async (
+          batch: TachoEvent[],
+          _health: unknown,
+          bodies?: readonly TachoBody[],
+        ) => {
+          sent.push(bodies);
+          return okResponse(batch);
+        },
+      } as unknown as ControlClient,
+      quarantineDir: paths.quarantine,
+      health: () => ({ version: "1" }),
+      onControl: () => undefined,
+      // NO_RETENTION because nothing can be shown to be covered, which is not
+      // the workspace narrowing anything.
+      retentionInForce: () => ({
+        mandate: { mode: "digest_only", classes: [] },
+        proven: false,
+      }),
+      log: () => undefined,
+      now: () => 0,
+    });
+    await s.drain();
+    // Withheld from the wire, kept on disk.
+    expect(sent.every((b) => b === undefined || b.length === 0)).toBe(true);
+    expect(bodyFileText(paths.wal, prompt.session_uuid)).toContain(
+      Buffer.from("the secret prompt").toString("base64"),
+    );
   });
 
   it("still ships a queued body the mandate does cover", async () => {
@@ -1272,8 +1372,11 @@ describe("shipper", () => {
       health: () => ({ version: "1" }),
       onControl: () => undefined,
       retentionInForce: () => ({
-        mode: "content_exact",
-        classes: ["model_call", "tool_call"],
+        mandate: {
+          mode: "content_exact",
+          classes: ["model_call", "tool_call"],
+        },
+        proven: true,
       }),
       log: () => undefined,
       now: () => 0,
@@ -1306,8 +1409,8 @@ describe("shipper", () => {
       onControl: () => undefined,
       onBodyRejection: (rejections) => refused.push(...rejections),
       retentionInForce: () => ({
-        mode: "content_exact",
-        classes: ["model_call"],
+        mandate: { mode: "content_exact", classes: ["model_call"] },
+        proven: true,
       }),
       log: () => undefined,
       now: () => 0,
