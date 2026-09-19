@@ -1955,6 +1955,9 @@ type Messages = {
       avatarHint: string;
       email: string;
       emailHint: string;
+      timeZone: string;
+      timeZoneHint: string;
+      timeZoneInvalid: string;
       invalid: string;
       denied: string;
       failed: string;

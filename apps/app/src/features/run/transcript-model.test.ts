@@ -17,7 +17,8 @@ const turns = buildTranscript(entries);
 /** The step at `s` in turn `t`; a missing one fails the test that asked. */
 function step(t: number, s: number) {
   const found = turns[t]?.steps[s];
-  if (found === undefined) throw new Error(`no step ${String(s)} in turn ${String(t)}`);
+  if (found === undefined)
+    throw new Error(`no step ${String(s)} in turn ${String(t)}`);
   return found;
 }
 
@@ -31,9 +32,7 @@ describe("buildTranscript", () => {
   });
 
   it("pairs a model request with its response and a tool request with its decision and call", () => {
-    expect(
-      turns[1]?.steps.map((s) => [s.id, s.kind, s.from, s.to]),
-    ).toEqual([
+    expect(turns[1]?.steps.map((s) => [s.id, s.kind, s.from, s.to])).toEqual([
       ["s2", "event", 2, 2],
       ["s3", "model", 3, 4],
       ["s5", "tool", 5, 7],

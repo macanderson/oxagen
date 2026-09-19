@@ -16,7 +16,7 @@
 // row whose GitHub connection was retired saying so. The list is local facts
 // only, so it draws while GitHub is down; the link is the one GitHub call, and
 // it happens on submit.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useEffect, useId, useState } from "react";
 import type { WorkspaceRepositories } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
@@ -39,6 +39,7 @@ import {
   useWorkspaceSettingsFailure,
   type WorkspaceSettingsFailure,
 } from "./workspace-settings-failure";
+import { useFormatter } from "@/ui/formatter";
 
 type Load<T> =
   | { kind: "loading" }
