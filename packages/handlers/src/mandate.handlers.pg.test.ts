@@ -783,6 +783,70 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).rejects.toSatisfy(forbidden("org_role_required"));
     });
 
+    it("list/get: a requester's grant does not survive the agent's soft-delete", async () => {
+      const softDeletedAgentPrincipal = randomUUID();
+      const [softDeletedAgent] = await withSystemDb((tx) =>
+        tx
+          .insert(schema.agents)
+          .values({
+            orgId,
+            workspaceId,
+            slug: `soft-deleted-bot-${randomUUID().slice(0, 8)}`,
+            name: "Soft-deleted bot",
+            agentType: "custom",
+            principalId: softDeletedAgentPrincipal,
+            createdById: otherOperatorUserId,
+          })
+          .returning({ publicId: schema.agents.publicId }),
+      );
+      const draft = await inScope(() =>
+        mandateRequestHandler(
+          mandateGrant.input.parse({
+            ...body(),
+            agentId: softDeletedAgent!.publicId,
+          }),
+          ctx(operatorUserId),
+        ),
+      );
+
+      // Before the soft-delete, the requester grant works the same as the
+      // still-live case above.
+      const beforeDelete = await inScope(() =>
+        mandateListHandler(
+          { limit: 50, agentId: softDeletedAgent!.publicId },
+          ctx(operatorUserId),
+        ),
+      );
+      expect(beforeDelete.items.map((m) => m.id)).toContain(draft.id);
+
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.agents)
+          .set({ deletedAt: new Date() })
+          .where(eq(schema.agents.publicId, softDeletedAgent!.publicId)),
+      );
+
+      // Once the agent is soft-deleted, neither list nor get admits the
+      // requester through the requester grant: a row that hasn't been purged
+      // yet is not the same as a live agent, and the requester's visibility
+      // must not outlive the agent it was requested for. Listed with no
+      // `agentId` filter, since that filter alone already excludes a
+      // soft-deleted agent's mandates (line ~33 above) and would pass even
+      // without the fix this test protects.
+      const afterDelete = await inScope(() =>
+        mandateListHandler({ limit: 500 }, ctx(operatorUserId)),
+      );
+      expect(afterDelete.items.map((m) => m.id)).not.toContain(draft.id);
+      await expect(
+        inScope(() =>
+          mandateGetHandler(
+            { mandateId: draft.id, ledgerLimit: 100 },
+            ctx(operatorUserId),
+          ),
+        ),
+      ).rejects.toSatisfy(forbidden("org_role_required"));
+    });
+
     // ── revoke, limits ─────────────────────────────────────────────────────────
 
     it("revoke: releases what parked calls hold, expires the parked approval, records the reason and emits; a second revoke is a conflict", async () => {

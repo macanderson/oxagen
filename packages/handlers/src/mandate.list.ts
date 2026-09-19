@@ -52,24 +52,40 @@ export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
     // never read back.
     let readerScope: SQL | undefined;
     if (operatorId !== null) {
-      const created = await tx
-        .select({ principalId: schema.agents.principalId })
+      const liveAgents = await tx
+        .select({
+          principalId: schema.agents.principalId,
+          createdById: schema.agents.createdById,
+        })
         .from(schema.agents)
         .where(
           and(
             eq(schema.agents.workspaceId, workspaceId),
-            eq(schema.agents.createdById, operatorId),
             isNull(schema.agents.deletedAt),
           ),
         );
-      const createdByOperator = created
+      const createdByOperator = liveAgents
+        .filter((a) => a.createdById === operatorId)
+        .map((a) => a.principalId)
+        .filter((id): id is string => id !== null);
+      // A requester's visibility is narrowed to a *live* agent too: a
+      // soft-deleted agent's mandate is not readable through the requester
+      // grant just because `deletedAt` on the agent row happens to be the
+      // only thing standing between the requester and someone else's now-gone
+      // agent's ledger (ADR-107, follow-on finding).
+      const livePrincipalIds = liveAgents
         .map((a) => a.principalId)
         .filter((id): id is string => id !== null);
       readerScope = or(
         createdByOperator.length > 0
           ? inArray(schema.mandates.agentPrincipalId, createdByOperator)
           : undefined,
-        eq(schema.mandates.requestedBy, operatorId),
+        livePrincipalIds.length > 0
+          ? and(
+              eq(schema.mandates.requestedBy, operatorId),
+              inArray(schema.mandates.agentPrincipalId, livePrincipalIds),
+            )
+          : undefined,
       );
     }
 
