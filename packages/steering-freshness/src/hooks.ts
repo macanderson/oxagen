@@ -33,6 +33,41 @@ export const HOOK_MARKER = "oxagen steering gate";
 export const INSTALLABLE = ["claude-code", "codex"] as const;
 export type InstallableHarness = (typeof INSTALLABLE)[number];
 
+/**
+ * Wrapped harnesses this installer has no config writer for.
+ *
+ * Oxagen wraps four agents with a pre-prompt hook (`WRAPPED_HARNESSES` in
+ * `@oxagen/tacho`), and two of them are here: Cursor and Stella. The gate
+ * itself runs for either one, because `oxagen steering gate --harness <name>`
+ * falls back to the text renderer and the exit-code contract for a name it
+ * does not know. What is missing is the part that puts the command in front
+ * of a prompt: neither has a hook-config path this code can write, so nothing
+ * calls the gate until someone wires it by hand.
+ *
+ * The list is written out rather than imported, because this package depends
+ * on git and `zod` and nothing else. Re-registering one of these names is a
+ * config writer in `hookConfigPath` and a move from this list to
+ * {@link INSTALLABLE}.
+ *
+ * It exists so `--harness all` can say what it did. Installing "all" and
+ * getting two of four, with no word about the other two, is how a team ends
+ * up believing their Cursor prompts are gated when nothing is checking them.
+ */
+export const UNINSTALLABLE = ["cursor", "stella"] as const;
+export type UninstallableHarness = (typeof UNINSTALLABLE)[number];
+
+/**
+ * What `--harness all` did not cover, in one line for a person to read.
+ *
+ * Printed by `oxagen steering hooks install` and `status`, so the honest
+ * scope of "all" is in the output rather than only in the source.
+ */
+export function ungatedHarnessNotice(): string {
+  return `No hook was installed for ${UNINSTALLABLE.join(
+    " or ",
+  )}: Oxagen has no config writer for either yet, so prompts there are not gated. Call \`oxagen steering gate --harness <name>\` from that harness's own pre-prompt hook and treat exit 2 as a refusal, with the reason on stderr.`;
+}
+
 export interface HookIo {
   read: typeof readFile;
   write: typeof writeFile;

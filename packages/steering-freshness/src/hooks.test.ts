@@ -6,6 +6,9 @@ import {
   hookStatus,
   installHook,
   removeHook,
+  ungatedHarnessNotice,
+  INSTALLABLE,
+  UNINSTALLABLE,
   type HookIo,
 } from "./hooks";
 
@@ -258,5 +261,26 @@ describe("hookStatus", () => {
   it("reports not installed for an unparseable config rather than throwing", async () => {
     const store = io({ [CODEX]: "{" });
     expect((await hookStatus(ROOT, "codex", store)).installed).toBe(false);
+  });
+});
+
+// Finding 2. Oxagen wraps four harnesses with a pre-prompt hook and this
+// installer writes a config for two of them. The two it cannot write for are
+// named, so `--harness all` can say what it did rather than leaving a team to
+// believe four are gated.
+describe("the harnesses with no installer", () => {
+  it("does not overlap the installable ones", () => {
+    for (const harness of UNINSTALLABLE) {
+      expect(INSTALLABLE as readonly string[]).not.toContain(harness);
+    }
+  });
+
+  it("names both, says they are not gated, and gives the manual wiring", () => {
+    const notice = ungatedHarnessNotice();
+    expect(notice).toContain("cursor");
+    expect(notice).toContain("stella");
+    expect(notice).toContain("not gated");
+    expect(notice).toContain("oxagen steering gate --harness <name>");
+    expect(notice).toContain("exit 2");
   });
 });
