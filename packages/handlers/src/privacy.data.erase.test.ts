@@ -17,12 +17,9 @@
  *   6. org scope, no membership row     → throws Forbidden (IDOR guard)
  *   7. user scope                       → SUCCEEDS without any role check, revokes
  *      sessions, emits security event + Inngest job, returns queued.
- *   8. org scope, input.orgId ≠ ctx.orgId → throws Forbidden  ← the recheck
- *      evaluates the governed org, so a target naming another org had its own
- *      erase_data deny skipped while being scheduled for hard-delete.
- *   9. org scope, deny in the target org → throws Forbidden, and the IAM read
+ *   8. org scope, deny in the target org → throws Forbidden, and the IAM read
  *      was made about the org being erased.
- *  10. org scope, same org, nothing denying → still SUCCEEDS.
+ *   9. org scope, same org, nothing denying → still SUCCEEDS.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -278,6 +275,32 @@ describe("privacy.data.erase handler", () => {
     expect(mockEventSend).not.toHaveBeenCalled();
   });
 
+  // The recheck below asks ctx.orgId's policy while the role read and the
+  // scheduled delete use input.orgId. With the two free to differ, an owner of
+  // both could invoke in A, name B, and have B's explicit erase_data deny go
+  // unread while B's records were scheduled for hard-delete: decided in one
+  // tenant, executed in another, on the one capability where that cannot be
+  // undone.
+  it("throws Forbidden for an org scope naming an organization other than the governed one", async () => {
+    roleResult = [{ role: "owner" }];
+    // The deny lives in the target, and nothing revokes it in the governed org:
+    // exactly the arrangement the old code read the wrong half of.
+    authzByOrg.value = {
+      [OTHER_ORG_ID]: authzWithOwnerEffect(OTHER_ORG_ID, "deny"),
+    };
+    await expect(
+      privacyDataEraseHandler(
+        { scope: "org", orgId: OTHER_ORG_ID, confirm: true },
+        makeCtx({ orgId: ORG_ID }),
+      ),
+    ).rejects.toThrow(/own context/);
+    expect(mockEventSend).not.toHaveBeenCalled();
+    // Nothing was scheduled, and no organization's policy was consulted on
+    // another organization's behalf.
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(fetchAuthzCalls.orgIds).toEqual([]);
+  });
+
   it("throws Forbidden for org scope when the member is not an owner", async () => {
     roleResult = [{ role: "admin" }];
     await expect(
@@ -314,34 +337,6 @@ describe("privacy.data.erase handler", () => {
     );
     expect(mockEventSend).toHaveBeenCalledTimes(1);
     expect(firstArg<InngestEvent>(mockEventSend)?.data?.scope).toBe("user");
-  });
-
-  // ── The erasure target must be the governed organisation ──────────────────
-  //
-  // The recheck above evaluates `ctx.orgId`. Before the equality check, an
-  // owner of two organisations could invoke through A while naming B in the
-  // body: the policy of A decided, and B was scheduled for an irreversible
-  // hard-delete with its own explicit `erase_data` deny never read. Erasure
-  // does not come back, so a control that was not consulted is not a control.
-  it("REGRESSION: refuses an org erasure whose input.orgId is not the governed org", async () => {
-    roleResult = [{ role: "owner" }];
-    // Nothing revoked in the governed org; the deny lives in the target.
-    authzByOrg.value = {
-      [OTHER_ORG_ID]: authzWithOwnerEffect(OTHER_ORG_ID, "deny"),
-    };
-
-    await expect(
-      privacyDataEraseHandler(
-        { scope: "org", orgId: OTHER_ORG_ID, confirm: true },
-        makeCtx({ orgId: ORG_ID }),
-      ),
-    ).rejects.toThrow(/must be requested in that organization's own context/);
-
-    // Nothing was scheduled, and the policy of the governed org was never even
-    // consulted on another org's behalf.
-    expect(mockEventSend).not.toHaveBeenCalled();
-    expect(tx.insert).not.toHaveBeenCalled();
-    expect(fetchAuthzCalls.orgIds).toEqual([]);
   });
 
   it("REGRESSION: an explicit erase_data deny in the target org stops the erasure", async () => {
