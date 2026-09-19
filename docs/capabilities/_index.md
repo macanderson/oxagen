@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**307 capabilities across 47 domains.**
+**310 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -331,8 +331,9 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repo.resume](repo.resume.md) — Resume automatic syncing for a paused repository connection
 - [repo.sync](repo.sync.md) — Trigger incremental or full re-index of a repository connection (async)
 
-## Repository (8)
+## Repository (11)
 
+- [repository.init_pr.open](repository.init_pr.open.md) — Add Oxagen to one of the workspace's repositories: open a pull request from oxagen/init that adds the .oxagen/ tree with the reviewed workspace.toml and governance.toml; never writes to the production branch
 - [repository.installation.attach](repository.installation.attach.md) — Make one of the workspace's reachable GitHub App installations the installation it acts through
 - [repository.installation.candidates](repository.installation.candidates.md) — The GitHub App installations the workspace's stored GitHub authorization can reach, the set attach_github_installation will accept
 - [repository.installation.list](repository.installation.list.md) — The repositories the workspace's GitHub App installation can reach, the set bind_main_repository will accept
@@ -340,6 +341,8 @@ Capabilities granted to an agent as a set have a page of their own:
 - [repository.list](repository.list.md) — The workspace's repositories, its one main repository and every linked one, with each one's role, approved default ref and whether its connection is live
 - [repository.main.bind](repository.main.bind.md) — Bind a GitHub repository the workspace's GitHub App installation reaches as its main repo, and close the onboarding gate's provisional window
 - [repository.main.get](repository.main.get.md) — The workspace's main repository, whether a GitHub App installation is attached, and the signed URLs to install or to change which repositories it reaches
+- [repository.production_branch.set](repository.production_branch.set.md) — Confirm or change the production branch of one of the workspace's repositories; the branch must exist on GitHub, and a change writes a new binding version
+- [repository.tree.get](repository.tree.get.md) — What one of the workspace's repositories holds under .oxagen/ on its production branch: the head commit, every path, workspace.toml, governance.toml and its mode, and any open init pull request
 - [repository.unlink](repository.unlink.md) — Unlink a linked repository from the workspace by its binding id; the main repository is refused and binding history is kept
 
 ## Router (4)

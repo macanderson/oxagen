@@ -1,0 +1,163 @@
+{
+  "name": "get_repository_tree",
+  "domain": "repository",
+  "description": "Read what one of the workspace's repositories holds under .oxagen/ on its production branch: the head commit, every path, workspace.toml, governance.toml and its mode, and any open init pull request.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "bindingId": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "main",
+          "linked"
+        ]
+      },
+      "fullName": {
+        "type": "string",
+        "minLength": 1
+      },
+      "productionBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "githubDefaultBranch": {
+        "type": "string",
+        "minLength": 1
+      },
+      "head": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "oxagen": {
+        "type": "object",
+        "properties": {
+          "present": {
+            "type": "boolean"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "present",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "workspaceToml": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "governanceToml": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "governanceMode": {
+        "type": "string",
+        "enum": [
+          "solo",
+          "team",
+          "regulated",
+          "absent",
+          "invalid"
+        ]
+      },
+      "initPullRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "htmlUrl": {
+                "type": "string",
+                "format": "uri"
+              }
+            },
+            "required": [
+              "number",
+              "htmlUrl"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "readAt": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "bindingId",
+      "role",
+      "fullName",
+      "productionBranch",
+      "githubDefaultBranch",
+      "head",
+      "oxagen",
+      "workspaceToml",
+      "governanceToml",
+      "governanceMode",
+      "initPullRequest",
+      "readAt"
+    ],
+    "additionalProperties": false
+  }
+}

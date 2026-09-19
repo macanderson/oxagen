@@ -240,14 +240,25 @@ export interface GitHubClient {
 
   /**
    * Return all blob paths in the repository tree at the given ref (defaults to
-   * the repository default branch). The returned paths are relative to the
-   * repository root (e.g. `"src/index.ts"`).
+   * the repository default branch). The ref may be a branch name, a tag or a
+   * commit SHA; name the commit when two reads have to agree on one. The
+   * returned paths are relative to the repository root (e.g. `"src/index.ts"`).
    */
   getTree(args: {
     owner: string;
     repo: string;
     ref?: string;
   }): Promise<string[]>;
+
+  /**
+   * One branch's head commit by name, or null when the branch does not exist
+   * (HTTP 404). Any other refusal surfaces as the thrown error.
+   */
+  getBranch(args: {
+    owner: string;
+    repo: string;
+    branch: string;
+  }): Promise<{ name: string; sha: string } | null>;
 
   /**
    * Fetch a single pull request's details (stats, refs, comment totals).

@@ -78,6 +78,9 @@ import { repositoryMainGet } from "./repository.main.get";
 import { repositoryLink } from "./repository.link";
 import { repositoryUnlink } from "./repository.unlink";
 import { repositoryList } from "./repository.list";
+import { repositoryTreeGet } from "./repository.tree.get";
+import { repositoryProductionBranchSet } from "./repository.production_branch.set";
+import { repositoryInitPrOpen } from "./repository.init_pr.open";
 import { repositoryInstallationList } from "./repository.installation.list";
 import { repositoryInstallationCandidates } from "./repository.installation.candidates";
 import { repositoryInstallationAttach } from "./repository.installation.attach";
@@ -622,6 +625,9 @@ export {
   repositoryLink,
   repositoryUnlink,
   repositoryList,
+  repositoryTreeGet,
+  repositoryProductionBranchSet,
+  repositoryInitPrOpen,
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,
@@ -962,6 +968,9 @@ export const contracts: readonly CapabilityDeclaration[] = [
   repositoryLink,
   repositoryUnlink,
   repositoryList,
+  repositoryTreeGet,
+  repositoryProductionBranchSet,
+  repositoryInitPrOpen,
   repositoryInstallationList,
   repositoryInstallationCandidates,
   repositoryInstallationAttach,

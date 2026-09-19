@@ -7,13 +7,14 @@ const labels = { nav: (key: string) => `nav:${key}` };
 describe("buildCommands", () => {
   const commands = buildCommands({ org: "acme", ws: "core-platform" }, labels);
 
-  it("offers the eight sidebar pages and the organization's other three, and nothing else", () => {
+  it("offers the ten sidebar pages and the organization's other three, and nothing else", () => {
     expect(commands.map((c) => c.href)).toEqual([
       "/acme/core-platform",
       "/acme/core-platform/agents",
       "/acme/core-platform/tools",
       "/acme/core-platform/skills",
       "/acme/core-platform/steering",
+      "/acme/core-platform/repositories",
       "/acme/core-platform/spend",
       "/acme",
       "/acme/roles",

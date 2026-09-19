@@ -328,7 +328,8 @@ const READ_REASON_BY_CODE: Record<
  *
  * It lives here, beside `toRead` which produces the value, because the two are
  * one encoding read from both ends. It was written out separately in
- * `account-actions.ts` and `workspace-settings-actions.ts`, and both copies
+ * `account-actions.ts` and the Workspace settings actions (now
+ * `features/repositories/actions.ts`), and both copies
  * collapsed every error to `unavailable`.
  */
 export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
