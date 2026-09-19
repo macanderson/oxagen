@@ -242,16 +242,17 @@ function effectiveAt(entry: PriceEntry, at: Date): boolean {
  * The longest of an entry's names that names the same model as `modelId`, or
  * null.
  *
- * The test is {@link isSameModelIdentity}, not a raw `startsWith`. A prefix
- * has to end on a segment boundary, because `gpt-4` prefixes `gpt-4o` and the
- * two are different models at different prices. On leading characters alone an
- * organization that negotiated `gpt-4` priced every `gpt-4o` call at the
- * `gpt-4` rate: the resolver reads the organization's rows before the list
- * rows and returns the first name that matched, so it never reached the more
- * specific `gpt-4o` list row, and the frontier model was billed at the older
- * model's contracted rate. `gpt-4-0613` and `claude-sonnet-5-20260901` are
- * still the versions of their families they look like, which is what the
- * prefix rule is for.
+ * The test is {@link isSameModelIdentity}, not a prefix test of any kind. An
+ * entry's name reaches another model id only through an explicit alias or a
+ * recognized version suffix, because the resolver reads the organization's
+ * rows before the list rows and returns the first name that matched — so a
+ * name that over-claims never reaches the more specific list row, and the
+ * organization is billed its negotiated rate for a product it did not
+ * negotiate. `gpt-4` over-claiming `gpt-4o` billed a frontier model at an
+ * older model's contracted rate; `gpt-4o` over-claiming `gpt-4o-mini` billed a
+ * tenth-price model at the frontier rate. `gpt-4-0613` and
+ * `claude-sonnet-5-20260901` are still the releases of their families they
+ * look like, which is what the suffix rule admits.
  */
 function matchLength(entry: PriceEntry, modelId: string): number | null {
   let best: number | null = null;

@@ -420,8 +420,10 @@ export function mergePublishedPrices(
   // family. Within one group both survive, since the same source published
   // both and the longer match is the more specific price it meant.
   //
-  // Same identity, not the same leading characters — see
-  // {@link isSameModelIdentity}.
+  // Same identity, not the same leading characters and not merely a segment
+  // boundary either: only an explicit alias or a recognized version suffix
+  // inherits, so an override for `gpt-4o` leaves the catalog's separately
+  // priced `gpt-4o-mini` row alone — see {@link isSameModelIdentity}.
   const claimedAbove: string[] = [];
   const counts: Record<PriceSourceId, number> = {
     operator_override: 0,

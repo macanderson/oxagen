@@ -3,7 +3,7 @@
 // resolver that picks which row prices a frame. It lives in its own module so
 // both can import it without `price-book` and `price-sources` importing each
 // other, and so the answer cannot drift into two implementations that disagree
-// about `gpt-4` and `gpt-4o`.
+// about `gpt-4o` and `gpt-4o-mini`.
 
 /**
  * Characters that end one segment of a model id: the separators every vendor
@@ -13,29 +13,68 @@
 const MODEL_ID_BOUNDARY = new Set(["-", "/", ":", ".", "_", "@"]);
 
 /**
+ * A segment that names which RELEASE of a product this is: a version number
+ * (`5`, `4.8`, `v2`), a part of a date stamp (`20260901`, or `2026`, `08`,
+ * `01`), a snapshot ordinal (`002`), or the moving `latest` pointer.
+ *
+ * Anything else — `mini`, `nano`, `turbo`, `pro`, `flash`, `thinking`, `free`
+ * — names a different product that the vendor prices separately, even though
+ * it hangs off the same family name.
+ */
+const VERSION_SEGMENT = /^(?:v?\d+(?:\.\d+)*|latest)$/;
+
+function segmentsOf(rest: string): string[] {
+  const out: string[] = [];
+  let current = "";
+  for (const char of rest) {
+    if (MODEL_ID_BOUNDARY.has(char)) {
+      out.push(current);
+      current = "";
+    } else current += char;
+  }
+  out.push(current);
+  return out;
+}
+
+/**
  * Whether `name` is the same model as the `claimed` family: the same id, or
- * that family plus a version, date, size or path segment.
+ * that family plus segments that name nothing but a version, a date stamp or
+ * the `latest` pointer.
  *
- * The test is a segment boundary, not a raw `startsWith`. `gpt-4` and `gpt-4o`
- * share five characters and are different models with different prices, as are
- * `gpt-4` and `gpt-4o-mini`. Displacing on leading characters alone dropped
- * both `gpt-4o` rows in favour of an operator override for `gpt-4`; once
- * retirement closed the rows they used to have, the resolver prefix-matched
- * every `gpt-4o` call to that override and billed a frontier model at the
- * older model's rate. The operator overrode one model and silently repriced
- * three.
+ * **This is not a prefix test, and deliberately not a boundary test either.**
+ * Three rounds of review taught the same lesson from three directions. Keying
+ * on the model id alone ignored aliases, so an override never bound the
+ * gateway form of the name it overrode. A raw `startsWith` let `gpt-4`
+ * displace `gpt-4o`, and an operator who overrode one model silently repriced
+ * three. Requiring the match to land on a separator fixed that pair and left
+ * the real hole open: `-` is a separator, so `gpt-4o` still swallowed
+ * `gpt-4o-mini` — a tenth of its price — and an organization that negotiated
+ * `gpt-4o` was billed the frontier rate for every cheap call whose name starts
+ * the same way.
  *
- * `claude-sonnet` and `claude-sonnet-5` are the case this exists for: the
- * character after the family is a separator, so the second name is that
- * family's version, and an override on the family has to own it or the
- * resolver's longest-prefix match hands `claude-sonnet-5-20260901` back to the
- * list row. A `claimed` name that already ends at a separator (`anthropic/`)
- * is a boundary in itself.
+ * A fourth punctuation tweak could not close that, because the distinction is
+ * not in the punctuation. `gpt-4o-2026-08-01` is the same product as `gpt-4o`
+ * and `gpt-4o-mini` is a different one, yet both differ from `gpt-4o` by a
+ * hyphen and one token. So inheritance is restricted to the two relationships
+ * that are actually stated somewhere: an **explicit alias** (settled by the
+ * exact-name test in the callers, which is what binds `claude-sonnet-5` to
+ * `anthropic/claude-sonnet-5`), and a **recognized version suffix** —
+ * {@link VERSION_SEGMENT}, the vocabulary the catalogs publish for releases of
+ * one product.
  *
- * Exact alias relationships are settled before this: a lower source whose id
- * or alias is a name a higher source claimed outright is dropped on the
- * exact-name test, which is what binds the bare family and its gateway form
- * (`claude-sonnet-5` and `anthropic/claude-sonnet-5`) to one row.
+ * An unrecognized suffix is a DISTINCT identity, which is the safe direction.
+ * A model that fails to inherit resolves to no row, and the rollup records it
+ * as `estimated` with a null cost and the Pricing tab shows the gap. A model
+ * that inherits the wrong row bills a customer at another product's rate.
+ *
+ * ```
+ * gpt-4o            ← gpt-4o-2026-08-01   same: a date stamp
+ * claude-sonnet     ← claude-sonnet-5     same: a version
+ * gemini-1.5-pro    ← gemini-1.5-pro-002  same: a snapshot ordinal
+ * gpt-4o            ✗ gpt-4o-mini         different products
+ * gpt-4             ✗ gpt-4o              not even a segment boundary
+ * claude-sonnet-5   ✗ claude-sonnet-50    not even a segment boundary
+ * ```
  */
 export function isSameModelIdentity(name: string, claimed: string): boolean {
   if (name === claimed) return true;
@@ -44,6 +83,15 @@ export function isSameModelIdentity(name: string, claimed: string): boolean {
   if (claimed === "") return false;
   if (!name.startsWith(claimed)) return false;
   const last = claimed.at(-1);
-  if (last !== undefined && MODEL_ID_BOUNDARY.has(last)) return true;
-  return MODEL_ID_BOUNDARY.has(name.charAt(claimed.length));
+  const rest =
+    last !== undefined && MODEL_ID_BOUNDARY.has(last)
+      ? // `claimed` already ends at a boundary (`anthropic/`), so the rest of
+        // `name` is the suffix — and it has to be a version like any other.
+        // Ending at a separator does not let a name own every id beneath it.
+        name.slice(claimed.length)
+      : MODEL_ID_BOUNDARY.has(name.charAt(claimed.length))
+        ? name.slice(claimed.length + 1)
+        : null;
+  if (rest === null || rest === "") return false;
+  return segmentsOf(rest).every((segment) => VERSION_SEGMENT.test(segment));
 }

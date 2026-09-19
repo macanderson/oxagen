@@ -212,9 +212,11 @@ describe("resolvePriceEntry", () => {
         at,
       })?.id;
     expect(q("gpt-4o")).toBe("list-gpt-4o");
-    expect(q("gpt-4o-mini")).toBe("list-gpt-4o");
-    // The versions of the family it did negotiate still take the rate, which
-    // is what the prefix rule exists for.
+    // Nor does the `gpt-4o` list row price the mini: `mini` is a separately
+    // priced product, so with no row of its own it is unpriced.
+    expect(q("gpt-4o-mini")).toBe(undefined);
+    // The releases of the family it did negotiate still take the rate, which
+    // is what the suffix rule exists for.
     expect(q("gpt-4")).toBe("neg-gpt-4");
     expect(q("gpt-4-0613")).toBe("neg-gpt-4");
     // And with no row for the other model at all, it is unpriced rather than
@@ -223,6 +225,49 @@ describe("resolvePriceEntry", () => {
       resolvePriceEntry([negotiatedFour], {
         orgId: ORG,
         modelId: "gpt-4o",
+        tokenClass: "input_uncached",
+        at,
+      }),
+    ).toBeNull();
+  });
+
+  // The third round on the same comparison. `gpt-4o-mini` is a tenth of
+  // `gpt-4o`, and both differ from it by a hyphen and one token — exactly as
+  // `gpt-4o-2026-08-01` does, which IS the same product. A boundary test
+  // cannot tell them apart, so inheritance is restricted to a recognized
+  // version suffix: an organization that negotiated `gpt-4o` was being billed
+  // its premium rate for every cheap mini call.
+  it("does not let a negotiated model price a different product that shares its name", () => {
+    const negotiatedFourO = entry({
+      id: "neg-gpt-4o",
+      model: "gpt-4o",
+      orgId: ORG,
+      source: "negotiated",
+      microsPerMillion: 1_000_000n,
+    });
+    const listMini = entry({
+      id: "list-gpt-4o-mini",
+      model: "gpt-4o-mini",
+      microsPerMillion: 150_000n,
+    });
+    const q = (modelId: string) =>
+      resolvePriceEntry([listMini, negotiatedFourO], {
+        orgId: ORG,
+        modelId,
+        tokenClass: "input_uncached",
+        at,
+      })?.id;
+    expect(q("gpt-4o-mini")).toBe("list-gpt-4o-mini");
+    expect(q("gpt-4o-mini-2026-08-01")).toBe("list-gpt-4o-mini");
+    // The dated release of the model it DID negotiate still takes the rate.
+    expect(q("gpt-4o")).toBe("neg-gpt-4o");
+    expect(q("gpt-4o-2026-08-01")).toBe("neg-gpt-4o");
+    // With no mini row at all it is unpriced — a null cost the Pricing tab
+    // shows as a gap, not the wrong rate billed silently.
+    expect(
+      resolvePriceEntry([negotiatedFourO], {
+        orgId: ORG,
+        modelId: "gpt-4o-mini",
         tokenClass: "input_uncached",
         at,
       }),
