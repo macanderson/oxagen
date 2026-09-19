@@ -262,15 +262,18 @@ export function mergeCursorHooks(
 /**
  * Remove Tacho's entries (one enrollment, or any) and drop emptied events.
  *
- * `version` stays while anything else in the document does, because the file
- * is Cursor's and a user's remaining hooks need it. Where the strip empties
- * the document, `version` goes too: `mergeCursorHooks` is what wrote it on a
- * machine that had no `hooks.json` at all, and `HarnessFiles.settle` removes
- * a file Tacho created only when what is left says nothing. Without this an
- * `unenroll --purge` left `{"version":1}` behind, which `settle` reads as a
- * user edit, so the file and the `.cursor` directory survived and Cursor was
- * the one wrapped harness that failed the rig's standard: Tacho creates
- * nothing it does not remove.
+ * `version` always stays, including when it is all that is left. Dropping it
+ * there does clear the `{"version":1}` that an `unenroll --purge` used to
+ * leave behind, and that leftover is real: `mergeCursorHooks` wrote it on a
+ * machine with no `hooks.json`, and the file and its `.cursor` directory
+ * survived because of it. But this function is handed a document and cannot
+ * see whose file it is, and `{"version": 1}` is also what someone who started
+ * a `hooks.json` and never wrote a hook has. Emptying that reports a change
+ * on a file holding nothing of ours and puts `{}` where their content was.
+ *
+ * `HarnessFiles.settle` draws the line instead, from the receipt: a file
+ * Tacho created whose bytes are still the ones Tacho last wrote is taken
+ * back, scaffolding and all, and a file the user brought is restored.
  */
 export function stripCursorHooks(
   existing: unknown,
