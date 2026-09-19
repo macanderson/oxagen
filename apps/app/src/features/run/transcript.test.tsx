@@ -8,7 +8,15 @@
 // cursor must say so rather than emptying the view. Lane 2's own transcript
 // rendering, its transport and its zoom disclosures are covered by
 // transcript-model.test.ts and the Transcript block of run.test.tsx.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript, TranscriptKind } from "@/data/contracts/run";
@@ -279,5 +287,82 @@ describe("following a live run", () => {
     renderSection({ read: readOk(mockupTranscript()), status: "live" });
     const transcript = screen.getByTestId("transcript");
     expect(within(transcript).getByTestId("transport-readout")).toBeInTheDocument();
+  });
+
+  it("reads the tail once more for a frame that landed during an active read, rather than dropping it (negative)", async () => {
+    // A fake EventSource: the test drives it directly rather than opening a
+    // real connection, and captures the one instance the hook constructs.
+    class FakeEventSource {
+      static readonly CONNECTING = 0;
+      static readonly OPEN = 1;
+      static readonly CLOSED = 2;
+      readyState = FakeEventSource.OPEN;
+      onopen: (() => void) | null = null;
+      onmessage: ((event: MessageEvent<string>) => void) | null = null;
+      onerror: (() => void) | null = null;
+      close(): void {
+        this.readyState = FakeEventSource.CLOSED;
+      }
+      addEventListener(): void {
+        // The "done" listener is never exercised by this test.
+      }
+      removeEventListener(): void {}
+      constructor() {
+        instances.push(this);
+      }
+    }
+    const instances: FakeEventSource[] = [];
+    vi.stubGlobal("EventSource", FakeEventSource);
+
+    // readTranscriptPage never resolves until the test tells it to, so the
+    // second frame is guaranteed to land while the first read is in flight.
+    const pending: Array<(read: Read<RunTranscript>) => void> = [];
+    readTranscriptPage.mockImplementation(
+      () =>
+        new Promise<Read<RunTranscript>>((resolve) => {
+          pending.push(resolve);
+        }),
+    );
+
+    vi.useFakeTimers();
+    try {
+      renderSection({
+        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
+        status: "live",
+      });
+      const [source] = instances;
+      if (source === undefined) throw new Error("no EventSource opened");
+
+      // The first frame starts the one read the guard lets through.
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await vi.advanceTimersByTimeAsync(750);
+      expect(pending).toHaveLength(1);
+
+      // A second frame lands while that read is still pending. Before the
+      // fix this signal was simply discarded by the `readingRef.current`
+      // guard, and nothing recorded that it had arrived.
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await vi.advanceTimersByTimeAsync(750);
+      expect(pending).toHaveLength(1);
+
+      // The active read settles. The recorded signal must now trigger the
+      // follow-up tail read on its own, with no third frame required.
+      const resolveFirst = pending[0];
+      if (resolveFirst === undefined) throw new Error("no pending read");
+      await act(async () => {
+        resolveFirst(
+          readOk({ ...mockupTranscript(), cursor: "next", complete: false }),
+        );
+        // Flush the microtask queue: the promise's own continuation, the
+        // state updates it triggers, and the follow-up loadMore's call into
+        // readTranscriptPage each resolve as a separate microtask hop. Fake
+        // timers are active, so waitFor's real-timer polling never fires.
+        for (let i = 0; i < 10; i += 1) await Promise.resolve();
+      });
+      expect(pending).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -503,6 +503,11 @@ export function TranscriptView({
   const heldRef = useRef<Frames>(first);
   const cursorRef = useRef<string | null>(transcript.cursor);
   const readingRef = useRef(false);
+  // A signal that arrived mid-read: set when a caller finds readingRef
+  // already true, so the request in flight cannot see it. The finally
+  // block below checks it and runs one more tail read once that request
+  // settles, so a frame landing during an active read is never dropped.
+  const pendingReadRef = useRef(false);
   const [entries, setEntries] = useState<Frames>(first);
   const [cursor, setCursor] = useState<string | null>(transcript.cursor);
   const [complete, setComplete] = useState(transcript.complete);
@@ -553,9 +558,16 @@ export function TranscriptView({
    * replaced, so the scroll position and the playhead survive the read.
    */
   const loadMore = useCallback(async (): Promise<void> => {
+    // A read already in flight cannot see a frame that lands while it runs,
+    // so record the signal and let the finally block below run a follow-up
+    // read once that request settles, rather than dropping it here.
+    if (readingRef.current) {
+      pendingReadRef.current = true;
+      return;
+    }
     // A sealed run stops when the page answers no cursor. A live run must
     // keep a resume cursor from the handler so SSE can ask for the next page.
-    if (readingRef.current || cursorRef.current === null) return;
+    if (cursorRef.current === null) return;
     readingRef.current = true;
     setReading(true);
     try {
@@ -591,6 +603,10 @@ export function TranscriptView({
     } finally {
       readingRef.current = false;
       setReading(false);
+      if (pendingReadRef.current) {
+        pendingReadRef.current = false;
+        void loadMore();
+      }
     }
   }, [kinds, org, runId, ws]);
 
