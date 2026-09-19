@@ -163,13 +163,26 @@ async function emailReaderLink(
       editionTitle: EDITION_TITLES[edition],
       email: to,
     });
-    await sendEmail({
+    const result = await sendEmail({
       to,
       subject: tpl.subject,
       text: tpl.text,
       html: tpl.html,
     });
-    return true;
+    // sendEmail can resolve without throwing while the target address sits in
+    // `rejected` (bad mailbox, provider-side block, etc.), which is still a
+    // failed delivery, not a thrown error, so check `accepted` explicitly
+    // rather than trusting a non-throwing resolve.
+    const delivered = result.accepted.some(
+      (addr) => addr.toLowerCase() === to.toLowerCase(),
+    );
+    if (!delivered) {
+      logger.error(
+        { to, accepted: result.accepted, rejected: result.rejected },
+        "[cms] email transport rejected the recipient, delivery failed",
+      );
+    }
+    return delivered;
   } catch (err) {
     logger.error(
       { err, to },

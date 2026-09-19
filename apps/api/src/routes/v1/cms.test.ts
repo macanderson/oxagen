@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => ({
   findLeadByEmail: vi.fn(),
   issueCodeForLead: vi.fn(),
   redeemAndRotate: vi.fn(),
-  sendEmail: vi.fn().mockResolvedValue({ ok: true }),
+  sendEmail: vi
+    .fn()
+    .mockImplementation((opts: { to: string }) =>
+      Promise.resolve({ accepted: [opts.to], rejected: [] }),
+    ),
   isEmailTransportConfigured: vi.fn().mockReturnValue(true),
 }));
 
@@ -108,7 +112,9 @@ const VALID_LEAD = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.sendEmail.mockResolvedValue({ ok: true });
+  mocks.sendEmail.mockImplementation((opts: { to: string }) =>
+    Promise.resolve({ accepted: [opts.to], rejected: [] }),
+  );
   mocks.isEmailTransportConfigured.mockReturnValue(true);
   mocks.finalizeCodeDelivery.mockResolvedValue(undefined);
   mocks.captureLeadAndIssueCode.mockResolvedValue({
@@ -180,6 +186,25 @@ describe("POST /v1/cms/leads", () => {
     // The lead and code are already persisted — only the email failed —
     // and finalize revokes the new code rather than the (absent) prior one.
     expect(mocks.captureLeadAndIssueCode).toHaveBeenCalledTimes(1);
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "code_1",
+      null,
+      false,
+    );
+  });
+
+  it("treats a resolved send with the recipient in `rejected` as a delivery failure", async () => {
+    mocks.sendEmail.mockResolvedValueOnce({
+      accepted: [],
+      rejected: ["ada@example.com"],
+    });
+    const res = await post("/leads", VALID_LEAD);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      delivered: false,
+      message: SIGNUP_DELIVERY_FAILED,
+    });
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
       "code_1",
       null,
@@ -351,6 +376,34 @@ describe("POST /v1/cms/book/resend", () => {
     });
     // Not delivered: finalize revokes the NEW code, so the prior link (the
     // one the lead already knew worked) is left active, not both dead.
+    expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
+      "code_2",
+      "code_old",
+      false,
+    );
+  });
+
+  it("treats a resolved send with the recipient in `rejected` as a delivery failure", async () => {
+    mocks.findLeadByEmail.mockResolvedValue({
+      id: "lead_1",
+      email: "ada@example.com",
+    });
+    mocks.issueCodeForLead.mockResolvedValue({
+      readUrl: "http://localhost:8080/read?e=page-flip-reader&c=xyz",
+      codeId: "code_2",
+      priorActiveCodeId: "code_old",
+    });
+    mocks.sendEmail.mockResolvedValueOnce({
+      accepted: [],
+      rejected: ["ada@example.com"],
+    });
+    const res = await post("/book/resend", { email: "ada@example.com" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      sent: false,
+      message: RESEND_DELIVERY_FAILED,
+    });
     expect(mocks.finalizeCodeDelivery).toHaveBeenCalledWith(
       "code_2",
       "code_old",
