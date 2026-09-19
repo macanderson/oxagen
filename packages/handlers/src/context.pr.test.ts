@@ -40,8 +40,10 @@ import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import {
   AUTHOR,
+  MemoryStore,
   REPO,
   REVIEWER,
+  SCOPE,
   ctx,
   harness,
   type Harness,
@@ -907,6 +909,260 @@ describe("merge_context_pr", () => {
     expect(h.store.versions[0]!.body).toBe(
       await h.github.readFile(REPO, PATH, "head1"),
     );
+    // The publication carries GitHub's merge instant, not the retry's clock.
+    // The harness clock advances on every reading, so a reading taken here is
+    // necessarily later than the merge; that is what makes the line above a
+    // claim rather than a restatement of "now".
+    //
+    // It deliberately does not say how much later. The previous form required
+    // at least two readings between the merge and here, which was a count of
+    // how often the code happens to look at the clock, not a fact about the
+    // record. The resume path stopped looking: it takes `mergedAt` from the
+    // pull request rather than reading the clock, which is the whole point of
+    // this test, so the old assertion broke because the behaviour it guards
+    // started working.
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    expect(mergedAt.getTime()).toBeLessThan(h.now().getTime());
+  });
+
+  // Two Context PRs merging at once are two calls to GitHub, and GitHub can
+  // land A before B while A's response comes back after B's. The branch that
+  // performs the merge stamped the publication with its own clock, so A could
+  // sort newest over the commit that descends from it, and a checkout at A
+  // read as current while it lacked B's record.
+  it("stamps a merge it performs with GitHub's merge time, not this call's clock", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    // Every clock reading after the merge is later, so the stamp can only be
+    // GitHub's.
+    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime());
+  });
+
+  // The re-read that reports GitHub's merge instant can time out while two
+  // Context PRs are merging at once. Stamping the earlier commit with this
+  // call's later clock made `latestPublication` name an ancestor as the tip a
+  // checkout must reach, so a checkout stopped there read as current while it
+  // lacked the later record. The publication is refused instead, and the
+  // merge GitHub already holds is resumed on the retry.
+  it("refuses merge_time_unknown when the merged pull request cannot be re-read, and the retry publishes GitHub's instant", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const github = h.github;
+    const read = github.getPullRequest.bind(github);
+    // The first read is the head check before the merge; the second is the
+    // re-read for the merge instant.
+    let calls = 0;
+    github.getPullRequest = async (repo, number) => {
+      calls += 1;
+      if (calls > 1) throw new Error("GitHub API error 502");
+      return read(repo, number);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merge_time_unknown",
+    });
+    // The merge landed on GitHub; only the publication was refused.
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.events).toHaveLength(0);
+    // The proposal is still mergeable, which is what makes the refusal safe
+    // to retry.
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+
+    github.getPullRequest = read;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(out.mergedCommit).toBe("merge519");
+    expect(h.github.merges).toHaveLength(1);
+    const mergedAt = h.github.pulls[0]!.mergedAt!;
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+    // The retry's clock is later, so the stamp can only be GitHub's.
+    expect(h.now().getTime()).toBeGreaterThan(mergedAt.getTime());
+  });
+
+  // The resume path reads the instant off the pull request, so it has the
+  // same guess to refuse when GitHub answers without one.
+  it("refuses merge_time_unknown when GitHub reports the merge with no instant", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let fail = true;
+    store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const pr = h.github.pulls[0]!;
+    const mergedAt = pr.mergedAt;
+    pr.mergedAt = null;
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "merge_time_unknown",
+    });
+    expect(h.store.records).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+
+    // Once GitHub answers with the instant, the same retry publishes.
+    pr.mergedAt = mergedAt;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
+  });
+
+  // `latestPublication` orders by `publishedAt` to name the commit a checkout
+  // must reach. A retried publication stamped with the retry's time, after a
+  // later merge had already published, named the earlier commit as newest.
+  it("stamps a resumed publication with GitHub's merge time, not the retry's", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let fail = true;
+    store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const mergedAt = h.github.pulls[0]!.mergedAt;
+    expect(mergedAt).not.toBeNull();
+    // Time passes: other calls, other merges.
+    h.now();
+    h.now();
+    h.now();
+
+    await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(h.store.records[0]!.publishedAt?.getTime()).toBe(
+      mergedAt!.getTime(),
+    );
+  });
+
+  // The case the stamp exists for. PR A merges on GitHub and its publication
+  // fails. PR B merges and publishes. A's publication is retried. The newest
+  // publication is still B's commit: a checkout at A's commit lacks B's
+  // record, and `get_steering_freshness` must name B's commit as the one a
+  // checkout has to reach, whatever order the rows were written in.
+  it("a retried earlier merge does not become the newest publication over a later one", async () => {
+    const h = harness();
+    const a = await opened(h);
+    const store = h.store;
+    const original = store.publishMerge.bind(store);
+    let failOnce = true;
+    store.publishMerge = async (input) => {
+      if (failOnce) {
+        failOnce = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: a }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    const commitA = h.github.pulls[0]!.mergeCommitSha;
+    expect(commitA).not.toBeNull();
+
+    const b = await opened(h, {
+      record: {
+        ...proposalInput().record,
+        lineageId: "ctx.release.cache-readme",
+        statement: "Do not re-read README.md more than once in a run.",
+      },
+    });
+    await merge({ proposalId: b }, ctx({ userId: REVIEWER }));
+    const commitB = h.github.pulls[1]!.mergeCommitSha;
+    expect(commitB).not.toBeNull();
+    expect(commitB).not.toBe(commitA);
+
+    // A's retry lands after B published, stamped with A's merge time.
+    await merge({ proposalId: a }, ctx({ userId: REVIEWER }));
+    expect(h.store.records).toHaveLength(2);
+    const latest = await h.store.latestPublication(SCOPE);
+    expect(latest?.commitSha).toBe(commitB);
+  });
+
+  // GitHub reports `merged_at` to the second, so two PRs can merge inside
+  // one. Nothing stored orders them on the branch. Write order does not: a
+  // retried earlier merge is written last, and a new version of an existing
+  // lineage reuses that lineage's row. Naming one commit let a checkout at
+  // the earlier one read as current while it lacked the later record, so the
+  // store names both and the checkout has to reach each.
+  it("names every commit published at the newest instant, not one of them", async () => {
+    const store = new MemoryStore();
+    const at = new Date("2026-09-18T12:00:00.000Z");
+    const row = (slug: string, commitSha: string) => ({
+      id: `id-${slug}`,
+      publicId: `ctr_${slug}`,
+      createdAt: at,
+      createdById: null,
+      updatedById: null,
+      updatedAt: at,
+      deletedAt: null,
+      deletedById: null,
+      orgId: "org",
+      workspaceId: "ws",
+      slug,
+      activeVersionId: null,
+      version: null,
+      checksum: null,
+      title: slug,
+      status: "active" as const,
+      kind: "rule" as const,
+      force: null,
+      constraintEffect: null,
+      sharingScope: null,
+      statement: slug,
+      commitSha,
+      path: `.oxagen/rules/${slug}.toml`,
+      publishedAt: at,
+      activatedByUserId: null,
+      activatedAt: at,
+    });
+    store.records.push(
+      row("earlier", "commit-earlier") as never,
+      row("later", "commit-later") as never,
+      // A second lineage published by the same merge: one commit, named once.
+      row("later-sibling", "commit-later") as never,
+    );
+    const earlierInstant = new Date(at.getTime() - 1000);
+    store.records.push({
+      ...row("before", "commit-before"),
+      publishedAt: earlierInstant,
+    } as never);
+    const latest = await store.latestPublication({ workspaceId: "ws" });
+    expect(latest?.publishedAt).toEqual(at);
+    expect(latest?.commitShas.sort()).toEqual([
+      "commit-earlier",
+      "commit-later",
+    ]);
+    // The single commit older clients read is one of the tied ones.
+    expect(latest?.commitShas).toContain(latest?.commitSha);
   });
 
   it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {

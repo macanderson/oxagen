@@ -260,7 +260,12 @@ export function billingSource(
     mandates: { list: refuse },
     audit: { events: refuse, exportEvents: refuse },
     skills: { inventory: refuse },
-    steering: { records: refuse, proposals: refuse, contextPr: refuse },
+    steering: {
+      records: refuse,
+      proposals: refuse,
+      contextPr: refuse,
+      freshness: refuse,
+    },
     tools: { versions: refuse, grants: refuse, killSwitches: refuse },
   };
   return { source, calls };

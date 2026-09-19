@@ -340,6 +340,7 @@ describe("renameWorkspace", () => {
       description: null,
       avatarUrl: null,
       consequenceRoles: {},
+      steering: { autoSync: false, blockStaleRuns: false },
     });
     expect(
       await renameWorkspace("acme", "wrk_1", {

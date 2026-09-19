@@ -164,3 +164,27 @@ export const ContextPr = z.object({
     .nullable(),
 });
 export type ContextPr = z.infer<typeof ContextPr>;
+
+/**
+ * The freshness panel on the Steering page: what the workspace has published,
+ * where it lives, and the two gates every agent a member runs answers to.
+ *
+ * `repository` is null while no repository is bound, which is the state in
+ * which steering is off for the workspace entirely. The panel says so rather
+ * than showing two switches that could not take effect.
+ */
+export const SteeringFreshness = z.object({
+  /** The promotion ledger's length. */
+  version: Count,
+  /** The production-branch commit the newest record published at. */
+  headCommit: z.string().min(1).nullable(),
+  publishedAt: Instant.nullable(),
+  /** `owner/repo`, and the branch a Context PR targets. Null until one is bound. */
+  repository: z.string().min(1).nullable(),
+  defaultBranch: z.string().min(1).nullable(),
+  gates: z.object({
+    autoSync: z.boolean(),
+    blockStaleRuns: z.boolean(),
+  }),
+});
+export type SteeringFreshness = z.infer<typeof SteeringFreshness>;
