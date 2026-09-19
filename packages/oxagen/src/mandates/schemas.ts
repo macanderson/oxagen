@@ -106,7 +106,7 @@ export const CALLS_MEASURE = "calls";
 
 /**
  * The ISO 4217 alpha-3 currency codes this runtime knows, as a static,
- * versioned list — not `Intl.supportedValuesOf("currency")`. Codex review on
+ * versioned list, not `Intl.supportedValuesOf("currency")`. Codex review on
  * #3484 found that source omits valid, still-circulating ISO 4217 units
  * (`CLF`, `CHE`, `USN`, `XAU`, and others) because it returns the JS engine's
  * *display-formatting* subset, not the registry: a real declaration naming
@@ -115,17 +115,21 @@ export const CALLS_MEASURE = "calls";
  * codebase owns and can extend is the durable fix (SCR-002); it never shrinks
  * with a Node/browser engine upgrade the way the `Intl` source could.
  *
- * Current as of ISO 4217 Amendment 179 (2024). Independent of apps/app's own
- * `isCurrencyCode` (`data/contracts/money.ts`) rather than imported from it:
- * §2 deliberately keeps this module out of the app, so the two stay two call
- * sites of the same platform fact rather than one importing the other — if
- * this list changes, mirror the change there too.
+ * Current as of ISO 4217 Amendment 179 (2024), cross-checked against
+ * `Intl.supportedValuesOf("currency")` on the pinned Node 24 runtime for
+ * codes ICU already recognizes (including `ZWG`, added in 2024) so an
+ * omission does not silently become a declaration refusal (Codex round 3 on
+ * #3484). Independent of apps/app's own `isCurrencyCode`
+ * (`data/contracts/money.ts`) rather than imported from it: §2 deliberately
+ * keeps this module out of the app, so the two stay two call sites of the
+ * same platform fact rather than one importing the other. If this list
+ * changes, mirror the change there too.
  *
  * ADR-111: an `amount`-typed measure's unit is checked against this set at
  * declaration time (`measureDeclarationSchema` below), the one write boundary
  * every tool declaration passes through (`publish_tool_declaration`,
- * `import_tool`). A declared `currency` further downstream — `Money.currency`
- * (`apps/app/src/data/contracts/money.ts`) is exactly three characters —
+ * `import_tool`). A declared `currency` further downstream, `Money.currency`
+ * (`apps/app/src/data/contracts/money.ts`), is exactly three characters, and
  * therefore never sees a unit ISO 4217 does not recognize; before this, a
  * declaration such as `{ type: "amount", unit: "USDC" }` passed here, then
  * failed `Money`'s schema the first time a mandate naming it was mapped for
@@ -163,7 +167,7 @@ const ISO_4217_CODES: ReadonlySet<string> = new Set([
   "XAF", "XAG", "XAU", "XBA", "XBB", "XBC", "XBD", "XCD", "XDR", "XOF",
   "XPD", "XPF", "XPT", "XSU", "XTS", "XUA", "XXX",
   "YER",
-  "ZAR", "ZMW", "ZWL",
+  "ZAR", "ZMW", "ZWG", "ZWL",
 ]);
 
 export function isIso4217Currency(code: string): boolean {
@@ -193,15 +197,15 @@ const measureDeclarationShape = z
  * this refuses here would otherwise pass the declaration and fail that
  * schema much later, for every mandate naming the measure at once (#3448). A
  * `count`-typed measure is unconstrained and may legitimately carry a
- * currency-code unit (`{ type: "count", unit: "USD" }` — a count of dollar
+ * currency-code unit (`{ type: "count", unit: "USD" }`, a count of dollar
  * bills, not an amount of dollars).
  *
- * This is the WRITE boundary only — `publish_tool_declaration` and
+ * This is the WRITE boundary only: `publish_tool_declaration` and
  * `import_tool` (the two contracts that consume `measureDeclarationsSchema`
  * below). Do not use it to parse a stored `tool_versions.measures` column:
  * a version published before ADR-111 can still carry a legacy non-ISO unit,
  * and every mandate-gated call reads that column (`loadDeclaredTool`,
- * `decideMandate`'s measure lookups) — refusing it there would take a
+ * `decideMandate`'s measure lookups); refusing it there would take a
  * working tool down until an operator republishes it, exactly the class of
  * outage this schema exists to prevent. A read of persisted data uses
  * `measureDeclarationsReadSchema` instead, which accepts the same shape

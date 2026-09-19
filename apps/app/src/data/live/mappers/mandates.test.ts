@@ -176,8 +176,8 @@ describe("toMandateList", () => {
   // every mandate naming the measure down with `record_unmappable`. ADR-111
   // closes this at `measureDeclarationSchema`, the one write boundary every
   // tool declaration passes through, so a money-kind authority reaching this
-  // mapper is now guaranteed an ISO 4217 `currencyOrUnit` by construction —
-  // this asserts that guarantee holds through the mapper and `Money`'s
+  // mapper is now guaranteed an ISO 4217 `currencyOrUnit` by construction.
+  // This asserts that guarantee holds through the mapper and `Money`'s
   // schema, rather than merely being untested.
   it("maps a money-kind authority's currency to a Money value that parses (ADR-111)", () => {
     const view = MandateList.parse(

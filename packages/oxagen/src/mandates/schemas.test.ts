@@ -119,7 +119,7 @@ describe("measure values", () => {
   });
 
   // Codex review on #3484: the write-time ISO 4217 check must not also
-  // apply to a READ of an already-persisted declaration — a tool published
+  // apply to a READ of an already-persisted declaration. A tool published
   // before ADR-111 can still carry a legacy `{ type: "amount", unit: "USDC"
   // }` on disk, and `loadDeclaredTool` parses every enabled tool's
   // `tool_versions.measures` on every mandate-gated call. Refusing that read
@@ -136,7 +136,7 @@ describe("measure values", () => {
     expect(measureDeclarationReadSchema.safeParse(stored).success).toBe(true);
   });
 
-  it.each(["USD", "EUR", "JPY", "GBP"])(
+  it.each(["USD", "EUR", "JPY", "GBP", "CLF", "CHE", "USN", "XAU", "ZWG"])(
     "isIso4217Currency accepts %s",
     (code) => {
       expect(isIso4217Currency(code)).toBe(true);

@@ -96,7 +96,7 @@ export async function loadDeclaredTool(
     consequenceTags: unionConsequenceTags(row),
     // Read-time schema (ADR-111): a version published before the ISO 4217
     // check landed can still carry a legacy non-ISO unit on disk, and this
-    // is on the path every mandate-gated call takes — refusing it here
+    // is on the path every mandate-gated call takes. Refusing it here
     // would take a working tool down instead of just failing to map it on
     // the app's Money-typed surfaces (#3448 P1 follow-up).
     measures: measureDeclarationsReadSchema.parse(row.measures),

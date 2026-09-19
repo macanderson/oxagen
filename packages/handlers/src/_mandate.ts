@@ -163,6 +163,17 @@ export async function assertToolsDeclareMeasures(
     tools: readonly string[];
     limits: MandateLimits;
     targets: MandateTargets;
+    // Codex P2 on #3484: `update_mandate_limits` merges an operator's
+    // partial `limitChanges` onto the mandate's existing `limits` before
+    // calling this function, so `limits` here can carry measures the
+    // operator never touched. Undefined (request_mandate, grant_mandate,
+    // and a full `limits` replacement) means every measure in `limits` was
+    // explicitly named, so the ISO 4217 check below runs on all of them, as
+    // before. A defined set restricts that check to the measures actually
+    // named by this call. An update that only changes validTo, targets or
+    // approval must not refuse on an untouched legacy limit it never asked
+    // about.
+    isoCheckedMeasures?: ReadonlySet<string>;
   },
 ): Promise<MandateLimits> {
   const declared = await tx
@@ -250,17 +261,26 @@ export async function assertToolsDeclareMeasures(
           });
         }
         // Codex P1 on #3484: this function's declaration read is
-        // deliberately lax (ADR-111's read schema) so an unrelated legacy
+        // deliberately lax (ADR-111's read schema), so an unrelated legacy
         // measure on the same tool never blocks a grant naming a different,
-        // validly-denominated one. But a NEW or CHANGED limit is a write —
-        // exactly the boundary ADR-111 gates — so the measure THIS limit
+        // validly-denominated one. But a NEW or CHANGED limit is a write,
+        // exactly the boundary ADR-111 gates, so the measure THIS limit
         // actually denominates is checked here, per-measure, rather than at
         // the whole-declaration parse: an "amount" measure whose declared
         // unit predates ADR-111 and isn't ISO 4217 must be refused before a
         // mandate limit is written against it, or the limit is created and
         // then fails to map on the app's Money-typed surfaces the same way
         // #3448 did for a bad declaration.
-        if (d.type === "amount" && !isIso4217Currency(d.unit)) {
+        //
+        // Codex P2 on #3484: `isoCheckedMeasures`, when given, restricts
+        // this check to the measures this call actually named. Without it,
+        // update_mandate_limits' merged `limits` (existing + `limitChanges`)
+        // made this refuse an update to validTo, targets or approval alone,
+        // on the strength of an untouched legacy limit it never asked about.
+        const isoChecked =
+          args.isoCheckedMeasures === undefined ||
+          args.isoCheckedMeasures.has(name);
+        if (isoChecked && d.type === "amount" && !isIso4217Currency(d.unit)) {
           throw new HandlerError({
             code: "conflict",
             reason: "measure_unit_mismatch",

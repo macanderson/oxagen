@@ -191,7 +191,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
   });
 
   // Codex P1 on #3484: the whole-tool declaration parse is deliberately lax
-  // (ADR-111's read schema — a legacy measure with a bad unit must not block
+  // (ADR-111's read schema: a legacy measure with a bad unit must not block
   // a grant naming a DIFFERENT, valid measure on the same tool), but writing
   // a NEW or CHANGED limit against an amount measure whose own unit predates
   // ADR-111 is exactly the write boundary the ADR gates, and must still
@@ -251,5 +251,71 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       { tools: ["onchain__mixed@*"], limits, targets: {} as MandateTargets },
     );
     expect(out.rows?.kind).toBe("count");
+  });
+
+  // Codex P2 on #3484: update_mandate_limits merges a partial `limitChanges`
+  // onto the mandate's existing `limits` before calling this function, so
+  // `limits` here can carry a measure the operator never touched. Without
+  // `isoCheckedMeasures`, an update to validTo, targets or approval alone
+  // would still refuse on the strength of an untouched legacy limit.
+  it("isoCheckedMeasures restricts the ISO check to the named measures, leaving an untouched legacy limit alone", async () => {
+    const legacyUsdc: DeclaredRow = {
+      slug: "onchain__pay",
+      version: 1,
+      measures: {
+        amount: { path: "amount.value", type: "amount", unit: "USDC" },
+      },
+      consequenceTags: ["moves_money"],
+      classification: null,
+    };
+    const limits: MandateLimits = {
+      amount: {
+        perPeriod: "500000000",
+        period: "monthly",
+        currencyOrUnit: "USDC",
+      },
+    };
+    const out = await assertToolsDeclareMeasures(
+      fakeTx([legacyUsdc]),
+      WORKSPACE_ID,
+      {
+        tools: ["onchain__pay@*"],
+        limits,
+        targets: {} as MandateTargets,
+        // Nothing named "amount", so the untouched legacy limit passes.
+        isoCheckedMeasures: new Set(),
+      },
+    );
+    expect(out.amount?.kind).toBe("money");
+  });
+
+  it("isoCheckedMeasures still refuses a legacy unit on a measure the call actually named", async () => {
+    const legacyUsdc: DeclaredRow = {
+      slug: "onchain__pay",
+      version: 1,
+      measures: {
+        amount: { path: "amount.value", type: "amount", unit: "USDC" },
+      },
+      consequenceTags: ["moves_money"],
+      classification: null,
+    };
+    const limits: MandateLimits = {
+      amount: {
+        perPeriod: "500000000",
+        period: "monthly",
+        currencyOrUnit: "USDC",
+      },
+    };
+    await expect(
+      assertToolsDeclareMeasures(fakeTx([legacyUsdc]), WORKSPACE_ID, {
+        tools: ["onchain__pay@*"],
+        limits,
+        targets: {} as MandateTargets,
+        isoCheckedMeasures: new Set(["amount"]),
+      }),
+    ).rejects.toSatisfy(
+      (err: unknown) =>
+        isHandlerError(err) && err.reason === "measure_unit_mismatch",
+    );
   });
 });
