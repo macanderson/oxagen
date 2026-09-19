@@ -133,6 +133,37 @@ describe("agent roster", () => {
     expect(legacy.agents()).toEqual([]);
   });
 
+  it("carries the reconciliation baseline across a restart", () => {
+    // The baseline is what every reconciliation measures from, so a daemon
+    // that restarts mid-session and comes back without it takes its next one
+    // from a `HEAD` the session's own commits have already moved — and
+    // everything committed before the restart leaves the record, which is the
+    // defect the baseline exists to close. It is persisted with the other
+    // live-session facts, not held only in memory.
+    const clock = { now: () => 1_000 };
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    const { record } = registry.ensure("sess-baseline", { cwd: "/repo" });
+    record.baselineCommit = "base-sha";
+    record.baselineCwd = "/repo";
+
+    const state = JSON.parse(JSON.stringify(registry.state())) as RegistryState;
+    const restarted = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: clock.now,
+    });
+    restarted.restore(state);
+
+    expect(restarted.get("sess-baseline")?.baselineCommit).toBe("base-sha");
+    // The worktree it was taken in travels with it: a commit is only an
+    // identity inside one repository, so the pair is what makes it usable.
+    expect(restarted.get("sess-baseline")?.baselineCwd).toBe("/repo");
+  });
+
   it("keeps two agents that share one harness session id on separate chains", () => {
     const clock = clockAt("2026-09-15T10:00:00.000Z");
     const registry = new SessionRegistry({

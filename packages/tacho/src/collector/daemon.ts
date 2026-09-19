@@ -1200,11 +1200,22 @@ export async function startDaemon(
       // absent HEAD, so the reconciliation still runs. Its own status read
       // is what tells the two apart: a non-repository answers nothing and
       // seals no frame. There is simply no git context to note for either.
-      // The first read that answers fixes the session's baseline. Later reads
-      // measure from it rather than from a `HEAD` that the session's own
+      // The first read that answers fixes the session's baseline, and a
+      // session that has moved to another worktree takes a fresh one. Later
+      // reads measure from it rather than from a `HEAD` that the session's own
       // commits keep moving.
-      if (facts !== undefined && session.baselineCommit === undefined)
+      //
+      // Recaptured on a move rather than carried, because a commit is only an
+      // identity inside one repository: the old sha would not resolve in the
+      // new one, the diff would fall back to its `HEAD`, and work committed
+      // there before `Stop` would leave the record again.
+      if (
+        facts !== undefined &&
+        (session.baselineCommit === undefined || session.baselineCwd !== cwd)
+      ) {
         session.baselineCommit = facts.head_sha;
+        session.baselineCwd = cwd;
+      }
       const at = now();
       const last = lastReconcileAt.get(harnessSessionId);
       const due =
@@ -1225,7 +1236,12 @@ export async function startDaemon(
               const changes = await readWorkingTreeChanges(
                 execAsync,
                 cwd,
-                session.baselineCommit,
+                // Only a baseline taken in this worktree. A git read that did
+                // not answer leaves the pair untouched above, so a session
+                // that moved can still be holding the previous repository's.
+                session.baselineCwd === cwd
+                  ? session.baselineCommit
+                  : undefined,
               );
               return changes === undefined ? {} : { changes };
             })()

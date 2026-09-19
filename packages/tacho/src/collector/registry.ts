@@ -139,6 +139,18 @@ export interface SessionFacts {
    * baseline nobody recorded at the start.
    */
   baselineCommit?: string;
+  /**
+   * The worktree `baselineCommit` was taken in.
+   *
+   * A commit is only an identity inside one repository. A session that moves
+   * from repository A to B keeps its record, and a baseline carried across
+   * that move names a commit B has never heard of: the diff fails to resolve
+   * it, falls back to B's `HEAD`, and work committed in B before `Stop`
+   * disappears again — the defect the baseline was added to fix, reached by
+   * a different door. The reader uses the baseline only when this matches the
+   * directory it is about to measure.
+   */
+  baselineCwd?: string;
 }
 
 export interface SessionRecord extends SessionFacts {
@@ -633,6 +645,16 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
     ...(facts.lastHookEvent !== undefined
       ? { lastHookEvent: facts.lastHookEvent }
+      : {}),
+    // Persisted with the rest. A daemon that restarts mid-session and comes
+    // back without these takes its next baseline from the `HEAD` the session's
+    // own commits have already moved, and everything committed before the
+    // restart leaves the record — which is what the baseline exists to stop.
+    ...(facts.baselineCommit !== undefined
+      ? { baselineCommit: facts.baselineCommit }
+      : {}),
+    ...(facts.baselineCwd !== undefined
+      ? { baselineCwd: facts.baselineCwd }
       : {}),
   };
 }
