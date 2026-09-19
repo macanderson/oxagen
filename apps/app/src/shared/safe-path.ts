@@ -71,6 +71,17 @@ export const routes = {
   root: (): SafePath => ROOT,
   login: (next?: SafePath): SafePath =>
     withQuery(mint("/login"), { next: nextParam(next) }),
+  /**
+   * /login carrying a Better Auth OAuth `error` query value. Used when the
+   * proxy lifts `/?error=` onto the login page, and as `errorCallbackURL` for
+   * social sign-in so a failed Google/GitHub attempt is visible instead of a
+   * blank form.
+   */
+  loginWithOAuthError: (error: string, next?: SafePath): SafePath =>
+    withQuery(mint("/login"), {
+      next: nextParam(next),
+      error: error.trim() === "" ? undefined : error,
+    }),
   signup: (next?: SafePath): SafePath =>
     withQuery(mint("/signup"), { next: nextParam(next) }),
   verify: (q: { email: string; next?: SafePath }): SafePath =>
