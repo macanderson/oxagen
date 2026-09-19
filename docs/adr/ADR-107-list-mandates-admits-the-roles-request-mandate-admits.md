@@ -117,10 +117,13 @@ after creating an agent, as a narrowed reader on those tiers.
   every tier, not only an enterprise org: `readerFilter`'s own workspace
   role check enforces it directly, since `defaultRoles` alone only gates an
   enterprise org.
-- `apps/app` needed no change: `blindSpotOf`'s `reader_scope` branch already
-  tells a narrowed reader their view is limited instead of reporting "no
-  mandate" when mandates are only hidden from them, and now renders on a live
-  path instead of a theoretical one.
+- `apps/app` needed no logic change: `blindSpotOf`'s `reader_scope` branch
+  already tells a narrowed reader their view is limited instead of reporting
+  "no mandate" when mandates are only hidden from them, and now renders on a
+  live path instead of a theoretical one. It did need a copy fix: the
+  `partial`-view strings in `apps/app/messages/{tools,agents,mandate}.json`
+  described only the creator grant, and were updated to also name the
+  requester grant once that landed (below).
 - The API route, MCP tool and CLI carry no capability-specific role logic
   (the kernel enforces `defaultRoles` centrally), so no other surface needed
   a change beyond these two contracts.
