@@ -46,10 +46,10 @@ const OperatorKind = z.enum(["human", "agent", "service"]);
  */
 export const RunModel = z.object({
   /**
-   * The vendor's own model id, e.g. `claude-opus-5`. Named `slug` rather than
-   * `id` because INV-11 (ARCHITECTURE.md §4) reads every view-model field
-   * called `id` as a platform public id, and this is a vendor string the
-   * platform neither mints nor resolves.
+   * The model id exactly as the store recorded it — a vendor slug such as
+   * `claude-sonnet-5`, not a record this platform issues. It is named `slug`
+   * rather than `id` because INV-11 reserves an `id` field on a view model for
+   * a `PublicId`, and a reader who saw `id` here would reasonably expect one.
    */
   slug: z.string().min(1),
   provider: z.string().min(1).nullable(),

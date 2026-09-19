@@ -37,8 +37,8 @@ export function toRunRow(
             ...moneyFromMicros(run.cost.micros, run.cost.currency),
             basis: run.cost.basis,
           },
-    // The contract calls the vendor string `id`; the view calls it `slug`,
-    // because a view-model `id` is a platform public id (INV-11).
+    // The capability records the vendor slug under `id`; the view model calls
+    // it `slug`, because INV-11 reserves `id` for a PublicId.
     model:
       run.model === null
         ? null
