@@ -40,6 +40,7 @@ import {
   textValue,
   type ToolsAt,
   toolsLink,
+  weekdayKey,
 } from "./view";
 
 /** ISO weekdays, Monday first, as the contract numbers them. */
@@ -110,7 +111,7 @@ function draftOf(
   return {
     ok: true,
     draft: {
-      id: existing?.id ?? textValue(form, "id"),
+      id: existing?.slug ?? textValue(form, "id"),
       name: textValue(form, "name"),
       tools: splitLines(textValue(form, "tools")),
       enabled: form.get("enabled") === "on",
@@ -191,7 +192,7 @@ export function RuleEditor({
       <button
         type="button"
         data-testid={
-          creating ? "rule-create-open" : `rule-edit-${existing.id}`
+          creating ? "rule-create-open" : `rule-edit-${existing.slug}`
         }
         className={creating ? buttonPrimary : buttonSecondary}
         onClick={() => {
@@ -222,7 +223,7 @@ export function RuleEditor({
             </Field>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {t("id")} · <span className={mono}>{existing.id}</span>
+              {t("id")} · <span className={mono}>{existing.slug}</span>
             </p>
           )}
           <Field id="rule-name" label={t("name")}>
@@ -335,7 +336,7 @@ export function RuleEditor({
                         hours === null ? day <= 5 : hours.days.includes(day)
                       }
                     />
-                    {days(String(day))}
+                    {days(weekdayKey(day))}
                   </label>
                 ))}
               </div>
@@ -411,7 +412,7 @@ export function RuleToggle({
       const result = await setApprovalRuleEnabled(
         at.org,
         at.ws,
-        rule.id,
+        rule.slug,
         !rule.enabled,
       );
       if (result.ok) {
@@ -430,7 +431,7 @@ export function RuleToggle({
     <span className="flex flex-col gap-1.5">
       <button
         type="button"
-        data-testid={`rule-toggle-${rule.id}`}
+        data-testid={`rule-toggle-${rule.slug}`}
         aria-busy={pending}
         disabled={pending}
         className={buttonSecondary}
@@ -439,7 +440,7 @@ export function RuleToggle({
         {rule.enabled ? t("off") : t("on")}
       </button>
       {failure === null ? null : (
-        <FormAlert testId={`rule-toggle-failure-${rule.id}`}>
+        <FormAlert testId={`rule-toggle-failure-${rule.slug}`}>
           {failure}
         </FormAlert>
       )}
@@ -486,7 +487,7 @@ export function RuleDelete({
     <>
       <button
         type="button"
-        data-testid={`rule-delete-${rule.id}`}
+        data-testid={`rule-delete-${rule.slug}`}
         className={buttonSecondary}
         onClick={() => {
           setOpen(true);
@@ -506,7 +507,7 @@ export function RuleDelete({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void act(() => deleteApprovalRule(at.org, at.ws, rule.id));
+            void act(() => deleteApprovalRule(at.org, at.ws, rule.slug));
           }}
           className="flex flex-col gap-3"
         >
@@ -514,7 +515,7 @@ export function RuleDelete({
             {t("body", { name: rule.name })}
           </p>
           <p className="text-sm text-muted-foreground">
-            {t("keep", { citation: `policy:${rule.id}` })}
+            {t("keep", { citation: `policy:${rule.slug}` })}
           </p>
           {rule.enabled ? (
             <button
@@ -524,7 +525,7 @@ export function RuleDelete({
               className={buttonSecondary}
               onClick={() =>
                 void act(() =>
-                  setApprovalRuleEnabled(at.org, at.ws, rule.id, false),
+                  setApprovalRuleEnabled(at.org, at.ws, rule.slug, false),
                 )
               }
             >

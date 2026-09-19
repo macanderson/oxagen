@@ -10,6 +10,7 @@ import {
   textValue,
   TOOLS_TABS,
   toolsLink,
+  weekdayKey,
 } from "./view";
 
 const at = { org: "acme", ws: "core-platform" };
@@ -149,5 +150,18 @@ describe("parseMeasureLines", () => {
     ["a measure named twice", "amount = 1\namount = 2"],
   ])("refuses %s", (_what, raw) => {
     expect(parseMeasureLines(raw)).toBeNull();
+  });
+});
+
+describe("weekdayKey", () => {
+  it("keys ISO weekdays Monday first, as the catalogue holds them", () => {
+    const keys = ["1", "2", "3", "4", "5", "6", "7"];
+    expect([1, 2, 3, 4, 5, 6, 7].map(weekdayKey)).toEqual(keys);
+  });
+
+  // The contract bounds a rule's days to 1 to 7, so anything else is a bug
+  // upstream, and a thrown error names it rather than printing a raw key.
+  it.each([0, 8, 1.5])("refuses %s", (day) => {
+    expect(() => weekdayKey(day)).toThrow(RangeError);
   });
 });

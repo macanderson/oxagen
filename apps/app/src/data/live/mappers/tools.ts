@@ -119,7 +119,7 @@ export function toApprovalRuleSet(
 ): z.input<typeof ApprovalRuleSet> {
   return {
     rules: out.items.map((item) => ({
-      id: item.id,
+      slug: item.id,
       name: item.name,
       tools: item.tools,
       enabled: item.enabled,

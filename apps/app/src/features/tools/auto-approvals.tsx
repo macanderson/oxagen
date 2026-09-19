@@ -30,7 +30,7 @@ import { cell, numericCell, Table } from "@/ui/table";
 import { RuleDelete, RuleEditor, RuleToggle } from "./approval-rule-controls";
 import { Chip, Section, StateDot, useDate } from "./parts";
 import { ReadFailure } from "./read-failure";
-import { type ToolsAt, toolsLink } from "./view";
+import { type ToolsAt, toolsLink, weekdayKey } from "./view";
 
 const MINUTE_MS = 60_000;
 
@@ -118,7 +118,7 @@ function Requires({ rule }: { rule: ApprovalRule }) {
     lines.push({
       key: "hours",
       text: t("hours", {
-        days: hours.days.map((day) => days(String(day))).join(", "),
+        days: hours.days.map((day) => days(weekdayKey(day))).join(", "),
         start: hours.start,
         end: hours.end,
         timezone: hours.timezone,
@@ -156,12 +156,12 @@ function Row({
   const locale = useLocale();
   const date = useDate();
   return (
-    <tr data-rule={rule.id} data-enabled={rule.enabled ? "true" : "false"}>
+    <tr data-rule={rule.slug} data-enabled={rule.enabled ? "true" : "false"}>
       <td className={cell}>
         <span className="flex flex-col gap-0.5">
           <span className="font-medium text-foreground">{rule.name}</span>
           <span className={`${mono} text-xs text-muted-foreground`}>
-            policy:{rule.id}
+            policy:{rule.slug}
           </span>
           <span className="text-xs text-muted-foreground">
             {rule.lastWrittenBy === null
@@ -291,7 +291,7 @@ export function AutoApprovals({
           ]}
         >
           {rules.map((rule) => (
-            <Row key={rule.id} at={at} rule={rule} canWrite={canWrite} />
+            <Row key={rule.slug} at={at} rule={rule} canWrite={canWrite} />
           ))}
         </Table>
         <p className="max-w-prose text-xs text-muted-foreground">

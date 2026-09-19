@@ -51,7 +51,7 @@ const TAB = "/acme/core-platform/tools?tab=autoapprovals";
 
 /** The fixture's rules by id: `small-refunds` is on with hours, `repeat-deploys` off with a standing window. */
 function rule(id: string) {
-  const found = approvalRuleSet().rules.find((r) => r.id === id);
+  const found = approvalRuleSet().rules.find((r) => r.slug === id);
   if (found === undefined) throw new Error(`no rule ${id}`);
   return found;
 }
