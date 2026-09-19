@@ -12,7 +12,7 @@ import type {
   IncidentPage,
   Toolbelt,
 } from "./contracts/agents";
-import type { ApprovalItem } from "./contracts/approvals";
+import type { ApprovalItem, ResolvedApprovalItem } from "./contracts/approvals";
 import type {
   AuditExport,
   AuditExportQuery,
@@ -173,6 +173,15 @@ export interface DataSource {
       ctx: WsCtx,
       q: { runId: string | null },
     ): Promise<Read<ApprovalItem[]>>;
+    /**
+     * list_resolved_approvals, narrowed to one run: the Run page's Approvals
+     * tab reads back a resolved decision, including one a decision rule
+     * auto-approved with no person, that `pending` never shows (#3153).
+     */
+    resolved(
+      ctx: WsCtx,
+      q: { runId: string },
+    ): Promise<Read<ResolvedApprovalItem[]>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:

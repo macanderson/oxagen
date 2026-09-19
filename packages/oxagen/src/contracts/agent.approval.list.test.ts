@@ -22,8 +22,8 @@ describe("list_approvals contract", () => {
     expect(agentApprovalList.noBillingGate).toBe(true);
     expect(agentApprovalList.defaultEffect).toBe("deny");
     expect(agentApprovalList.defaultRoles).toEqual({
-      org: { Owner: "allow", Admin: "allow", Member: "allow" },
-      workspace: {},
+      org: { Owner: "allow", Admin: "allow" },
+      workspace: { Owner: "allow", Member: "allow" },
     });
     expect(agentApprovalList.layers).not.toContain("e2e");
     expect(agentApprovalList.surfaces).toEqual(["api", "mcp"]);
