@@ -1,12 +1,13 @@
 // The pieces every Agents section is drawn from: a titled panel, a list of
 // facts, a tile, an instant, the status dot and word, the not-recorded words
 // and a pager. Presentational; each section passes translated text.
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
 import type { AgentStatus } from "@/data/contracts/agents";
 import type { SafePath } from "@/shared/safe-path";
 import { linkText, panel } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
+import { useFormatter } from "@/ui/formatter";
 
 export function Panel({
   id,

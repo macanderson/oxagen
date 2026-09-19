@@ -348,8 +348,8 @@ export interface DataSource {
                roles(ctx: OrgCtx): Promise<Read<RoleCatalog>>;                                        // list_iam_roles (#2964): roles, the permission catalogue, enforcement
                workspaces(ctx: OrgCtx): Promise<Read<WorkspaceList>>;                                 // list_workspaces {includeArchived:true} (#2964)
                apiKeys(ctx: WsCtx): Promise<Read<ApiKey[]>> };                                        // list_api_keys, in the workspace the key names (ADR-073)
-  audit:     { events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;                          // query_audit_log (#3097)
-               exportEvents(ctx: OrgCtx, q: AuditFilters & { format: "csv" | "ndjson" }): Promise<Read<AuditExport>> }; // export_audit_events
+  audit:     { events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;                      // query_audit_log (#3097); the day filters arrive resolved (AuditWindow)
+               exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>> };           // export_audit_events, over the same window
   billing:   { plan(ctx: OrgCtx): Promise<Read<PlanCard>>;                                            // get_subscription
                bucket(ctx: OrgCtx): Promise<Read<GauBucket>>;                                         // get_gau_bucket: mode, meter, invoice thresholds, auto top-up state
                contractRate(ctx: OrgCtx): Promise<Read<ContractRate>>;                                // get_contract_rate

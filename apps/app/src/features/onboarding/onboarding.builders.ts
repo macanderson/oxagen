@@ -100,7 +100,10 @@ export function onboardingSource(reads: Reads): {
       list: refuse("mandates.list"),
       get: refuse("mandates.get"),
     },
-    shell: { context: refuse("shell.context") },
+    shell: {
+      context: refuse("shell.context"),
+      preferences: refuse("shell.preferences"),
+    },
     runs: {
       list: refuse("runs.list"),
       get: refuse("runs.get"),
