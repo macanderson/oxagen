@@ -68,12 +68,13 @@ const roster: Read<MemberList> = readOk({
 });
 
 const events = vi.fn<DataSource["audit"]["events"]>();
+const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const exportEvents = vi.fn<DataSource["audit"]["exportEvents"]>();
 const members = vi.fn<DataSource["org"]["members"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
   pretenant: { orgs: refuse, workspaces: refuse },
-  shell: { context: refuse },
+  shell: { context: refuse, preferences },
   runs: {
     list: refuse,
     get: refuse,
@@ -148,6 +149,8 @@ function at(selector: string): HTMLElement | null {
 
 beforeEach(() => {
   events.mockReset();
+  preferences.mockReset();
+  preferences.mockResolvedValue(readOk({ timeZone: "America/Los_Angeles" }));
   exportEvents.mockReset();
   members.mockReset();
   members.mockResolvedValue(roster);
@@ -171,10 +174,12 @@ describe("the record", () => {
       outcome: null,
       actor: null,
       capability: null,
-      from: null,
-      to: null,
+      since: null,
+      until: null,
       offset: 0,
     });
+    // No day is filtered, so the zone is not worth a read.
+    expect(preferences).not.toHaveBeenCalled();
     const table = screen.getByRole("table", { name: "Control-plane events" });
     expect(
       within(table)
@@ -264,6 +269,35 @@ describe("filters and paging", () => {
       "href",
       "/acme/audit/export?outcome=deny&capability=purchase_gau_bucket&format=ndjson",
     );
+  });
+
+  it("reads the day filters as days on the viewer's clock, inclusive of the last", async () => {
+    events.mockResolvedValue(recordOf([event()]));
+    await renderAudit({ from: "2026-01-15", to: "2026-01-15" });
+
+    // PST (UTC-8): local midnight is 08:00 UTC, and the day is inclusive, so
+    // the exclusive bound is the next local midnight.
+    expect(events.mock.calls[0]?.[1]).toMatchObject({
+      since: "2026-01-15T08:00:00.000Z",
+      until: "2026-01-16T08:00:00.000Z",
+    });
+    expect(preferences).toHaveBeenCalledOnce();
+    // The links keep the days the reader typed, not the instants.
+    expect(at("[data-export=csv]")).toHaveAttribute(
+      "href",
+      "/acme/audit/export?from=2026-01-15&to=2026-01-15&format=csv",
+    );
+  });
+
+  it("falls back to the default zone when the preference cannot be read (negative)", async () => {
+    preferences.mockResolvedValue(readError("control_plane_unavailable", 503));
+    events.mockResolvedValue(recordOf([event()]));
+    await renderAudit({ from: "2026-01-15" });
+    // Pacific is the default every page prints in, so the bound matches it.
+    expect(events.mock.calls[0]?.[1]).toMatchObject({
+      since: "2026-01-15T08:00:00.000Z",
+      until: null,
+    });
   });
 
   it("drops a filter value the record cannot hold rather than asking the contract for it (negative)", async () => {

@@ -16,6 +16,7 @@ import { responseRedirect } from "@/shared/navigation";
 import { routes } from "@/shared/safe-path";
 import {
   auditQueryParams,
+  auditWindow,
   parseAuditExportFormat,
   parseAuditQuery,
 } from "./filters";
@@ -64,9 +65,14 @@ export async function handleAuditExport(
       break;
   }
   const { offset: _offset, ...filters } = parsed;
-  const read = await deps
-    .dataSource()
-    .audit.exportEvents(viewer.ctx, { ...filters, format });
+  // The same window the page reads over, resolved in the viewer's zone here so
+  // the file carries the rows the reader is looking at (auditWindow).
+  const source = deps.dataSource();
+  const range = await auditWindow(viewer.ctx, source, filters);
+  const read = await source.audit.exportEvents(viewer.ctx, {
+    ...range,
+    format,
+  });
   if (!read.ok) {
     if (read.reason === "denied") return refusal(403, "denied");
     if (read.reason === "pending_approval") {

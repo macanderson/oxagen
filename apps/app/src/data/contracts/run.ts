@@ -278,11 +278,11 @@ const ChainCheckpoint = z.object({
    *
    * Named `platformKey` and not `platformKeyId` because it is not a public id:
    * the store holds free text (`tacho_checkpoints.platform_key_id`), which is
-   * a signing-key identifier of whatever shape the signer uses, the same kind
-   * of thing as `deviceKeyFingerprint` beside it. A field spelled `…Id` here
-   * must carry a `PublicId` (src/test/arch/public-ids.test.ts), and forcing
-   * that shape on this one would refuse a real checkpoint whose key is not
-   * spelled like a public id.
+   * a signing-key identifier of whatever shape the signer uses (including
+   * shapes like `pk:1`), the same kind of thing as `deviceKeyFingerprint`
+   * beside it. A field spelled `…Id` here must carry a `PublicId`
+   * (src/test/arch/public-ids.test.ts), and forcing that shape on this one
+   * would refuse a real checkpoint whose key is not spelled like a public id.
    */
   platformKey: z.string().nullable(),
   countersignedAt: z.iso.datetime({ offset: true }).nullable(),

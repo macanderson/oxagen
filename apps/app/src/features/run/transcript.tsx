@@ -29,6 +29,7 @@ import { ReadFailure } from "@/ui/read-failure";
 import { Panel } from "./parts";
 import { isNonEmpty } from "./transcript-model";
 import { TranscriptView } from "./transcript-view";
+import { LiveEmptyFollow } from "./use-run-stream";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -145,6 +146,9 @@ export function TranscriptSection({
             ? t("empty")
             : t("emptyFiltered", { count: formatCount(kinds.length, locale) })}
         </p>
+        {run.status === "live" ? (
+          <LiveEmptyFollow org={org} ws={ws} runId={runId} />
+        ) : null}
       </Panel>
     );
   }

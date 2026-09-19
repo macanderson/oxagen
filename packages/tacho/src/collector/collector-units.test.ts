@@ -21,7 +21,8 @@ import type { FrameBody } from "../evidence/frame-body";
 import { minimalSession } from "../test-helpers";
 import {
   TACHO_MAX_BATCH,
-  TACHO_MAX_BATCH_BODY_BYTES,
+  TACHO_MAX_BODY_BYTES,
+  TACHO_MAX_REQUEST_BYTES,
   type DeliveredCommand,
   type TachoBody,
 } from "../wire";
@@ -622,7 +623,8 @@ describe("shipper", () => {
         ingest: async (batch, _daemon, bodies = []) => {
           sent.push({ seqs: batch.map((e) => e.seq), bodies: bodies.length });
           // The route refuses any request that carries this body.
-          if (bodies.length > 0) throw new ControlError(413, "Payload Too Large");
+          if (bodies.length > 0)
+            throw new ControlError(413, "Payload Too Large");
           return okResponse(batch);
         },
       },
@@ -672,7 +674,9 @@ describe("shipper", () => {
     expect(wal.stats().unshipped).toBe(events.length);
     // No leaf above the left ceiling was attempted: the split stopped.
     expect(
-      sent.some((seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling),
+      sent.some(
+        (seqs) => seqs.length === 1 && (seqs[0] as number) > leftCeiling,
+      ),
     ).toBe(false);
   });
 
@@ -1007,17 +1011,19 @@ describe("shipper", () => {
     );
   });
 
-  it("cuts a batch where its bodies would pass the byte budget", async () => {
+  it("cuts a batch where the encoded request would pass the route's limit", async () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
     const events = minimalSession();
-    // Three bodies of 2 MiB against a 4 MiB budget: the third must wait for
-    // the next batch, and the event it belongs to waits with it.
-    const half = "x".repeat(TACHO_MAX_BATCH_BODY_BYTES / 2);
+    // Three bodies at the 1 MiB cap are 3 MiB raw, under the 4 MiB request
+    // limit, but about 4.2 MB once base64-encoded. Measured raw, all three
+    // would ship in one request the route refuses with 413. Measured on the
+    // wire, the third waits for the next batch with its event.
+    const full = "x".repeat(TACHO_MAX_BODY_BYTES);
     wal.append(events, [
-      bodyFor(events[0] as TachoEvent, half),
-      bodyFor(events[1] as TachoEvent, half),
-      bodyFor(events[2] as TachoEvent, half),
+      bodyFor(events[0] as TachoEvent, full),
+      bodyFor(events[1] as TachoEvent, full),
+      bodyFor(events[2] as TachoEvent, full),
     ]);
     const sent: Array<{
       events: TachoEvent[];
@@ -1026,7 +1032,17 @@ describe("shipper", () => {
     const { s } = shipper(
       wal,
       {
-        ingest: async (batch, _daemon, bodies) => {
+        ingest: async (batch, daemon, bodies) => {
+          const request = JSON.stringify({
+            schema: "tacho/1.0",
+            host_enrollment_id: "hen_x",
+            events: batch,
+            bodies,
+            daemon,
+          });
+          expect(Buffer.byteLength(request)).toBeLessThanOrEqual(
+            TACHO_MAX_REQUEST_BYTES,
+          );
           sent.push({ events: batch as TachoEvent[], bodies });
           return okResponse(batch);
         },
@@ -1041,6 +1057,83 @@ describe("shipper", () => {
     expect(sent[0]?.bodies).toHaveLength(2);
     expect(sent[1]?.events[0]?.seq).toBe(2);
     expect(sent[1]?.bodies).toHaveLength(1);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("bisects a batch the route refuses as too large instead of retrying it", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const sizes: number[] = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          sizes.push(batch.length);
+          if (batch.length > 2)
+            throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.shipped).toBe(events.length);
+    expect(result.quarantined).toBe(0);
+    expect(sizes[0]).toBe(events.length);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("ships a lone event without its body when the body makes it too large", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    const prompt = events[1] as TachoEvent;
+    wal.append(events, [bodyFor(prompt, "a body the route will not take")]);
+    const shippedWithout: string[] = [];
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch, _daemon, bodies) => {
+          if ((bodies ?? []).length > 0)
+            throw new ControlError(413, "Payload Too Large");
+          for (const e of batch) shippedWithout.push(e.event_id_idem);
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.shipped).toBe(events.length);
+    expect(result.quarantined).toBe(0);
+    expect(shippedWithout).toContain(prompt.event_id_idem);
+    expect(wal.stats().unshipped).toBe(0);
+  });
+
+  it("quarantines a lone event the route refuses as too large on its own", async () => {
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    const events = minimalSession();
+    wal.append(events);
+    const big = events[2]?.seq;
+    const { s } = shipper(
+      wal,
+      {
+        ingest: async (batch) => {
+          if (batch.some((e) => e.seq === big))
+            throw new ControlError(413, "Payload Too Large");
+          return okResponse(batch);
+        },
+      },
+      paths.quarantine,
+      () => 0,
+    );
+    const result = await s.drain();
+    expect(result.quarantined).toBe(1);
+    expect(result.shipped).toBe(events.length - 1);
     expect(wal.stats().unshipped).toBe(0);
   });
 

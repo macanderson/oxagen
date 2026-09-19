@@ -15,10 +15,9 @@ import type {
 import type { ApprovalItem } from "./contracts/approvals";
 import type {
   AuditExport,
-  AuditExportFormat,
-  AuditFilters,
+  AuditExportQuery,
   AuditPage,
-  AuditQuery,
+  AuditPageQuery,
 } from "./contracts/audit";
 import type {
   ContractRate,
@@ -49,6 +48,7 @@ import type { RunPage } from "./contracts/runs";
 import type {
   OrgChoice,
   ShellContext,
+  ViewerPreferences,
   WorkspaceChoice,
 } from "./contracts/shell";
 import type { SkillInventory } from "./contracts/skills";
@@ -93,8 +93,17 @@ export interface DataSource {
       orgSlug: string,
     ): Promise<Read<WorkspaceChoice[]>>;
   };
-  /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
-  shell: { context(ctx: OrgCtx): Promise<Read<ShellContext>> };
+  shell: {
+    /** list_orgs + list_workspaces; caller: features/shell/source.ts. */
+    context(ctx: OrgCtx): Promise<Read<ShellContext>>;
+    /**
+     * get_user_preferences, user-global: the zone every date under the
+     * organization layout renders in, and the zone the Audit day filters are
+     * resolved against; callers: features/shell/source.ts,
+     * features/shell/viewer-clock.tsx and features/audit/filters.ts.
+     */
+    preferences(ctx: OrgCtx): Promise<Read<ViewerPreferences>>;
+  };
   /**
    * The Billing page's five noBillingGate reads, each Owner, Admin or Billing
    * (checked in its handler); caller: features/billing/billing.tsx.
@@ -274,16 +283,15 @@ export interface DataSource {
   /**
    * The organization's audit record (#3097), both noBillingGate reads for an
    * org Owner or Admin (checked in the handlers); callers:
-   * features/audit/audit.tsx and features/audit/export.ts.
+   * features/audit/audit.tsx and features/audit/export.ts. Both take a window
+   * whose bounds are instants: the reader's calendar days are resolved in the
+   * viewer's zone by the lane, since no port implementation has a viewer.
    */
   audit: {
-    /** query_audit_log, one page at `offset` */
-    events(ctx: OrgCtx, q: AuditQuery): Promise<Read<AuditPage>>;
-    /** export_audit_events: the signed file over the same filters */
-    exportEvents(
-      ctx: OrgCtx,
-      q: AuditFilters & { format: AuditExportFormat },
-    ): Promise<Read<AuditExport>>;
+    /** query_audit_log, one page at `offset`; the day filters arrive resolved (AuditWindow) */
+    events(ctx: OrgCtx, q: AuditPageQuery): Promise<Read<AuditPage>>;
+    /** export_audit_events: the signed file over the same window */
+    exportEvents(ctx: OrgCtx, q: AuditExportQuery): Promise<Read<AuditExport>>;
   };
   /**
    * list_skills, one page by name over its default window (noBillingGate;
