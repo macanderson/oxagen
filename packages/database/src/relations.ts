@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { and, eq, relations } from "drizzle-orm";
 import {
   schemaRegistries,
   schemaVersions,
@@ -381,6 +381,27 @@ export const principalsRelations = relations(principals, ({ one, many }) => ({
   roleAssignments: many(principalRoleAssignments),
   accessRequests: many(accessRequests),
 }));
+
+/**
+ * The person an initiating principal acts for, joined through the principal
+ * rather than looked up per row — a page reads up to a hundred runs, and a
+ * lookup per row would be a hundred round trips for a column Postgres can
+ * carry along the join it is already making.
+ *
+ * `kind = 'human'` is part of the join condition and not an afterthought. A
+ * delegated agent principal carries its creator's `parent_user_id`, so
+ * joining on the column alone would put the person who built the agent on
+ * every run the agent started, which is a name the record does not claim.
+ *
+ * This is a cross-domain join (agent/Tacho schema through IAM into auth), so
+ * it lives here rather than being redefined ad hoc in each handler that
+ * needs it — `list_runs` uses it for both the ledger select and the Tacho
+ * session select.
+ */
+export const operatorUserJoin = and(
+  eq(users.id, principals.parentUserId),
+  eq(principals.kind, "human"),
+);
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   org: one(organizations, {

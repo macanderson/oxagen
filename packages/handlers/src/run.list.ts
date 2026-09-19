@@ -45,6 +45,7 @@ import {
 import {
   hidesWitnessRuns,
   notWitnessRun,
+  operatorUserJoin,
   schema,
   type Tx,
   withTenantDb,
@@ -176,27 +177,15 @@ function hideWitnessRuns(
   return notWitnessRun(run);
 }
 
-/**
- * The person an initiating principal acts for, joined through the principal
- * rather than looked up per row: a page reads up to a hundred runs, and a
- * lookup per row would be a hundred round trips for a column Postgres can
- * carry along the join it is already making.
- *
- * `kind = 'human'` is part of the join condition and not an afterthought. A
- * delegated agent principal carries its creator's `parent_user_id`, so
- * joining on the column alone would put the person who built the agent on
- * every run the agent started, which is a name the record does not claim.
- *
- * The name comes from `auth.users.display_name`, which Better Auth fills from
- * the name the person gave at sign-up. It is deliberately not
- * `iam.principals.display_name`: provisioning falls that column back to the
- * user's email address, and a run row is a record, not a directory, so it
- * carries a name or nothing.
- */
-const operatorUserJoin = and(
-  eq(schema.users.id, schema.principals.parentUserId),
-  eq(schema.principals.kind, "human"),
-);
+// `operatorUserJoin` (the principal-to-user cross-domain join, agent/Tacho
+// schema through IAM into auth) lives in @oxagen/database's relations seam,
+// not here, and both selects below import it rather than redefine it.
+//
+// The name comes from `auth.users.display_name`, which Better Auth fills from
+// the name the person gave at sign-up. It is deliberately not
+// `iam.principals.display_name`: provisioning falls that column back to the
+// user's email address, and a run row is a record, not a directory, so it
+// carries a name or nothing.
 
 const ledgerColumns = {
   run: {
