@@ -395,9 +395,12 @@ describe("the agent wizard: pull request", () => {
     expect(call[2]).toMatchObject({
       slug: SLUG,
       harness: "cursor",
-      source: expect.stringContaining(`slug = "${SLUG}"`),
       rationale: DESC,
     });
+    expect(call[2]).toHaveProperty(
+      "source",
+      expect.stringContaining(`slug = "${SLUG}"`),
+    );
 
     const link = screen.getByRole("link", { name: "acme/platform#526" });
     expect(link.getAttribute("href")).toBe(

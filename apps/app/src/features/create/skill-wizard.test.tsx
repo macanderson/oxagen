@@ -220,9 +220,12 @@ describe("the skill wizard: describe it", () => {
     expect(call[2]).toMatchObject({
       origin: "describe",
       name: "cut-release-notes-group",
-      body: expect.stringContaining("name: cut-release-notes-group"),
       rationale: "Cut release notes group merged PRs",
     });
+    expect(call[2]).toHaveProperty(
+      "body",
+      expect.stringContaining("name: cut-release-notes-group"),
+    );
 
     const link = screen.getByRole("link", { name: "acme/platform#525" });
     expect(link.getAttribute("href")).toBe(
