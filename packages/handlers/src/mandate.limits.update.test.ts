@@ -20,7 +20,11 @@ import type { MandateLimits } from "@oxagen/oxagen/mandates/schemas";
 
 const doubles = vi.hoisted(() => ({
   /** What `lockMandate` answers: the current record, under the lock. */
-  locked: { limits: {} as MandateLimits, status: "active" as string },
+  locked: {
+    limits: {} as MandateLimits,
+    status: "active" as string,
+    validTo: new Date("2027-01-01T00:00:00.000Z"),
+  },
   /** What `loadMandateRow` answers: a stale snapshot, deliberately wider. */
   stale: {} as MandateLimits,
   /** Every `limits` value written, in order. */
@@ -97,7 +101,7 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
       approval: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },
       status: doubles.locked.status,
       validFrom: new Date("2026-01-01T00:00:00.000Z"),
-      validTo: new Date("2027-01-01T00:00:00.000Z"),
+      validTo: doubles.locked.validTo,
     };
   },
   // Undrawn by default so the existing merge cases still write. A case that
@@ -172,6 +176,7 @@ beforeEach(() => {
   doubles.written = [];
   doubles.lockCalls = 0;
   doubles.locked.status = "active";
+  doubles.locked.validTo = new Date("2027-01-01T00:00:00.000Z");
   doubles.locked.limits = { amount: AMOUNT, calls: CALLS };
   doubles.stale = { amount: AMOUNT, calls: CALLS };
   doubles.drawn = false;
@@ -291,6 +296,23 @@ describe("update_mandate_limits, limitChanges", () => {
     doubles.locked.status = "revoked";
     await expect(
       change({ limitChanges: { calls: { perPeriod: "40" } } }),
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "mandate_ended",
+    );
+    expect(doubles.written).toHaveLength(0);
+  });
+
+  // Status can still read active between exclusive validTo and the hourly
+  // expiry job. Without this refusal an operator could push validTo forward
+  // and reopen authority enforcement had already stopped honouring.
+  it("writes nothing when active status outlives exclusive validTo (negative)", async () => {
+    doubles.locked.status = "active";
+    doubles.locked.validTo = new Date("2020-01-01T00:00:00.000Z");
+    await expect(
+      change({
+        validTo: "2028-01-01T00:00:00.000Z",
+        limitChanges: { calls: { perPeriod: "40" } },
+      }),
     ).rejects.toSatisfy(
       (e: unknown) => isHandlerError(e) && e.reason === "mandate_ended",
     );

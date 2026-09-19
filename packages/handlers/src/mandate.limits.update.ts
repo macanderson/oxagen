@@ -165,6 +165,18 @@ export const mandateLimitsUpdateHandler: CapabilityHandler<
         message: `Mandate ${input.mandateId} is ${locked?.status ?? "gone"}; only an active mandate changes`,
       });
     }
+    // Enforcement uses the exclusive validTo bound, not the status column.
+    // The hourly expiry job may not have flipped the row to "expired" yet;
+    // without this check an operator could push validTo forward and reopen
+    // authority the gate had already stopped honouring.
+    const at = new Date();
+    if (locked.validTo.getTime() <= at.getTime()) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "mandate_ended",
+        message: `Mandate ${input.mandateId} ended at ${locked.validTo.toISOString()}; only a mandate still inside its validity window changes`,
+      });
+    }
     const limits =
       input.limitChanges === undefined
         ? (input.limits ?? locked.limits)

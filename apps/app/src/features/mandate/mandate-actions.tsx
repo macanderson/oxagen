@@ -16,6 +16,7 @@
 import { useTranslations } from "next-intl";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
 import type { MandateRow, MeasureValue } from "@/data/contracts/mandates";
+import { isEffective } from "@/data/contracts/mandates";
 import type { SafePath } from "@/shared/safe-path";
 import { buttonPrimary, buttonSecondary, inputBase } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -441,15 +442,19 @@ function Revoke({ org, ws, mandate, here }: Place) {
  * control is a capability the API has and the app does not, which is the one
  * gap this repo treats as seriously as a missing route.
  *
- * A mandate that has already ended offers neither, since both handlers are
- * certain to refuse it.
+ * Change limits only while the mandate is inside its validity window
+ * (`isEffective`), matching enforcement: a row that is still `active` but past
+ * exclusive `validTo` (before the expiry job flips the status) must not expose
+ * a control that could push validTo forward and reopen ended authority. Revoke
+ * stays available so an operator can end a draft request or mark a lapsed row
+ * revoked before the cron does. A revoked or expired status offers neither.
  */
 export function MandateActions(place: Place) {
-  const { status } = place.mandate;
-  if (status !== "active" && status !== "draft") return null;
+  const { mandate } = place;
+  if (mandate.status !== "active" && mandate.status !== "draft") return null;
   return (
     <>
-      {status === "active" ? <ChangeLimits {...place} /> : null}
+      {isEffective(mandate, new Date()) ? <ChangeLimits {...place} /> : null}
       <Revoke {...place} />
     </>
   );

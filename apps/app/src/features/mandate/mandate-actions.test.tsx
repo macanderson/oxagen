@@ -35,7 +35,7 @@ vi.mock("./actions", () => ({ changeMandateLimits, revokeMandate }));
 
 const { MandateActions } = await import("./mandate-actions");
 
-/** 50 rows a call, 1000 rows a month, 40 calls a day: three prefills. */
+/** 50 rows a call, 1000 rows a month, 50 calls a day: three prefills. */
 const bounded = mandateRow({
   authority: [
     mandateAuthority({
@@ -85,7 +85,7 @@ const PREFILLED = {
   perCall: "50",
   perPeriod: "1000",
   period: "monthly",
-  callsPerDay: "40",
+  callsPerDay: "50",
 };
 
 beforeEach(() => {
@@ -110,7 +110,7 @@ describe("ChangeLimits", () => {
     expect(within(form).getByLabelText("Period")).toHaveValue("monthly");
     // The stored cap is counted daily, and the label says which window the
     // figure belongs to rather than assuming one.
-    expect(within(form).getByLabelText("Calls per day")).toHaveValue("40");
+    expect(within(form).getByLabelText("Calls per day")).toHaveValue("50");
     // The window is the one field with no prefill: a blank date keeps the
     // window, so there is nothing to echo back.
     expect(within(form).getByLabelText("Valid to")).toHaveValue("");
@@ -270,5 +270,23 @@ describe("MandateActions on a draft", () => {
       draw(mandateRow({ status }));
       expect(screen.queryByRole("button")).not.toBeInTheDocument();
     }
+  });
+
+  // Status can still read active after exclusive validTo, before the expiry
+  // job flips the row. Change limits must not appear: submitting a future
+  // validTo through it would reopen ended authority. Revoke stays so the
+  // operator can mark the row revoked before the cron does.
+  it("hides Change limits when active status outlives exclusive validTo", () => {
+    draw(
+      mandateRow({
+        status: "active",
+        validFrom: "2020-01-01T00:00:00.000Z",
+        validTo: "2020-06-01T00:00:00.000Z",
+      }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Change limits" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
   });
 });
