@@ -365,10 +365,18 @@ export async function hasUnstampedLedgerHistory(
   at: Date = new Date(),
 ): Promise<boolean> {
   const key = periodKey(period, at);
+  // Mirrors `periodSums`'s own reserve/settle/release netting (a release
+  // nets against its reserve in the same `reserved` sum; only `settle` adds
+  // to `settled`), restricted to unstamped rows and, for the period figure,
+  // to this period key. A release that clears an unstamped reservation must
+  // net it back to zero here the same way it does in `periodSums`, or a
+  // legacy mandate with only released history would read as still drawn
+  // and never clear this check.
   const [row] = await tx
     .select({
       openReserved: sql<string>`coalesce(sum(case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end), 0)::text`,
-      drawnInPeriod: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} and ${l.kind} in ('reserve', 'settle') then ${l.value} else 0 end), 0)::text`,
+      periodReserved: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} then (case when ${l.kind} = 'reserve' then ${l.value} else -${l.value} end) else 0 end), 0)::text`,
+      periodSettled: sql<string>`coalesce(sum(case when ${l.periodKey} = ${key} and ${l.kind} = 'settle' then ${l.value} else 0 end), 0)::text`,
     })
     .from(l)
     .where(
@@ -378,10 +386,9 @@ export async function hasUnstampedLedgerHistory(
         isNull(l.measureKind),
       ),
     );
-  return (
-    BigInt(row?.openReserved ?? "0") > 0n ||
-    BigInt(row?.drawnInPeriod ?? "0") > 0n
-  );
+  const drawnInPeriod =
+    BigInt(row?.periodReserved ?? "0") + BigInt(row?.periodSettled ?? "0");
+  return BigInt(row?.openReserved ?? "0") > 0n || drawnInPeriod > 0n;
 }
 
 /** Remaining authority by measure, as get_mandate and list_mandates report it. */

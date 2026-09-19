@@ -1133,9 +1133,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
-    it("limits: a kind change is never refused for a legacy measure with no stored kind, even with an open reservation", async () => {
+    it("limits: a kind change is never refused for a legacy measure with no stored kind, once its unstamped reservation clears", async () => {
       const m = await grant(billingUserId, body());
-      await seedReservation(m.id, "150000000", randomUUID());
+      const toolCallId = randomUUID();
+      await seedReservation(m.id, "150000000", toolCallId);
       // Strip the stored kind entirely, the pre-ADR-108 shape: a stored
       // `limits.amount` with no `kind` key at all, not merely a wrong one.
       // `parseMandateRow` resolves this via `legacyMeasureKindGuess`, and
@@ -1156,6 +1157,30 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
           .where(eq(schema.mandates.publicId, m.id)),
       );
+      // `seedReservation`'s row carries no `measureKind` (the pre-ADR-108
+      // shape), so `hasUnstampedLedgerHistory` still sees it as live and
+      // unverified authority until it is released: the guess being wrong
+      // does not excuse a genuinely open reservation from that check.
+      const [row] = await withSystemDb((tx) =>
+        tx
+          .select({ id: schema.mandates.id })
+          .from(schema.mandates)
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      await withSystemDb((tx) =>
+        tx.insert(schema.mandateLedger).values({
+          orgId,
+          workspaceId,
+          mandateId: row!.id,
+          toolCallId,
+          kind: "release",
+          measure: "amount",
+          value: "150000000",
+          unitOrCurrency: "USD",
+          periodKey: `${new Date().getUTCFullYear()}-${String(new Date().getUTCMonth() + 1).padStart(2, "0")}`,
+          balanceAfter: "2000000000",
+        }),
+      );
       const touched = await inScope(() =>
         mandateLimitsUpdateHandler(
           {
@@ -1166,6 +1191,49 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ),
       );
       expect(touched.limits.amount).toMatchObject({ kind: "money" });
+      await inScope(() =>
+        mandateRevokeHandler(
+          { mandateId: m.id, reason: "done" },
+          ctx(billingUserId),
+        ),
+      );
+    });
+
+    it("limits: a kind change is refused for a legacy measure whose unstamped reservation is still open", async () => {
+      const m = await grant(billingUserId, body());
+      await seedReservation(m.id, "150000000", randomUUID());
+      await withSystemDb((tx) =>
+        tx
+          .update(schema.mandates)
+          .set({
+            limits: {
+              amount: {
+                perCall: m.limits.amount!.perCall,
+                perPeriod: m.limits.amount!.perPeriod,
+                period: m.limits.amount!.period,
+                currencyOrUnit: m.limits.amount!.currencyOrUnit,
+              },
+            },
+          })
+          .where(eq(schema.mandates.publicId, m.id)),
+      );
+      let thrown: unknown;
+      try {
+        await inScope(() =>
+          mandateLimitsUpdateHandler(
+            {
+              mandateId: m.id,
+              limitChanges: { amount: { perCall: "300000000" } },
+            },
+            ctx(billingUserId),
+          ),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(
+        isHandlerError(thrown) && thrown.reason === "measure_kind_drawn",
+      ).toBe(true);
       await inScope(() =>
         mandateRevokeHandler(
           { mandateId: m.id, reason: "done" },
