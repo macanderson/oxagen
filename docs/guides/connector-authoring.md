@@ -487,7 +487,7 @@ Once your schema is validated and hosted:
    your own domain).
 2. Read `docs/guides/partner-registration.md` for the registration workflow.
 3. Submit your schema URL, plugin ID, and contact information to
-   `partners@oxagen.ai`.
+   `partners@oxagen.sh`.
 4. Oxagen will review your schema for security, quality, and compliance.
 5. After approval, `metadata.publisher.verified` is set to `true` and your
    connector appears in the marketplace.

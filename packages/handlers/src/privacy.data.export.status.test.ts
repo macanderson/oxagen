@@ -53,12 +53,11 @@ const authz = vi.hoisted(() => ({
     roleGrants: [] as unknown[],
     policies: [] as unknown[],
   },
-  calls: [] as {
-    capability: string;
-    orgId: string;
-    workspaceId: string | null;
-    userId: string | null;
-  }[],
+  calls: [] as { capability: string; orgId: string; userId: string | null }[],
+  /** The workspace each policy read was asked in, in order. */
+  workspaces: [] as string[],
+  /** When set, the configured policy applies in this workspace only. */
+  onlyIn: null as string | null,
 }));
 
 vi.mock("@oxagen/iam", () => ({
@@ -66,15 +65,24 @@ vi.mock("@oxagen/iam", () => ({
   fetchAuthz: (args: {
     capability: string;
     orgId: string;
-    workspaceId: string | null;
     userId: string | null;
+    workspaceId: string;
   }) => {
     authz.calls.push({
       capability: args.capability,
       orgId: args.orgId,
-      workspaceId: args.workspaceId,
       userId: args.userId,
     });
+    authz.workspaces.push(args.workspaceId);
+    if (authz.onlyIn !== null && args.workspaceId !== authz.onlyIn) {
+      return Promise.resolve({
+        principal: null,
+        grants: [],
+        roles: [],
+        roleGrants: [],
+        policies: [],
+      });
+    }
     return Promise.resolve(authz.value);
   },
 }));
@@ -132,17 +140,12 @@ function personalRow(overrides: Record<string, unknown> = {}) {
   return {
     id: EXPORT_ID,
     scope: "user",
-    workspaceId: QUEUED_WS,
     status: "ready",
     exportUrl: "privacy-exports/org/exp.zip",
     completedAt: null,
     ...overrides,
   };
 }
-
-/** The workspace an export was queued through, and a sibling in the same org. */
-const QUEUED_WS = "66666666-6666-4666-8666-666666666666";
-const OTHER_WS = "77777777-7777-4777-8777-777777777777";
 
 const PRINCIPAL_ID = "44444444-4444-4444-8444-444444444444";
 const ROLE_ID = "55555555-5555-4555-8555-555555555555";
@@ -181,6 +184,8 @@ beforeEach(() => {
   mocks.selects.length = 0;
   mocks.wheres.length = 0;
   authz.calls.length = 0;
+  authz.workspaces.length = 0;
+  authz.onlyIn = null;
   authz.value = {
     principal: null,
     grants: [],
@@ -429,62 +434,17 @@ describe("an export_data deny written after the archive was queued", () => {
     );
   });
 
-  // The deny is written in the workspace the export was QUEUED through, and
-  // the download route is mounted under every workspace slug in the
-  // organisation. Asking the resolver about the caller's current workspace
-  // therefore let an owner walk around the deny by requesting the same archive
-  // through a sibling workspace: B's policy answered for an archive A
-  // governed, and the archive is every person's data in the organisation.
-  it("asks the workspace the export was queued in, not the one it is asked from", async () => {
-    readyOrgExportForAnOwner();
-    denyExportData();
-    await privacyDataExportStatusHandler(
-      { exportId: EXPORT_ID },
-      ctx({ workspaceId: OTHER_WS }),
-    ).catch(() => undefined);
-
-    const asked = authz.calls.filter((c) => c.capability === "export_data");
-    expect(asked).not.toHaveLength(0);
-    for (const call of asked) expect(call.workspaceId).toBe(QUEUED_WS);
-  });
-
-  // A row queued before the column existed carries null. It is asked at
-  // organisation scope rather than at the caller's, which sees organisation
-  // rules and not workspace-keyed ones: less than the full check, and still
-  // better than trusting the scope the requester picked.
-  it("falls back to organisation scope for a row with no recorded workspace", async () => {
-    queueSelects(
-      [personalRow({ scope: "org", workspaceId: null })],
-      [{ role: "owner" }],
-    );
-    denyExportData();
-    await privacyDataExportStatusHandler(
-      { exportId: EXPORT_ID },
-      ctx({ workspaceId: OTHER_WS }),
-    ).catch(() => undefined);
-
-    const asked = authz.calls.filter((c) => c.capability === "export_data");
-    expect(asked).not.toHaveLength(0);
-    for (const call of asked) expect(call.workspaceId).not.toBe(OTHER_WS);
-  });
-
-  // The question asked is `export_data`'s, in the organisation AND the
-  // workspace that governed the export, for the person reading it. Asking
-  // about `get_export_status` instead would miss the deny entirely: no rule is
-  // keyed to that name.
-  it("asks about export_data in the governed organisation and workspace", async () => {
+  // The question asked is `export_data`'s, in the organisation that governed
+  // the export, for the person reading it. Asking about `get_export_status`
+  // instead would miss the deny entirely: no rule is keyed to that name.
+  it("asks about export_data in the governed organisation", async () => {
     readyOrgExportForAnOwner();
     denyExportData();
     await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()).catch(
       () => undefined,
     );
     expect(authz.calls).toEqual([
-      {
-        capability: "export_data",
-        orgId: ORG_ID,
-        workspaceId: QUEUED_WS,
-        userId: USER_ID,
-      },
+      { capability: "export_data", orgId: ORG_ID, userId: USER_ID },
     ]);
   });
 
@@ -592,5 +552,72 @@ describe("an export_data deny written after the archive was queued", () => {
     );
     expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
     expect(authz.calls).toHaveLength(1);
+  });
+});
+
+// The download route is mounted under any workspace slug, so the policy of the
+// workspace a download arrives through is not the policy that governed the
+// export. A deny written in the queuing workspace has to hold wherever the
+// archive is asked for from.
+describe("an export_data deny in the workspace that queued the export", () => {
+  const QUEUED_IN = "66666666-6666-4666-8666-666666666666";
+  const CALLING_FROM = "33333333-3333-4333-8333-333333333333";
+
+  function readyOrgExportQueuedIn(workspaceId: string | null): void {
+    queueSelects(
+      [personalRow({ scope: "org", workspaceId })],
+      [{ role: "owner" }],
+    );
+  }
+
+  it("refuses a download through another workspace (negative)", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    denyExportData();
+    authz.onlyIn = QUEUED_IN;
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        isHandlerError(error) &&
+        error.code === "forbidden" &&
+        error.reason === "org_export_not_permitted",
+    );
+    expect(authz.workspaces).toEqual([QUEUED_IN]);
+  });
+
+  it("still refuses on a deny in the calling workspace alone", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    denyExportData();
+    authz.onlyIn = CALLING_FROM;
+    await expect(
+      privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx()),
+    ).rejects.toSatisfy(
+      (error: unknown) => isHandlerError(error) && error.code === "forbidden",
+    );
+    expect(authz.workspaces).toEqual([QUEUED_IN, CALLING_FROM]);
+  });
+
+  it("hands the key over when neither workspace denies it", async () => {
+    readyOrgExportQueuedIn(QUEUED_IN);
+    const out = await privacyDataExportStatusHandler(
+      { exportId: EXPORT_ID },
+      ctx(),
+    );
+    expect(out.storageKey).toBe("privacy-exports/org/exp.zip");
+    expect(authz.workspaces).toEqual([QUEUED_IN, CALLING_FROM]);
+  });
+
+  it("asks once when the download comes through the queuing workspace", async () => {
+    readyOrgExportQueuedIn(CALLING_FROM);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(authz.workspaces).toEqual([CALLING_FROM]);
+  });
+
+  // Rows written before the column existed, or queued in no workspace, carry
+  // none. They keep the check they had: the calling scope alone.
+  it("asks in the calling scope alone for a row with no workspace", async () => {
+    readyOrgExportQueuedIn(null);
+    await privacyDataExportStatusHandler({ exportId: EXPORT_ID }, ctx());
+    expect(authz.workspaces).toEqual([CALLING_FROM]);
   });
 });
