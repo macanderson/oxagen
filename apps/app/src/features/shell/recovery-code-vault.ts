@@ -114,6 +114,23 @@ export const recoveryCodeVault = {
   begin(userId: string): boolean {
     if (state.rotating) return false;
     const mine = state.userId === userId;
+    // Never over the top of someone else's unsaved set or unresolved doubt.
+    //
+    // This store outlives every client transition, which is the point of it,
+    // and that includes a sign-out and a sign-in as somebody else in the same
+    // tab. `view()` hides one person's state from another, so the second
+    // person sees an empty panel and has no way to know anything is held. A
+    // rotation from there used to overwrite `codes` and `uncertain` with the
+    // new owner's blank state, destroying the first person's only plaintext
+    // copy of a set the server had already swapped in. They were signed out,
+    // so they could not save it first and cannot get it back.
+    //
+    // Refusing costs the second person a rotation they can have after a
+    // reload, which drops this store with the page. Allowing it costs the
+    // first person their account on the next lost authenticator. The tab
+    // reads `heldByAnother` and says which of the two happened, rather than
+    // leaving a button that does nothing.
+    if (!mine && (state.codes !== null || state.uncertain)) return false;
     set({
       userId,
       rotating: true,
@@ -121,6 +138,17 @@ export const recoveryCodeVault = {
       uncertain: mine && state.uncertain,
     });
     return true;
+  },
+  /**
+   * Whether the refusal above is what would stop a rotation for this person:
+   * somebody else's set is unsaved, or their rotation never resolved.
+   */
+  heldByAnother(userId: string): boolean {
+    return (
+      state.userId !== null &&
+      state.userId !== userId &&
+      (state.codes !== null || state.uncertain)
+    );
   },
   /** The rotation answered: nothing is on the wire any more. */
   end(): void {

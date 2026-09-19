@@ -129,6 +129,7 @@ export function AccountDialog({ data }: { data: ShellData }) {
     pending: vault.rotating,
     uncertain: vault.uncertain,
     begin: () => recoveryCodeVault.begin(userId),
+    heldByAnother: () => recoveryCodeVault.heldByAnother(userId),
     end: () => {
       recoveryCodeVault.end();
     },
@@ -258,6 +259,13 @@ type CodeRotation = {
   /** An earlier rotation's answer was lost, so the stored set is unknown. */
   uncertain: boolean;
   begin: () => boolean;
+  /**
+   * Whether a refusal from `begin` is another person's held set rather than a
+   * rotation already on the wire. The store outlives a sign-out and a sign-in
+   * as somebody else in the same tab, and it will not overwrite their unsaved
+   * codes.
+   */
+  heldByAnother: () => boolean;
   end: () => void;
   /** The server answered and refused: this rotation changed nothing. */
   refuse: () => void;
@@ -787,7 +795,13 @@ type SessionsState =
 type CodesState =
   | { kind: "closed" }
   | { kind: "asking"; password: string; refused: boolean }
-  | { kind: "issued"; codes: string[] };
+  | { kind: "issued"; codes: string[] }
+  /**
+   * The rotation was refused before it started, because another person's
+   * unsaved set is still held in this tab. The vault outlives a sign-out and a
+   * sign-in as somebody else, and it will not overwrite their only copy.
+   */
+  | { kind: "blockedByOther" };
 
 /** "MacBook Pro · Chrome 141" from a user agent, or the raw string when nothing is recognised. */
 function describeAgent(userAgent: string | null, fallback: string): string {
@@ -923,7 +937,13 @@ function SecurityTab({
     if (codes.kind !== "asking") return;
     // The gate, not a disabled button: the button is gone the moment the person
     // presses Cancel or leaves the tab, and the rotation is not.
-    if (!rotation.begin()) return;
+    if (!rotation.begin()) {
+      // Refused because somebody else's set is still unsaved in this tab, not
+      // because a rotation is already running. Saying so beats a button that
+      // does nothing, and a reload drops the store with the page.
+      if (rotation.heldByAnother()) setCodes({ kind: "blockedByOther" });
+      return;
+    }
     const { password } = codes;
     setCodes({ kind: "asking", password, refused: false });
     try {
@@ -1097,9 +1117,14 @@ function SecurityTab({
                   </button>
                 </div>
               ) : null}
+              {codes.kind === "blockedByOther" ? (
+                <FormAlert testId="account-codes-blocked">
+                  {t("codesBlockedByOther")}
+                </FormAlert>
+              ) : null}
             </div>
             {viewer.twoFactorEnabled ? (
-              codes.kind === "closed" ? (
+              codes.kind === "closed" || codes.kind === "blockedByOther" ? (
                 <button
                   type="button"
                   data-testid="account-codes-open"

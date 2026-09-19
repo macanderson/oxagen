@@ -2022,6 +2022,7 @@ type Messages = {
         revoking: string;
         revoked: string;
         sessionsHint: string;
+        codesBlockedByOther: string;
       };
       privacy: {
         export: string;
