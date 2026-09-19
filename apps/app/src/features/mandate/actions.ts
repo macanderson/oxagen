@@ -54,7 +54,9 @@ import { endOfZonedDay, isCalendarDay } from "@/shared/calendar-day";
  * opened, through the very path the row lock made atomic (ADR-102, amended
  * 2026-09-19).
  */
-export type LimitsBaseline = {
+// Not exported: nothing outside this file names it, only through
+// `LimitsDraft["baseline"]`. knip flags an export nothing imports.
+type LimitsBaseline = {
   measure: string;
   unit: string;
   period: "daily" | "weekly" | "monthly";

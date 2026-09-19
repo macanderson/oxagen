@@ -75,12 +75,14 @@ export type MandateAuthority = z.infer<typeof MandateAuthority>;
  * model is a list because a record's key order is not a thing a page may rely
  * on, and every consumer renders it as rows.
  */
-export const MandateTargetRule = z.object({
+// Not exported, and the inferred type not aliased: nothing outside this file
+// names either, only through `MandateRow["targets"][number]`. knip flags an
+// export nothing imports.
+const MandateTargetRule = z.object({
   measure: z.string().min(1),
   allow: z.array(z.string().min(1)),
   deny: z.array(z.string().min(1)),
 });
-export type MandateTargetRule = z.infer<typeof MandateTargetRule>;
 
 /**
  * One threshold in the mandate's own approval rule: above this figure of this
@@ -95,14 +97,13 @@ export type MandateTargetRule = z.infer<typeof MandateTargetRule>;
  * measure, rather than being guessed into dollars or dropped from a rule that is
  * in force either way.
  */
-export const MandateApprovalThreshold = z.object({
+// Not exported, and the inferred type not aliased, same reason as
+// `MandateTargetRule` above.
+const MandateApprovalThreshold = z.object({
   measure: z.string().min(1),
   value: MeasureValue.nullable(),
   recorded: z.string().regex(/^\d+$/),
 });
-export type MandateApprovalThreshold = z.infer<
-  typeof MandateApprovalThreshold
->;
 
 /**
  * The mandate's own approval rule (`mandateApprovalSchema`): when a person has
@@ -113,12 +114,13 @@ export type MandateApprovalThreshold = z.infer<
  * an empty list would say the opposite of what it means, so the rule is rendered
  * as sentences and never as the shape.
  */
-export const MandateApproval = z.object({
+// Not exported, and the inferred type not aliased, same reason as
+// `MandateTargetRule` above.
+const MandateApproval = z.object({
   humanAbove: z.array(MandateApprovalThreshold),
   alwaysHumanFor: z.array(z.string().min(1)),
   approvers: z.array(z.string().min(1)),
 });
-export type MandateApproval = z.infer<typeof MandateApproval>;
 
 export const MandateRow = z.object({
   id: PublicId,
