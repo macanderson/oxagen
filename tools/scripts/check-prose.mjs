@@ -114,6 +114,10 @@ export const AVOID = [
   "it's no secret",
   "we believe",
   "we're on a mission",
+  // Retired lines from the positioning registry
+  // (.claude/skills/oxagen-branding/references/positioning.md, "Retired").
+  // Each one came back once after it was retired, so the scanner holds it.
+  "never re-explain",
 ];
 
 const AVOID_RE = new RegExp(

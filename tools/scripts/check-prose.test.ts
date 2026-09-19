@@ -22,6 +22,14 @@ describe("check-prose", () => {
     expect(findHits("The severy field.", ".mdx")).toEqual([]);
   });
 
+  it("flags a retired registry line, including in JSX text", () => {
+    const tsx =
+      '<h2>\n  Never re-explain yourself{" "}\n  <span>to AI</span>\n</h2>';
+    expect(findHits(tsx, ".tsx").map((h) => h.kind)).toEqual([
+      "avoid: Never re-explain",
+    ]);
+  });
+
   it("flags an exclamation point but not a shell negation", () => {
     expect(findHits("Done!", ".mdx")[0].kind).toBe("exclamation");
     expect(findHits("if [ ! -f x ]", ".mdx")).toEqual([]);
