@@ -31,7 +31,7 @@ exists:
 | `oxagen agent enroll \| status \| unenroll` | The commands. Already moved; `oxagen tacho` is hidden, still works, and prints one deprecation line. | 1a and 1b, shipped |
 | `tachod`, `tacho-hook` | A user service and a hook binary path, written into harness settings and into managed settings documents that MDM has distributed. | 4, new name alongside the old, migrating on the next enroll |
 | `tacho/1.0` | The envelope version on the wire between hook, collector and server. `TACHO_ENVELOPE_VERSION` in `packages/tacho/src/envelope.ts` accepts this literal and no other, so a producer sends this today. | 5, which adds `oxagen.frame/1.0` alongside it and reads both for one release |
-| `tacho_sessions` | The table, and its `tacho_sessions_runtime_check` constraint. | 6, by Atlas migration, after the runtime stops writing the old name |
+| the `tacho` Postgres schema | The schema, not one table. `tacho.ts` declares 10 tables on it and the migrations create `"tacho"."sessions"`, `"tacho"."hosts"` and the rest, so the word qualifies all 10. `tacho_sessions_runtime_check` is a constraint name; the `tacho_sessions_*` prefixes move with the schema. | 6, by Atlas migration, after the runtime stops writing the old name |
 | `@oxagen/tacho`, `ingest_tacho_events` | A package name and a registered capability name. Internal identifiers, and an MCP tool name a customer's agent calls. | Neither. ADR-111 decision 1 keeps them, and ADR-025 retired the dotted form with no alias fallback. |
 
 ## The Stella-side seam corpus (copied)

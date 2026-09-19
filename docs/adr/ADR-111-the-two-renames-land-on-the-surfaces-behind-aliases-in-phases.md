@@ -167,65 +167,61 @@ request.**
    lands this record (ADR-110). A branch commit is not: citing one would make
    the measurement unreproducible the moment it merged.
 
-   One predicate, `grep -ril tacho`, for the total and every row. Case matters:
-   a case-sensitive scan misses `Tacho` and undercounts three of the files
-   below, which is how an earlier draft of this table read 26 and 2. Count
-   `docs/capabilities/*.md` non-recursively; a git pathspec's `*` crosses `/`
-   and pulls in `schemas/README.md` for 29.
+   One predicate, `grep -ril tacho`, finds 119 files under `docs/`. Case
+   matters: a case-sensitive scan misses `Tacho`. Count
+   `docs/capabilities/*.md` non-recursively, because a git pathspec's `*`
+   crosses `/` and pulls in `schemas/README.md` for 29.
 
-   119 files under `docs/` carry the word, and the count is the wrong unit of
-   work:
+   **The unit of work is the occurrence, not the file.** Three drafts of this
+   table classified files by the directory they sit in, and each draft was
+   wrong in the same way, because most of these files carry more than one kind
+   of occurrence. What decides whether an occurrence changes is what it is:
 
-   | Where | Files | What phase 3 does with it |
+   | The occurrence is | What phase 3 does | Where |
    | --- | --- | --- |
-   | `docs/capabilities/schemas/` | 16 | Nothing. Generated from the contracts, so the name follows the contract, which keeps it under decision 1. |
-   | `docs/capabilities/*.md` | 28 | The prose is rewritten; the filename and the `**Surfaces:**` line are not. 15 of the 28 say `Tacho` in prose a reader reads, and "Enrol a machine as a Tacho host" is the product name on a docs surface whatever the file is called. The other 13 carry only identifiers (`tacho.hosts`, `revoke_tacho_enrollment`, `tacho_host_v1`), which stay. |
-   | `docs/adr/` | 33 | Nothing. A dated record of what was decided. Two carry the word in the filename. Rewriting one is rewriting the record. |
-   | `docs/audits/` | 3 | Nothing. Dated records, same reason. |
-   | `docs/specs/tacho/` | 17 | Three kinds. 11 are prose and are rewritten: this `README.md`, `spec.md`, `plan.md`, `data-model.md`, and the seven design documents. 3 are `design/adr-0003` through `adr-0005`, accepted and dated 2026-08-31, so they are left alone for the same reason `docs/adr/` is; living outside that directory does not make a decision record rewritable. 3 are code examples under `design/examples/`, whose occurrences are SDK identifiers (`TachoCallbackHandler`, `tacho.Session`, `@oxagen/tacho`, `tacho.middleware`); those stay and only comment prose changes. |
-   | Everything else | 22 | Rewritten. Current-tense product prose, which is where a reader meets the word. |
+   | An identifier | Nothing. Decision 1 keeps it: a registered capability name, a contract file stem, a package name, a schema or table name, an SDK symbol, the envelope literal. | Everywhere, including 13 capability documents whose only occurrences are these |
+   | Generated output | Nothing by hand. It says what its source says, so it changes when the source does. 26 files: the 16 capability schemas, `docs/CODEMAPS/architecture.md`, `docs/mission-control/TOOL-MATRIX.md` and `TRACEABILITY.md`, four JSON matrices, and three `.html` siblings of `.md` specs |
+   | A dated record | Nothing. It says what was decided and when. 39 files: `docs/adr/` (33), `docs/audits/` (3), and `design/adr-0003` through `adr-0005`, accepted 2026-08-31. Living outside `docs/adr/` does not make a decision record rewritable |
+   | Prose a reader reads | Rewritten. 38 files: 11 in `docs/specs/tacho/`, 15 capability documents that say `Tacho` in sentences, and 12 elsewhere including `docs/VISION.md`, `README.md` and `ONBOARDING.md` |
+   | A code comment | Rewritten; the code around it is identifiers. 3 files, the examples under `design/examples/` |
 
-   16 + 28 + 33 + 3 + 17 + 22 = 119. Of those, 48 files carry prose phase 3
-   rewrites (11 + 22 + 15), 3 more change only in their comments (the code
-   examples), and 68 are left alone entirely (16 + 33 + 3 + 13 + the three
-   design decision records). 48 + 3 + 68 = 119.
-
-   `check-capability-docs` is not the reason to exclude a capability document's
-   prose. It compares each document's `**Surfaces:**` line against its
-   contract and says nothing about the sentences around it, and the filename
-   keeps its dotted legacy stem independently of the registered snake_case
-   name. So the filename and that one line are contract-tracked; the prose is
-   prose, and §2.1's bar applies to it.
+   38 + 3 + 26 + 39 + 13 = 119. The file counts are a size, not a work list: a
+   capability document has a filename and a `**Surfaces:**` line that stay and
+   sentences that change, and `check-capability-docs` compares only that line
+   against the contract, so it is not a reason to leave the sentences alone.
 
    **The directory keeps its path.** `docs/specs/tacho` is referenced 59 times,
-   and most of those are comments in source files across `packages/database`,
-   `packages/telemetry`, `packages/oxagen`, `packages/run-ledger` and
-   `packages/tacho`. Nothing checks those paths, so a move breaks them
-   silently. A repository path nobody outside the tree reads is an internal
-   identifier, and decision 1 says those change when their file is being
-   changed for another reason, not as a campaign.
+   and most of those are comments in source files across
+   `packages/database`, `packages/telemetry`, `packages/oxagen`,
+   `packages/run-ledger` and `packages/tacho`. Nothing checks those paths, so a
+   move breaks them silently, and a repository path nobody outside the tree
+   reads is the internal identifier decision 1 leaves alone.
 
    **The prose keeps naming what exists.** `tachod`, `tacho-hook`, `tacho/1.0`
-   and `tacho_sessions` are live until phases 4, 5 and 6 rename them. The
-   envelope's live name is `tacho/1.0`, the one literal
+   and the `tacho` Postgres schema are live until phases 4, 5 and 6 rename
+   them. The envelope's live name is `tacho/1.0`, the one literal
    `TACHO_ENVELOPE_VERSION` accepts; `oxagen.frame/1.0` is what phase 5 adds
-   beside it. Naming the replacement as though it were current would tell a
+   beside it. Naming a replacement as though it were current would tell a
    producer to send a version the collector rejects, which is the failure this
-   paragraph exists to prevent. `@oxagen/tacho` and `ingest_tacho_events` are not renamed by any
-   phase: decision 1 keeps the package name, and the capability name is an MCP
-   tool a customer's agent calls, which ADR-025 retired the dotted form of with
-   no alias fallback. A doc that calls any of the six something else is a doc
-   that is wrong, so each keeps its name, and the ones that move say which
-   phase moves them. The word goes from the concept, which has no product name:
-   doing it is wrapping an agent.
+   paragraph exists to prevent. `@oxagen/tacho` and `ingest_tacho_events` are
+   not renamed by any phase: decision 1 keeps the package name, and the
+   capability name is an MCP tool a customer's agent calls, whose dotted form
+   ADR-025 retired with no alias fallback.
+
 4. The runtime names: `tachod` to `oxagend`, `tacho-hook` to `oxagen-hook`,
    each shipping the new name alongside the old and migrating on the next
    enroll.
 5. The envelope: `oxagen.frame/1.0` accepted alongside the current name, with
    the collector reading both for one release.
-6. The database: the `tacho_sessions` table and the
-   `tacho_sessions_runtime_check` constraint, by Atlas migration, after the
-   runtime no longer writes the old name.
+6. The database: the `tacho` Postgres schema, by Atlas migration, after the
+   runtime no longer writes the old name. It is a schema rename rather than a
+   table rename. `packages/database/src/schema/tacho.ts` declares 10 tables on
+   `tachoSchema`, and the migrations create them as `"tacho"."sessions"`,
+   `"tacho"."hosts"`, `"tacho"."incidents"` and the rest, so the word is in the
+   schema that qualifies all 10. `tacho_sessions_runtime_check` is a constraint
+   name, not a table, and the `tacho_sessions_*` prefixes on constraints and
+   indexes move with it. Earlier drafts of this record and of the corpus README
+   named a `tacho_sessions` table, which does not exist.
 7. `capability` to `agent tool` on the surfaces: UI strings, error messages,
    CLI output, `docs/capabilities/`, and the two rule files. The registry
    symbol and the contract files keep their names under decision 1.
