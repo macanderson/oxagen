@@ -3494,6 +3494,7 @@ type Messages = {
       off: string;
       written: string;
       writtenUnattributed: string;
+      slug: string;
       unstamped: string;
       checkedAgainst: string;
       empty: {

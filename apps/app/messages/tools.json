@@ -415,6 +415,7 @@
       "off": "off",
       "written": "Last written {at} by {by}",
       "writtenUnattributed": "Last written {at}, by no recorded person",
+      "slug": "policy:{slug}",
       "unstamped": "Releases nothing until it is saved again: the record does not say which consequences it was checked against.",
       "checkedAgainst": "Checked against: {tags}",
       "empty": {

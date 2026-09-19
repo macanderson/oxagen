@@ -18,7 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import { callsAuthority, mandateAuthority, mandateRow } from "@/test/mandate-views";
+import {
+  callsAuthority,
+  mandateAuthority,
+  mandateRow,
+} from "@/test/mandate-views";
 import type { AgentChoices } from "./grant-mandate";
 
 const { router, grantMandate } = vi.hoisted(() => ({
@@ -44,7 +48,10 @@ const AGENTS: AgentChoices = {
 };
 
 function draw(
-  props: { agents?: AgentChoices; request?: ReturnType<typeof mandateRow> } = {},
+  props: {
+    agents?: AgentChoices;
+    request?: ReturnType<typeof mandateRow>;
+  } = {},
 ) {
   render(
     <IntlProvider>
@@ -70,9 +77,15 @@ const dialog = () => screen.getByTestId("grant-mandate");
 /** Fills the fields a grant needs and submits. */
 async function grant(user: ReturnType<typeof userEvent.setup>) {
   const form = dialog();
-  await user.selectOptions(within(form).getByLabelText("Agent"), "agt_releasebot");
+  await user.selectOptions(
+    within(form).getByLabelText("Agent"),
+    "agt_releasebot",
+  );
   await user.click(within(form).getByLabelText("moves_money"));
-  await user.type(within(form).getByLabelText("Tools"), "stripe__create_payment@*");
+  await user.type(
+    within(form).getByLabelText("Tools"),
+    "stripe__create_payment@*",
+  );
   await user.type(within(form).getByLabelText("Measure"), "rows");
   await user.type(within(form).getByLabelText("Unit"), "rows");
   await user.type(within(form).getByLabelText("Per period"), "2000");
@@ -84,7 +97,10 @@ async function grant(user: ReturnType<typeof userEvent.setup>) {
     within(form).getByLabelText("Measure the target is read from"),
     "recipient",
   );
-  await user.type(within(form).getByLabelText("Who may answer"), "role:Billing");
+  await user.type(
+    within(form).getByLabelText("Who may answer"),
+    "role:Billing",
+  );
   await user.type(within(form).getByLabelText("Purpose"), "PO-4471");
   await user.type(within(form).getByLabelText("Valid from"), "2026-09-01");
   await user.type(within(form).getByLabelText("Valid to"), "2026-12-31");
@@ -221,7 +237,9 @@ describe("GrantMandate", () => {
   it("says when the picker holds only the first page of agents", async () => {
     draw({ agents: { ...AGENTS, partial: true } });
     await open();
-    expect(dialog()).toHaveTextContent("The first page of this workspace's agents.");
+    expect(dialog()).toHaveTextContent(
+      "The first page of this workspace's agents.",
+    );
   });
 });
 
@@ -259,9 +277,9 @@ describe("GrantMandate on a requested draft", () => {
     expect(form).toHaveTextContent("invoice-bot");
     expect(within(form).getByLabelText("moves_money")).toBeChecked();
     expect(within(form).getByLabelText("destroys_data")).not.toBeChecked();
-    expect(
-      within(form).getByLabelText(/Others the tools declare/),
-    ).toHaveValue("ships_code");
+    expect(within(form).getByLabelText(/Others the tools declare/)).toHaveValue(
+      "ships_code",
+    );
     expect(within(form).getByLabelText("Tools")).toHaveValue(
       "stripe__create_payment@*, deploy__ship@3",
     );
@@ -321,10 +339,7 @@ describe("GrantMandate on a requested draft", () => {
   // the form cannot hold whole would be activated weaker than it was asked for.
   // The dialog shows it for review and offers no submit (negative).
   it.each([
-    [
-      "a money limit",
-      mandateRow({ id: "mnd_7c1d2e", status: "draft" }),
-    ],
+    ["a money limit", mandateRow({ id: "mnd_7c1d2e", status: "draft" })],
     [
       "two count limits",
       mandateRow({
@@ -348,7 +363,12 @@ describe("GrantMandate on a requested draft", () => {
       mandateRow({
         ...request,
         authority: [
-          request.authority[0]!,
+          mandateAuthority({
+            measure: "rows",
+            perCall: { kind: "count", count: "50", unit: "rows" },
+            perPeriod: { kind: "count", count: "1000", unit: "rows" },
+            period: "weekly",
+          }),
           { ...callsAuthority(), period: "weekly" },
         ],
       }),
@@ -376,17 +396,20 @@ describe("GrantMandate on a requested draft", () => {
         ],
       }),
     ],
-  ])("refuses a draft with %s rather than granting part of it", async (_, draft) => {
-    draw({ request: draft });
-    await open("Grant mandate mnd_7c1d2e");
-    const form = draftDialog();
-    expect(form).toHaveTextContent("more than this form can carry");
-    expect(
-      within(form).queryByRole("button", { name: "Grant this request" }),
-    ).toBeNull();
-    expect(notCarried(draft)).toBe(true);
-    await expectNoAxe(document.body);
-  });
+  ])(
+    "refuses a draft with %s rather than granting part of it",
+    async (_, draft) => {
+      draw({ request: draft });
+      await open("Grant mandate mnd_7c1d2e");
+      const form = draftDialog();
+      expect(form).toHaveTextContent("more than this form can carry");
+      expect(
+        within(form).queryByRole("button", { name: "Grant this request" }),
+      ).toBeNull();
+      expect(notCarried(draft)).toBe(true);
+      await expectNoAxe(document.body);
+    },
+  );
 
   it("carries a draft with one count limit, a daily calls limit and one of each rule", () => {
     expect(notCarried(request)).toBe(false);
@@ -440,7 +463,11 @@ describe("useGrantFailure", () => {
       }),
     ).toContain("Your time zone could not be read");
     expect(
-      sentence.current({ ok: false, reason: "exhausted", code: "gau_exhausted" }),
+      sentence.current({
+        ok: false,
+        reason: "exhausted",
+        code: "gau_exhausted",
+      }),
     ).toContain("gau_exhausted");
   });
 });

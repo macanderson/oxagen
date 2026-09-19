@@ -161,7 +161,7 @@ function Row({
         <span className="flex flex-col gap-0.5">
           <span className="font-medium text-foreground">{rule.name}</span>
           <span className={`${mono} text-xs text-muted-foreground`}>
-            policy:{rule.slug}
+            {t("slug", { slug: rule.slug })}
           </span>
           <span className="text-xs text-muted-foreground">
             {rule.lastWrittenBy === null
