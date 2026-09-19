@@ -39,6 +39,15 @@ export const privacyExportRequests = privacySchema.table(
     userId: uuid("user_id").notNull(),
     /** Org context — always set; for user-scope exports this is their primary org. */
     orgId: uuid("org_id").notNull(),
+    /**
+     * The workspace that governed the queue, when one was named.
+     *
+     * `get_export_status` rechecks `export_data` against this workspace, not
+     * the download request's current one, so a deny written where the archive
+     * was authorized still binds when the same id is polled elsewhere in the
+     * organization. Null for pre-column rows and for org-only mounts.
+     */
+    workspaceId: uuid("workspace_id"),
     scope: privacyRequestScopeEnum("scope").notNull(),
     status: privacyExportStatusEnum("status").notNull().default("queued"),
     /** Signed Vercel Blob URL — set when status transitions to "ready". */

@@ -1,4 +1,4 @@
-h1:NHnnEjQaImeoDz7q+YAv4l2lqiaNerOLrzA/4UawReg=
+h1:aNfbmRhh0EscYjD1m4l5KWWluDuJFyw/4lxdTjRb5Ck=
 20260611233016_initial_schema.sql h1:zDxoHTpnCTjbF+5PvUDeUGvyJCb6yhltPOFOw1pdqMQ=
 20260612000959_add_agent_execution_step_timing.sql h1:d6h37F1Jf3ze2TIHheAB3P9PR0hbcaenjF15U45v2ak=
 20260612052000_regrant_oxagen_app.sql h1:Xh0Mx6rfN3XHIBA7nIlNhADsWGfC1mZtn25NsnrIZXo=
@@ -161,3 +161,4 @@ h1:NHnnEjQaImeoDz7q+YAv4l2lqiaNerOLrzA/4UawReg=
 20260919120000_user_preferences_timezone_pacific.sql h1:Ez7CkshBc42f94Ps2oQ5a+swDenC6u6DQK/NhW2f8BM=
 20260919130000_restore_cms_ebook_lead_gate.sql h1:i5EqdTBHKY/MQcgr2vyDwxo5t9xFtya9vg6q8ZQr6ok=
 20260919131000_seed_cms_book_editions.sql h1:Q/u92HPVr8wPXIbLp+s33Uvi8/nwUM8iFja35jpzo9U=
+20260919140000_privacy_export_requests_workspace.sql h1:sa04cveb4EEde9w3UhAxfYoBnZntR9LZqEHSF7HGmXE=

@@ -10,6 +10,7 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 const mocks = vi.hoisted(() => ({
   selectResults: [] as Array<() => Promise<unknown>>,
   insertReturning: vi.fn<() => Promise<unknown>>(),
+  insertValues: null as Record<string, unknown> | null,
   eventSend: vi.fn<(arg: unknown) => Promise<unknown>>(),
   emitSecurityEvent: vi.fn<(arg: unknown) => void>(),
 }));
@@ -62,7 +63,10 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       }),
     }),
     insert: () => ({
-      values: () => ({ returning: () => mocks.insertReturning() }),
+      values: (vals: Record<string, unknown>) => {
+        mocks.insertValues = vals;
+        return { returning: () => mocks.insertReturning() };
+      },
     }),
   });
   return {
@@ -82,6 +86,7 @@ vi.mock("./event-client", () => ({
 }));
 
 import { privacyDataExportHandler } from "./privacy.data.export";
+import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
 
 const CTX: CapabilityContext = {
   orgId: "org_A",
@@ -102,6 +107,7 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectResults.length = 0;
+    mocks.insertValues = null;
     mocks.insertReturning.mockResolvedValue([{ id: "exp_1" }]);
     authz.value = {
       principal: null,
@@ -117,6 +123,13 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     const result = await privacyDataExportHandler({ scope: "user" }, CTX);
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
+    // The workspace that governed the queue is on the row, so the status
+    // recheck can bind to it when the archive is later read elsewhere.
+    expect(mocks.insertValues).toMatchObject({
+      workspaceId: "ws_1",
+      orgId: "org_A",
+      scope: "user",
+    });
   });
 
   it("rejects org-scope export when the caller is not a member of the org", async () => {
@@ -180,6 +193,21 @@ describe("privacyDataExportHandler (@oxagen/handlers)", () => {
     );
     expect(result).toEqual({ exportId: "exp_1", status: "queued" });
     expect(mocks.eventSend).toHaveBeenCalledTimes(1);
+    expect(mocks.insertValues).toMatchObject({
+      workspaceId: "ws_1",
+      scope: "org",
+    });
+  });
+
+  // The org-only sentinel is not a workspace a deny can be written in. Storing
+  // it would make the download recheck treat a sentinel as an origin.
+  it("stores null when the queue names the org-only sentinel", async () => {
+    const result = await privacyDataExportHandler(
+      { scope: "user" },
+      { ...CTX, workspaceId: ORG_ONLY_WORKSPACE_ID },
+    );
+    expect(result).toEqual({ exportId: "exp_1", status: "queued" });
+    expect(mocks.insertValues).toMatchObject({ workspaceId: null });
   });
 
   it("allows org-scope export for an Admin of the org", async () => {
