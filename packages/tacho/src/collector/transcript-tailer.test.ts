@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
+import { sessionMapKey } from "./registry";
 import {
   completeLines,
   type TailedSession,
@@ -25,10 +26,15 @@ import {
 } from "./transcript-tailer";
 
 /** A recorder that only remembers the lines it was handed. */
-function fakeSession(id: string, transcriptPath?: string) {
+function fakeSession(
+  id: string,
+  transcriptPath?: string,
+  identity: Pick<TailedSession, "harness" | "customAgent"> = {},
+) {
   const lines: Array<{ line: string; subagentId?: string }> = [];
   const session: TailedSession & { lines: typeof lines } = {
     harnessSessionId: id,
+    ...identity,
     ...(transcriptPath !== undefined ? { transcriptPath } : {}),
     sealed: false,
     lines,
@@ -43,6 +49,11 @@ function fakeSession(id: string, transcriptPath?: string) {
     },
   };
   return session;
+}
+
+/** The cursor map key the tailer uses for a default (Claude Code) session. */
+function cursorId(harnessSessionId: string): string {
+  return sessionMapKey(harnessSessionId, {});
 }
 
 describe("TranscriptTailer", () => {
@@ -117,7 +128,7 @@ describe("TranscriptTailer", () => {
     // Nothing new: nothing fed.
     await instance.tick();
     expect(session.lines).toHaveLength(4);
-    expect(instance.state().cursors["s1"]?.offset).toBe(
+    expect(instance.state().cursors[cursorId("s1")]?.offset).toBe(
       Buffer.byteLength('{"a":1}\n{"b":2}\n{"c":3}\n{"d":4}\n'),
     );
   });
@@ -207,7 +218,7 @@ describe("TranscriptTailer", () => {
     ).toBeUndefined();
   });
 
-  it("drains a sealed session once more, then never reads it again", async () => {
+  it("drains a sealed session once more, then keeps its cursor as a tombstone", async () => {
     const dir = scratch();
     const path = join(dir, "s.jsonl");
     const session = fakeSession("s1", path);
@@ -223,23 +234,81 @@ describe("TranscriptTailer", () => {
     appendFileSync(path, "cost-state\n");
     await instance.tick();
     expect(session.lines).toHaveLength(3);
-    expect(instance.state().cursors["s1"]?.drained).toBe(true);
-    // The sealed session stays in the registry for days: its drained cursor
-    // stays too, and no later tick reads the transcript again.
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
+    // The registry keeps listing the sealed session for its retention. The
+    // tombstone stays, and nothing is read again: no replay after agent_stop.
     appendFileSync(path, "late\n");
-    await instance.tick();
-    await instance.tick();
-    await instance.tick();
+    for (let i = 0; i < 4; i += 1) await instance.tick();
+    await instance.drain("s1");
     expect(session.lines).toHaveLength(3);
-    expect(instance.state().cursors["s1"]?.drained).toBe(true);
-    expect(instance.state().cursors["s1"]?.offset).toBeGreaterThan(0);
-    // A session that left the registry loses its cursor too.
-    const other = fakeSession("s2", path);
-    const second = tailer([other]);
+    expect(instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
+    // Once the registry forgets the session, the tombstone goes too.
+    const sessions = [session];
+    const second = tailer(sessions);
     await second.instance.tick();
-    expect(second.instance.state().cursors["s2"]).toBeDefined();
-    other.sealed = false;
+    expect(second.instance.state().cursors[cursorId("s1")]).toBeDefined();
+    sessions.length = 0;
     await second.instance.tick();
+    expect(second.instance.state().cursors[cursorId("s1")]).toBeUndefined();
+  });
+
+  it("does not let one agent's drained tombstone block another sharing the raw id", async () => {
+    const dir = scratch();
+    const pathA = join(dir, "a.jsonl");
+    const pathB = join(dir, "b.jsonl");
+    const sharedId = "shared-session";
+    writeFileSync(pathA, "agent-a-1\n");
+    writeFileSync(pathB, "agent-b-1\nagent-b-2\n");
+    const agentA = fakeSession(sharedId, pathA);
+    const agentB = fakeSession(sharedId, pathB, { customAgent: "reviewer" });
+    const sessions = [agentA, agentB];
+    const { instance } = tailer(sessions);
+
+    await instance.tick();
+    expect(agentA.lines.map((l) => l.line)).toEqual(["agent-a-1"]);
+    expect(agentB.lines.map((l) => l.line)).toEqual([
+      "agent-b-1",
+      "agent-b-2",
+    ]);
+
+    // Agent A seals and drains; its tombstone must not key on the raw id.
+    agentA.sealed = true;
+    await instance.tick();
+    const keyA = sessionMapKey(sharedId, {});
+    const keyB = sessionMapKey(sharedId, { customAgent: "reviewer" });
+    expect(instance.state().cursors[keyA]?.drained).toBe(true);
+    expect(instance.state().cursors[keyB]?.drained).toBeUndefined();
+    expect(keyA).not.toBe(keyB);
+
+    // Agent B keeps growing: the tombstone for A must not skip B's reads.
+    appendFileSync(pathB, "agent-b-3\n");
+    await instance.tick();
+    expect(agentB.lines.map((l) => l.line)).toEqual([
+      "agent-b-1",
+      "agent-b-2",
+      "agent-b-3",
+    ]);
+    expect(instance.state().cursors[keyA]?.drained).toBe(true);
+  });
+
+  it("does not read a sealed session that has no cursor", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    const statePath = join(dir, "state", "transcript-tail.json");
+    writeFileSync(path, "one\ntwo\n");
+    // A daemon before the tombstone dropped this cursor; the registry still
+    // lists the session, sealed.
+    const session = fakeSession("s1", path);
+    session.sealed = true;
+    const first = tailer([session], { statePath });
+    await first.instance.tick();
+    await first.instance.tick();
+    expect(session.lines).toEqual([]);
+    expect(first.instance.state().cursors[cursorId("s1")]?.drained).toBe(true);
+    // The tombstone survives a restart.
+    const second = tailer([session], { statePath });
+    await second.instance.tick();
+    expect(session.lines).toEqual([]);
   });
 
   it("persists cursors so a restart does not re-read the transcript", async () => {
@@ -256,7 +325,7 @@ describe("TranscriptTailer", () => {
       cursors: Record<string, { offset: number }>;
     };
     expect(persisted.schema).toBe("tacho.transcript-tail.v1");
-    expect(persisted.cursors["s1"]?.offset).toBe(8);
+    expect(persisted.cursors[cursorId("s1")]?.offset).toBe(8);
 
     const again = fakeSession("s1", path);
     appendFileSync(path, "three\n");
