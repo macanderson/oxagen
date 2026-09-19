@@ -266,6 +266,8 @@ export async function apiGetOrThrow<T>(
 export async function userApiPostOrThrow<T>(
   path: string,
   body: unknown,
+  /** See `apiPostOrThrow`. Omitted, the call waits as long as the connection does. */
+  options: { timeoutMs?: number } = {},
 ): Promise<T> {
   const token = getToken();
   if (!token) throw new ApiError(NOT_LOGGED_IN);
@@ -287,6 +289,9 @@ export async function userApiPostOrThrow<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body ?? {}),
+      ...(options.timeoutMs === undefined
+        ? {}
+        : { signal: AbortSignal.timeout(options.timeoutMs) }),
     });
   } catch (err) {
     throw await buildNetworkError(
@@ -325,9 +330,35 @@ export async function userApiPostOrThrow<T>(
 export async function apiPostOrThrow<T>(
   path: string,
   body: unknown,
+  /**
+   * The org and workspace to address, when the caller knows better than the
+   * globally selected pair — typically a project whose `.oxagen/workspace.json`
+   * names its own. Slugs, as they appear in the URL. Omitted, the global
+   * selection applies as before.
+   */
+  scope?: { org: string; ws: string },
+  /**
+   * Give up after this many milliseconds. For a call that sits on the path of
+   * a prompt and is optional there: a hung connection must cost the caller a
+   * bounded wait, not the whole hook budget. Omitted, the call waits as long
+   * as the connection does.
+   */
+  options: { timeoutMs?: number } = {},
 ): Promise<T> {
-  const ctx = resolveApiContext();
-  if (!ctx) throw new ApiError(NOT_LOGGED_IN);
+  // With an explicit scope only the token is needed. Requiring the global org
+  // and workspace as well made a linked checkout on a machine that had never
+  // run `oxagen workspace use` fail before the scope was even read, and the
+  // freshness caller swallows that failure: the linked workspace's gates were
+  // dropped without a word.
+  const token = getToken();
+  if (!token) throw new ApiError(NOT_LOGGED_IN);
+  const ctx: ApiContext = scope
+    ? { apiUrl: getApiUrl(), token, org: scope.org, ws: scope.ws }
+    : (() => {
+        const resolved = resolveApiContext();
+        if (!resolved) throw new ApiError(NOT_LOGGED_IN);
+        return resolved;
+      })();
   const category: DebugCategory = "api";
   const url = `${ctx.apiUrl}/v1/${ctx.org}/${ctx.ws}/${path}`;
   void debugLog(category, "api.post.request", {
@@ -346,6 +377,9 @@ export async function apiPostOrThrow<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body ?? {}),
+      ...(options.timeoutMs === undefined
+        ? {}
+        : { signal: AbortSignal.timeout(options.timeoutMs) }),
     });
   } catch (err) {
     throw await buildNetworkError(

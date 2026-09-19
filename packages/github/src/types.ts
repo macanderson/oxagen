@@ -17,6 +17,8 @@ export interface GitHubPullRequest {
   headSha: string | null;
   /** The merge commit once `merged` is true; null before. */
   mergeCommitSha: string | null;
+  /** When GitHub merged it (ISO 8601), once `merged` is true; null before. */
+  mergedAt: string | null;
   additions: number;
   deletions: number;
   changedFiles: number;

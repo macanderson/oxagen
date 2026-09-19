@@ -4,6 +4,9 @@
  * one, and `checkIAM`'s tier fast-path allows every non-enterprise org, so a
  * key minted for one narrow job could invoke anything.
  */
+import { tachoBundleGet } from "@oxagen/oxagen/contracts/tacho.bundle.get";
+import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
+import { tachoEventsIngest } from "@oxagen/oxagen/contracts/tacho.events.ingest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const findFirst = vi.fn();
@@ -289,11 +292,27 @@ describe("a key that is no longer there", () => {
 });
 
 describe("the Tacho host key", () => {
+  it("names the control client's three capabilities as their contracts register them", () => {
+    // A capability rename (ADR-025) left this list naming
+    // `fetch_tacho_commands` after the contract became `fetch_commands`, and
+    // every host's command poll was refused in production. The list is held
+    // to the contracts' own names so the next rename fails here instead.
+    expect(
+      [...(MACHINE_KEY_CAPABILITIES[TACHO_HOST_PURPOSE] ?? [])].sort(),
+    ).toEqual(
+      [
+        tachoBundleGet.name,
+        tachoCommandFetch.name,
+        tachoEventsIngest.name,
+      ].sort(),
+    );
+  });
+
   it("may make the three calls its control client makes", async () => {
     for (const capability of [
       "ingest_tacho_events",
       "get_tacho_bundle",
-      "fetch_tacho_commands",
+      "fetch_commands",
     ]) {
       keyWithScope({
         purpose: TACHO_HOST_PURPOSE,

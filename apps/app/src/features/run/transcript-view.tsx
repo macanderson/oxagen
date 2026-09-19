@@ -49,7 +49,6 @@ import {
   type TranscriptZoom,
 } from "@/data/contracts/run";
 import type { ReplayGrade, RunStatus } from "@/data/contracts/runs";
-
 import { routes } from "@/shared/safe-path";
 import { linkText } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
@@ -76,13 +75,12 @@ import {
 
 type Place = { org: string; ws: string; runId: string };
 
-const SPEEDS = [1, 1.5, 2, 4] as const;
-/** How often a followed live run re-reads itself. */
-/** How close to the end the playhead gets before the next page is read ahead of it. */
-const PREFETCH_WITHIN = 5;
-
 /** Why a later page did not arrive, in the shape the action answers with. */
 type PageFailure = Exclude<ActionResult<unknown>, { ok: true }>;
+
+const SPEEDS = [1, 1.5, 2, 4] as const;
+/** How close to the end the playhead gets before the next page is read ahead of it. */
+const PREFETCH_WITHIN = 5;
 
 const DOT: Record<StepNode, string> = {
   model: "border-info",
@@ -252,7 +250,10 @@ function FrameDetail({
           <Decision decision={frame.decision} />
         )}
         {neither ? (
-          <p data-testid="entry-no-halves" className="m-0 text-xs text-muted-foreground">
+          <p
+            data-testid="entry-no-halves"
+            className="m-0 text-xs text-muted-foreground"
+          >
             {t("noHalves")}
           </p>
         ) : (
@@ -568,6 +569,9 @@ export function TranscriptView({
   // block below checks it and runs one more tail read once that request
   // settles, so a frame landing during an active read is never dropped.
   const pendingReadRef = useRef(false);
+  // Latest loadMore, so the finally block can request a follow-up without
+  // closing over the useCallback identity (React Compiler refuses that).
+  const loadMoreRef = useRef<() => Promise<void>>(async () => {});
   const [entries, setEntries] = useState<Frames>(first);
   const [cursor, setCursor] = useState<string | null>(transcript.cursor);
   const [complete, setComplete] = useState(transcript.complete);
@@ -665,12 +669,23 @@ export function TranscriptView({
         // write and would otherwise narrow the property to always `false`.
       } while (readPending());
     } catch {
-      setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
+      setPageFailure({
+        ok: false,
+        reason: "unavailable",
+        code: "unanswered",
+      });
     } finally {
       readingRef.current = false;
       setReading(false);
+      if (pendingReadRef.current) {
+        pendingReadRef.current = false;
+        void loadMoreRef.current();
+      }
     }
   }, [kinds, org, runId, ws]);
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
 
   // A followed live run reads its tail when the stream says a frame landed.
   const stream = useRunStream({
@@ -954,7 +969,9 @@ export function TranscriptView({
                     count: formatCount(entries.length, locale),
                   })
                 : complete
-                  ? t("complete", { count: formatCount(entries.length, locale) })
+                  ? t("complete", {
+                      count: formatCount(entries.length, locale),
+                    })
                   : t("cut", { count: formatCount(entries.length, locale) })}
         </span>
         {cursor === null ? null : (

@@ -123,6 +123,7 @@ import "./contracts/context.record.publish";
 import "./contracts/context.records.append";
 import "./contracts/context.records.get";
 import "./contracts/context.records.list";
+import "./contracts/context.steering.freshness";
 import "./contracts/context.steering.shared";
 import "./contracts/conversation.archive";
 import "./contracts/conversation.attachment.add";

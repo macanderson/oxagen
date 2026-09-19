@@ -696,6 +696,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .appendRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_steering_freshness",
+    async () =>
+      (await import("./context.steering.freshness"))
+        .getSteeringFreshnessHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "propose_record",
     async () =>
       (await import("./context.proposal.create"))
@@ -1097,7 +1103,8 @@ registerHandlersOnce("@oxagen/handlers", () => {
   registerHandler(
     "get_run_chain",
     async () =>
-      (await import("./run.chain.get")).runChainGetHandler as CapabilityHandlerFn,
+      (await import("./run.chain.get"))
+        .runChainGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "bisect_runs",

@@ -34,9 +34,21 @@ import {
   transcriptEntry,
 } from "./run.builders";
 
+/** A page-action refusal the player shows under the transport. */
+const pageFailed = (code: string): ActionResult<RunTranscript> => ({
+  ok: false,
+  reason: "unavailable",
+  code,
+});
+
+/** A successful page-action answer. */
+const pageOk = (value: RunTranscript): ActionResult<RunTranscript> => ({
+  ok: true,
+  value,
+});
+
 const { readTranscriptPage } = vi.hoisted(() => ({
-  readTranscriptPage:
-    vi.fn<typeof import("./actions").readTranscriptPage>(),
+  readTranscriptPage: vi.fn<typeof import("./actions").readTranscriptPage>(),
 }));
 vi.mock("./actions", () => ({ readTranscriptPage }));
 vi.mock("next/link", () => ({
@@ -182,10 +194,9 @@ describe("paging past the cursor", () => {
 
   it("reads the next page from the cursor, through the same chips, and appends it", async () => {
     const more = mockupTranscript();
-    readTranscriptPage.mockResolvedValue({
-      ok: true,
-      value: { ...more, cursor: null, complete: true },
-    });
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...more, cursor: null, complete: true }),
+    );
     renderSection({ read: paged, kinds: ["tools"] });
     const before = screen.getAllByTestId("transcript-frame").length;
     fireEvent.click(screen.getByTestId("transcript-more"));
@@ -208,10 +219,9 @@ describe("paging past the cursor", () => {
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {
-    readTranscriptPage.mockResolvedValue({
-      ok: true,
-      value: { ...mockupTranscript(), cursor: null, complete: true },
-    });
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...mockupTranscript(), cursor: null, complete: true }),
+    );
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
     await waitFor(() => {
@@ -241,11 +251,7 @@ describe("paging past the cursor", () => {
   });
 
   it("says a page failed for any other reason without claiming the cursor was bad (negative)", async () => {
-    readTranscriptPage.mockResolvedValue({
-      ok: false,
-      reason: "unavailable",
-      code: "frame_store_unreachable",
-    });
+    readTranscriptPage.mockResolvedValue(pageFailed("frame_store_unreachable"));
     renderSection({ read: paged });
     fireEvent.click(screen.getByTestId("transcript-more"));
     await waitFor(() => {
@@ -302,7 +308,9 @@ describe("following a live run", () => {
   it("keeps the transport and the frames reachable while following", () => {
     renderSection({ read: readOk(mockupTranscript()), status: "live" });
     const transcript = screen.getByTestId("transcript");
-    expect(within(transcript).getByTestId("transport-readout")).toBeInTheDocument();
+    expect(
+      within(transcript).getByTestId("transport-readout"),
+    ).toBeInTheDocument();
   });
 
   it("reads the tail once more for a frame that landed during an active read, rather than dropping it (negative)", async () => {
@@ -366,10 +374,9 @@ describe("following a live run", () => {
       const resolveFirst = pending[0];
       if (resolveFirst === undefined) throw new Error("no pending read");
       await act(async () => {
-        resolveFirst({
-          ok: true,
-          value: { ...mockupTranscript(), cursor: "next", complete: false },
-        });
+        resolveFirst(
+          pageOk({ ...mockupTranscript(), cursor: "next", complete: false }),
+        );
         // Flush the microtask queue: the promise's own continuation, the
         // state updates it triggers, and the follow-up loadMore's call into
         // readTranscriptPage each resolve as a separate microtask hop. Fake
