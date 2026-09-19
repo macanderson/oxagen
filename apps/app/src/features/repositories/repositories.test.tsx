@@ -10,6 +10,7 @@
 import {
   cleanup,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -90,6 +91,9 @@ vi.mock("next/link", () => ({
 }));
 
 const { Repositories } = await import("./repositories");
+const { Configuration } = await import("./configuration");
+const { Changes } = await import("./changes");
+const { useRepositoriesFailure } = await import("./failure");
 
 const MAIN: WorkspaceRepositories["repositories"][number] = {
   bindingId: "rpb_main01",
@@ -989,5 +993,204 @@ describe("the other tabs", () => {
     expect(await screen.findByTestId("configuration-mode")).toHaveTextContent(
       "opening and merging are both refused",
     );
+  });
+});
+
+describe("repository refusal messages", () => {
+  it.each([
+    ["github_not_connected", "Install the App first"],
+    ["repository_not_installed", "Grant it access on GitHub"],
+    ["main_repo_bound", "already binds a different main repository"],
+    ["github_not_authorized", "Connect GitHub first"],
+    ["installation_unreachable", "cannot reach that installation"],
+    ["main_repo", "never also linked"],
+    ["repository_already_linked", "already linked to this workspace"],
+    ["main_repo_claimed", "Another workspace steers by that repository"],
+    ["main_repo_unbound", "main repository first"],
+    ["repository_linked_elsewhere", "Another workspace has linked"],
+    ["main_repo_unlink_refused", "main repository cannot be unlinked"],
+    ["repository_not_linked", "Reload the page"],
+    ["branch_not_found", "Check the spelling"],
+    ["production_branch_missing", "Set the production branch first"],
+    ["production_branch_is_init_branch", "Set another production branch first"],
+    ["oxagen_tree_exists", "Change it with an ordinary pull request"],
+    ["governance_toml_invalid", "Fix the file or pick the mode"],
+    ["workspace_toml_invalid", "not valid TOML"],
+    ["secret_found", "credential or personal data"],
+    ["authority_declared", "grant of authority"],
+    ["github_refused", "Check that the App can write"],
+  ])("explains how to recover from %s", (code, recovery) => {
+    const { result } = renderHook(useRepositoriesFailure, {
+      wrapper: IntlProvider,
+    });
+    for (const reason of ["conflict", "not_found"] as const)
+      expect(result.current({ ok: false, reason, code })).toContain(recovery);
+  });
+
+  it("preserves unknown refusal codes and approval request identifiers", () => {
+    const { result } = renderHook(useRepositoriesFailure, {
+      wrapper: IntlProvider,
+    });
+    expect(
+      result.current({ ok: false, reason: "conflict", code: "future_refusal" }),
+    ).toBe("This was refused: future_refusal.");
+    expect(
+      result.current({
+        ok: false,
+        reason: "pending_approval",
+        accessRequestId: "apr_123",
+      }),
+    ).toContain("Request apr_123 is waiting");
+    expect(
+      result.current({ ok: false, reason: "invalid", code: "invalid_input" }),
+    ).toContain("not one GitHub accepts");
+    expect(
+      result.current({ ok: false, reason: "denied", code: "authz_denied" }),
+    ).toContain("Only an organization Owner or Admin");
+    expect(
+      result.current({
+        ok: false,
+        reason: "exhausted",
+        code: "budget_exceeded",
+      }),
+    ).toContain("budget_exceeded");
+    expect(
+      result.current({
+        ok: false,
+        reason: "unavailable",
+        code: "action_failed",
+      }),
+    ).toContain("action_failed");
+  });
+});
+
+describe("configuration read states", () => {
+  it("distinguishes an unbound workspace from a pending read", () => {
+    const view = render(
+      <IntlProvider>
+        <Configuration mainFullName={null} tree={undefined} />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("configuration-no-main")).toHaveTextContent(
+      "binds no main repository",
+    );
+    view.rerender(
+      <IntlProvider>
+        <Configuration mainFullName="acme/platform" tree={undefined} />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("configuration-loading")).toHaveTextContent(
+      "acme/platform",
+    );
+    view.rerender(
+      <IntlProvider>
+        <Configuration
+          mainFullName="acme/platform"
+          tree={{ kind: "loading" }}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Reading .oxagen/");
+  });
+
+  it("shows a read refusal without presenting stale configuration", () => {
+    render(
+      <IntlProvider>
+        <Configuration
+          mainFullName="acme/platform"
+          tree={{
+            kind: "failed",
+            failure: { ok: false, reason: "unavailable", code: "github_down" },
+          }}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("configuration-failure")).toHaveTextContent(
+      "github_down",
+    );
+    expect(screen.queryByTestId("configuration-workspace-toml")).toBeNull();
+  });
+
+  it("explains a missing branch and absent files without inventing content", () => {
+    render(
+      <IntlProvider>
+        <Configuration
+          mainFullName="acme/platform"
+          tree={{
+            kind: "ready",
+            value: {
+              ...MAIN_TREE,
+              head: null,
+              workspaceToml: null,
+              governanceToml: null,
+              governanceMode: "absent",
+              oxagen: { present: false, files: [] },
+            },
+          }}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("configuration")).toHaveTextContent(
+      "production branch main no longer exists",
+    );
+    expect(
+      screen.getByTestId("configuration-workspace-toml"),
+    ).toHaveTextContent("Not on the production branch yet");
+    expect(screen.getByTestId("configuration-governance")).toHaveTextContent(
+      "No governance.toml",
+    );
+    expect(screen.getByTestId("configuration-tree")).toHaveTextContent(
+      "No .oxagen/ on the production branch",
+    );
+    expect(document.querySelector("pre")).toBeNull();
+  });
+});
+
+describe("change read states", () => {
+  it("shows a pending read before any change rows exist", () => {
+    render(
+      <IntlProvider>
+        <Changes org="acme" ws="core-platform" changes={{ kind: "loading" }} />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("changes-loading")).toHaveAttribute(
+      "role",
+      "status",
+    );
+    expect(screen.queryByTestId("changes-empty")).toBeNull();
+  });
+
+  it("prints an unsafe pull request URL as text and distinguishes unreported checks", () => {
+    render(
+      <IntlProvider>
+        <Changes
+          org="acme"
+          ws="core-platform"
+          changes={{
+            kind: "ready",
+            value: {
+              open: 1,
+              changes: [
+                {
+                  ...CHANGES.changes[0]!,
+                  checks: null,
+                  pullRequest: {
+                    ...CHANGES.changes[0]!.pullRequest,
+                    url: "https://example.com/acme/platform/pull/42",
+                  },
+                },
+              ],
+            },
+          }}
+        />
+      </IntlProvider>,
+    );
+    const label = screen.getByText("acme/platform#42");
+    expect(label.closest("a")).toBeNull();
+    expect(screen.getByTestId("change-open-prp_open1")).toHaveAttribute(
+      "href",
+      expect.stringContaining("steering"),
+    );
+    expect(screen.getByTestId("changes")).not.toHaveTextContent("3/6");
   });
 });
