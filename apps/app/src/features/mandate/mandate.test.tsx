@@ -219,12 +219,27 @@ describe("Mandate › loaded", () => {
   });
 
   // An empty approvers list is a rule, not an absence: the consequence roles
-  // decide. Printing it as empty would say the opposite.
+  // decide. Printing it as empty would say the opposite. A trigger
+  // (`humanAbove` or `alwaysHumanFor`) must be present, or the panel names no
+  // approval path at all and never reaches the approvers line.
   it("reads an empty approver list as the consequence roles", async () => {
     await renderMandate(
       mandateDetailRead({
         mandate: mandateRow({
-          approval: { humanAbove: [], alwaysHumanFor: [], approvers: [] },
+          approval: {
+            humanAbove: [
+              {
+                measure: "amount",
+                value: {
+                  kind: "money",
+                  money: { micros: "100000000", currency: "USD" },
+                },
+                recorded: "100000000",
+              },
+            ],
+            alwaysHumanFor: ["moves_money"],
+            approvers: [],
+          },
         }),
       }),
     );
@@ -437,7 +452,9 @@ describe("Mandate › access denied", () => {
     expect(panel.textContent).toContain("Signed in as: Member");
     expect(panel.textContent).toContain("Needed:");
     expect(panel.textContent).toContain("Decided by:");
-    expect(panel.textContent).toContain("An owner can grant it");
+    expect(panel.textContent).toContain(
+      "An owner can grant an accountable role",
+    );
     expect(
       within(panel).getByRole("link", { name: "Back to Fleet" }),
     ).toHaveAttribute("href", "/a-intel/core-platform");

@@ -42,13 +42,18 @@ function Row({
   basis?: string;
   children: ReactNode;
 }) {
+  // A grouping `<div>` is fine under a `<dl>` (HTML5); a sibling `<p>` is not.
+  // Axe's definition-list rule fails the whole list when any group contains a
+  // non-dt/dd child, so the basis rides inside the `<dd>` with the value.
   return (
     <div className="flex flex-col gap-0.5 border-t border-border px-4 py-2.5 first:border-t-0">
       <dt className={term}>{label}</dt>
-      <dd className={value}>{children}</dd>
-      {basis === undefined ? null : (
-        <p className="text-xs text-muted-foreground">{basis}</p>
-      )}
+      <dd className={value}>
+        {children}
+        {basis === undefined ? null : (
+          <p className="mt-0.5 text-xs text-muted-foreground">{basis}</p>
+        )}
+      </dd>
     </div>
   );
 }

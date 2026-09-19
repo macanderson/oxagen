@@ -37,8 +37,7 @@ import { MEASURE_VALUE } from "@/data/contracts/mandates";
 import { isCurrencyCode } from "@/data/contracts/money";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
-import { requireViewer } from "@/server/viewer";
-import { viewerTimeZone } from "@/server/viewer-zone";
+import { requireViewer, viewerTimeZone } from "@/server/viewer";
 import { endOfZonedDay, isCalendarDay } from "@/shared/calendar-day";
 
 /**
@@ -302,7 +301,7 @@ export async function changeMandateLimits(
   // still makes exactly one kernel call. A zone that cannot be established
   // refuses rather than falling back, because a guessed zone moves an authority
   // boundary by up to a day and says nothing about having guessed
-  // (`server/viewer-zone.ts`).
+  // (`server/viewer.ts` → `viewerTimeZone`).
   let validToInstant: string | null = null;
   if (validTo !== "") {
     const zone = await viewerTimeZone(ctx, "mandates");
