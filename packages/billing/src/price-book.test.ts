@@ -2957,10 +2957,9 @@ describe("syncPriceBook closes a row whose names another row now prices", () => 
     ).toBeNull();
   });
 
-  // Only the gateway form is displaced. A bare row answers ids the
-  // gateway-form seed cannot match, so closing it would leave them unpriced
-  // for as long as its catalog stayed down, which is the retirement bug this
-  // pass must not reintroduce.
+  // Only a gateway-form seed that does NOT claim the bare family leaves the
+  // bare row open. A bare row answers ids that seed cannot match, so closing
+  // it would leave them unpriced for as long as its catalog stayed down.
   it("keeps a bare row from a failed catalog when the seed names only the gateway form (negative)", async () => {
     fake.rows.push(
       priceRow({
@@ -2981,6 +2980,71 @@ describe("syncPriceBook closes a row whose names another row now prices", () => 
     expect(result.superseded).toBe(0);
     expect(result.retired).toBe(0);
     expect(fake.rows.find((r) => r.model === "foo")!.effectiveTo).toBeNull();
+  });
+
+  // The reverse of the gateway-form case: catalog published bare `foo`, then
+  // failed while the operator added an override for `vendor/foo` whose default
+  // alias claims `foo`. Skipping every bare name before consulting seedByName
+  // left those classes billing at the stale catalog rate (Codex P1 on #3271).
+  it("closes a bare row a prefixed override's alias now claims, while its catalog is down", async () => {
+    fake.rows.push(
+      priceRow({
+        provider: "openrouter",
+        model: "foo",
+        catalog: "openrouter",
+        microsPerMillion: 5_000_000n,
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    fake.rows.push(
+      priceRow({
+        provider: "openrouter",
+        model: "foo",
+        catalog: "openrouter",
+        tokenClass: "cache_read",
+        microsPerMillion: 500_000n,
+        effectiveFrom: FROM,
+        createdAt: ESTABLISHED,
+      }),
+    );
+    const result = await syncPriceBook({
+      effectiveFrom: AT,
+      now: NOW,
+      // Prefixed override that also claims the bare family, stating input only.
+      seeds: [
+        seed({
+          model: "anthropic/foo",
+          modelAliases: ["foo"],
+          microsPerMillion: 1_000_000n,
+        }),
+      ],
+      retireAbsent: false,
+      completedCatalogs: ["operator_override", "in_code_card"],
+    });
+    expect(result.retired).toBe(0);
+    expect(result.superseded).toBe(2);
+    for (const row of fake.rows.filter((r) => r.model === "foo"))
+      expect(row.effectiveTo).toEqual(AT);
+    const book: PriceEntry[] = fake.rows.map((r) => ({
+      ...(r as unknown as PriceEntry),
+    }));
+    expect(
+      resolvePriceEntry(book, {
+        orgId: ORG,
+        modelId: "foo",
+        tokenClass: "cache_read",
+        at: AT,
+      }),
+    ).toBeNull();
+    expect(
+      resolvePriceEntry(book, {
+        orgId: ORG,
+        modelId: "anthropic/foo",
+        tokenClass: "input_uncached",
+        at: AT,
+      })?.microsPerMillion,
+    ).toBe(1_000_000n);
   });
 
   // The family has to be spelled exactly. The resolver's prefix rule is

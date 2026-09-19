@@ -1001,8 +1001,12 @@ export async function syncPriceBook(args: {
     // prices exactly what it priced, which is the same reason supersession
     // closes one. Absence alone still preserves the row.
     //
-    // Only the gateway form is displaced. A bare row beside a gateway-form
-    // seed still answers ids the seed cannot match, so it stays open.
+    // A gateway-form row is displaced when a seed answers its bare family
+    // (the shape `resolvePriceEntry` falls back to). A bare row is displaced
+    // when a seed answers that exact name — including via a prefixed override's
+    // default alias that claims the bare family. A seed that names only the
+    // gateway form, with no bare alias, still leaves the bare row open, because
+    // that row answers ids the seed cannot match.
     //
     // Displacement is per model and region, NOT per token class. A source that
     // wins a model states what that model costs, in every class it prices and
@@ -1037,12 +1041,13 @@ export async function syncPriceBook(args: {
           seedByName.set(slot, seed);
       }
     // The seed that now answers to a name this row holds, or null. The test
-    // is the family behind a `creator/` prefix, spelled EXACTLY by one of the
-    // seed's names. That is the shape `resolvePriceEntry` falls back to and
-    // nothing looser. The resolver's prefix rule is deliberately loose, and
-    // loose is wrong here: `gpt-4` prefixes `gpt-4o`, and closing the
-    // `openai/gpt-4o` row because some seed prices `gpt-4` would throw away
-    // the more specific price for a model that merely shares a stem.
+    // is an exact name the seed claims (`seed.model` or an alias), plus — for
+    // a gateway-form row — the bare family behind its `creator/` prefix. That
+    // is the shape `resolvePriceEntry` falls back to and nothing looser. The
+    // resolver's prefix rule is deliberately loose, and loose is wrong here:
+    // `gpt-4` prefixes `gpt-4o`, and closing the `openai/gpt-4o` row because
+    // some seed prices `gpt-4` would throw away the more specific price for a
+    // model that merely shares a stem.
     //
     // A seed that ranks BELOW the row never displaces it, so an operator's
     // override is never closed by a catalog. Above that, a seed outranks
@@ -1052,7 +1057,17 @@ export async function syncPriceBook(args: {
     const displacedBy = (row: Row): PriceEntrySeed | null => {
       for (const name of [row.model, ...row.modelAliases]) {
         const slash = name.indexOf("/");
-        if (slash < 0) continue;
+        if (slash < 0) {
+          // Bare spelling on the row: only a prefixed seed that claims this
+          // exact name (as model or alias) displaces it. Bare-to-bare is the
+          // earlier supersession pass's job; closing every class of a bare
+          // row because another bare seed priced one class would over-claim.
+          const seed = seedByName.get(nameKey(row.region, name));
+          if (seed === undefined) continue;
+          if (sourceRank(seed.source) < sourceRank(row.source)) continue;
+          if (!seed.model.includes("/")) continue;
+          return seed;
+        }
         const seed = seedByName.get(nameKey(row.region, name.slice(slash + 1)));
         if (seed === undefined) continue;
         if (sourceRank(seed.source) < sourceRank(row.source)) continue;
