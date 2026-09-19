@@ -589,22 +589,21 @@ export async function startDaemon(
     retention: RetentionMandate,
     dropped: readonly string[],
   ): void {
-    try {
-      ensureDir(paths.wal);
-      const owed = owedBodyPurge();
-      const clause =
-        owed?.retention === undefined
-          ? retention
-          : narrowestOf(owed.retention, retention);
-      writeFileSync(
-        bodyPurgeOwedPath,
-        JSON.stringify({ retention: clause, classes: dropped }),
-        { mode: 0o600 },
-      );
-    } catch {
-      // Best effort. Failing to record the debt must not stop the sweep that
-      // is about to run and would usually clear it anyway.
-    }
+    ensureDir(paths.wal);
+    const owed = owedBodyPurge();
+    const clause =
+      owed?.retention === undefined
+        ? retention
+        : narrowestOf(owed.retention, retention);
+    // Must persist. A silent failure here, followed by a failed sweep, would
+    // let `refreshBundle` cache the new etag with no debt on disk, and every
+    // later `not_modified` poll would find nothing to retry. Let the write
+    // throw so the etag commit does not run.
+    writeFileSync(
+      bodyPurgeOwedPath,
+      JSON.stringify({ retention: clause, classes: dropped }),
+      { mode: 0o600 },
+    );
   }
 
   /**
@@ -701,12 +700,11 @@ export async function startDaemon(
     );
     if (dropped.length === 0) return;
     // Owed before attempted, so the debt survives what the attempt might not.
-    // `applyControlFacts` has already written the new etag, so every later
-    // poll answers `not_modified` and never reaches this function again: a
-    // transient filesystem error here, or the process dying mid-sweep, would
-    // otherwise leave content the mandate excludes on disk for ever, with
-    // nothing left to notice. The marker is cleared only by a sweep that
-    // returned.
+    // The debt write must succeed: `refreshBundle` commits the new etag after
+    // this returns, and a later `not_modified` poll is the only retry path. A
+    // write that fails throws, so the etag stays put and the next poll sees
+    // the narrowing again. A sweep that fails after a successful write leaves
+    // the debt on disk for that same retry.
     markBodyPurgeOwed(next, dropped);
     try {
       const purged = wal.purgeBodiesOutsideMandate(next);
@@ -715,10 +713,11 @@ export async function startDaemon(
         `mandate narrowed (${dropped.join(", ")}): erased ${purged} queued body(ies) from the WAL`,
       );
     } catch (error) {
-      // Logged and not rethrown, on purpose. Throwing erases nothing, and it
-      // would abort a refresh that has already cached the narrower mandate,
-      // so the host would go on withholding these bodies and stop reporting
-      // why they are still on disk. The line says what is still there.
+      // Logged and not rethrown, on purpose. The debt is on disk, and the
+      // etag commit below is safe because of it: throwing would abort a
+      // refresh that already recorded the narrowing, and the host would go
+      // on withholding these bodies without a durable retry. The line says
+      // what is still there.
       log(
         `failed to erase bodies the narrowed mandate no longer covers (${dropped.join(", ")}); content remains in the WAL: ${error instanceof Error ? error.message : String(error)}`,
       );

@@ -5,7 +5,7 @@
  * the log. Kept apart from daemon.test.ts, whose fake control plane accepts
  * events and never looks at bodies.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { request } from "node:http";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -730,6 +730,67 @@ describe("tachod and frame bodies", () => {
     expect(log.some((line) => line.startsWith("mandate narrowed ("))).toBe(
       false,
     );
+  });
+
+  // A silent debt-write failure plus a failed sweep used to commit the new
+  // etag with nothing on disk to retry. The next poll answered not_modified
+  // and the excluded bodies stayed forever.
+  it("refuses the etag commit when the purge debt cannot be written (negative)", async () => {
+    const narrowed: { bundle?: PolicyBundle; delivered?: boolean } = {};
+    const { fetch } = plane(
+      () => undefined,
+      () =>
+        narrowed.bundle === undefined || narrowed.delivered === true
+          ? BUNDLE_UNCHANGED
+          : {
+              ok: true,
+              status: 200,
+              payload: {
+                not_modified: false,
+                etag: narrowed.bundle.etag,
+                bundle: narrowed.bundle,
+              },
+            },
+    );
+    const { handle, host, log, signer, paths } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["model_call", "tool_call"],
+    });
+    await runLiveSession(handle.port as number, host.local_token);
+    const bodyPath = bodyFileOf(paths.wal, handle);
+    await handle.tick();
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+
+    // No writes in the WAL directory: the debt marker cannot land.
+    chmodSync(paths.wal, 0o500);
+    narrowed.bundle = signer.sign(
+      unsignedBundle({
+        version: 4,
+        etag: "etag-4",
+        retention: { mode: "digest_only", classes: [] },
+      }),
+    );
+    await handle.refreshBundle();
+
+    // The replacement never cached: without a debt, committing it would leave
+    // excluded bodies with no retry path.
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-3");
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(false);
+    expect(readFileSync(bodyPath, "utf8")).toContain(PROMPT_BASE64);
+    expect(
+      log.some((line) => line.startsWith("bundle refresh failed:")),
+    ).toBe(true);
+
+    // Writable again: the next poll still carries the narrowing (old etag),
+    // records the debt, sweeps, and commits.
+    chmodSync(paths.wal, 0o700);
+    await handle.refreshBundle();
+    narrowed.delivered = true;
+    expect(readHostFile(paths.hostFile)?.bundle.etag).toBe("etag-4");
+    expect(
+      existsSync(bodyPath) ? readFileSync(bodyPath, "utf8") : "",
+    ).not.toContain(PROMPT_BASE64);
+    expect(existsSync(join(paths.wal, "body-purge-owed"))).toBe(false);
   });
 
   it("keeps queued bodies through a mandate it cannot establish, and ships them once it can", async () => {
