@@ -38,6 +38,7 @@ import {
   type MandatePeriod,
   type MandateStatus,
   type MandateTargets,
+  type MeasureKind,
 } from "@oxagen/oxagen/mandates/schemas";
 import { and, asc, eq, gt, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { evaluateAutoApproval } from "./auto-approval";
@@ -332,6 +333,17 @@ interface ReserveArgs {
   toolCallId: string;
   /** measure → value to reserve; every measure the mandate limits must be present. */
   values: Record<string, string>;
+  /**
+   * measure → the kind the call currently governing this measure declares
+   * (`calls`'s built-in "count", or `measureKindOf(declaration.type)` for
+   * everything else), computed by the caller from the live tool declaration.
+   * `reserve` stamps this onto the ledger row rather than `mandate.limits[
+   * measure].kind`: for a legacy measure that kind is `legacyMeasureKindGuess`'s
+   * fallback, not a fact, and stamping the guess as the reservation's kind
+   * would turn it into a durable one the mandate's own removal of the
+   * measure could not later correct.
+   */
+  measureKinds: Record<string, MeasureKind>;
   at: Date;
 }
 
@@ -350,7 +362,7 @@ export async function reserve(
   tx: Tx,
   args: ReserveArgs,
 ): Promise<ReserveResult> {
-  const { mandate, toolCallId, values, at } = args;
+  const { mandate, toolCallId, values, measureKinds, at } = args;
   const rows: (Omit<typeof l.$inferInsert, "createdAt"> & {
     createdAt: SQL;
   })[] = [];
@@ -358,6 +370,10 @@ export async function reserve(
     const value = values[measure];
     if (value === undefined) {
       throw new Error(`reserve: no value for measure "${measure}"`);
+    }
+    const measureKind = measureKinds[measure];
+    if (measureKind === undefined) {
+      throw new Error(`reserve: no measure kind for measure "${measure}"`);
     }
     if (limit.perCall !== undefined && exceeds(value, limit.perCall)) {
       return {
@@ -394,11 +410,14 @@ export async function reserve(
       measure,
       value,
       unitOrCurrency: limit.currencyOrUnit,
-      // The mandate's own resolved kind for this measure (ADR-108), stamped
-      // once here so the row survives a later whole-record `limits`
-      // replacement that removes the measure: the ledger is append-only,
-      // the mandate is not.
-      measureKind: limit.kind,
+      // The kind the call's live tool declaration governs this measure
+      // under (ADR-108), stamped once here so the row survives a later
+      // whole-record `limits` replacement that removes the measure: the
+      // ledger is append-only, the mandate is not. Never `limit.kind`: for
+      // a legacy measure that is `legacyMeasureKindGuess`'s fallback, not a
+      // fact, and stamping the guess would turn it into a durable one no
+      // later mandate write could correct.
+      measureKind,
       periodKey: key,
       balanceAfter,
       // The insert time under the lock, so "last row" is well ordered across
@@ -693,11 +712,16 @@ export async function decideMandate(
       };
     }
 
-    // Measures: one value per limited measure, read from the call.
+    // Measures: one value per limited measure, read from the call. Also the
+    // kind the call's live declaration governs each measure under, for
+    // `reserve` to stamp onto the ledger row (never the mandate's own
+    // `limit.kind`, a legacy guess for a pre-ADR-108 row).
     const values: Record<string, string> = {};
+    const measureKinds: Record<string, MeasureKind> = {};
     for (const measure of Object.keys(mandate.limits)) {
       if (isCallsMeasure(measure)) {
         values[measure] = readCallsMeasure().value;
+        measureKinds[measure] = "count";
         continue;
       }
       const declaration = tool.measures[measure];
@@ -741,6 +765,7 @@ export async function decideMandate(
           detail: `${tool.slug}@${tool.version} now declares measure "${measure}" as ${measureKindOf(declaration.type)}, but this mandate's limit was written when it was ${storedKind}; update the mandate's limit before this call can be decided`,
         };
       }
+      measureKinds[measure] = measureKindOf(declaration.type);
       const read = readMeasure(args.input, declaration);
       if (!read.ok || read.measure.kind !== "value") {
         return {
@@ -836,7 +861,13 @@ export async function decideMandate(
     }
 
     const toolCallId = randomUUID();
-    const reserved = await reserve(tx, { mandate, toolCallId, values, at });
+    const reserved = await reserve(tx, {
+      mandate,
+      toolCallId,
+      values,
+      measureKinds,
+      at,
+    });
     if (!reserved.ok) {
       return {
         kind: "deny",

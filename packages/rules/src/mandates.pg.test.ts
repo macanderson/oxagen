@@ -56,7 +56,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       reserve,
       settle,
     } = await import("./mandates");
-    const { periodKey } = await import("./mandates/measures");
+    const { legacyMeasureKindGuess, periodKey } = await import(
+      "./mandates/measures"
+    );
 
     const orgId = randomUUID();
     const workspaceId = randomUUID();
@@ -132,6 +134,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where(eq(schema.mandates.id, id));
         return parseMandateRow(row!);
       });
+
+    /**
+     * `reserve`'s `measureKinds` as `decideMandate` would build them from the
+     * live tool declaration. These fixtures' "amount" measure is always
+     * declared money (the tool row seeded in `beforeAll`), so the mandate's
+     * own resolved `limit.kind` (real or legacy-guessed) is the same value
+     * the declaration would give here. `parseMandateRow` always resolves
+     * `kind` (ADR-108); the `??` fallback here only satisfies the type
+     * checker against `MandateLimit`'s optional field, mirroring the same
+     * pattern `mandates.ts` itself uses at its own defensive fallback sites.
+     */
+    const kindsOf = (mandate: Awaited<ReturnType<typeof loadMandate>>) =>
+      Object.fromEntries(
+        Object.entries(mandate.limits).map(([measure, limit]) => [
+          measure,
+          limit.kind ?? legacyMeasureKindGuess(limit.currencyOrUnit),
+        ]),
+      );
 
     const notificationsForOrg = () =>
       withSystemDb((tx) =>
@@ -286,6 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000001" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -305,6 +326,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: "250000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -318,6 +340,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "1" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -359,6 +382,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 mandate,
                 toolCallId: randomUUID(),
                 values: { amount: "100000000" },
+                measureKinds: kindsOf(mandate),
                 at: NOW,
               });
             }),
@@ -392,6 +416,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId,
               values: { amount: "250000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }
@@ -460,6 +485,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000000" },
+            measureKinds: kindsOf(mandate),
             at: NOW,
           });
         }),
@@ -471,6 +497,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             mandate,
             toolCallId: randomUUID(),
             values: { amount: "250000000" },
+            measureKinds: kindsOf(mandate),
             at: NEXT_MONTH,
           });
           return readAuthority(tx, mandate, NEXT_MONTH);
@@ -507,6 +534,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: "1000000" },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -555,6 +583,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
               mandate,
               toolCallId: randomUUID(),
               values: { amount: value },
+              measureKinds: kindsOf(mandate),
               at: NOW,
             });
           }),
@@ -720,6 +749,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
         checkArgs(agent, { amount: { value: "10" }, vendor: "vendor:aws" }),
       );
       expect(out.kind).not.toBe("deny");
+      // The reservation the proceeding call wrote must carry the live
+      // declaration's kind ("money"), not the legacy row's guess ("count"
+      // from "widgets"). Stamping the guess would make it a durable ledger
+      // fact a later mandate write could never correct.
+      const rows = await ledgerOf(legacy);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.measureKind).toBe("money");
       await withSystemDb((tx) =>
         tx
           .update(schema.mandates)
