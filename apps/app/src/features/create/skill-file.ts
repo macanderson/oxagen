@@ -45,7 +45,7 @@ const SKILL_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const NAME_MAX = 48;
 
 /** The words of `text` a name may be built from, lowercased, in order. */
-function wordsOf(text: string): string[] {
+export function wordsOf(text: string): string[] {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9 ]+/g, " ")
