@@ -73,11 +73,7 @@ describe("the daemon's git seam", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(
-    exec: Exec,
-    now: () => number,
-    execAsync?: ExecAsync,
-  ) {
+  async function boot(exec: Exec, now: () => number, execAsync?: ExecAsync) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
@@ -232,7 +228,10 @@ describe("the daemon's git seam", () => {
     );
     await handle.tick();
     await handle.api.handleHook(
-      hook("PostToolUse", { tool_name: "Read", tool_input: { file_path: "a" } }),
+      hook("PostToolUse", {
+        tool_name: "Read",
+        tool_input: { file_path: "a" },
+      }),
     );
     await handle.tick();
     expect(reconciliations(handle)).toHaveLength(0);
@@ -274,10 +273,41 @@ describe("the daemon's git seam", () => {
     await handle.api.handleHook(hook("Stop"));
     await handle.tick();
     expect(reconciliations(handle)).toHaveLength(0);
-    // It did not even reach for the worktree: the facts read said no repo.
+    // It does reach for the worktree, and that read is what decides. A
+    // missing HEAD covers both a directory that is no repository and a
+    // repository whose first commit has not been made, and only the status
+    // read tells them apart. Here it answers nothing, so nothing is sealed.
     expect(
       calls.some((call) => call.join(" ").includes("--porcelain=v1 -z")),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("reconciles a repository whose first commit has not been made", async () => {
+    // `rev-parse HEAD` fails on an unborn repository, so the facts read
+    // declines it. The worktree is real and full of creates, and the
+    // worktree reader has its own fallback for an absent HEAD, so skipping
+    // the reconciliation lost every file in a fresh repository until its
+    // first commit.
+    const handle = await boot(
+      fakeGit(
+        () => ({
+          "status --porcelain=v1 -z": "?? src/new.ts\0",
+          "rev-parse --show-toplevel": "/repo\n",
+        }),
+        [],
+      ),
+      () => 1_000,
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    await handle.tick();
+
+    const sealed = reconciliations(handle);
+    expect(sealed).toHaveLength(1);
+    expect(
+      (sealed[0]?.body as { observed_changes: { path: string }[] })
+        .observed_changes[0]?.path,
+    ).toContain("src/new.ts");
   });
 
   it("clears a branch git no longer reports", async () => {

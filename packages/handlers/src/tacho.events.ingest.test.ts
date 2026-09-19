@@ -1080,9 +1080,7 @@ describe("ingest_tacho_events", () => {
       // The counters on the same row DO accumulate, which is the contrast
       // this assertion exists to hold.
       expect(dialect.sqlToQuery(set["writes"] as SQL).sql).toContain(" + ");
-      expect(["modified", "added", "deleted"]).toContain(
-        set["observedStatus"],
-      );
+      expect(["modified", "added", "deleted"]).toContain(set["observedStatus"]);
     }
   });
 
@@ -1115,6 +1113,87 @@ describe("ingest_tacho_events", () => {
       expect(set).not.toHaveProperty("linesRemoved");
       expect(set).not.toHaveProperty("observedStatus");
     }
+  });
+
+  it("merges the attested and observed forms of one path into one row", async () => {
+    // A tool reports a relative target and git reports the same file
+    // absolutely. Keyed on those raw strings the file became two rows, one
+    // carrying the writes and the other the observed status and line counts,
+    // and the Run page showed it twice with half the truth on each.
+    const db = fakeDb();
+    wire(db);
+    const context = {
+      cwd: "/home/dev/proj",
+      worktree_path: "/home/dev/proj",
+      model: "claude-haiku-4-5-20251001",
+      permission_mode: "default",
+    };
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events: TachoEvent[] = [];
+    for (const draft of [
+      unsealed("agent_start", {}, "hook", CLAUDE_CODE, { context }),
+      unsealed(
+        "file_io",
+        {
+          tool_name: "Write",
+          tool_use_id: "toolu_1",
+          effect_kind: "file_write",
+          // Relative, as a tool commonly reports it.
+          tool_target: "src/a.ts",
+          effect_id: "eff_1",
+          tool_input_bytes: 12,
+        },
+        "hook",
+        CLAUDE_CODE,
+        { context },
+      ),
+      unsealed(
+        "oxagen:worktree_reconciled",
+        {
+          observed_changes: [
+            {
+              // Absolute, as git reports it.
+              path: "/home/dev/proj/src/a.ts",
+              repo_relative_path: "src/a.ts",
+              status: "modified",
+              lines_added: 9,
+              lines_removed: 2,
+            },
+          ],
+          observed_changes_total: 1,
+          observed_changes_truncated: false,
+        },
+        "collector",
+        CLAUDE_CODE,
+        { context },
+      ),
+    ]) {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      events.push(sealed.event);
+    }
+
+    const output = await tachoEventsIngestHandler(
+      {
+        schema: "tacho.batch.v1",
+        host_enrollment_id: HOST_PUBLIC,
+        events,
+        daemon: { version: "2.1.1", hooks_ok: true, spool_depth: 0 },
+      },
+      CONTEXT,
+    );
+    expect(output.accepted).toBe(events.length);
+
+    expect(db.files).toHaveLength(1);
+    expect(db.files[0]).toMatchObject({
+      // The absolute path wins, since it is the one a person can act on.
+      path: "/home/dev/proj/src/a.ts",
+      repoRelativePath: "src/a.ts",
+      writes: 1,
+      observedStatus: "modified",
+      linesAdded: 9,
+      linesRemoved: 2,
+    });
   });
 
   it("files a Codex session under runtime codex, not custom", async () => {
@@ -3386,7 +3465,13 @@ describe("observed metering from the model proxy", () => {
     const otelFirst = zero();
     const [a, b] = chain([
       unsealed("llm_call", usage, "otel_log"),
-      unsealed("llm_call", split, "transcript", CLAUDE_CODE, stamped("otel_log")),
+      unsealed(
+        "llm_call",
+        split,
+        "transcript",
+        CLAUDE_CODE,
+        stamped("otel_log"),
+      ),
     ]) as [TachoEvent, TachoEvent];
     foldDelta(otelFirst, a);
     foldDelta(otelFirst, b);
@@ -3402,7 +3487,13 @@ describe("observed metering from the model proxy", () => {
     const transcriptFirst = zero();
     const [c, d] = chain([
       unsealed("llm_call", split, "transcript"),
-      unsealed("llm_call", usage, "otel_log", CLAUDE_CODE, stamped("transcript")),
+      unsealed(
+        "llm_call",
+        usage,
+        "otel_log",
+        CLAUDE_CODE,
+        stamped("transcript"),
+      ),
     ]) as [TachoEvent, TachoEvent];
     foldDelta(transcriptFirst, c);
     foldDelta(transcriptFirst, d);
@@ -3417,7 +3508,13 @@ describe("observed metering from the model proxy", () => {
     // A transcript continuation block (usage stripped, stamped transcript) adds nothing.
     const continuation = zero();
     const [e] = chain([
-      unsealed("llm_call", { model: "claude-opus-5" }, "transcript", CLAUDE_CODE, stamped("transcript")),
+      unsealed(
+        "llm_call",
+        { model: "claude-opus-5" },
+        "transcript",
+        CLAUDE_CODE,
+        stamped("transcript"),
+      ),
     ]) as [TachoEvent];
     foldDelta(continuation, e);
     expect(continuation).toMatchObject({ numModelCalls: 0, inputTokens: 0 });

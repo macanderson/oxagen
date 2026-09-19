@@ -225,10 +225,13 @@ export function classifyShellEffect(command: string): EffectKind | undefined {
   const program = tokens[0] as string;
   if (program === "gh") {
     if (tokens[1] !== "pr" || tokens[2] !== "create") return undefined;
-    // `gh pr create --dry-run` prints what it would do and creates nothing,
-    // so counting it would put a pull request on the run's record that does
-    // not exist. The git branches below already make the same exclusion.
-    return tokens.includes("--dry-run") ? undefined : "pr_open";
+    // `--dry-run` prints what it would do and `--web` opens a browser for a
+    // person to finish or abandon. Neither creates a pull request by itself,
+    // so counting either would put one on the run's record that may not
+    // exist. The git branches below make the same exclusion.
+    return tokens.includes("--dry-run") || tokens.includes("--web")
+      ? undefined
+      : "pr_open";
   }
   if (program !== "git") {
     return undefined;

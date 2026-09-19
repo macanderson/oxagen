@@ -1788,6 +1788,8 @@ async function rollupFiles(
       first: number;
       last: number;
       bytes: number;
+      /** The path the row stores, preferring an absolute one. */
+      path: string;
       /** What the last reconciliation in this batch observed, if any. */
       observed?: {
         status: string;
@@ -1797,8 +1799,24 @@ async function rollupFiles(
       };
     }
   >();
-  const entryFor = (path: string, seq: number) =>
-    byPath.get(path) ?? {
+  /**
+   * The identity two passes agree on for one file.
+   *
+   * The attested pass keys on whatever the tool reported, which is often a
+   * relative `src/a.ts`. The observed pass keys on what git reported, which
+   * is the absolute `/repo/src/a.ts`. Keyed on those raw strings the same
+   * file became two rows, one carrying the writes and the other the observed
+   * status and line counts, and the Run page showed the file twice with half
+   * the truth on each. The repo-relative form is what both can reach, so it
+   * is the key, and a path with no root to measure against keeps its own
+   * string rather than colliding with anything.
+   */
+  const identityOf = (path: string): string =>
+    repoRelativePathOf(path, root) ?? path;
+  const entryFor = (path: string, seq: number) => {
+    const existing = byPath.get(identityOf(path));
+    if (existing !== undefined) return existing;
+    return {
       reads: 0,
       writes: 0,
       edits: 0,
@@ -1806,7 +1824,11 @@ async function rollupFiles(
       first: seq,
       last: seq,
       bytes: 0,
+      // The path the row stores. An absolute one wins if either pass has it,
+      // since it is the one a person can act on.
+      path,
     };
+  };
   for (const event of events) {
     if (event.kind !== "tool_call" && event.kind !== "file_io") continue;
     if (event.kind === "tool_call" && event.source !== "hook") continue;
@@ -1824,7 +1846,7 @@ async function rollupFiles(
     else if (kind === "file_delete") entry.deletes += 1;
     entry.first = Math.min(entry.first, event.seq);
     entry.last = Math.max(entry.last, event.seq);
-    byPath.set(target, entry);
+    byPath.set(identityOf(target), entry);
   }
   // The observed pass, second so that a path both announced and seen lands
   // on one row. A reconciliation frame reports the whole worktree as git
@@ -1845,10 +1867,14 @@ async function rollupFiles(
       };
       entry.first = Math.min(entry.first, event.seq);
       entry.last = Math.max(entry.last, event.seq);
-      byPath.set(change.path, entry);
+      // Git reports an absolute path, which is the better one to store when
+      // the attested pass only had a relative one.
+      if (change.path.startsWith("/")) entry.path = change.path;
+      byPath.set(identityOf(change.path), entry);
     }
   }
-  for (const [path, entry] of byPath) {
+  for (const entry of byPath.values()) {
+    const path = entry.path;
     await tx
       .insert(schema.tachoSessionFiles)
       .values({

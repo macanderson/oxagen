@@ -893,7 +893,9 @@ export async function startDaemon(
     const work = [...gitPending.keys()].slice(0, GIT_READS_PER_TICK);
     const found: Array<{
       session: SessionRecord;
-      facts: GitFacts;
+      // Absent for a repository with no commit yet, which has no HEAD to
+      // describe but does have a worktree to reconcile.
+      facts?: GitFacts;
       changes?: GitWorkingTreeChange[];
     }> = [];
     for (const harnessSessionId of work) {
@@ -905,15 +907,20 @@ export async function startDaemon(
       if (session === undefined || session.sealed || cwd === undefined)
         continue;
       const facts = await gitFactsFor(cwd, want.force);
-      // Undefined is "not a repository this host can read", and there is
-      // nothing to say about the worktree of a directory that is not one.
-      if (facts === undefined) continue;
+      // Undefined means `rev-parse HEAD` did not answer, which covers a
+      // directory that is not a repository AND a repository whose first
+      // commit has not been made. The second is a real worktree full of real
+      // creates, and `readWorkingTreeChanges` has its own fallback for an
+      // absent HEAD, so the reconciliation still runs. Its own status read
+      // is what tells the two apart: a non-repository answers nothing and
+      // seals no frame. There is simply no git context to note for either.
       const at = now();
       const last = lastReconcileAt.get(harnessSessionId);
       const due =
         want.reconcile &&
         (last === undefined || at - last >= RECONCILE_MIN_INTERVAL_MS);
       if (due) lastReconcileAt.set(harnessSessionId, at);
+      if (facts === undefined && !due) continue;
       found.push({
         session,
         facts,
@@ -934,7 +941,8 @@ export async function startDaemon(
       const events: TachoEvent[] = [];
       for (const { session, facts, changes } of found) {
         if (session.sealed) continue;
-        session.recorder.noteContext(gitContextOf(facts));
+        if (facts !== undefined)
+          session.recorder.noteContext(gitContextOf(facts));
         if (changes === undefined) continue;
         events.push(
           session.recorder.sealCollectorEvent(
