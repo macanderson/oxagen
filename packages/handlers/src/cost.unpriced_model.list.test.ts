@@ -1,12 +1,28 @@
-import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen";
+import { ORG_ONLY_WORKSPACE_ID, HandlerError } from "@oxagen/oxagen";
 import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import type { UnpricedModel } from "@oxagen/billing";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const gate = vi.hoisted(() => ({
+  assertOrgRole: vi.fn(),
+  resolveActingUserId: vi.fn(),
+}));
+vi.mock("@oxagen/iam/org-role", () => gate);
+
 import { createUnpricedModelListHandler } from "./cost.unpriced_model.list";
 import { ctx, SCOPE } from "./spend.test-support";
 
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 const THIRTY_DAYS_BEFORE_NOW = new Date("2026-08-15T15:00:00.000Z");
+
+beforeEach(() => {
+  gate.assertOrgRole.mockReset();
+  gate.resolveActingUserId.mockReset();
+  gate.resolveActingUserId.mockImplementation(
+    async (c: { userId: string | null }) => c.userId,
+  );
+  gate.assertOrgRole.mockResolvedValue("Member");
+});
 
 function model(over: Partial<UnpricedModel> = {}): UnpricedModel {
   return {
@@ -39,6 +55,18 @@ function harness(models: UnpricedModel[]) {
 }
 
 describe("list_unpriced_models", () => {
+  it("refuses before any read when the actor lacks an allowed org role", async () => {
+    gate.assertOrgRole.mockRejectedValueOnce(
+      new HandlerError({ code: "forbidden", reason: "org_role_required" }),
+    );
+    const h = harness([]);
+    await expect(h.handler({}, ctx())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(h.readUnpricedModels).not.toHaveBeenCalled();
+  });
+
   it("reads the last thirty days against the book as it stands now", async () => {
     const h = harness([]);
     const out = await h.handler({}, ctx());

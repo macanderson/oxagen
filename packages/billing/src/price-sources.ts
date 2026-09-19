@@ -515,9 +515,19 @@ export function mergePublishedPrices(
     for (const price of group) {
       const names = [price.model, ...price.aliases];
       if (names.some((n) => claimed.has(n))) continue;
+      // Both directions: a higher source that claimed the stamped id
+      // `gpt-4-0613` must still displace the lower source's bare `gpt-4`, and
+      // the reverse (higher claims the bare family) already did. One-way left
+      // both rows live, so stamped frames took the override while bare frames
+      // kept the lower-source rate. Same bidirectional test the negotiated
+      // overlap check uses in price-book.ts.
       if (
         names.some((n) =>
-          claimedAbove.some((above) => isSameModelIdentity(n, above)),
+          claimedAbove.some(
+            (above) =>
+              isSameModelIdentity(n, above) ||
+              isSameModelIdentity(above, n),
+          ),
         )
       )
         continue;

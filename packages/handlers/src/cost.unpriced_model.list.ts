@@ -2,6 +2,12 @@
 //
 // `list_unpriced_models` (ADR-060 §1): the diff between the models the
 // organization has actually run and the prices anyone has stated for them.
+//
+// The role gate runs in the handler rather than resting on the contract's
+// `defaultRoles`, because the kernel's IAM check allows every capability for a
+// non-enterprise organization (INV-29). An API-key call acts as the key's
+// creator. The list returns model names, call counts, and token totals, so
+// Compliance and Viewer must not see it even though Member may.
 import { ORG_ONLY_WORKSPACE_ID, type CapabilityHandler } from "@oxagen/oxagen";
 import {
   costUnpricedModelList,
@@ -9,6 +15,7 @@ import {
   type CostUnpricedModelListOutput,
 } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
 import { readUnpricedModels, type UnpricedModel } from "@oxagen/billing";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +33,12 @@ export function createUnpricedModelListHandler(
   deps: UnpricedModelListDeps,
 ): CapabilityHandler<typeof costUnpricedModelList> {
   return async (input, ctx): Promise<CostUnpricedModelListOutput> => {
+    const actingUserId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId: actingUserId },
+      { org: ["Owner", "Admin", "Billing", "Member"] },
+    );
+
     const at = input.at === undefined ? deps.now() : new Date(input.at);
     const since =
       input.since === undefined

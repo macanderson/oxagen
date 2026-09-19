@@ -50,6 +50,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "set_spend_budget",
   "set_price_entry",
   "remove_price_entry",
+  "list_unpriced_models",
   "append_record",
   "propose_record",
   "dismiss_proposal",
