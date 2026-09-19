@@ -322,11 +322,11 @@ export function createProposeAgentHandler(
   };
 }
 
-export const proposeAgentHandler: CapabilityHandler<typeof agentPropose> = (
-  input,
-  ctx,
-) =>
+// Built once: the GitHub seam keys its clients by the repository handle each
+// call resolves, so one instance serves every workspace. The initializer is
+// the factory call, which is what the INV-29 role-check test reads.
+export const proposeAgentHandler: CapabilityHandler<typeof agentPropose> =
   createProposeAgentHandler({
     github: createSteeringGitHub(),
     facts: readAgentProposalFacts,
-  })(input, ctx);
+  });
