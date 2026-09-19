@@ -119,7 +119,7 @@ Route PostHog ingestion through a first-party reverse proxy so events aren't blo
 - **Canonical `distinct_id` = our `user_id`** (the Postgres user UUID / public_id — pick one and keep it stable forever). Never use email as the distinct id.
 - **Person properties** (set via `identify` / `$set` and `$set_once`):
   - `$set_once`: `signup_at`, `signup_source`, `initial_utm_*`, `initial_referrer`.
-  - `$set`: `email` (if consent allows — see PII rules), `name`, `created_at`, `role` (org role), `is_internal` (true for `@oxagen.ai` / staff — used to exclude internal traffic), `email_verified`, `last_active_at`, `plan` (denormalized current org plan for convenience), `locale`, `timezone`.
+  - `$set`: `email` (if consent allows — see PII rules), `name`, `created_at`, `role` (org role), `is_internal` (true for `@oxagen.sh` / staff — used to exclude internal traffic), `email_verified`, `last_active_at`, `plan` (denormalized current org plan for convenience), `locale`, `timezone`.
 - **Internal-traffic exclusion is mandatory.** Tag staff (`is_internal: true`) and create a saved cohort that every production dashboard filters out by default.
 
 #### 3.2 Groups (B2B multi-tenancy) — required, not optional
