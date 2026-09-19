@@ -1039,7 +1039,15 @@ function PrivacyTab({ data }: { data: ShellData }) {
     const exportId = queuedId;
     const scope = queuedScope;
     let live = true;
+    // One request at a time. A server action slower than the interval would
+    // otherwise have a second tick start another before the first answered,
+    // and a degraded server is exactly when that happens: the tab would pile
+    // up concurrent reads of one row for as long as it stayed open, adding
+    // load to the outage it is waiting out.
+    let asking = false;
     async function look() {
+      if (asking) return;
+      asking = true;
       // The catch is the point, not a formality: a server action whose request
       // loses its connection rejects, and an uncaught rejection here would
       // repeat every tick until the tab closes. A throw is the same as a
@@ -1057,6 +1065,10 @@ function PrivacyTab({ data }: { data: ShellData }) {
           setState({ kind: "expired", scope, exportId });
       } catch {
         return;
+      } finally {
+        // Released on every exit, including the early returns above and a
+        // thrown request: a flag left set would stop the poller for good.
+        asking = false;
       }
     }
     const timer = setInterval(() => {

@@ -19,7 +19,7 @@ export const privacyDataExport = registerCapability({
   name: "export_data",
   domain: "privacy",
   description:
-    "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20 — right to data portability). Returns immediately with status 'queued'; poll via GET /v1/privacy/export/:exportId for the download URL.",
+    "Request a machine-readable ZIP export of personal or organizational data (GDPR Article 20, the right to data portability). Returns immediately with status 'queued'; poll GET /v1/{org}/{workspace}/privacy/export/{exportId} until it answers ready, then fetch the archive from that path's /download. No URL is returned: the bundle is a private object served by an authenticated route.",
   mode: "async",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -76,7 +76,13 @@ export const privacyDataExport = registerCapability({
   output: z.object({
     exportId: z.string().uuid(),
     status: z.enum(["queued", "processing", "ready", "failed"]),
-    /** Signed download URL — present only when status = "ready". */
+    /**
+     * Never set, and kept only so an older client parsing this shape does not
+     * break on its absence. The archive is a private object, so there is no
+     * URL to sign: `get_export_status` answers a storage key and the bytes
+     * come from the authenticated download route. A new client should not
+     * read this field.
+     */
     downloadUrl: z.string().url().optional(),
   }),
 });
