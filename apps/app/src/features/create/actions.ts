@@ -7,8 +7,10 @@
 // themselves. Nothing here writes a row: each write cuts a branch in the
 // workspace's main repository and opens a pull request, and the thing exists
 // when a person merges it.
+import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { repositoryMainGet } from "@oxagen/oxagen/contracts/repository.main.get";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
+import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -93,6 +95,121 @@ export async function proposeSkill(
       digest: out.digest,
       tokens: out.tokens,
       budget: out.budget,
+      pullRequest: out.pullRequest,
+    },
+  };
+}
+
+// ── The agent wizard (roadmap creation-spec §1; MC spec §6.2) ────────────────
+
+/** One page of the workspace's tool registry is the belt the wizard offers. */
+const BELT_PAGE = 100;
+
+export type ToolbeltOffer = {
+  tools: {
+    slug: string;
+    name: string;
+    version: number;
+    riskGrade: "low" | "medium" | "high" | "critical";
+    sideEffect: "read" | "write" | "irreversible" | null;
+    financial: boolean;
+    killed: boolean;
+  }[];
+  /** More versions exist than the one page the step shows. */
+  more: boolean;
+};
+
+/**
+ * The toolbelt step's choices: the registry's active tool versions, each
+ * with the classification that decides whether a call to it parks for a
+ * person. A read, so it writes nothing.
+ */
+export async function readToolbelt(
+  org: string,
+  ws: string,
+): Promise<ActionResult<ToolbeltOffer>> {
+  const ctx = await requireViewer(org, ws);
+  const read = await kernelRead(ctx, {
+    contract: toolVersionList,
+    input: { limit: BELT_PAGE },
+    page: "tools",
+  });
+  const result = readToActionResult(read);
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: {
+      tools: result.value.items.map((v) => ({
+        slug: v.slug,
+        name: v.name,
+        version: v.version,
+        riskGrade: v.riskGrade,
+        sideEffect: v.classification?.sideEffect ?? null,
+        financial:
+          v.classification?.consequenceTags.includes("moves_money") ?? false,
+        killed: v.gate.kind !== "open",
+      })),
+      more: result.value.nextCursor !== null,
+    },
+  };
+}
+
+export type ProposedAgent = Pick<
+  ContractOutput<typeof agentPropose>,
+  | "slug"
+  | "agentKey"
+  | "path"
+  | "generatedPath"
+  | "branch"
+  | "repository"
+  | "baseRef"
+  | "digest"
+  | "pullRequest"
+>;
+
+/**
+ * The agent wizard's last step: propose_agent runs the six checks and, when
+ * they pass, opens the pull request with the definition and its generated
+ * subagent file. A failed check comes back as `conflict` with
+ * `agent_check_<name>`, and nothing was written.
+ */
+export async function proposeAgent(
+  org: string,
+  ws: string,
+  input: {
+    slug: string;
+    harness:
+      | "stella"
+      | "claude-code"
+      | "codex"
+      | "cursor"
+      | "claude-agent-sdk"
+      | "custom";
+    source: string;
+    rationale: string;
+  },
+): Promise<ActionResult<ProposedAgent>> {
+  const ctx = await requireViewer(org, ws);
+  const rationale = input.rationale.trim();
+  const result = await kernelWrite(ctx, agentPropose, {
+    slug: input.slug,
+    harness: input.harness,
+    source: input.source,
+    ...(rationale === "" ? {} : { rationale }),
+  });
+  if (!result.ok) return result;
+  const out = result.value;
+  return {
+    ok: true,
+    value: {
+      slug: out.slug,
+      agentKey: out.agentKey,
+      path: out.path,
+      generatedPath: out.generatedPath,
+      branch: out.branch,
+      repository: out.repository,
+      baseRef: out.baseRef,
+      digest: out.digest,
       pullRequest: out.pullRequest,
     },
   };

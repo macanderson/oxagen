@@ -38,6 +38,7 @@ describe("buildCommands", () => {
   it("ends on Create: the chooser, then one entry per kind the shell hosts", () => {
     expect(commands.filter((c) => "create" in c)).toEqual([
       { id: "create", label: "create:any", create: null },
+      { id: "create:agent", label: "create:agent", create: "agent" },
       { id: "create:skill", label: "create:skill", create: "skill" },
     ]);
   });
