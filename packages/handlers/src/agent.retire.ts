@@ -38,7 +38,6 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
   // assertOrgRole refused a call with no acting user.
   const userId = actingUserId as string;
 
-  const now = new Date();
   const reason = input.reason ?? "agent retired";
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const result = await withTenantDb(async (tx) => {
@@ -48,21 +47,32 @@ export const agentRetireHandler: CapabilityHandler<typeof agentRetire> = async (
     // commits before the mandate scan below sees it, or waits and then reads
     // the agent as archived and refuses (ADR-106, #3124). The re-read also
     // makes two concurrent retirements answer one write and one `already`.
+    // `now` is captured only after this lock succeeds: a `grant_mandate`
+    // holding the `FOR SHARE` lock can commit a later `updated_at` while
+    // this call waits, and a `now` taken before the wait would then record
+    // this retirement, and the mandate revocations it causes, as earlier
+    // than the grant they are meant to have superseded.
     const [locked] = await tx
-      .select({ status: schema.agents.status })
+      .select({
+        status: schema.agents.status,
+        updatedAt: schema.agents.updatedAt,
+      })
       .from(schema.agents)
       .where(eq(schema.agents.id, agent.id))
       .for("update");
+    const now = new Date();
     if ((locked?.status ?? agent.status) === "archived") {
       // The retirement below is the last identity write an archived agent
-      // takes, so its `updated_at` is the instant recorded then.
+      // takes, so its `updated_at` is the instant recorded then. Reads it
+      // from the row just locked, not the pre-lock `agent` snapshot, which
+      // can be stale if this call itself waited on the lock.
       return {
         agent,
         already: true,
         credentials: 0,
         hosts: 0,
         mandates: 0,
-        retiredAt: agent.updatedAt,
+        retiredAt: locked?.updatedAt ?? agent.updatedAt,
       };
     }
 
