@@ -2,7 +2,7 @@
 
 > Status: authoritative as of 2026-05-31.
 > Supersedes `pricing-and-metering.md`.
-> Owner: Mac Anderson (mac@oxagen.ai)
+> Owner: Mac Anderson (mac@oxagen.sh)
 
 ---
 

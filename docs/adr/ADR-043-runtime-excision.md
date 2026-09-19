@@ -1,6 +1,8 @@
 # ADR-043: Excise the agent runtime — Oxagen governs agents, it does not run them
 
-- **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the amendment at the end)
+- **Status:** Accepted; amended 2026-09-18 by ADR-096 (one sentence, see the
+  amendment at the end); amended 2026-09-19 by ADR-102 (cms marketing lead
+  gate restored, see the second amendment)
 - **Date:** 2026-09-07
 - **Owners:** platform
 - **Related:** ADR-040 (governance-plane refocus — this ADR executes its
@@ -138,3 +140,12 @@ a filesystem policy (ADR-096), aimed at CI, headless runs,
 cloud runners and managed devices first, and never mandatory on a developer's
 own laptop. ADR-094's loopback proxy is also not a runtime: it forwards a
 request a harness made and assembles nothing.
+
+## Amendment 2026-09-19: cms marketing lead gate is not runtime
+
+Maintainer decision of 2026-09-19, recorded in ADR-102. The `cms` schema
+(leads, book editions, access codes) and the public `/v1/cms/*` routes were
+dropped in this ADR as collateral of the runtime excision. They are marketing
+infrastructure for the oxagen.sh ebook gate, not agent runtime, and are
+restored. The ban on sandboxes, coding engines, workers, skill systems, eval
+harnesses, playbooks, browser tools, and content generators is unchanged.
