@@ -75,23 +75,34 @@ workspace: Owner, Member (allow, narrowed)
 
 The read rule, stated once: an accountable org role (Owner, Admin, Billing,
 Compliance) reads every mandate in the workspace. A workspace Owner or Member
-(the same set `request_mandate` admits) reads only the mandates of the agents
-they created. Anyone outside both sets is refused before the handler runs,
-exactly as before.
+(the same set `request_mandate` admits) reads the mandates of the agents
+they created, and the mandates they requested themselves for any agent.
+Anyone outside both sets is refused before the handler runs, exactly as
+before.
 
 This is enforcement matching a filter that was already written, not new
 narrowing logic: `readerFilter` and `blindSpotOf`'s `reader_scope` branch
-already implement and render this rule. Widening the grants is what makes
-them reachable, on both the list and the detail page.
+already implement and render the creator half of this rule. Widening the
+grants is what makes it reachable, on both the list and the detail page. The
+requester half is new: `request_mandate` admits a workspace Owner or Member
+to request a mandate for any agent, not only one they created (that is the
+point of the role; see Context above), so a narrowing that only checked the
+agent's creator left a requester unable to read back a draft they made for
+an agent someone else operates. `mandate.list.ts` and `mandate.get.ts` now
+admit a mandate row when the caller created its agent OR is the mandate's
+own `requestedBy`, two independent grants of visibility rather than one
+narrowed by the other.
 
 ## Consequences
 
 - A workspace Owner or Member can now read the mandates of the agents they
-  created on both `list_mandates` and `get_mandate`, including a draft they
-  just requested and the detail page its row links to.
-- They still cannot read another operator's agent's mandates, or the
-  workspace's full ledger: `readerFilter` narrows every such read to
-  `createdById = actingUserId`.
+  created on both `list_mandates` and `get_mandate`, and the mandates they
+  requested themselves for any agent, including a draft they just requested
+  for an agent someone else operates and the detail page its row links to.
+- They still cannot read another operator's agent's mandates they did not
+  request themselves, or the workspace's full ledger: `readerFilter` narrows
+  every such read to `createdById = actingUserId OR requestedBy =
+  actingUserId`.
 - `apps/app` needed no change: `blindSpotOf`'s `reader_scope` branch already
   tells a narrowed reader their view is limited instead of reporting "no
   mandate" when mandates are only hidden from them, and now renders on a live

@@ -7,7 +7,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { mandateList } from "@oxagen/oxagen/contracts/mandate.list";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { mapMandates, readerFilter, requireWorkspace } from "./_mandate";
 
 export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
@@ -38,19 +38,44 @@ export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
       agentPrincipalId = agent.principalId;
     }
 
-    // Joined for `createdById`: a non-accountable reader sees a mandate for
-    // an agent they created, or a mandate they requested themselves for any
-    // agent (ADR-107). `request_mandate` admits a workspace Owner or Member
-    // to request a mandate for any agent, not only one they created, so
-    // narrowing only by the agent's creator would let a requester create a
-    // draft they can never read back.
+    // `agents` (agent schema) and `mandates` (tools schema) are cross-domain;
+    // no cross-schema FK, and this repo's storage rules keep a cross-domain
+    // Postgres relationship out of a raw JOIN inside a handler, so the
+    // creator set is its own query, same as the agentId lookup above, rather
+    // than a `leftJoin` against `mandates`.
+    //
+    // A non-accountable reader sees a mandate for an agent they created, or
+    // a mandate they requested themselves for any agent (ADR-107).
+    // `request_mandate` admits a workspace Owner or Member to request a
+    // mandate for any agent, not only one they created, so narrowing only
+    // by the agent's creator would let a requester create a draft they can
+    // never read back.
+    let readerScope: SQL | undefined;
+    if (operatorId !== null) {
+      const created = await tx
+        .select({ principalId: schema.agents.principalId })
+        .from(schema.agents)
+        .where(
+          and(
+            eq(schema.agents.workspaceId, workspaceId),
+            eq(schema.agents.createdById, operatorId),
+            isNull(schema.agents.deletedAt),
+          ),
+        );
+      const createdByOperator = created
+        .map((a) => a.principalId)
+        .filter((id): id is string => id !== null);
+      readerScope = or(
+        createdByOperator.length > 0
+          ? inArray(schema.mandates.agentPrincipalId, createdByOperator)
+          : undefined,
+        eq(schema.mandates.requestedBy, operatorId),
+      );
+    }
+
     const rows = await tx
-      .select({ mandate: schema.mandates })
+      .select()
       .from(schema.mandates)
-      .leftJoin(
-        schema.agents,
-        eq(schema.agents.principalId, schema.mandates.agentPrincipalId),
-      )
       .where(
         and(
           eq(schema.mandates.workspaceId, workspaceId),
@@ -60,22 +85,11 @@ export const mandateListHandler: CapabilityHandler<typeof mandateList> = async (
           agentPrincipalId !== undefined
             ? eq(schema.mandates.agentPrincipalId, agentPrincipalId)
             : undefined,
-          operatorId !== null
-            ? or(
-                eq(schema.agents.createdById, operatorId),
-                eq(schema.mandates.requestedBy, operatorId),
-              )
-            : undefined,
+          readerScope,
         ),
       )
       .orderBy(desc(schema.mandates.createdAt))
       .limit(input.limit);
-    return {
-      items: await mapMandates(
-        tx,
-        workspaceId,
-        rows.map((r) => r.mandate),
-      ),
-    };
+    return { items: await mapMandates(tx, workspaceId, rows) };
   });
 };
