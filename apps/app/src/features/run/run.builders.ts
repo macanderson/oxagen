@@ -174,6 +174,7 @@ export function transcriptEntry(
     kind: "model_call",
     type: "model.call_completed",
     label: "claude-opus-5",
+    callKey: null,
     kinds: ["responses"],
     request: null,
     response: transcriptBody(),

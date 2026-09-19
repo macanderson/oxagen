@@ -242,6 +242,14 @@ export const TranscriptEntry = z.object({
   type: z.string(),
   /** A short machine-derived label, never prose. */
   label: z.string(),
+  /**
+   * The call the opening frame belongs to. Null when the producer recorded
+   * none. Named `callKey` and not `callId` because it is not a public id: the
+   * producer writes a free-text call identifier (`tool_call_id`,
+   * `model_call_id`, `toolUseId`), and a field spelled `Id` here must carry
+   * a `PublicId` (src/test/arch/public-ids.test.ts).
+   */
+  callKey: z.string().nullable(),
   /** The chips this entry answers to. */
   kinds: z.array(TranscriptKind),
   request: TranscriptBody.nullable(),

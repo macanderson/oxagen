@@ -30,6 +30,7 @@ const entry = {
   kind: "tool_call",
   type: "tool_requested",
   label: "Read ok",
+  callId: "tu_shared",
   kinds: ["tools"],
   request: half,
   response: { ...half, seq: "5", type: "tool_call", text: "# Oxagen" },

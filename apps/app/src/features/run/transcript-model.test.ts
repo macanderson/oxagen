@@ -216,6 +216,92 @@ describe("buildTranscript", () => {
       ["s2", "event"],
     ]);
   });
+
+  it("pairs overlapping tool calls by call key, not by adjacency", () => {
+    // start A, start B, complete A, complete B: adjacency would end A at B,
+    // then pair B with A's completion, and leave B's result as its own step.
+    // With matching call keys each step owns its own start and complete.
+    const turns = buildTranscript([
+      transcriptEntry({
+        seq: "1",
+        type: "tool.engine_call_started",
+        kind: "tool_call",
+        label: "read_file",
+        callKey: "tc_a",
+        turn: 1,
+        request: transcriptBody({
+          seq: "1",
+          type: "tool.engine_call_started",
+          text: '{"path":"a.ts"}',
+        }),
+        response: null,
+        frames: 1,
+        cost: null,
+      }),
+      transcriptEntry({
+        seq: "2",
+        type: "tool.engine_call_started",
+        kind: "tool_call",
+        label: "read_file",
+        callKey: "tc_b",
+        turn: 1,
+        request: transcriptBody({
+          seq: "2",
+          type: "tool.engine_call_started",
+          text: '{"path":"b.ts"}',
+        }),
+        response: null,
+        frames: 1,
+        cost: null,
+      }),
+      transcriptEntry({
+        seq: "3",
+        type: "tool.engine_call_completed",
+        kind: "tool_call",
+        label: "read_file completed",
+        callKey: "tc_a",
+        turn: 1,
+        request: null,
+        response: transcriptBody({
+          seq: "3",
+          type: "tool.engine_call_completed",
+          text: "contents of a",
+        }),
+        frames: 1,
+        cost: null,
+      }),
+      transcriptEntry({
+        seq: "4",
+        type: "tool.engine_call_completed",
+        kind: "tool_call",
+        label: "read_file completed",
+        callKey: "tc_b",
+        turn: 1,
+        request: null,
+        response: transcriptBody({
+          seq: "4",
+          type: "tool.engine_call_completed",
+          text: "contents of b",
+        }),
+        frames: 1,
+        cost: null,
+      }),
+    ]);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.steps.map((s) => [s.id, s.kind, s.from, s.to])).toEqual([
+      ["s1", "tool", 0, 2],
+      ["s2", "tool", 1, 3],
+    ]);
+    const stepA = turns[0]?.steps[0];
+    const stepB = turns[0]?.steps[1];
+    if (stepA === undefined || stepB === undefined) {
+      throw new Error("expected two tool steps for the overlapping calls");
+    }
+    expect(stepA.frames.map((f) => f.seq)).toEqual(["1", "3"]);
+    expect(stepB.frames.map((f) => f.seq)).toEqual(["2", "4"]);
+    expect(stepA.frames[1]?.response?.text).toBe("contents of a");
+    expect(stepB.frames[1]?.response?.text).toBe("contents of b");
+  });
 });
 
 describe("stepDigest", () => {

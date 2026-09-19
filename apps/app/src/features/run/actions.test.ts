@@ -372,6 +372,7 @@ describe("readTranscriptPage", () => {
           kind: "tool_call",
           type: "tool_result",
           label: "create_release ok",
+          callId: "tc_1",
           kinds: ["tools"],
           turn: 1,
           request: null,

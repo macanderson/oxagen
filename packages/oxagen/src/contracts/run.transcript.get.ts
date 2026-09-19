@@ -145,6 +145,14 @@ export const transcriptEntrySchema = z
     type: z.string(),
     /** A short machine-derived label, never prose. */
     label: z.string(),
+    /**
+     * The call the opening frame belongs to (`tool_call_id`, `model_call_id`,
+     * or a wrapped session's `toolUseId`). Null when the producer recorded
+     * none. Clients that rebuild steps at `everything` pair halves on this
+     * value rather than on adjacency, so overlapping tool calls keep each
+     * result under the request that made it.
+     */
+    callId: z.string().nullable(),
     /** The chips this entry answers to, from the frames it folds. */
     kinds: z.array(transcriptKindSchema),
     /** What went out; null when the recording has only the terminal receipt. */

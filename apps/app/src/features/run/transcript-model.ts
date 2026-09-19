@@ -109,7 +109,7 @@ const CONTROL: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Where the step opening at `i` ends (exclusive), and what kind it is.
+ * Which indices the step opening at `i` owns, and what kind it is.
  *
  * A model or tool exchange is two frames wherever the producer wrote two: the
  * request and the response. The wrapped session spells those
@@ -117,34 +117,70 @@ const CONTROL: ReadonlySet<string> = new Set([
  * in-app assistant spells them `*.engine_call_started`/`*.engine_call_completed`.
  * Both halves carry the same step kind at `everything`, so without this pair
  * each half would draw as its own step.
+ *
+ * When the opening frame carries a `callKey`, the close is the later frame of
+ * the matching close type with the same key, even when another call's start or
+ * close sits between them (TOOL_GATE frames are allowed through the same way).
+ * Frames claimed by an earlier pair are skipped by `stepsOf`, so overlapping
+ * `start A, start B, complete A, complete B` yields two steps that each own
+ * their own halves. When `callKey` is null, pairing stays adjacency: the next
+ * close of the right type, with only TOOL_GATE frames allowed between a tool's
+ * request and its call.
  */
-function stepEnd(
+function stepPair(
   frames: readonly TranscriptEntry[],
   i: number,
   frame: TranscriptEntry,
-): { end: number; kind: TranscriptStep["kind"] } {
+): { indices: number[]; kind: TranscriptStep["kind"] } {
   if (frame.type === MODEL_REQUEST || frame.type === MODEL_ENGINE_STARTED) {
     const close =
       frame.type === MODEL_ENGINE_STARTED
         ? MODEL_ENGINE_COMPLETED
         : MODEL_RESPONSE;
+    const callKey = frame.callKey;
+    if (callKey !== null) {
+      for (let j = i + 1; j < frames.length; j += 1) {
+        const next = frames[j];
+        if (next === undefined) break;
+        if (next.type === close && next.callKey === callKey) {
+          return { indices: [i, j], kind: "model" };
+        }
+      }
+      return { indices: [i], kind: "model" };
+    }
     const paired = frames[i + 1]?.type === close;
-    return { end: paired ? i + 2 : i + 1, kind: "model" };
+    return { indices: paired ? [i, i + 1] : [i], kind: "model" };
   }
   if (frame.type === TOOL_REQUESTED || frame.type === TOOL_ENGINE_STARTED) {
     const close =
       frame.type === TOOL_ENGINE_STARTED ? TOOL_ENGINE_COMPLETED : TOOL_CALL;
-    let end = i + 1;
-    for (let next = frames[end]; next !== undefined; next = frames[end]) {
-      if (next.type === close) return { end: end + 1, kind: "tool" };
-      if (!TOOL_GATE.has(next.type)) break;
-      end += 1;
+    const callKey = frame.callKey;
+    if (callKey !== null) {
+      for (let j = i + 1; j < frames.length; j += 1) {
+        const next = frames[j];
+        if (next === undefined) break;
+        if (next.type === close && next.callKey === callKey) {
+          return { indices: [i, j], kind: "tool" };
+        }
+      }
+      return { indices: [i], kind: "tool" };
     }
-    return { end, kind: "tool" };
+    const indices = [i];
+    for (let j = i + 1; j < frames.length; j += 1) {
+      const next = frames[j];
+      if (next === undefined) break;
+      if (next.type === close) {
+        indices.push(j);
+        return { indices, kind: "tool" };
+      }
+      if (!TOOL_GATE.has(next.type)) break;
+      indices.push(j);
+    }
+    return { indices, kind: "tool" };
   }
-  if (frame.kind === "model_call") return { end: i + 1, kind: "model" };
-  if (frame.kind === "tool_call") return { end: i + 1, kind: "tool" };
-  return { end: i + 1, kind: "event" };
+  if (frame.kind === "model_call") return { indices: [i], kind: "model" };
+  if (frame.kind === "tool_call") return { indices: [i], kind: "tool" };
+  return { indices: [i], kind: "event" };
 }
 
 function stepsOf(
@@ -152,20 +188,31 @@ function stepsOf(
   offset: number,
 ): TranscriptStep[] {
   const steps: TranscriptStep[] = [];
-  let i = 0;
-  for (let first = frames[i]; first !== undefined; first = frames[i]) {
-    const { end, kind } = stepEnd(frames, i, first);
-    const slice = frames.slice(i, end);
+  const claimed = new Set<number>();
+  for (let i = 0; i < frames.length; i += 1) {
+    if (claimed.has(i)) continue;
+    const first = frames[i];
+    if (first === undefined) continue;
+    const { indices, kind } = stepPair(frames, i, first);
+    for (const index of indices) {
+      if (index !== i) claimed.add(index);
+    }
+    const slice = indices.flatMap((index) => {
+      const entry = frames[index];
+      return entry === undefined ? [] : [entry];
+    });
+    const last = slice[slice.length - 1] ?? first;
+    const from = indices[0] ?? i;
+    const to = indices[indices.length - 1] ?? i;
     steps.push({
       id: `s${first.seq}`,
       kind,
-      from: offset + i,
-      to: offset + end - 1,
+      from: offset + from,
+      to: offset + to,
       first,
-      last: slice[slice.length - 1] ?? first,
+      last,
       frames: slice,
     });
-    i = end;
   }
   return steps;
 }
