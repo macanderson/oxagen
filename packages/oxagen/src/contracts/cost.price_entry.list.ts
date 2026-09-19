@@ -50,7 +50,7 @@ export const costPriceEntryList = registerCapability({
     "List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over.",
   mode: "sync",
   surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "app", "unit", "docs"],
   scoped: true,
   noBillingGate: true,
   mutates: false,

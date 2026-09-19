@@ -1,0 +1,117 @@
+{
+  "name": "list_unpriced_models",
+  "domain": "cost",
+  "description": "List the models this organization has run that the price book cannot price: the model, its vendor, how many calls and tokens it has run in the window, and which token classes are missing a price — the reason a run's cost comes back blank.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "low",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "since": {
+        "type": "string"
+      },
+      "at": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "since": {
+        "type": "string"
+      },
+      "at": {
+        "type": "string"
+      },
+      "models": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "calls": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "firstSeen": {
+              "type": "string"
+            },
+            "lastSeen": {
+              "type": "string"
+            },
+            "missingClasses": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "input_uncached",
+                  "cache_read",
+                  "cache_write_5m",
+                  "cache_write_1h",
+                  "output",
+                  "reasoning",
+                  "server_tool_request",
+                  "embedding_input",
+                  "rerank",
+                  "image",
+                  "video_second"
+                ]
+              }
+            },
+            "fullyUnpriced": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "model",
+            "provider",
+            "calls",
+            "tokens",
+            "firstSeen",
+            "lastSeen",
+            "missingClasses",
+            "fullyUnpriced"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "since",
+      "at",
+      "models"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -115,6 +115,9 @@ import { tachoHostEnroll } from "@oxagen/oxagen/contracts/tacho.host.enroll";
 import { conversationChat } from "@oxagen/oxagen/contracts/conversation.chat";
 import { tachoIncidentList } from "@oxagen/oxagen/contracts/tacho.incident.list";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
+import { costUnpricedModelList } from "@oxagen/oxagen/contracts/cost.unpriced_model.list";
+import { costPriceEntrySet } from "@oxagen/oxagen/contracts/cost.price_entry.set";
+import { costPriceEntryRemove } from "@oxagen/oxagen/contracts/cost.price_entry.remove";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
@@ -207,6 +210,9 @@ import { contextPrMergeRoute } from "./context.pr.merge";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
 import { conversationChatRoute } from "./conversation.chat";
 import { costPriceEntryListRoute } from "./cost.price_entry.list";
+import { costUnpricedModelListRoute } from "./cost.unpriced_model.list";
+import { costPriceEntrySetRoute } from "./cost.price_entry.set";
+import { costPriceEntryRemoveRoute } from "./cost.price_entry.remove";
 import { runCostGetRoute } from "./run.cost";
 import { spendDrillRoute } from "./spend.drill";
 import { spendGetRoute } from "./spend.get";
@@ -1434,6 +1440,52 @@ const ROUTES: ThinRoute[] = [
     capability: costPriceEntryList.name,
     body: { at: "2026-09-14T00:00:00.000Z" },
     invalidBody: { at: "yesterday" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost.unpriced_model.list",
+    route: costUnpricedModelListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costUnpricedModelList.name,
+    body: { since: "2026-08-14T00:00:00.000Z" },
+    invalidBody: { since: "last month" },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost.price_entry.set",
+    route: costPriceEntrySetRoute as unknown as Hono<never>,
+    // POST, matching the route: the write moved off PUT so a body that
+    // restates the row key is not mistaken for a full-resource replace.
+    method: "POST",
+    capability: costPriceEntrySet.name,
+    body: {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "input_uncached",
+      usdPerMillion: 2.4,
+    },
+    invalidBody: {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "input_uncached",
+      usdPerMillion: -1,
+    },
+    jsonGuard: true,
+    status: 200,
+  },
+  {
+    file: "cost.price_entry.remove",
+    route: costPriceEntryRemoveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: costPriceEntryRemove.name,
+    body: {
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      tokenClass: "input_uncached",
+    },
+    invalidBody: { provider: "anthropic", model: "claude-sonnet-5" },
     jsonGuard: true,
     status: 200,
   },

@@ -2526,6 +2526,7 @@ type Messages = {
       tool: string;
       waste: string;
       budgets: string;
+      pricing: string;
     };
     actions: {
       exportReport: string;
@@ -2694,6 +2695,124 @@ type Messages = {
         threshold_80: string;
         threshold_95: string;
         exceeded: string;
+      };
+    };
+    pricing: {
+      class: {
+        input_uncached: string;
+        cache_read: string;
+        cache_write_5m: string;
+        cache_write_1h: string;
+        output: string;
+        reasoning: string;
+        server_tool_request: string;
+        embedding_input: string;
+        rerank: string;
+        image: string;
+        video_second: string;
+      };
+      per: {
+        token: string;
+        request: string;
+        image: string;
+        second: string;
+      };
+      source: {
+        list: string;
+        negotiated: string;
+        override: string;
+      };
+      unpriced: {
+        title: string;
+        note: string;
+        none: string;
+        columns: {
+          model: string;
+          provider: string;
+          calls: string;
+          tokens: string;
+          missing: string;
+          recordedAs: string;
+          action: string;
+        };
+        noProvider: string;
+        noCost: string;
+        estimated: string;
+        setRate: string;
+      };
+      book: {
+        title: string;
+        note: string;
+        empty: string;
+        columns: {
+          model: string;
+          provider: string;
+          tokenClass: string;
+          rate: string;
+          region: string;
+          source: string;
+          effective: string;
+          action: string;
+        };
+        open: string;
+        until: string;
+        anyRegion: string;
+        platformPriced: string;
+      };
+      dialog: {
+        open: string;
+        title: string;
+        body: string;
+        provider: string;
+        model: string;
+        aliases: string;
+        aliasesHint: string;
+        effectiveFrom: string;
+        effectiveFromHint: string;
+        rates: string;
+        ratesHint: string;
+        showAllClasses: string;
+        submit: string;
+        pending: string;
+        errors: {
+          providerInvalid: string;
+          modelInvalid: string;
+          regionInvalid: string;
+          aliasesInvalid: string;
+          effectiveFromInvalid: string;
+          tokenClassInvalid: string;
+          rateInvalid: string;
+          ratesEmpty: string;
+        };
+        partial: {
+          written: string;
+          noneWritten: string;
+          notWritten: string;
+        };
+      };
+      remove: {
+        open: string;
+        label: string;
+        title: string;
+        body: string;
+        kept: string;
+        submit: string;
+        pending: string;
+        unpricedTitle: string;
+        unpriced: string;
+        unpricedClose: string;
+        confirmUnpricedTitle: string;
+        confirmUnpriced: string;
+        confirmUnpricedSubmit: string;
+        confirmUnpricedCancel: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
       };
     };
     drill: {

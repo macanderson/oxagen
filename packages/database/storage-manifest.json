@@ -2170,6 +2170,16 @@
       "writes": []
     },
     {
+      "domain": "cost",
+      "name": "list_unpriced_models",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "spend",
       "name": "list_waste",
       "reads": [],
@@ -2528,6 +2538,17 @@
       "surfaces": [
         "agent",
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "remove_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -2947,6 +2968,17 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "cost",
+      "name": "set_price_entry",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -3455,7 +3487,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0d71f77745fc063eec0a6a15eed55e329dbb1ef7871c335e4faaf211ae3b6ebf",
+  "contentHash": "ae7ff6d151822aa2ecf37cd35da648282ebc15462c9d850b4b7f10aea5c44563",
   "domains": [
     {
       "name": "agent",
@@ -3606,6 +3638,7 @@
       "tables": [
         "postgres:cost.daily_totals",
         "postgres:cost.findings",
+        "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
         "postgres:cost.run_totals"
       ]
@@ -3890,7 +3923,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 134
+      "tableCount": 135
     },
     {
       "domains": [
@@ -12039,6 +12072,57 @@
     {
       "columns": [
         {
+          "name": "book",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "updated_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "initialized_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "completed_catalogs",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text[]"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.price_book_initializations",
+      "name": "price_book_initializations",
+      "store": "postgres",
+      "tenantScoped": false
+    },
+    {
+      "columns": [
+        {
           "name": "id",
           "nullable": false,
           "primaryKey": true,
@@ -12138,6 +12222,12 @@
         {
           "name": "source",
           "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "catalog",
+          "nullable": true,
           "primaryKey": false,
           "type": "text"
         }

@@ -1,8 +1,30 @@
+import { HandlerError } from "@oxagen/oxagen";
 import { costPriceEntryList } from "@oxagen/oxagen/contracts/cost.price_entry.list";
 import type { PriceEntry } from "@oxagen/billing";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPriceEntryListHandler } from "./cost.price_entry.list";
 import { ctx, SCOPE } from "./spend.test-support";
+
+// The role gate reads iam.principal_role_assignments; matches
+// cost.price_entry.set.test.ts's pattern for the same gate.
+const gate = vi.hoisted(() => ({ refuse: false }));
+vi.mock("@oxagen/iam/org-role", () => ({
+  resolveActingUserId: async (c: {
+    userId: string | null;
+    apiKeyId: string | null;
+  }) => c.userId ?? c.apiKeyId,
+  assertOrgRole: async () => {
+    if (gate.refuse)
+      throw new HandlerError({
+        code: "forbidden",
+        reason: "org_role_required",
+      });
+    return "Member";
+  },
+}));
+afterEach(() => {
+  gate.refuse = false;
+});
 
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 
@@ -34,6 +56,16 @@ function harness(entries: PriceEntry[]) {
 }
 
 describe("list_price_entries", () => {
+  it("is refused for a role the gate excludes, and reads nothing (#3271 P1)", async () => {
+    const h = harness([]);
+    gate.refuse = true;
+    await expect(h.handler({}, ctx())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(h.listPriceEntries).not.toHaveBeenCalled();
+  });
+
   it("lists the book effective now when no instant is given", async () => {
     const h = harness([]);
     const out = await h.handler({}, ctx());

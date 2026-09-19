@@ -9,7 +9,7 @@ subagent fan-out, background tasks, file locks, plans, skills, evals,
 automations/workflows, browser tools, content generation, research swarm,
 web fetch/search, and repo mutations) no longer have capability pages.
 
-**305 capabilities across 47 domains.**
+**307 capabilities across 47 domains.**
 
 Capabilities granted to an agent as a set have a page of their own:
 [the ontology read set](_ontology-read-set.md) covers the graph reads and the
@@ -131,9 +131,12 @@ Capabilities granted to an agent as a set have a page of their own:
 - [budget.policy.read](budget.policy.read.md) — Read the calling user's saved per-turn dollar budget (enabled, limit, enforcement mode, grace cushion)
 - [budget.policy.write](budget.policy.write.md) — Update the calling user's saved per-turn dollar budget (partial update): on/off, USD limit, mode (grace/prompt/enforce), grace cushion
 
-## Cost (1)
+## Cost (4)
 
 - [cost.price_entry.list](cost.price_entry.list.md) — List the price book this organization is priced against: every provider list price effective at an instant and the organization's negotiated rows, in integer micros per million units with the window each is effective over
+- [cost.price_entry.remove](cost.price_entry.remove.md) — End this organization's negotiated rate for one model and token class at an instant, so every frame from then on is priced at the provider list price again; the row is closed, not deleted
+- [cost.price_entry.set](cost.price_entry.set.md) — Set this organization's negotiated rate for one model and token class, in USD per one million units, effective from an instant; the row it supersedes is closed, never overwritten
+- [cost.unpriced_model.list](cost.unpriced_model.list.md) — List the models this organization has run that the price book cannot price: the model, its vendor, how many calls and tokens it has run in the window, and which token classes are missing a price — the reason a run's cost comes back blank
 
 ## Capability (2)
 

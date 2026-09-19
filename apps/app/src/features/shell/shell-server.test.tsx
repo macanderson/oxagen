@@ -86,6 +86,8 @@ describe("ShellChrome", () => {
         budgets: vi.fn(),
         findings: vi.fn(),
         findingEvidence: vi.fn(),
+        priceBook: vi.fn(),
+        unpricedModels: vi.fn(),
       },
       onboarding: { state: vi.fn(), firstFrame: vi.fn() },
       org: {

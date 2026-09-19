@@ -43,4 +43,4 @@ An entry:
 
 ## Tenancy
 
-RLS on `cost.price_entries` is `org_or_global`: a tenant session reads the rows with a null `org_id` and its own; a negotiated row for another organization is never returned.
+RLS on `cost.price_entries` is the `tenant_isolation` policy, which for this table is org-or-global (`org_id IS NULL OR org_id = <the session's org>`): a tenant session reads the rows with a null `org_id` and its own; a negotiated row for another organization is never returned.

@@ -97,6 +97,7 @@ export function pricedRun(
             reasoning: 0n,
           },
           basis,
+          hasUnpriced: false,
         },
       ],
       tools: [{ name: "Read", calls: 2 }],
