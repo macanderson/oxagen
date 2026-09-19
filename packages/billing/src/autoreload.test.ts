@@ -7,6 +7,7 @@
  *  - maybeAutoReload: below threshold → charge → grant lot → set lastAutoReloadAt
  *  - maybeAutoReload: charge failure → returns {reloaded:false, reason}
  *  - maybeAutoReload: no stripe customer → returns {reloaded:false}
+ *  - maybeAutoReload: the settings customer wins over a stale subscription one
  *  - maybeAutoReload: idempotency (reloaded within last hour)
  */
 
@@ -56,6 +57,8 @@ vi.mock("./billing-settings", () => ({
 // #1420 turns on.
 interface DbState {
   subRow: Record<string, unknown> | null;
+  /** The org_billing_settings customer id; null leaves the column empty. */
+  settingsCustomerId: string | null;
   /** Set by closeReloadEpisode; the marker that a reload actually finished. */
   lastAutoReloadAt: Date | null;
   episodeKey: string | null;
@@ -68,6 +71,7 @@ interface DbState {
 function makeState(): DbState {
   return {
     subRow: null,
+    settingsCustomerId: null,
     lastAutoReloadAt: null,
     episodeKey: null,
     episodeStartedAt: null,
@@ -81,6 +85,11 @@ function makeDb(state: DbState) {
     query: {
       subscriptions: {
         findFirst: vi.fn(async () => state.subRow),
+      },
+      orgBillingSettings: {
+        findFirst: vi.fn(async () => ({
+          stripeCustomerId: state.settingsCustomerId,
+        })),
       },
     },
     update: vi.fn(() => ({
@@ -359,6 +368,31 @@ describe("maybeAutoReload", () => {
     // The episode is finished: the reload is stamped and the key released.
     expect(state.lastAutoReloadAt).toBeInstanceOf(Date);
     expect(state.episodeKey).toBeNull();
+  });
+
+  it("charges the settings customer, not a stale id left on a subscription row", async () => {
+    // After a Stripe account cutover ensureStripeCustomer replaces the
+    // settings id; the historical subscription row still names the previous
+    // account's customer (Codex P1 on #3392).
+    const state = makeState();
+    state.settingsCustomerId = "cus_live_new";
+    state.subRow = { stripeCustomerId: "cus_stale_old" };
+    dbHolder.instance = makeDb(state);
+    getOrgBillingSettingsMock.mockResolvedValue(
+      makeSettings({ autoReloadThresholdCents: 500n }),
+    );
+    effectiveBalanceMock.mockResolvedValue(100n);
+
+    const result = await maybeAutoReload("org-abc");
+
+    expect(result.reloaded).toBe(true);
+    expect(getDefaultPaymentMethodIdMock).toHaveBeenCalledWith("cus_live_new");
+    expect(chargeOffSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: "cus_live_new" }),
+    );
+    expect(chargeOffSessionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: "cus_stale_old" }),
+    );
   });
 
   it("uses customer default payment method when no saved PM in settings", async () => {

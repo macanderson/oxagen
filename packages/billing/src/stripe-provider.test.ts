@@ -3,6 +3,7 @@
  *
  * Mocks the Stripe SDK so no real API calls are made. Tests cover:
  *  - findCustomerByOrgId
+ *  - customerExists
  *  - createCustomer
  *  - getSubscription (drives stripeSubscriptionToNeutral)
  *  - updateSubscription / cancelSubscription
@@ -216,6 +217,48 @@ describe("StripeProvider", () => {
         name: "Acme Corp",
         metadata: { org_id: "org-3" },
       });
+    });
+  });
+
+  describe("customerExists", () => {
+    it("returns true for a live customer", async () => {
+      stripeMethods.customers.retrieve.mockResolvedValue({
+        id: "cus_live_001",
+        deleted: false,
+      });
+      await expect(provider.customerExists("cus_live_001")).resolves.toBe(true);
+    });
+
+    it("returns false for a deleted customer", async () => {
+      stripeMethods.customers.retrieve.mockResolvedValue({
+        id: "cus_gone_001",
+        deleted: true,
+      });
+      await expect(provider.customerExists("cus_gone_001")).resolves.toBe(
+        false,
+      );
+    });
+
+    it("returns false when Stripe answers resource_missing", async () => {
+      const err = Object.assign(new Error("No such customer"), {
+        code: "resource_missing",
+        type: "StripeInvalidRequestError",
+      });
+      stripeMethods.customers.retrieve.mockRejectedValue(err);
+      await expect(provider.customerExists("cus_stale_001")).resolves.toBe(
+        false,
+      );
+    });
+
+    it("rethrows a transient Stripe error", async () => {
+      const err = Object.assign(new Error("rate limited"), {
+        type: "StripeRateLimitError",
+        statusCode: 429,
+      });
+      stripeMethods.customers.retrieve.mockRejectedValue(err);
+      await expect(provider.customerExists("cus_any")).rejects.toThrow(
+        "rate limited",
+      );
     });
   });
 

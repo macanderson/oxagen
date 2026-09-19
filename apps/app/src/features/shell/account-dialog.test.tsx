@@ -366,9 +366,7 @@ describe("AccountDialog", () => {
     });
     const select = screen.getByLabelText("Time zone");
     expect(select).toHaveValue("Asia/Tokyo");
-    expect(
-      screen.getByRole("option", { name: "Europe/London" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Europe/London" })).toBeTruthy();
   });
 
   it("saves a changed zone through set_preferences, after the profile, and refreshes once", async () => {

@@ -215,6 +215,7 @@ const provider = {
   createGauCheckout: vi.fn(),
   findCustomerByOrgId: vi.fn(),
   createCustomer: vi.fn(),
+  customerExists: vi.fn().mockResolvedValue(true),
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────

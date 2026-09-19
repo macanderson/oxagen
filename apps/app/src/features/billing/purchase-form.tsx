@@ -65,7 +65,11 @@ function QuantityPicker({
   );
   const failure = failureKey(state);
   return (
-    <SafeForm action={action} className="flex flex-col gap-3">
+    <SafeForm
+      action={action}
+      aria-label={t("title")}
+      className="flex flex-col gap-3"
+    >
       {failure === null ? null : (
         <FormAlert testId="purchase-error">
           {t(failure, { max: formatCount(maxGau, locale) })}
