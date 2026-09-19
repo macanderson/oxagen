@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import type { ResolvedApprovalItem } from "@/data/contracts/approvals";
 import type { Read } from "@/data/read";
 import { mono, panel } from "@/ui/control-styles";
+import { useFormatter } from "@/ui/formatter";
 import { ReadFailure } from "@/ui/read-failure";
 
 function approverLabel(resolvedBy: string | null): string {
@@ -19,6 +20,7 @@ function approverLabel(resolvedBy: string | null): string {
 
 function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
   const t = useTranslations("run.resolvedApprovals");
+  const format = useFormatter();
   return (
     <li
       data-testid="resolved-approval"
@@ -33,7 +35,14 @@ function ResolvedApprovalRow({ item }: { item: ResolvedApprovalItem }) {
           {approverLabel(item.resolvedBy)}
         </dd>
         <dt className="text-muted-foreground">{t("resolvedAt")}</dt>
-        <dd>{item.resolvedAt}</dd>
+        <dd>
+          <time dateTime={item.resolvedAt}>
+            {format.dateTime(new Date(item.resolvedAt), {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </time>
+        </dd>
       </dl>
     </li>
   );
