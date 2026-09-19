@@ -3487,7 +3487,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8331577bb07a76c0979bd55b28febe23db75985cdd7edac2ef6ecbd8c7aa8d99",
+  "contentHash": "804758944a70dc3f59a56cac0811c11523ace1c768583c10bb260f5f50c18583",
   "domains": [
     {
       "name": "agent",
@@ -11641,6 +11641,24 @@
           "nullable": false,
           "primaryKey": false,
           "type": "boolean"
+        },
+        {
+          "name": "crm_record_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "crm_synced_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "crm_sync_error",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "cms",
