@@ -73,7 +73,15 @@ describe("the daemon's git seam", () => {
     for (const handle of handles.splice(0)) await handle.stop();
   });
 
-  async function boot(exec: Exec, now: () => number, execAsync?: ExecAsync) {
+  async function boot(
+    exec: Exec,
+    now: () => number,
+    execAsync?: ExecAsync,
+    fetchImpl?: (
+      url: string,
+      init?: unknown,
+    ) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>,
+  ) {
     const paths = scratchPaths();
     const signer = bundleSigner();
     const bundle = signer.sign(
@@ -99,9 +107,10 @@ describe("the daemon's git seam", () => {
     );
     const handle = await startDaemon({
       paths,
-      fetch: async () => {
-        throw new Error("ECONNREFUSED");
-      },
+      fetch: (fetchImpl ??
+        (async () => {
+          throw new Error("ECONNREFUSED");
+        })) as Parameters<typeof startDaemon>[0]["fetch"],
       exec,
       ...(execAsync !== undefined ? { execAsync } : {}),
       now,
@@ -180,6 +189,74 @@ describe("the daemon's git seam", () => {
       hook("PreToolUse", { tool_name: "Read", tool_input: { file_path: "a" } }),
     );
     expect(answered).toBeDefined();
+    release();
+    await ticking;
+  });
+
+  it("polls the control path without waiting on a slow worktree read", async () => {
+    // The governance half of the git seam, and the reason the reconciliation is
+    // a lane of its own.
+    //
+    // A reconciliation is bounded, but generously: `readGitFacts` is
+    // `rev-parse HEAD` then three reads at once (2 x 10 s), and
+    // `readWorkingTreeChanges` is `status`, then numstat-and-root at once with
+    // a no-HEAD fallback, then 64 untracked probes through a pool of 4, which
+    // is 16 waves (10 + 20 + 160 s). That is 210 s for one session, and four
+    // are drained one after another: 840 s, fourteen minutes, while the
+    // interval driver's `ticking` guard drops every tick in between.
+    //
+    // The bundle this loop fetches is what the hooks read to decide allow or
+    // deny, and the ingest response is how a queued suspend, revoke or cancel
+    // reaches this host. Behind the drain, an operator's withdrawal of a
+    // mandate took up to fourteen minutes to be enforced, and the record named
+    // the withdrawn state as the live one for that whole window. Now the poll
+    // runs on its own cadence whatever git is doing.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let probeStarted = false;
+    // Never answers until released: the worst case, not merely a slow one.
+    const stuck: ExecAsync = async () => {
+      probeStarted = true;
+      await held;
+      return { status: 1, stdout: "", stderr: "released" };
+    };
+    const reached: string[] = [];
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      stuck,
+      async (url: string) => {
+        reached.push(url);
+        throw new Error("ECONNREFUSED");
+      },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+
+    const ticking = handle.tick();
+    const deadline = Date.now() + 2_000;
+    while (!probeStarted && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(probeStarted).toBe(true);
+
+    // The discriminating assertion. The git read is in flight and will not
+    // answer, and the control path has already run inside the SAME tick: the
+    // shipper reached the control plane, which is where acks go out and where
+    // control commands come back. Awaited on the same tick as the drain, none
+    // of this happens until the read is released.
+    const controlDeadline = Date.now() + 2_000;
+    while (reached.length === 0 && Date.now() < controlDeadline)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(reached.length).toBeGreaterThan(0);
+
+    // And a second poll gets through while the first read is still stuck, which
+    // is the half the `ticking` guard used to eat.
+    reached.length = 0;
+    await handle.refreshBundle();
+    expect(reached.length).toBeGreaterThan(0);
+
     release();
     await ticking;
   });

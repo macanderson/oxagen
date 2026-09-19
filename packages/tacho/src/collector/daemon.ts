@@ -165,8 +165,17 @@ export interface DaemonHandle {
   port: number | undefined;
   /** The model proxy's bound port, or undefined when it is not listening. */
   modelProxyPort: number | undefined;
-  /** Run the periodic work once, in order; tests call this instead of waiting. */
+  /**
+   * Run the periodic work once, in order, and wait for the git reconciliation
+   * it started; tests call this instead of waiting.
+   *
+   * The interval driver does NOT call this — it drives the control path alone,
+   * so a slow worktree cannot delay an operator's command. This seam exists so
+   * that a caller stepping the daemon by hand still sees the reconciliation.
+   */
   tick: () => Promise<void>;
+  /** Wait for the git reconciliation lane to settle, starting one if due. */
+  flushGitReads: () => Promise<void>;
   drainSpool: () => Promise<number>;
   refreshBundle: () => Promise<boolean>;
   stop: () => Promise<void>;
@@ -1561,7 +1570,71 @@ export async function startDaemon(
   let lastSweep = 0;
   let lastCompact = 0;
 
-  async function tick(): Promise<void> {
+  /**
+   * The git reconciliation lane: at most one drain in flight, never awaited by
+   * the work an operator's command travels through.
+   *
+   * ## Why this is a lane and not a step in the tick
+   *
+   * `drainGitReads` used to be awaited in the middle of `tick`, ahead of
+   * `refreshBundle` (the allow-state fetch) and `sendAcks` (which is also how a
+   * queued control command reaches this host). Its bounds are generous by
+   * design, because a git read that is slow is a read worth abandoning rather
+   * than waiting on — but the ceilings multiply. One reconciliation is
+   * `readGitFacts` (`rev-parse HEAD`, then three reads at once: 2 x 10 s) plus
+   * `readWorkingTreeChanges` (`status`, then numstat-and-root at once with a
+   * no-HEAD fallback, then `MAX_UNTRACKED_LINE_COUNTS` = 64 untracked probes
+   * through a pool of `UNTRACKED_COUNT_CONCURRENCY` = 4, which is 16 waves):
+   * 10 + 20 + 160 = 190 s, so 210 s in all. `GIT_READS_PER_TICK` = 4 sessions
+   * are drained one after another, and the interval driver's `ticking` guard
+   * drops every tick that would overlap — so on a network-backed worktree the
+   * whole control path stalled for up to **840 s, fourteen minutes**, on top of
+   * the five-minute `bundleRefreshMs` cadence.
+   *
+   * Fourteen minutes is not a slow refresh, it is a kill switch that does not
+   * work. An operator's suspend, revoke or cancel is enforced by the hooks
+   * reading the bundle this loop fetches, so for that whole window the agent
+   * kept acting under the allow state the mandate had already withdrawn, and
+   * the record named the withdrawn state as the live one.
+   *
+   * With the drain in its own lane the control path waits on none of it: the
+   * poll runs every tick — `Math.min(shipMs, 1_000)` = **1 s** — and the bundle
+   * on its own five-minute cadence, whatever git is doing. Reconciliation is
+   * unchanged in every other respect: it is still bounded to four sessions a
+   * tick, still spawns off the serial queue, and still applies its results
+   * back THROUGH that queue, which is what makes detaching it safe — the seal
+   * ordering a hook depends on is enforced there, not by the tick's `await`.
+   *
+   * `tick()` still awaits the lane before it resolves, so a caller driving the
+   * daemon a tick at a time sees the reconciliation it asked for. The interval
+   * driver calls {@link controlTick} instead and releases its guard without
+   * waiting, which is the half that matters: nothing an operator sends queues
+   * behind a git process any more.
+   */
+  let gitLane: Promise<void> | undefined;
+  function startGitReads(): Promise<void> {
+    if (gitLane !== undefined) return gitLane;
+    if (stopped || gitPending.size === 0) return Promise.resolve();
+    const lane = drainGitReads()
+      .catch((error) =>
+        log(
+          `git reads failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      )
+      .finally(() => {
+        if (gitLane === lane) gitLane = undefined;
+      });
+    gitLane = lane;
+    return lane;
+  }
+
+  /**
+   * One pass of everything an operator's command travels through.
+   *
+   * This is what the interval drives, and it is deliberately free of the git
+   * lane: see {@link startGitReads}.
+   */
+  async function controlTick(): Promise<void> {
     if (stopped) return;
     // The detector runs off the serial queue: its scan is asynchronous file
     // I/O over every project directory, and a hook that arrived while it
@@ -1589,9 +1662,10 @@ export async function startDaemon(
       }
       if (stateDirty) persistState();
     });
-    // Outside the serial block above on purpose: this is where the git
-    // process spawns happen, and a hook must never queue behind them.
-    await drainGitReads();
+    // Started, not awaited. The spawns are outside the serial block above so a
+    // hook never queues behind them, and outside this function's own await
+    // chain so an operator's command never does either.
+    void startGitReads();
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
@@ -1609,6 +1683,18 @@ export async function startDaemon(
     }
   }
 
+  /**
+   * One pass, plus the git lane it started.
+   *
+   * The seam a caller driving the daemon by hand uses, so that awaiting a tick
+   * means "and the reconciliation it asked for has landed". The interval driver
+   * does NOT use it, for the reason {@link startGitReads} gives.
+   */
+  async function tick(): Promise<void> {
+    await controlTick();
+    await gitLane;
+  }
+
   let timer: NodeJS.Timeout | undefined;
   let ticking = false;
   if (options.listen ?? true) {
@@ -1616,7 +1702,10 @@ export async function startDaemon(
       () => {
         if (ticking) return;
         ticking = true;
-        tick()
+        // `controlTick`, not `tick`: the guard must be released as soon as the
+        // control path is done, or a fourteen-minute git drain would drop every
+        // poll in between and put the stall straight back.
+        controlTick()
           .catch((error) =>
             log(
               `tick failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -1647,12 +1736,24 @@ export async function startDaemon(
         : undefined;
     },
     tick,
+    /**
+     * Wait for the git lane to settle, starting one if work is pending.
+     *
+     * For a caller that wants the reconciliation without a whole tick — and for
+     * the assertion that a slow one does not hold the control path up, which
+     * needs to observe the two independently.
+     */
+    flushGitReads: () => startGitReads(),
     drainSpool: () => serial.run(drainSpool),
     refreshBundle,
     stop: async () => {
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
+      // The lane may be mid-spawn. Its results are applied through `serial`, so
+      // shutting down without waiting would race the finalize below and could
+      // append a reconciliation after the host chain was sealed.
+      await gitLane;
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();
