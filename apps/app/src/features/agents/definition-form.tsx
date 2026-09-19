@@ -55,7 +55,7 @@ const table = (value: TomlValue | undefined): TomlTable | null =>
  */
 function usdInputValue(micros: number): string {
   const cents = Math.round(micros / 10_000);
-  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}`;
+  return `${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, "0")}`;
 }
 
 /** The draft's document: what parses, or the empty table with the line that stopped the parse. */
