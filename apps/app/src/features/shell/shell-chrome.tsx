@@ -4,7 +4,7 @@
 // to the client shell.
 //
 // The chrome is a sibling of the page tree, not its ancestor, so it carries its
-// own <TimeZoneProvider>: the workspace settings dialog and the user menu
+// own <TimeZoneProvider>: the account dialog and the user menu
 // format dates too, and they must agree with the page below them.
 // <ViewerClock> is the same provider around the pages.
 import "server-only";

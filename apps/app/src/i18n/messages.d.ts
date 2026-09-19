@@ -1950,6 +1950,8 @@ type Messages = {
       denied: {
         title: string;
         body: string;
+        signedIn: string;
+        roles: string;
         needed: string;
         ask: string;
         back: string;

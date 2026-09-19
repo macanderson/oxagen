@@ -114,6 +114,8 @@
       "denied": {
         "title": "You cannot see this workspace’s repositories",
         "body": "The roles you hold do not include {permission} on {workspace}.",
+        "signedIn": "Signed in as",
+        "roles": "{org} in the organization, {workspace} in this workspace",
         "needed": "Needed",
         "ask": "Ask an organization Owner or Admin, or this workspace’s Owner, to grant it.",
         "back": "Back to Fleet"

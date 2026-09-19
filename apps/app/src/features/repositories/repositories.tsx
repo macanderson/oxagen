@@ -47,6 +47,9 @@ import { RepositoryDialog } from "./repository-dialog";
 import type { RepositoryTab } from "./view";
 import { ConnectDirectoryDialog, WorkingCopies } from "./working-copies";
 
+/** The roles the signed-in person holds here, lowercased as the viewer carries them. */
+export type ViewerRoles = { org: string; workspace: string };
+
 type Trees = Readonly<Record<string, Load<RepositoryTree>>>;
 
 type WizardState = { open: boolean; initial: string | null; opening: number };
@@ -56,11 +59,14 @@ export function Repositories({
   ws,
   wsName,
   tab,
+  roles,
 }: {
   org: string;
   ws: string;
   wsName: string;
   tab: RepositoryTab;
+  /** The signed-in person's roles, which the denied state names. */
+  roles: ViewerRoles;
 }) {
   const t = useTranslations("repositories.page");
   const navigate = useNavigate();
@@ -197,7 +203,7 @@ export function Repositories({
   else if (list.kind === "failed")
     body =
       list.failure.reason === "denied" ? (
-        <DeniedBody org={org} ws={ws} failure={list.failure} />
+        <DeniedBody org={org} ws={ws} failure={list.failure} roles={roles} />
       ) : (
         <ErrorBody failure={list.failure} onRetry={reread} />
       );
@@ -454,10 +460,12 @@ function DeniedBody({
   org,
   ws,
   failure,
+  roles,
 }: {
   org: string;
   ws: string;
   failure: RepositoriesFailure;
+  roles: ViewerRoles;
 }) {
   const t = useTranslations("repositories.page.denied");
   const permission = "code" in failure ? failure.code : "repository.read";
@@ -469,6 +477,10 @@ function DeniedBody({
       <h2 className={sectionTitle}>{t("title")}</h2>
       <p className={prose}>{t("body", { permission, workspace: ws })}</p>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-muted-foreground">{t("signedIn")}</dt>
+        <dd data-testid="repositories-denied-roles">
+          {t("roles", { org: roles.org, workspace: roles.workspace })}
+        </dd>
         <dt className="text-muted-foreground">{t("needed")}</dt>
         <dd>
           <code className={mono}>

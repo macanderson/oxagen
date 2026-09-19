@@ -214,6 +214,7 @@ function page(tab: "repositories" | "working-copies" | "changes" | "configuratio
         ws="core-platform"
         wsName="Core platform"
         tab={tab}
+        roles={{ org: "member", workspace: "viewer" }}
       />
     </IntlProvider>,
     container ? { container } : undefined,
@@ -386,6 +387,9 @@ describe("states", () => {
       "You cannot see this workspace’s repositories",
     );
     expect(denied).toHaveTextContent("repository.read");
+    expect(screen.getByTestId("repositories-denied-roles")).toHaveTextContent(
+      "member in the organization, viewer in this workspace",
+    );
     expect(screen.getByTestId("repositories-back-to-fleet")).toHaveAttribute(
       "href",
       "/acme/core-platform",

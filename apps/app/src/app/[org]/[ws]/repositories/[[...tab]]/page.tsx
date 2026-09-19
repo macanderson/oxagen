@@ -25,7 +25,13 @@ export default async function RepositoriesPage({
       id="main"
       className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-10"
     >
-      <Repositories org={org} ws={ws} wsName={ctx.wsName} tab={tab} />
+      <Repositories
+        org={org}
+        ws={ws}
+        wsName={ctx.wsName}
+        tab={tab}
+        roles={{ org: ctx.orgRole, workspace: ctx.wsRole }}
+      />
     </main>
   );
 }
