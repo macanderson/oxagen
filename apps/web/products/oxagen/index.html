@@ -6,8 +6,9 @@
 <title>Oxagen: agent control plane and agent fleet management</title>
 <meta name="description" content="See which agent spent what, and on whose behalf. Oxagen prices the model calls routed through it and attributes each one to the operator, answers an agent's request for a system or an action with the decision rules you wrote, routes matching requests to a person, and records every run frame by frame. The agent never receives a connection credential.">
 <link rel="canonical" href="https://oxagen.sh/products/oxagen">
-<meta name="theme-color" content="#09090B">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#09090B">
+<meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://oxagen.sh/products/oxagen">
 <meta property="og:site_name" content="Oxagen">
@@ -25,7 +26,20 @@
 <link rel="manifest" href="/oxagen.webmanifest">
 <link rel="preload" href="/fonts/space-grotesk-latin-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
-<script>document.documentElement.classList.add("js")</script>
+<script>
+/* Stamp the theme before first paint: a pinned choice from the footer's
+   control, else the OS. oxagen.js keeps it current after load. */
+(function (d) {
+  d.classList.add("js");
+  var c = null;
+  try { c = localStorage.getItem("theme"); } catch (e) {}
+  var t = c === "light" || c === "dark" ? c
+    : matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  d.setAttribute("data-theme", t);
+  var m = document.querySelector('meta[name="color-scheme"]');
+  if (m) m.content = t;
+})(document.documentElement);
+</script>
 <link rel="stylesheet" href="/assets/oxagen.css">
 <style>
 /* ---- page-specific: the hero, the four promises, one figure per feature ---- */
@@ -763,7 +777,14 @@
 
     <div class="foot-base">
       <span>© 2026 Oxagen, Inc. All rights reserved.</span>
-      <span class="mono">agent control plane · <a href="/#field-manual">read the manual</a></span>
+      <div class="foot-end">
+        <span class="mono">agent control plane · <a href="/#field-manual">read the manual</a></span>
+        <div class="theme-switch" role="radiogroup" aria-label="Theme">
+          <button type="button" role="radio" aria-checked="true" data-theme-choice="system" aria-label="System" title="System"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="light" aria-label="Light" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+          <button type="button" role="radio" aria-checked="false" tabindex="-1" data-theme-choice="dark" aria-label="Dark" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        </div>
+      </div>
     </div>
   </div>
 </footer>
